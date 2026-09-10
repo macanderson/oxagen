@@ -102,10 +102,96 @@ contains "$SCRIPT" "tag:Name,Values=" "script: resolves the app node by tag"
 contains "$SCRIPT" "oxagen-deploy-916294258235" "script: targets the current deploy bucket"
 contains "$SCRIPT" "oxagen-postgres" "script: names the Aurora cluster"
 
-# A failed SSM command used to leave this exiting 0.
-# shellcheck disable=SC2016  # the single quotes are the point: this is the
-# literal text to find in the script under test, not an expression to expand.
-contains "$SCRIPT" 'if [[ $st != "Success" ]]; then' "script: a failed run exits non-zero"
+# --- how the SSM invocation is judged --------------------------------------
+#
+# Behaviour, not text: these three endings are the script's contract with
+# whatever runs it, and the middle one used to be wrong. Running out of polls
+# left the status at `InProgress`, which is not `Success`, so a command that
+# had not finished was reported as one that had failed — and the obvious
+# response to a failed migration is to run it again, over an apply still in
+# flight.
+
+verdict_code() {
+  invocation_verdict "$@" >/dev/null 2>&1
+  echo $?
+}
+
+verdict_stderr() {
+  invocation_verdict "$@" 2>&1 >/dev/null
+}
+
+expect_code() {
+  local want=$1 got=$2 label=$3
+  if [[ $want == "$got" ]]; then pass; else fail "$label — wanted exit $want, got $got"; fi
+}
+
+expect_code 0 "$(verdict_code Success 0 cmd-1 i-abc us-east-1 600)" \
+  "a completed successful invocation exits 0"
+expect_code 1 "$(verdict_code Failed 0 cmd-1 i-abc us-east-1 600)" \
+  "a completed failed invocation exits 1"
+expect_code 1 "$(verdict_code TimedOut 0 cmd-1 i-abc us-east-1 600)" \
+  "SSM's own TimedOut is a completed failure and exits 1"
+expect_code 2 "$(verdict_code InProgress 1 cmd-1 i-abc us-east-1 600)" \
+  "giving up waiting is its own outcome and exits 2, not 1"
+
+# The distinction is only useful if the message carries it. A run that gave up
+# waiting must say the command is still going and must say not to re-run.
+STILL=$(verdict_stderr InProgress 1 cmd-1 i-abc us-east-1 600)
+contains "$STILL" "NOT a failure" "still-running: says it is not a failure"
+contains "$STILL" "Do NOT re-run" "still-running: forbids the dangerous next step"
+contains "$STILL" "cmd-1" "still-running: names the command to watch"
+contains "$STILL" "i-abc" "still-running: names the instance"
+lacks "$STILL" "FAILED" "still-running: does not call itself a failure"
+
+FAILED_MSG=$(verdict_stderr Failed 0 cmd-2 i-abc us-east-1 600)
+contains "$FAILED_MSG" "FAILED" "failed: says so"
+lacks "$FAILED_MSG" "Do NOT re-run" "failed: a real failure may be re-run once fixed"
+
+# --- the silent output cap -------------------------------------------------
+#
+# ssm get-command-invocation returns at most 24,000 characters per stream and
+# does not say when it cut. On an apply that ceiling lands in the middle of
+# the list of migrations that ran against production.
+
+SHORT=$(truncation_note stdout 100 2>&1)
+[[ -z $SHORT ]] && pass || fail "a stream that fitted must produce no warning, got: $SHORT"
+
+CUT=$(truncation_note stdout 24000 2>&1)
+contains "$CUT" "truncated" "at the cap: warns the record is incomplete"
+contains "$CUT" "stdout" "at the cap: names the stream"
+
+# --- the atlas project the node is handed ----------------------------------
+#
+# Checked here rather than on the node: without env "ci" the remote fails two
+# minutes in, after a tarball, an S3 upload and an SSM round trip, on a
+# message about a project file that reads like a broken instance.
+
+FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/atlas-fixture-XXXXXX")
+trap 'rm -rf "$FIXTURE"' EXIT
+
+mkdir -p "$FIXTURE/good/atlas/migrations"
+printf 'env "ci" {\n  url = getenv("DATABASE_URL")\n}\n' > "$FIXTURE/good/atlas.hcl"
+assert_atlas_project "$FIXTURE/good" 2>/dev/null && pass || fail "a complete project is accepted"
+
+mkdir -p "$FIXTURE/no-hcl/atlas/migrations"
+assert_atlas_project "$FIXTURE/no-hcl" 2>/dev/null && fail "a project with no atlas.hcl must be refused" || pass
+
+mkdir -p "$FIXTURE/no-ci/atlas/migrations"
+printf 'env "local" {\n  url = "postgres://localhost/x"\n}\n' > "$FIXTURE/no-ci/atlas.hcl"
+assert_atlas_project "$FIXTURE/no-ci" 2>/dev/null && fail "an atlas.hcl without env \"ci\" must be refused" || pass
+NO_CI=$(assert_atlas_project "$FIXTURE/no-ci" 2>&1)
+contains "$NO_CI" 'env "ci"' "no ci env: the message names what is missing"
+
+mkdir -p "$FIXTURE/no-migrations"
+printf 'env "ci" {}\n' > "$FIXTURE/no-migrations/atlas.hcl"
+assert_atlas_project "$FIXTURE/no-migrations" 2>/dev/null && fail "a project with no migrations dir must be refused" || pass
+
+# The real database package is the thing this actually ships, so check it too.
+REPO=$(cd "$TOOLS/../.." && pwd)
+if [[ -d "$REPO/packages/database/atlas/migrations" ]]; then
+  assert_atlas_project "$REPO/packages/database" 2>/dev/null \
+    && pass || fail "packages/database does not satisfy the check the script makes of it"
+fi
 
 # --- result ---------------------------------------------------------------
 

@@ -152,6 +152,87 @@ atlas migrate status --env ci"
   printf '%s\n' "$rendered"
 }
 
+# assert_atlas_project DB_DIR
+#
+# The remote script runs `atlas migrate status --env ci`, so the packaged
+# atlas.hcl has to declare that env. Checked here, in a second, rather than
+# discovered on the node after the tarball has been built, uploaded to S3 and
+# carried through an SSM round trip: without it the node fails two minutes in
+# on `project file ... does not define env "ci"`, which reads like a broken
+# instance rather than a missing block in a file on this machine.
+assert_atlas_project() {
+  local db_dir=$1
+
+  if [[ ! -d "$db_dir/atlas/migrations" ]]; then
+    echo "error: no atlas/migrations under $db_dir" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$db_dir/atlas.hcl" ]]; then
+    echo "error: no atlas.hcl under $db_dir" >&2
+    echo "error: the tarball carries it to the node, which cannot run atlas without it" >&2
+    return 1
+  fi
+
+  # `grep`, not `rg`: this predicate is also the shape the node would need,
+  # and a project file is small enough that the difference is unmeasurable.
+  if ! grep -q 'env "ci"' "$db_dir/atlas.hcl"; then
+    echo "error: $db_dir/atlas.hcl does not declare env \"ci\"" >&2
+    echo "error: the remote script runs 'atlas migrate status --env ci' and would fail on the node" >&2
+    return 1
+  fi
+}
+
+# truncation_note LABEL LENGTH
+#
+# ssm get-command-invocation returns at most 24,000 characters of each stream
+# and says nothing when it cuts. On an apply that ceiling lands in the middle
+# of the record — the list of migrations that actually ran against production
+# — so a truncated stream must not be read as the whole account of what
+# happened. Prints nothing when the stream fitted.
+truncation_note() {
+  local label=$1 length=$2
+
+  if [[ $length -ge 24000 ]]; then
+    echo "==> WARNING: $label hit SSM's 24,000-character cap and is truncated." >&2
+    echo "==> WARNING: this is not the whole record of what ran. Read the full" >&2
+    echo "==> WARNING: output on the node before treating this as the account." >&2
+  fi
+}
+
+# invocation_verdict STATUS TIMED_OUT COMMAND_ID INSTANCE REGION SECONDS
+#
+# How the SSM command ended, and the exit code that goes with it: 0 the
+# migration succeeded, 1 it failed, 2 it is still running and this script gave
+# up waiting.
+#
+# The third case used to be reported as the second. Running out of polls left
+# STATUS at `InProgress`, which is not `Success`, so the script said "FAILED
+# ... finished as InProgress" — about a command that had not finished and was
+# very likely still applying. That reading invites the one action that must
+# not follow: re-running the script. A second apply over one still in flight
+# is how a schema gets migrated halfway twice, and Atlas cannot undo it.
+invocation_verdict() {
+  local status=$1 timed_out=$2 command_id=$3 instance=$4 region=$5 seconds=$6
+
+  if [[ $timed_out == "1" ]]; then
+    echo "==> STILL RUNNING after ${seconds}s. This is NOT a failure." >&2
+    echo "==> Command $command_id is still executing on $instance and the" >&2
+    echo "==> migration may be mid-apply." >&2
+    echo "==> Do NOT re-run this script. Watch the command instead:" >&2
+    echo "==>   aws ssm get-command-invocation --region $region \\" >&2
+    echo "==>     --command-id $command_id --instance-id $instance" >&2
+    return 2
+  fi
+
+  if [[ $status != "Success" ]]; then
+    echo "==> FAILED: ssm command $command_id finished as $status" >&2
+    return 1
+  fi
+
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Everything above is definitions; everything below runs.
 #
@@ -230,7 +311,7 @@ PGUSER=${PGUSER:-oxagen}
 # and a way to double-create objects every other time.
 ALLOW_DIRTY=${ALLOW_DIRTY:-0}
 
-[[ -d "$DB_DIR/atlas/migrations" ]] || { echo "error: no atlas/migrations under $DB_DIR" >&2; exit 1; }
+assert_atlas_project "$DB_DIR" || exit 1
 
 # Resolving the endpoint here is also the cheapest proof that the caller's
 # credentials reach the right account: the cluster is only in 916294258235.
@@ -306,21 +387,37 @@ CMD=$(aws ssm send-command --region "$REGION" --instance-ids "$INSTANCE" \
   --query 'Command.CommandId' --output text)
 echo "==> ssm command $CMD"
 
+# A ten-minute ceiling, and reaching it is its own outcome rather than a
+# failure — see invocation_verdict. Raise it with POLLS for a migration known
+# to be long; each poll is ten seconds.
+POLLS=${POLLS:-60}
+TIMED_OUT=1
 st=Pending
-for _ in $(seq 1 60); do
+for _ in $(seq 1 "$POLLS"); do
   st=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
-  [[ $st == InProgress || $st == Pending ]] || break
+  if [[ $st != InProgress && $st != Pending ]]; then
+    TIMED_OUT=0
+    break
+  fi
   sleep 10
 done
 echo "==> $st"
-aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardOutputContent --output text 2>/dev/null | tail -20
-echo "--- stderr ---"
-aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardErrorContent --output text 2>/dev/null | tail -20
+
+# Captured rather than piped straight to `tail` so its length can be measured:
+# the cap SSM applies is silent, and a truncated apply record read as complete
+# is the failure mode worth catching here.
+for stream in StandardOutputContent StandardErrorContent; do
+  content=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" \
+    --instance-id "$INSTANCE" --query "$stream" --output text 2>/dev/null || true)
+  label=stdout
+  [[ $stream == StandardErrorContent ]] && label=stderr
+  echo "--- $label ---"
+  printf '%s\n' "$content" | tail -20
+  truncation_note "$label" "${#content}"
+done
 
 # A migration that failed used to leave this script exiting 0, so the caller —
 # and anything wrapping it — read a failed apply as a successful one. The
-# status is the result, so it is the exit code.
-if [[ $st != "Success" ]]; then
-  echo "==> FAILED: ssm command $CMD finished as $st" >&2
-  exit 1
-fi
+# outcome is the result, so it is the exit code.
+invocation_verdict "$st" "$TIMED_OUT" "$CMD" "$INSTANCE" "$REGION" "$((POLLS * 10))"
+exit $?
