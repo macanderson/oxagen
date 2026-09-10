@@ -17,10 +17,11 @@
 # That also meant neither role existed until the ci-deploy stack had been
 # applied once, and the job that would apply it is the one that needs the
 # role — so the first apply was done by hand (infra/README.md, "Applying from
-# CI"). That has happened: both roles exist in 916294258235, and the plan job
-# no longer tolerates a failure to assume `gha-infra-plan`. The apply job
-# still does, until one apply has been observed on `main` — see the note on
-# that step.
+# CI"). That has happened, and both roles have since been exercised from this
+# workflow: run 34411814281 on `main` (2026-09-09) assumed `gha-infra-plan`
+# for the plan and `gha-infra-apply` for the apply, which created the
+# ingestion KMS key in 916294258235. Neither job tolerates a failure to
+# assume its role any more (#2648).
 
 name: infra
 
@@ -248,41 +249,31 @@ jobs:
           # 0 applied, anything else failed.
           tofu_wrapper: false
 
-      # Still gated, unlike the plan job above, and for a reason that outlived
-      # the bootstrap: this runs on `main`, so a failure here leaves the
-      # default branch red, which blocks every open pull request through the
-      # red-main hold. The plan job proves the OIDC provider and this
-      # repository's federation work, but not this role — `gha-infra-apply`
-      # is assumed under a different subject (`environment:production`), and
-      # nothing has exercised it yet.
+      # No `continue-on-error`, and no skip step. Both were here for the
+      # bootstrap in the header: `gha-infra-apply` did not exist, the pull
+      # request that would create it could not, and a hard failure on `main`
+      # blocks every open pull request through the red-main hold. The role
+      # exists now and this step has assumed it — run 34411814281 on `main`
+      # (2026-09-09), which applied the `oxagen` stack and created the
+      # ingestion KMS key. The reason is spent (#2648).
       #
-      # Remove `continue-on-error` and the skip step below once one apply has
-      # actually run on `main`. Until then a skip is not a pass: the step
-      # writes a warning naming the stack that did not apply, so an un-applied
-      # change is visible rather than silent.
+      # Kept, it would now mean the opposite of what it meant then. A revoked
+      # role, an edited trust policy, or a renamed environment would skip the
+      # apply and report the job green, so `main` would claim to have applied
+      # a change the account never received — and the next plan would show the
+      # drift as if someone had edited the account by hand. An apply that did
+      # not run must not read like an apply that found nothing, which is the
+      # same rule the plan job above states for itself.
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
-        id: credentials
-        continue-on-error: true
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-infra-apply
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: apply skipped
-        if: steps.credentials.outcome != 'success'
-        run: |
-          echo "::warning title=${{ matrix.stack }} not applied::\
-          Could not assume gha-infra-apply, so this stack was NOT applied and \
-          the account does not reflect this commit. The role is created by the \
-          first apply of infra/stacks-new/ci-deploy, done by hand once -- see \
-          infra/README.md. This gate clears itself once the role exists."
-
       - name: init
-        if: steps.credentials.outcome == 'success'
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
       - name: apply
-        if: steps.credentials.outcome == 'success'
         working-directory: infra/stacks-new/${{ matrix.stack }}
         # Re-plans rather than reusing the pull request's plan file: that plan
         # was computed against a different base and the state may have moved.

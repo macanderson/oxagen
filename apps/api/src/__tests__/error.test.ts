@@ -422,6 +422,60 @@ describe("errorMiddleware billing errors", () => {
       "billing_suspended",
     );
   });
+
+  // Regression — #1456. The hard period-to-date spend ceiling
+  // (BudgetExceededError, code "budget_exceeded") was absent from the
+  // middleware's duck-typed billing-code list, so a ceiling denial fell through
+  // to the catch-all and returned a generic 500 instead of the 402 that both
+  // spend-budget.ts and kernel.ts document. A spend ceiling is a payment
+  // decision, not a server fault.
+  it("BudgetExceededError → 402, not 500", async () => {
+    const err = Object.assign(new Error("spend budget exceeded"), {
+      code: "budget_exceeded",
+    });
+    const { status, body } = await triggerError(err);
+    expect(status).toBe(402);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "budget_exceeded",
+    );
+    // The human message reaches the client, as it does for the two codes this
+    // one mirrors — the caller needs to know WHICH ceiling stopped them.
+    expect((body as { error: { message: string } }).error.message).toBe(
+      "spend budget exceeded",
+    );
+  });
+
+  // The middleware's BILLING_ERROR_CODES list is a hand-maintained mirror of the
+  // error classes @oxagen/billing throws. This asserts against the REAL classes,
+  // so adding a fourth billing error without mapping it fails here rather than
+  // in production as a 500.
+  it("every billing error class @oxagen/billing throws maps to 402", async () => {
+    const {
+      InsufficientCreditsError,
+      BillingSuspendedError,
+      BudgetExceededError,
+    } = await import("@oxagen/billing");
+    const thrown: Error[] = [
+      new InsufficientCreditsError(),
+      new BillingSuspendedError(null),
+      new BudgetExceededError({
+        scope: "workspace",
+        orgId: "00000000-0000-0000-0000-000000000001",
+        workspaceId: "00000000-0000-0000-0000-000000000002",
+        period: "monthly",
+        limitMicros: 1_000_000n,
+        spentMicros: 2_000_000n,
+        capability: "send_message",
+      }),
+    ];
+    for (const err of thrown) {
+      const { status, body } = await triggerError(err);
+      expect(status, `${err.name} must map to 402 Payment Required`).toBe(402);
+      expect((body as { error: { code: string } }).error.code).toBe(
+        (err as unknown as { code: string }).code,
+      );
+    }
+  });
 });
 
 // ── Full app.fetch integration — confirm requestId is UUID from logger ────────
