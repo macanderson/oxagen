@@ -2,6 +2,27 @@
 
 <!-- One or two sentences: what this PR does and why. Link the Linear ticket. -->
 
+## Issue link
+
+<!-- Exactly one of:
+       Closes #N   — this PR finishes the issue. Its DoD must be fully ticked,
+                     or the `dod` check fails and the merge is blocked.
+       Refs #N     — this PR advances the issue without finishing it. `Refs`
+                     never closes anything, so no DoD is demanded.
+       a label     — `no-issue` for a trivial change, `closes-nothing` for a
+                     substantial one that deliberately closes nothing.
+
+     Write it as plain text, NOT inside backticks. GitHub ignores a closing
+     keyword in an inline code span or a fenced block, so `Closes #N` in
+     backticks closes nothing — it reads as a claim and acts as none. A full
+     issue URL does work, and counts exactly like the short form.
+
+     A keyword anywhere in this body counts, not only here. So a sentence like
+     "the operator's next command closes #123" closes #123 on merge, whether or
+     not that was meant. Phrase such prose as "finishes #123" instead. -->
+
+Closes #
+
 ## Vision Alignment
 
 <!-- How does this advance the wedge (metering→billing, contract governance, graph
