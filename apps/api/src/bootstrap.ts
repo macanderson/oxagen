@@ -17,7 +17,11 @@ import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { isEmailVerificationRequired } from "@oxagen/auth";
 import { isEmailTransportConfigured } from "@oxagen/notifications";
-import { inngestEnvironmentComplaint } from "@oxagen/inngest-functions";
+// Imported from the subpath, not the package root: the root barrel pulls in
+// `functions.ts`, which builds every Inngest function at module scope and so
+// needs INNGEST_* present the moment it is imported. This module is pure and
+// imports nothing.
+import { inngestEnvironmentComplaint } from "@oxagen/inngest-functions/env-check";
 import { logger } from "./middleware/logger";
 
 let bootPromise: Promise<void> | null = null;
