@@ -7,7 +7,7 @@
 - **Disposition vs today:** Keep + wire nav + build write path
 
 ## Purpose
-Datasets and runs for evaluating agent/model quality — the place a team checks whether an agent's answers are actually good before reselling access to it. The page and its data model already exist and are functionally complete for reading, but the route has no inbound nav link today (a shipped orphan) and every write action (creating a dataset, adding items, launching a run) currently requires the CLI.
+Datasets and runs for evaluating agent/model quality — the place a team checks whether an agent's answers are actually good before putting it in front of the business. The page and its data model already exist and are functionally complete for reading, but the route has no inbound nav link today (a shipped orphan) and every write action (creating a dataset, adding items, launching a run) currently requires the CLI.
 
 ## Primary user & jobs-to-be-done
 - **Primary user:** developer or QA owner validating agent quality before wider rollout

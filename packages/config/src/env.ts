@@ -96,8 +96,6 @@ export const baseEnvSchema = z.object({
   GOOGLE_DATA_CLIENT_SECRET: z.string().optional(),
   GITHUB_LOGIN_CLIENT_ID: z.string().optional(),
   GITHUB_LOGIN_CLIENT_SECRET: z.string().optional(),
-  GITHUB_DATA_CLIENT_ID: z.string().optional(),
-  GITHUB_DATA_CLIENT_SECRET: z.string().optional(),
   // Pre-registered OAuth clients for MCP authorization servers without RFC 7591
   // dynamic client registration (GitHub MCP). JSON: endpoint host → client.
   // Malformed values are tolerated at runtime (logged + ignored), so the schema
@@ -105,7 +103,6 @@ export const baseEnvSchema = z.object({
   MCP_OAUTH_PREREGISTERED_CLIENTS: z.string().optional(),
 
   // GitHub App OAuth — used for the data-connector OAuth flow (repo ingestion).
-  // Separate from GITHUB_DATA_CLIENT_* (data client is for future use).
   // CLIENT_ID/SECRET identify the GitHub App itself; WEBHOOK_SECRET validates
   // inbound webhook payloads; INSTALL_STATE_SECRET signs the OAuth state param;
   // SLUG is the app's public path segment, used to deep-link users to GitHub's
@@ -218,20 +215,6 @@ export const baseEnvSchema = z.object({
   SMTP_FROM_EMAIL: z.string().email().optional(),
   SMTP_FROM_NAME: z.string().min(1).optional(),
 
-  // Google Maps / Places API. Both fields are ORPHANED: the address form they
-  // were added for does not exist in apps/app, and nothing outside this file
-  // and the registry reads either name. They are validated and optional, so
-  // they cost nothing at boot, but they should be built against or deleted.
-  //
-  // If they are kept: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is the browser-exposed
-  // key and must be HTTP-referrer-restricted in the Google Cloud console.
-  // GOOGLE_MAPS_URL_SIGNING_SECRET is the server-only URL-signing secret and
-  // must NEVER be referenced in client bundle code or carry a NEXT_PUBLIC_
-  // prefix — Next.js inlines any NEXT_PUBLIC_ var into the browser bundle,
-  // and a signing secret must stay server-side only.
-  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
-  GOOGLE_MAPS_URL_SIGNING_SECRET: z.string().min(1).optional(),
-
   LINEAR_API_KEY: z.string().optional(),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -244,10 +227,6 @@ export const baseEnvSchema = z.object({
   // CORS to allow the static site's cross-origin lead/redeem fetches. Optional —
   // resolveMarketingUrl() falls back to a per-environment default.
   MARKETING_URL: z.string().url().optional(),
-  // Public origin advertised in the A2A Agent Card / well-known URL. Optional —
-  // A2A routes derive the origin from the live request; overrides only apply to
-  // out-of-band card reads. Falls back to the API origin.
-  A2A_PUBLIC_URL: z.string().url().optional(),
   // Browser-exposed docs-site origin override (apps/app docs links). Optional —
   // getDocsBaseUrl() resolves a correct dev/prod default when unset.
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
@@ -305,9 +284,6 @@ export const baseEnvSchema = z.object({
   INGESTION_CRYPTO_PROVIDER: z.enum(["env", "kms"]).default("env").optional(),
   AWS_KMS_INGESTION_KEY_ARN: z.string().min(1).optional(),
   INGESTION_ENCRYPTION_KEY: z.string().min(1).optional(),
-  // Base64 master key for encrypting per-org reseller Stripe keys (reseller
-  // revenue). Optional: reseller-secret.ts falls back to INGESTION_ENCRYPTION_KEY.
-  BILLING_ENCRYPTION_KEY: z.string().min(1).optional(),
   // Audit-export download-URL signing (HMAC). Optional dedicated secret; the
   // route falls back to BETTER_AUTH_SECRET. Must be >= 16 bytes when set
   // (enforced at the signing call site in the audit export route).

@@ -11,6 +11,7 @@ import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
 import { inspectAppPorts, type AppPort } from "./lib/preflight-ports";
+import { linkHint, missingEnvTargets } from "./lib/env-targets";
 import {
   guardTurbopackCaches,
   markCleanShutdown,
@@ -76,24 +77,36 @@ async function checkDocker(): Promise<void> {
 }
 
 async function ensureEnvFile(): Promise<void> {
-  // Vercel is the source of truth for env vars. `.env.local` is hydrated from
-  // the linked project's Development environment via `vercel env pull`.
-  // If absent, we bootstrap it here so first-time setup is one command.
-  const envPath = resolve(ROOT, ".env.local");
-  if (existsSync(envPath)) return;
+  // Vercel is the source of truth for env vars. Each `.env.local` is hydrated
+  // from its linked project's Development environment via `vercel env pull`.
+  // If any is absent, we bootstrap here so first-time setup is one command.
+  let missing = missingEnvTargets(ROOT);
+  if (missing.length === 0) return;
 
-  console.log(kleur.cyan("[dev] .env.local missing — running `pnpm env:pull`"));
+  console.log(
+    kleur.cyan(
+      `[dev] .env.local missing in ${missing.map((t) => t.dir).join(", ")} — running \`pnpm env:pull\``,
+    ),
+  );
   try {
     await execa("pnpm", ["env:pull"], { stdio: "inherit" });
-  } catch {
-    console.error(
-      kleur.red(
-        "Failed to pull env from Vercel. Run `vercel login` and `vercel link` " +
-          "(project oxagen-v2-app, scope oxagen), then `pnpm env:pull`.",
-      ),
-    );
-    process.exit(1);
+  } catch (err) {
+    console.error(kleur.red(`[dev] pnpm env:pull failed: ${formatError(err)}`));
   }
+
+  // env:pull silently skips any directory without a `.vercel/project.json`
+  // link, so a successful pull can still leave files missing. Name exactly
+  // which links to create rather than dying later with `.env.local: not found`.
+  missing = missingEnvTargets(ROOT);
+  if (missing.length === 0) return;
+  console.error(
+    kleur.red(
+      "Could not hydrate every .env.local from Vercel. Run `vercel login`, then " +
+        "link each missing directory and re-run `pnpm env:pull`:\n" +
+        linkHint(missing),
+    ),
+  );
+  process.exit(1);
 }
 
 async function up(): Promise<void> {

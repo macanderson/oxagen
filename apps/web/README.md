@@ -1,8 +1,13 @@
 # @oxagen/web-v2 — oxagen.sh website (v2)
 
-Static site deployed as the Vercel project **oxagen-v2-web**. No build step —
-Vercel serves this directory as-is (framework preset: Other, root directory
-`apps/web`).
+Hand-authored static pages plus a blog compiled from MDX. `pnpm build` (from
+the repo root, or `pnpm --filter @oxagen/web-v2 build`) assembles the
+publishable site into `dist/`: every static file here except source, config
+and tooling, plus the generated `blog/` tree and a `sitemap.xml` that includes
+it. CI's `deploy-web` job builds and syncs `dist/` to the S3 bucket behind
+CloudFront; `vercel.json` points the Vercel project (**oxagen-v2-web**, root
+directory `apps/web`) at the same build command and output directory. Nothing
+in `dist/` is committed.
 
 ## Layout
 
@@ -51,6 +56,20 @@ Vercel serves this directory as-is (framework preset: Other, root directory
   metal belongs to the `x` of the word.
 - `og.png` / `research-assets/book-og.png` — social share cards referenced by
   the Open Graph tags on `index.html` and `read/index.html` respectively.
+- `content/` — the blog's source of truth. See **The blog** below.
+- `scripts/build.mjs` — the build: copies the site, compiles the blog, writes
+  the feed and sitemap. `scripts/lib/` holds the pure pieces (`content.mjs`
+  for loading and validation, `mdx.mjs` for MDX → HTML, `html.mjs` for the
+  page templates), each with a co-located vitest suite gated at 90% coverage.
+  `scripts/check-links.mjs` fetches every URL cited in the posts and fails on
+  any that does not resolve (`pnpm --filter @oxagen/web-v2 check:links`); it
+  is network-bound, so it is a separate command rather than part of `build`.
+- `assets/blog.css` — the blog's own rules (index, pillar and post layouts,
+  the reading measure, references, callouts). Semantic tokens only, same four
+  rules as `oxagen.css`.
+- `assets/blog/pillars/*.jpg` — one stock hero per pillar, 1600px wide, with
+  the photographer credit kept in `content/pillars.yaml` (the Unsplash
+  License asks for it and the pages print it).
 - `overview-video.html` — a standalone Stella overview page. Nothing on the
   site links to it and it is not in `sitemap.xml`; it is reachable only if you
   already know the URL.
@@ -116,11 +135,55 @@ The ebook gate is a marketing gate, not access control: form success mints a
 single-use `/read?e=...&c=` link server-side and emails it — the reader never
 stores an unlock flag client-side.
 
+## The blog
+
+Two inputs, one rule: **a post links to one or more pillars, and the pillars
+are the YAML.**
+
+- `content/pillars.yaml` — the pillar list. Each pillar has a `slug` (its URL
+  under `/blog/pillars/`), `name`, `tagline`, `description`, display `order`,
+  and an `image` with `src`, `alt`, and a full `credit` (author, author URL,
+  source, source URL, licence). Every field is required; the build refuses a
+  pillar without them, and a post naming a pillar not in this file fails the
+  build with the offending file and slug.
+- `content/posts/<slug>/index.mdx` — one folder per post, the folder name is
+  the URL (`/blog/<slug>`). Anything else in the folder is copied alongside
+  the page, so a post can carry its own images at `/blog/<slug>/<file>`.
+  Frontmatter:
+
+  ```yaml
+  ---
+  title: "…"
+  description: "…"          # ≤ 200 chars, becomes the meta description
+  date: 2026-09-09          # ISO; `updated:` is optional
+  authors: [Oxagen Research]
+  pillars: [ontologies, ai-agents]   # first entry is the primary pillar
+  tags: [knowledge-graphs]           # kebab-case
+  image: /blog/<slug>/hero.jpg       # optional; defaults to the primary pillar's
+  draft: false                       # drafts build only with BLOG_DRAFTS=1
+  ---
+  ```
+
+- The body is Markdown with GFM (tables, footnotes) and two components:
+  `<Callout kind="note|warn" title="…">` and `<Figure src alt caption />`.
+  Citations are GFM footnotes (`claim.[^3]` … `[^3]: Authors (Year). *Title*.
+  Venue. https://…`), which the build renders as the **References** section;
+  a post with no footnotes fails the build, because these are research posts.
+- What the build emits: `/blog` (index with the pillar strip and every post),
+  `/blog/pillars/<slug>` (one per pillar, including empty ones),
+  `/blog/<slug>` (the post: hero, sticky table of contents from its `##`
+  headings, prose, references, related posts by shared pillar), and
+  `/blog/feed.xml` (RSS). Each page carries Open Graph, canonical, and
+  schema.org JSON-LD (`Blog`, `CollectionPage`, `BlogPosting`).
+- Posts are rendered to plain HTML at build time. React and `@mdx-js/mdx` are
+  devDependencies of this package only; the browser receives no JavaScript
+  beyond `assets/oxagen.js`.
+
 ## Local preview
 
 ```bash
-cd apps/web && python3 -m http.server 5500
-# http://localhost:5500 — the API allows this origin in non-production
+pnpm --filter @oxagen/web-v2 preview
+# builds dist/ and serves it at http://localhost:5500 — the API allows this origin in non-production
 ```
 
 The forms still post to `localhost:4000`, so run the API too if you want to

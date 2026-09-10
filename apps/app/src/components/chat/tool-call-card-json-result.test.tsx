@@ -14,10 +14,6 @@ import { ToolCallCard } from "./tool-call-card";
 
 afterEach(cleanup);
 
-vi.mock("./registry-components/diff-syntax", () => ({
-  highlightLine: vi.fn(async (line: string) => [{ content: line }]),
-}));
-
 const output = { nodes: [{ id: "n1", label: "Person", displayName: "Ada" }] };
 
 function renderCard(capability: string) {

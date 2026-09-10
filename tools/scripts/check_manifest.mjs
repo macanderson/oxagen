@@ -145,7 +145,7 @@ function writeContractBarrel(files) {
  * The "api" layer is satisfied by a dedicated per-capability file at
  * apps/api/src/routes/v1/<stem>.ts OR by evidence inside a combined
  * multi-capability route file (schema.ts, connection.ts, integration.ts,
- * repo.ts, semantic-edge.ts, workflow.ts, plugin-schema.ts, reseller.ts) —
+ * repo.ts, semantic-edge.ts, workflow.ts, plugin-schema.ts) —
  * see apiLayerSatisfied/buildApiRouteIndex above. Filename-only checking
  * cannot see those combined files' contents, so it used to falsely report
  * every capability they dispatch as an api gap.

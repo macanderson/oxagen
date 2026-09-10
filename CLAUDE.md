@@ -4,11 +4,14 @@
 
 ## Mission
 
-Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on three things:
+Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. We sell to the enterprise team that runs the agents and answers for them — not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on four things:
 
-- **Contract governance:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
-- **Graph grounding:** a Neo4j graph + ontology grounding agent answers in cited, time-aware context.
-- **Metering → billing:** a ClickHouse→Stripe loop turning observed usage into customer billing.
+- **Teach:** a Neo4j graph + ontology that hands an agent the company's knowledge and rules when it starts a job, and takes back what the run learned.
+- **Govern:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
+- **Explain:** every run saved as one trace — who asked, what it read, what it changed, what proved it, what it cost.
+- **Learn:** proven runs leave behind skills, tools, tuned settings, and knowledge; later they train a model the customer owns.
+
+Revenue is the platform billed by use, fine-tuning runs at a flat fee, and hosting at cost. There is no margin line, so we do not build resale or re-bill machinery.
 
 Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint, not an add-on.
 
@@ -100,7 +103,7 @@ This gate is non-negotiable. Do not mark the work ready to merge until all four 
 Before running any mutation/migration script, **confirm you are targeting the correct database.**
 
 - **Migration files go in `packages/database/atlas/migrations/`**, never in `apps/`. After adding or renaming one, regenerate the checksum: `atlas migrate hash --dir "file://atlas/migrations"` from `packages/database` (never hand-edit `atlas.sum`). Pick a timestamp prefix later than every existing file AND later than the shared local DB's current version — parallel sessions collide otherwise.
-- **Echo the target DB URL before any mutation script.** Local = `localhost:5433`; prod = Vercel secrets.
+- **Echo the target DB URL before any mutation script.** Local = `localhost:5433`; production datastores live in the AWS account (secrets in Parameter Store under `/oxagen/production/`, see README → Deployment; `where-is-production.yml` answers exactly where from inside the account). Nothing migrates production automatically: the manual `db-migrate.yml` (Postgres) and `store-migrate.yml` (ClickHouse + Neo4j) workflows are the only paths from a committed migration to prod.
 - `tsx --env-file=.env.local` does NOT override a shell `DATABASE_URL` — `unset DATABASE_URL` to force local targeting.
 - **Verify with a query after migration.** Don't trust logs alone.
 
@@ -109,7 +112,7 @@ Before running any mutation/migration script, **confirm you are targeting the co
 - **Use writable agents.** Architect agents return blueprints only; use `general-purpose` or equivalent for file edits.
 - **Grant full find-and-fix permissions.** Bug-fix workers must be able to diagnose, fix across files, run tests, and commit.
 - **Subagents commit and push too.** They commit frequently on the working branch/worktree, same as you; the session that owns the branch keeps it pushed and opens the PR. When dispatching a subagent, tell it which branch it is on.
-- **Dispatch the test-completeness-judge before committing a finished body of work.**
+- **Dispatch the `test-engineer` agent (`.claude/agents/test-engineer.md`) to audit coverage before committing a finished body of work.** (The old `test-completeness-judge` skill was deleted with `.agents/` on 2026-07-10 and no longer exists.)
 - **Verify agents actually committed.** Run `git log -5 --oneline` (and `git status`) on the branch/worktree. Do not accept "committed" claims without this.
 
 ## Large file handling
@@ -125,7 +128,7 @@ For files >50k tokens, do NOT read the whole file. Grep or slice first:
 3. Write unit tests for all new/changed logic.
 4. Write E2E tests for user-facing changes (screenshots to `e2e/screenshots/`).
 5. Run `pnpm gate` — all gates green.
-6. Dispatch **test-completeness-judge** to audit coverage. Re-run until APPROVED.
+6. Dispatch the **`test-engineer`** agent to audit coverage. Re-run until it approves.
 7. Push the final commits and **open (or mark ready) a pull request against `main`.** Confirm CI green via `gh run watch`. Don't fuss over perfectly clean commits or a perfectly scoped PR — see **Operating mode**.
 
 ## Working with this user
@@ -145,23 +148,24 @@ Decomposition:
 
 ## Project skills
 
-`.agents/skills/` auto-registered via `.claude/skills/`. Consult before writing code.
+Real skill directories live in `.claude/skills/` (checked in). Consult the matching one before writing code.
 
-- **`oxagen-engineering-policy`** — binding law. Non-negotiables, four-store data model, SQL conventions, bloat/vendor/naming, observability, PR discipline. Consult BEFORE writing/changing code, picking a dep, designing a schema, writing tests, opening a PR, or touching CI. Halt and surface conflicts — do not weaken the rule.
-- **`coss-ui`** — `@oxagen/ui` component system: registry, `render`-not-`asChild`, naming conventions, size scales, shadcn/Radix → coss migration. Use when building UI importing `@oxagen/ui`.
-- **`frontend-patterns`** — 136-entry technique library (CSS, a11y, CWV, forms, passkeys, view transitions, privacy, security). Open matching technique files; don't read the whole library.
-- **`reablocks`** — tables, timelines, block layouts in `apps/app`.
-- **`reagraph`** — WebGL graph visualization (knowledge-graph, lineage, topology).
-- **`reaviz`** — d3-backed charts, sparklines, metric visualizations.
-- **`oxagen-feature`** — feature scaffolding workflow (contracts → routes → UI → tests).
-- **`vendor-better-auth`** — Better Auth llms.txt index. Pair with `*-best-practices` auth skills.
-- **`oxagen-code-audit`** — full-repo audit: fan-out → adversarial verify → auto-fix → Linear tickets → HTML dashboard.
-- **`test-completeness-judge`** — gates PR opening. Audits unit, integration, E2E coverage with proof. Do not open PR until judge approves.
-- **`ci-green`** — full local CI gate, env file sync, push, watch GitHub Actions until green.
+- **`oxagen-capability-contracts`** — defining a contract, the registry, handler binding, the `invoke()` pipeline, and the parity rule (contract → API route → MCP tool → CLI → UI).
+- **`oxagen-surface-patterns`** — Hono route and xmcp tool conventions: thin adapters, auth middleware, `capabilityContext`, error shaping.
+- **`oxagen-app-conventions`** — `apps/app`: server/client boundary, `actions.ts`, the `@/components/ui` re-export layer, the single chat SSE transport, the generative-UI registry, `proxy.ts`.
+- **`oxagen-tenancy`** — `runInTenantScope`, `withTenantDb` / `withSystemDb`, RLS GUCs, principal attribution, the raw `db()` ban.
+- **`oxagen-four-store-data`** — Postgres/Drizzle conventions, Neo4j via ontology contracts, ClickHouse append-only emission, blob storage; which store a datum belongs in.
+- **`oxagen-ai-calls`** — the `@oxagen/ai` chokepoint, `modelIdOf()`, metering emission, the bans on raw `ai` imports and `ai/rsc`.
+- **`oxagen-error-handling`** — typed error classes with a stable `code`, the Hono `onError` mapping, log-then-rethrow, no swallowed catches.
+- **`oxagen-naming`** — kebab-case files, `FooProps`, SCREAMING_SNAKE constants, `is`/`has` booleans, ADR-025 verb-first capability names.
+- **`oxagen-testing`** — co-located `*.test.ts`, the coverage ratchet, `apps/app/e2e` conventions, and the narrow-run-only rule.
+- **`quality-gates`** — definition-of-done for user-facing features: the five UI states, stability, performance budgets, accessibility floor.
+- **`ai-assisted-config`** — the 8-step pattern for AI-drafted configuration UIs and the boundaries the AI must not cross.
+- **`playwright-cli`**, **`reflective-memory`**, **`continuous-learning-v2`** — browser automation, the recall/reflect protocol for agents, and instinct capture.
 
-Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` to run the full local gate, push, and watch CI green before opening or finalizing the PR.
-UI → `coss-ui` + `frontend-patterns` + component libs as needed.
-Auth → `vendor-better-auth` + Better Auth `*-best-practices`. New features → `oxagen-feature`.
+Routing: code/schema/test/PR/CI → the matching `oxagen-*` skill first; then `pnpm gate`, push, and `gh run watch` until green before opening or finalizing the PR. UI → `oxagen-app-conventions` + `quality-gates`. Auth → Better Auth docs via Context7 plus `oxagen-tenancy`. Agent definitions for review, debugging, docs, e2e, and shipping live in `.claude/agents/`.
+
+The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `frontend-patterns`, `reablocks`, `reagraph`, `reaviz`, `oxagen-feature`, `vendor-better-auth`, `oxagen-code-audit`, `ci-green`, `test-completeness-judge`, and the vendored third-party skills) was deleted from git on 2026-07-10 in commit `dd36ade55`. Its symlinks under `.claude/skills/` dangled for two months and were pruned; the content is recoverable from `dd36ade55^` if any of it is wanted back.
 
 ## Production URLs (interim)
 
@@ -214,15 +218,16 @@ Authorized and encouraged every session without asking permission. Use `creds.js
 
 **Stack:** `apps/app` → `http://localhost:3000`, `apps/docs` → `http://localhost:3300`, API → `:4000`, MCP → `:4100`. Local Postgres on `:5433`. `pnpm dev` starts all apps + Docker.
 
-**Login:** Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}/{ws}/ask`. Returning: `/login`.
+**Login:** Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (org dashboard). Workspace chat front door: `/{org}/{ws}/sessions`. Returning: `/login`.
 
-**Browser:** Prefer chrome-devtools MCP (`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`). The chrome-devtools `fill` tool appends to inputs — to set a React-controlled field, use `evaluate_script` with the native value setter + a bubbling `input` event.
+**Browser:** Use whichever browser MCP the session exposes — chrome-devtools (`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`) or Claude in Chrome (`mcp__claude-in-chrome__*`). Browser `fill`-style tools append to inputs — to set a React-controlled field, run a script that uses the native value setter + a bubbling `input` event.
 
 ## Key dependency versions
 
-- **Next.js `16.2.7`** — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
-- **AI SDK `ai@6.0.x`** — use `modelIdOf()` for model resolution. `streamText`/`generateObject`/`generateText` are correct. `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**. `@ai-sdk/react` permitted for non-chat client surfaces only.
-- **TypeScript `6.0.3`** — no `any`.
+- **Next.js `16.2.10`** + React `19.2.6` — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
+- **AI SDK `ai@7.0.14`** — use `modelIdOf()` for model resolution. `streamText`/`generateObject`/`generateText` are correct. `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**. `@ai-sdk/react` permitted for non-chat client surfaces only.
+- **TypeScript `6.0.3`** (pinned via `pnpm-workspace.yaml` overrides, alongside `drizzle-orm@0.45.2`) — no `any`.
+- **Hono `4.12.x`**, **Better Auth `1.6.x`**, **xmcp `0.6.x`**, **Vitest `2.1.x`**, **Playwright `1.60.x`**, **Node `>=24`**, **pnpm `11.7.0`** (`packageManager`).
 
 ## App stack
 
@@ -243,8 +248,8 @@ Authorized and encouraged every session without asking permission. Use `creds.js
   2. It has a binding in `apps/app/capability-ui-map.json` → `{ route, page, entry, proof }`, where `page` exists and `proof` points at a runtime artifact (a screenshot committed under `verifications/<session>/`, or an `apps/app/e2e/<slug>.spec.ts`) captured against a **working, non-erroring** page.
   3. `pnpm check:ui-parity` enforces it. **Forward gate** (`--strict` fails CI): every `app`-layer capability must be bound to an existing, proven page. **Reverse advisory** (warn-only): every capability the app actually invokes (`invoke(<contract>.name, …)`) but does not declare `app` for is flagged — either promise + wire it, or it is internal plumbing behind another surface. Wired into `pnpm gate`. Run `pnpm check:ui-parity --json` to see `{ forward, reverse }`.
   4. Prime-directive corollary: encountering an app surface that 404s / throws / renders a placeholder for a capability that works elsewhere is a **defect to fix now** — wire the UI or, if the build is large (Opus/Fable-tier), open a sub-issue under the `UI Capability Parity` milestone in Linear before moving on. Never ship the dead surface.
-- **Mostly-wired-now (verified 2026-07-04, do NOT treat as mock):** the `access/*` (sessions, reviews), `developer/*` (mcp, tokens), and `security/*` (compliance, audit, mfa) app sections under `apps/app/src/app/[orgSlug]/` are real — they have server `actions.ts` backed by contracts/handlers, with unit tests. `security/compliance/page.tsx` explicitly notes "No more mock data." The `activity/` routes under `apps/app/src/app/[orgSlug]/[workspaceSlug]/` were reintroduced (verified 2026-07-09) as real Suspense-streamed pages backed by `agent.execution.list` — treat them as live, not mock; the old "activity.*"/"tools/studio.*" mock warning stays obsolete, and there are still no `tools/studio/` routes. The `security/page.tsx` posture dashboard itself reads live data, but it honestly flags the controls that are genuinely not built yet — org-wide MFA / SSO enforcement is "not yet configurable" and the backup-restore drill is "not yet on file" — so those specific controls, plus a few `knowledge.*` / billing / settings / profile surfaces still awaiting their contract, remain unwired until the contract/feature lands, per the rule above.
-- **`check:manifest` combined route files:** `tools/scripts/check_manifest.mjs` content-scans `apps/api/src/routes/v1/*.ts` (contract imports + literal capability-name matches) as a fallback beyond per-capability filename existence, so a capability dispatched from a combined multi-capability route file no longer reports as a false-positive `api` gap — no manual verification needed before filing a parity ticket. Where these families live: `workflow.ts` (`workflow.run/cancel/status`), `connection.ts` (all 10 `connection.*`: create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update), `integration.ts` (all 7 `integration.*`), `repo.ts` (the 9 read/observe `repo.*`: branch.list/ci.status/configure/metrics/pause/pr.diff/pr.get/resume/sync — repository mutation left with the runtime), `semantic-edge.ts` (all 4 `semantic.edge.*`), `schema.ts` (all 22 `schema.*`), `plugin-schema.ts` (`plugin.schema.get/validate` + `plugin.version.list`), `reseller.ts` (all 15 `billing.reseller_*` capabilities), `org.data_plane.ts` (`get_data_plane`/`set_data_plane`). Note: `semantic-relationship.ts` and its 4 `semantic.relationship.*` capabilities were deleted in commit `1e54acd6` — do not reference that file, it no longer exists. All surviving combined files are mounted in `apps/api/src/app.ts`. To see only genuine surface gaps (ignore docs/unit/e2e-only entries): `pnpm check:manifest --json` and filter for gaps whose `missing` includes `api` or `mcp`.
+- **App route map (verified 2026-09-10, do NOT treat as mock):** org-level sections under `apps/app/src/app/[orgSlug]/` are `dashboard` (usage/metering home and the org-root redirect target), `access` (sessions, reviews), `billing`, `developer` (mcp, tokens), `governance`, `members`, `security` (compliance, audit, mfa), `settings`, `workspaces`, `new-workspace`. Workspace sections under `[orgSlug]/[workspaceSlug]/` are `sessions` (the chat front door), `knowledge`, `marketplace`, `workbench` (agents, environments, tools), `settings`. All are real pages with server `actions.ts` backed by contracts/handlers and unit tests. There are no `ask/`, `activity/`, or `tools/studio/` routes any more — do not link to them. The `security/page.tsx` posture dashboard reads live data but honestly flags controls not yet built (org-wide MFA / SSO enforcement, the backup-restore drill); those, plus any surface still awaiting its contract, remain unwired until the contract lands, per the rule above.
+- **`check:manifest` combined route files:** `tools/scripts/check_manifest.mjs` content-scans `apps/api/src/routes/v1/*.ts` (contract imports + literal capability-name matches) as a fallback beyond per-capability filename existence, so a capability dispatched from a combined multi-capability route file no longer reports as a false-positive `api` gap — no manual verification needed before filing a parity ticket. Where these families live today: `connection.ts` (the `connection.*` family: create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update), `integration.ts` (the `integration.*` family), `repo.ts` (the read/observe `repo.*` family — repository mutation left with the runtime), `schema.ts` (the `schema.*` family), `plugin-schema.ts` (`plugin.schema.get/validate` + `plugin.version.list`), `reseller.ts` (the `billing.reseller_*` family), `org.data_plane.ts` (`get_data_plane`/`set_data_plane`), `webhook.ts`, `github-*.ts`, `chat-memory.ts`, `chat-stream-translator.ts`. The former `workflow.ts`, `semantic-edge.ts`, and `semantic-relationship.ts` combined files and their capability families are gone — do not reference them. All surviving combined files are mounted in `apps/api/src/app.ts`. To see only genuine surface gaps (ignore docs/unit/e2e-only entries): `pnpm check:manifest --json` and filter for gaps whose `missing` includes `api` or `mcp`.
 
 ### `apps/cli`
 Commander only. Entry: `apps/cli/src/index.ts`. A thin governance-operations CLI over the platform API — auth, budget, cost, trace, secrets, environments, telemetry, memory, graph search — with `commands/retired.ts` printing a retirement notice for every former coding-agent command (Stella owns that work). No LLM calls, no local agent loop.
@@ -262,18 +267,23 @@ pnpm check:manifest              # verify API↔MCP capability parity (warn-only
 pnpm check:manifest --json       # machine-readable parity output
 pnpm check:contracts             # verify contract definitions
 pnpm env:check                   # validate .env.local against schema
-pnpm release:patch               # bump patch version, tag, sync PLATFORM_VERSION to Vercel
+pnpm release:patch               # bump patch version, tag, AI release notes, PLATFORM_VERSION sync (--no-vercel to skip)
 pnpm release:minor               # bump minor version
 pnpm release:major               # bump major version
-pnpm db:migrate                  # apply pending Postgres migrations
+pnpm db:migrate                  # apply pending Postgres migrations + seed platform defaults
 pnpm db:lint-migrations          # verify migration file names and checksums
+pnpm db:atlas-validate           # validate Atlas migration dir against the DB
 pnpm db:seed-iam                 # seed IAM roles and permissions
-pnpm db:seed-skills              # seed agent skill definitions
+pnpm db:seed-platform            # seed platform defaults on their own
 pnpm db:backfill-iam             # backfill org IAM for existing orgs
-pnpm gate                        # run full CI suite locally (lint + typecheck + test + build)
+pnpm gate                        # CI checks locally, scoped to packages changed since origin/main
+pnpm gate:full                   # every package, plus Playwright e2e — heavy; CI is the authoritative gate
+pnpm check:ui-parity             # app-layer capability → UI binding (--strict fails on gaps)
+pnpm check:naming                # ADR-025 verb-first snake_case compliance
 pnpm kill                        # kill all background processes
-pnpm env:pull                    # pull Vercel env vars to .env.local
+pnpm env:pull                    # materialise .env.local from the linked Vercel projects (needs vercel login + link)
 pnpm billing:stripe-sync         # sync meter pricing and discounts with Stripe
+pnpm cli:dev                     # install this tree's `oxagen` CLI on PATH and watch-rebuild it
 lsof -ti:3000                    # check if app dev server is running
 lsof -ti:4000                    # check if API server is running
 lsof -ti:4100                    # check if MCP server is running
@@ -346,6 +356,6 @@ Authoritative. Document architectural decisions in `docs/adr/`.
 
 `docs/capabilities/` must stay in sync with live contracts. Manually maintained.
 
-- Update when a contract is added, renamed, or removed. Filename: kebab-case capability name (e.g. `workflow.run.md`). Update `_index.md` for new capabilities.
+- Update when a contract is added, renamed, or removed. Filename: the contract file's dotted stem (e.g. `ontology.query.md` documents `query_ontology`), matching the still-in-progress ADR-025 file-path realignment. Update `_index.md` for new capabilities.
 - Verify `docs/capabilities/` matches contracts in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`, `apps/mcp/src/tools/*`, `apps/cli/src/commands/*` before committing a finished body of work.
 - **Gaps (last audited 2026-06-12):** ~38 contracts missing `docs/capabilities/*.md` (26 tracked by `pnpm check:manifest`; 12 more omit `"docs"` from `layers[]`, so the checker never sees them — add `"docs"` to the contract to track). This count drifts; do not hard-code it.

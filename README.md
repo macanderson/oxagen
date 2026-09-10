@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-A metered, governed, graph-grounded control plane for teams that build and resell AI agents.
+The control plane that teaches, governs, explains, and learns from every AI agent an enterprise runs.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
@@ -28,7 +28,7 @@ Oxagen combines three concerns that agent frameworks, observability tools, and R
 
 1. **Governance** — every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are schema-enforced and metered.
 2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context.
-3. **Monetization** — a ClickHouse→Stripe loop turns observed agent usage into customer billing, so teams reselling agents can meter usage and invoice their own customers.
+3. **Explain and meter** — every run is saved as one trace (who asked, what it read, what it changed, what proved it, what it cost), and a ClickHouse→Stripe loop prices the platform by use, per governed action.
 
 The platform is vendor-neutral: bring your own model keys and your own Neo4j endpoint.
 
@@ -53,7 +53,7 @@ graph LR
 
 ### The capability kernel
 
-Every feature is a **capability**: a snake_case name (`send_message`, `query_ontology`, `suggest_semantic_edges`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
+Every feature is a **capability**: a verb-first snake_case name (`send_message`, `query_ontology`, `get_ontology_neighbors`; ADR-025) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
 
 Capabilities are exposed with parity across four surfaces: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity.
 
@@ -64,7 +64,7 @@ graph TB
     B["REST API — apps/api · Hono"]
     C["MCP Server — apps/mcp · streamable HTTP"]
     D["Web App — apps/app · Next.js RSC"]
-    E["CLI — apps/cli · Commander + Ink"]
+    E["CLI — apps/cli · Commander"]
 
     A --> B
     A --> C
@@ -80,11 +80,11 @@ graph TB
 
 ### The metering→billing loop
 
-Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-043).
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so spend resolves to a workspace, an agent, a rule, and a run instead of to one monthly total. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-043).
 
 ### The knowledge graph
 
-Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`ontology.query`, `ontology.neighbors`) and answer with citations to nodes and edges carrying time-aware validity, inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
+Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`query_ontology`, `get_ontology_neighbors`) and answer with citations to nodes and edges carrying time-aware validity, inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
 
 ### Vendor neutrality
 
@@ -100,36 +100,41 @@ oxagen/
 │   ├── api          REST API + Inngest handler (Hono) — api.oxagen.sh
 │   ├── app          Next.js web app (App Router, RSC) — app.oxagen.sh
 │   ├── mcp          MCP server (streamable HTTP at /mcp) — mcp.oxagen.sh
-│   ├── cli          Developer CLI + coding agent (Commander + Ink)
+│   ├── cli          Governance-operations CLI (Commander; no agent loop — ADR-043)
 │   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
-│   └── web          Public website — oxagen.sh
+│   └── web          Public website (static, no build step) — oxagen.sh
 │
-├── packages/
+├── packages/        (30 workspace packages)
 │   ├── oxagen       Capability kernel, contracts, IAM resolution (source of truth)
 │   ├── handlers     Built-in capability handler implementations
-│   ├── agent        Governed in-app agent turn loop, MCP tool gateway, agent registry handlers
-│   ├── run-ledger   Durable run/attempt/event evidence ledger (was agent-runner)
+│   ├── agent        Governed in-app Q&A turn loop, MCP tool gateway, agent registry handlers
+│   ├── run-ledger   Durable run/attempt/event/seal evidence ledger (was agent-runner)
+│   ├── run-evidence CGP frame normalisation + RFC-8785 canonical digests for evidence
+│   ├── tacho        Wrapper that records, gates and evidences agents Oxagen does not run
+│   ├── rules        Workspace decision-rules gate inside the kernel's invoke() chain
 │   ├── ai           LLM access layer — all model calls go through here (metered)
 │   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
 │   ├── database     Drizzle schemas + Atlas migrations (Postgres)
 │   ├── ontology     Neo4j schema, indexes, graph query layer
-│   ├── telemetry    ClickHouse client + event schemas
-│   ├── tenancy      Tenant scoping (RLS seam) — withTenantDb / runInTenantScope
+│   ├── engram       Agent memory substrate (content-addressed, consolidated, decaying)
+│   ├── context-provider  Serves a workspace's memory as Context Graph Protocol frames
+│   ├── telemetry    ClickHouse client + event schemas + circuit breaker
+│   ├── tenancy      Tenant scoping (RLS seam) — withTenantDb / runInTenantScope / data planes
 │   ├── iam          Roles, permissions, policy seeds
 │   ├── auth         Better Auth integration
-│   ├── plugins      Plugin registry + entitlement gating
+│   ├── plugins      Plugin registry, entitlement gating, OAuth, workspace credentials
 │   ├── ingestion    Universal connector pipeline
-│   ├── inngest-functions  Durable background jobs
+│   ├── functions    Provider-agnostic durable-function contracts
+│   ├── inngest-functions  Inngest adapter + the durable background jobs
 │   ├── ui           Component system (@oxagen/ui)
-│   └── …            code-graph, compliance, config, crypto, engram, functions,
-│                    github, mcp-config, notifications, prompt-templates,
-│                    storage, and more
+│   └── …            compliance, config, crypto, github, glob, mcp-config,
+│                    notifications, storage
 │
 │   (ADR-043 removed the agent runtime: agent-engine, agent-worker, sandbox,
 │   skills, agent-artifacts, and stella-engine-client packages are gone.)
 │
-├── tools/scripts    Dev orchestration, CI checks (manifest, vision gate)
-└── docs/            VISION.md, capability registry, ADRs, architecture
+├── tools/           scripts (dev orchestration, CI checks), env-manager, codemods
+└── docs/            VISION.md, capability registry, ADRs, SCRs, specs
 ```
 
 ---
@@ -187,7 +192,7 @@ MCP connects over streamable HTTP; org + workspace scope is carried by the API k
 
 ## The `oxagen` CLI
 
-Running `oxagen` with no args opens an interactive TUI (`OXAGEN_NO_TUI=1` or any subcommand/pipe keeps classic behavior). Install from the working tree with live rebuilds:
+A thin governance-operations CLI over the platform API: spend ceilings and cost, run traces, knowledge-graph search, agent memory, environments, the credential vault, audit logs. It makes no LLM calls and runs no agent loop — the coding agent this CLI used to ship moved to Stella (ADR-043), and every retired command is kept as a stub that prints exactly that. Install from the working tree with live rebuilds:
 
 ```bash
 pnpm cli:dev          # build → install `oxagen` to PATH → watch + auto-rebuild
@@ -196,11 +201,11 @@ pnpm cli:install      # one-shot install, no watcher
 
 ```bash
 oxagen --help
-oxagen login                    # browser OAuth + PKCE; oxagen logout to clear the session
-oxagen "summarize this repo"    # one-shot agent prompt (omit the prompt for the interactive TUI)
+oxagen login          # browser-based PKCE login; oxagen logout to clear the session
+oxagen budget         # spend ceilings; oxagen cost, oxagen trace, oxagen graph search, oxagen memory, oxagen secret, oxagen env
 ```
 
-The CLI supports a local BYOK mode (no platform login) via `AI_GATEWAY_API_KEY` or `ANTHROPIC_API_KEY`. It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the disclosure and one-command opt-out. Full command reference: [`apps/cli/README.md`](apps/cli/README.md).
+It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the disclosure and one-command opt-out (`oxagen telemetry off`). Full command reference: [`apps/cli/README.md`](apps/cli/README.md).
 
 ---
 
@@ -220,7 +225,7 @@ gh run watch                                    # confirm CI green
 
 ### The gate
 
-`pnpm gate` runs the same checks as CI: ESLint (zero warnings) → TypeScript (strict, no `any`) → unit tests (coverage ratchets, capped at 90) → build → `check:manifest` (API↔MCP parity) → `check:contracts` → env check → migration lint. CI additionally runs the **Vision Gate**, which judges the PR diff against [`docs/VISION.md`](docs/VISION.md).
+`pnpm gate` runs the same checks as CI against the packages changed since `origin/main`: ESLint (zero warnings) → TypeScript (strict, no `any`) → unit tests + coverage (ratchets, capped at 90) → build → `check:brand` → `check:manifest` (API↔MCP parity) → `check:ui-parity` → `check:mobile-parity` → `check:contracts` → `check:connector-schemas` → `check:contextgraph-fixtures` → `check:mcp-externals` → `env:check` → `db:lint-migrations` → `db:atlas-validate`. `pnpm gate:full` runs the same over every package and adds the Playwright e2e suite. CI additionally runs the SOC 2 audit-coverage check, the RLS and RDS integration jobs, and the **Vision Gate**, which judges the PR diff against [`docs/VISION.md`](docs/VISION.md).
 
 ### Quality rules
 

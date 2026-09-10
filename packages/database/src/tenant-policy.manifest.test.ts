@@ -134,7 +134,7 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     // 97 as of org.model_credentials (ADR-053).
-    expect(POLICY_MANIFEST.length).toBe(97);
+    expect(POLICY_MANIFEST.length).toBe(91);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {

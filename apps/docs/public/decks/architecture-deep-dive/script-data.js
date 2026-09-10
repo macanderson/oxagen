@@ -44,7 +44,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Metering → billing",
-    say: "The same events that power observability power billing. Nothing's estimated — the meter reads what actually ran and reconciles to Stripe. Attributed per org, workspace, and agent. Per-turn USD budgets in three modes — grace, prompt, enforce — so runaway spend stops at the budget. And if you resell agents, usage flows to your customer's invoice. That loop is why we call it the Stripe for agents.",
+    say: "The same events that power observability power billing. Nothing's estimated — the meter reads what actually ran and reconciles to Stripe. Attributed per org, workspace, and agent. Per-turn USD budgets in three modes — grace, prompt, enforce — so runaway spend stops at the budget. And every dollar lands against the team that spent it, so finance can charge it back without a spreadsheet.",
   },
   {
     title: "Graph grounding",

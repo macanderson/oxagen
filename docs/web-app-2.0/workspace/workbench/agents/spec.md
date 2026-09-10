@@ -7,7 +7,7 @@
 - **Disposition vs today:** Keep
 
 ## Purpose
-The catalog of every agent definition owned by the workspace — draft, published, and deployed — and the entry point into building, editing, and launching them. This is the build-side counterpart to Ask: Ask runs agents, Workbench/Agents designs and ships them, including the definitions a team ultimately resells.
+The catalog of every agent definition owned by the workspace — draft, published, and deployed — and the entry point into building, editing, and launching them. This is the build-side counterpart to Ask: Ask runs agents, Workbench/Agents designs and ships them.
 
 ## Primary user & jobs-to-be-done
 - **Primary user:** agent builder / workspace admin
@@ -45,4 +45,4 @@ Postgres (agent_definitions, versions, deployment records) via the capabilities 
 - **Today:** `workbench/agents/page.tsx` is COMPLETE — status/deployment/version badges, row-to-builder navigation, deployed-agent Launch link, and manager-gated New button all wired.
 
 ## Vision alignment
-Agents are the unit teams build and resell — this list is where governed, versioned, publishable agent definitions become discoverable and launchable, directly serving the "Stripe for agents" wedge.
+Agents are the unit teams build and govern — this list is where governed, versioned, publishable agent definitions become discoverable and launchable, directly serving the governance wedge.

@@ -98,6 +98,21 @@ describe("runPipeline", () => {
     expect(pr.embedded).toBe(true);
   });
 
+  // Witness: the node is written by the dedup step before this point, so an
+  // unreachable embedding backend must cost the record its vector and nothing
+  // more. Throwing here discarded an entity that was already in the graph.
+  it("returns embedded=false rather than throwing when the embedder fails", async () => {
+    vi.mocked(embedEntity).mockRejectedValueOnce(new Error("gateway 429"));
+    const event = makeEvent();
+    const ctx = makeCtx({ oxagenEntityType: "task", propertyMappings: {} });
+
+    const result = await runPipeline(event, ctx);
+
+    const pr = result as PipelineResult;
+    expect(pr.embedded).toBe(false);
+    expect(pr.dedup.principalNodeId).toBe("node-principal-1");
+  });
+
   it("calls resolveEntity with the correct entityMutation", async () => {
     const event = makeEvent();
     const ctx = makeCtx({
