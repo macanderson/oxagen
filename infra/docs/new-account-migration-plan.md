@@ -262,8 +262,25 @@ user-requested tradeoffs, not drift.
   Rewritten in #2652: it resolves the `oxagen-postgres` writer endpoint,
   runs Atlas against it from the app node over SSM with no `docker exec`
   anywhere, reads the password from `/oxagen-app/postgres/password`, and
-  reports status only unless given `--apply`. Still to do: run it against
-  the cluster once. Nobody has, so the path is written and not yet proven.
+  reports status only unless given `--apply`.
+
+  Three further defects were fixed before anyone ran it, because the first
+  run against a live database is the wrong moment to meet them. Using up the
+  polling budget left the status at `InProgress`, which is not `Success`, so
+  a command still executing — very likely mid-apply — was reported as
+  `FAILED`; the obvious response to that is to run the migration again, over
+  an apply still in flight. Giving up waiting is now its own outcome, exit 2,
+  with a message that says not to re-run. SSM returns at most 24,000
+  characters per stream and does not say when it cuts, which on an apply
+  lands in the middle of the list of migrations that ran, so a truncated
+  record now says so. And the packaged `atlas.hcl` is checked for the `ci`
+  env here rather than on the node, where its absence surfaced two minutes
+  later as a message that read like a broken instance.
+
+  Still to do: run it against the cluster once. Nobody has, so the path is
+  written and not yet proven. `infra/tools/tests/` holds what can be checked
+  without an account — 44 assertions on what reaches the node and how the
+  result is judged — and CI runs them.
 
 ---
 
@@ -285,6 +302,8 @@ so the code and this record agree.
 | Disk use is measured and alarmed | The CloudWatch agent is installed by SSM State Manager (`modules/app-node/monitoring.tf`) and `stacks-new/oxagen/alarms.tf` alarms at 80% on `/` and `/data`. | EC2 cannot see how full a disk is from outside. A full root disk passed every status check for days in August while every deploy failed with no output. |
 | ClickHouse and Neo4j migrations reach production by hand | `.github/workflows/store-migrate.yml`, a manual dispatch that forwards the node's loopback ports to a runner and runs the repository's own runner; `apply=false` prints the pending list and writes nothing. | Production ClickHouse had no tables from the cutover until 2026-09-09: the store listens on loopback only and no path existed. Manual on purpose, matching Postgres: a schema change to a live store is read before it is applied. |
 | The `bootstrap` stack keeps its state in S3 | `platform/bootstrap/terraform.tfstate` in the state bucket, like every other stack. | Its state used to live on one laptop, so CI could not read it and planned to recreate the bucket and lock table on every run. The reason it was local — the bucket cannot exist before the stack that creates it — is true of the first apply only. |
+| The ingestion key moves to this account | `stacks-new/oxagen/crypto.tf` creates `alias/oxagen-app/ingestion`, grants the node role the calls envelope encryption makes, and manages the parameter that names it. Applied 2026-09-09, run 34411814281. | The parameter still named a key in `578673726240`/`us-east-2`, so the last thread of the cutover was load-bearing — and retiring that account would have taken the platform's encryption with it. No re-wrap was needed: the old key's policy admits only that account's root, so nothing here had ever encrypted successfully and every ciphertext column was empty. That is also why the GitHub connect flow returned 500 after the cutover. #2680; runbook in `docs/ops/ingestion-key-cutover.md`. |
+| Both CI roles are load-bearing rather than optional | `.github/workflows/infra.yml` no longer tolerates a failure to assume either `gha-infra-plan` or `gha-infra-apply`. | Both were bootstrapped by hand and both have since been exercised — run 34411814281 planned and applied the `oxagen` stack. Kept, the tolerance would invert: a revoked role would skip the apply and report green, so `main` would claim to have applied a change the account never received. #2648. |
 
 The plan for `stacks-new/oxagen` against the live account read `No changes`
 on 2026-09-08 after the node replacement, and again on 2026-09-09 before the
