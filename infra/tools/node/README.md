@@ -119,4 +119,4 @@ The token lives twice because the engine's container reads its own prefix
 1. Have its repository publish `<service>-standalone.tgz` with a manifest.
 2. Add its hostname to `/opt/oxagen/caddy/Caddyfile` and reload Caddy.
 3. Add the service name to `local.platform_services` (or the relevant role) in
-   `stacks/ci-deploy/roles.tf` and apply, so CI may publish that object.
+   `stacks-new/ci-deploy/roles.tf` and apply, so CI may publish that object.
