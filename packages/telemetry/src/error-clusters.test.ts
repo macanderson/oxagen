@@ -107,7 +107,12 @@ describe("clusterErrorEvents", () => {
 
   it("issues a second, non-grouped aggregate for totalErrors/distinctClusters over the same filters", async () => {
     mockCalls([], [{ total_errors: 42, distinct_clusters: 5 }]);
-    await clusterErrorEvents({ orgId: ORG, workspaceId: WS, severity: "error", source: "api" });
+    await clusterErrorEvents({
+      orgId: ORG,
+      workspaceId: WS,
+      severity: "error",
+      source: "api",
+    });
 
     const totalsQuery = callAt(1);
     expect(totalsQuery.query).toContain("count() AS total_errors");
@@ -129,7 +134,12 @@ describe("clusterErrorEvents", () => {
     expect(callAt(0).query).not.toContain("source = {source:String}");
 
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG, workspaceId: WS, severity: "fatal", source: "mcp" });
+    await clusterErrorEvents({
+      orgId: ORG,
+      workspaceId: WS,
+      severity: "fatal",
+      source: "mcp",
+    });
     expect(callAt(2).query).toContain("severity = {severity:String}");
     expect(callAt(2).query).toContain("source = {source:String}");
     expect(callAt(2).query_params).toMatchObject({

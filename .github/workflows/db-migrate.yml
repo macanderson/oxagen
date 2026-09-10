@@ -2,11 +2,20 @@
 #
 # Why this exists: pipeline.yml used to carry a `migrate` job that applied the
 # committed Atlas migrations to prod on every push to main. That job was retired
-# in #1341, having been unable to act on any event since #1280. So this workflow
-# is no longer an escape hatch beside an automatic path — it is the only working
-# path from a committed migration to production Postgres, and prod drifts behind
-# the migration directory until someone runs it ("column ... does not exist"
-# 500s).
+# in #1341, having been unable to act on any event since #1280, and prod drifts
+# behind the migration directory until someone runs a migration by hand
+# ("column ... does not exist" 500s — most recently #1275, 2026-09-09).
+#
+# This workflow is NOT that working path for `target: production` today, and
+# the "Guard — the database is reachable from this runner" step below exists
+# because it is not: on account 916294258235, Aurora's security group admits
+# 5432 only from the app node, so a hosted runner always fails that guard
+# (oxagen#2652). The path that actually reaches production Postgres is
+# `infra/tools/run-db-migrations.sh`, run from the app node itself — see that
+# script's header, and #1275's most recent comment for it being used that way
+# against production on 2026-09-09. Whether `target: preview` reaches its
+# database from a hosted runner is not established here either way; the guard
+# above checks TCP reachability for both targets rather than assuming.
 #
 # pipeline.yml still runs `atlas migrate apply --env ci` in three jobs, but each
 # targets an ephemeral Postgres service container in CI, never production.

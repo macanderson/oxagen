@@ -13,8 +13,21 @@
  * Usage (CI — called on-failure from .github/workflows/nightly.yml):
  *   pnpm e2e:failure-ticket
  *
- * Safe by design: missing LINEAR_API_KEY → no-op exit 0 so a misconfigured
- * runner never breaks an already-failing job further.
+ * Three outcomes, honestly reported (#2555):
+ *   1. No LINEAR_API_KEY configured (e.g. a fork) → silent no-op, exit 0.
+ *   2. LINEAR_API_KEY is set but the Linear call fails (rejected credential,
+ *      GraphQL error, network error) → exit 0 still, BUT the step is no
+ *      longer silently green: a `::error::` GitHub Actions annotation is
+ *      printed to stdout and a summary is appended to $GITHUB_STEP_SUMMARY
+ *      (see `failureReport`/`reportFailure` below), so a reader sees the
+ *      miss on the run page without opening the step's log. A rejected
+ *      credential (permanent — every future run will fail the same way) is
+ *      worded differently from a transient network blip (see
+ *      `isPermanentFailure`).
+ *   3. Success → ticket filed or updated, exit 0.
+ * In every case the script exits 0. The nightly e2e job's own conclusion is
+ * decided by the tests, never by this script — a Linear outage must not
+ * flip the job red, and a Linear success must not paper over a red suite.
  *
  * Env vars (all provided by GitHub Actions context):
  *   LINEAR_API_KEY        — repo secret (lin_api_… personal key)
@@ -256,7 +269,7 @@ async function createTracker(
   return result.issueCreate.issue;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   if (!API_KEY) {
     log("no LINEAR_API_KEY — skipping (no-op).");
     return;

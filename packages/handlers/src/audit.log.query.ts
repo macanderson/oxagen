@@ -56,7 +56,9 @@ async function callerHoldsOrgAuditRole(
   const membership = await tx
     .select({ role: schema.orgUsers.role })
     .from(schema.orgUsers)
-    .where(and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)))
+    .where(
+      and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)),
+    )
     .limit(1);
 
   const role = membership[0]?.role?.toLowerCase();

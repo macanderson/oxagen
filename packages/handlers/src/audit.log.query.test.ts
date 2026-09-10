@@ -205,7 +205,10 @@ describe("auditLogQueryHandler — workspace boundary", () => {
   it("defaults the workspace predicate to ctx.workspaceId for a non-org-admin", async () => {
     mocks.orgRole = "member";
 
-    await auditLogQueryHandler({ source: "security", limit: 50, offset: 0 }, CTX);
+    await auditLogQueryHandler(
+      { source: "security", limit: 50, offset: 0 },
+      CTX,
+    );
 
     expectWhere(orgIs(CTX.orgId), workspaceIs(CTX.workspaceId));
   });
@@ -213,7 +216,10 @@ describe("auditLogQueryHandler — workspace boundary", () => {
   it("omits the workspace predicate for an org Owner (the Governance hub feed)", async () => {
     mocks.orgRole = "owner";
 
-    await auditLogQueryHandler({ source: "security", limit: 50, offset: 0 }, CTX);
+    await auditLogQueryHandler(
+      { source: "security", limit: 50, offset: 0 },
+      CTX,
+    );
 
     expectWhere(orgIs(CTX.orgId));
   });
@@ -223,7 +229,10 @@ describe("auditLogQueryHandler — workspace boundary", () => {
     // deny a legitimately promoted admin.
     mocks.orgRole = "Admin";
 
-    await auditLogQueryHandler({ source: "security", limit: 50, offset: 0 }, CTX);
+    await auditLogQueryHandler(
+      { source: "security", limit: 50, offset: 0 },
+      CTX,
+    );
 
     expectWhere(orgIs(CTX.orgId));
   });
@@ -256,7 +265,12 @@ describe("auditLogQueryHandler — workspace boundary", () => {
     mocks.orgRole = "member";
 
     await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0, workspaceId: CTX.workspaceId },
+      {
+        source: "security",
+        limit: 50,
+        offset: 0,
+        workspaceId: CTX.workspaceId,
+      },
       CTX,
     );
 
