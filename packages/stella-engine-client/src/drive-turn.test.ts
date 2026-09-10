@@ -310,6 +310,82 @@ describe("driveTurn", () => {
     expect(result.outcome.status).toBe("completed");
   });
 
+  it("answers a requery request through the host's handler, and with null when there is none", async () => {
+    const script: ServerFrame[] = [
+      {
+        type: "requery_request",
+        request_id: "rq-1",
+        signal: {
+          prompt: "p",
+          recent_tool_calls: [],
+          touched_paths: [],
+          errors_seen: [],
+          step: 1,
+          since_last_query: 1,
+        },
+      } as ServerFrame,
+      {
+        type: "turn_complete",
+        outcome: { status: "completed", text: "", cost_usd: 0 },
+      },
+    ];
+    const withHandler = setup({}, script);
+    await driveTurn(withHandler.client, {
+      request: { provider_id: "openrouter", messages: [] },
+      handlers: goldenHandlers({
+        onRequeryRequest: async (signal) => `context for ${signal.prompt}`,
+      }),
+      sleep: noSleep,
+    });
+    expect(
+      withHandler.engine.posts.find((p) => p.route === "requery-result")?.body,
+    ).toEqual({
+      request_id: "rq-1",
+      context: "context for p",
+    });
+
+    const without = setup({}, script);
+    await driveTurn(without.client, {
+      request: { provider_id: "openrouter", messages: [] },
+      handlers: goldenHandlers(),
+      sleep: noSleep,
+    });
+    expect(
+      without.engine.posts.find((p) => p.route === "requery-result")?.body,
+    ).toEqual({
+      request_id: "rq-1",
+      context: null,
+    });
+
+    const throwing = setup({}, script);
+    const err = await driveTurn(throwing.client, {
+      request: { provider_id: "openrouter", messages: [] },
+      handlers: goldenHandlers({
+        onRequeryRequest: async () => {
+          throw new Error("context plane down");
+        },
+      }),
+      sleep: noSleep,
+    }).catch((e: unknown) => e);
+    // The step still proceeded with a null answer, and the host hears about the failure.
+    expect(
+      throwing.engine.posts.find((p) => p.route === "requery-result")?.body,
+    ).toEqual({ request_id: "rq-1", context: null });
+    expect((err as Error).message).toBe("context plane down");
+  });
+
+  it("waits the real backoff between reconnects when no sleep is injected", async () => {
+    const { client } = setup({ dropAfterFrames: 2 });
+    const started = Date.now();
+    const result = await driveTurn(client, {
+      request: { provider_id: "openrouter", messages: [] },
+      handlers: goldenHandlers(),
+      resume: { baseDelayMs: 30, maxDelayMs: 30, maxAttempts: 3 },
+    });
+    expect(result.resumes).toBeGreaterThanOrEqual(1);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(25);
+  });
+
   it("delivers hold and release frames to onHold", async () => {
     const script: ServerFrame[] = [
       { type: "turn_held", reason: "operator" },
