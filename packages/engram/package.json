@@ -20,6 +20,7 @@
   "dependencies": {
     "@anthropic-ai/tokenizer": "0.0.4",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/billing": "workspace:*",
     "tiktoken": "1.0.22",
     "zod": "3.25.76"
   },

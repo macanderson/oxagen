@@ -15,9 +15,11 @@
 import { z } from "zod";
 import {
   generateObjectFor,
+  resolveModelFundingSource,
   selectModel,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import type { MemoryRecord, SemanticBody } from "../types";
 import { jaccard, jaccardSets, tokenize } from "./text-similarity";
 
@@ -213,15 +215,23 @@ export async function extractFactFromCluster(
   if (!options || !hasGatewayKey()) return heuristic;
 
   try {
+    // Who pays, resolved rather than assumed (ADR-053 §3). Both fields are
+    // required precisely so this is not guessed: the old defaults billed an
+    // organisation that had brought its own key, and charged it under a reason
+    // the assistant spend cap cannot see. The credential that answers is the
+    // same one the funding source names, so the model is selected with it.
+    const funding = await resolveModelFundingSource(options.telemetry.orgId);
     const { object } = await generateObjectFor({
       schema: DistilledFactSchema,
       // Small/cheap "fast" tier — distillation is a high-volume background job.
-      model: selectModel({ tier: "fast" }),
+      model: selectModel({ tier: "fast", credential: funding.credential }),
       // Temperature 0 so the decoration (domain label) is itself deterministic.
       temperature: 0,
       system: DISTILL_SYSTEM_PROMPT,
       prompt: buildClusterPrompt(heuristic.fact, cluster),
       telemetry: options.telemetry,
+      fundedBy: funding.fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     });
     const domain = object.domain.trim();
     // Decoration only: keep the deterministic fact, adopt the model's domain

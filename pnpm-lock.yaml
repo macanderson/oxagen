@@ -948,6 +948,9 @@ importers:
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
       tiktoken:
         specifier: 1.0.22
         version: 1.0.22

@@ -9,11 +9,21 @@ import type { Namespace, Provenance } from "../types";
 
 // Mock the AI chokepoint. `selectModel` returns a sentinel; `generateObjectFor`
 // is controlled per-test. `vi.hoisted` lets the mock factory reference these.
-const { generateObjectFor, selectModel } = vi.hoisted(() => ({
-  generateObjectFor: vi.fn(),
-  selectModel: vi.fn(() => ({ modelId: "test/fast" })),
+// `resolveModelFundingSource` answers platform funding with no credential,
+// which is what an organisation that has not brought its own key gets.
+const { generateObjectFor, selectModel, resolveModelFundingSource } =
+  vi.hoisted(() => ({
+    generateObjectFor: vi.fn(),
+    selectModel: vi.fn(() => ({ modelId: "test/fast" })),
+    resolveModelFundingSource: vi
+      .fn()
+      .mockResolvedValue({ fundedBy: "platform" }),
+  }));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
 }));
-vi.mock("@oxagen/ai", () => ({ generateObjectFor, selectModel }));
 
 // Import after the mock is registered.
 import {
