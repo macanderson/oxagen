@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
     "preview": "node scripts/build.mjs && python3 -m http.server -d dist 5500",
     "check:links": "node scripts/check-links.mjs",
     "test:unit": "vitest run",

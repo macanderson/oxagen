@@ -27,12 +27,14 @@ describe("classifyStack", () => {
     expect(result.status).toBe("partial");
     if (result.status === "partial") {
       expect(result.bound).toEqual(bound);
-      expect(result.free.map((p) => p.port)).toEqual([3300, 4000, 4100]);
+      expect(result.free.map((p) => p.port)).toEqual([3300, 4000, 4100, 5500]);
     }
   });
 
-  it("treats the app ports as 3000/3300/4000/4100 only (datastores excluded)", () => {
-    expect(APP_PORTS.map((p) => p.port)).toEqual([3000, 3300, 4000, 4100]);
+  it("treats the app ports as 3000/3300/4000/4100/5500 only (datastores excluded)", () => {
+    expect(APP_PORTS.map((p) => p.port)).toEqual([
+      3000, 3300, 4000, 4100, 5500,
+    ]);
   });
 });
 
