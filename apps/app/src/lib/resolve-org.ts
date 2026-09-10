@@ -354,8 +354,9 @@ export const assertOrgMember = cache(
   },
 );
 
-// Every role Set below is lowercase, and every read that compares against one
-// lowercases first. `org_users.role` is written in BOTH casings today — the
+// Every role Set below is lowercase, and every value compared against one is
+// lowercased first — at the source in getOrgRole, and at the two reads here
+// that query the column directly. `org_users.role` is written in BOTH casings today — the
 // lowercase membership role by org.create and the invite-accept path, TitleCase
 // by workspace.invite.send's mapRole() and org.member.role.change, which writes
 // the IAM role NAME. The column's CHECK is `lower(role) IN (...)`, so both are
@@ -452,7 +453,7 @@ const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
  */
 export const assertOrgAdmin = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const role = (await getOrgRole(orgId, userId))?.toLowerCase();
+    const role = await getOrgRole(orgId, userId);
     if (!role || !ORG_ADMIN_ROLES.has(role)) {
       notFound();
     }
@@ -543,9 +544,15 @@ export const resolveWorkspaceScope = cache(
 );
 
 /**
- * Return the caller's role in the org, or null when they are not a member.
- * Read-only (does NOT 404) — use for UI gating (e.g. enabling/disabling the
- * audit-export button). For a hard server gate use {@link assertSecurityManager}.
+ * Return the caller's role in the org, LOWERCASED, or null when they are not a
+ * member. Read-only (does NOT 404) — use for UI gating (e.g. enabling/disabling
+ * the audit-export button). For a hard server gate use
+ * {@link assertSecurityManager}.
+ *
+ * Lowercased at the source rather than at each caller, because there are a
+ * dozen callers and every one of them compares against a lowercase role Set.
+ * See the note above {@link BILLING_MANAGER_ROLES} for why the column carries
+ * both casings.
  */
 export const getOrgRole = cache(
   async (orgId: string, userId: string): Promise<string | null> => {
@@ -561,7 +568,7 @@ export const getOrgRole = cache(
         )
         .limit(1),
     );
-    return rows[0]?.role ?? null;
+    return rows[0]?.role?.toLowerCase() ?? null;
   },
 );
 
@@ -572,7 +579,7 @@ export const getOrgRole = cache(
  */
 export const assertSecurityManager = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const role = (await getOrgRole(orgId, userId))?.toLowerCase();
+    const role = await getOrgRole(orgId, userId);
     if (!role || !SECURITY_MANAGER_ROLES.has(role)) {
       notFound();
     }
