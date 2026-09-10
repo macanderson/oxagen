@@ -1,0 +1,111 @@
+---
+title: "From STaR to DeepSeek-R1: what self-improvement actually means"
+description: "A vendor says the model improves itself. Here is the research lineage behind that claim, what signal drives each loop, and the exact thing that stops it"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - self-improving-models
+tags:
+  - self-improvement
+  - reasoning
+  - synthetic-data
+  - reinforcement-learning
+  - verifiers
+draft: false
+---
+
+Someone on a call tells your team the model improves itself. Nobody in the room can say whether that means a training loop, a prompt trick, or a slide. So the claim goes unchallenged, and six weeks later you are debugging a system whose failure mode nobody predicted because nobody knew what was actually running.
+
+The research behind that sentence is real, it is about four years deep, and it is more specific than the marketing. Every published method that works is a loop with three parts: the model produces candidate outputs, something decides which candidates are good, and the model trains on the survivors. The interesting part is never the model. It is the second step. Change what does the deciding and you change what the loop can learn, how far it goes, and where it quietly stops.
+
+Here is the lineage, method by method, with the signal that drives each one and the thing that ends it.
+
+## The loop that started it: keep what checks out
+
+STaR, published in 2022, is the clean version of the idea.[^1] A model is prompted with a handful of worked examples and asked to produce a chain of reasoning for a question. If the final answer is right, the reasoning is kept. If it is wrong, the model is shown the correct answer and asked to produce a rationale that reaches it, a step the authors call rationalization. Fine-tune on everything that survived, then run the whole thing again.
+
+```text
+loop:
+  rationales = model.generate(questions)
+  keep = [r for r in rationales if r.answer == answer_key[r.question]]
+  retry = rationalize(model, wrong_ones, answer_key)
+  model = finetune(model, keep + retry)
+```
+
+The signal is the answer key. Not the model's confidence, not its self-assessment, an external label that the model cannot argue with. That is why the loop terminates in a useful place instead of drifting.
+
+It is also the limit. STaR can only learn from problems it already solves some of the time, because a problem it never gets right produces no correct rationale to train on. The rationalization step patches this by leaking the answer backward, which helps and also introduces rationales that reach the right answer through bad reasoning.
+
+Two later methods generalize the same shape. Rejection sampling fine-tuning, from the 2023 scaling study by Yuan and colleagues, samples many reasoning paths from a supervised model and keeps the correct and distinct ones as augmented training data.[^2] The paper reports that the gain is larger when the kept paths are diverse, and larger for weaker base models, which is the honest way of saying the technique is a catch-up mechanism rather than a frontier one.
+
+ReST, from DeepMind the same year, splits the loop into a Grow step that samples from the current policy and an Improve step that filters those samples with a learned reward model and runs offline reinforcement learning on what is left.[^3] Because the dataset is produced offline, it can be reused across several Improve passes, which is why the authors describe it as more efficient than typical online reinforcement learning from human feedback. They demonstrate it on machine translation.
+
+ReST swaps the answer key for a reward model, and that swap is the whole story of the next five years. A reward model is cheaper and covers more tasks. It is also a model, so it can be wrong in ways an answer key cannot.
+
+## When the model writes its own training set
+
+Self-Instruct, also 2022, moves one step earlier in the pipeline.[^4] Instead of bootstrapping reasoning for questions you already have, it bootstraps the questions. A model generates new instructions from a small seed set of human-written tasks, generates inputs and outputs for them, filters out the invalid and near-duplicate ones, and the survivors become instruction-tuning data.
+
+This is the technique that produced most of the open instruction datasets that followed, and it is worth being precise about what it does and does not verify. The filtering is heuristic. It checks that an instruction is well-formed and that it is not too similar to something already in the pool. Nothing in the pipeline checks that the generated answer is correct.
+
+That is fine for its actual job, which is teaching a model the shape of following an instruction. It is not a correctness loop, and treating it as one is a common and expensive mistake.
+
+## When the model writes its own reward
+
+Constitutional AI, from Anthropic in 2022, replaces the human labeler for one specific axis.[^5] The model critiques and revises its own outputs against a written list of principles, then a preference model trained on those AI-generated comparisons drives reinforcement learning. The paper's claim is narrow and worth quoting: it trains a harmless assistant through self-improvement "without any human labels identifying harmful outputs."
+
+The humans did not leave. They wrote the constitution. The signal comes from outside the model, it just arrives as text at the start instead of as labels throughout.
+
+RLAIF, from Google in 2023, tested how far this generalizes.[^6] Using an off-the-shelf model as the preference labeler, it reports performance comparable to reinforcement learning from human feedback on summarization and dialogue, and improvement over the supervised baseline even when the labeler is the same size as the policy. That last detail is the surprising one. A model no larger than the one being trained still produces a usable training signal.
+
+Self-Rewarding Language Models, from Meta in 2024, closes the loop completely.[^7] One model generates candidate responses, judges them with an LLM-as-a-Judge prompt, and trains on its own preferences. Three iterations on Llama 2 70B produced a model that beat Claude 2, Gemini Pro, and GPT-4 0613 on the AlpacaEval 2.0 leaderboard. Both abilities improved together: the model got better at following instructions and better at judging.
+
+Read the evaluation carefully before reading the result as unbounded. AlpacaEval 2.0 is a preference benchmark scored by a model judge. The loop improved the thing a model judge rewards, measured by a model judge. That is a real result about instruction-following style. It is not evidence that a model can bootstrap its way to being right about facts, and the paper runs three iterations, not thirty.
+
+## When the loop moves inside the forward pass
+
+Quiet-STaR, from 2024, asks what happens if the reasoning step is not a separate prompt but a habit at every token.[^8] The model generates short internal rationales in parallel at each position, and the training signal is whether a rationale improved the prediction of the text that follows. Rationales that help get reinforced. Rationales that do not are discarded.
+
+The reported gains are zero-shot and come without task-specific fine-tuning: GSM8K from 5.9% to 10.9%, and CommonsenseQA from 36.3% to 47.2%.
+
+The verifier here is the corpus itself. That is elegant, because ordinary text is unlimited and needs no labeling, and it is also the limit. Predicting the next token better is a proxy for thinking better, not the same thing. A thought that makes the following sentence more predictable may be a good inference, or it may be a good guess about the author's habits.
+
+## Where it stands: reinforcement learning on answers you can check
+
+DeepSeek-R1, released in January 2025, is the current reference point.[^9] R1-Zero was trained with large-scale reinforcement learning and no supervised fine-tuning step first. Reasoning behaviors emerged from the reward alone. The Nature version of the paper describes self-reflection, verification, and dynamic strategy adaptation appearing without human-labeled reasoning trajectories.[^10]
+
+The preprint is blunt about what that cost. R1-Zero has "poor readability, and language mixing." The shipped R1 fixes this with multi-stage training and cold-start data before the reinforcement learning phase. So the pure loop worked, and it produced something a person could not comfortably read, and a human-curated stage was added to make it usable.
+
+The load-bearing detail is what the reward measured. Reinforcement learning at that scale works on tasks where an automatic checker can score an answer: mathematics, competitive programming, and similar domains where correctness is decidable without a human. This is the same signal STaR used, applied with far more compute. Verification, not self-assessment, is the through-line. Cobbe and colleagues made the case in 2021 on GSM8K, a set of 8.5 thousand grade-school math problems, where training a verifier to rank sampled solutions scaled better with data than fine-tuning did.[^11]
+
+| Method | Signal source | Verifier | Known limit |
+|---|---|---|---|
+| STaR (2022) | Rationales for labeled questions | The answer key | Only learns problems it already sometimes solves |
+| Self-Instruct (2022) | Model-generated instruction data | Heuristic filters only | Nothing checks whether the answer is correct |
+| Constitutional AI (2022) | Self-critique against written principles | Human-written principles | Targets harmlessness, not correctness |
+| RFT (2023) | Sampled reasoning paths, kept if correct | The answer key | Gains shrink as the base model gets stronger |
+| ReST (2023) | Samples from the current policy | A learned reward model | Inherits every flaw in the reward model |
+| RLAIF (2023) | An LLM labeling preference pairs | The labeler model | Produces a preference, not a fact |
+| Self-Rewarding LM (2024) | The model judging its own output | The same model | Judge and student share blind spots |
+| Quiet-STaR (2024) | Whether a thought improves prediction | The training corpus | Prediction gain is a proxy for reasoning |
+| DeepSeek-R1-Zero (2025) | Reward on checkable tasks | An automatic checker | Poor readability, language mixing |
+
+Read the Verifier column top to bottom. Every method that produced a durable capability gain has something in that column the model does not control. Every method where the column collapses back onto the model itself produced a gain in something a model measures. That distinction is the one to carry into the next vendor call, and it is exactly where the failures live: models struggle to correct their own reasoning without external feedback, and sometimes get worse trying.[^12]
+
+## Where this meets Oxagen
+
+Oxagen does not train models and does not run agents. It governs them, and the Verifier column is why that matters commercially. A typed contract binds an agent's identity, its knowledge scope, its permitted actions, its commercial terms, and its verified outcome into one auditable record, which means the outcome signal lives outside the model that produced it. That record is also what gets metered and rated. If you want to know whether a self-improving system is actually improving, you need an outcome log the system cannot write for itself.
+
+[^1]: Zelikman, E., Wu, Y., Mu, J., & Goodman, N. D. (2022). *STaR: Bootstrapping Reasoning With Reasoning*. arXiv. https://arxiv.org/abs/2203.14465
+[^2]: Yuan, Z., Yuan, H., Li, C., Dong, G., Lu, K., Tan, C., Zhou, C., & Zhou, J. (2023). *Scaling Relationship on Learning Mathematical Reasoning with Large Language Models*. arXiv. https://arxiv.org/abs/2308.01825
+[^3]: Gulcehre, C., Le Paine, T., Srinivasan, S., Konyushkova, K., Weerts, L., Sharma, A., Siddhant, A., Ahern, A., Wang, M., Gu, C., Macherey, W., Doucet, A., Firat, O., & de Freitas, N. (2023). *Reinforced Self-Training (ReST) for Language Modeling*. arXiv. https://arxiv.org/abs/2308.08998
+[^4]: Wang, Y., Kordi, Y., Mishra, S., Liu, A., Smith, N. A., Khashabi, D., & Hajishirzi, H. (2022). *Self-Instruct: Aligning Language Models with Self-Generated Instructions*. arXiv. https://arxiv.org/abs/2212.10560
+[^5]: Bai, Y., et al. (2022). *Constitutional AI: Harmlessness from AI Feedback*. arXiv. https://arxiv.org/abs/2212.08073
+[^6]: Lee, H., et al. (2023). *RLAIF vs. RLHF: Scaling Reinforcement Learning from Human Feedback with AI Feedback*. arXiv. https://arxiv.org/abs/2309.00267
+[^7]: Yuan, W., Pang, R. Y., Cho, K., Li, X., Sukhbaatar, S., Xu, J., & Weston, J. (2024). *Self-Rewarding Language Models*. arXiv. https://arxiv.org/abs/2401.10020
+[^8]: Zelikman, E., Harik, G., Shao, Y., Jayasiri, V., Haber, N., & Goodman, N. D. (2024). *Quiet-STaR: Language Models Can Teach Themselves to Think Before Speaking*. arXiv. https://arxiv.org/abs/2403.09629
+[^9]: DeepSeek-AI (2025). *DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning*. arXiv. https://arxiv.org/abs/2501.12948
+[^10]: DeepSeek-AI (2025). *DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning*. Nature, 645, 633-638. https://doi.org/10.1038/s41586-025-09422-z
+[^11]: Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., Hesse, C., & Schulman, J. (2021). *Training Verifiers to Solve Math Word Problems*. arXiv. https://arxiv.org/abs/2110.14168
+[^12]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. arXiv. https://arxiv.org/abs/2310.01798
