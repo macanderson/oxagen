@@ -317,6 +317,12 @@ export const baseEnvSchema = z.object({
   // credits below provider cost).
   OXAGEN_METER_MARKUP: z.coerce.number().gte(1).optional(),
 
+  // ADR-052 §7.5. "shadow" counts governed actions and raises no debit, for a
+  // staged rollout; the default charges. Left optional and defaulted in code
+  // rather than here, so an unset value and an explicit "charge" are the same
+  // thing — the failure mode of a typo'd value is to charge, not to stop.
+  OXAGEN_ACTION_METER_MODE: z.enum(["shadow", "charge"]).optional(),
+
   // ── Usage-purchase volume discount (hybrid SaaS + usage pricing) ──
   // When a customer buys usage credits they earn a volume discount of
   // OXAGEN_USAGE_DISCOUNT_PERCENT% off for every OXAGEN_USAGE_DISCOUNT_INCREMENT

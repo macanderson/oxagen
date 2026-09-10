@@ -756,6 +756,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_ACTION_METER_MODE: {
+    group: "Billing",
+    description:
+      "ADR-052 governed-action meter mode: 'shadow' records actions against the " +
+      "annual counter and raises no debit; anything else (the default) charges. " +
+      "Set to shadow only for a staged rollout — the platform bills nothing at " +
+      "all while it is on.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_USAGE_DISCOUNT_PERCENT: {
     group: "Billing",
     description:
