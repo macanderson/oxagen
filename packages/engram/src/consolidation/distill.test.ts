@@ -9,11 +9,21 @@ import type { Namespace, Provenance } from "../types";
 
 // Mock the AI chokepoint. `selectModel` returns a sentinel; `generateObjectFor`
 // is controlled per-test. `vi.hoisted` lets the mock factory reference these.
-const { generateObjectFor, selectModel } = vi.hoisted(() => ({
-  generateObjectFor: vi.fn(),
-  selectModel: vi.fn(() => ({ modelId: "test/fast" })),
+const { generateObjectFor, selectModel, resolveModelFundingSource } =
+  vi.hoisted(() => ({
+    generateObjectFor: vi.fn(),
+    selectModel: vi.fn(() => ({ modelId: "test/fast" })),
+    // Defaults to `customer` deliberately. `resolveModelFundingSource` calls
+    // guessing `platform` the one direction the funding seam must never err in,
+    // so a test whose stub guessed it would be unable to catch that mistake.
+    resolveModelFundingSource: vi.fn(async () => ({ fundedBy: "customer" })),
+  }));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
 }));
-vi.mock("@oxagen/ai", () => ({ generateObjectFor, selectModel }));
 
 // Import after the mock is registered.
 import {
@@ -96,6 +106,43 @@ describe("extractFactFromCluster — LLM path", () => {
     await extractFactFromCluster(cluster, TELEMETRY);
     expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
       telemetry: TELEMETRY.telemetry,
+    });
+  });
+
+  it("charges the organisation's own funding source, never a guessed one", async () => {
+    // ADR-053: an organisation that brought its own key must not be billed for
+    // the call its key answered. The resolver is asked per organisation, and
+    // whatever it answers is what reaches the chokepoint unchanged.
+    resolveModelFundingSource.mockResolvedValueOnce({ fundedBy: "customer" });
+    generateObjectFor.mockResolvedValueOnce({
+      object: { domain: "general" },
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    });
+
+    await extractFactFromCluster(cluster, TELEMETRY);
+
+    expect(resolveModelFundingSource).toHaveBeenCalledWith(
+      TELEMETRY.telemetry.orgId,
+    );
+    expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
+      fundedBy: "customer",
+      // The reason the assistant spend cap sums. A reason outside that sum is
+      // invisible to the cap meant to bound it (ADR-052/053).
+      chargeReason: "consume_assistant_tokens",
+    });
+  });
+
+  it("passes a platform funding source through unchanged", async () => {
+    resolveModelFundingSource.mockResolvedValueOnce({ fundedBy: "platform" });
+    generateObjectFor.mockResolvedValueOnce({
+      object: { domain: "general" },
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    });
+
+    await extractFactFromCluster(cluster, TELEMETRY);
+
+    expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
+      fundedBy: "platform",
     });
   });
 
