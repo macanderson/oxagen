@@ -365,6 +365,26 @@ in this repository under [`infra/`](infra/) — `infra/stacks-new/ci-deploy/`,
 policy on `gha-infra-apply` names this one, so `infra/` here is the only place
 production infrastructure can be changed from.
 
+### Workflows nothing triggers for you
+
+Four things reach production only when a human dispatches them. None runs on a
+push, and each was made a workflow of its own rather than a step inside a job
+gated on something else — a step buried in a job whose gating is about
+something adjacent is how the Stripe sync became unreachable for months without
+anybody noticing (#1371).
+
+| Workflow | What it does | Safe default |
+| --- | --- | --- |
+| `db-migrate.yml` | Applies committed Atlas migrations to production Postgres | `apply=false` prints the pending list and changes nothing |
+| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations | `apply=false` prints the pending list |
+| `stripe-sync.yml` | Reconciles Stripe products and prices with `packages/billing/src/pricing.ts` | `apply=false` is a dry run that writes nothing |
+| `infra.yml` | Plans and applies OpenTofu — this one *does* apply on a push to `main` | plans on every pull request |
+
+Each of the three manual ones refuses to run when the credential it needs is
+absent, and says which secret to set. That is deliberate: a dispatch that
+quietly does nothing and reports success is worse than one that fails, because
+the person who dispatched it goes away believing the work happened.
+
 
 ## Security
 

@@ -1,0 +1,126 @@
+# stripe-sync.yml — manual reconcile of Stripe products/prices against the
+# repository's pricing definitions.
+#
+# Why this exists: `pnpm billing:stripe-sync --apply` had exactly one automated
+# caller — the last step of pipeline.yml's `migrate` job — and that job was
+# retired in #1341, so the step went with it.
+#
+# It had already been unreachable before it was deleted, which is the part worth
+# remembering. The step was gated on `steps.changes.outputs.pg == 'true'`, and
+# since #1280 the change-detection step has resolved `DATABASE_URL` to `''` on a
+# `workflow_dispatch`. The absence check short-circuited every step below it. So
+# anyone who dispatched that workflow expecting a Stripe sync got **a green job
+# that did nothing** — which is the failure mode this file is shaped to prevent,
+# not merely a trigger to restore.
+#
+# Two consequences for how this is written:
+#
+#   1. It is its own workflow, not a step in a job gated on something else. A
+#      step buried inside a job whose gating is about database changes is how a
+#      Stripe sync became unreachable without anyone noticing.
+#   2. Every precondition is checked explicitly and fails loudly. A dispatch that
+#      cannot do the sync says so and exits non-zero. It never reports success
+#      for a run that touched nothing.
+#
+# Safe by default: a run with apply=false is a DRY RUN. The script reports what
+# it would change and writes nothing. Read that output before applying.
+name: Stripe Sync (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write to Stripe? Leave false for a dry run that changes nothing."
+        type: boolean
+        default: false
+      skip_db:
+        description: "Skip the billing.plans upsert (Stripe only)."
+        type: boolean
+        default: false
+
+# Two concurrent syncs would race on the same Stripe products, and the script
+# transfers a price's lookup key when an amount changes — an interleaved pair
+# could leave a lookup key on an archived price.
+concurrency:
+  group: stripe-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: reconcile Stripe with packages/billing/src/pricing.ts
+    runs-on: ubuntu-latest
+    # Resolves the `production` environment's secrets. As db-migrate.yml already
+    # records, this environment's only protection rule is a branch policy, so it
+    # gates nothing and is not claimed to.
+    environment: production
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The precondition that made the old step a no-op was invisible. This one
+      # is not: no key, no run, and a message naming the secret to set.
+      - name: Guard — STRIPE_SECRET_KEY is set
+        run: |
+          set -euo pipefail
+          if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
+            echo "::error::STRIPE_SECRET_KEY is empty, so this dispatch cannot reach Stripe and nothing was reconciled. Set it as an environment secret on the 'production' environment (Settings → Environments → production → Secrets). Failing rather than reporting success, because a green run that touched nothing is what #1371 is about."
+            exit 1
+          fi
+
+      # Which Stripe account this is about to touch, stated before it touches
+      # it. The script prints its own mode line too; this one is here so the
+      # answer is in the log even if the script fails early.
+      - name: Which Stripe account
+        run: |
+          set -euo pipefail
+          case "${STRIPE_SECRET_KEY}" in
+            sk_live*) echo "::warning::Targeting the LIVE Stripe account." ;;
+            sk_test*) echo "Targeting a TEST Stripe account." ;;
+            *) echo "::error::STRIPE_SECRET_KEY is neither sk_live nor sk_test. Refusing to guess which account this is."; exit 1 ;;
+          esac
+
+      - name: Reconcile
+        run: |
+          set -euo pipefail
+          # An array, not a string. An unquoted "$args" relies on word
+          # splitting (SC2086), and a flag that silently failed to split would
+          # be an apply that ran as a dry run, or the reverse.
+          #
+          # Note for the next editor: a comment line here must not BEGIN with
+          # the linter's name, because it then parses as a directive and errors
+          # with SC1072. That is how this comment came to be worded this way.
+          args=()
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            args+=(--apply)
+            echo "::warning::apply=true — this run WRITES to Stripe."
+          else
+            echo "Dry run: reporting what would change, writing nothing."
+          fi
+          if [ "${{ inputs.skip_db }}" = "true" ]; then
+            args+=(--no-db)
+          fi
+          pnpm billing:stripe-sync "${args[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Stripe sync"
+            echo
+            echo "- apply: \`${{ inputs.apply }}\`"
+            echo "- skip billing.plans upsert: \`${{ inputs.skip_db }}\`"
+            echo
+            if [ "${{ inputs.apply }}" != "true" ]; then
+              echo "This was a **dry run** — nothing was written. Re-dispatch with \`apply=true\` once the reported changes look right."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
