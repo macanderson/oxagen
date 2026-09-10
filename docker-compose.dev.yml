@@ -30,7 +30,7 @@ services:
   # The Stella engine the in-app agent runs on (ADR-053). Published by the
   # Stella repository on every release; the tag here tracks
   # STELLA_SERVE_IMAGE_TAG in tools/scripts/package-for-node.sh. Point the
-  # surfaces at it with STELLA_SERVE_URL=http://127.0.0.1:4200 and
+  # surfaces at it with STELLA_SERVE_URL=http://127.0.0.1:4300 and
   # STELLA_SERVE_TOKEN=dev-token-change-me in .env.local.
   stella-serve:
     image: ghcr.io/macanderson/stella-serve:${STELLA_SERVE_IMAGE_TAG:-0.9.414}
@@ -41,7 +41,7 @@ services:
       STELLA_SERVE_TOOLS: remote
       STELLA_SERVE_LOG: info
     ports:
-      - "4200:8080"
+      - "4300:8080"
     healthcheck:
       test: ["CMD", "/usr/local/bin/stella-serve", "healthcheck"]
       interval: 10s

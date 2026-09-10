@@ -98,8 +98,8 @@ ls /opt/oxagen/services/<service>/releases
 is not built here: the artifact is a manifest naming the published image
 `ghcr.io/macanderson/stella-serve:<version>`, written by
 `tools/scripts/package-for-node.sh stella-serve`, which is the one place the
-version is written. It listens on loopback port 4200 and has no Caddy route
-and no public hostname; `app` and `api` reach it as `http://127.0.0.1:4200`.
+version is written. It listens on loopback port 4300 and has no Caddy route
+and no public hostname; `app` and `api` reach it as `http://127.0.0.1:4300`.
 
 Before its first deploy an operator creates three parameters:
 
@@ -107,7 +107,7 @@ Before its first deploy an operator creates three parameters:
 | --- | --- |
 | `/oxagen/production/stella-serve/STELLA_SERVE_TOKEN` | SecureString, 32 or more random characters |
 | `/oxagen/production/STELLA_SERVE_TOKEN` | the same value |
-| `/oxagen/production/STELLA_SERVE_URL` | `http://127.0.0.1:4200` |
+| `/oxagen/production/STELLA_SERVE_URL` | `http://127.0.0.1:4300` |
 
 The token lives twice because the engine's container reads its own prefix
 (`config_prefix` in the manifest) and the surfaces read the shared one.
