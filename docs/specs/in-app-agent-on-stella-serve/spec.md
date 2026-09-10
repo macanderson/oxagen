@@ -79,17 +79,37 @@ make.
 
 ## 3. The answerer
 
+Two decisions taken while building it, each reversing a line in the plan
+below and stated here so the plan is read against them.
+
+**Stateless turns, not server-owned sessions.** The plan called sessions
+"the prompt-cache win". That is true when the engine calls the vendor and
+false here: Oxagen makes every completion, and the engine hands the whole
+transcript back inside each `provider_request`, so the vendor sees the same
+prefix either way. A session would add a per-conversation id to store, a
+reclaim to recover from, and nothing the cache can feel. Each turn is
+`POST /v1/turns` with the transcript the route already assembles; `?after=`
+resume works on a stateless turn exactly as on a session turn.
+
+**The turn's result keeps its shape.** Both chat routes consume a turn as a
+stream of AI-SDK-shaped parts (`start-step`, `text-delta`, `tool-call`,
+`tool-result`, `finish`, …), and the API's on-the-wire format is pinned
+byte for byte by a snapshot test. So `runGovernedTurn` keeps its signature
+and its result, and the engine's events are mapped onto those parts inside
+it. The routes, the translators, persistence, and both wire formats do not
+change. A tool's rich host-side output (the render directives the app
+paints) is kept in a per-call table while the engine sees only its text,
+and is re-attached when the engine's `tool_result` event arrives.
+
 `packages/agent`'s `runGovernedTurn` keeps three of its four jobs and gives up
 the fourth. It still builds the system prompt, still materialises tools from
 capability contracts, and still writes the audit trail. It no longer runs
 the step loop. In its place:
 
-1. **Open or reuse a session** per chat thread. The session holds the
-   transcript on the engine, which is what keeps the prompt prefix stable
-   for the vendor's cache. A session is capped at 64 per server and
-   reclaimed after an idle hour, so a thread that finds its session gone
-   opens a new one and replays its own history from the run ledger.
-2. **Start the turn** with the user's input, the tools as full
+1. **Assemble the transcript** the way the route does today: system prompt,
+   history, the volatile context messages, the user's instruction and its
+   attachments, mapped onto `CompletionMessage`s.
+2. **Start the turn** with that transcript, the tools as full
    `ToolContract`s, and the acting user as `principal`. A bare tool schema
    is coerced to untrusted and high-risk at the engine's gate, and an absent
    principal attributes every call to an anonymous host, so both fields are
@@ -108,10 +128,13 @@ the step loop. In its place:
    surface renders tokens as they arrive and the engine's idle deadline is
    reset. The result carries usage and cost, and the cost is what the
    metering in the funding-source spec records.
-5. **Forward `event` frames** to the chat stream and to the run ledger with
-   their `seq`, so a dropped connection resumes with `?after=` rather than
-   restarting, and a `replay_truncated` frame is the signal to reload from
-   the ledger.
+5. **Forward `event` frames** to the chat stream as the parts the routes
+   already read, tracking the last `seq` so a dropped connection resumes
+   with `?after=` rather than restarting. Writing the same events to the
+   run ledger with their `seq` is the next slice, not this one: nothing
+   records a chat turn in the ledger today, and the ledger's run and
+   attempt shapes (`RunSpecV2`, retention policy, engine identity) are
+   their own piece of work.
 6. **Cancel** on client disconnect, and tolerate the 409 the server returns
    for an answer that arrives after the turn ended.
 
@@ -139,7 +162,7 @@ Oxagen tree at the commit ADR-043 names.
 | tools as `ToolContract` | accepted; bare schema coerced to untrusted | bare schema only | send contracts |
 | `principal` on the turn | yes | none | send the acting user |
 | stale `request_id` | 409 | any non-2xx threw | tolerate after cancel |
-| server-owned sessions | yes | none, whole transcript resent each turn | build; this is the prompt-cache win |
+| server-owned sessions | yes | none, whole transcript resent each turn | not used; see §3, the host makes the model call so the cache sees the same prefix either way |
 | steer, pause, resume, `turn_held` | yes | none; an unknown tag fell through and read as a hang | handle the frames; steering is optional |
 | per-turn engine knobs, budget modes | yes | budget only | send `max_output_tokens` from the output-budget module |
 | checkpoints | routes exist, no default store | none | skip for now, the run ledger is the record |
@@ -154,18 +177,20 @@ Oxagen tree at the commit ADR-043 names.
 Four slices, each landable alone and each leaving the tree better than it
 found it.
 
-1. **`packages/stella-engine-client`, rewritten.** Types generated from
-   Stella's wire schema at a pinned tag, a fetch-only client with sessions,
-   turns, resumable SSE, deltas, reverse-request answers, cancel, and steer.
+1. **`packages/stella-engine-client`, rewritten.** Types copied from
+   Stella's generated wire declarations at a pinned tag, a fetch-only client
+   with turns, sessions (available, unused by the answerer), resumable SSE,
+   deltas, reverse-request answers, cancel, and steer.
    A smoke test that builds the pinned tag's serve binary and drives one
    turn end to end, plus a fake server for the unit tests. The contract
    test for the schema pin is `check:contracts`'s neighbour: a regenerated
    type file that differs from the committed one fails the check.
-2. **The answerer in `packages/agent`.** The session and turn lifecycle from
-   §3, the kernel-backed tool answer, the funding-source-backed completion
-   answer with deltas, and the ledger write with `seq`. The chat routes in
-   `apps/app` and `apps/api` switch to it. The in-process step loop is
-   deleted in the same change, per ADR-053 §4.
+2. **The answerer in `packages/agent`.** The turn lifecycle from §3, the
+   kernel-backed tool answer, the funding-source-backed completion answer
+   with deltas, and the event-to-part mapping. The chat routes need no
+   change because the result shape is kept. The in-process step loop is
+   deleted in the same change, per ADR-053 §4. The ledger write is a
+   follow-up.
 3. **The container.** A `stella-serve` service in the node's compose file
    with its token in Parameter Store beside the others, a readiness gate in
    the deploy script, and the engine's health in the platform health check.
