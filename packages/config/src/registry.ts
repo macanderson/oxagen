@@ -302,6 +302,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
+  TRUSTED_PROXY_HOP_COUNT: {
+    group: "Rate limiting",
+    description:
+      "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
+      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
+      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
+      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
   ALERT_WEBHOOK_URL: {
     group: "Error alerting",

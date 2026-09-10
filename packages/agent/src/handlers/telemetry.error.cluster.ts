@@ -28,6 +28,7 @@ export async function telemetryErrorClusterHandler(
 
   const { clusters, totalErrors, distinctClusters } = await clusterErrorEvents({
     orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
     sinceMs,
     severity: input.severity,
     source: input.source,

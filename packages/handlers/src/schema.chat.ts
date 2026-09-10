@@ -1,6 +1,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaChat } from "@oxagen/oxagen/contracts/schema.chat";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+} from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
@@ -240,6 +245,12 @@ Conversation ID: ${conversationId}
 Draft version: ${input.draftVersionId ?? "current draft"}`;
 
   const { object } = await generateObjectFor({
+    // Platform-vs-org funding, resolved rather than assumed. The parameter is
+    // required for that reason: it used to default to `platform`, and every
+    // caller took the default, so an organisation that had brought its own key
+    // was billed for this call anyway (ADR-053 §3).
+    fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+    chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     schema: chatResponseSchema,
     prompt: input.message,
     system,

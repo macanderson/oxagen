@@ -3,29 +3,66 @@ import {
   auditLogQuery,
   type AuditEvent,
 } from "@oxagen/oxagen/contracts/audit.log.query";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
  * audit.log.query handler.
  *
- * Reads the append-only audit spine and returns a newest-first feed. The table
- * is read through withSystemDb (security_events is partitioned and lives in a
- * bypass-only schema), so tenant isolation is enforced HERE, explicitly: EVERY
- * query filters by ctx.orgId. Never relax this — a missing org filter would leak
- * another tenant's audit trail (SOC 2 §0).
+ * Reads the append-only audit spine and returns a newest-first feed. The read
+ * goes through withSystemDb, so RLS is off for it and tenant isolation is
+ * enforced HERE, explicitly: EVERY query filters by ctx.orgId. Never relax
+ * this — a missing org filter would leak another tenant's audit trail
+ * (SOC 2 §0).
  *
- * Workspace narrowing comes ONLY from `input.workspaceId`; ctx.workspaceId is
- * deliberately not applied, so the default result is the whole org's feed. That
- * is what the org Governance hub wants, but it also means a caller allowed at
- * workspace scope reads events from sibling workspaces — see the contract's
- * defaultRoles before widening who may invoke this.
+ * Workspace narrowing defaults to ctx.workspaceId, and widening past it is an
+ * org-admin act that is checked here rather than assumed. The org Governance
+ * hub still gets the whole org's feed, because the Owner/Admin who opens it
+ * passes that check; a member scoped to one workspace no longer does. The
+ * contract is sensitivity "high" on the api/mcp/agent/cli surfaces, so the
+ * caller asking to widen can be a prompt-injected agent holding a workspace
+ * role — the kernel IAM gate resolves that role against the workspace, and
+ * nothing below it re-asked about the org until now.
+ *
+ * Widening is refused rather than silently narrowed: a caller who names another
+ * workspace and gets this workspace's events back has been handed a wrong
+ * answer that looks like a right one.
  *
  * Pagination is done by over-fetching (offset+limit+1), ordering by occurredAt
  * desc, then slicing the window. Correct and bounded for the realistic admin
  * use case.
  */
+
+/**
+ * Whether the caller holds an org-level role that may read the whole org's
+ * audit feed. Mirrors the contract's `defaultRoles.org` (Owner + Admin) and the
+ * target-org re-verification in privacy.data.export.
+ *
+ * org_users.role holds the membership role, NOT the capitalized SystemOrgRole
+ * ("Owner") the IAM defaultRoles layer uses. It is written in both casings and
+ * the column's CHECK is `lower(role) IN (...)`, so a case-sensitive compare
+ * would deny a legitimately promoted admin.
+ */
+async function callerHoldsOrgAuditRole(
+  tx: Tx,
+  orgId: string,
+  userId: string | null,
+): Promise<boolean> {
+  // An API key or an unauthenticated surface has no org membership to read, so
+  // it stays at its own workspace scope.
+  if (!userId) return false;
+
+  const membership = await tx
+    .select({ role: schema.orgUsers.role })
+    .from(schema.orgUsers)
+    .where(and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)))
+    .limit(1);
+
+  const role = membership[0]?.role?.toLowerCase();
+  return role === "owner" || role === "admin";
+}
+
 export const auditLogQueryHandler: CapabilityHandler<
   typeof auditLogQuery
 > = async (input, ctx) => {
@@ -39,10 +76,37 @@ export const auditLogQueryHandler: CapabilityHandler<
   const events: AuditEvent[] = [];
 
   await withSystemDb(async (tx) => {
+    // Resolve the workspace predicate before any spine is read, so a refusal
+    // costs no query and every spine added later inherits the same decision.
+    const requested = input.workspaceId ?? null;
+    const widens = requested === null || requested !== ctx.workspaceId;
+    const mayReadOrgWide = widens
+      ? await callerHoldsOrgAuditRole(tx, orgId, ctx.userId)
+      : false;
+
+    let workspaceFilter: string | null;
+    if (requested !== null) {
+      if (requested !== ctx.workspaceId && !mayReadOrgWide) {
+        throw new Error(
+          "Forbidden: reading another workspace's audit events requires an org Owner or Admin role",
+        );
+      }
+      workspaceFilter = requested;
+    } else if (mayReadOrgWide) {
+      workspaceFilter = null; // the whole org's feed
+    } else if (ctx.workspaceId) {
+      workspaceFilter = ctx.workspaceId;
+    } else {
+      // No org role and no workspace scope leaves nothing this caller may read.
+      throw new Error(
+        "Forbidden: the org-wide audit feed requires an org Owner or Admin role",
+      );
+    }
+
     if (wantSecurity) {
       const conds: SQL[] = [eq(schema.securityEvents.orgId, orgId)];
-      if (input.workspaceId)
-        conds.push(eq(schema.securityEvents.workspaceId, input.workspaceId));
+      if (workspaceFilter !== null)
+        conds.push(eq(schema.securityEvents.workspaceId, workspaceFilter));
       if (input.eventType)
         conds.push(eq(schema.securityEvents.eventType, input.eventType));
       if (input.actorUserId)

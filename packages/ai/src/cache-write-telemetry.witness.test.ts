@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
@@ -81,6 +82,8 @@ describe("cache-write token telemetry", () => {
     }));
 
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: [{ role: "user", content: "hello" }],
       telemetry,
     }) as ReturnType<typeof streamAgentReply> & {
@@ -119,6 +122,8 @@ describe("cache-write token telemetry", () => {
     });
 
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: z.object({ answer: z.string() }),
       prompt: "answer",
       telemetry,

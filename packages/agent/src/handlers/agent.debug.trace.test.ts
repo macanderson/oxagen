@@ -7,11 +7,23 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: vi.fn() };
 });
 vi.mock("./agent.trace.get", () => ({ agentTraceGetHandler: vi.fn() }));
-vi.mock("@oxagen/telemetry", () => ({
-  fetchErrorEventsForExecution: vi.fn(),
-  fetchLogsForExecution: vi.fn(),
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  // agent.debug.trace now imports CREDIT_REASONS from @oxagen/billing, whose
+  // module graph reaches sumSpendMicros. A partial mock keeps the real exports
+  // rather than making this file list every one the chain touches.
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return {
+    ...real,
+    fetchErrorEventsForExecution: vi.fn(),
+    fetchLogsForExecution: vi.fn(),
+  };
+});
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: vi
+    .fn()
+    .mockResolvedValue({ fundedBy: "platform" }),
   generateObjectFor: vi.fn(),
   selectModel: vi.fn(() => "model-stub"),
 }));

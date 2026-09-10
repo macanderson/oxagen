@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { CREDIT_REASONS } from "@oxagen/billing";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -114,7 +115,12 @@ beforeEach(() => {
 
 describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("calls streamText with the supplied messages and default temperature", () => {
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
     expect(mocks.streamText).toHaveBeenCalledTimes(1);
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     // No system supplied → no cached system message prepended; messages pass through.
@@ -125,6 +131,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("forwards abortSignal verbatim to streamText when supplied", () => {
     const controller = new AbortController();
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       abortSignal: controller.signal,
@@ -134,13 +142,20 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("omits abortSignal when not supplied (SDK default: no cancellation)", () => {
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect("abortSignal" in arg).toBe(false);
   });
 
   it("forwards maxRetries verbatim (0 = outer system owns retries, e.g. the engine loop)", () => {
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       maxRetries: 0,
@@ -150,13 +165,20 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("omits maxRetries when not supplied (SDK default stays for retry-less surfaces)", () => {
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect("maxRetries" in arg).toBe(false);
   });
 
   it("prepends the system prompt as an Anthropic-cacheable system message", () => {
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       system: "You are Oxagen.",
       telemetry: TELEMETRY,
@@ -180,7 +202,12 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("does not set providerOptions when no effort is supplied", () => {
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.providerOptions).toBeUndefined();
   });
@@ -189,6 +216,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     // defaultModel() returns { modelId: "claude-sonnet-5" } (no "/" prefix)
     // which lands in the default/back-compat branch.
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       effort: "high",
@@ -203,7 +232,12 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("uses defaultModel() when no model arg is given", () => {
     const before = mocks.defaultModel.mock.calls.length;
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
     const after = mocks.defaultModel.mock.calls.length;
     expect(after - before).toBe(1);
   });
@@ -213,6 +247,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const before = mocks.defaultModel.mock.calls.length;
     // Cast needed because LanguageModel has more methods; modelId is what we test.
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       model: customModel as Parameters<typeof streamAgentReply>[0]["model"],
@@ -228,6 +264,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("onFinish writes a token_usage row with correct telemetry fields", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -250,6 +288,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("onFinish charges the org's credits through the gate meter", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -257,6 +297,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
+      reason: "consume_assistant_tokens",
       orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_abc",
       model: "claude-sonnet-5",
@@ -269,6 +310,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -299,6 +342,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -336,6 +381,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       onFinish: async () => {
@@ -348,6 +395,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("onFinish hashes the last user message content", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -363,6 +412,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       },
     ];
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: structuredMessages,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -376,6 +427,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       onFinish: async () => {
@@ -391,6 +444,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     mocks.hashPrompt.mockRejectedValueOnce(new Error("hash failure"));
     let calledOnFinish = false;
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       onFinish: async () => {
@@ -404,6 +459,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("forwards text, usage and finishReason to the caller-supplied onFinish", async () => {
     let captured: Record<string, unknown> | null = null;
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       onFinish: async (e) => {
@@ -419,6 +476,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("resolves promptTokens/completionTokens to 0 when usage fields are missing", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -442,6 +501,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     // branch fires and temperatureLocked = true.
     const anthropicModel = { modelId: "anthropic/claude-opus-4.8" };
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       effort: "medium",
@@ -463,6 +524,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("omits temperature entirely when an openai-prefixed model is used with effort", () => {
     const openaiModel = { modelId: "openai/gpt-5.2" };
     streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       effort: "low",
@@ -482,6 +545,7 @@ describe("streamAgentReply funding source (ADR-053)", () => {
   it("charges nothing when the organisation's own key paid, and still reports the usage", async () => {
     let calledOnFinish = false;
     const result = streamAgentReply({
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       fundedBy: "org",
@@ -507,6 +571,7 @@ describe("streamAgentReply funding source (ADR-053)", () => {
 
   it("charges when the platform key paid (fundedBy: platform, the default made explicit)", async () => {
     const result = streamAgentReply({
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       fundedBy: "platform",
@@ -517,6 +582,7 @@ describe("streamAgentReply funding source (ADR-053)", () => {
 
   it("forwards chargeReason as the ledger reason of a platform-paid charge", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
       messages: MESSAGES,
       telemetry: TELEMETRY,
       chargeReason: "consume_assistant_tokens",
@@ -530,8 +596,15 @@ describe("streamAgentReply funding source (ADR-053)", () => {
     );
   });
 
-  it("sends no reason key when chargeReason is unset, so the meter's default applies", async () => {
+  // The reason used to be optional here and default to consume_token_overage
+  // inside the meter — a reason ADR-052 retired, ADR-053 says must not be
+  // repurposed, and the assistant spend cap cannot see (it sums
+  // consume_assistant_tokens alone). Both fields are required now, so no caller
+  // can fall into the retired reason by omission.
+  it("always sends the caller's ledger reason, never a default", async () => {
     const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       messages: MESSAGES,
       telemetry: TELEMETRY,
     }) as StreamResult;
@@ -540,7 +613,7 @@ describe("streamAgentReply funding source (ADR-053)", () => {
       string,
       unknown
     >;
-    expect("reason" in arg).toBe(false);
+    expect(arg.reason).toBe("consume_assistant_tokens");
   });
 });
 
