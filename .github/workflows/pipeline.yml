@@ -621,7 +621,7 @@ jobs:
   # `environment: production` is what puts required reviewers in front of an
   # apply. That is the path to reach for.
   #
-  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh`, which earlier comments here
+  # NOT `infra/tools/run-db-migrations.sh`, which earlier comments here
   # named as the production route. It still targets the account the 2026-08-27
   # cutover left behind — it SSM-targets the old combined data node and
   # `docker exec`s a Postgres container the new account does not have (#2652).
