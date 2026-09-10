@@ -616,25 +616,41 @@ jobs:
   #                       RLS suite, and seeds platform defaults
   #   rds-compatibility   applies it again from empty as a NON-superuser role,
   #                       which is what a managed target actually is (#1347)
-  # In production: `db-migrate.yml`, dispatched by hand. It applies the same
-  # committed Atlas migrations against `PRODUCTION_DATABASE_URL`, and its
-  # `environment: production` is what puts required reviewers in front of an
-  # apply. That is the path to reach for.
+  # In production: `infra/tools/run-db-migrations.sh --apply`, run from the app
+  # node (SSM), against the Aurora cluster. It is the path that actually
+  # applies today — used that way against production on 2026-09-09 (#1275's
+  # most recent comment) — because Aurora's security group admits 5432 only
+  # from the app node's own security group and nothing else
+  # (`aws_security_group.aurora` in `infra/stacks-new/oxagen/data-services.tf`).
   #
-  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh`, which earlier comments here
-  # named as the production route. It still targets the account the 2026-08-27
-  # cutover left behind — it SSM-targets the old combined data node and
-  # `docker exec`s a Postgres container the new account does not have (#2652).
+  # NOT `db-migrate.yml`. Its `environment: production` is not a reviewer gate
+  # — that comment was corrected in the workflow itself once it turned out to
+  # be a branch policy, not a required reviewer — and its own "database is
+  # reachable from this runner" guard fails on every production dispatch by
+  # design: a hosted runner is outside the VPC, so it cannot reach Aurora
+  # (#2652). It stays for `preview` and as a status/validate dry run.
+  #
+  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh` either — a same-named
+  # script in a different (sibling, not this) repository, which earlier
+  # comments here named as the production route. It still targets the account
+  # the 2026-08-27 cutover left behind — it SSM-targets the old combined data
+  # node and `docker exec`s a Postgres container the new account does not
+  # have (#2652). `infra/tools/run-db-migrations.sh` above is this
+  # repository's own, unrelated script for the current account.
   #
   # Where production Postgres is *intended* to be, since two comments in this
   # file disagreed and one sent people hunting for a connection string that
   # could not exist (#2542): Aurora PostgreSQL Serverless v2, cluster
   # `oxagen-postgres`, declared at `infra/stacks-new/oxagen/data-services.tf`'s
-  # `aws_rds_cluster.postgres`. Intended, not observed — that is Terraform in
-  # this repository, and drift between it and the account is the sort of thing
-  # that produced #2542 in the first place. #2542's first item is an
-  # `aws rds describe-db-clusters` confirming it, which needs credentials no
-  # contributor here has, so nothing below states it as an observation.
+  # `aws_rds_cluster.postgres`. Intended, not fully observed — that is
+  # Terraform in this repository, and drift between it and the account is the
+  # sort of thing that produced #2542 in the first place. #2542's first item
+  # is an `aws rds describe-db-clusters` confirming it; the CI deploy role
+  # still has no `rds:Describe*` permission, so that call is denied even from
+  # inside the account (where-is-production.yml run 34456388188, 2026-09-10).
+  # What that same run DID observe, read-only: exactly two running EC2
+  # instances, `oxagen-nat` and `oxagen-app`, and no `oxagen-data` box — which
+  # rules out the loopback/SSM story's premise even without an RDS answer.
   #
   # What is NOT covered, named so its absence is trackable rather than merely
   # true — retiring a job silently is how the last two months happened:
@@ -736,9 +752,10 @@ jobs:
     # months — the ordering guarantee is gone either way. Restoring it is part of
     # giving production migrations a real trigger again (#1275).
     needs: [checks, test]
-    # arm64, matching the t4g.medium these ship to. An x86 build passes every
-    # check here and fails to load a native module there, at first request
-    # rather than at build.
+    # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
+    # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
+    # x86 build passes every check here and fails to load a native module
+    # there, at first request rather than at build.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     environment: production
@@ -746,7 +763,7 @@ jobs:
       contents: read
       id-token: write
     strategy:
-      # One at a time. Every service in the matrix below lands on the same 4 GB
+      # One at a time. Every service in the matrix below lands on the same 8 GB
       # instance, which also runs Neo4j and ClickHouse (Postgres moved to Aurora
       # Serverless v2); concurrent container starts are the one moment this node
       # is most likely to run out of memory.
