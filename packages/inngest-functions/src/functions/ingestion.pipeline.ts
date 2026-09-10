@@ -40,6 +40,17 @@ import { logger } from "../logger";
  * Step 6: schedule-event      fire ingestion/entity.created or entity.updated
  *                              for downstream trigger matching.
  *
+ * Neither embedding call can fail the run. Steps 3 and 5 both talk to the
+ * embedding backend, and an unreachable one used to abort the pipeline before
+ * the node was written — with nothing to replay a failed step once its retries
+ * were spent, so every record arriving during the outage was lost. An
+ * unauthenticated gateway credential, and then a free-tier rate limit, each
+ * emptied a whole GitHub backfill that way while the rest of the pipeline
+ * worked. Now step 3 degrades to "no similarity match" and step 5 records the
+ * failure, so the entity reaches the graph and downstream automations still
+ * see it. What is missing in both cases is the vector, and
+ * `MATCH (n:EntityNode) WHERE n.embedding IS NULL` is the backfill set.
+ *
  * Filters come from `@oxagen/ingestion/filters` — the same
  * pure functions the reference `runPipeline()` uses — so there is exactly one
  * implementation of DeliveryConfig enforcement. An absent / empty DeliveryConfig
@@ -269,6 +280,7 @@ export const [ingestionPipeline] = createFunction(
           | "confirmed_alias";
         principalNodeId: string;
         confidence: number;
+        similarityDeferred?: boolean;
       }> => {
         if (dedupPassA.found && dedupPassA.nodeId) {
           return {
@@ -300,9 +312,28 @@ export const [ingestionPipeline] = createFunction(
           action: resolved.action,
           principalNodeId: resolved.principalNodeId,
           confidence: resolved.confidence,
+          ...(resolved.similarityDeferred ? { similarityDeferred: true } : {}),
         };
       },
     );
+
+    // Pass B was skipped because the embedding backend could not answer. The
+    // entity is in the graph rather than discarded, but it was resolved without
+    // similarity matching, so it may be its own principal where an alias was
+    // warranted. Reported at warn because it is a silent quality regression
+    // that only an operator can act on, and because the outage that causes it
+    // affects every record while it lasts.
+    if (dedup.similarityDeferred) {
+      logger.warn(
+        {
+          naturalKey: mutation.naturalKey,
+          entityType: mutation.entityType,
+          orgId,
+          connectionId,
+        },
+        "ingestion-pipeline: embedding backend unavailable — entity written without similarity dedup; re-resolve nodes where n.embedding IS NULL once it recovers",
+      );
+    }
 
     // ── Step 4: Upsert entity node in Neo4j ──────────────────────────────────
     // Each Inngest step.run is memoized and re-executed as its own (potentially
@@ -338,18 +369,47 @@ export const [ingestionPipeline] = createFunction(
         mutation.displayName,
         mutation.properties,
       );
-      await step.run("embed", () =>
-        runInTenantScope({ orgId, workspaceId }, () =>
-          embedEntity({
-            nodeId: dedup.principalNodeId,
-            entityType: mutation.entityType,
-            text,
-            workspaceId: mutation.workspaceId,
-            orgId: mutation.orgId,
-            connectionId: mutation.connectionId,
+      // The node is already in the graph — the upsert above is step 4. Letting
+      // an embedding failure throw here would spend the step's retries and
+      // then fail the run, which skips the change event below and leaves
+      // automations blind to an entity that exists. The vector is the only
+      // thing actually missing, and a node without one is exactly what
+      // `MATCH (n:EntityNode) WHERE n.embedding IS NULL` selects for a later
+      // backfill. So the failure is recorded and the pipeline continues.
+      const embedOutcome = await step.run(
+        "embed",
+        (): Promise<{ embedded: boolean; error?: string }> =>
+          runInTenantScope({ orgId, workspaceId }, async () => {
+            try {
+              await embedEntity({
+                nodeId: dedup.principalNodeId,
+                entityType: mutation.entityType,
+                text,
+                workspaceId: mutation.workspaceId,
+                orgId: mutation.orgId,
+                connectionId: mutation.connectionId,
+              });
+              return { embedded: true };
+            } catch (err: unknown) {
+              return {
+                embedded: false,
+                error: err instanceof Error ? err.message : String(err),
+              };
+            }
           }),
-        ),
       );
+
+      if (!embedOutcome.embedded) {
+        logger.warn(
+          {
+            naturalKey: mutation.naturalKey,
+            nodeId: dedup.principalNodeId,
+            orgId,
+            err: embedOutcome.error,
+          },
+          "ingestion-pipeline: entity stored but not embedded — backfill nodes where n.embedding IS NULL",
+        );
+      }
     }
 
     // ── Step 6: Fire async downstream events ─────────────────────────────────
