@@ -15,6 +15,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 import { workspace as routes } from "@/lib/routes";
 
@@ -58,7 +59,7 @@ interface Scope {
   userId: string;
 }
 
-/** Resolve org+workspace, assert org membership (IDOR guard), return scope. */
+/** Resolve org+workspace, assert org AND workspace membership, return scope. */
 async function resolveScope(
   orgSlug: string,
   workspaceSlug: string,
@@ -67,6 +68,10 @@ async function resolveScope(
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
+  // And a member of THIS workspace: a server action is a direct POST, so the
+  // workspace layout's assertWorkspaceMember never runs, and org membership
+  // alone would open a tenant scope for a workspace the caller is not in.
+  await assertWorkspaceMember(ws.id, session.user.id);
   return { orgId: org.id, workspaceId: ws.id, userId: session.user.id };
 }
 
