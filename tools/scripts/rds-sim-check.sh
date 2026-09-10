@@ -61,11 +61,12 @@ url() { # url <user> <password> <database> [extra query]
 # writes. Granting it costs no privilege the guard is looking for: it is a GUC
 # the policies read, not a permission.
 #
-# TODAY'S PRODUCTION DOES NOT SET IT and does not need to — oxagen-aws-infra's
-# run-db-migrations.sh applies against the Dockerised Postgres on the oxagen-data
-# node as `oxagen`, which is that container's superuser. An Aurora rebuild has no
-# superuser and would be refused here. That is a real finding about the deploy
-# rather than about this script, and it is filed.
+# TODAY'S PRODUCTION DOES NOT SET IT and does not need to —
+# `infra/tools/run-db-migrations.sh` applies against the Dockerised Postgres on
+# the oxagen-data node as `oxagen`, which is that container's superuser. An
+# Aurora rebuild has no superuser and would be refused here. That is a real
+# finding about the deploy rather than about this script, and it is filed as
+# macanderson/oxagen#2652.
 SIM_OPTS="&options=-c%20app.rls_bypass%3Don"
 
 SUPERUSER_URL="$(url "$PGSUPERUSER" "$PGSUPERPASS" "$PGSUPERDB")"

@@ -100,12 +100,12 @@ smallest possible migration. Treat that as a spike (task 1c), not the plan.
 ```
 
 - **Region:** `us-east-2` for the bucket, Lambda, and DynamoDB — matching
-  `infra/environments/production/providers.tf`. **The ACM certificate must be
+  `infra/legacy/environments/production/providers.tf`. **The ACM certificate must be
   issued in `us-east-1`**; CloudFront reads certificates only from that region.
   This needs a second aliased AWS provider in the production stack, and it is
   the single most common thing to get wrong here.
 - **Bucket is private.** Origin Access Control only, `block_public_acls` and
-  friends all on, mirroring the posture of `infra/bootstrap/main.tf`'s state
+  friends all on, mirroring the posture of `infra/legacy/bootstrap/main.tf`'s state
   bucket. No S3 website endpoint (it cannot do OAC or HTTPS-to-origin).
 - **Directory-index rewrite** is why a CloudFront Function is required rather
   than just `default_root_object`: a static export writes `docs/index.html`, and
@@ -168,7 +168,7 @@ values, or the funnel numbers reset to zero on cutover.
 2b. New `infra/modules/install-funnel/` — DynamoDB table (`PAY_PER_REQUEST`,
     matching `oxagen-tflock`'s billing mode), Lambda, Function URL, least-
     privilege role (`UpdateItem`/`GetItem` on the one table, nothing else).
-2c. Wire both into `infra/environments/production/main.tf` with the same tag
+2c. Wire both into `infra/legacy/environments/production/main.tf` with the same tag
     block the KMS modules use (`Project`/`Environment`/`ManagedBy`/`Ticket`).
 2d. **Deploy IAM via GitHub OIDC, not an access key.** The existing KMS modules
     mint IAM users with long-lived secrets exported as Terraform outputs; do not

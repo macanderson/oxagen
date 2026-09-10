@@ -3,17 +3,20 @@
 **Status: STALE — never executed, describes an architecture this account
 does not run.** Verified 2026-08-26 against live account state, not
 assumed: this plan's central claim in §2 ("the AWS account is not
-greenfield... `infra/environments/production` already manages two KMS
+greenfield... `infra/legacy/environments/production` already manages two KMS
 keys") does not hold — `aws kms list-aliases` against `578673726240`
-(`us-east-2`) returns zero custom aliases. Only `infra/bootstrap`'s state
+(`us-east-2`) returns zero custom aliases. Only `infra/legacy/bootstrap`'s state
 backend (the `oxagen-tfstate-578673726240` bucket + `oxagen-tflock` table)
 was ever actually applied; the KMS module, and everything in §3 onward
 (ECS Fargate, Aurora, Neptune, ALB+CloudFront+WAF), was written but never
 run. The account instead moved off Vercel through a completely separate
 repository and a completely different architecture — see below.
 
-**Where the real plan and current state live:** `oxagen-aws-infra` (a
-sibling repo, not a directory of this one). Its `README.md` documents what
+**Where the real plan and current state live:** [`infra/`](../../infra/), a
+directory of this repository. It was a sibling repo, `oxagen-aws-infra`, until
+that repo was archived and its contents moved here; the OIDC trust policy on
+`gha-infra-apply` now names this repository, so `infra/` is the only place
+production infrastructure can be changed from. Its `README.md` documents what
 is actually running in `578673726240` today — one self-hosted EC2 node
 behind Caddy running Postgres/Neo4j/ClickHouse in Docker, plus the five
 platform services as plain Node processes, not the ECS/managed-store
@@ -86,10 +89,11 @@ migration completes, and is a prerequisite for customer-hosted deployments.
 | KMS | **Both aliases exist**, in `578673726240`/`us-east-2` — `alias/oxagen/ingestion-prod` and `alias/oxagen/auth-tokens-prod`, confirmed by `aws kms list-aliases --region us-east-2` on 2026-09-08. The earlier "no such aliases exist" reading (2026-08-26) was taken in a different region; this stack's backend and keys are `us-east-2` and nothing else in the estate is. The ingestion key is live and production wraps with it — see #2680 and `infra/legacy/README.md` | `infra/legacy/environments/production` |
 | CI | GitHub Actions, `ghcr.io/oxageninc/oxagen-ci-*` images | `.github/workflows/pipeline.yml` |
 
-Only `infra/bootstrap` was ever actually applied — the state backend
+Only `infra/legacy/bootstrap` was ever actually applied — the state backend
 (`oxagen-tfstate-578673726240` + `oxagen-tflock`) exists and is shared with
-`oxagen-aws-infra`'s own stacks under different state keys.
-`infra/environments/production`'s KMS module was written but never run, and
+the live `infra/stacks/` and `infra/stacks-new/` stacks under different state
+keys.
+`infra/legacy/environments/production`'s KMS module was written but never run, and
 neither was anything past it in this plan. See the file-level banner above.
 
 ---
@@ -219,7 +223,7 @@ env-var-only portion of ADR-004. The `env-manager` Vercel fan-out gains an
 AWS target.
 
 ### 4.8 IAM: static keys → task roles — **security fix, do regardless**
-`infra/environments/production/outputs.tf` currently mints long-lived IAM
+`infra/legacy/environments/production/outputs.tf` currently mints long-lived IAM
 access keys for the two KMS users and pastes them into Vercel env. On ECS,
 replace both with **ECS task roles** (no static credentials, automatic
 rotation) and delete the IAM users. Until then, add rotation. This is a
