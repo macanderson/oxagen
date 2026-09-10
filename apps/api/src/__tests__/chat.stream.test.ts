@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   resolveWorkspaceScope: vi.fn(),
   invoke: vi.fn(),
   evaluateTurnCreditGate: vi.fn(),
+  resolveModelFundingSource: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -44,6 +45,18 @@ vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
 vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
   return { ...real, evaluateTurnCreditGate: mocks.evaluateTurnCreditGate };
+});
+
+// Funding is resolved BEFORE the credit gate (ADR-053 §3), so the gate cannot
+// be reached without it. It reads through withTenantDb; unmocked it throws, the
+// route's catch turns that into a 500, and every 402 assertion below fails on a
+// status that has nothing to do with billing.
+vi.mock("@oxagen/ai", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/ai")>();
+  return {
+    ...real,
+    resolveModelFundingSource: mocks.resolveModelFundingSource,
+  };
 });
 
 vi.mock("../middleware/logger", () => ({
@@ -85,6 +98,7 @@ beforeEach(() => {
   mocks.invoke.mockResolvedValue(undefined);
   // Deny by default so a valid request stops at the gate instead of opening a
   // real turn. The admitted path is covered in routes/v1/chat.stream.test.ts.
+  mocks.resolveModelFundingSource.mockResolvedValue({ fundedBy: "platform" });
   mocks.evaluateTurnCreditGate.mockResolvedValue({
     ok: false,
     code: "insufficient_credits",
