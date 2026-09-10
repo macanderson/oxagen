@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   generateObjectFor,
   selectModel,
+  PLATFORM_FUNDING,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
@@ -65,6 +66,17 @@ export interface DistillationLlmOptions {
   telemetry: GenerateObjectArgs<
     z.infer<typeof DistilledFactSchema>
   >["telemetry"];
+  /**
+   * Who paid the vendor for this call (ADR-053 §3). Optional here — unlike
+   * the metered turn paths — because distillation is a background job that
+   * only runs on the platform gateway key (`hasGatewayKey` gates the LLM
+   * path), so the funding answer is always `platform`. A caller that has
+   * already resolved funding for the organisation may pass it through; it is
+   * forwarded verbatim.
+   */
+  fundedBy?: GenerateObjectArgs<
+    z.infer<typeof DistilledFactSchema>
+  >["fundedBy"];
 }
 
 /** True when the Vercel AI Gateway key is configured (LLM path is viable). */
@@ -214,6 +226,12 @@ export async function extractFactFromCluster(
 
   try {
     const { object } = await generateObjectFor({
+      // Platform-funded: the LLM path only runs on the platform gateway key
+      // (gated by `hasGatewayKey` above), so Oxagen paid the vendor and the
+      // tokens are assistant usage (ADR-053 §3). A caller-resolved funding
+      // answer, when supplied, is forwarded verbatim.
+      fundedBy: options.fundedBy ?? PLATFORM_FUNDING.fundedBy,
+      chargeReason: "consume_assistant_tokens",
       schema: DistilledFactSchema,
       // Small/cheap "fast" tier — distillation is a high-volume background job.
       model: selectModel({ tier: "fast" }),

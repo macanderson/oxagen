@@ -13,7 +13,11 @@ const { generateObjectFor, selectModel } = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   selectModel: vi.fn(() => ({ modelId: "test/fast" })),
 }));
-vi.mock("@oxagen/ai", () => ({ generateObjectFor, selectModel }));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor,
+  selectModel,
+  PLATFORM_FUNDING: { fundedBy: "platform" },
+}));
 
 // Import after the mock is registered.
 import {
@@ -83,6 +87,9 @@ describe("extractFactFromCluster — LLM path", () => {
     expect(selectModel).toHaveBeenCalledWith({ tier: "fast" });
     expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
       temperature: 0,
+      // Platform-funded background job, charged as assistant usage (ADR-053).
+      fundedBy: "platform",
+      chargeReason: "consume_assistant_tokens",
     });
     expect(fact!.fact).toBe(heuristic.fact); // identity is deterministic
     expect(fact!.domain).toBe("tooling"); // decoration adopted
