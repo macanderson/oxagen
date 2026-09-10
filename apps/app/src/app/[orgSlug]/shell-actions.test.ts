@@ -252,21 +252,6 @@ vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({
     },
   },
 }));
-vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
-  agentPlanApprove: {
-    input: {
-      safeParse: (raw: unknown) => {
-        const r = raw as { planId?: unknown; decision?: unknown };
-        if (!r?.planId || !r?.decision)
-          return {
-            success: false,
-            error: { issues: [{ message: "Invalid" }] },
-          };
-        return { success: true, data: r };
-      },
-    },
-  },
-}));
 
 import {
   wandSendAction,

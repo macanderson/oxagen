@@ -12,7 +12,6 @@
     "./security": "./src/security.ts",
     "./seed": "./src/seed.ts",
     "./tenant": "./src/tenant.ts",
-    "./tenant.mock": "./src/tenant.mock.ts",
     "./data-plane": "./src/data-plane-resolver.ts"
   },
   "scripts": {

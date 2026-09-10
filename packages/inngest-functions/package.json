@@ -8,8 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./adapter": "./src/adapter.ts",
-    "./client": "./src/inngest.ts",
-    "./functions": "./src/functions.ts"
+    "./client": "./src/inngest.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
