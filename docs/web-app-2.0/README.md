@@ -12,7 +12,7 @@ Inputs it was authored from: the current-state route inventory (`84` page files,
 real content pages, a 3-mode sidebar, `308` registered capability contracts of which only
 `57` declare an `app` layer, leaving `251` operable only via API/MCP/CLI), and
 [`docs/VISION.md`](../VISION.md) — the "metered, governed, graph-grounded control plane
-for teams that build and **resell** AI agents" north star.
+for the enterprise team that runs the agents and answers for them" north star.
 
 > Note on route names: the old `studio/` segment was renamed to `workbench/` on `main`;
 > this IA uses the current `workbench/` names. Doc folders mirror the **recommended**
@@ -29,8 +29,9 @@ says Oxagen *is* — the metering→billing loop, the governed accountability ch
 graph grounding — are present in the codebase but scattered, buried, or headless:
 
 - The **metering→billing loop** (`billing.usage.breakdown` → Stripe) is a single tab
-  three clicks deep under org billing. The **reseller** half of the wedge — meter observed
-  usage and re-bill *your* customers — has no surface at all.
+  three clicks deep under org billing. The half a buyer needs most — what the tier
+  allowance is, how much of it is spent, and what to do at the ceiling — has no
+  surface at all.
 - The **accountability chain** (every capability is a typed contract binding identity →
   knowledge scope → permitted action → commercial terms → verified outcome → audit record)
   is the product's core differentiator, yet there is **no page anywhere** that makes a
@@ -76,9 +77,7 @@ Keep the three scopes (**workspace** = daily operation, **org** = governance + m
   as a board, a **Capability & Contract catalog** (the flagship — the "one enforced object"
   made inspectable), Access (sessions/reviews), and Policies.
 - **Security**: posture · Audit (the audit-record link).
-- **Billing & Revenue**: Subscription · **Usage/Metering** (the wedge dashboard) · Invoices ·
-  **Revenue/Reseller** (new — the clearest market whitespace: meter → re-bill *your*
-  customers).
+- **Billing**: Subscription · **Usage/Metering** (the wedge dashboard) · Invoices.
 - **Developer** (MCP · Tokens) · **Settings**.
 
 Every new/relocated surface is justified against a specific vision drift test in its
@@ -89,9 +88,9 @@ into a governed grounding wizard rather than becoming a breadth play).
 
 ### Top 5 UX changes vs today
 
-1. **Surface the money loop.** Elevate Usage/Metering and add a **Revenue/Reseller** surface
-   so a customer can meter observed agent usage and re-bill their own customers — the
-   vision's clearest whitespace, and a real new build (contracts required).
+1. **Surface the money loop.** Elevate Usage/Metering so an org sees its governed-action
+   count against the tier allowance, and can move up a tier or buy ad-hoc usage at the
+   ceiling — a real new build (contracts required).
 2. **Make governance a place.** New **Governance** group with a **Capability & Contract
    catalog** that renders each typed contract as identity → scope → action → terms → outcome
    → audit — the differentiator, currently CLI-only.
@@ -194,7 +193,6 @@ appears in the file's header.
 - [`org/billing/subscription/spec.md`](./org/billing/subscription/spec.md) — Subscription, credits, plans, payment methods (the Stripe side of the loop).
 - [`org/billing/usage/spec.md`](./org/billing/usage/spec.md) — Metering wedge dashboard (ClickHouse observed usage, priced).
 - [`org/billing/invoices/spec.md`](./org/billing/invoices/spec.md) — Stripe-synced invoice history.
-- [`org/billing/revenue/spec.md`](./org/billing/revenue/spec.md) — New Reseller surface: attribute usage to customers and re-bill them (the whitespace).
 
 ### Org scope — Developer & Settings
 

@@ -19,8 +19,6 @@ import type {
   BillingCustomerCreateInput,
   BillingCustomerSearchResult,
   BillingDispute,
-  BillingExternalInvoiceInput,
-  BillingExternalInvoiceResult,
   BillingInvoice,
   BillingInvoiceLineItem,
   BillingOffSessionChargeInput,
@@ -370,27 +368,9 @@ function stripeEventType(stripeType: string): BillingWebhookEventType {
 // ── StripeProvider ───────────────────────────────────────────────────────────
 
 export class StripeProvider implements BillingProvider {
-  /**
-   * A per-instance Stripe client built from an explicit secret key — used for a
-   * RESELLER-scoped provider that must bill from the reseller's own account. When
-   * absent, every method uses the platform env singleton (`stripeClient()`), so
-   * the default `new StripeProvider()` is unchanged.
-   */
-  private scopedClient: Stripe | null = null;
-
-  constructor(private readonly secretKey?: string) {}
-
-  /** The Stripe client this provider operates against: the scoped key, else the env singleton. */
+  /** The Stripe client every method operates against: the platform env singleton. */
   private client(): Stripe {
-    if (!this.secretKey) return stripeClient();
-    if (!this.scopedClient) {
-      this.scopedClient = new Stripe(this.secretKey, {
-        apiVersion: "2025-02-24.acacia",
-        typescript: true,
-        appInfo: { name: "oxagen", version: "0.1.0" },
-      });
-    }
-    return this.scopedClient;
+    return stripeClient();
   }
 
   // ── Customer ────────────────────────────────────────────────────────────────
@@ -603,62 +583,6 @@ export class StripeProvider implements BillingProvider {
       expand: ["lines.data.price"],
     });
     return stripeInvoiceToNeutral(invoice);
-  }
-
-  async createExternalInvoice(
-    input: BillingExternalInvoiceInput,
-  ): Promise<BillingExternalInvoiceResult> {
-    const stripe = this.client();
-
-    // 1. Resolve the customer — reuse an existing id, else create one. The `:cust`
-    //    idempotency suffix dedupes the customer create on a retried push.
-    let customerId = input.customerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create(
-        { name: input.customerName, metadata: input.customerMetadata },
-        idempotency(`${input.idempotencyKey}:cust`),
-      );
-      customerId = customer.id;
-    }
-
-    // 2. Attach one pending invoice item per line. `amount` is the line total in
-    //    cents; a per-line idempotency key dedupes items on a retried push.
-    for (const [index, line] of input.lines.entries()) {
-      await stripe.invoiceItems.create(
-        {
-          customer: customerId,
-          amount: line.amountCents,
-          currency: input.currency,
-          description: line.description,
-          metadata: { ...line.metadata, quantity: String(line.quantity) },
-        },
-        idempotency(`${input.idempotencyKey}:item:${index}`),
-      );
-    }
-
-    // 3. Draft an invoice that sweeps in those pending items.
-    const draft = await stripe.invoices.create(
-      {
-        customer: customerId,
-        collection_method: "send_invoice",
-        days_until_due: 30,
-        auto_advance: input.finalize,
-        pending_invoice_items_behavior: "include",
-        metadata: input.metadata,
-      },
-      idempotency(`${input.idempotencyKey}:invoice`),
-    );
-
-    // 4. Finalize (open) it when asked; otherwise leave a reviewable draft.
-    const invoice =
-      input.finalize && draft.id
-        ? await stripe.invoices.finalizeInvoice(draft.id)
-        : draft;
-
-    return {
-      providerCustomerId: customerId,
-      invoice: stripeInvoiceToNeutral(invoice),
-    };
   }
 
   // ── Checkout ─────────────────────────────────────────────────────────────────

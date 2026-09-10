@@ -1,0 +1,218 @@
+---
+title: "What an Ontology Buys an Agent"
+description: "Agents fail confidently when they answer from the wrong context. Here is what classes, relations, constraints, and time-aware facts actually buy you"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - ontologies
+  - ai-agents
+tags:
+  - ontology
+  - knowledge-graph
+  - description-logic
+  - owl
+  - grounding
+  - temporal-reasoning
+  - provenance
+draft: false
+---
+
+Ask an agent which pricing tier a customer is on. It will answer. It will sound
+certain, it will quote a paragraph, and some of the time it will hand you the
+tier that customer was on in March, or a tier from an unsigned template, or a
+tier belonging to a different company with a similar name.
+
+The answer is fluent. The context is wrong. Nothing in the pipeline noticed,
+because nothing in the pipeline was ever asked to check.
+
+## The confident answer from the wrong context
+
+The failure has a name. The standard survey of hallucination in natural
+language generation splits it into two kinds: intrinsic, where the output
+contradicts the source it was given, and extrinsic, where the output cannot be
+verified against that source at all.[^1] Both are graded against the source.
+That framing is the whole problem in one sentence. If the retrieved source is
+the wrong one, a model that is perfectly faithful to it still produces a false
+answer, and every faithfulness metric you run will pass.
+
+Retrieval was supposed to solve grounding. It solves half of it. It puts *a*
+document in the context window. It does not establish that the document
+describes the entity you asked about, that the fact was true on the date you
+care about, or that anyone is accountable for having asserted it.
+
+An ontology is how you turn "the right context" from a similarity score into a
+question a machine can answer.
+
+## What an ontology actually is
+
+An ontology is three things: classes, relations, and constraints.
+
+Classes are the kinds of thing that exist in your domain. Customer, Contract,
+Subscription, LegalEntity. Relations are the permitted connections between
+them, with a domain and a range. `SIGNED_BY` goes from a Contract to a
+LegalEntity and nowhere else. Constraints are the axioms that hold: a Contract
+has exactly one counterparty, a Subscription tier is drawn from a closed set of
+five values, and a LegalEntity cannot be its own parent.
+
+The formal machinery underneath is description logics, a family of decidable
+fragments of first-order logic built specifically so that reasoning terminates.
+The reference account is the *Description Logic Handbook*, which covers the
+tradeoff at the centre of the field: every bit of expressive power you add to
+the language costs you something in the complexity of deciding entailment.[^2]
+You do not get an unconstrained modelling language and cheap inference. You
+pick.
+
+The web standard that encodes this is OWL 2, whose primer walks through
+modelling with classes, properties, and individuals.[^3] OWL 2 ships three
+profiles, EL, QL, and RL, each of which deliberately gives up expressivity to
+buy tractable reasoning. That is the description logic tradeoff shipped as a
+product decision.
+
+Two properties matter more than the syntax.
+
+First, constraints are checkable. If the graph says a Contract is signed by a
+Person rather than a LegalEntity, that is a detectable violation, not a
+plausible sentence. You can catch a class of wrong answers before anyone reads
+them.
+
+Second, and this is the one that bites teams: OWL uses the open world
+assumption. The absence of a fact does not make it false. If your graph has no
+`HAS_SUBSCRIPTION` edge for a customer, an OWL reasoner concludes nothing, not
+"that customer has no subscription." Most application code assumes the
+opposite. If you want closed-world answers, say so explicitly with a cardinality
+constraint or a validation shape, rather than assuming your reasoner shares your
+intuition.
+
+<Callout kind="note" title="Ontology is not the same as taxonomy">
+A taxonomy gives you an is-a tree. An ontology gives you typed relations
+between branches and axioms that constrain them. The tree tells you a Contract
+is a Document. The ontology tells you which entity signed it, when the term
+started, and that both facts are required.
+</Callout>
+
+## Knowledge graphs are the operational form
+
+An ontology on its own is a schema. The thing an agent queries is a knowledge
+graph: nodes for entities, edges for relations, populated with actual instances.
+
+The 2021 ACM Computing Surveys treatment by Hogan and eighteen co-authors is
+the closest thing the field has to a shared definition, and it is worth reading
+for its structure alone.[^4] It works through the graph data models, then
+schema, identity, and context, then quality assessment and refinement, and
+finally publication. That ordering is a warning. Most of the difficulty in a
+knowledge graph is not the query language. It is identity, meaning deciding
+that two records are the same entity, and context, meaning knowing when and
+under what assumptions a fact holds.
+
+The operational advantage over a document index is that edges are first-class.
+An edge is not a byproduct of two nodes being near each other. It is an object
+you can address, type, and hang properties on. That is what makes the next two
+sections possible.
+
+It also relocates the hard work rather than removing it. A document index is
+cheap to populate and expensive to trust. A knowledge graph is the reverse. You
+pay up front to decide that "Acme Corp", "Acme Corporation", and a row keyed on
+a tax identifier are one node, and you pay again every time a source changes
+its mind. What you buy is that the join is already done and does not have to be
+guessed at query time.
+
+## Structure beats similarity when the question has hops
+
+"Which of our contracts with subsidiaries of Acme expire before the renewal
+date on the parent agreement?" There is no passage that answers this. The
+answer is a join across four entity types, and any single chunk of text
+contains at most a fragment of it.
+
+This class of question has been measurable since HotpotQA, which built 113,000
+questions that require finding and reasoning over multiple supporting
+documents, and asked systems to produce the supporting facts as well as the
+answer.[^5] Once you can measure multi-hop separately, the gap between
+retrieving text and reasoning over structure stops being a matter of opinion.
+
+The survey work maps the response. Pan and colleagues lay out three integration
+patterns in their roadmap: knowledge graphs used to enhance language models,
+language models used to build and complete graphs, and synergised systems where
+both run together.[^6] Their diagnosis is blunt and holds up. Language models
+generalise well and are weak on factual grounding. Graphs are strong on
+grounding and weak at handling anything new.
+
+Two concrete results are worth the read. Think-on-Graph treats the model as an
+agent that runs beam search over the graph, following relation paths step by
+step instead of retrieving once and hoping.[^7] The reasoning path is the
+citation, which means you can inspect why the answer came out the way it did.
+The paper reports that this can let smaller models beat GPT-4 on some of these
+benchmarks, which is a claim about where the difficulty actually lives: in the
+retrieval structure, not the parameter count.
+
+GraphRAG comes at the same problem from the corpus side.[^8] It extracts an
+entity graph from source documents, builds summaries for detected communities
+of entities, and answers global questions by combining partial answers across
+those communities. On query-focused summarisation over corpora around a million
+tokens, it improves both comprehensiveness and diversity against conventional
+retrieval. The interesting part is what it fixes: questions about the whole
+corpus, which chunk-and-embed handles worst because no chunk is about the whole
+corpus.
+
+## Facts have a clock, and edges carry a source
+
+A triple like `(Acme, subscribed_to, Enterprise)` is missing two things an
+auditor will ask for immediately: since when, and who says so.
+
+### Time
+
+Real facts have validity intervals. Employment ends. Prices change. A contract
+term supersedes the one before it. Storing the current value and overwriting
+the old one destroys the only information that answers "what did we bill them
+in March."
+
+The completion literature took this on directly. Lacroix and colleagues extend
+the ComplEx tensor factorisation to timestamped facts using a decomposition of
+an order-4 tensor, treating time as a dimension of the model rather than
+metadata bolted onto it.[^9] On the question answering side, Saxena and
+colleagues introduced CRONQUESTIONS, a temporal knowledge graph QA dataset
+around 340 times larger than the prior work, and reported roughly a 120 percent
+accuracy improvement over the baselines available at the time.[^10] Both
+numbers say the same thing. Time is not a decoration on a fact. It is part of
+the fact, and systems that model it do measurably better on questions that
+depend on it.
+
+In practice this means an edge carries `validFrom` and `validTo`, and "as of"
+is a query parameter rather than an assumption.
+
+### Provenance
+
+The second missing field is accountability. W3C standardised a vocabulary for
+this in PROV-O, which expresses provenance in OWL around three core types:
+Entity, Activity, and Agent.[^11] Something was derived from something else, by
+some process, attributed to someone.
+
+Put on an edge, that becomes a source document, an extraction run, a timestamp,
+and a confidence. Now a citation is not a paragraph the model chose to quote
+after the fact. It is a property of the fact itself, attached at write time,
+and it survives whether or not the model mentions it.
+
+This is the difference between an answer you can check and an answer you can
+only believe. The check does not depend on the model cooperating.
+
+## Where this meets Oxagen
+
+Oxagen governs agents, it does not run them. Two of its five jobs sit exactly
+here. Grounding means answers come from a Neo4j graph plus an ontology, so a
+response is cited and time-aware by construction rather than by prompt
+instruction. Explaining means the lineage of an answer, the nodes, the edges,
+and the sources behind it, is a record you can pull up later. Neither job makes
+a model smarter. Both make a wrong answer visible, which is the part that
+matters when someone asks why the agent said what it said.
+
+[^1]: Ji et al. (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys 55(12). https://arxiv.org/abs/2202.03629
+[^2]: Baader, Calvanese, McGuinness, Nardi, & Patel-Schneider, eds. (2003). *The Description Logic Handbook: Theory, Implementation, and Applications*. Cambridge University Press. https://www.inf.unibz.it/~calvanese/papers-html/DLHB-2003-ed.html
+[^3]: W3C (2012). *OWL 2 Web Ontology Language Primer (Second Edition)*. W3C Recommendation, 11 December 2012. https://www.w3.org/TR/owl2-primer/
+[^4]: Hogan et al. (2021). *Knowledge Graphs*. ACM Computing Surveys 54(4), 71:1-71:37. https://arxiv.org/abs/2003.02320
+[^5]: Yang et al. (2018). *HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering*. EMNLP 2018. https://arxiv.org/abs/1809.09600
+[^6]: Pan et al. (2024). *Unifying Large Language Models and Knowledge Graphs: A Roadmap*. IEEE Transactions on Knowledge and Data Engineering. https://arxiv.org/abs/2306.08302
+[^7]: Sun et al. (2024). *Think-on-Graph: Deep and Responsible Reasoning of Large Language Model on Knowledge Graph*. ICLR 2024. https://arxiv.org/abs/2307.07697
+[^8]: Edge et al. (2024). *From Local to Global: A Graph RAG Approach to Query-Focused Summarization*. https://arxiv.org/abs/2404.16130
+[^9]: Lacroix, Obozinski, & Usunier (2020). *Tensor Decompositions for Temporal Knowledge Base Completion*. ICLR 2020. https://arxiv.org/abs/2004.04926
+[^10]: Saxena, Chakrabarti, & Talukdar (2021). *Question Answering Over Temporal Knowledge Graphs*. ACL 2021. https://arxiv.org/abs/2106.01515
+[^11]: W3C (2013). *PROV-O: The PROV Ontology*. W3C Recommendation, 30 April 2013. https://www.w3.org/TR/prov-o/

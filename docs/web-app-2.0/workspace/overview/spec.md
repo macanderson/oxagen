@@ -14,7 +14,7 @@ conversational front door via the nav; this page gives operators and
 billing-conscious admins a reason to land here first.
 
 ## Primary user & jobs-to-be-done
-- **Primary user:** workspace admin / team lead who resells or operates agents for this workspace
+- **Primary user:** workspace admin / team lead who operates agents for this workspace
 - **JTBD:**
   - See current-period spend, tokens used, and credit balance remaining before the invoice arrives
   - Confirm recent agent runs are succeeding, not silently failing

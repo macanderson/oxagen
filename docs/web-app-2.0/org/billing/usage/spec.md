@@ -7,7 +7,7 @@
 - **Disposition vs today:** Keep (the metering wedge dashboard)
 
 ## Purpose
-Usage is the observed-usage half of the ClickHouse→Stripe loop — the dashboard proving that every capability invocation, agent step, and LLM call is captured as a priceable event. It is revenue infrastructure, not a spend dashboard: it exists so a billing manager can see exactly what is being metered, at what granularity, before it becomes an invoice or (via the Revenue tab) a re-bill to a reseller's own customers.
+Usage is the observed-usage half of the ClickHouse→Stripe loop — the dashboard proving that every capability invocation, agent step, and LLM call is captured as a priceable event. It is revenue infrastructure, not a spend dashboard: it exists so a billing manager can see exactly what is being metered, at what granularity, before it becomes an invoice.
 
 ## Primary user & jobs-to-be-done
 - **Primary user:** Billing manager
@@ -39,4 +39,4 @@ ClickHouse (append-only runtime events: execution events, token usage, tool call
 - **Today:** COMPLETE — `assertOrgMember` + `assertBillingManager` gate, then `invoke(get_usage_breakdown)` (ClickHouse); KPI tiles, daily trends, per-model/surface/workspace/capability/principal tables; degrades to zeroed view + banner on failure. Reuse as-is.
 
 ## Vision alignment
-THE observed-usage half of the ClickHouse→Stripe loop — every capability, agent step, and LLM call emits a priceable event here. P1 because this is the metering wedge made visible, the foundation the Revenue tab (reseller re-billing) builds on.
+THE observed-usage half of the ClickHouse→Stripe loop — every capability, agent step, and LLM call emits a priceable event here. P1 because this is the metering wedge made visible.

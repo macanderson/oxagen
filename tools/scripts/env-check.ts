@@ -75,16 +75,10 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_WORKSPACE_ID",
   "OXAGEN_API_URL",
   "OXAGEN_APP_URL",
-  "OXAGEN_MODEL",
   "OXAGEN_DEBUG",
-  "OXAGEN_CLI_MOUSE",
   // CLI local pipeline knobs — read via process.env in the CLI turn pipeline
   // and local tooling; never validated by deployed services
-  "OXAGEN_ALLOW_NO_SESSION",
   "OXAGEN_ALLOW_STDIO_MCP",
-  "OXAGEN_CLI_FUN",
-  "OXAGEN_CLI_MOTION",
-  "OXAGEN_LOCAL",
   "OXAGEN_TELEMETRY",
   // Console Do Not Track standard — CLI telemetry opt-out, never a service var
   "DO_NOT_TRACK",

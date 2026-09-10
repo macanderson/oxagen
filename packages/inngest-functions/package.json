@@ -9,8 +9,7 @@
     ".": "./src/index.ts",
     "./env-check": "./src/env-check.ts",
     "./adapter": "./src/adapter.ts",
-    "./client": "./src/inngest.ts",
-    "./functions": "./src/functions.ts"
+    "./client": "./src/inngest.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

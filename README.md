@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-A metered, governed, graph-grounded control plane for teams that build and resell AI agents.
+The control plane that teaches, governs, explains, and learns from every AI agent an enterprise runs.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
@@ -28,7 +28,7 @@ Oxagen combines three concerns that agent frameworks, observability tools, and R
 
 1. **Governance** — every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are schema-enforced and metered.
 2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context.
-3. **Monetization** — a ClickHouse→Stripe loop turns observed agent usage into customer billing, so teams reselling agents can meter usage and invoice their own customers.
+3. **Explain and meter** — every run is saved as one trace (who asked, what it read, what it changed, what proved it, what it cost), and a ClickHouse→Stripe loop prices the platform by use, per governed action.
 
 The platform is vendor-neutral: bring your own model keys and your own Neo4j endpoint.
 
@@ -80,7 +80,7 @@ graph TB
 
 ### The metering→billing loop
 
-Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-043).
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so spend resolves to a workspace, an agent, a rule, and a run instead of to one monthly total. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-043).
 
 ### The knowledge graph
 

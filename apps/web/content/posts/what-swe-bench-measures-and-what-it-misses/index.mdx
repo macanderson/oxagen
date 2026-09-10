@@ -1,0 +1,99 @@
+---
+title: "What SWE-bench Measures, and What It Misses"
+description: "SWE-bench turned coding agents into a leaderboard race. What a resolve rate proves, where test-based grading leaks, and what it cannot tell you"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - coding-agents
+tags:
+  - swe-bench
+  - benchmarks
+  - evaluation
+  - program-repair
+  - contamination
+draft: false
+---
+
+You are picking a coding agent, and the only comparable number on the page is a SWE-bench resolve rate. So you pick on it. Then the agent lands in your repository, on your backlog, under your review process, and behaves nothing like the number promised.
+
+The gap is real and it is measurable. The fix is not to throw out benchmarks. The fix is to know what the score is made of, because a resolve rate is a joint measurement of a model, a scaffold, a budget, and a grading harness, reported as if it were a property of the model alone.
+
+SWE-bench was introduced in 2023 by Jimenez and colleagues: 2,294 task instances built from real GitHub issues and their merged pull requests across 12 popular Python repositories.[^1] Each instance hands a system the repository at the parent commit and the issue text, then asks for a patch. The patch is graded by running tests. When the paper was published, the best system evaluated resolved 1.96% of the issues.[^1] Frontier systems now clear most of the curated subset. That is a genuine and fast climb, and it is why every model launch quotes it.
+
+## What "resolved" actually means
+
+Resolved means one thing. The generated patch moved a specific set of tests from failing to passing, and did not break tests that were already passing. That is the whole definition.
+
+It says nothing about whether a maintainer would accept the patch. Nothing about performance regressions the tests do not cover, conventions the patch ignores, or whether a reviewer could follow it. Test-passing is a proxy for correctness, and proxies drift.
+
+The original benchmark had a sharper problem: some tasks were not fairly gradable at all. OpenAI worked with the SWE-bench authors and 93 professional Python developers to review the test split, releasing SWE-bench Verified in August 2024 as 500 instances confirmed to have clear problem statements, correct test patches, and tasks solvable from the information given.[^2] What got filtered out is the instructive part. Some issue descriptions were underspecified, so no reader could infer the intended behaviour. Some tests were written so tightly around the original author's implementation that a different correct fix would fail them. Verified is the standard reported figure today, and it exists because a large share of the original test split could not carry the weight the leaderboard put on it.
+
+## Where the grading leaks
+
+Two leaks matter, and they push in opposite directions.
+
+The first is tests that are too weak. Yu and colleagues built UTBoost, a test augmentation framework, and ran it across SWE-bench submissions. They found 345 patches labelled as passing that were in fact wrong: the pull request's own tests never exercised the failure mode.[^3] Adding the missing coverage changed the ranking of 40.9% of SWE-bench Lite leaderboard entries and 24.4% of SWE-bench Verified entries.[^3] A resolve rate is an upper bound on correctness, not a measurement of it.
+
+The second is contamination. These are public repositories with public issues and public fixes, and they predate the training cutoff of every system on the board. Liang and colleagues tested the effect directly by giving models the issue text alone, with no repository access, and asking which file held the bug. Models named the correct path up to 76% of the time on SWE-bench, and up to 53% on tasks from repositories outside it.[^4] On verbatim reproduction of the fixed function they reached up to 35% consecutive 5-gram accuracy on SWE-bench Verified against up to 18% elsewhere.[^4] Some fraction of the score is recall rather than reasoning, and nobody can say precisely how large that fraction is.
+
+<Callout kind="note" title="Two errors, opposite signs">Weak tests inflate the score by passing wrong patches. Contamination inflates it by rewarding memory. Neither is corrected by running the benchmark more carefully, because both are properties of the dataset, not the run.</Callout>
+
+## Most of the score is scaffolding
+
+The number you are shopping on is not produced by a model. It is produced by a model wrapped in a harness that decides what the model can see and do.
+
+SWE-agent made that argument explicitly. Yang and colleagues built a custom agent-computer interface for repository navigation, file editing, and test running, and reported a 12.5% pass@1 rate on SWE-bench where non-interactive approaches had done far worse.[^5] Their framing is that language model agents are a new category of end user, needing purpose-built interfaces the way humans need an IDE. The interface, not the weights, was the contribution.
+
+OpenHands generalised the same idea into an open platform where agents write code, drive a command line, and browse the web inside a sandbox, with benchmark harnesses built in.[^6] It is worth naming because it changed how results get produced: the platform is now a shared dependency of many reported numbers.
+
+Then Agentless pushed the other way. Xia and colleagues dropped tool use and autonomous decision-making entirely in favour of three fixed phases, localise, repair, and validate, and resolved 32.00% of SWE-bench Lite at roughly $0.70 per issue, beating every open-source agent available at the time on both score and cost.[^7] That result should change how you read a leaderboard. A large part of what looked like agentic capability was retrieval and localisation, and a deterministic pipeline could do it cheaper.
+
+Retrieval quality is its own axis. RepoCoder showed that repository-level context beats in-file context by more than 10% across line, API, and function-body completion, using an iterative loop where generation informs the next retrieval.[^8] Where the relevant code lives, and whether the harness can find it, is a substantial share of any repository-scale score.
+
+The practical consequence is that two numbers printed side by side may not be comparable at all. One can come from a fixed pipeline with a strict budget. The other can come from an agent allowed to run for an hour with unlimited retries. Unless the harness, the model, the retry policy, and the spend are reported together, a resolve rate is closer to a headline than a measurement.
+
+## The variants, and what each one still cannot see
+
+The benchmark family has grown, mostly by patching the weaknesses above.
+
+| Benchmark | Instances | Domain | What it fixed | What it still cannot see |
+|---|---|---|---|---|
+| SWE-bench (2023) | 2,294 | 12 Python repositories | Framed the task: real issue, real repository, test-graded[^1] | Ambiguous issues, unfair tests, contamination |
+| SWE-bench Verified (2024) | 500 | Same Python repositories | Human review of statements, tests, and solvability[^2] | Contamination, thin test coverage |
+| SWE-bench Multimodal (2024) | 617 | 17 JavaScript libraries | Visual, user-facing bugs outside Python[^9] | Whether the fix looks right to a user |
+| SWE-Bench Pro (2025) | 1,865 | 41 repositories, some private | Long-horizon multi-file tasks, licence-based contamination resistance[^10] | Your codebase, your conventions, your reviewers |
+
+The generalisation results are humbling. On SWE-bench Multimodal, built from 617 instances across 17 visual JavaScript libraries, the best system resolved 12% of tasks and the next best 6%, from a field that was already scoring far higher on Python.[^9] SWE-Bench Pro assembles 1,865 instances across 41 repositories, drawing on copyleft and proprietary code specifically so the tasks are harder to have trained on, with reference patches averaging 107.4 changed lines across 4.1 files. Widely used models score below 25% pass@1 on it.[^10]
+
+Read those two results together and the picture is clear. A high Verified score generalises poorly to a different language, a different interaction mode, and a longer task horizon. Your repository is at least one of those three.
+
+There is a further mismatch that no variant has fixed, because it is structural rather than a dataset flaw. A SWE-bench task is a closed question. The issue is already triaged, already reproducible, already scoped to one repository, and a correct answer already exists in a merged pull request. A real backlog is not shaped like that. Its tickets are ambiguous, duplicated, or simply wrong. Some span two services. Some describe a symptom whose cause sits in a dependency. Many are not bugs at all: they are migrations, deprecations, and cleanups where no failing test exists to turn green. The benchmark selected for tasks it could grade, which means it selected against most of the work your team actually has.
+
+## What to measure instead
+
+None of this makes the benchmark useless. It makes it one input.
+
+Three things a leaderboard number structurally cannot tell you, and each is cheap to measure on your own tree:
+
+- **Grading fidelity.** SWE-bench grades against tests written by the person who fixed the bug. Your agent will be graded against tests written before the bug existed. If your suite would not catch the regression, the agent's pass is not evidence.
+- **Cost and variance per outcome.** Agentless was measured at $0.70 per issue for a reason: cost per resolved task is a comparable number, and resolve rate alone hides a scaffold that spent fifty tool calls getting there.[^7] Run the same task several times and record the spread, not just the best attempt.
+- **Reviewability.** A patch a reviewer cannot follow costs more than it saves. Nothing in a resolve rate captures diff size, blast radius, or whether the change came with a reason.
+- **Task admissibility.** Before asking how often an agent succeeds, measure what share of your backlog is even shaped like a task it can attempt. If a quarter of your tickets carry no reproducible failure, the resolve rate applies to three quarters of the work at best.
+
+The honest summary: SWE-bench measures whether a system can turn an issue description into a patch that satisfies a pre-written test, in Python, in a repository whose history the model has probably seen. That is a useful thing to know. It is not the same question as whether the agent should be allowed near your main branch.
+
+## Where this meets Oxagen
+
+Oxagen does not run coding agents, and it does not publish a benchmark score. It governs agents and records what they did. Two of its five jobs are relevant here. Rating is built on verified outcomes rather than self-reported success, which is the same discipline as refusing to accept a resolve rate at face value. Metering turns observed usage into a cost per governed action, which is the per-outcome number a leaderboard leaves out. Stella, the coding agent, is the reference implementation being governed; the evidence it emits is what a rating can honestly be built from.
+
+[^1]: Jimenez, C. E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., & Narasimhan, K. (2023). *SWE-bench: Can Language Models Resolve Real-World GitHub Issues?* ICLR 2024. https://arxiv.org/abs/2310.06770
+[^2]: OpenAI (2024). *Introducing SWE-bench Verified.* OpenAI, 13 August 2024. https://openai.com/index/introducing-swe-bench-verified/
+[^3]: Yu, B., Zhu, Y., He, P., & Kang, D. (2025). *UTBoost: Rigorous Evaluation of Coding Agents on SWE-Bench.* https://arxiv.org/abs/2506.09289
+[^4]: Liang, S., Garg, S., & Zilouchian Moghaddam, R. (2025). *The SWE-Bench Illusion: When State-of-the-Art LLMs Remember Instead of Reason.* https://arxiv.org/abs/2506.12286
+[^5]: Yang, J., Jimenez, C. E., Wettig, A., Lieret, K., Yao, S., Narasimhan, K., & Press, O. (2024). *SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering.* NeurIPS 2024. https://arxiv.org/abs/2405.15793
+[^6]: Wang, X., Li, B., Song, Y., Xu, F. F., Tang, X., Zhuge, M., et al. (2024). *OpenHands: An Open Platform for AI Software Developers as Generalist Agents.* ICLR 2025. https://arxiv.org/abs/2407.16741
+[^7]: Xia, C. S., Deng, Y., Dunn, S., & Zhang, L. (2024). *Agentless: Demystifying LLM-based Software Engineering Agents.* https://arxiv.org/abs/2407.01489
+[^8]: Zhang, F., Chen, B., Zhang, Y., Keung, J., Liu, J., Zan, D., Mao, Y., Lou, J.-G., & Chen, W. (2023). *RepoCoder: Repository-Level Code Completion Through Iterative Retrieval and Generation.* EMNLP 2023. https://arxiv.org/abs/2303.12570
+[^9]: Yang, J., Jimenez, C. E., Zhang, A. L., Lieret, K., Wu, X., Muennighoff, N., Synnaeve, G., Narasimhan, K. R., Yang, D., Wang, S. I., & Press, O. (2024). *SWE-bench Multimodal: Do AI Systems Generalize to Visual Software Domains?* ICLR 2025. https://arxiv.org/abs/2410.03859
+[^10]: Deng, X., Da, J., Pan, E., He, Y. Y., Ide, C., Garg, K., et al. (2025). *SWE-Bench Pro: Can AI Agents Solve Long-Horizon Software Engineering Tasks?* https://arxiv.org/abs/2509.16941

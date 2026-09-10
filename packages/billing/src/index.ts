@@ -32,7 +32,3 @@ export * from "./autoreload";
 export * from "./dunning";
 export * from "./receipts";
 export * from "./disputes";
-export * from "./reseller-pricing";
-export * from "./reseller-secret";
-export * from "./reseller";
-export * from "./reseller-rebill";

@@ -8,7 +8,7 @@ import { registerCapability } from "../registry";
 // and which attachment kinds it accepts.
 //
 // Why this is a capability and not just an internal module: Oxagen is BYOK and
-// vendor-neutral, so a reseller routing work to a customer-configured provider
+// vendor-neutral, so an org routing work to a customer-configured provider
 // needs to know what that provider ACTUALLY supports before dispatching — most
 // importantly whether its cache is explicit opt-in (Anthropic) or implicit
 // (OpenAI/Gemini/DeepSeek), because getting that wrong bills every token at the

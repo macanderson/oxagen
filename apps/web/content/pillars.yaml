@@ -1,0 +1,102 @@
+# The blog's pillars. Every post links to one or more of these by `slug`, and
+# the build refuses a post whose pillar is not listed here.
+#
+# Fields:
+#   slug         the URL segment: /blog/pillars/<slug>
+#   name         the short label shown on chips and the index
+#   tagline      one line under the name on the pillar page
+#   description  a short paragraph for the pillar page and its <meta>
+#   image        the stock hero (path under apps/web, served as-is), and the
+#                credit the licence asks us to keep with it
+#   order        display order on the index
+pillars:
+  - slug: ontologies
+    name: Ontologies
+    tagline: The map an agent reasons over.
+    description: >-
+      How typed entities, relationships, and time-aware facts turn a pile of
+      documents into a map an agent can cite. Description logics, knowledge
+      graphs, graph-grounded retrieval, and what the research says about
+      grounding answers in structure instead of similarity.
+    order: 1
+    image:
+      src: /assets/blog/pillars/ontologies.jpg
+      alt: "A bundle of illuminated blue fiber-optic strands glowing against a black background."
+      credit:
+        author: "Compare Fibre"
+        authorUrl: "https://unsplash.com/@comparefibre"
+        source: "Unsplash"
+        sourceUrl: "https://unsplash.com/photos/blue-and-white-light-in-dark-room-INNsF0Zz_kQ"
+        license: "Unsplash License"
+
+  - slug: ai-agents
+    name: AI agents
+    tagline: Models that act, and what makes them reliable.
+    description: >-
+      The science of agents: planning, tool use, memory, and evaluation. From
+      ReAct and Reflexion to the benchmarks that measure whether an agent
+      finishes the job, and the cost of every attempt.
+    order: 2
+    image:
+      src: /assets/blog/pillars/ai-agents.jpg
+      alt: "A lone hooded figure standing as a dark silhouette, backlit by a soft beam of light in an otherwise black room."
+      credit:
+        author: "Rafael Garcin"
+        authorUrl: "https://unsplash.com/@nimbus_vulpis"
+        source: "Unsplash"
+        sourceUrl: "https://unsplash.com/photos/a-silhouette-stands-illuminated-in-the-darkness-8n5X_XDrdMA"
+        license: "Unsplash License"
+
+  - slug: coding-agents
+    name: Coding agents
+    tagline: Agents that change code, on the record.
+    description: >-
+      What the benchmarks measure, how repository-scale agents plan and repair,
+      and why every turn needs to be reproducible and auditable before a team
+      can trust it in a production tree.
+    order: 3
+    image:
+      src: /assets/blog/pillars/coding-agents.jpg
+      alt: "A dark-themed code editor and terminal on a computer screen, showing a file tree, source code, and test output."
+      credit:
+        author: "Bernd Dittrich"
+        authorUrl: "https://unsplash.com/@hdbernd"
+        source: "Unsplash"
+        sourceUrl: "https://unsplash.com/photos/computer-screen-displaying-code-and-terminal-output-fmH6yLBwEPw"
+        license: "Unsplash License"
+
+  - slug: self-improving-models
+    name: Self-improving models
+    tagline: Models that train on their own output.
+    description: >-
+      Bootstrapped reasoning, self-rewarding training, and the hard limits the
+      research keeps finding: model collapse, the myth of unaided
+      self-correction, and why external verification is not optional.
+    order: 4
+    image:
+      src: /assets/blog/pillars/self-improving-models.jpg
+      alt: "A dark metal spiral staircase photographed from directly above, its steps curling inward toward a vanishing point."
+      credit:
+        author: "Asher Pardey"
+        authorUrl: "https://unsplash.com/@asherpardey"
+        source: "Unsplash"
+        sourceUrl: "https://unsplash.com/photos/dark-spiral-staircase-viewed-from-above-6iwPumzJhVg"
+        license: "Unsplash License"
+
+  - slug: self-evolving-agents
+    name: Self-evolving agents
+    tagline: Agents that rewrite their own playbook.
+    description: >-
+      Skill libraries, workflow memory, automated agent design, and systems
+      that modify their own code. What the evidence shows, where it breaks,
+      and what governing a system that changes itself has to look like.
+    order: 5
+    image:
+      src: /assets/blog/pillars/self-evolving-agents.jpg
+      alt: "A black-and-white close-up of intricate, branching tree roots spreading across a forest floor."
+      credit:
+        author: "Zach Lezniewicz"
+        authorUrl: "https://unsplash.com/@zachlez"
+        source: "Unsplash"
+        sourceUrl: "https://unsplash.com/photos/a-black-and-white-photo-of-tree-roots-aNezWuEDbbU"
+        license: "Unsplash License"

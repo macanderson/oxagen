@@ -1,0 +1,97 @@
+---
+title: "The science of AI agents: from ReAct to tool use"
+description: "Planning, tool use, memory, and reflection each came from a paper that measured something. Here is the research line, and what it still cannot do"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - ai-agents
+tags:
+  - agent-architecture
+  - react
+  - tool-use
+  - planning
+  - memory
+  - reflection
+draft: false
+---
+
+Most systems shipped as agents are a while loop wrapped around a chat completion. Call the model, parse whatever looks like a tool call, run it, paste the result back, repeat until the token budget runs out. It demos well. Then it fails in production and nobody on the team can say why, because there was never a theory of what the loop was supposed to be doing. The fix gets applied to the prompt, because the prompt is the only part anyone can see.
+
+There is a theory. Between 2022 and 2023 a short line of papers took the loop apart and named its pieces: planning, tool use, memory, and reflection. Two surveys published a month apart converged on roughly that decomposition, one framing it as a profile, memory, planning, and action module,[^1] the other as a brain, perception, and action architecture.[^2] Each piece traces back to a paper that measured something specific. Knowing which paper measured what is the difference between debugging an agent and rerolling the prompt.
+
+## The loop: reasoning and acting in one trace
+
+Before ReAct, the two halves were studied separately.[^3] Chain-of-thought prompting reasons in a closed room, with no way to check a claim against the world. Action-only policies touch the world with no running explanation of why. Yao and colleagues interleaved them. The model emits a thought, then an action, then observes the result, then thinks again, all in one trace.
+
+The numbers were not marginal. On ALFWorld, a text household-task environment, ReAct beat imitation and reinforcement learning baselines by 34 absolute percentage points of success rate. On WebShop it gained 10 points. On the question-answering tasks HotpotQA and Fever, the gain was less about the score and more about the failure mode: grounding each step in a Wikipedia lookup cut the model's habit of inventing a fact and then reasoning confidently on top of it. All of this with one or two in-context examples.
+
+Two things are worth keeping. First, the thought is not decoration. It carries plan state between steps, which is why deleting it hurts performance rather than just readability. Second, the trace is legible. A person reading it afterwards can point at the step where the agent went wrong. That property, more than the benchmark score, is why the format spread.
+
+## Tool use, learned rather than prompted
+
+A prompt can tell a model that a calculator exists. It cannot tell the model when calling it is worth the round trip. Toolformer went after the second problem.[^4]
+
+The method is self-supervised and clean. Sample candidate API calls into a corpus of ordinary text, actually execute them, and keep only the calls whose returned value lowers the perplexity of the tokens that come next. Keep the useful ones, train on that. Schick and colleagues wired up a calculator, a question-answering system, a search engine, a translation system, and a calendar. The resulting model reached zero-shot performance competitive with much larger models, and it did not lose its core language modelling ability in the process. Each API needed only a handful of demonstrations.
+
+The interesting claim is about placement, not capability. The filter answers a question no prompt can: does calling this tool right here make the next tokens more predictable? Most production tool-use bugs are placement bugs. The agent has exactly the right tool, and it calls it one step too late, or calls it three times, or narrates using it instead of using it.
+
+## Planning is search, not a single line
+
+Sampling one chain of thought is a greedy walk through a space the model never gets to look at. Tree of Thoughts made the space explicit.[^5] Partial solutions become nodes, the model self-evaluates each one as sure, maybe, or impossible, and a search procedure with backtracking decides where to expand next.
+
+On the Game of 24, a puzzle that needs arithmetic planning with dead ends, GPT-4 with standard chain-of-thought prompting solved 4 percent of instances. The same model under Tree of Thoughts solved 74 percent.
+
+That gap is the single most quoted number in agent planning, and it is usually quoted without its price tag. Tree of Thoughts multiplies model calls: every node evaluated is a call, every branch abandoned is compute already spent. A 70-point improvement bought with an order of magnitude more inference is a real result and a real bill. That trade governs every planner anyone has built since, and almost none of the papers report the cost side of it.
+
+## Memory and reflection: what makes a loop a system
+
+Reflexion asked what an agent can learn between attempts without touching a single weight.[^6] The answer: write the post-mortem in words. The agent fails, reflects verbally on why, stores that reflection in an episodic buffer, and reads it before the next attempt. Shinn and colleagues call it verbal reinforcement learning. On the HumanEval coding benchmark it reached 91 percent pass@1, against the 80 percent reported for GPT-4.
+
+Note the precondition. Reflexion works because a unit test tells it, unambiguously, that the last attempt was wrong. The reflection is language, but the signal underneath it is external and binary.
+
+Generative Agents attacked memory at a different scale.[^7] Twenty-five agents in a sandbox town kept a memory stream, a running natural-language log of everything observed. Retrieval scored each memory on recency, importance, and relevance. On top of that sat reflection, which periodically synthesised raw observations into higher-level inferences, and planning, which turned those inferences into a day. Park and colleagues ran ablations: remove memory, reflection, or planning, and the believability of the resulting behaviour drops each time. The famous result, agents organising a Valentine's Day party and spreading the invitation by word of mouth, is downstream of the retrieval function, not of a party subroutine.
+
+Voyager added the piece the others left out: skills that survive the episode.[^8] When the agent works out how to do something in Minecraft, it writes the behaviour as executable code, verifies it against the environment, and files it in a skill library it can retrieve later. Wang and colleagues report 3.3 times more unique items obtained than prior methods, 2.3 times longer distances travelled, and key tech-tree milestones unlocked up to 15.3 times faster. The skills transferred to fresh worlds where other methods stalled.
+
+| Piece | Paper | What it measured |
+| --- | --- | --- |
+| Reasoning plus acting | ReAct | 34 points of absolute success over baselines on ALFWorld, 10 points on WebShop |
+| Tool use | Toolformer | Zero-shot performance competitive with much larger models, core language ability retained |
+| Planning as search | Tree of Thoughts | Game of 24: 4 percent with chain-of-thought, 74 percent with ToT |
+| Reflection | Reflexion | HumanEval pass@1 of 91 percent, against 80 percent reported for GPT-4 |
+| Memory | Generative Agents | Ablating memory, reflection, or planning each lowered believability ratings |
+| Skill retention | Voyager | 3.3x unique items, 2.3x distance, up to 15.3x faster tech-tree milestones |
+
+Read the table as an architecture, not a menu. Each row is a different failure the loop has when that piece is missing. An agent with no memory repeats work. An agent with no reflection repeats mistakes. An agent with no planner commits to its first idea. An agent with no skill library relearns the same procedure every session and pays for it every time.
+
+## What is still unsolved
+
+The four components are a decomposition, not a solution. Four things in the research are still open, and every one of them shows up in production.
+
+**Reflection needs a grader.** Huang and colleagues tested intrinsic self-correction, meaning the model revises its own answer with no external feedback, and found that models struggle to correct themselves and that performance sometimes gets worse after the revision.[^9] This is not a contradiction of Reflexion. It is the fine print on it. Reflexion's gains ride on a unit test. Take the test away and the reflection has nothing to be about. If your agent reflects against its own opinion of its output, you have built a loop that can talk itself into anything.
+
+**Long horizons compound.** Dziri and colleagues studied transformers on compositional tasks such as multi-digit multiplication and dynamic programming, and found that models reduce multi-step reasoning to linearised subgraph matching rather than acquiring a systematic procedure.[^10] They give both a theoretical argument and empirical evidence that accuracy decays rapidly as compositional depth grows. An agent taking twenty dependent steps inherits that decay. Per-step accuracy of 95 percent is not reassuring when the twentieth step depends on all nineteen before it.
+
+**Memory retention is a heuristic.** Recency, importance, and relevance are three hand-tuned weights that happened to work in one sandbox. There is no principled account of what an agent should forget, and forgetting is where long-running agents go wrong. The survey literature names memory management as open rather than settled.[^1]
+
+**Cost is mostly unreported.** Of the results above, the ones that buy accuracy with extra inference do not report what the extra inference cost. That makes the numbers hard to compare and easy to misread, and it is the subject of a separate argument in the evaluation literature that deserves its own post.
+
+<Callout kind="note" title="The one-line version">
+Planning searches, tool use grounds, memory persists, and reflection corrects. Reflection only corrects when something outside the model can say the last attempt was wrong.
+</Callout>
+
+## Where this meets Oxagen
+
+Oxagen governs agents, it does not run them. The research line above is why the governance layer is shaped the way it is: a typed contract binds identity, knowledge scope, permitted action, commercial terms, verified outcome, and audit record, which is the external signal that reflection needs and the tool-placement record that debugging needs. Grounding sits in a Neo4j graph with an ontology, so an answer cites time-aware structure rather than whatever the retriever happened to return. And because planners buy accuracy with inference, every governed action is metered from ClickHouse through to Stripe, so the cost of the extra search is a line item rather than a surprise.
+
+[^1]: Wang, L., Ma, C., Feng, X., Zhang, Z., Yang, H., Zhang, J., Chen, Z., Tang, J., Chen, X., Lin, Y., Zhao, W. X., Wei, Z., & Wen, J.-R. (2023). *A Survey on Large Language Model based Autonomous Agents*. arXiv. https://arxiv.org/abs/2308.11432
+[^2]: Xi, Z., Chen, W., Guo, X., He, W., Ding, Y., Hong, B., Zhang, M., Wang, J., Jin, S., Zhou, E., Zheng, R., Fan, X., Wang, X., Xiong, L., Zhou, Y., Wang, W., Jiang, C., Zou, Y., Liu, X., Yin, Z., Dou, S., Weng, R., Cheng, W., Zhang, Q., Qin, W., Zheng, Y., Qiu, X., Huang, X., & Gui, T. (2023). *The Rise and Potential of Large Language Model Based Agents: A Survey*. arXiv. https://arxiv.org/abs/2309.07864
+[^3]: Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2022). *ReAct: Synergizing Reasoning and Acting in Language Models*. ICLR 2023. https://arxiv.org/abs/2210.03629
+[^4]: Schick, T., Dwivedi-Yu, J., Dessì, R., Raileanu, R., Lomeli, M., Zettlemoyer, L., Cancedda, N., & Scialom, T. (2023). *Toolformer: Language Models Can Teach Themselves to Use Tools*. NeurIPS 2023. https://arxiv.org/abs/2302.04761
+[^5]: Yao, S., Yu, D., Zhao, J., Shafran, I., Griffiths, T. L., Cao, Y., & Narasimhan, K. (2023). *Tree of Thoughts: Deliberate Problem Solving with Large Language Models*. NeurIPS 2023. https://arxiv.org/abs/2305.10601
+[^6]: Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., & Yao, S. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning*. NeurIPS 2023. https://arxiv.org/abs/2303.11366
+[^7]: Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. (2023). *Generative Agents: Interactive Simulacra of Human Behavior*. UIST 2023. https://arxiv.org/abs/2304.03442
+[^8]: Wang, G., Xie, Y., Jiang, Y., Mandlekar, A., Xiao, C., Zhu, Y., Fan, L., & Anandkumar, A. (2023). *Voyager: An Open-Ended Embodied Agent with Large Language Models*. arXiv. https://arxiv.org/abs/2305.16291
+[^9]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. ICLR 2024. https://arxiv.org/abs/2310.01798
+[^10]: Dziri, N., Lu, X., Sclar, M., Li, X. L., Jiang, L., Lin, B. Y., West, P., Bhagavatula, C., Le Bras, R., Hwang, J. D., Sanyal, S., Welleck, S., Ren, X., Ettinger, A., Harchaoui, Z., & Choi, Y. (2023). *Faith and Fate: Limits of Transformers on Compositionality*. NeurIPS 2023. https://arxiv.org/abs/2305.18654

@@ -665,24 +665,34 @@ jobs:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Build the marketing site
+        run: |
+          set -euo pipefail
+          # apps/web is hand-authored HTML plus a blog compiled from
+          # apps/web/content (pillars.yaml + posts/*/index.mdx). `pnpm build`
+          # assembles both into apps/web/dist, which is the only thing this
+          # job publishes: source, config and tooling never reach the bucket.
+          pnpm --filter @oxagen/web-v2 build
+          # The build's own validation (a post naming a pillar that does not
+          # exist, a pillar image that is missing, a post with no citations)
+          # fails the command above. This guard is against dist/ itself
+          # having been emptied by a copy-step regression.
+          count=$(find apps/web/dist -type f | wc -l | tr -d ' ')
+          if [ "$count" -lt 10 ]; then
+            echo "::error::apps/web/dist holds $count publishable files — refusing to publish what looks like a mistake"
+            exit 1
+          fi
+          test -f apps/web/dist/blog/index.html || { echo "::error::dist has no blog index"; exit 1; }
+          echo "publishing $count files"
+
       - name: Publish the marketing site
         env:
           BUCKET: oxagen-web-916294258235
           DISTRIBUTION: E2NYX5PXV8HXB3
         run: |
           set -euo pipefail
-
-          # apps/web has no build step — it is hand-authored HTML, fonts and
-          # images. `package.json` carries no scripts at all, so there is
-          # nothing to run and nothing that can fail quietly; the guard below
-          # is against the directory itself having been emptied.
-          count=$(find apps/web -type f -not -name 'package.json' -not -name 'vercel.json' \
-            -not -name 'README.md' -not -name '.*' | wc -l | tr -d ' ')
-          if [ "$count" -lt 10 ]; then
-            echo "::error::apps/web holds $count publishable files — refusing to publish what looks like a mistake"
-            exit 1
-          fi
-          echo "publishing $count files"
 
           # `--delete` makes this repository the source of truth for the whole
           # bucket, which is what it should be — but it was NOT, and the first
@@ -691,16 +701,8 @@ jobs:
           # existed on `main`, having been uploaded by hand during the
           # migration. It is committed now. If anything else is ever added to
           # this bucket out of band, this line removes it.
-          #
-          # The exclusions are build configuration and repository metadata, not
-          # site content. Uploading them would serve them.
-          aws s3 sync apps/web "s3://$BUCKET" \
+          aws s3 sync apps/web/dist "s3://$BUCKET" \
             --delete \
-            --exclude 'package.json' \
-            --exclude 'vercel.json' \
-            --exclude 'README.md' \
-            --exclude '.*' \
-            --exclude '*/.*' \
             --cache-control 'no-cache' \
             --only-show-errors
 
@@ -716,7 +718,8 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 10); do
             code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://oxagen.sh/ || echo 000)
-            [ "$code" = "200" ] && { echo "oxagen.sh -> 200"; exit 0; }
+            blog=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://oxagen.sh/blog || echo 000)
+            [ "$code" = "200" ] && [ "$blog" = "200" ] && { echo "oxagen.sh -> 200, /blog -> $blog"; exit 0; }
             echo "attempt $attempt: $code"
             sleep 6
           done

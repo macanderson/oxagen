@@ -34,8 +34,6 @@
         "GOOGLE_DATA_CLIENT_SECRET",
         "GITHUB_LOGIN_CLIENT_ID",
         "GITHUB_LOGIN_CLIENT_SECRET",
-        "GITHUB_DATA_CLIENT_ID",
-        "GITHUB_DATA_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
         // Stripe billing + usage meter
         "STRIPE_SECRET_KEY",
@@ -54,13 +52,6 @@
         "OXAGEN_LLM_BALANCED",
         "OXAGEN_LLM_PRECISE",
         // Sandbox (code-execution drivers)
-        "SANDBOX_ENABLED",
-        "SANDBOX_DRIVER",
-        "MODAL_RUNNER_URL",
-        "MODAL_RUNNER_TOKEN",
-        "VERCEL_SANDBOX_TOKEN",
-        "VERCEL_SANDBOX_TEAM_ID",
-        "VERCEL_SANDBOX_PROJECT_ID",
         // IAM enforcement
         "IAM_ENFORCEMENT_ENABLED",
         // Server Action origin allowlist (next.config bakes these in). The

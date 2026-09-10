@@ -34,7 +34,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Metering → billing",
-    say: "The unexplained bill, explained. Every token is observed at the control plane, attributed, and priced — broken down by model, by surface, and by workspace, with a daily time series. When a number spikes you see exactly which team and which agent caused it. And because agents resell downstream, the same loop bills your customers. Usage in, governed invoice out — on your own keys.",
+    say: "The unexplained bill, explained. Every token is observed at the control plane, attributed, and priced — broken down by model, by surface, and by workspace, with a daily time series. When a number spikes you see exactly which team and which agent caused it — and the same loop charges it back to them. Usage in, governed invoice out — on your own keys.",
   },
   {
     title: "Traceability & audit",

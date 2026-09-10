@@ -1,6 +1,6 @@
 ---
 title: Billing & usage
-description: Plans, usage credits, metered consumption, per-turn budgets, and reseller re-billing.
+description: Plans, usage credits, metered consumption, and per-turn budgets.
 ---
 
 Everything an agent, API call, or MCP tool does in Oxagen is metered at the `invoke()` boundary, so billing is a direct readout of governed activity — not a separate estimate. Org admins manage it under **Organization → Billing**.
@@ -51,12 +51,3 @@ Two layers combine:
 
 - **Personal budget** — each user's own per-turn limit and mode.
 - **Workspace budget policy** — set by an org/workspace admin, either as a soft `default` (seeds members who have not set their own) or a hard `ceiling` (members cannot exceed it, and the mode can only get stricter).
-
-## Reseller re-billing
-
-Organizations that resell Oxagen usage to their own customers get a re-billing pipeline on **Billing → Revenue**:
-
-1. **Customers** — end-customer accounts you bill.
-2. **Attribution rules** — evaluated in priority order to attribute observed usage to a customer.
-3. **Price plans** — markup or per-unit pricing applied to each customer's usage slice.
-4. **Rebill runs** — preview a period's line items per customer, then push invoices through your own connected Stripe key (stored fingerprinted; never readable back).

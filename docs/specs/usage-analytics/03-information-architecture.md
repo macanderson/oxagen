@@ -173,5 +173,5 @@ by current slice" overlay — present, explained, not silently wrong.
   `assertOrgMember`; `apps/app` does not bootstrap IAM, so the gate is explicit, per CLAUDE.md).
   Cost/spend numbers are gated to billing-managers (`assertBillingManager`) — non-managers see
   usage counts (tokens/executions/artifacts) but the **cost** tiles are hidden, not zeroed.
-- **Export:** a "Download CSV" affordance on the Usage tab (the by-* tables) — the reseller/
+- **Export:** a "Download CSV" affordance on the Usage tab (the by-* tables) — the finance/
   finance workflow. Server action streams the aggregation as CSV.

@@ -178,12 +178,9 @@ vi.mock("./streaming-text", () => ({
   StreamingText: ({ text }: { text: string }) => <span>{text}</span>,
 }));
 vi.mock("./reasoning-card", () => ({ ReasoningCard: () => null }));
-vi.mock("./plan-card", () => ({ PlanCard: () => null }));
 vi.mock("./approval-card", () => ({ ApprovalCard: () => null }));
 vi.mock("./tool-call-card", () => ({ ToolCallCard: () => null }));
-vi.mock("./code-execute-card", () => ({ CodeExecuteCard: () => null }));
 vi.mock("./memory-card", () => ({ MemoryCard: () => null }));
-vi.mock("./subagent-fanout", () => ({ SubagentFanout: () => null }));
 // Mock MessageFooter to avoid pulling in server-only imports from
 // message-footer-actions (which uses "use server" / server-only).
 vi.mock("./message-footer", () => ({ MessageFooter: () => null }));
@@ -194,11 +191,6 @@ vi.mock("./message-footer", () => ({ MessageFooter: () => null }));
 // runtime. Mock them the same way message-footer-actions is mocked above;
 // mounting behavior (gated on chatUxV2) is exercised by the mobile-chrome
 // describe block further down.
-vi.mock("./session/branch-actions", () => ({
-  listRepoBranchesAction: vi
-    .fn()
-    .mockResolvedValue({ branches: [], defaultBranch: null }),
-}));
 vi.mock("@/components/shell/notifications-bell", () => ({
   NotificationsBell: () => <div data-testid="notifications-bell-stub" />,
 }));

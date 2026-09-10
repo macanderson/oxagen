@@ -122,9 +122,9 @@ verification, and billing in one loop.
   auditable: which task classes, which venues, what verified rate, what was refunded
   and why. This is the artifact a buyer's finance team has never seen from an AI
   vendor.
-- **Reseller pass-through.** Teams that build and resell agents on Oxagen can publish
-  their own SLAs to their customers, backed by the platform's curves, with their own
-  margin on top. The router's guarantees become their product's guarantees.
+- **Business-unit pass-through.** Each team inside the enterprise gets the attainment
+  curve for the task classes it actually runs, backed by the same evidence, so a
+  platform team can offer its internal customers a guarantee it can prove.
 - **Marketplace pricing of accuracy.** Published agents and skills carry an accuracy
   SLA and a price as first-class listing metadata. Buyers compare guaranteed
   outcomes, not marketing claims.

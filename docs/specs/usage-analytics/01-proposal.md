@@ -18,12 +18,12 @@ items."* Usage dashboards are the **cost-attribution surface** of that loop:
 
 - **Advances metering→billing:** turns the already-collected `token_usage` stream into a
   first-class, sliceable product surface. (drift test #1: *does this help a team meter, govern,
-  ground, or resell?* → **yes, meter + attribute**.)
+  or ground?* → **yes, meter + attribute**.)
 - **Advances vendor-neutral fleet lineage:** slicing by model **provider** (anthropic / openai
   / google / bfl / xai …) makes BYOK cost visible per vendor — reinforcing the vendor-neutral
   design constraint rather than hiding spend behind one provider.
 - **Advances resale:** the same aggregation that powers these dashboards
-  (`readResellerUsageAttribution`) already drives reseller rebill. A clean per-user /
+  already drives usage attribution. A clean per-user /
   per-workspace / per-capability view is the customer-facing twin of the rebill math.
 
 This is **not** a new data pipeline; it is a UI + aggregation-contract layer on top of the

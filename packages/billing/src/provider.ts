@@ -232,37 +232,6 @@ export interface BillingInvoice {
   lineItems: BillingInvoiceLineItem[];
 }
 
-// ── External (reseller re-bill) invoice ──────────────────────────────────────
-
-export interface BillingExternalInvoiceLine {
-  description: string;
-  /** Total amount for this line, in cents. */
-  amountCents: number;
-  /** Metered quantity behind the line — informational; amountCents is the total. */
-  quantity: number;
-  metadata: Record<string, string>;
-}
-
-export interface BillingExternalInvoiceInput {
-  /** Existing provider customer id to reuse; when null, one is created. */
-  customerId: string | null;
-  /** Used to create the customer when customerId is null. */
-  customerName: string;
-  customerMetadata: Record<string, string>;
-  currency: string;
-  lines: BillingExternalInvoiceLine[];
-  metadata: Record<string, string>;
-  /** Finalize (open) the invoice immediately; false leaves it a provider draft. */
-  finalize: boolean;
-  /** Idempotency root so a retried push reuses the same customer, items, and invoice. */
-  idempotencyKey: string;
-}
-
-export interface BillingExternalInvoiceResult {
-  providerCustomerId: string;
-  invoice: BillingInvoice;
-}
-
 // ── Checkout domain types ────────────────────────────────────────────────────
 
 export interface BillingCheckoutSubscriptionInput {
@@ -468,16 +437,6 @@ export interface BillingProvider {
 
   /** Retrieve a full invoice including line items. */
   getInvoice(invoiceId: string): Promise<BillingInvoice>;
-
-  /**
-   * Create (and optionally finalize) an invoice with arbitrary line items for an
-   * external customer — the reseller re-bill primitive. When customerId is null a
-   * customer is created from customerName/customerMetadata first. Idempotent via
-   * idempotencyKey so a retried push reuses the same customer, items, and invoice.
-   */
-  createExternalInvoice(
-    input: BillingExternalInvoiceInput,
-  ): Promise<BillingExternalInvoiceResult>;
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
 

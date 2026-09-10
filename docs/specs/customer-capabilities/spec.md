@@ -688,7 +688,7 @@ Two-gate discipline, extended (per `packages/billing`):
   pricing decision, not an architecture one — the meter hook exists either
   way. Cost lands on `capability_runs.cost_usd_micros` and the standard
   usage breakdowns (`billing.usage.breakdown` already slices by capability
-  name; reseller attribution rules already key on capability slices).
+  name; usage attribution already keys on capability slices).
 
 ---
 
