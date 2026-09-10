@@ -7,7 +7,7 @@
 - **Disposition vs today:** Keep (add inbound link)
 
 ## Purpose
-The scored results of a single eval run: overall pass rate, per-item scores across quality axes, and cost — the record that lets a team decide whether an agent is good enough to ship or resell. The page itself is complete and well-built; its only defect is that nothing links to it.
+The scored results of a single eval run: overall pass rate, per-item scores across quality axes, and cost — the record that lets a team decide whether an agent is good enough to ship. The page itself is complete and well-built; its only defect is that nothing links to it.
 
 ## Primary user & jobs-to-be-done
 - **Primary user:** developer or QA owner reviewing eval results

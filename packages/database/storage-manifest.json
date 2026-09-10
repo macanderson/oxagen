@@ -56,16 +56,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "archive_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -176,16 +166,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "configure_reseller_stripe",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "create_agent_def",
       "reads": [],
@@ -241,26 +221,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "create_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "create_reseller_price_plan",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -274,6 +234,15 @@
     {
       "domain": "telemetry",
       "name": "create_stella_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "create_tacho_enrollment",
       "reads": [],
       "surfaces": [
         "api"
@@ -391,16 +360,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "delete_reseller_attribution_rule",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "delete_schema",
       "reads": [],
@@ -509,6 +468,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "dispatch_tacho_command",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "privacy",
       "name": "erase_data",
       "reads": [],
@@ -559,6 +527,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "fetch_tacho_commands",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -903,17 +880,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "get_reseller_stripe_status",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "get_routing_policy",
       "reads": [],
@@ -955,6 +921,24 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "get_tacho_bundle",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "get_tacho_session",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -1027,6 +1011,15 @@
     {
       "domain": "telemetry",
       "name": "ingest_stella_operational_telemetry",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "ingest_tacho_events",
       "reads": [],
       "surfaces": [
         "api"
@@ -1366,50 +1359,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "list_reseller_attribution_rules",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_customers",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_price_plans",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_rebill_runs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "list_routing_stats",
       "reads": [],
@@ -1451,6 +1400,24 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_hosts",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_sessions",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -1564,17 +1531,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "preview_reseller_rebill",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "preview_routing_decision",
       "reads": [],
@@ -1651,16 +1607,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "push_reseller_rebill",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1875,6 +1821,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "revoke_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "api_key",
       "name": "rotate_api_key",
       "reads": [],
@@ -1901,16 +1856,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "save_reseller_attribution_rule",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2345,26 +2290,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "update_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "update_reseller_price_plan",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -2511,7 +2436,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a9d420c5094531bb8aeee8b5506025c4928617ca55bed0e94bb954f0f67eb58d",
+  "contentHash": "e3d4d5b85ac2982bc211d7f93cb4cdf6440301e7c63fd02a4185da3dd88a84a1",
   "domains": [
     {
       "name": "agent",
@@ -2601,12 +2526,6 @@
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
-        "postgres:billing.reseller_attribution_rules",
-        "postgres:billing.reseller_customers",
-        "postgres:billing.reseller_price_plans",
-        "postgres:billing.reseller_rebill_line_items",
-        "postgres:billing.reseller_rebill_runs",
-        "postgres:billing.reseller_settings",
         "postgres:billing.spend_budgets",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
@@ -2818,6 +2737,22 @@
       ]
     },
     {
+      "name": "tacho",
+      "stores": [
+        "postgres"
+      ],
+      "tables": [
+        "postgres:tacho.checkpoints",
+        "postgres:tacho.control_commands",
+        "postgres:tacho.hosts",
+        "postgres:tacho.incidents",
+        "postgres:tacho.session_commands",
+        "postgres:tacho.session_files",
+        "postgres:tacho.session_models",
+        "postgres:tacho.sessions"
+      ]
+    },
+    {
       "name": "telemetry",
       "stores": [
         "clickhouse"
@@ -2877,11 +2812,12 @@
         "ratelimit",
         "schema_registry",
         "security",
+        "tacho",
         "workspace"
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 107
+      "tableCount": 109
     },
     {
       "domains": [
@@ -8235,6 +8171,24 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "auto_reload_episode_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "auto_reload_episode_started_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "meter_carry_micro_credits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
           "name": "low_balance_threshold_cents",
           "nullable": false,
           "primaryKey": false,
@@ -8531,580 +8485,6 @@
       "name": "plans",
       "store": "postgres",
       "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "match_kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_value",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_label",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "customer_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_customers",
-          "type": "uuid"
-        },
-        {
-          "name": "priority",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_attribution_rules",
-      "name": "reseller_attribution_rules",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "external_ref",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_customer_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "price_plan_id",
-          "nullable": true,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_price_plans",
-          "type": "uuid"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_customers",
-      "name": "reseller_customers",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "pricing_mode",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "markup_bps",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "unit_price_cents",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "currency",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_price_plans",
-      "name": "reseller_price_plans",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_rebill_runs",
-          "type": "uuid"
-        },
-        {
-          "name": "label",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_kind",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_value",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "raw_cost_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "unit_price_cents",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "amount_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_rebill_line_items",
-      "name": "reseller_rebill_line_items",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "customer_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_customers",
-          "type": "uuid"
-        },
-        {
-          "name": "period_start",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "period_end",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "currency",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "subtotal_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "total_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "provider_invoice_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "provider_customer_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "hosted_invoice_url",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "error",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_rebill_runs",
-      "name": "reseller_rebill_runs",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "stripe_secret_ciphertext",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "bytea"
-        },
-        {
-          "name": "stripe_secret_key_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_secret_last4",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_account_label",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_settings",
-      "name": "reseller_settings",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
     },
     {
       "columns": [
@@ -14707,6 +14087,2180 @@
       "id": "postgres:security.security_events",
       "name": "security_events",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "chain_head",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "event_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "device_key_fingerprint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "device_signature",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "platform_key_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "platform_signature",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "signed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "countersigned_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "anchor_root",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anchored_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.checkpoints",
+      "name": "checkpoints",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "command",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "issued_by_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "issued_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "issued_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "delivered_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "acknowledged_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "applied_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "applied_at_seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "outcome_detail",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.control_commands",
+      "name": "control_commands",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "api_key_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "hostname",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "hostname_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "platform",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "os_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "arch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "os_user",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "os_user_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "device_public_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "device_key_fingerprint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harnesses",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "claude_version_at_enroll",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "claude_execpath",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "node_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "wrapper_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "shell",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "terminal_type_last",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "enrollment_claims",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "enrollment_signature",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoke_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "managed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "managed_settings_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "user_settings_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "project_settings_digests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle_version_served",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "bundle_etag_served",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "deny_generation_org_seen",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "deny_generation_ws_seen",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "last_bundle_fetch_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_seen_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_ingest_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_heartbeat_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "spool_depth",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "spool_oldest_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "hooks_ok",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "hooks_last_checked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "otel_ok",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "daemon_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "daemon_uptime_s",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "sessions_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "unobserved_sessions_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "incidents_open",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.hosts",
+      "name": "hosts",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "host_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "severity",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "smallint"
+        },
+        {
+          "name": "detected_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "detected_by",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "evidence",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "event_seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "resolved_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "resolved_by_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "resolution_note",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "trust_weight",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.incidents",
+      "name": "incidents",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "tool_use_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "command_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "command_head",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bash_command",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "exit_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "duration_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cwd",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "decision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "decision_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "policy_rule",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.session_commands",
+      "name": "session_commands",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "path",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repo_relative_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "language",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reads",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "writes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "edits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "deletes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "bytes_written",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "lines_added",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "lines_removed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "first_seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "last_seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "digest_before",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "digest_after",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.session_files",
+      "name": "session_files",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "canonical_model",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_basis",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "context_window",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "max_output_tokens",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "requests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "input_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "output_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_read_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_creation_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "thinking_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "web_search_requests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "cost_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "api_duration_ms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.session_models",
+      "name": "session_models",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_uuid",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "harness_session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "host_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "initiating_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "initiating_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "root_session_uuid",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "parent_session_uuid",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "subagent_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "subagent_type",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "subagent_description",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "spawn_depth",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "smallint"
+        },
+        {
+          "name": "spawn_tool_use_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anthropic_user_id_hash",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anthropic_user_email",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anthropic_account_uuid",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anthropic_account_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "anthropic_org_uuid",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "api_key_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "runtime",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "wrapper_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "entrypoint",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "query_source_initial",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "terminal_type",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "session_kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "is_child_session",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "bridge_session_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "output_style",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "effort",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_initial",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_final",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fast_mode_state",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fast_mode_disabled_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "permission_mode_initial",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "permission_mode_final",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "permission_mode_changes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "analytics_disabled",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "start_type",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "start_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "end_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "terminal_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "stop_reason_final",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "is_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "api_error_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "first_prompt_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_event_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "ended_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "sealed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "cwd",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "project_dir",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "transcript_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "git_remote_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "git_branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "git_head_sha_start",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "git_head_sha_end",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "git_dirty_start",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "worktree_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "worktree_name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "worktree_branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "relocated_cwd",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tools_available",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "mcp_servers",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "agents_available",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "skills_available",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "slash_commands",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "plugins",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "plugin_errors",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "mcp_server_errors",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "harness_capabilities",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "instructions_loaded",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "settings_sources",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "hooks_registered",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "env_snapshot",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "memory_paths",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "available_models",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "fallback_models",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "effort_level_setting",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "sandbox_enabled",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "auto_compact_enabled",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "always_thinking_enabled",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "prompt_cache_ttl",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "default_permission_mode_setting",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "num_turns",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_prompts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_model_calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_api_errors",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_api_retries",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_tool_calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_tool_errors",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_tool_rejections",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_tool_asks",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_subagents",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_compactions",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_model_switches",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_notifications",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "num_elicitations",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "input_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "output_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_read_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_creation_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_creation_5m_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cache_creation_1h_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "thinking_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "web_search_requests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "web_fetch_requests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "total_cost_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "cost_basis",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "has_unknown_model_cost",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "duration_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "api_duration_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "api_duration_without_retries_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_duration_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "active_time_s",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "ttft_first_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "lines_added",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "lines_removed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "files_read",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "files_written",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "files_deleted",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "commands_run",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "network_calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "commits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "pull_requests",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "subagent_stats",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "permission_denials",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "models_used",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "enforcement_tier",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "policy_decisions",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "policy_denies",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "elevations_requested",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "elevations_approved",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "elevations_denied",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "elevations_expired",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tokens_issued",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tokens_used",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "seq_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "genesis_hash",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_hash",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "final_hash",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checkpoint_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "last_checkpoint_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "chain_verified",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "chain_break_at_seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "telemetry_gap_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "unobserved_tail",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "completeness_gaps",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "replay_grade",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "evidence_manifest_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_prompt_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.sessions",
+      "name": "sessions",
+      "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
     },

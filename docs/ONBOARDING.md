@@ -133,7 +133,7 @@ shape.
 | `iam` | `iam.ts` | `principals`, `roles`, `role_grants`, access requests, authorization decisions — who can do what |
 | `agent` | `agent.ts` | Agent definitions and versions, approvals, executions/steps/tool calls, A2A tasks, the run/attempt/seal/finalization evidence ledger, tool & context-record registries (18 tables — the biggest domain). ADR-043 dropped the skills, subagent fan-out, sandbox session, plan, and file-lock tables that used to live here. |
 | `chat` | `chat.ts` | `conversations`, `messages` |
-| `billing` | `billing.ts` + `reseller.ts` | Plans, subscriptions, invoices, credits, Stripe events, spend budgets, and reseller price plans/customers/rebilling |
+| `billing` | `billing.ts` | Plans, subscriptions, invoices, credits, Stripe events, and spend budgets |
 | `mcp` | `mcp.ts` | MCP server registries, credentials, consents, catalog |
 | `plugin` | `plugin.ts` | `installed_plugins` |
 | `ingestion` | `ingestion.ts` | Data connectors: source connections, OAuth tokens, webhooks, GitHub installs, repo bindings |

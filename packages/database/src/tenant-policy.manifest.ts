@@ -96,13 +96,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
-  // Reseller revenue (Stripe-for-agents re-bill loop) — org-only RLS.
-  { table: "billing.reseller_price_plans", policyClass: "org_only" },
-  { table: "billing.reseller_customers", policyClass: "org_only" },
-  { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_runs", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_line_items", policyClass: "org_only" },
-  { table: "billing.reseller_settings", policyClass: "org_only" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

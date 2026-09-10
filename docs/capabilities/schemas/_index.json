@@ -1,5 +1,5 @@
 {
-  "generatedCount": 239,
+  "generatedCount": 224,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -56,17 +56,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "archive_reseller_customer",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -193,17 +182,6 @@
       "consumes": []
     },
     {
-      "name": "configure_reseller_stripe",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "create_agent_def",
       "domain": "agent",
       "surfaces": [
@@ -258,28 +236,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "create_reseller_customer",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "create_reseller_price_plan",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -432,17 +388,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "delete_reseller_attribution_rule",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1021,18 +966,6 @@
       "consumes": []
     },
     {
-      "name": "get_reseller_stripe_status",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "get_routing_policy",
       "domain": "router",
       "surfaces": [
@@ -1560,54 +1493,6 @@
       "consumes": []
     },
     {
-      "name": "list_reseller_attribution_rules",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "list_reseller_customers",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "list_reseller_price_plans",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "list_reseller_rebill_runs",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
@@ -1796,18 +1681,6 @@
       "consumes": []
     },
     {
-      "name": "preview_reseller_rebill",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "preview_routing_decision",
       "domain": "router",
       "surfaces": [
@@ -1892,17 +1765,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "push_reseller_rebill",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2175,17 +2037,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "save_reseller_attribution_rule",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2657,28 +2508,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "update_reseller_customer",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "update_reseller_price_plan",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "component": null,
       "produces": [],

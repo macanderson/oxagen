@@ -1687,16 +1687,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  BILLING_ENCRYPTION_KEY: {
-    group: "Billing",
-    description:
-      "Base64-encoded 32-byte master key for AES-256-GCM encryption of per-org reseller Stripe keys (reseller revenue). Optional: falls back to INGESTION_ENCRYPTION_KEY when unset.",
-    secret: true,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",
     description:

@@ -33,7 +33,6 @@ The charge is raised at the model call, not the gate.
 | `packages/ai/src/*` | Calls `chargeUsageCredits(...)` after an LLM call, with the token usage. |
 | `packages/billing/src/metering.ts` | `meterCreditsForUsage(usage, {markup, rateCard})` → `creditsForCostUsd(providerCostUsd(usage, rateCard), markup ?? resolveMeterMarkup())`. Credits are provider token cost, marked up. |
 | `packages/billing/src/constants.ts` | Ledger reasons: `CONSUME_EXECUTION`, `CONSUME_TOOL_CALL`, `CONSUME_TOKEN_OVERAGE`. |
-| `packages/billing/src/reseller-pricing.ts` | Two modes already: `markup` (bps over raw cost) and `per_unit` (flat cents per metered unit, cost-independent). |
 | `packages/billing/src/tier.ts` | `PlanTier` = `free` \| `build` \| `scale` \| `enterprise`. |
 | `packages/billing/src/rate-card.ts` | Every model family priced, with cache-read and cache-write rates, kept in sync with `pricing.ts` by `rate-card-parity.test.ts`. |
 
@@ -69,9 +68,9 @@ A **governed action** is one `invoke()` that satisfies all of:
 ### 3.3 Attribution
 
 Every billable action carries `orgId`, `workspaceId`, the capability `name`, the
-principal, and — where the caller supplied one — a `runId`, so a reseller can
-attribute a slice to an end customer and a customer can attribute a line to a
-team. `runId` is metadata for grouping, never a billing unit.
+principal, and — where the caller supplied one — a `runId`, so a customer can
+attribute a line to a team, a workspace or an agent. `runId` is metadata for
+grouping, never a billing unit.
 
 ### 3.4 Runs, for quoting
 
@@ -181,12 +180,14 @@ there is no cost to mark up.
 `CONSUME_TOKEN_OVERAGE` is **retired, not repurposed** — historical rows keep
 meaning what they meant. A new `CONSUME_RETENTION` covers §4.3.
 
-### 5.5 Reseller
+### 5.5 No re-bill layer
 
-No change. `priceAttributedUsage` in `per_unit` mode is `unitPriceCents × quantity`
-with `quantity` = governed actions. The mode exists; this makes it the default
-for new reseller plans. `markup` mode stays for partners who resell their own
-model spend.
+Oxagen sells direct to the enterprise team that runs the agents and answers for
+them. There is no margin line, so there is nothing to resell: the reseller
+capabilities, tables, pricing modes and the Billing → Revenue surface were
+deleted rather than repointed at the action meter. Price is set by tier
+allowance plus per-action overage, and an org that reaches its allowance either
+moves up a tier or buys ad-hoc usage.
 
 ### 5.6 Surfaces
 

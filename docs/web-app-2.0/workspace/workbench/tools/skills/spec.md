@@ -44,4 +44,4 @@ Postgres (skills, skill_versions); ClickHouse (usage metrics via `get_skill_metr
 - **Today:** list COMPLETE (source/version/last-used/usage-count columns, AI-drafted New skill wizard); `[skillSlug]` COMPLETE (version history, edit-to-new-version, activate, export/download). Legacy redirect shims at `workbench/skills` and `settings/skills` point here — collapse those routes once callers are updated.
 
 ## Vision alignment
-Skills are versioned, reusable procedure contracts equipped onto agents — part of the typed-contract governance wedge and a resellable unit alongside agents themselves.
+Skills are versioned, reusable procedure contracts equipped onto agents — part of the typed-contract governance wedge, alongside agents themselves.

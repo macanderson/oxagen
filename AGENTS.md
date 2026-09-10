@@ -36,7 +36,7 @@ docs/       capability specs, ADRs, architecture docs
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
-| `database` | `src/schema/` | 23 Drizzle Postgres schema files (org, auth, workspace, agent, chat, content, billing, reseller, security, iam, mcp, plugin, notification, privacy, ingestion, evidence, schema-registry, environments, ai, ratelimit + mixins) |
+| `database` | `src/schema/` | The Drizzle Postgres schema files (org, auth, workspace, agent, chat, content, billing, security, iam, mcp, plugin, notification, privacy, ingestion, evidence, schema-registry, environments, ai, ratelimit + mixins) |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |

@@ -57,14 +57,6 @@ export const SECURITY_EVENT_TYPES = [
   // Spend-ceiling mutation (set_spend_budget): how much may be spent per
   // period, per scope. Distinct from auto_reload_updated (when to top up).
   "billing.budget_updated",
-  // Billing — reseller revenue (BYO-Stripe rebilling): commercial-terms
-  // mutations on downstream customers, price plans, attribution rules, the
-  // reseller Stripe connection, and invoice pushes (SOC2 CC6.3/CC6.8).
-  "billing.reseller_customer_changed",
-  "billing.reseller_price_plan_changed",
-  "billing.reseller_attribution_rule_changed",
-  "billing.reseller_stripe_configured",
-  "billing.reseller_rebill_pushed",
   // Capability authz
   "capability.invoke_allowed",
   "capability.invoke_denied",

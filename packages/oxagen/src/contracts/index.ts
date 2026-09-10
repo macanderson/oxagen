@@ -75,21 +75,6 @@ import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
-import { resellerCustomerCreate } from "./billing.reseller_customer.create";
-import { resellerCustomerList } from "./billing.reseller_customer.list";
-import { resellerCustomerUpdate } from "./billing.reseller_customer.update";
-import { resellerCustomerArchive } from "./billing.reseller_customer.archive";
-import { resellerPricePlanCreate } from "./billing.reseller_price_plan.create";
-import { resellerPricePlanList } from "./billing.reseller_price_plan.list";
-import { resellerPricePlanUpdate } from "./billing.reseller_price_plan.update";
-import { resellerAttributionRuleSave } from "./billing.reseller_attribution_rule.save";
-import { resellerAttributionRuleList } from "./billing.reseller_attribution_rule.list";
-import { resellerAttributionRuleDelete } from "./billing.reseller_attribution_rule.delete";
-import { resellerRebillPreview } from "./billing.reseller_rebill.preview";
-import { resellerRebillPush } from "./billing.reseller_rebill.push";
-import { resellerRebillListRuns } from "./billing.reseller_rebill.list_runs";
-import { resellerStripeConfigure } from "./billing.reseller_stripe.configure";
-import { resellerStripeStatus } from "./billing.reseller_stripe.status";
 import { chatMessageExecution } from "./chat.message.execution";
 import { chatMessageSend } from "./chat.message.send";
 import { conversationArchive } from "./conversation.archive";
@@ -363,35 +348,6 @@ export type {
   ClickHousePlaneConfigInput,
 } from "./org.data_plane.shared";
 
-// Shared reseller-revenue wire schemas (not capabilities themselves) — re-exported
-// so surfaces and the app import one canonical shape, and so the contracts guard
-// sees this sibling module referenced.
-export {
-  resellerCustomerStatusSchema,
-  resellerPricingModeSchema,
-  resellerMatchKindSchema,
-  resellerRebillStatusSchema,
-  resellerCustomerSchema,
-  resellerPricePlanSchema,
-  resellerAttributionRuleSchema,
-  resellerRebillLineItemSchema,
-  resellerRebillPreviewSchema,
-  resellerRebillRunSchema,
-  isoInstant,
-} from "./reseller-shared";
-export type {
-  ResellerCustomerStatus,
-  ResellerPricingMode,
-  ResellerMatchKind,
-  ResellerRebillStatus,
-  ResellerCustomer,
-  ResellerPricePlan,
-  ResellerAttributionRule,
-  ResellerRebillLineItem,
-  ResellerRebillPreview,
-  ResellerRebillRun,
-} from "./reseller-shared";
-
 export {
   apiKeyCreate,
   apiKeyRevoke,
@@ -457,21 +413,6 @@ export {
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
-  resellerCustomerCreate,
-  resellerCustomerList,
-  resellerCustomerUpdate,
-  resellerCustomerArchive,
-  resellerPricePlanCreate,
-  resellerPricePlanList,
-  resellerPricePlanUpdate,
-  resellerAttributionRuleSave,
-  resellerAttributionRuleList,
-  resellerAttributionRuleDelete,
-  resellerRebillPreview,
-  resellerRebillPush,
-  resellerRebillListRuns,
-  resellerStripeConfigure,
-  resellerStripeStatus,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
@@ -707,21 +648,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
-  resellerCustomerCreate,
-  resellerCustomerList,
-  resellerCustomerUpdate,
-  resellerCustomerArchive,
-  resellerPricePlanCreate,
-  resellerPricePlanList,
-  resellerPricePlanUpdate,
-  resellerAttributionRuleSave,
-  resellerAttributionRuleList,
-  resellerAttributionRuleDelete,
-  resellerRebillPreview,
-  resellerRebillPush,
-  resellerRebillListRuns,
-  resellerStripeConfigure,
-  resellerStripeStatus,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
