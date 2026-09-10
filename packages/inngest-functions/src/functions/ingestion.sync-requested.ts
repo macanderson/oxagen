@@ -22,7 +22,9 @@ interface SourceConnectionRow {
  *   2. Dispatch the connector-appropriate sync event:
  *        - "github"  → `ingestion/github.initial-sync`
  *        - others    → log "unsupported connector for sync" (extend as needed)
- *   3. Update `last_sync_at` on the source connection to stamp the sync time.
+ *   3. Update `last_sync_at` on the source connection — only when step 2
+ *      actually dispatched something, so a skipped dispatch cannot report a
+ *      successful sync.
  *
  * Concurrency: capped at 4 per org so that bulk "sync all" calls don't fan
  * out uncontrollably.
@@ -98,54 +100,71 @@ export const [ingestionSyncRequested] = createFunction(
     }
 
     // ── Step 2: Dispatch connector-specific sync event ────────────────────────
-    await step.run("dispatch-connector-sync", async () => {
-      const dc = conn.delivery_config;
+    const dispatch = await step.run(
+      "dispatch-connector-sync",
+      async (): Promise<{ dispatched: boolean; reason?: string }> => {
+        const dc = conn.delivery_config;
 
-      if (conn.connector_id === "github") {
-        // GitHub: re-run the full tree sync. deliveryConfig carries the
-        // owner/repo/defaultBranch set during the connection wizard.
-        const owner = typeof dc?.["owner"] === "string" ? dc["owner"] : "";
-        const repo = typeof dc?.["repo"] === "string" ? dc["repo"] : "";
-        const defaultBranch =
-          typeof dc?.["defaultBranch"] === "string"
-            ? dc["defaultBranch"]
-            : "main";
+        if (conn.connector_id === "github") {
+          // GitHub: re-run the full tree sync. deliveryConfig carries the
+          // owner/repo/defaultBranch set during the connection wizard.
+          const owner = typeof dc?.["owner"] === "string" ? dc["owner"] : "";
+          const repo = typeof dc?.["repo"] === "string" ? dc["repo"] : "";
+          const defaultBranch =
+            typeof dc?.["defaultBranch"] === "string"
+              ? dc["defaultBranch"]
+              : "main";
+          // The wizard's "sync history depth" selector lives here. Dropping it
+          // silently re-syncs a 180-day connection at the initial-sync
+          // function's 90-day default, quietly shortening the history the
+          // customer asked for.
+          const rawDepth = dc?.["syncDepthDays"];
+          const syncDepthDays =
+            typeof rawDepth === "number" &&
+            Number.isFinite(rawDepth) &&
+            rawDepth > 0
+              ? rawDepth
+              : undefined;
 
-        if (!owner || !repo) {
-          logger.warn(
-            { connectionId, orgId, jobId, connectorId: conn.connector_id },
-            "ingestion-sync-requested: github deliveryConfig missing owner/repo — skipping connector dispatch",
+          if (!owner || !repo) {
+            logger.warn(
+              { connectionId, orgId, jobId, connectorId: conn.connector_id },
+              "ingestion-sync-requested: github deliveryConfig missing owner/repo — skipping connector dispatch",
+            );
+            return { dispatched: false, reason: "missing_owner_or_repo" };
+          }
+
+          await inngest.send({
+            name: "ingestion/github.initial-sync" as never,
+            data: {
+              connectionId,
+              orgId,
+              workspaceId,
+              owner,
+              repo,
+              defaultBranch,
+              ...(syncDepthDays === undefined ? {} : { syncDepthDays }),
+            },
+          });
+
+          logger.info(
+            {
+              connectionId,
+              orgId,
+              workspaceId,
+              owner,
+              repo,
+              defaultBranch,
+              syncDepthDays,
+              mode,
+              syncMethod,
+              jobId,
+            },
+            "ingestion-sync-requested: dispatched ingestion/github.initial-sync",
           );
-          return;
+          return { dispatched: true };
         }
 
-        await inngest.send({
-          name: "ingestion/github.initial-sync" as never,
-          data: {
-            connectionId,
-            orgId,
-            workspaceId,
-            owner,
-            repo,
-            defaultBranch,
-          },
-        });
-
-        logger.info(
-          {
-            connectionId,
-            orgId,
-            workspaceId,
-            owner,
-            repo,
-            defaultBranch,
-            mode,
-            syncMethod,
-            jobId,
-          },
-          "ingestion-sync-requested: dispatched ingestion/github.initial-sync",
-        );
-      } else {
         // For other connectors, polling sync is not yet implemented. This stub
         // logs the request so it is traceable and the slot can be filled per-connector.
         logger.info(
@@ -160,21 +179,29 @@ export const [ingestionSyncRequested] = createFunction(
           },
           "ingestion-sync-requested: connector does not support sync dispatch yet — integration must implement its own polling handler",
         );
-      }
-    });
-
-    // ── Step 3: Stamp last_sync_at ────────────────────────────────────────────
-    await step.run("update-last-sync-at", () =>
-      withSystemDb((tx) =>
-        tx.execute(sql`
-          UPDATE ingestion.source_connections
-          SET    last_sync_at = NOW(),
-                 updated_at   = NOW()
-          WHERE  id     = ${connectionId}::uuid
-          AND    org_id = ${orgId}::uuid
-        `),
-      ),
+        return { dispatched: false, reason: "connector_unsupported" };
+      },
     );
+
+    // ── Step 3: Stamp last_sync_at, but only for a sync that happened ─────────
+    // last_sync_at is what every surface reads to say when this connection
+    // last synced. Stamping it after a dispatch that was skipped — a GitHub
+    // connection with no owner/repo, or a connector with no polling handler at
+    // all — reports a fresh successful sync for a run that did nothing, which
+    // is the shape that let a dead ingestion pipeline look healthy for weeks.
+    if (dispatch.dispatched) {
+      await step.run("update-last-sync-at", () =>
+        withSystemDb((tx) =>
+          tx.execute(sql`
+            UPDATE ingestion.source_connections
+            SET    last_sync_at = NOW(),
+                   updated_at   = NOW()
+            WHERE  id     = ${connectionId}::uuid
+            AND    org_id = ${orgId}::uuid
+          `),
+        ),
+      );
+    }
 
     logger.info(
       {
@@ -185,6 +212,8 @@ export const [ingestionSyncRequested] = createFunction(
         mode,
         syncMethod,
         jobId,
+        dispatched: dispatch.dispatched,
+        reason: dispatch.reason,
       },
       "ingestion-sync-requested: completed",
     );
@@ -195,6 +224,8 @@ export const [ingestionSyncRequested] = createFunction(
       mode,
       syncMethod,
       jobId,
+      dispatched: dispatch.dispatched,
+      ...(dispatch.reason ? { reason: dispatch.reason } : {}),
     };
   },
 );
