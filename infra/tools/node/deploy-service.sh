@@ -190,8 +190,13 @@ config_prefix=$(field '.config_prefix // empty')
 [[ $port =~ ^[0-9]{2,5}$ ]] || fail "oxagen-run.json: 'port' must be a number, got '${port:-<missing>}'"
 [[ -n $image ]] || fail "oxagen-run.json: 'image' is required"
 
+# An empty command runs the image's own entrypoint, which is what an external
+# image such as the engine's wants: its binary is already the entrypoint, and
+# naming it again would hand it its own path as an argument. The tarball
+# services keep naming theirs, because node:22-alpine's entrypoint is a shell.
+jq -e '.command | type == "array"' "$manifest" >/dev/null 2>&1 \
+  || fail "oxagen-run.json: 'command' must be an array"
 mapfile -t command < <(jq -re '.command[]' "$manifest" 2>/dev/null || true)
-[[ ${#command[@]} -gt 0 ]] || fail "oxagen-run.json: 'command' must be a non-empty array"
 
 # Static environment declared by the artifact. Non-secret by construction —
 # anything secret comes from Parameter Store below, because this file ships
@@ -319,7 +324,7 @@ start_container() {
     "${env_args[@]}" \
     -v "$dir:/app" \
     -w /app \
-    "$image" "${command[@]}" >/dev/null
+    "$image" ${command[@]+"${command[@]}"} >/dev/null
 }
 
 healthy() {
