@@ -1,5 +1,7 @@
 import { setSecretValue } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { secretValueSet } from "@oxagen/oxagen/contracts/secret.value.set";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
@@ -11,6 +13,11 @@ export const secretValueSetHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[secret.value.set] workspaceId is required (scoped capability)",
     );
+  // Overwriting a secret redirects whatever the value authenticates to —
+  // a database, a payment key, a webhook signature. The contract restricts it
+  // to org Owner/Admin, and the kernel's IAM gate consults no policy for an org
+  // below the tier that unlocks ACLs (oxagen#2819), so ask again here.
+  await assertCallerRole(secretValueSet, ctx);
   const { keyId, environmentId, value } = input as {
     keyId: string;
     environmentId: string;

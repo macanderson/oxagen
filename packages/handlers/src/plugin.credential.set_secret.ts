@@ -1,5 +1,7 @@
 import { setWorkspaceSecret } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { pluginCredentialSetSecret } from "@oxagen/oxagen/contracts/plugin.credential.set_secret";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
@@ -18,6 +20,12 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       "[plugin.credential.set_secret] workspaceId is required (scoped capability)",
     );
   }
+
+  // The stored credential is what every later plugin call authenticates with,
+  // so writing it hands the plugin's remote account to whoever supplied the
+  // token. The contract restricts that to org Owner/Admin; the kernel's IAM
+  // gate consults no policy below the tier that unlocks ACLs (oxagen#2819).
+  await assertCallerRole(pluginCredentialSetSecret, ctx);
 
   try {
     await setWorkspaceSecret({

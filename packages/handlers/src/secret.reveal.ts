@@ -1,17 +1,28 @@
 import { revealSecret } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { secretReveal } from "@oxagen/oxagen/contracts/secret.reveal";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
 // Privileged + audited (Spec §7.3). The service writes environments.secret_access_log
-// on every call. Owner/Admin enforcement comes from the contract's IAM gate on
-// the api/mcp surfaces; app call sites must add an explicit gate (apps/app does
-// not bootstrap IAM). NEVER log the revealed value.
+// on every call. NEVER log the revealed value.
+//
+// The contract restricts reveal to org Owner/Admin, and the kernel's IAM gate is
+// where that is meant to be enforced — but checkIAM returns tier_gate -> allow
+// whenever canAccessACL(tier) is false, which is every org below the enterprise
+// tier, so no policy is consulted and defaultRoles is never read (oxagen#2819).
+// apps/app is not the limiter, as an earlier version of this comment claimed:
+// instrumentation.ts calls bootstrapIAMRuntime with enforced=true.
+//
+// So the assertion below is the one that runs. Same helper its four siblings
+// took, reading the same contract the gate would have.
 export const secretRevealHandler: CapabilityHandlerFn = async (input, ctx) => {
   if (!ctx.workspaceId)
     throw new Error(
       "[secret.reveal] workspaceId is required (scoped capability)",
     );
+  await assertCallerRole(secretReveal, ctx);
   const { keyId, environmentId } = input as {
     keyId: string;
     environmentId?: string | null;
