@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   recallWorkspaceMemoryMessage: vi.fn(),
   loadWorkspacePromptConfigSafe: vi.fn(),
   loadEffectiveModelDefaults: vi.fn(),
+  selectModel: vi.fn(),
+  resolveModelFundingSource: vi.fn(),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
@@ -39,12 +41,14 @@ vi.mock("@oxagen/agent", () => ({
   waitForApproval: mocks.waitForApproval,
 }));
 vi.mock("@oxagen/ai", () => ({
-  selectModel: () => ({ modelId: "anthropic/claude-sonnet-5" }),
+  selectModel: mocks.selectModel,
   modelIdOf: (m: unknown) => (m as { modelId: string }).modelId,
   supportsReasoning: () => true,
   resolvePrompt: (a: { baseline: string }) => a.baseline,
   loadWorkspacePromptConfigSafe: mocks.loadWorkspacePromptConfigSafe,
   loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
+  resolveModelFundingSource: mocks.resolveModelFundingSource,
+  PLATFORM_FUNDING: { fundedBy: "platform" },
 }));
 vi.mock("@oxagen/database", () => ({
   withTenantDb: mocks.withTenantDb,
@@ -158,9 +162,23 @@ function governedTurn(parts: unknown[]) {
   };
 }
 
+/** An organisation's own key, as `resolveModelFundingSource` answers it. */
+const ORG_CREDENTIAL = {
+  provider: "openrouter" as const,
+  apiKey: "sk-or-v1-THE-SECRET-KEY",
+  digest: "d1g3st",
+};
+const ORG_FUNDING = {
+  fundedBy: "org" as const,
+  credential: ORG_CREDENTIAL,
+  keyHint: "sk-or-…-KEY",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.capabilityContext.mockReturnValue(CTX);
+  mocks.selectModel.mockReturnValue({ modelId: "anthropic/claude-sonnet-5" });
+  mocks.resolveModelFundingSource.mockResolvedValue({ fundedBy: "platform" });
   mocks.evaluateTurnCreditGate.mockResolvedValue({ ok: true });
   mocks.materializeTools.mockResolvedValue({
     tools: { list_executions: {} },
@@ -225,6 +243,111 @@ describe("POST chat/stream — credit admission gate", () => {
     });
     const res = await post({ content: "hi" });
     expect(res.status).toBe(402);
+  });
+
+  it("answers 402 naming the cap when a platform-funded org is over its assistant spend cap", async () => {
+    mocks.evaluateTurnCreditGate.mockResolvedValue({
+      ok: false,
+      code: "assistant_spend_cap",
+      message: "Assistant spend cap of $20.00 reached",
+    });
+    const res = await post({ content: "hi" });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({
+      error: {
+        code: "assistant_spend_cap",
+        message: "Assistant spend cap of $20.00 reached",
+      },
+    });
+    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST chat/stream — who pays for the tokens (ADR-053)", () => {
+  it("with a stored key: the gate hears org funding, the model is built on the key, the turn is org-funded", async () => {
+    mocks.resolveModelFundingSource.mockResolvedValue(ORG_FUNDING);
+
+    await drain(await post({ content: "hi" }));
+
+    expect(mocks.resolveModelFundingSource).toHaveBeenCalledWith(CTX.orgId);
+    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith(CTX.orgId, {
+      fundedBy: "org",
+    });
+    expect(mocks.selectModel).toHaveBeenCalledWith(
+      expect.objectContaining({ credential: ORG_CREDENTIAL }),
+    );
+    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(input["fundedBy"]).toBe("org");
+  });
+
+  it("resolves funding BEFORE the gate decides, so the cap can be scoped to platform-funded turns", async () => {
+    const order: string[] = [];
+    mocks.resolveModelFundingSource.mockImplementation(async () => {
+      order.push("funding");
+      return ORG_FUNDING;
+    });
+    mocks.evaluateTurnCreditGate.mockImplementation(async () => {
+      order.push("gate");
+      return { ok: true };
+    });
+
+    await drain(await post({ content: "hi" }));
+
+    expect(order).toEqual(["funding", "gate"]);
+  });
+
+  it("with no stored key: platform funding, and no credential reaches selectModel", async () => {
+    await drain(await post({ content: "hi" }));
+
+    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith(CTX.orgId, {
+      fundedBy: "platform",
+    });
+    expect(mocks.selectModel).toHaveBeenCalledTimes(1);
+    expect(mocks.selectModel.mock.calls[0]![0]).not.toHaveProperty(
+      "credential",
+    );
+    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(input["fundedBy"]).toBe("platform");
+  });
+
+  it("a failed funding read fails the turn before the gate, the model or the loop", async () => {
+    // Never answered as "platform": that would move an organisation with its
+    // own key onto Oxagen's billed key for the length of a database outage.
+    // Hono's default handler answers the throw with a 500 here; the real app
+    // routes it through errorMiddleware (apps/api/src/app.ts).
+    mocks.resolveModelFundingSource.mockRejectedValue(new Error("db down"));
+
+    const res = await post({ content: "hi" });
+
+    expect(res.status).toBe(500);
+    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
+    expect(mocks.selectModel).not.toHaveBeenCalled();
+    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+  });
+
+  it("logs the key hint for an org-funded turn and never the key", async () => {
+    mocks.resolveModelFundingSource.mockResolvedValue(ORG_FUNDING);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    await drain(await post({ content: "hi" }));
+
+    const modelLog = info.mock.calls.find(
+      (c) => c[0] === "[chat.stream] turn model",
+    );
+    expect(modelLog?.[1]).toMatchObject({
+      fundedBy: "org",
+      keyHint: ORG_FUNDING.keyHint,
+    });
+    expect(JSON.stringify(info.mock.calls)).not.toContain(
+      ORG_CREDENTIAL.apiKey,
+    );
+    info.mockRestore();
   });
 });
 

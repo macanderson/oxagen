@@ -4,9 +4,18 @@ export {
   tierModelId,
   resolvedTierCatalog,
   modelIdOf,
+  embeddingProvider,
   DEFAULT_TIER,
 } from "./models";
-export type { ModelSelector, OxagenTier } from "./models";
+export type { ModelCredential, ModelSelector, OxagenTier } from "./models";
+
+// Who pays the vendor for an organisation's calls (ADR-053). Server-only: the
+// resolver opens the organisation's KMS envelope.
+export {
+  resolveModelFundingSource,
+  PLATFORM_FUNDING,
+} from "./funding-source";
+export type { ModelFundingSource, TurnFunding } from "./funding-source";
 
 // Re-export the client-safe catalog from the package root for server callers
 // (route guards, RSC). Client components should import from "@oxagen/ai/catalog"
@@ -144,3 +153,17 @@ export type {
 export { tool, jsonSchema, stepCountIs } from "ai";
 export type { Tool, ToolSet, ModelMessage } from "ai";
 export type { JSONSchema7 } from "@ai-sdk/provider";
+
+// Token-free check of a customer's model-vendor key against the vendor
+// (ADR-053 §2). Used by verify_model_credential; the key goes into one request
+// header and never into a log, an error, or the result.
+export {
+  probeModelCredential,
+  CREDENTIAL_PROBE_TIMEOUT_MS,
+  CREDENTIAL_PROBE_URL,
+} from "./credential-probe";
+export type {
+  CredentialProbeProvider,
+  CredentialProbeResult,
+  ProbeModelCredentialArgs,
+} from "./credential-probe";

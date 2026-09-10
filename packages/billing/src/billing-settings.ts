@@ -21,6 +21,8 @@ export interface OrgBillingSettings {
   autoReloadPaymentMethodId: string | null;
   lastAutoReloadAt: Date | null;
   lowBalanceThresholdCents: number;
+  /** ADR-053 §3: monthly cap on platform-paid assistant tokens; null = no cap. */
+  assistantSpendCapCents: number | null;
   dunningState: "active" | "grace" | "suspended";
   delinquentSince: Date | null;
   graceEndsAt: Date | null;
@@ -32,6 +34,8 @@ export interface OrgBillingSettings {
 const DEFAULT_THRESHOLD_CENTS = 500;
 const DEFAULT_AMOUNT_CENTS = 2_000;
 const DEFAULT_LOW_BALANCE_THRESHOLD_CENTS = 500;
+/** ADR-053 §3: $20 a month of platform-paid assistant tokens unless raised. */
+export const DEFAULT_ASSISTANT_SPEND_CAP_CENTS = 2_000;
 const MIN_RELOAD_AMOUNT_CENTS = 100; // $1.00 minimum
 
 // ── Mapping helper ────────────────────────────────────────────────────────────
@@ -44,6 +48,7 @@ function rowToSettings(row: {
   autoReloadPaymentMethodId: string | null;
   lastAutoReloadAt: Date | null;
   lowBalanceThresholdCents: bigint;
+  assistantSpendCapCents: bigint | null;
   dunningState: string;
   delinquentSince: Date | null;
   graceEndsAt: Date | null;
@@ -57,6 +62,10 @@ function rowToSettings(row: {
     autoReloadPaymentMethodId: row.autoReloadPaymentMethodId,
     lastAutoReloadAt: row.lastAutoReloadAt,
     lowBalanceThresholdCents: Number(row.lowBalanceThresholdCents),
+    assistantSpendCapCents:
+      row.assistantSpendCapCents === null
+        ? null
+        : Number(row.assistantSpendCapCents),
     dunningState: row.dunningState as "active" | "grace" | "suspended",
     delinquentSince: row.delinquentSince,
     graceEndsAt: row.graceEndsAt,
@@ -97,6 +106,7 @@ export async function getOrgBillingSettings(
         autoReloadAmountCents: BigInt(DEFAULT_AMOUNT_CENTS),
         autoReloadPaymentMethodId: null,
         lowBalanceThresholdCents: BigInt(DEFAULT_LOW_BALANCE_THRESHOLD_CENTS),
+        assistantSpendCapCents: BigInt(DEFAULT_ASSISTANT_SPEND_CAP_CENTS),
         dunningState: "active",
         delinquentSince: null,
         graceEndsAt: null,
@@ -235,4 +245,49 @@ export async function updateAutoReloadSettings(
   );
 
   return updated;
+}
+
+// ── updateAssistantSpendCap ───────────────────────────────────────────────────
+
+/**
+ * Set the organisation's monthly cap on platform-paid assistant tokens
+ * (ADR-053 §3). `null` removes the cap, which is an explicit operator choice;
+ * a number is credit cents per calendar month and must be non-negative — zero
+ * refuses every platform-paid assistant turn, which is how an organisation
+ * that has not yet brought its own key opts out of the assistant entirely.
+ *
+ * Ensures the settings row exists first (via getOrgBillingSettings) so the
+ * update always has a base row.
+ */
+export async function updateAssistantSpendCap(
+  orgId: string,
+  capCents: number | null,
+): Promise<OrgBillingSettings> {
+  if (capCents !== null && (!Number.isInteger(capCents) || capCents < 0)) {
+    throw new Error(
+      "assistantSpendCapCents must be a non-negative integer or null",
+    );
+  }
+  await getOrgBillingSettings(orgId);
+  const row = await withTenantDb(async (tx) => {
+    const [updated] = await tx
+      .update(schema.orgBillingSettings)
+      .set({
+        assistantSpendCapCents: capCents === null ? null : BigInt(capCents),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.orgBillingSettings.orgId, orgId))
+      .returning();
+    return updated ?? null;
+  });
+  if (!row) {
+    throw new Error(
+      `billing-settings: failed to update the assistant spend cap for org ${orgId}`,
+    );
+  }
+  logger.info(
+    { orgId, assistantSpendCapCents: capCents },
+    "billing: assistant spend cap updated",
+  );
+  return rowToSettings(row);
 }

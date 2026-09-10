@@ -16,6 +16,7 @@ export default async function OrgSettingsLayout({
   const navItems = [
     { label: "General", href: org.settings.general(ctx) },
     { label: "Privacy", href: org.settings.privacy(ctx) },
+    { label: "Model funding", href: org.settings.modelFunding(ctx) },
   ];
 
   return (

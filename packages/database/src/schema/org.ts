@@ -253,3 +253,65 @@ export const dataPlanes = orgSchema.table(
     ),
   }),
 );
+
+// ── Organisation model credentials (ADR-053) ─────────────────────────────────
+//
+// The organisation's own model-vendor API key, envelope-encrypted. While a row
+// is live the in-app agent's completions run on the customer's key and Oxagen
+// bills nothing for those tokens; with no row the platform key pays and the
+// tokens are billed as assistant usage. One live row per organisation. Org-only
+// (no workspace_id → the `org_only` RLS class), and read through withTenantDb
+// because, unlike a data-plane binding, nothing resolves THROUGH this table.
+export const modelCredentials = orgSchema.table(
+  "model_credentials",
+  {
+    ...idMixin("mcr"),
+    ...auditMixin(),
+    ...softDeleteMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // Which vendor the key belongs to. CHECK enforced below.
+    provider: text("provider").notNull(),
+    // KMS envelope over the plaintext key. Never NULL on a live row — the
+    // pairing CHECK below refuses a row with no ciphertext, so a partial write
+    // cannot produce a credential the resolver has to guess about.
+    keyCiphertext: bytea("key_ciphertext").notNull(),
+    keyKeyId: text("key_key_id").notNull(),
+    // SHA-256 of the plaintext key. The provider-client cache key: a rotated
+    // key produces a different digest, misses the cache, and the client built
+    // on the revoked key is dropped rather than retried.
+    keyDigest: text("key_digest").notNull(),
+    // Last four characters of the key — what a vendor dashboard shows, and what
+    // an operator needs to tell two keys apart. Not a secret.
+    keyHint: text("key_hint").notNull(),
+    status: text("status").notNull().default("active"),
+    lastVerifiedAt: timestamp("last_verified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    rotatedAt: timestamp("rotated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // One LIVE credential per organisation. Partial on deleted_at so a revoked
+    // key stays readable as history without blocking a new one.
+    orgIdx: uniqueIndex("model_credentials_org_idx")
+      .on(t.orgId)
+      .where(sql`${t.deletedAt} IS NULL`),
+    providerCheck: check(
+      "model_credentials_provider_check",
+      sql`${t.provider} IN ('openrouter','gateway')`,
+    ),
+    statusCheck: check(
+      "model_credentials_status_check",
+      sql`${t.status} IN ('active','disabled')`,
+    ),
+    keyHintCheck: check(
+      "model_credentials_key_hint_check",
+      sql`length(${t.keyHint}) <= 4`,
+    ),
+  }),
+);

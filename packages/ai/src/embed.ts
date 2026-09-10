@@ -1,6 +1,7 @@
 import pino from "pino";
 import { embed, embedMany as embedManyThroughGateway } from "ai";
-import { gateway } from "@ai-sdk/gateway";
+import { embeddingProvider, type ModelCredential } from "./models";
+import type { TurnFunding } from "./funding-source";
 import {
   insertTokenUsage,
   providerFromModelId,
@@ -46,6 +47,13 @@ export interface EmbedTextOpts {
      */
     executionStepId: string | null;
   };
+  /**
+   * The organisation's own key, when it has one (ADR-053 §2). Used only when
+   * it is a gateway key — OpenRouter does not serve embeddings — so the
+   * platform key may still answer, and then the call is billed. Which one
+   * answered is decided here, not by the caller.
+   */
+  credential?: ModelCredential;
 }
 
 /**
@@ -62,6 +70,8 @@ async function meterEmbeddingCall(params: {
   inputTokens: number;
   durationMs: number;
   telemetry: EmbedTextOpts["telemetry"];
+  /** Who paid the vendor; `org` reports the usage and charges nothing. */
+  fundedBy: TurnFunding;
 }): Promise<void> {
   const { orgId, workspaceId, surface, executionStepId } = params.telemetry;
   // Embeddings are input-only; the rate card prices them per the same meter.
@@ -106,6 +116,9 @@ async function meterEmbeddingCall(params: {
   // otherwise run scopeless and throw TenantScopeError (silently swallowed →
   // unbilled embeddings, a revenue leak). Prefer the active ALS scope, else
   // rebuild it from the trusted telemetry org/workspace. Mirrors stream.ts.
+  //
+  // ADR-053 §3: only when the platform key paid.
+  if (params.fundedBy !== "platform") return;
   const capturedScope: TenantScope = getScope() ?? { orgId, workspaceId };
   try {
     await runInTenantScope(capturedScope, async () => {
@@ -142,7 +155,8 @@ export async function embedText(
   text: string,
   opts: EmbedTextOpts,
 ): Promise<number[]> {
-  const model = gateway.embeddingModel(GATEWAY_MODEL);
+  const { provider, fundedBy } = embeddingProvider(opts.credential);
+  const model = provider.embeddingModel(GATEWAY_MODEL);
   const startedAt = Date.now();
 
   const { embedding, usage } = await embed({ model, value: text });
@@ -162,6 +176,7 @@ export async function embedText(
     inputTokens: usage?.tokens ?? 0,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
+    fundedBy,
   });
 
   return embedding;
@@ -186,7 +201,8 @@ export async function embedMany(
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const model = gateway.embeddingModel(GATEWAY_MODEL);
+  const { provider, fundedBy } = embeddingProvider(opts.credential);
+  const model = provider.embeddingModel(GATEWAY_MODEL);
   const startedAt = Date.now();
 
   const { embeddings, usage } = await embedManyThroughGateway({
@@ -210,6 +226,7 @@ export async function embedMany(
     inputTokens: usage?.tokens ?? 0,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
+    fundedBy,
   });
 
   return embeddings;

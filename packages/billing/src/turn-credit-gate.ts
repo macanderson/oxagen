@@ -40,12 +40,21 @@
 
 import {
   assertCanStartTurn,
+  AssistantSpendCapError,
   InsufficientCreditsError,
   BillingSuspendedError,
+  type StartTurnOptions,
 } from "./metering";
 
-/** The 402 error codes surfaced to the client — match errorMiddleware's billing shape. */
-export type CreditGateDenyCode = "insufficient_credits" | "billing_suspended";
+/**
+ * The 402 error codes surfaced to the client — match errorMiddleware's billing
+ * shape. `assistant_spend_cap` is the third affirmative "must not spend"
+ * state (ADR-053 §3): the month's platform-paid assistant cap is used up.
+ */
+export type CreditGateDenyCode =
+  | "insufficient_credits"
+  | "billing_suspended"
+  | "assistant_spend_cap";
 
 export type CreditGateResult =
   | { ok: true }
@@ -62,9 +71,10 @@ export type CreditGateResult =
  */
 export async function evaluateTurnCreditGate(
   orgId: string,
+  opts: StartTurnOptions = {},
 ): Promise<CreditGateResult> {
   try {
-    await assertCanStartTurn(orgId);
+    await assertCanStartTurn(orgId, opts);
     return { ok: true };
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
@@ -72,6 +82,9 @@ export async function evaluateTurnCreditGate(
     }
     if (err instanceof BillingSuspendedError) {
       return { ok: false, code: "billing_suspended", message: err.message };
+    }
+    if (err instanceof AssistantSpendCapError) {
+      return { ok: false, code: "assistant_spend_cap", message: err.message };
     }
     // Unknown / infra error — FAIL OPEN. Do not block the turn on a metering
     // blip; the invoke() admission gate still guards any tool call in the turn.

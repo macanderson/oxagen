@@ -20,6 +20,9 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: <T>(_scope: unknown, fn: () => Promise<T> | T) => fn(),
 }));
 
+// The real constant: the assertion is that the loop names the ledger reason
+// ADR-053 §3 gave assistant usage, not a string the test happens to agree with.
+import { CREDIT_REASONS } from "@oxagen/billing";
 import type { GovernedTurnInput } from "./governed-turn";
 
 const {
@@ -187,6 +190,45 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
       totalTokens: 1020,
       cachedInputTokens: 700,
     });
+  });
+});
+
+describe("runGovernedTurn — who paid for the tokens (ADR-053 §3)", () => {
+  it("defaults to platform funding and reports it on the result", async () => {
+    streamAgentReply.mockReturnValue(fakeStream([]));
+
+    const result = await runGovernedTurn(baseInput());
+
+    const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
+    expect(args["fundedBy"]).toBe("platform");
+    expect(result.fundedBy).toBe("platform");
+  });
+
+  it("hands org funding through to the chokepoint unchanged", async () => {
+    streamAgentReply.mockReturnValue(fakeStream([]));
+
+    const result = await runGovernedTurn(baseInput({ fundedBy: "org" }));
+
+    const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
+    expect(args["fundedBy"]).toBe("org");
+    expect(result.fundedBy).toBe("org");
+  });
+
+  it("always charges under the assistant reason, whoever paid", async () => {
+    streamAgentReply.mockReturnValue(fakeStream([]));
+    await runGovernedTurn(baseInput({ fundedBy: "platform" }));
+    streamAgentReply.mockReturnValue(fakeStream([]));
+    await runGovernedTurn(baseInput({ fundedBy: "org" }));
+
+    for (const call of streamAgentReply.mock.calls) {
+      expect((call[0] as AnyRecord)["chargeReason"]).toBe(
+        CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      );
+    }
+    // The literal, so a renamed constant cannot silently repurpose the line.
+    expect(CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS).toBe(
+      "consume_assistant_tokens",
+    );
   });
 });
 

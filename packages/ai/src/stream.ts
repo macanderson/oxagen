@@ -1,4 +1,5 @@
 import pino from "pino";
+import type { TurnFunding } from "./funding-source";
 import {
   streamText,
   type ModelMessage,
@@ -13,7 +14,11 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import {
+  chargeUsageCredits,
+  providerCostUsdMicros,
+  type CreditReason,
+} from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { trace, context, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import { defaultModel, modelIdOf } from "./models";
@@ -230,6 +235,22 @@ export interface StreamAgentReplyArgs {
      */
     messageId: string;
   };
+  /**
+   * Who paid the vendor for this call (ADR-053 §3). `platform` (the default)
+   * charges the organisation's credits for the tokens; `org` means the
+   * organisation's own key paid, so the tokens are reported to `token_usage`
+   * and charged nothing. Pass what `resolveModelFundingSource` answered for
+   * the same organisation that chose the model — the two must agree, or a
+   * customer-funded call would be billed twice or a platform-funded one not
+   * at all.
+   */
+  fundedBy?: TurnFunding;
+  /**
+   * Ledger reason for a platform-funded charge. The in-app agent passes
+   * `consume_assistant_tokens` so its usage is its own line; other callers
+   * keep the default.
+   */
+  chargeReason?: CreditReason;
   onFinish?: (event: {
     text: string;
     usage: {
@@ -441,20 +462,26 @@ export function streamAgentReply(
       // requireScope(). The AI SDK fires onFinish after the stream ends, outside
       // the original request ALS context. We re-establish the scope using the
       // context captured synchronously before the stream was started.
-      try {
-        // capturedScope is always set (active ALS scope, or rebuilt from the
-        // telemetry org/workspace above), so chargeUsageCredits → withTenantDb →
-        // requireScope always runs inside a valid tenant scope.
-        await runInTenantScope(capturedScope, async () => {
-          await chargeUsageCredits({
-            orgId: args.telemetry.orgId,
-            referenceId: args.telemetry.messageId,
-            ...usage,
+      //
+      // ADR-053 §3: only when the platform key paid. A call the organisation's
+      // own key answered is reported above and charged nothing here.
+      if ((args.fundedBy ?? "platform") === "platform") {
+        try {
+          // capturedScope is always set (active ALS scope, or rebuilt from the
+          // telemetry org/workspace above), so chargeUsageCredits → withTenantDb →
+          // requireScope always runs inside a valid tenant scope.
+          await runInTenantScope(capturedScope, async () => {
+            await chargeUsageCredits({
+              orgId: args.telemetry.orgId,
+              referenceId: args.telemetry.messageId,
+              ...(args.chargeReason ? { reason: args.chargeReason } : {}),
+              ...usage,
+            });
           });
-        });
-      } catch (err) {
-        // Swallow — credit metering must never fail the chat turn.
-        logger.error({ err }, "stream credit charge failed");
+        } catch (err) {
+          // Swallow — credit metering must never fail the chat turn.
+          logger.error({ err }, "stream credit charge failed");
+        }
       }
       await args.onFinish?.({
         text: event.text,

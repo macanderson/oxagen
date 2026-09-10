@@ -1,4 +1,8 @@
+import { and, eq, gte, sql } from "drizzle-orm";
+import { schema, withTenantDb } from "@oxagen/database";
 import { consumeCredits, effectiveBalance } from "./credits";
+import { CREDIT_REASONS, type CreditReason } from "./constants";
+import { getOrgBillingSettings } from "./billing-settings";
 import {
   providerCostUsd,
   imageProviderCostUsd,
@@ -29,6 +33,93 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+/**
+ * ADR-053 §3: the organisation has spent its monthly cap of assistant tokens
+ * on the platform key. Refused before the turn starts, and the message names
+ * the cap and the two ways out, because the person reading it is the one who
+ * can take either.
+ */
+export class AssistantSpendCapError extends Error {
+  readonly code = "assistant_spend_cap" as const;
+  readonly capCents: number;
+  readonly spentCents: number;
+
+  constructor(capCents: number, spentCents: number) {
+    super(
+      `Assistant spend cap reached: this organisation has used ${spentCents} of its ${capCents} credits of platform-paid assistant usage this month. Raise the cap in billing settings, or add your own model API key so the assistant runs on it.`,
+    );
+    this.name = "AssistantSpendCapError";
+    this.capCents = capCents;
+    this.spentCents = spentCents;
+  }
+}
+
+/** First instant of the current calendar month, UTC — the cap's window. */
+export function assistantSpendWindowStart(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/**
+ * Credits the platform key has spent on this organisation's assistant turns
+ * since the start of the month: the sum of `consume_assistant_tokens` debits.
+ * A debit is negative in the ledger, so the sum is negated. Reads through
+ * withTenantDb, so the caller must be inside a tenant scope.
+ */
+export async function assistantSpendThisMonth(orgId: string): Promise<bigint> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        spent: sql<string>`COALESCE(-SUM(${schema.creditLedger.deltaCents}), 0)`,
+      })
+      .from(schema.creditLedger)
+      .where(
+        and(
+          eq(schema.creditLedger.orgId, orgId),
+          eq(
+            schema.creditLedger.reason,
+            CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+          ),
+          gte(schema.creditLedger.createdAt, assistantSpendWindowStart()),
+        ),
+      ),
+  );
+  return BigInt(rows[0]?.spent ?? "0");
+}
+
+/**
+ * Refuse a platform-paid assistant turn once the organisation's monthly cap is
+ * spent (ADR-053 §3). A `null` cap means no cap. Called only when the platform
+ * key would pay; an organisation on its own key never reaches it.
+ */
+export async function assertUnderAssistantSpendCap(
+  orgId: string,
+): Promise<void> {
+  const settings = await getOrgBillingSettings(orgId);
+  const cap = settings.assistantSpendCapCents;
+  if (cap === null) return;
+  const spent = await assistantSpendThisMonth(orgId);
+  if (spent >= BigInt(cap)) {
+    logger.warn(
+      { orgId, capCents: cap, spentCents: Number(spent) },
+      "billing: assertCanStartTurn — assistant spend cap reached, refusing turn",
+    );
+    throw new AssistantSpendCapError(cap, Number(spent));
+  }
+}
+
+/** Who pays the vendor for a turn's tokens (ADR-053 §2). */
+export type TurnFunding = "platform" | "org";
+
+export interface StartTurnOptions {
+  /**
+   * `platform` (the default) adds the assistant spend cap to the gate; `org`
+   * means the organisation's own key pays the vendor, so the cap does not
+   * apply. The credit gate itself runs either way: governed tool calls still
+   * consume credits under ADR-052 whoever pays for tokens.
+   */
+  fundedBy?: TurnFunding;
+}
+
 export { BillingSuspendedError };
 
 /**
@@ -39,9 +130,15 @@ export { BillingSuspendedError };
  *   1. assertOrgCanConsume → throws BillingSuspendedError when dunningState==='suspended'
  *   2. maybeAutoReload     → charges and grants credits if balance is low and auto-reload enabled
  *   3. effectiveBalance    → after any auto-reload, if still 0, throw InsufficientCreditsError
+ *   4. assistant spend cap → for a platform-funded turn only, throw
+ *                            AssistantSpendCapError once the month's cap is spent (ADR-053 §3)
  */
-export async function assertCanStartTurn(orgId: string): Promise<void> {
+export async function assertCanStartTurn(
+  orgId: string,
+  opts: StartTurnOptions = {},
+): Promise<void> {
   const start = Date.now();
+  const fundedBy: TurnFunding = opts.fundedBy ?? "platform";
 
   // Step 1: refuse suspended orgs immediately.
   await assertOrgCanConsume(orgId);
@@ -69,8 +166,18 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
     throw new InsufficientCreditsError();
   }
 
+  // Step 4: a turn the platform key would pay for is held to the org's cap.
+  if (fundedBy === "platform") {
+    await assertUnderAssistantSpendCap(orgId);
+  }
+
   logger.debug(
-    { orgId, balanceCents: Number(balance), durationMs: Date.now() - start },
+    {
+      orgId,
+      fundedBy,
+      balanceCents: Number(balance),
+      durationMs: Date.now() - start,
+    },
     "billing: assertCanStartTurn — admitted",
   );
 }
@@ -188,6 +295,8 @@ async function chargeCostUsd(params: {
   markup?: number;
   /** True when the rate came from the fallback because no card row matched. */
   rateCardMiss?: boolean;
+  /** Ledger reason; defaults to the token-overage reason every caller used before ADR-053. */
+  reason?: CreditReason;
   logFields?: Record<string, unknown>;
 }): Promise<ChargeUsageResult> {
   const start = Date.now();
@@ -240,7 +349,7 @@ async function chargeCostUsd(params: {
     await consumeCredits({
       orgId: params.orgId,
       requestedMicroCents: microCredits,
-      reason: "consume_token_overage",
+      reason: params.reason ?? CREDIT_REASONS.CONSUME_TOKEN_OVERAGE,
       referenceType: "token_usage",
       referenceId: params.referenceId,
     });
@@ -282,6 +391,12 @@ export interface ChargeUsageArgs extends TokenUsageInput {
   /** Optional markup override (tests / dry-run). */
   markup?: number;
   rateCard?: RateCard;
+  /**
+   * Ledger reason. The in-app agent passes `consume_assistant_tokens` so its
+   * platform-paid tokens are their own line (ADR-053 §3); every other caller
+   * keeps the default.
+   */
+  reason?: CreditReason;
 }
 
 /** Charge an org for one metered TEXT (token) call. */
@@ -294,6 +409,7 @@ export async function chargeUsageCredits(
     costUsd: providerCostUsd(args, args.rateCard),
     referenceId: args.referenceId,
     markup: args.markup,
+    reason: args.reason,
     rateCardMiss:
       resolveRateEntry(args.model, args.rateCard).matchedKey === null,
     logFields: {
