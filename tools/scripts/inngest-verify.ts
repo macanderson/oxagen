@@ -33,8 +33,19 @@ export const CANARY_EVENT_NAME = "ops/inngest.connectivity-canary";
 
 const INNGEST_API = "https://api.inngest.com";
 const EVENT_API = "https://inn.gs";
-/** How long to wait for the canary to appear in the signing key's environment. */
-const VISIBILITY_TIMEOUT_MS = 30_000;
+/**
+ * How long to wait for the canary to appear in the signing key's environment.
+ *
+ * Inngest does not index an event into the queryable event stream the instant
+ * it accepts it. Repairing the production key pair on 2026-09-10 measured that
+ * gap at roughly thirty seconds against a correctly-configured environment,
+ * which the first value here — thirty seconds exactly — would have called a
+ * mismatch. A gate that reports the outage it exists to catch when nothing is
+ * wrong gets ignored, so the budget is generous: a genuine mismatch never
+ * becomes visible no matter how long the wait, and the only cost of waiting
+ * longer is a slower failure.
+ */
+const VISIBILITY_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 2_000;
 
 interface InngestEvent {
@@ -155,7 +166,8 @@ async function awaitCanaryVisible(
   }
 
   fail(
-    `the canary (${canaryId}) was accepted by the event API but never appeared in the environment ` +
+    `the canary (${canaryId}) was accepted by the event API but never appeared within ` +
+      `${Math.round(VISIBILITY_TIMEOUT_MS / 1000)}s in the environment ` +
       "INNGEST_SIGNING_KEY authenticates to. The two keys belong to different Inngest environments, " +
       "so events land where no function is registered and nothing will ever run. Set both keys from " +
       "the same Inngest environment and redeploy.",
