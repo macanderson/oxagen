@@ -210,17 +210,19 @@
   <section class="sec sec-alt tex tex-hex">
     <div class="wrap split split-wide">
       <div class="reveal">
-        <p class="eyebrow">One shared map</p>
-        <h2>The answer is a lookup, not a guess.</h2>
+        <p class="eyebrow">Authorization at the graph edge</p>
+        <h2>Not filtered after. Resolved before it leaves the store.</h2>
         <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
-          Connect your code and the systems around it once. Oxagen builds one connected map of how
-          they relate, and every agent — in a terminal, in the app, over the API, in an editor —
-          asks the same map and gets the same answer, with citations you can open.
+          Every retrieval is resolved against the caller's contracted capabilities before a
+          single node reaches a model — not a prompt guardrail bolted on after the fact.
+          Connect your code and the systems around it once, and every agent — Stella's terminal,
+          the app, the API, an editor — asks the same map and gets exactly its principal's view,
+          with citations you can open.
         </p>
         <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:11px">
-          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>Scoped to the person asking. The map honours your existing permissions.</li>
-          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>Bounded results. An agent gets what it needs, not the whole company.</li>
-          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>Every answer cites its source, so a wrong one is traceable rather than mysterious.</li>
+          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>An allowed node can never bridge into a denied subgraph — enforced at the edge, not the answer.</li>
+          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>Every agent borrows exactly its principal's view. Nothing more ever leaves the store.</li>
+          <li style="display:flex;gap:11px;color:var(--ink-2);font-size:15.5px"><span class="gold">—</span>Every answer carries a chain of custody you can replay — the citation and the authorization are the same record.</li>
         </ul>
       </div>
       <figure class="app reveal reveal-d1">
