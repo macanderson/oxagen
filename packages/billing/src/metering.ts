@@ -183,9 +183,21 @@ export async function assertCanStartTurn(
 }
 
 /**
- * The cost meter that lives inside the gate. Converts one metered call into
- * (a) the provider cost we incurred and (b) the credits to debit, then charges
- * them. Inputs are exactly what providers bill on — tokens in/out for text,
+ * The cost meter. Converts one metered call into (a) the provider cost incurred
+ * and (b) the credits to debit, then charges them.
+ *
+ * **Under ADR-052 this is a REPORT for almost every caller.** Tokens are priced
+ * in full and billed at zero, because under vendor-neutral BYOK the customer
+ * settled that invoice with the provider directly and a markup would be margin
+ * on a cost Oxagen never bore. The primary meter is the governed action —
+ * `action-metering.ts`, driven from the kernel's usage recorder.
+ *
+ * ADR-053 §3 amends that for exactly one case: tokens the in-app agent spent on
+ * the PLATFORM key are a cost Oxagen did bear, and are billed back at vendor
+ * cost plus the published markup under `consume_assistant_tokens`. Every
+ * surviving caller of the charge path is gated on `fundedBy === "platform"`,
+ * which is why {@link resolveMeterMarkup} still exists — it is the ADR-053
+ * markup now, and it has no other charging caller. Inputs are exactly what providers bill on — tokens in/out for text,
  * images/seconds for media — so the meter matches the real invoice.
  *
  * Text, image, and video all funnel through one DB-charging chokepoint
@@ -277,7 +289,7 @@ export interface ChargeUsageResult {
  * The single DB-charging chokepoint for every modality. Given a model and the
  * USD cost a call incurred, applies the solved meter markup, converts to
  * credits, and debits them via the atomic {@link consumeCredits} (reason
- * `consume_token_overage`), which row-locks the balance and clamps the debit to
+ * `consume_assistant_tokens`), which row-locks the balance and clamps the debit to
  * what's available — credit_balances enforces `balance_cents >= 0` (no
  * overdraft). A non-zero `shortfallCredits` means the org outran its credits
  * mid-turn; the pre-turn guard ({@link assertCanStartTurn}) is the real
@@ -295,7 +307,16 @@ async function chargeCostUsd(params: {
   markup?: number;
   /** True when the rate came from the fallback because no card row matched. */
   rateCardMiss?: boolean;
-  /** Ledger reason; defaults to the token-overage reason every caller used before ADR-053. */
+  /**
+   * Ledger reason; defaults to `consume_assistant_tokens`.
+   *
+   * The default moved with ADR-052. It used to be `consume_token_overage`, and
+   * that reason is now retired — under BYOK the token bill is the customer's
+   * own and Oxagen bills nothing for it. The one case that still charges is
+   * ADR-053 §3, tokens the PLATFORM key paid for, and every remaining caller of
+   * this path is gated on exactly that (`fundedBy === "platform"` in
+   * packages/ai). So the default is the reason that case writes.
+   */
   reason?: CreditReason;
   logFields?: Record<string, unknown>;
 }): Promise<ChargeUsageResult> {
@@ -349,7 +370,7 @@ async function chargeCostUsd(params: {
     await consumeCredits({
       orgId: params.orgId,
       requestedMicroCents: microCredits,
-      reason: params.reason ?? CREDIT_REASONS.CONSUME_TOKEN_OVERAGE,
+      reason: params.reason ?? CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       referenceType: "token_usage",
       referenceId: params.referenceId,
     });

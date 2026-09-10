@@ -12,6 +12,7 @@ import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
@@ -50,6 +51,129 @@ export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
 /** Remove the billing gate. Used in tests. */
 export function clearBillingAdmissionGate(): void {
   _billingGate = null;
+}
+
+// ── Governed-action usage recorder (injected at bootstrap) ───────────────────
+//
+// ADR-052: the governed action is the billable unit. The admission gate above
+// decides whether an org MAY proceed; this records what it DID. They are two
+// functions on purpose — a gate that also bills is a gate that fails open when
+// billing is down, and a recorder that also admits would refuse a call because
+// an append failed.
+//
+// The recorder fires once per governed action, after the handler returned AND
+// the output validated. Four exclusions are built into where it fires rather
+// than layered on as policy (ADR-052 "Decision", spec §3.2):
+//
+//   1. Nested invokes never fire it. `_governedActionScope` marks the async
+//      context for the duration of an invocation, so an inner invoke() sees a
+//      store and skips. Oxagen's internal call graph is an implementation
+//      detail that moves between releases; billing it would make an invoice
+//      depend on something the customer cannot see.
+//   2. `noBillingGate: true` contracts never fire it — reading your own spend,
+//      budget, settings or membership is not a charge.
+//   3. Denials never reach it. Every gate throws, and the throw leaves
+//      _invokeCore through the catch below, which is upstream of this call.
+//   4. A failed handler or an invalid output never reaches it, for the same
+//      structural reason: there is no completed action to sell.
+//
+// When no recorder is registered (tests, CLI) the call proceeds and nothing
+// accrues — the same default-open injection pattern as IAM, billing and
+// entitlement.
+
+/**
+ * One governed action, as handed to the recorder. Everything here is
+ * attribution (spec §3.3) except `actions`, which is the charge.
+ */
+export interface GovernedActionRecord {
+  /** Owning organisation. Never empty — the recorder does not fire without one. */
+  orgId: string;
+  /** Owning workspace, or null for an org-scoped capability. */
+  workspaceId: string | null;
+  /** Canonical (verb-first) capability name. */
+  capability: string;
+  /** Surface the call arrived on, or null when the caller declared none. */
+  surface: CapabilitySurface | "app" | "runner" | null;
+  /** IAM-resolved acting principal, or null when the resolver did not run. */
+  principalId: string | null;
+  principalKind: string | null;
+  /** Originating human user, or null for machine-to-machine traffic. */
+  userId: string | null;
+  /**
+   * The run this action belongs to (`CapabilityContext.executionStepId`).
+   * Metadata for grouping a customer's invoice by run — NEVER a billing unit
+   * (spec §3.3). Null when the caller supplied none; a fabricated value would
+   * group an action under a run that did not happen.
+   */
+  runId: string | null;
+  requestId: string;
+  /**
+   * Governed actions this invocation is worth. One for every contract that
+   * does not declare a `meter` block; see {@link CapabilityDeclaration.meter}
+   * for the bulk-write case. Always >= 1.
+   */
+  actions: number;
+  /** Wall-clock duration of the whole invocation, for the usage report. */
+  durationMs: number;
+  /** When the action completed. */
+  occurredAt: Date;
+}
+
+export type UsageRecorderFn = (
+  record: GovernedActionRecord,
+) => Promise<void> | void;
+
+let _usageRecorder: UsageRecorderFn | null = null;
+
+/**
+ * Register the governed-action usage recorder. Call once at service bootstrap,
+ * beside {@link setBillingAdmissionGate}.
+ *
+ * The recorder MUST NOT throw to refuse a call — it runs after the action has
+ * already happened, so a throw could only fail a request whose work is done.
+ * The kernel catches and logs anyway; this is a contract, not a hope.
+ */
+export function setUsageRecorder(recorder: UsageRecorderFn): void {
+  _usageRecorder = recorder;
+}
+
+/** Remove the usage recorder. Used in tests. */
+export function clearUsageRecorder(): void {
+  _usageRecorder = null;
+}
+
+/**
+ * Marks the async context of an in-flight invocation. Presence means "an
+ * enclosing invoke() frame exists", which is the whole of the top-level test.
+ *
+ * A dedicated ALS rather than the tenant scope the spec first suggested: an
+ * UNSCOPED capability never enters a tenant scope, so reading nesting off the
+ * tenant scope would report every unscoped call as top-level, including one
+ * dispatched from inside another handler. This store is entered on every
+ * invocation, scoped or not, so nesting is exact.
+ */
+const _governedActionScope = new AsyncLocalStorage<true>();
+
+/**
+ * How many governed actions one invocation is worth, from the contract's
+ * `meter` block against the validated output (spec §7.2).
+ *
+ * Everything that is not a usable positive count charges the default one
+ * action: an absent field, a non-number, a negative, a NaN, an Infinity. A
+ * bulk write that reports nothing is still one governed action — it passed the
+ * gates and left a record — so the floor is 1, never 0.
+ */
+export function governedActionUnits(
+  meter: { unitsFrom: string; unitsPerAction: number } | undefined,
+  output: unknown,
+): number {
+  if (!meter) return 1;
+  const per = meter.unitsPerAction;
+  if (!Number.isFinite(per) || per < 1) return 1;
+  if (typeof output !== "object" || output === null) return 1;
+  const raw = (output as Record<string, unknown>)[meter.unitsFrom];
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return 1;
+  return Math.max(1, Math.ceil(raw / per));
 }
 
 // ── Budget admission gate (injected at bootstrap) ────────────────────────────
@@ -721,15 +845,38 @@ export async function invoke(
 }
 
 /**
- * Core invocation logic: resolve contract, validate input, run IAM + billing
- * + entitlement gates, invoke handler, validate output. Called by invoke()
- * inside an active OTEL span so trace context propagates to all child ops.
+ * Nesting frame + core invocation. Reads whether an enclosing invoke() is
+ * already on this async context BEFORE entering the frame, then enters it for
+ * the whole invocation so every nested invoke() sees one.
+ *
+ * `isTopLevelAction` is threaded down rather than re-read, because by the time
+ * the recorder fires we are inside our own frame and the store would always be
+ * present (ADR-052 exclusion 1).
  */
 async function _invokeCore(
   name: string,
   rawInput: unknown,
   ctx: CapabilityContext,
   opts: InvokeOptions,
+): Promise<unknown> {
+  const isTopLevelAction = _governedActionScope.getStore() === undefined;
+  return _governedActionScope.run(true, () =>
+    _invokeCoreInner(name, rawInput, ctx, opts, isTopLevelAction),
+  );
+}
+
+/**
+ * Core invocation logic: resolve contract, validate input, run IAM + billing
+ * + entitlement gates, invoke handler, validate output, record the governed
+ * action. Called by invoke() inside an active OTEL span so trace context
+ * propagates to all child ops.
+ */
+async function _invokeCoreInner(
+  name: string,
+  rawInput: unknown,
+  ctx: CapabilityContext,
+  opts: InvokeOptions,
+  isTopLevelAction: boolean,
 ): Promise<unknown> {
   const startMs = Date.now();
   const cap = getCapability(name);
@@ -1379,6 +1526,69 @@ async function _invokeCore(
     output: outputResult.data,
     durationMs: Date.now() - startMs,
   });
+
+  // ── Governed-action accrual (ADR-052) ─────────────────────────────────────
+  // Everything that must not bill has already left this function by another
+  // path: a denial or a handler throw went through the catch above, an invalid
+  // output threw a line earlier, a nested invoke arrived with
+  // isTopLevelAction=false, and a noBillingGate contract is filtered here. So
+  // this is the one place a charge is raised, and it is raised on exactly the
+  // event ADR-052 sells.
+  //
+  // The tenant scope is RE-ENTERED rather than held open: the recorder's
+  // consumeCredits goes through withTenantDb, and the scope opened for the
+  // handler has already closed by the time the output validates. Re-entry is
+  // an ALS run over ids we already validated — cheap, and it keeps accrual
+  // strictly after "the action definitively succeeded".
+  const skipAccrual =
+    (cap as { noBillingGate?: boolean }).noBillingGate === true;
+  if (
+    _usageRecorder !== null &&
+    isTopLevelAction &&
+    !skipAccrual &&
+    ctx.orgId
+  ) {
+    // Widened rather than read directly. `resolvedPrincipal` is assigned inside
+    // the withScope closure above; TypeScript's control-flow analysis does not
+    // follow an assignment made in a nested function, so here it still believes
+    // the type is the `null` initialiser and `?.id` narrows to `never`. The
+    // assertion restores the declared type — it widens, so it cannot hide a
+    // wrong one.
+    const actingPrincipal = resolvedPrincipal as ResolvedPrincipal | null;
+    const record: GovernedActionRecord = {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId || null,
+      capability: canonical,
+      surface: opts.surface ?? ctx.surface ?? null,
+      principalId: actingPrincipal?.id ?? null,
+      principalKind: actingPrincipal?.kind ?? null,
+      userId: ctx.userId,
+      runId: ctx.executionStepId ?? null,
+      requestId: ctx.requestId,
+      actions: governedActionUnits(
+        (cap as { meter?: { unitsFrom: string; unitsPerAction: number } })
+          .meter,
+        outputResult.data,
+      ),
+      durationMs: Date.now() - startMs,
+      occurredAt: new Date(),
+    };
+    try {
+      await withScope(async () => {
+        await _usageRecorder?.(record);
+      });
+    } catch (err) {
+      // Accrual is best-effort by design. The action happened, the audit row
+      // exists, and the customer's response is already correct — failing the
+      // call now would trade a missed charge for a broken request, which is
+      // the worse of the two. Loud, because a silent one is a revenue leak.
+      console.error(
+        `[kernel] governed-action accrual failed for "${canonical}" ` +
+          `(org=${ctx.orgId}, actions=${record.actions}): ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   return outputResult.data;
 }
