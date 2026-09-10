@@ -39,7 +39,7 @@ runs:
       run: |
         set -euo pipefail
         if [ ! -f "$DIRECTORY/oxagen-run.json" ]; then
-          echo "::error::$DIRECTORY/oxagen-run.json is missing — the node reads it to learn how to run this service. See oxagen-aws-infra tools/node/README.md."
+          echo "::error::$DIRECTORY/oxagen-run.json is missing — the node reads it to learn how to run this service. See infra/tools/node/README.md."
           exit 1
         fi
         # Parsed here rather than discovered on the instance: a malformed

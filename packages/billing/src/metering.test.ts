@@ -11,6 +11,7 @@
  */
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import type { SQL } from "drizzle-orm";
+import { CREDIT_REASONS } from "./constants";
 
 // consumeCredits + effectiveBalance are both in ../credits.js
 const consumeState: { chargedCents: bigint; shortfallCents: bigint } = {
@@ -154,6 +155,7 @@ describe("chargeUsageCredits", () => {
   it("meters the call and delegates the full debit to consumeCredits", async () => {
     consumeState.chargedCents = 20n;
     const result = await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       orgId: "org-1",
       referenceId: "msg-1",
       markup: MARKUP,
@@ -170,7 +172,7 @@ describe("chargeUsageCredits", () => {
     expect(consumeCredits).toHaveBeenCalledWith({
       orgId: "org-1",
       requestedMicroCents: 19_914_000n,
-      reason: "consume_token_overage",
+      reason: "consume_assistant_tokens",
       referenceType: "token_usage",
       referenceId: "msg-1",
     });
@@ -180,6 +182,7 @@ describe("chargeUsageCredits", () => {
     consumeState.chargedCents = 5n;
     consumeState.shortfallCents = 15n;
     const result = await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       orgId: "org-1",
       markup: MARKUP,
       ...sonnetCall,
@@ -195,6 +198,7 @@ describe("chargeUsageCredits", () => {
 
   it("never calls consumeCredits for a zero-cost call", async () => {
     const result = await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       orgId: "org-1",
       markup: MARKUP,
       model: "claude-sonnet-5",
@@ -227,11 +231,25 @@ describe("chargeUsageCredits", () => {
     );
   });
 
-  it("defaults the ledger reason to consume_token_overage when none is given", async () => {
+  // The reason used to default to consume_token_overage, which ADR-052 retired
+  // and ADR-053 says must not be repurposed — and the assistant spend cap sums
+  // consume_assistant_tokens alone, so a defaulted debit was invisible to the
+  // cap meant to bound it. It is a required field now, so no call can fall into
+  // the retired reason by omission; this asserts the value is passed through
+  // rather than substituted.
+  it("never substitutes the retired overage reason for the caller's", async () => {
     consumeState.chargedCents = 20n;
-    await chargeUsageCredits({ orgId: "org-1", markup: MARKUP, ...sonnetCall });
-    expect(consumeCredits).toHaveBeenCalledWith(
+    await chargeUsageCredits({
+      orgId: "org-1",
+      markup: MARKUP,
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: "consume_token_overage" }),
+    );
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "consume_assistant_tokens" }),
     );
   });
 });

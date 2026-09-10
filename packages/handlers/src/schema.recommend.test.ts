@@ -23,6 +23,11 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 
 // ── Mock the LLM layer; capture the prompt the handler builds from graph stats ─
 let capturedPrompt = "";
+const mockResolveFunding = vi.fn(
+  async (_orgId: string): Promise<{ fundedBy: "platform" | "org" }> => ({
+    fundedBy: "platform",
+  }),
+);
 const mockGenerateObjectFor = vi.fn(async (args: { prompt: string }) => {
   capturedPrompt = args.prompt;
   return {
@@ -39,6 +44,10 @@ const mockGenerateObjectFor = vi.fn(async (args: { prompt: string }) => {
   };
 });
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: (...a: unknown[]) =>
+    mockResolveFunding(a[0] as string),
   generateObjectFor: (...args: unknown[]) =>
     mockGenerateObjectFor(args[0] as { prompt: string }),
   selectModel: () => "mock-model",
@@ -163,5 +172,48 @@ describe("schema.recommend — graph.stats signal mapping", () => {
     });
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
     expect(capturedPrompt).toContain("no type data available");
+  });
+});
+
+// ── ADR-053 §3: who paid for the recommendation ──────────────────────────────
+//
+// `fundedBy` used to be optional on generateObjectFor and default to
+// `platform`, and this caller took the default — so an organisation that had
+// brought its own key was billed for this call anyway. It is a required
+// parameter now, resolved per org.
+describe("schema.recommend — funding source", () => {
+  beforeEach(() => {
+    mockResolveFunding.mockClear();
+    mockResolveFunding.mockResolvedValue({ fundedBy: "platform" as const });
+  });
+
+  it("resolves funding for the calling org and passes the answer down", async () => {
+    graphStatsImpl = async () => ({
+      nodeCount: 0,
+      edgeCount: 0,
+      nodesByLabel: {},
+    });
+    await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
+    expect(mockResolveFunding).toHaveBeenCalledTimes(1);
+    const args = mockGenerateObjectFor.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(args.fundedBy).toBe("platform");
+  });
+
+  it("passes org funding through, so a customer's own key is not billed", async () => {
+    mockResolveFunding.mockResolvedValue({ fundedBy: "org" as const });
+    graphStatsImpl = async () => ({
+      nodeCount: 0,
+      edgeCount: 0,
+      nodesByLabel: {},
+    });
+    await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
+    const args = mockGenerateObjectFor.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(args.fundedBy).toBe("org");
   });
 });

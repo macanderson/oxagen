@@ -1,5 +1,5 @@
 /**
- * Unit tests for metering.ts — assertCanStartTurn, chargeImageCredits, chargeVideoCredits.
+ * Unit tests for metering.ts — assertCanStartTurn.
  *
  * Mocks all seams so no DB or Stripe calls are made.
  */
@@ -53,12 +53,9 @@ vi.mock("./billing-settings", () => ({
   getOrgBillingSettings: getOrgBillingSettingsMock,
 }));
 
-const {
-  assertCanStartTurn,
-  chargeImageCredits,
-  chargeVideoCredits,
-  InsufficientCreditsError,
-} = await import("./metering");
+const { assertCanStartTurn, InsufficientCreditsError } = await import(
+  "./metering"
+);
 
 // ---------------------------------------------------------------------------
 // assertCanStartTurn
@@ -121,115 +118,5 @@ describe("assertCanStartTurn", () => {
     await expect(assertCanStartTurn("org-6")).rejects.toBeInstanceOf(
       InsufficientCreditsError,
     );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// chargeImageCredits
-// ---------------------------------------------------------------------------
-
-describe("chargeImageCredits", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    consumeCreditsMock.mockResolvedValue({
-      chargedCents: 10n,
-      shortfallCents: 0n,
-      balanceCents: 90n,
-    });
-  });
-
-  it("returns a ChargeUsageResult with imageCount in logFields", async () => {
-    const result = await chargeImageCredits({
-      orgId: "org-1",
-      model: "bfl/flux-2-max",
-      imageCount: 1,
-      referenceId: "img-ref-1",
-    });
-    expect(result).toHaveProperty("creditsMetered");
-    expect(result).toHaveProperty("creditsCharged");
-    expect(result).toHaveProperty("costUsdMicros");
-    expect(result).toHaveProperty("shortfallCredits");
-  });
-
-  it("charges zero credits for zero images", async () => {
-    const result = await chargeImageCredits({
-      orgId: "org-1",
-      model: "bfl/flux-2-max",
-      imageCount: 0,
-    });
-    expect(result.creditsMetered).toBe(0n);
-    expect(result.creditsCharged).toBe(0n);
-    expect(consumeCreditsMock).not.toHaveBeenCalled();
-  });
-
-  it("passes referenceId to consumeCredits", async () => {
-    await chargeImageCredits({
-      orgId: "org-1",
-      model: "bfl/flux-2-max",
-      imageCount: 2,
-      referenceId: "gen-123",
-    });
-    if (consumeCreditsMock.mock.calls.length > 0) {
-      expect(consumeCreditsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ referenceId: "gen-123" }),
-      );
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// chargeVideoCredits
-// ---------------------------------------------------------------------------
-
-describe("chargeVideoCredits", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    consumeCreditsMock.mockResolvedValue({
-      chargedCents: 50n,
-      shortfallCents: 0n,
-      balanceCents: 50n,
-    });
-  });
-
-  it("returns a ChargeUsageResult with video model", async () => {
-    const result = await chargeVideoCredits({
-      orgId: "org-1",
-      model: "google/veo-3.0-generate-001",
-      durationSeconds: 5,
-      referenceId: "vid-ref-1",
-    });
-    expect(result).toHaveProperty("creditsMetered");
-    expect(result).toHaveProperty("creditsCharged");
-    expect(result).toHaveProperty("costUsdMicros");
-    expect(result).toHaveProperty("shortfallCredits");
-  });
-
-  it("returns a non-zero result when durationSeconds is undefined (model has base cost)", async () => {
-    const result = await chargeVideoCredits({
-      orgId: "org-1",
-      model: "google/veo-3.0-generate-001",
-    });
-    // The veo-3.0 model has a base per-generation cost even without explicit duration.
-    expect(result).toHaveProperty("creditsMetered");
-    expect(result).toHaveProperty("costUsdMicros");
-    // costUsdMicros is positive (model has a base price)
-    expect(typeof result.costUsdMicros).toBe("number");
-  });
-
-  it("surfaces shortfall from consumeCredits for video charges", async () => {
-    consumeCreditsMock.mockResolvedValue({
-      chargedCents: 5n,
-      shortfallCents: 45n,
-      balanceCents: 0n,
-    });
-    const result = await chargeVideoCredits({
-      orgId: "org-1",
-      model: "google/veo-3.0-generate-001",
-      durationSeconds: 10,
-    });
-    if (result.creditsMetered > 0n) {
-      expect(result.shortfallCredits).toBe(45n);
-      expect(result.creditsCharged).toBe(5n);
-    }
   });
 });

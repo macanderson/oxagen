@@ -630,13 +630,15 @@ jobs:
   # design: a hosted runner is outside the VPC, so it cannot reach Aurora
   # (#2652). It stays for `preview` and as a status/validate dry run.
   #
-  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh` either — a same-named
-  # script in a different (sibling, not this) repository, which earlier
-  # comments here named as the production route. It still targets the account
-  # the 2026-08-27 cutover left behind — it SSM-targets the old combined data
-  # node and `docker exec`s a Postgres container the new account does not
-  # have (#2652). `infra/tools/run-db-migrations.sh` above is this
-  # repository's own, unrelated script for the current account.
+  # A caveat that used to sit here is now spent, and is recorded rather than
+  # deleted because the confusion it warned about was real. There were two
+  # same-named `run-db-migrations.sh` scripts: one here, one in a sibling
+  # infrastructure repository that earlier comments named as the production
+  # route. That repository is archived and its contents moved into this one
+  # under `infra/`, so there is only one script now — the one above — and it
+  # was rewritten for Aurora in #2770. It resolves the `oxagen-postgres`
+  # writer endpoint and runs Atlas from the app node over SSM, with no
+  # `docker exec` against a Postgres container the new account does not have.
   #
   # Where production Postgres is *intended* to be, since two comments in this
   # file disagreed and one sent people hunting for a connection string that
@@ -812,7 +814,11 @@ jobs:
       # A list of names in a workflow drifts the moment a route reads a new
       # variable, and its failure is a build crash naming a route instead of
       # the variable; the registry already knows which service needs what.
+      # The engine is a published image with nothing to build, so it has no
+      # build environment to resolve; build-env.ts refuses a service it does
+      # not know, which is what stopped the first engine deploy (#2833).
       - name: Resolve the build environment for ${{ matrix.service }}
+        if: matrix.service != 'stella-serve'
         env:
           PARAMETER_PREFIX: /oxagen/production
         run: |
@@ -836,9 +842,11 @@ jobs:
       - name: Package ${{ matrix.service }}
         run: |
           set -euo pipefail
-          set -a
-          . "$RUNNER_TEMP/build-env"
-          set +a
+          if [ -f "$RUNNER_TEMP/build-env" ]; then
+            set -a
+            . "$RUNNER_TEMP/build-env"
+            set +a
+          fi
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
       - uses: ./.github/actions/ship-to-node

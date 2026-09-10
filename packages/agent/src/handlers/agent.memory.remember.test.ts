@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   embedTextMock: vi.fn(),
   isKnowledgeGraphEnabledMock: vi.fn(),
   generateObjectForMock: vi.fn(),
+  resolveModelFundingSourceMock: vi
+    .fn()
+    .mockResolvedValue({ fundedBy: "platform" }),
 }));
 
 const PERSISTED_RECORD = {
@@ -55,6 +58,9 @@ vi.mock("../runtime/knowledge-graph", () => ({
 }));
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectForMock,
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: mocks.resolveModelFundingSourceMock,
 }));
 
 import { agentMemoryRememberHandler } from "./agent.memory.remember";

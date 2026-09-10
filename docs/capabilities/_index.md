@@ -9,13 +9,13 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**248 capabilities across 35 domains.**
+**221 capabilities across 34 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (57)
+## Agent (48)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
@@ -33,26 +33,17 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.environment.unbind](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
-- [agent.mcp.consent.list](agent.mcp.consent.list.md) — List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)
-- [agent.mcp.consent.resolve](agent.mcp.consent.resolve.md) — Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls
 - [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
 - [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
 - [agent.mcp_consent.list](agent.mcp_consent.list.md) — List external MCP tool consent grants in the active workspace; scope to the caller with `mineOnly`
 - [agent.mcp_consent.resolve](agent.mcp_consent.resolve.md) — Grant or deny first-use consent for an external MCP tool, resuming the paused agent stream
-- [agent.memory.citations.list](agent.memory.citations.list.md) — List an execution's memory citations, filterable by compliance (violations) or influence (what shaped output)
 - [agent.memory.cite](agent.memory.cite.md) — Record memory citations within an execution (influence + rule compliance); maintains citation/influence/violation counters
 - [agent.memory.delete](agent.memory.delete.md) — Permanently delete an AgentMemory node and its edges by id (destructive; prefer update to lower salience)
 - [agent.memory.demote](agent.memory.demote.md) — Demote a memory down the confidence ladder (FACT→RULE→OBSERVATION) with an auditable demotion event; clears enforcement on OBSERVATION and human confirmation when leaving FACT
-- [agent.memory.evidence.attach](agent.memory.evidence.attach.md) — Attach supporting/refuting evidence to a memory, adjusting confidence and refreshing the decay clock
-- [agent.memory.import.commit](agent.memory.import.commit.md) — Write confirmed two-axis draft memories into the workspace AgentMemory Neo4j graph; per-item error capture enables partial success on batch writes
-- [agent.memory.import.parse](agent.memory.import.parse.md) — Extract and classify atomic memories (class + kind) from markdown documents using the AI gateway; returns editable drafts without persisting
 - [agent.memory.list](agent.memory.list.md) — List a workspace's ACTIVE AgentMemory nodes (newest first) with optional class/kind/enforcement/node filters; non-semantic browse counterpart to agent.memory.recall
-- [agent.memory.policy.read](agent.memory.policy.read.md) — Read the workspace memory decay policy: confidence half-lives by weight and the recall threshold
-- [agent.memory.policy.write](agent.memory.policy.write.md) — Update the workspace memory decay policy (partial update of half-lives, thresholds, and decay floor)
 - [agent.memory.promote](agent.memory.promote.md) — Promote a memory up the confidence ladder (OBSERVATION→RULE→FACT) with an auditable promotion event; FACT requires human confirmation
-- [agent.memory.promotion.candidates](agent.memory.promotion.candidates.md) — Top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT
 - [agent.memory.recall](agent.memory.recall.md) — Query ACTIVE AgentMemory nodes by semantic similarity with optional class/enforcement filters; recovers confidence on recall
 - [agent.memory.remember](agent.memory.remember.md) — Capture a free-text memory, inferring its kind and class unless pinned, then embed and write it to the workspace AgentMemory graph
 - [agent.memory.update](agent.memory.update.md) — Edit an AgentMemory in place (lesson, kind, source, confidence/enforcement, status), re-embedding when the lesson changes
@@ -95,7 +86,6 @@ Capabilities granted to an agent as a set have a page of their own:
 - [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
-- [billing.subscription.upgrade.start](billing.subscription.upgrade.start.md) — Begin a plan change via Stripe Checkout; returns a URL for the user to complete
 - [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook
 - [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series
 
@@ -159,10 +149,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
 
-## Graph (7)
+## Graph (6)
 
 - [graph.node.get](graph.node.get.md) — Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`
-- [graph.node.labels.get](graph.node.labels.get.md) — Renamed to `graph.node_label.get` (ADR-022 alias)
 - [graph.node.list](graph.node.list.md) — Paginated browse of all nodes in the workspace graph; backs the graph explorer UI
 - [graph.node.search](graph.node.search.md) — Text search over the workspace graph, matching `displayName`/`description` with optional label filter
 - [graph.node_label.get](graph.node_label.get.md) — Read a node's full label set; read-only companion to label add/remove
@@ -192,36 +181,24 @@ Capabilities granted to an agent as a set have a page of their own:
 - [notification.list](notification.list.md) — List in-app notifications for the calling user, with unread filtering and pagination
 - [notification.mark](notification.mark.md) — Mark a notification as read and/or archived for the calling user
 
-## Notifications (2)
-
-- [notifications.list](notifications.list.md) — List in-app notifications for the calling user with unread filtering and pagination
-- [notifications.mark](notifications.mark.md) — Mark a notification as read and/or archived for the calling user
-
 ## Ontology (2)
 
 - [ontology.neighbors](ontology.neighbors.md) — The one-hop neighborhood of a node — a focused traversal primitive pairing with `ontology.query`
 - [ontology.query](ontology.query.md) — Typed multi-hop traversal over the knowledge graph via a governed, non-Cypher shape
 
-## Org (14)
+## Org (11)
 
 - [org.create](org.create.md) — Create a new organization with a globally-unique slug and attach the caller as first member
 - [get_data_plane](get_data_plane.md) — Read the organisation's data-plane binding for one store (postgres/neo4j/clickhouse): shared or dedicated, health status, endpoint host and database name — never a credential
 - [set_data_plane](set_data_plane.md) — Bind one of the organisation's stores to a dedicated customer-controlled endpoint, or return it to the shared platform plane; the config is envelope-encrypted and never readable back
 - [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the CLI tenant picker
 - [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
-- [org.member.invite.accept](org.member.invite.accept.md) — Accept a pending org invitation; creates membership and provisions IAM
-- [org.member.invite.decline](org.member.invite.decline.md) — Decline a pending org invitation; frees the reserved license seat
 - [org.member.remove](org.member.remove.md) — Permanently remove a member from the org; irreversible action with last-owner block
-- [org.member.role.change](org.member.role.change.md) — Change a member's org role; blocks last-owner demotion
 - [org.member_invite.accept](org.member_invite.accept.md) — Accept a pending org invitation and provision least-privilege IAM for the user
 - [org.member_invite.decline](org.member_invite.decline.md) — Decline a pending org invitation and free the reserved license seat
 - [org.member_role.change](org.member_role.change.md) — Change a member's org role; blocks demoting the last org owner
 - [org.settings.read](org.settings.read.md) — Read the org's profile settings: name, slug, avatar, website, industry, employee size, type
 - [org.settings.write](org.settings.write.md) — Update the org's profile settings (partial) through the kernel with IAM, metering, and audit
-
-## Organization (1)
-
-- [organization.create](organization.create.md) — Create a new organization with a globally-unique slug
 
 ## Plugin (19)
 
@@ -348,18 +325,14 @@ Capabilities granted to an agent as a set have a page of their own:
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
 - [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
 
-## Workspace (14)
+## Workspace (10)
 
-- [workspace.budget.policy.read](workspace.budget.policy.read.md) — Read the workspace's governed per-turn dollar budget: whether enforcement is active, the limit in USD, enforcement mode (grace/prompt/enforce), grace cushion, and enforcement policy (ceiling/default)
-- [workspace.budget.policy.write](workspace.budget.policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only; controls how agent turns are budget-governed for members
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
 - [workspace.member.list](workspace.member.list.md) — List members of a workspace
-- [workspace.model.settings.read](workspace.model.settings.read.md) — Read the workspace-level model defaults
-- [workspace.model.settings.write](workspace.model.settings.write.md) — Update the workspace-level model defaults (partial update)
 - [workspace.model_settings.read](workspace.model_settings.read.md) — Read the workspace-level model defaults for text/image/video tiers
 - [workspace.model_settings.write](workspace.model_settings.write.md) — Update the workspace-level model defaults (partial update); Owner/Admin only
 - [workspace.settings.read](workspace.settings.read.md) — Read the workspace's general settings: name, slug, description

@@ -236,21 +236,23 @@ export interface StreamAgentReplyArgs {
     messageId: string;
   };
   /**
-   * Who paid the vendor for this call (ADR-053 §3). `platform` (the default)
-   * charges the organisation's credits for the tokens; `org` means the
+   * Who paid the vendor for this call (ADR-053 §3). `platform` charges the
+   * organisation's credits for the tokens; `org` means the
    * organisation's own key paid, so the tokens are reported to `token_usage`
    * and charged nothing. Pass what `resolveModelFundingSource` answered for
    * the same organisation that chose the model — the two must agree, or a
    * customer-funded call would be billed twice or a platform-funded one not
    * at all.
    */
-  fundedBy?: TurnFunding;
+  fundedBy: TurnFunding;
   /**
-   * Ledger reason for a platform-funded charge. The in-app agent passes
-   * `consume_assistant_tokens` so its usage is its own line; other callers
-   * keep the default.
+   * Ledger reason for a platform-funded charge. Required rather than defaulted:
+   * the old default was `consume_token_overage`, which ADR-052 retired and
+   * ADR-053 says must not be repurposed, and the assistant spend cap sums
+   * `consume_assistant_tokens` alone — so a defaulted debit was invisible to
+   * the cap that is supposed to bound it.
    */
-  chargeReason?: CreditReason;
+  chargeReason: CreditReason;
   onFinish?: (event: {
     text: string;
     usage: {
@@ -465,7 +467,7 @@ export function streamAgentReply(
       //
       // ADR-053 §3: only when the platform key paid. A call the organisation's
       // own key answered is reported above and charged nothing here.
-      if ((args.fundedBy ?? "platform") === "platform") {
+      if (args.fundedBy === "platform") {
         try {
           // capturedScope is always set (active ALS scope, or rebuilt from the
           // telemetry org/workspace above), so chargeUsageCredits → withTenantDb →
@@ -474,7 +476,7 @@ export function streamAgentReply(
             await chargeUsageCredits({
               orgId: args.telemetry.orgId,
               referenceId: args.telemetry.messageId,
-              ...(args.chargeReason ? { reason: args.chargeReason } : {}),
+              reason: args.chargeReason,
               ...usage,
             });
           });

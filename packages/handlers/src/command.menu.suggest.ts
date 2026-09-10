@@ -12,7 +12,12 @@
  *     auditable via the kernel's capability.invoked security event.
  */
 import { z } from "zod";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+} from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { commandMenuSuggest } from "@oxagen/oxagen/contracts/command.menu.suggest";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -127,6 +132,12 @@ export const commandMenuSuggestHandler: CapabilityHandler<
   let suggestions: z.output<typeof suggestionSchema>["suggestions"] = [];
   try {
     const { object } = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The parameter is
+      // required for that reason: it used to default to `platform`, and every
+      // caller took the default, so an organisation that had brought its own key
+      // was billed for this call anyway (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: suggestionSchema,
       system: SUGGESTION_SYSTEM_PROMPT,
       prompt,

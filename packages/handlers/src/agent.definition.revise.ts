@@ -11,7 +11,8 @@
  * silently changes what is live.
  */
 import { z } from "zod";
-import { generateObjectFor } from "@oxagen/ai";
+import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { agentDefinitionRevise } from "@oxagen/oxagen/contracts/agent.definition.revise";
@@ -100,6 +101,13 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
   let object: ReviseSynthesis;
   try {
     const result = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The
+      // parameter is required for that reason: it used to default to
+      // `platform`, and every caller took the default, so an organisation
+      // that had brought its own key was billed for this call anyway
+      // (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: reviseSynthesisSchema,
       system,
       prompt,

@@ -8,7 +8,11 @@ import {
   hashPrompt,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import {
+  chargeUsageCredits,
+  providerCostUsdMicros,
+  CREDIT_REASONS,
+} from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
 const logger = pino({
@@ -124,6 +128,7 @@ async function meterEmbeddingCall(params: {
     await runInTenantScope(capturedScope, async () => {
       await chargeUsageCredits({
         orgId,
+        reason: CREDIT_REASONS.CONSUME_EMBEDDING,
         // referenceId is the credit_ledger.reference_id Postgres `uuid` column;
         // pass undefined (→ NULL) when there is no execution step rather than a
         // non-UUID string, which would throw and silently leave the call unbilled.
