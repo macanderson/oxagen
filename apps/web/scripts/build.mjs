@@ -122,7 +122,11 @@ export async function build({ log = console.log } = {}) {
   let copied = 0;
   for (const name of await readdir(ROOT)) {
     if (!isPublishable(name)) continue;
-    await cp(path.join(ROOT, name), path.join(DIST, name), { recursive: true });
+    await cp(path.join(ROOT, name), path.join(DIST, name), {
+      recursive: true,
+      // nested dotfiles (.DS_Store and friends) are not site content either
+      filter: (src) => !path.basename(src).startsWith("."),
+    });
     copied += 1;
   }
 
