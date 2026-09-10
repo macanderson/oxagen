@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   generateObjectFor,
   selectModel,
+  CREDIT_REASONS,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
@@ -65,6 +66,16 @@ export interface DistillationLlmOptions {
   telemetry: GenerateObjectArgs<
     z.infer<typeof DistilledFactSchema>
   >["telemetry"];
+  /**
+   * Who paid the vendor for the distillation call (ADR-053 §3). Supplied by the
+   * caller, not resolved here: `resolveModelFundingSource` reads through
+   * `withTenantDb` and needs an active tenant scope, and consolidation runs as a
+   * background job. Resolving it inside would throw scopeless, and the catch
+   * below would swallow that into a silent fall back to the heuristic — the LLM
+   * path would quietly stop running for exactly the organisations that brought
+   * their own key.
+   */
+  fundedBy: GenerateObjectArgs<z.infer<typeof DistilledFactSchema>>["fundedBy"];
 }
 
 /** True when the Vercel AI Gateway key is configured (LLM path is viable). */
@@ -222,6 +233,8 @@ export async function extractFactFromCluster(
       system: DISTILL_SYSTEM_PROMPT,
       prompt: buildClusterPrompt(heuristic.fact, cluster),
       telemetry: options.telemetry,
+      fundedBy: options.fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     });
     const domain = object.domain.trim();
     // Decoration only: keep the deterministic fact, adopt the model's domain
