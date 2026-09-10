@@ -1,7 +1,14 @@
-# Oxagen Vision — the Stripe for Agents
+# Oxagen Vision — teach, govern, explain, learn
 
-> **Mission: Oxagen is the metered, governed, graph-grounded control plane for teams that
-> build and resell AI agents — the neutral Stripe-for-agents.**
+> **Mission: Oxagen teaches your agents your business, governs what they may do,
+> explains every run, and learns from each one — so a company stops renting
+> intelligence and starts owning it.**
+
+We sell to the enterprise team that runs the agents and answers for them. Coding
+teams first, because everyone using a terminal agent today is a customer. We do not
+sell to resellers, and we do not build the machinery a customer would need to resell
+agent usage to their own customers. The September 2026 positioning deck is the
+source this document follows.
 
 This document is the north star for every product and engineering decision. Feature
 recommendations, roadmap priorities, and architecture choices are judged against it —
@@ -41,32 +48,46 @@ Oxagen does not compete where it loses. It will not out-Glean Glean on connector
 breadth and graph maturity, out-eval Braintrust, or out-mindshare LangGraph. The
 single wedge where a platform of Oxagen's exact shape can credibly be #1:
 
-**The metered, governed, graph-grounded control plane for teams that build and resell
-AI agents.**
+**The control plane that teaches, governs, explains, and learns from every agent an
+enterprise runs — whoever built it.**
 
-Own the intersection no incumbent bundles:
+Four jobs, one loop. Learn feeds Teach. Own the intersection no incumbent bundles:
 
-1. **Governance** — capability-parity typed contracts that make every MCP tool
+1. **Govern** — capability-parity typed contracts that make every MCP tool
    inherently governed and un-poisonable. Every capability is a typed contract with
    IAM + entitlement enforcement, exposed with parity across API, MCP, CLI, and UI.
    The contract is the one enforced object that binds identity → knowledge scope →
    permitted action → commercial terms → verified outcome → audit record — the full
    accountability chain, not just routing or authentication.
-2. **Grounding** — a Neo4j graph + ontology that grounds agent answers in cited,
-   time-aware context. Accuracy is the product, citations are the proof.
-3. **Monetization** — a ClickHouse→Stripe loop that turns observed agent usage
-   directly into customer billing. Not spend dashboards; revenue infrastructure.
+2. **Teach** — a Neo4j graph + ontology that hands an agent the company's knowledge
+   and rules when it starts a job, grounds its answers in cited, time-aware context,
+   and takes back what the run learned. Accuracy is the product, citations are the
+   proof.
+3. **Explain** — every run saved as one trace next to the data it touched: who
+   asked, what the agent read, what it changed, what proved it, and what it cost.
+   A security lead gets an answer instead of a log file. Finance sees what each
+   run bought. The same ClickHouse→Stripe loop prices the platform by use, per
+   governed action.
+4. **Learn** — each proven run leaves behind skills, tools, tuned settings, and
+   knowledge written back to the graph, so the next run starts with all four.
+   Later, those proven runs train an open-weight model the customer owns and can
+   run inside their own firewall. Labels are the expensive part of training a
+   model; a run that fails a test and then passes it is a label made as a side
+   effect of doing the work.
 
 That is not "another agent framework" or "another enterprise search box." It is
-**usage-based-billing-plus-governance infrastructure for AI products**, with the
-knowledge graph as the **accuracy moat** and vendor-neutral BYOK as the **trust moat**.
+**the governed, graph-grounded control plane for the agents an enterprise already
+runs**, with the knowledge graph as the **accuracy moat**, vendor-neutral BYOK as the
+**trust moat**, and the proven-run corpus as the **compounding asset** no competitor
+can copy from outside the customer.
 
 ## Market gaps we own (underserved needs nobody bundles)
 
-1. **Meter-to-revenue billing infrastructure for agents.** The clearest whitespace.
-   Observability tools show spend; FinOps tools do internal chargeback; nobody lets a
-   company *reselling* AI meter observed agent usage and bill their customers through
-   it. Oxagen already has the ClickHouse→Stripe loop. Verified: uncontested.
+1. **Per-run cost attribution an enterprise can act on.** The clearest whitespace.
+   Observability tools show spend as a total; FinOps tools chargeback by account.
+   Neither can say which agent, on whose behalf, under which rule, spent what — and
+   whether the work was proven. Oxagen meters the governed action, so the answer is
+   a row, not an estimate. Verified: uncontested.
 2. **Governed, schema-enforced, metered MCP tools as an anti-poisoning story.** The
    market fears tool poisoning/injection (OWASP entry, ~200K vulnerable instances),
    but gateways only inspect third-party servers. A platform whose tools are natively
@@ -103,8 +124,8 @@ knowledge graph as the **accuracy moat** and vendor-neutral BYOK as the **trust 
 - Tool-poisoning fear is driving demand for exactly the typed-contract governance
   Oxagen already enforces.
 
-Win by being the neutral Stripe-for-agents that also happens to ground every action in
-a governed graph — then earn evals and connector breadth as **fast-follows, not the
+Win by being the one place an enterprise can teach, govern, explain, and learn from
+every agent it runs — then earn evals and connector breadth as **fast-follows, not the
 front line**.
 
 ## What advances the vision
@@ -128,8 +149,11 @@ Work that strengthens the wedge:
   into the contract object — principal attribution (who initiated → which agent →
   which tool → what data), audit trails, verified/attested outcomes, and
   permission-scoped graph retrieval.
-- Reseller ergonomics: anything that makes it easier for a customer to package,
-  govern, meter, and bill *their* agents to *their* customers.
+- Learning from proven runs: skills, tools, tuned settings, and knowledge that a
+  proven run writes back into the graph, and the pipeline that turns a corpus of
+  proven runs into a model the customer owns.
+- Cost attribution an enterprise can act on: metering the governed action so spend
+  resolves to a workspace, an agent, a rule, and a run.
 - External-agent governance: Oxagen governs ANY agent, first- or third-party
   (ADR-040). Work on the run-evidence ingress (`runner_observed` and
   `client_attested` evidence), the governed tool gateway, third-party agent
@@ -157,6 +181,12 @@ Work that strengthens the wedge:
   audit record, or retrieval that ignores the caller's knowledge scope.
 - Storing data across the four-store boundaries in ways that break the metering or
   grounding story (see `CLAUDE.md` → *Infrastructure boundaries*).
+- Reseller and re-bill machinery: letting a customer package, price, and invoice
+  agent usage to *their* customers — downstream customer records, markup or per-unit
+  price plans, usage attribution to a third party, re-bill runs, or holding a
+  customer's own payment credentials so we can bill on their behalf. We sell the
+  platform by use, fine-tuning runs at a flat fee, and hosting at cost. There is no
+  margin line, so there is nothing to resell.
 
 **Not drift:** bug fixes, refactors, tests, CI/tooling, docs, dependency hygiene,
 performance work, and maintenance of existing surfaces. Routine engineering that
@@ -165,8 +195,8 @@ strategic drift, not to nag maintenance.
 
 ## Drift tests (the questions the Vision Gate asks)
 
-1. Does this change help a team that builds and resells AI agents meter, govern,
-   ground, or bill their product? (advances)
+1. Does this change help an enterprise teach its agents the business, govern what
+   they may do, explain what they did, or learn from a proven run? (advances)
 2. Does it add a capability without a typed contract, IAM/entitlement gate, or
    metering? (drifts)
 3. Does it present agent output without citations where graph grounding applies?
@@ -178,4 +208,7 @@ strategic drift, not to nag maintenance.
 6. Does it strengthen or weaken the accountability chain — the binding of identity,
    knowledge scope, permitted action, commercial terms, verified outcome, and audit
    record into the enforced contract object? (advances / drifts)
-7. Is it routine maintenance, fix, test, or tooling work? (neutral)
+7. Does it build machinery for a customer to resell agent usage to their own
+   customers — markup pricing, downstream customer records, re-bill runs, or holding
+   their payment credentials? (drifts)
+8. Is it routine maintenance, fix, test, or tooling work? (neutral)
