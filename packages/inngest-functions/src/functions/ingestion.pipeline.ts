@@ -203,9 +203,16 @@ export const [ingestionPipeline] = createFunction(
     );
 
     if (normalizeResult.kind === "skipped") {
-      logger.debug(
-        { connectionId, sourceRecordType },
-        "ingestion-pipeline: no mapping, skipping",
+      // An unmapped record type is dropped on the floor and the record is
+      // gone — nothing retries it once the mapping is added. That is data
+      // loss caused by configuration, not a routine filter decision, so it is
+      // reported at warn. At debug it was invisible in production, where a
+      // whole connector's worth of records can be discarded without a single
+      // line anyone would look at. The deliberate customer-configured drops
+      // below stay at debug, because those are the filter working.
+      logger.warn(
+        { connectionId, connectorType, sourceRecordType },
+        "ingestion-pipeline: no entity_type_mappings row for this record type — record dropped and not retried",
       );
       return { skipped: true };
     }

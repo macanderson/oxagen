@@ -2,6 +2,11 @@ export { inngest } from "./inngest";
 export type { InngestClient } from "./inngest";
 export { functions } from "./functions";
 export { logger } from "./logger";
+export {
+  inngestEnvironmentComplaint,
+  signingKeyPosture,
+} from "./env-check";
+export type { InngestKeyPosture } from "./env-check";
 
 // ─── Provider-agnostic adapter & types ───────────────────────────────────────
 export {

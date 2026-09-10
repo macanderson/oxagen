@@ -7,7 +7,8 @@
  *   - dispatches ingestion/github.initial-sync for GitHub connections
  *   - skips connector dispatch when owner/repo missing from deliveryConfig
  *   - logs "unsupported" for non-GitHub connectors (no throw)
- *   - stamps last_sync_at in all non-skip paths
+ *   - stamps last_sync_at only when a connector sync was actually dispatched
+ *   - forwards the connection's configured syncDepthDays
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -216,7 +217,10 @@ describe("ingestionSyncRequested — GitHub connector", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 
-  it("skips connector dispatch but still stamps last_sync_at when owner is missing", async () => {
+  // Witness: last_sync_at is what every surface reads to say when this
+  // connection last synced. Stamping it for a dispatch that never happened
+  // reports a fresh successful sync for a run that did nothing.
+  it("does not stamp last_sync_at when owner is missing", async () => {
     setupDb(makeConnection({ delivery_config: { repo: "platform" } }));
 
     const result = await capturedHandler!({
@@ -224,17 +228,55 @@ describe("ingestionSyncRequested — GitHub connector", () => {
       step: makeStep(),
     });
 
-    // Not skipped overall; just skips the send
+    // Not skipped overall; the connector dispatch is what was skipped.
     expect(result).toMatchObject({
       connectionId: "conn-uuid-1",
       connectorId: "github",
+      dispatched: false,
+      reason: "missing_owner_or_repo",
     });
     expect(mocks.inngestSend).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: "conn-uuid-1" }),
       expect.stringContaining("missing owner/repo"),
     );
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+    // Resolve only — no last_sync_at write.
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+  });
+
+  // Witness: the wizard's "sync history depth" selector is stored on the
+  // connection. Dropping it here re-syncs at the initial-sync function's
+  // 90-day default and silently shortens the history the customer chose.
+  it("forwards the connection's configured syncDepthDays", async () => {
+    setupDb(
+      makeConnection({
+        delivery_config: {
+          owner: "oxagen",
+          repo: "platform",
+          defaultBranch: "main",
+          syncDepthDays: 180,
+        },
+      }),
+    );
+
+    await capturedHandler!({ event: makeEvent(), step: makeStep() });
+
+    expect(mocks.inngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ syncDepthDays: 180 }),
+      }),
+    );
+  });
+
+  it("omits syncDepthDays when the connection does not configure one", async () => {
+    setupDb(makeConnection());
+
+    await capturedHandler!({ event: makeEvent(), step: makeStep() });
+
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(sent.data).not.toHaveProperty("syncDepthDays");
   });
 });
 
@@ -255,12 +297,21 @@ describe("ingestionSyncRequested — non-GitHub connector", () => {
     expect(result).toMatchObject({ connectorId: "linear" });
   });
 
-  it("still stamps last_sync_at for non-GitHub connectors", async () => {
+  // Witness: a connector with no polling handler dispatches nothing, so it
+  // has not synced and must not claim it has.
+  it("does not stamp last_sync_at for a connector with no sync dispatch", async () => {
     setupDb(makeConnection({ connector_id: "slack" }));
 
-    await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
-    // Resolve + last_sync_at update
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      dispatched: false,
+      reason: "connector_unsupported",
+    });
+    // Resolve only — no last_sync_at write.
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
   });
 });
