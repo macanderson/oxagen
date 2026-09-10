@@ -83,6 +83,12 @@ function errorToastTitle(code: string | undefined): string {
       return "Insufficient credits";
     case "billing_suspended":
       return "Billing suspended";
+    // The org/workspace period-to-date spend ceiling (@oxagen/billing
+    // BudgetExceededError). Distinct from the assistant cap below: that one is
+    // the cap on usage Oxagen pays for, this one is a ceiling the customer set
+    // on their own spend. #1456.
+    case "budget_exceeded":
+      return "Spend limit reached";
     case "assistant_spend_cap":
       return "Assistant cap reached";
     case "rate_limited":
