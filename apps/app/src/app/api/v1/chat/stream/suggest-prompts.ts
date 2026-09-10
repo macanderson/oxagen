@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { ModelMessage } from "ai";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+} from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { logger } from "@oxagen/handlers/logger";
 
 /**
@@ -324,7 +329,14 @@ export async function generateTurnSuggestions(
   sections.push(`Conversation so far:\n\n${renderTranscript(turns)}`);
 
   try {
+    // Platform-vs-org funding, resolved rather than assumed. The parameter is
+    // required for that reason: it used to default to `platform`, and every
+    // caller took the default, so an organisation that had brought its own key
+    // was billed for this call anyway (ADR-053 §3).
+    const funding = await resolveModelFundingSource(input.orgId);
     const generation = generateObjectFor({
+      fundedBy: funding.fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: suggestionsSchema,
       model: selectModel({ tier: "fast" }),
       system: suggestionSystemPrompt(),

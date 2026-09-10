@@ -5,6 +5,9 @@ import type { ModelMessage } from "ai";
 // the only LLM entry point; `selectModel` just returns an opaque handle.
 const generateObjectFor = vi.fn();
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
   generateObjectFor: (...args: unknown[]) => generateObjectFor(...args),
   selectModel: () => "fast-model" as unknown,
 }));

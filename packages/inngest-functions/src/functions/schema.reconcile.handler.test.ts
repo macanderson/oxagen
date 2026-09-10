@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   sessionClose: vi.fn(),
   scopedSession: vi.fn(),
   generateObjectFor: vi.fn(),
+  resolveModelFundingSource: vi
+    .fn()
+    .mockResolvedValue({ fundedBy: "platform" }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -79,6 +82,9 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
+  // The handler resolves funding before each derivation call (ADR-053 §3);
+  // an org with no stored key is platform-funded, which is this fixture.
+  resolveModelFundingSource: mocks.resolveModelFundingSource,
 }));
 
 vi.mock("../logger", () => ({

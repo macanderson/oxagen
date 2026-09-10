@@ -5,6 +5,9 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 type GenerateArgs = { abortSignal?: AbortSignal; prompt?: string };
 const generateCalls: GenerateArgs[] = [];
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
   generateObjectFor: async (args: GenerateArgs) => {
     generateCalls.push(args);
     return {
