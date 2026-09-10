@@ -5,8 +5,6 @@ import { CREDIT_REASONS, type CreditReason } from "./constants";
 import { getOrgBillingSettings } from "./billing-settings";
 import {
   providerCostUsd,
-  imageProviderCostUsd,
-  videoProviderCostUsd,
   resolveMeterMarkup,
   resolveRateEntry,
   CREDIT_VALUE_USD,
@@ -295,8 +293,13 @@ async function chargeCostUsd(params: {
   markup?: number;
   /** True when the rate came from the fallback because no card row matched. */
   rateCardMiss?: boolean;
-  /** Ledger reason; defaults to the token-overage reason every caller used before ADR-053. */
-  reason?: CreditReason;
+  /**
+   * Ledger reason. Required, not defaulted: the old default was
+   * `consume_token_overage`, which ADR-052 retired and ADR-053 says must not be
+   * repurposed — and the assistant spend cap sums `consume_assistant_tokens`
+   * alone, so a defaulted debit was invisible to the cap meant to bound it.
+   */
+  reason: CreditReason;
   logFields?: Record<string, unknown>;
 }): Promise<ChargeUsageResult> {
   const start = Date.now();
@@ -349,7 +352,7 @@ async function chargeCostUsd(params: {
     await consumeCredits({
       orgId: params.orgId,
       requestedMicroCents: microCredits,
-      reason: params.reason ?? CREDIT_REASONS.CONSUME_TOKEN_OVERAGE,
+      reason: params.reason,
       referenceType: "token_usage",
       referenceId: params.referenceId,
     });
@@ -392,11 +395,10 @@ export interface ChargeUsageArgs extends TokenUsageInput {
   markup?: number;
   rateCard?: RateCard;
   /**
-   * Ledger reason. The in-app agent passes `consume_assistant_tokens` so its
-   * platform-paid tokens are their own line (ADR-053 §3); every other caller
-   * keeps the default.
+   * Ledger reason. Required, not defaulted — see `chargeCostUsd`'s field for
+   * why a default here was a trap.
    */
-  reason?: CreditReason;
+  reason: CreditReason;
 }
 
 /** Charge an org for one metered TEXT (token) call. */
@@ -418,56 +420,6 @@ export async function chargeUsageCredits(
       cachedTokens: args.cachedTokens ?? 0,
       cacheWriteTokens: args.cacheWriteTokens ?? 0,
     },
-  });
-}
-
-export interface ChargeImageArgs {
-  orgId: string;
-  /** Gateway model id (creator/model form), e.g. "bfl/flux-2-max". */
-  model: string;
-  /** Number of images generated. */
-  imageCount: number;
-  /** Size string the generator used, e.g. "1024x1024" — drives HD multipliers. */
-  size?: string;
-  referenceId?: string;
-  markup?: number;
-}
-
-/** Charge an org for one metered IMAGE call (per-image pricing). */
-export async function chargeImageCredits(
-  args: ChargeImageArgs,
-): Promise<ChargeUsageResult> {
-  return chargeCostUsd({
-    orgId: args.orgId,
-    model: args.model,
-    costUsd: imageProviderCostUsd(args.model, args.imageCount, args.size),
-    referenceId: args.referenceId,
-    markup: args.markup,
-    logFields: { imageCount: args.imageCount, size: args.size ?? null },
-  });
-}
-
-export interface ChargeVideoArgs {
-  orgId: string;
-  /** Gateway model id (creator/model form), e.g. "google/veo-3.0-generate-001". */
-  model: string;
-  /** Clip length in seconds (drives per-second pricing). */
-  durationSeconds?: number;
-  referenceId?: string;
-  markup?: number;
-}
-
-/** Charge an org for one metered VIDEO call (per-second pricing). */
-export async function chargeVideoCredits(
-  args: ChargeVideoArgs,
-): Promise<ChargeUsageResult> {
-  return chargeCostUsd({
-    orgId: args.orgId,
-    model: args.model,
-    costUsd: videoProviderCostUsd(args.model, args.durationSeconds),
-    referenceId: args.referenceId,
-    markup: args.markup,
-    logFields: { durationSeconds: args.durationSeconds ?? null },
   });
 }
 

@@ -27,6 +27,7 @@ beforeEach(() => {
 describe("enhancePromptIfInsufficient", () => {
   it("is a no-op when autoImprove is off (judge never runs)", async () => {
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "draw a cat",
       kind: "image",
       autoImprove: false,
@@ -38,6 +39,7 @@ describe("enhancePromptIfInsufficient", () => {
 
   it("is a no-op for an empty prompt", async () => {
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "   ",
       kind: "image",
       autoImprove: true,
@@ -50,6 +52,7 @@ describe("enhancePromptIfInsufficient", () => {
   it("returns the original when the judge deems it sufficient", async () => {
     mocks.generateObjectFor.mockResolvedValue({ object: { sufficient: true } });
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "a detailed watercolor of a red fox in autumn woods, soft light",
       kind: "image",
       autoImprove: true,
@@ -69,6 +72,7 @@ describe("enhancePromptIfInsufficient", () => {
       },
     });
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "fox",
       kind: "image",
       autoImprove: true,
@@ -85,6 +89,7 @@ describe("enhancePromptIfInsufficient", () => {
       object: { sufficient: false },
     });
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "fox",
       kind: "image",
       autoImprove: true,
@@ -96,6 +101,7 @@ describe("enhancePromptIfInsufficient", () => {
   it("never throws — a judge error degrades to the original prompt", async () => {
     mocks.generateObjectFor.mockRejectedValue(new Error("judge down"));
     const out = await enhancePromptIfInsufficient({
+      fundedBy: "platform" as const,
       prompt: "fox",
       kind: "image",
       autoImprove: true,

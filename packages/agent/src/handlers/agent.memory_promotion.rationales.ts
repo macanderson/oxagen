@@ -1,6 +1,11 @@
 import pino from "pino";
 import { z } from "zod";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+} from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import type { CapabilityContext } from "../types";
 import { getMemoryById, type MemoryRecord } from "../memory/neo4j";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
@@ -145,6 +150,13 @@ export async function agentMemoryPromotionRationalesHandler(
 
   try {
     const { object } = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The
+      // parameter is required for that reason: it used to default to
+      // `platform`, and every caller took the default, so an organisation
+      // that had brought its own key was billed for this call anyway
+      // (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: draftSchema,
       system:
         "You draft concise, evidence-grounded rationales for changing the epistemic class of an agent memory. Each rationale is one sentence, references the memory's actual usage signals, and never invents facts not present in the input.",

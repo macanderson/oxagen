@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ beforeEach(() => {
 describe("generateObjectFor (@oxagen/ai)", () => {
   it("returns an object that satisfies the zod schema", async () => {
     const { object } = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "What is the capital of France?",
       telemetry: TELEMETRY,
@@ -118,6 +121,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("returns correct usage counts from the underlying SDK result", async () => {
     const { usage } = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "Capital of France?",
       telemetry: TELEMETRY,
@@ -130,6 +135,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("calls generateObject with default temperature 0 and the schema", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "test",
       telemetry: TELEMETRY,
@@ -149,6 +156,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     const before = mocks.defaultModel.mock.calls.length;
 
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "test",
       telemetry: TELEMETRY,
@@ -169,6 +178,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
   it("uses defaultModel() when no model is supplied", async () => {
     const before = mocks.defaultModel.mock.calls.length;
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "test",
       telemetry: TELEMETRY,
@@ -179,6 +190,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("writes a token_usage row with the correct telemetry fields", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "Capital?",
       telemetry: TELEMETRY,
@@ -201,6 +214,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("writes the prompt hash into the token_usage row", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "Capital?",
       telemetry: TELEMETRY,
@@ -217,6 +232,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       { role: "user" as const, content: "What is the capital?" },
     ];
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       messages,
       telemetry: TELEMETRY,
@@ -232,7 +249,13 @@ describe("generateObjectFor (@oxagen/ai)", () => {
         content: [{ type: "text" as const, text: "structured" }],
       },
     ];
-    await generateObjectFor({ schema: SCHEMA, messages, telemetry: TELEMETRY });
+    await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      schema: SCHEMA,
+      messages,
+      telemetry: TELEMETRY,
+    });
     expect(mocks.hashPrompt).toHaveBeenCalledWith(
       JSON.stringify([{ type: "text", text: "structured" }]),
     );
@@ -240,6 +263,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("charges the org's credits through the billing gate", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "test",
       telemetry: TELEMETRY,
@@ -247,6 +272,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
+      reason: "consume_assistant_tokens",
       orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_xyz",
       model: "claude-sonnet-5",
@@ -271,6 +297,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
 
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "test",
       telemetry: TELEMETRY,
@@ -311,6 +339,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
 
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "inngest step",
       telemetry: TELEMETRY,
@@ -338,6 +368,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
       async () => {
         await generateObjectFor({
+          fundedBy: "platform" as const,
+          chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
           schema: SCHEMA,
           prompt: "request turn",
           telemetry: TELEMETRY,
@@ -352,6 +384,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
 
     const { object } = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "resilient?",
       telemetry: TELEMETRY,
@@ -364,6 +398,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     mocks.hashPrompt.mockRejectedValueOnce(new Error("hash failure"));
 
     const { object } = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "resilient?",
       telemetry: TELEMETRY,
@@ -376,6 +412,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
 
     const { object } = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "resilient?",
       telemetry: TELEMETRY,
@@ -386,6 +424,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("respects a caller-supplied temperature override", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "creative?",
       temperature: 1.2,
@@ -402,6 +442,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
   it("passes system and messages through to the underlying SDK call", async () => {
     const messages = [{ role: "user" as const, content: "hello" }];
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       system: "You are a geography expert.",
       messages,
@@ -419,6 +461,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
   it("forwards a caller-supplied abortSignal so a stalled call can be bounded", async () => {
     const signal = AbortSignal.timeout(30_000);
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "bounded?",
       telemetry: TELEMETRY,
@@ -434,6 +478,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("forwards maxRetries when provided (e.g. 0 when an outer system owns retries)", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "no retries",
       telemetry: TELEMETRY,
@@ -449,6 +495,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("omits abortSignal and maxRetries entirely when the caller does not set them", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "defaults",
       telemetry: TELEMETRY,
@@ -466,6 +514,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("charges nothing when the organisation's own key paid, and still reports the usage", async () => {
     const { object } = await generateObjectFor({
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "on the customer's key",
       telemetry: TELEMETRY,
@@ -488,6 +537,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("charges when the platform key paid (fundedBy: platform, the default made explicit)", async () => {
     await generateObjectFor({
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "on the platform key",
       telemetry: TELEMETRY,
@@ -498,6 +548,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
   it("forwards chargeReason as the ledger reason of a platform-paid charge", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
       schema: SCHEMA,
       prompt: "assistant usage",
       telemetry: TELEMETRY,
@@ -511,8 +562,15 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     );
   });
 
-  it("sends no reason key when chargeReason is unset, so the meter's default applies", async () => {
+  // The reason used to be optional here and default to consume_token_overage
+  // inside the meter — a reason ADR-052 retired, ADR-053 says must not be
+  // repurposed, and the assistant spend cap cannot see (it sums
+  // consume_assistant_tokens alone). Both fields are required now, so no caller
+  // can fall into the retired reason by omission.
+  it("always sends the caller's ledger reason, never a default", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       prompt: "default reason",
       telemetry: TELEMETRY,
@@ -521,7 +579,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       string,
       unknown
     >;
-    expect("reason" in arg).toBe(false);
+    expect(arg.reason).toBe("consume_assistant_tokens");
   });
 
   it("propagates an AbortError when the underlying call is aborted", async () => {
@@ -533,6 +591,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
     await expect(
       generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
         schema: SCHEMA,
         prompt: "will abort",
         telemetry: TELEMETRY,

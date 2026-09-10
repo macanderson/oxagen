@@ -5,6 +5,9 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 const mockGenerateObjectFor = vi.fn();
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
   generateObjectFor: (...args: unknown[]) => mockGenerateObjectFor(...args),
   // selectModel just needs to return something non-null; the handler passes it
   // straight through to generateObjectFor which is mocked.
@@ -21,9 +24,13 @@ vi.mock("@oxagen/database", () => ({
   withTenantDb: (fn: (tx: unknown) => Promise<unknown>) => mockWithTenantDb(fn),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  // Partial: the handler now imports CREDIT_REASONS from @oxagen/billing, whose
+  // module graph reaches drizzle's `sql`. Keeping the real exports beats listing
+  // every one the chain happens to touch.
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return { ...real, eq: (a: unknown, b: unknown) => ({ eq: [a, b] }) };
+});
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
