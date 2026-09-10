@@ -43,6 +43,16 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
+// ADR-053 §3: the gate's fourth step reads the org's assistant spend cap. A
+// null cap means no cap, which is the neutral answer for every case below;
+// the cap's own behaviour is covered in metering.test.ts.
+const getOrgBillingSettingsMock = vi
+  .fn()
+  .mockResolvedValue({ assistantSpendCapCents: null });
+vi.mock("./billing-settings", () => ({
+  getOrgBillingSettings: getOrgBillingSettingsMock,
+}));
+
 const {
   assertCanStartTurn,
   chargeImageCredits,
