@@ -25,7 +25,7 @@ set -euo pipefail
 # engine is a change to this line (or an override in the environment for a
 # one-off deploy of another tag), and nothing else in the tree names the tag.
 # ADR-053 §1 is why the engine is a separate container at all.
-STELLA_SERVE_IMAGE_TAG="${STELLA_SERVE_IMAGE_TAG:-0.9.411}"
+STELLA_SERVE_IMAGE_TAG="${STELLA_SERVE_IMAGE_TAG:-0.9.414}"
 readonly STELLA_SERVE_IMAGE_TAG
 
 if [[ $# -ne 1 ]]; then
