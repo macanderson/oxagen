@@ -460,25 +460,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  GITHUB_DATA_CLIENT_ID: {
-    group: "OAuth providers",
-    description:
-      "GitHub DATA OAuth client id (repo-ingestion scopes; future connection).",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  GITHUB_DATA_CLIENT_SECRET: {
-    group: "OAuth providers",
-    description: "GitHub DATA OAuth client secret.",
-    secret: true,
-    clientExposed: false,
-    services: ["api", "app"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   MCP_OAUTH_PREREGISTERED_CLIENTS: {
     group: "OAuth providers",
     description:
@@ -750,32 +731,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // (lock it down with HTTP-referrer restrictions in the Google Cloud
   // console); the SECRET is server-only and must never carry a NEXT_PUBLIC_
   // prefix, because Next.js inlines every NEXT_PUBLIC_ var into the bundle.
-  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {
-    group: "Google Maps",
-    description:
-      "Browser-exposed Google Maps / Places API key powering billing-address autocomplete " +
-      "in onboarding. Restrict to HTTP referrers in the Google Cloud console.",
-    secret: false,
-    clientExposed: true,
-    services: ["app"],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "",
-  },
-  GOOGLE_MAPS_URL_SIGNING_SECRET: {
-    group: "Google Maps",
-    description:
-      "Google Maps URL-signing secret. Server-side only — must never be inlined into the " +
-      "browser bundle. Renamed from NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET (which would have " +
-      "caused Next.js to expose it client-side). Consumed server-side only when URL signing " +
-      "is enabled.",
-    secret: true,
-    clientExposed: false,
-    services: ["api", "app"],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "",
-  },
 
   // ── Billing / usage meter ────────────────────────────────────────────────────
   OXAGEN_TARGET_MARGIN: {
@@ -1207,23 +1162,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       production: API_PROD_URL,
     },
   },
-  A2A_PUBLIC_URL: {
-    group: "Public URLs",
-    description:
-      "Public origin advertised in the A2A (Agent2Agent) protocol Agent Card's " +
-      "service endpoint and the /.well-known/agent-card.json URL. Optional — the " +
-      "A2A routes derive the origin from the live request; this only overrides the " +
-      "default for out-of-band card reads (MCP/CLI). Falls back to the API origin.",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: {
-      development: "http://localhost:4000",
-      production: API_PROD_URL,
-    },
-  },
   APP_URL: {
     group: "Public URLs",
     description:
@@ -1531,17 +1469,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       production: "https://app.oxagen.sh",
     },
   },
-  OXAGEN_MODEL: {
-    group: "CLI",
-    description:
-      "Vercel AI Gateway model slug used by the CLI's local agent loop (e.g. " +
-      "anthropic/claude-sonnet-5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   DO_NOT_TRACK: {
     group: "CLI",
     description:
@@ -1566,60 +1493,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "0",
   },
-  OXAGEN_CLI_MOTION: {
-    group: "CLI",
-    description:
-      "Motion mode for the CLI TUI animations: full | reduced | off. Overrides the persisted " +
-      "`motion` config; unset falls back to config, then 'full'. (OXAGEN_CLI_FUN=0 is a legacy " +
-      "alias that maps to 'reduced'.)",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "full",
-  },
-  OXAGEN_CLI_FUN: {
-    group: "CLI",
-    description:
-      "When '0', disables whimsical CLI animations: the REPL status rail's cat-and-mouse " +
-      "chase, and `oxagen init`'s space-invaders/OXAGEN-reveal loading animation (which " +
-      "falls back to plain progress lines instead). Any other value (or unset) keeps them on.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_CLI_MOUSE: {
-    group: "CLI",
-    description:
-      "When '0', the full-screen REPL starts with mouse-wheel transcript scrolling disabled " +
-      "(terminal-native text selection stays available). Any other value (or unset) enables " +
-      "mouse capture on launch; the /mouse command toggles it at runtime either way.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_DEBUG: {
     group: "CLI",
     description:
       "When set, the CLI prints extra diagnostics (e.g. context-engine memory open failures) to stderr.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_ALLOW_NO_SESSION: {
-    group: "CLI",
-    description:
-      "Set to '1' to bypass the account-required gate (requireSession()) and return a " +
-      "synthetic benchmark session instead of exiting. Only for headless benchmark " +
-      "containers (bench/terminal-bench, bench/swe-bench) that run the agent path with " +
-      "no logged-in account — never set this outside a benchmark/CI sandbox.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1635,21 +1512,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "execute arbitrary commands on the API host — enable only for a trusted " +
       "local/CLI runtime, never on shared server deployments. HTTP MCP transports are " +
       "unaffected and always processed.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LOCAL: {
-    group: "CLI",
-    description:
-      "Set to '1' (or pass `--local`) to force local BYOK mode even when logged in: " +
-      "the CLI runs the coordinator + workers with your own key — AI_GATEWAY_API_KEY " +
-      "(gateway-direct, any vendor; preferred) or ANTHROPIC_API_KEY (Anthropic API " +
-      "direct, Anthropic models only) — instead of routing through your Oxagen " +
-      "account. When not logged in, BYOK is used automatically if either key is " +
-      "present, so this flag is only needed to override an existing login.",
     secret: false,
     clientExposed: false,
     services: [],

@@ -9,7 +9,6 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
-    "./tenant": "./src/tenant.ts",
     "./usage-events": "./src/usage-events.ts"
   },
   "scripts": {

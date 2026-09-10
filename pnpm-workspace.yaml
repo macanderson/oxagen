@@ -1,7 +1,6 @@
 packages:
   - "apps/*"
   - "packages/*"
-  - "plugins/*"
   - "tools/*"
 
 # pnpm 11 reads these settings from pnpm-workspace.yaml only — the

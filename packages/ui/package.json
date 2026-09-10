@@ -10,7 +10,6 @@
     ".": "./src/index.ts",
     "./styles/globals.css": "./src/styles/globals.css",
     "./styles/tokens.css": "./src/styles/tokens.css",
-    "./lib/utils": "./src/lib/utils.ts",
     "./lib/motion": "./src/lib/motion.ts",
     "./components/*": "./src/components/*.tsx"
   },

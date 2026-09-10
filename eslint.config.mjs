@@ -30,10 +30,7 @@ export default tseslint.config(
       // apps/web is the static oxagen.sh site: no build step, no tsconfig,
       // and its one script is browser vanilla JS. The project service has no
       // project to resolve it against, so linting it here is a parse error
-      // rather than a finding. apps/web2's src/ has its own tsconfig and
-      // lints via eslint-config-next like apps/docs, but its public/ carries
-      // the same kind of unconfigured vanilla JS (assets/oxagen.js, migrated
-      // from apps/web) that trips the same parse error in a root-context run.
+      // rather than a finding.
       "apps/web/**",
     ],
   },

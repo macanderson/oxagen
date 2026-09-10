@@ -40,10 +40,6 @@ vi.mock("@/lib/command-menu/use-recent", () => ({
   useRecent: () => ({ recent: [], push: vi.fn() }),
 }));
 
-vi.mock("./fill-action", () => ({
-  fillFormAction: vi.fn(),
-}));
-
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: vi.fn() }),
 }));
