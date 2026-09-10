@@ -62,7 +62,14 @@ import {
   schemaOnlyTools,
   toToolContracts,
 } from "./engine/tools";
+import pino from "pino";
 import type { ToolGovernance } from "./materialize-tools";
+import { assertToolListFitsProvider } from "./tool-budget";
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { pkg: "agent.governed-turn" },
+});
 
 /**
  * Default hard ceiling on model steps in one turn. A governance answer is a
@@ -339,6 +346,30 @@ export async function runGovernedTurn(
   );
   const model = input.model ?? defaultModel();
   const modelId = modelIdOf(model);
+
+  // What the tool list costs this turn, and whether the provider will take it
+  // (#2611). Both answers are wanted before the request goes out, not after:
+  // a provider that caps tools per request refuses the whole turn, and letting
+  // the gateway be the one to say so produces a provider-shaped error about a
+  // request nobody can inspect, on every turn, for every workspace pinned to
+  // that model. This throws a sentence naming the model, the limit and the
+  // count instead.
+  //
+  // The size is logged whether or not it is a problem, because it was not
+  // visible at all before: establishing that the list ran to 45,007 tokens —
+  // 92.4% of the cacheable prefix — took a manual measurement, and a number
+  // nobody can see is a number nobody manages. The list grows one tool at a
+  // time, and each one looks free.
+  const toolBudget = assertToolListFitsProvider(modelId, tools);
+  logger.info(
+    {
+      modelId,
+      toolCount: toolBudget.toolCount,
+      estimatedToolTokens: toolBudget.estimatedTokens,
+      largestTool: toolBudget.largestTool,
+    },
+    "governed turn tool budget",
+  );
   const fundedBy: TurnFunding = input.fundedBy ?? "platform";
   const tier: OxagenTier = input.tier ?? "balanced";
 
