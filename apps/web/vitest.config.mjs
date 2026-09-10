@@ -6,7 +6,7 @@ export default defineConfig({
     environment: "node",
     coverage: {
       provider: "v8",
-      include: ["scripts/lib/**/*.mjs"],
+      include: ["scripts/lib/**/*.mjs", "scripts/check-links.mjs"],
       exclude: ["scripts/**/*.test.mjs"],
       reporter: ["text", "json-summary"],
       // Ratchet: raise only when actual coverage leaves >= 2.5% headroom;
