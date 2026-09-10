@@ -4,11 +4,14 @@
 
 ## Mission
 
-Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on three things:
+Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. We sell to the enterprise team that runs the agents and answers for them — not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on four things:
 
-- **Contract governance:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
-- **Graph grounding:** a Neo4j graph + ontology grounding agent answers in cited, time-aware context.
-- **Metering → billing:** a ClickHouse→Stripe loop turning observed usage into customer billing.
+- **Teach:** a Neo4j graph + ontology that hands an agent the company's knowledge and rules when it starts a job, and takes back what the run learned.
+- **Govern:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
+- **Explain:** every run saved as one trace — who asked, what it read, what it changed, what proved it, what it cost.
+- **Learn:** proven runs leave behind skills, tools, tuned settings, and knowledge; later they train a model the customer owns.
+
+Revenue is the platform billed by use, fine-tuning runs at a flat fee, and hosting at cost. There is no margin line, so we do not build resale or re-bill machinery.
 
 Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint, not an add-on.
 

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. It is sold to the enterprise team that runs the agents and answers for them, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 

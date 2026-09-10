@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. It is sold to the enterprise team that runs the agents and answers for them. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
