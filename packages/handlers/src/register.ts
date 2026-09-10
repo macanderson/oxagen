@@ -241,6 +241,30 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .orgDataPlaneSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "set_model_credential",
+    async () =>
+      (await import("./org.model_credential.set"))
+        .orgModelCredentialSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_model_credential",
+    async () =>
+      (await import("./org.model_credential.get"))
+        .orgModelCredentialGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_model_credential",
+    async () =>
+      (await import("./org.model_credential.delete"))
+        .orgModelCredentialDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "verify_model_credential",
+    async () =>
+      (await import("./org.model_credential.verify"))
+        .orgModelCredentialVerifyHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_org_settings",
     async () =>
       (await import("./org.settings.read"))

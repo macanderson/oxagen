@@ -104,6 +104,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "api.key.", // API key lifecycle (create / revoke / rotate)
   "org.member.", // org membership + role mutations + invite lifecycle
   "org.settings.", // org-profile reads/writes
+  "org.model_credential.", // customer model-vendor key set / delete (get + verify are audit-exempt)
   "billing.", // billing mutations (checkout, plan/seat/subscription)
   "plugin.org.", // org-level plugin governance (install / uninstall / enable)
   "plugin.workspace.", // workspace-level plugin enable/disable

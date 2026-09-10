@@ -1,5 +1,5 @@
 {
-  "generatedCount": 224,
+  "generatedCount": 228,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -388,6 +388,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "delete_model_credential",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -809,6 +820,17 @@
     {
       "name": "get_message_execution",
       "domain": "chat",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_model_credential",
+      "domain": "org",
       "surfaces": [
         "api",
         "mcp"
@@ -2176,6 +2198,17 @@
       "consumes": []
     },
     {
+      "name": "set_model_credential",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_plugin_enabled",
       "domain": "plugin",
       "surfaces": [
@@ -2655,6 +2688,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "verify_model_credential",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

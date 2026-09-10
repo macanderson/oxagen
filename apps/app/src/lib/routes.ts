@@ -94,6 +94,10 @@ export const org = {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     privacy: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/privacy`,
+    // Who pays for the in-app assistant's tokens: the org's own model-vendor
+    // key, or Oxagen's key under a monthly cap (ADR-053 §2–3).
+    modelFunding: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/settings/model-funding`,
   },
 } as const;
 

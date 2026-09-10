@@ -14,6 +14,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 
 export interface MessageFooterActionCtx {
@@ -30,6 +31,9 @@ async function resolveScope(ctx: MessageFooterActionCtx) {
   const org = await resolveOrg(ctx.orgSlug);
   const ws = await resolveWorkspace(org.id, ctx.workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
+  // A server action is a direct POST — the workspace layout's membership check
+  // never runs, so assert it here.
+  await assertWorkspaceMember(ws.id, session.user.id);
   return {
     capabilityCtx: {
       orgId: org.id,

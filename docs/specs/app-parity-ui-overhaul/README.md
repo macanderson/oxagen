@@ -5,7 +5,7 @@
 
 ## The pain, in one line
 
-Oxagen's backend can build, govern, ground, meter, and resell agents. The web app cannot.
+Oxagen's backend can build, govern, ground and meter agents. The web app cannot.
 The CLI, MCP server, and API expose ~287 typed capabilities across 41 domains. The app
 exposes a fraction of them, and the ones it does expose are scattered across workspace
 settings, org settings, account settings, the knowledge page, the automations page, and
@@ -17,7 +17,7 @@ and the CLI."* Today the app breaks that promise. This spec fixes it.
 
 ## What this spec delivers
 
-1. **A proposal** grounded in the vision wedge (govern, ground, meter, resell) — see
+1. **A proposal** grounded in the vision wedge (govern, ground, meter) — see
    [`01-proposal.md`](./01-proposal.md).
 2. **A new information architecture** that drives both the navigation and the vocabulary
    we use in product and marketing — see [`02-information-architecture.md`](./02-information-architecture.md).

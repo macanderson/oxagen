@@ -2,17 +2,24 @@
 //
 // Flow:
 //   1. Auth guard — require authenticated principal + orgId.
-//   2. assertSeatAvailable — throws SeatLimitError when org is at capacity.
-//   3. Insert a pending invitation (idempotent: the partial unique index on
+//   2. Role guard — the caller must be an Owner or Admin of ctx.orgId.
+//   3. assertSeatAvailable — throws SeatLimitError when org is at capacity.
+//   4. Insert a pending invitation (idempotent: the partial unique index on
 //      (orgId, email) WHERE status='pending' prevents duplicate active invites).
-//   4. Return the invitation shape expected by the contract.
+//   5. Return the invitation shape expected by the contract.
 //
 // A pending invitation occupies a seat. The seat is released when the user
 // declines (or when an admin revokes) the invitation.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberAdd } from "@oxagen/oxagen/contracts/org.member.add";
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  schema,
+  withTenantDb,
+  withSystemDb,
+  isUniqueViolation,
+} from "@oxagen/database";
+import { and, eq } from "drizzle-orm";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
 import { logger, maskEmail } from "./logger";
@@ -37,6 +44,42 @@ export const orgMemberAddHandler: CapabilityHandler<
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
+
+  // ── Role guard ───────────────────────────────────────────────────────────────
+  // The contract's defaultRoles restrict this to org Owner and Admin, and the
+  // kernel's IAM gate is where that is meant to be enforced. It is not enough on
+  // its own: the gate consults no policy for an org below the tier that unlocks
+  // ACLs, so on every other tier this capability was reachable by any member.
+  // `role` is a free string on the wire, so a member could invite an accomplice
+  // — or their own second address — as "owner" and take the org.
+  //
+  // Re-read the caller's membership here, the way privacy.data.export does.
+  // Defence in depth: this holds whatever the tier gate decides.
+  //
+  // Lowercased because org_users.role is written in both casings — see
+  // privacy.data.erase for the same normalisation and the reason.
+  if (ctx.userId) {
+    const membership = await withSystemDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, ctx.orgId!),
+            eq(schema.orgUsers.userId, ctx.userId!),
+          ),
+        )
+        .limit(1),
+    );
+    const role = membership[0]?.role?.toLowerCase();
+    if (role !== "owner" && role !== "admin") {
+      logger.warn(
+        { orgId: ctx.orgId, actorId, role: role ?? null },
+        "org.member.add: rejected — caller is not an org Owner or Admin",
+      );
+      throw new Error("Forbidden: inviting a member requires Owner or Admin");
+    }
+  }
 
   // ── Seat enforcement ─────────────────────────────────────────────────────────
   try {

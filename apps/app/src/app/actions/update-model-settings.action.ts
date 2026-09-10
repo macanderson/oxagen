@@ -8,10 +8,11 @@
 // surface allow-list, the same trick the in-app schema proxy uses.
 //
 // KNOWN GAP: the contract's defaultRoles restrict this write to org/workspace
-// Owner and Admin, but apps/app does not bootstrap kernel IAM, and the only
-// gate here is assertOrgMember — so any org member passes. It needs the same
-// explicit owner/admin role read that new-workspace/actions.ts does before it
-// is wired to a UI. Nothing invokes it today outside its own unit test.
+// Owner and Admin. Membership of the workspace is now asserted below, so a
+// member of another workspace can no longer reach it, but the owner/admin
+// narrowing is still missing — it needs the same explicit role read that
+// new-workspace/actions.ts does before it is wired to a UI. Nothing invokes it
+// today outside its own unit test.
 
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
@@ -21,6 +22,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 
 export interface UpdateModelSettingsInput {
@@ -61,6 +63,9 @@ export async function updateModelSettingsAction(
     const org = await resolveOrg(input.orgSlug);
     const ws = await resolveWorkspace(org.id, input.workspaceSlug);
     await assertOrgMember(org.id, session.user.id);
+    // A server action is a direct POST — the workspace layout's membership
+    // check never runs, so assert it here.
+    await assertWorkspaceMember(ws.id, session.user.id);
     orgId = org.id;
     workspaceId = ws.id;
   } catch {

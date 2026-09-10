@@ -15,6 +15,7 @@ const {
   mockResolveOrg,
   mockResolveWorkspace,
   mockAssertOrgMember,
+  mockAssertWorkspaceMember,
   mockGetOrgRole,
   mockLoggerError,
   workspaceRoleRows,
@@ -24,6 +25,7 @@ const {
   mockResolveOrg: vi.fn(),
   mockResolveWorkspace: vi.fn(),
   mockAssertOrgMember: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
   mockGetOrgRole: vi.fn(),
   mockLoggerError: vi.fn(),
   workspaceRoleRows: { rows: [{ role: "owner" }] as Array<{ role: string }> },
@@ -35,6 +37,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
+  assertWorkspaceMember: mockAssertWorkspaceMember,
   getOrgRole: mockGetOrgRole,
 }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -87,6 +90,7 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue(ORG);
   mockResolveWorkspace.mockResolvedValue(WS);
   mockAssertOrgMember.mockResolvedValue(undefined);
+  mockAssertWorkspaceMember.mockResolvedValue(undefined);
   // Not an org owner/admin by default — forces the workspace-role fallback
   // path in assertCapabilityAccess so tests exercise both branches.
   mockGetOrgRole.mockResolvedValue("member");

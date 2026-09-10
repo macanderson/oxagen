@@ -34,6 +34,9 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 
 const mockInsert = vi.fn();
+// The caller's org membership, read by the Owner/Admin guard. Owner by default;
+// a test that wants a non-privileged caller overwrites it.
+const mockMembershipRows = vi.fn(() => [{ role: "owner" }]);
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -44,6 +47,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     }),
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({ insert: mockInsert }),
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => mockMembershipRows() }),
+          }),
+        }),
+      }),
   };
 });
 
@@ -163,5 +174,56 @@ describe("orgMemberAddHandler", () => {
     );
 
     expect(result.expiresAt).toBeNull();
+  });
+  // ── Role guard ─────────────────────────────────────────────────────────────
+  //
+  // `role` is a free string on the wire and the kernel's IAM gate consults no
+  // policy for an org below the tier that unlocks ACLs, so without this guard
+  // any member could invite an accomplice — or a second address of their own —
+  // as "owner" and take the org.
+
+  it("refuses a caller who is not an org Owner or Admin", async () => {
+    mockAssertSeatAvailable.mockResolvedValue(undefined);
+    mockMembershipRows.mockReturnValueOnce([{ role: "member" }]);
+
+    await expect(
+      orgMemberAddHandler(
+        { email: "accomplice@example.com", role: "owner" },
+        makeCtx(),
+      ),
+    ).rejects.toThrow("Forbidden: inviting a member requires Owner or Admin");
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a caller with no membership row at all", async () => {
+    mockAssertSeatAvailable.mockResolvedValue(undefined);
+    mockMembershipRows.mockReturnValueOnce([]);
+
+    await expect(
+      orgMemberAddHandler(
+        { email: "accomplice@example.com", role: "owner" },
+        makeCtx(),
+      ),
+    ).rejects.toThrow("Forbidden: inviting a member requires Owner or Admin");
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("accepts a TitleCase membership role — the column carries both casings", async () => {
+    mockAssertSeatAvailable.mockResolvedValue(undefined);
+    mockMembershipRows.mockReturnValueOnce([{ role: "Admin" }]);
+    mockInsert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        returning: vi
+          .fn()
+          .mockResolvedValue([{ publicId: "inv_TEST03", expiresAt: null }]),
+      }),
+    });
+
+    const result = await orgMemberAddHandler(
+      { email: "bob@example.com", role: "Member" },
+      makeCtx(),
+    );
+
+    expect(result.status).toBe("pending");
   });
 });

@@ -54,7 +54,7 @@ folders; structural but not deep logic).
 > / DEVELOP (org). Create empty `page.tsx` route stubs (with a 'coming soon' placeholder and
 > the right layout/tabs) for every NEW route in Part C: `/runs`, `/fleets`, `/approvals`,
 > `/studio/{agents,skills,prompts,commands,tools}`, `/marketplace`, `/knowledge/connections`,
-> `/access/roles`, `/billing/reseller`. Add redirects: `/activity`→`/runs`,
+> `/access/roles`. Add redirects: `/activity`→`/runs`,
 > `/settings/skills`→`/studio/skills`, `/settings/prompts`→`/studio/prompts`,
 > `/settings/plugins`→`/marketplace`, `/knowledge/repos`→`/knowledge/connections`. Wire the
 > Approvals badge count. Add the top-right live-spend chip. Keep `@oxagen/ui`/coss-ui and the
@@ -260,24 +260,6 @@ add install-detail with contracts/tier/scopes).
 > create a role, set a deny grant, assert enforcement. `test-completeness-judge` before PR.
 > Narrow tests."
 
-### WP-5.3 — Billing → Reseller (meter-to-revenue)  ★ most on-vision
-**Model: Opus** (billing + Stripe + ClickHouse metering; the core wedge, multi-system,
-money-touching).
-
-> Ready-to-go prompt:
-> "Branch `feat/billing-reseller`. Build `/billing/reseller` per wireframe §14: let a
-> customer turn observed agent usage into bills for THEIR customers. Read metered usage from
-> the ClickHouse usage events, let them define reseller meters (markup on tokens, per-run
-> price, per-tool price), map those to Stripe prices, preview an invoice, and sync
-> (`pnpm billing:stripe-sync` path). This is the meter-to-revenue wedge from `docs/VISION.md`
-> — revenue infrastructure, not a spend dashboard. Money-touching and multi-system: reuse the
-> existing `billing.*` + `budget.*` contracts and the Stripe/ClickHouse seams; add new
-> contracts only if genuinely missing, fully typed + IAM + metered. Guard with
-> `assertBillingManager`. Verify against a prod-equivalent Stripe test env (webhook secret
-> via full `pnpm dev`, not isolated api restart). Declare `appRoute`. E2E with a Stripe test
-> customer. `test-completeness-judge` before PR. Narrow tests."
-
----
 
 ## Model-selection summary
 
@@ -298,7 +280,6 @@ money-touching).
 | 4 | Fleets | Sonnet | New page + lineage tree |
 | 5 | Marketplace | Sonnet | Move + MCP merge |
 | 5 | Access roles matrix | **Opus** | Security-critical RBAC, no fail-open |
-| 5 | **Reseller billing ★** | **Opus** | Money + Stripe + ClickHouse, the wedge |
 
 Default to Haiku for any follow-up single-file polish. Escalate to Sonnet the moment a
 package boundary is crossed or non-trivial new logic appears. Reserve Opus for the three

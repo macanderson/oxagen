@@ -15,6 +15,7 @@
  *   5. invoke throws → {ok:false} with message
  *   6. renameConversationAction — empty title → safeParse fails → {ok:false}
  *   7. listConversationsAction — valid filter → invoke called, results mapped
+ *   8. workspace membership is asserted, not just org membership
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -32,6 +33,7 @@ vi.mock("@/lib/resolve-org", () => ({
   getOrgRole: vi.fn().mockResolvedValue("owner"),
   resolveWorkspace: vi.fn(),
   assertOrgMember: vi.fn(),
+  assertWorkspaceMember: vi.fn(),
 }));
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -63,6 +65,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { revalidatePath } from "next/cache";
@@ -94,6 +97,7 @@ function setupHappyPath() {
   vi.mocked(resolveOrg).mockResolvedValue(mockOrg as never);
   vi.mocked(resolveWorkspace).mockResolvedValue(mockWs as never);
   vi.mocked(assertOrgMember).mockResolvedValue(undefined);
+  vi.mocked(assertWorkspaceMember).mockResolvedValue(undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +220,33 @@ describe("resolveOrg throws → {ok:false}", () => {
     vi.mocked(resolveOrg).mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     const result = await purgeArchivedConversationsAction(ctx);
     expect(result.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Workspace membership, not just org membership
+//
+// A Server Action is a direct POST. The workspace layout — which is where
+// assertWorkspaceMember is otherwise called — never runs for one, so org
+// membership alone used to be the whole gate: a member of workspace A could
+// pass workspaceSlug: "B" and reach B's conversations inside a tenant scope
+// opened for B, which RLS then happily satisfied because the scope was forged
+// rather than checked.
+// ---------------------------------------------------------------------------
+
+describe("workspace membership gate", () => {
+  it("asserts membership of the workspace named in the ctx, not just the org", async () => {
+    await deleteConversationsAction(ctx, ["id-1"]);
+    expect(assertWorkspaceMember).toHaveBeenCalledWith("ws-1", "user-1");
+  });
+
+  it("refuses and never invokes when the caller is not in that workspace", async () => {
+    vi.mocked(assertWorkspaceMember).mockRejectedValueOnce(
+      new Error("NEXT_NOT_FOUND"),
+    );
+    const result = await deleteConversationsAction(ctx, ["id-1"]);
+    expect(result.ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 

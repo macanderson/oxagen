@@ -20,7 +20,7 @@
 --
 -- The five `billing.reseller_*` values are removed from the security_events
 -- event_type CHECK by the migration beside this one
--- (20260909130000_event_type_check_drops_reseller.sql), which carries the
+-- (20260909210000_event_type_check_drops_reseller.sql), which carries the
 -- reasoning for why that one is NOT VALID.
 --
 -- Idempotent: IF EXISTS on every drop.

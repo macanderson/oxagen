@@ -176,6 +176,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // runs before a tenant scope exists, and the row is platform state that must
   // stay on the shared plane), so the policy is the backstop, not the filter.
   { table: "org.data_planes", policyClass: "org_only" },
+  // ADR-053: the organisation's model-vendor key. Org-only, read through
+  // withTenantDb — nothing resolves through it, so RLS is the filter here.
+  { table: "org.model_credentials", policyClass: "org_only" },
 
   // ── plugin.* (workspace-scoped) ────────────────────────────────────────────
   { table: "plugin.installed_plugins", policyClass: "standard" },

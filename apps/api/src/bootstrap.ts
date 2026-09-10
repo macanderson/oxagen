@@ -17,6 +17,11 @@ import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { isEmailVerificationRequired } from "@oxagen/auth";
 import { isEmailTransportConfigured } from "@oxagen/notifications";
+// Imported from the subpath, not the package root: the root barrel pulls in
+// `functions.ts`, which builds every Inngest function at module scope and so
+// needs INNGEST_* present the moment it is imported. This module is pure and
+// imports nothing.
+import { inngestEnvironmentComplaint } from "@oxagen/inngest-functions/env-check";
 import { logger } from "./middleware/logger";
 
 let bootPromise: Promise<void> | null = null;
@@ -82,6 +87,25 @@ async function runBootstrap(): Promise<void> {
         "every credential sign-up will silently fail to deliver the verification email. " +
         "Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.",
     );
+  }
+
+  // Production ran for two weeks against a developer's Inngest environment:
+  // INNGEST_SIGNING_KEY in SSM was the same `signkey-test-…` value as a
+  // laptop's .env.local while INNGEST_EVENT_KEY belonged to a different
+  // environment, so every send() returned an event id, every surface reported
+  // a successful sync, and no function ever ran. Nothing anywhere said so.
+  //
+  // Logged rather than thrown, and deliberately not reported through /health:
+  // a 503 here fails the deploy script's own health gate and rolls the service
+  // back, which would turn a silent ingestion outage into a total one. The
+  // blocking gate is `pnpm inngest:verify`, which the deploy runs before the
+  // service is considered shipped.
+  const inngestComplaint = inngestEnvironmentComplaint({
+    nodeEnv: process.env.NODE_ENV ?? "",
+    signingKey: process.env.INNGEST_SIGNING_KEY ?? "",
+  });
+  if (inngestComplaint) {
+    logger.error({ check: "inngest_environment" }, inngestComplaint);
   }
 
   // Refuse to boot if a production runtime disabled RLS enforcement, or if the

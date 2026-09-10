@@ -1776,6 +1776,62 @@
       }
     },
     {
+      "name": "delete_model_credential",
+      "file": "org.model_credential.delete.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_model_credential",
+      "file": "org.model_credential.get.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_model_credential",
+      "file": "org.model_credential.set.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "verify_model_credential",
+      "file": "org.model_credential.verify.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_org_settings",
       "file": "org.settings.read.ts",
       "domain": "org",

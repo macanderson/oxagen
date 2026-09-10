@@ -13,6 +13,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 
 // Chat/agent attachment upload runs on the default Node.js runtime (the storage
@@ -152,6 +153,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       resolveWorkspace(tenant.id, workspaceSlug),
     ]);
     workspace = resolvedWorkspace;
+    // Org membership does not imply membership of THIS workspace, and a route
+    // handler never runs the workspace layout. Sequenced after the Promise.all
+    // because it needs the resolved workspace id; a non-member falls into the
+    // same generic 404 as an unknown workspace.
+    await assertWorkspaceMember(workspace.id, session.user.id);
   } catch {
     return NextResponse.json(
       { error: "Org or workspace not found" },

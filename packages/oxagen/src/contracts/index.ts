@@ -182,6 +182,10 @@ import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { orgDataPlaneGet } from "./org.data_plane.get";
 import { orgDataPlaneSet } from "./org.data_plane.set";
+import { orgModelCredentialDelete } from "./org.model_credential.delete";
+import { orgModelCredentialGet } from "./org.model_credential.get";
+import { orgModelCredentialSet } from "./org.model_credential.set";
+import { orgModelCredentialVerify } from "./org.model_credential.verify";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -347,6 +351,22 @@ export type {
   Neo4jPlaneConfigInput,
   ClickHousePlaneConfigInput,
 } from "./org.data_plane.shared";
+
+// Shared model-credential wire schemas (ADR-053, not capabilities themselves) —
+// re-exported so the settings page, the API route and the MCP tools import one
+// canonical shape, and so the contracts guard sees this sibling module referenced.
+export {
+  modelCredentialProviderSchema,
+  modelCredentialStatusSchema,
+  modelCredentialApiKeySchema,
+  modelCredentialViewSchema,
+  modelCredentialVerificationSchema,
+} from "./org.model_credential.shared";
+export type {
+  ModelCredentialProvider,
+  ModelCredentialView,
+  ModelCredentialVerification,
+} from "./org.model_credential.shared";
 
 export {
   apiKeyCreate,
@@ -520,6 +540,10 @@ export {
   connectionUpdate,
   orgDataPlaneGet,
   orgDataPlaneSet,
+  orgModelCredentialDelete,
+  orgModelCredentialGet,
+  orgModelCredentialSet,
+  orgModelCredentialVerify,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -757,6 +781,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   connectionUpdate,
   orgDataPlaneGet,
   orgDataPlaneSet,
+  orgModelCredentialDelete,
+  orgModelCredentialGet,
+  orgModelCredentialSet,
+  orgModelCredentialVerify,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

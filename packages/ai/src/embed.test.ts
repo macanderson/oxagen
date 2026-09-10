@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   embedMany: vi.fn(),
   embeddingModel: vi.fn(),
+  // A customer's own GATEWAY key builds its own client (ADR-053 §2); its
+  // embeddingModel is a separate spy so a test can tell whose key answered.
+  createGateway: vi.fn(),
+  orgEmbeddingModel: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerCostUsdMicros: vi.fn(),
@@ -30,6 +34,13 @@ mocks.embedMany.mockImplementation(
 mocks.embeddingModel.mockReturnValue({
   modelId: "openai/text-embedding-3-small",
 });
+mocks.orgEmbeddingModel.mockReturnValue({
+  modelId: "openai/text-embedding-3-small",
+  client: "org-gateway",
+});
+mocks.createGateway.mockReturnValue({
+  embeddingModel: mocks.orgEmbeddingModel,
+});
 // Telemetry stubs.
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
@@ -46,6 +57,7 @@ mocks.chargeUsageCredits.mockResolvedValue({
 vi.mock("ai", () => ({ embed: mocks.embed, embedMany: mocks.embedMany }));
 vi.mock("@ai-sdk/gateway", () => ({
   gateway: { embeddingModel: mocks.embeddingModel },
+  createGateway: mocks.createGateway,
 }));
 // Stub pino so the usage-absent warning is observable.
 vi.mock("pino", () => ({
@@ -292,6 +304,92 @@ describe("embedText (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
       expect.objectContaining({ inputTokens: 0 }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-053: whose key serves an embedding decides whether it is billed
+// ---------------------------------------------------------------------------
+
+describe("embedText under an organisation credential (ADR-053)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.embed.mockImplementation(async () => ({
+      embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
+      usage: { tokens: 7 },
+    }));
+    mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
+    mocks.providerCostUsdMicros.mockReturnValue(42);
+    mocks.chargeUsageCredits.mockResolvedValue({
+      costUsdMicros: 42,
+      creditsMetered: 1n,
+      creditsCharged: 1n,
+      shortfallCredits: 0n,
+      rateCardMiss: false,
+    });
+  });
+
+  const GATEWAY_CREDENTIAL = {
+    provider: "gateway" as const,
+    apiKey: "vck_customer",
+    digest: "sha256:gw",
+  };
+  const OPENROUTER_CREDENTIAL = {
+    provider: "openrouter" as const,
+    apiKey: "sk-or-v1-customer",
+    digest: "sha256:or",
+  };
+
+  it("a gateway credential serves the embedding on the organisation's key and charges nothing", async () => {
+    const v = await embedText("theirs", {
+      telemetry: BASE_TELEMETRY,
+      credential: GATEWAY_CREDENTIAL,
+    });
+    expect(v).toHaveLength(1536);
+    expect(mocks.createGateway).toHaveBeenCalledWith({
+      apiKey: "vck_customer",
+    });
+    expect(mocks.orgEmbeddingModel).toHaveBeenCalledWith(
+      "openai/text-embedding-3-small",
+    );
+    expect(mocks.embeddingModel).not.toHaveBeenCalled();
+    const embedArg = mocks.embed.mock.calls[0]?.[0] as {
+      model: { client?: string };
+    };
+    expect(embedArg.model.client).toBe("org-gateway");
+    // Reported in full, billed at zero.
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+  });
+
+  it("an OpenRouter credential cannot serve embeddings: the platform gateway answers and the call is billed", async () => {
+    await embedText("no embeddings there", {
+      telemetry: BASE_TELEMETRY,
+      credential: OPENROUTER_CREDENTIAL,
+    });
+    expect(mocks.createGateway).not.toHaveBeenCalled();
+    expect(mocks.embeddingModel).toHaveBeenCalledWith(
+      "openai/text-embedding-3-small",
+    );
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+  });
+
+  it("no credential: the platform gateway answers and the call is billed", async () => {
+    await embedText("platform", { telemetry: BASE_TELEMETRY });
+    expect(mocks.createGateway).not.toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+  });
+
+  it("embedMany on a gateway credential is one telemetry row and no charge", async () => {
+    const { embedMany } = await import("./embed");
+    await embedMany(["a", "b"], {
+      telemetry: BASE_TELEMETRY,
+      credential: GATEWAY_CREDENTIAL,
+    });
+    expect(mocks.embedMany).toHaveBeenCalledTimes(1);
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
   });
 });
 

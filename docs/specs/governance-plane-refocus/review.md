@@ -167,7 +167,7 @@ middleware) maintained as examples, not products.
 
 **(e) One real tension with VISION.md.** The vision says "teams that build and
 resell AI agents"; this repositioning sells to *enterprises adopting anyone's
-agents*. These are compatible — the reseller metering loop becomes
+agents*, and the reseller half was retired outright in #2811. The metering loop becomes
 chargeback/showback + insurance-grade cost attribution for enterprises — but
 the vision doc should be amended so the Vision Gate doesn't judge the wrapper
 work as drift. The accountability-chain language in VISION.md already *is*
@@ -194,7 +194,7 @@ removed, or the meter goes dark.
 | Run identity / attempts / event log / finalization (rename: this is the evidence store, not a "runner") | `packages/agent-runner` minus `execute-turn.ts` |
 | CGP conformance + canonical digests | `packages/run-evidence` (promote from orphan to spine) |
 | SOC2 taxonomy + drift-proof audit | `packages/compliance`, `packages/telemetry` |
-| Metering→Stripe, budgets, reseller rebill | `packages/billing` |
+| Metering→Stripe, budgets | `packages/billing` |
 | Entitlements, credentials/KMS, secrets | `packages/plugins`, `secret.*` |
 | Tool-wrapping governance runtime (IAM → entitlement → RBAC → consent → approval → telemetry per tool call) — this *is* the wrapper, currently welded to the in-process ToolSet | `packages/agent/src/runtime/` (~4k LOC: `materialize-tools.ts`, `approval.ts`, `consent.ts`, mcp-rbac) |
 | Knowledge graph, ontology, ingestion, memory-policy/citation/evidence contracts | `packages/ontology`, `packages/ingestion`, `packages/engram` (policy/citation half) |

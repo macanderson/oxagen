@@ -103,6 +103,15 @@ export const SECURITY_EVENT_TYPES = [
   // SOC2 CC6.1/CC6.8 auditor asks for by name, and it is emitted by the
   // set_data_plane handler (packages/handlers/src/org.data_plane.set.ts).
   "data_plane.updated",
+  // Organisation model credentials (ADR-053). Storing or removing the
+  // organisation's own model-vendor key decides whose invoice every assistant
+  // completion lands on, which is a privileged credential change (SOC2 CC6.1)
+  // exactly like plugin.credential_set above. Emitted by the
+  // set_model_credential and delete_model_credential handlers
+  // (packages/handlers/src/org.model_credential.{set,delete}.ts). Verifying a
+  // key writes nothing and is not audited.
+  "model_credential.set",
+  "model_credential.revoked",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by

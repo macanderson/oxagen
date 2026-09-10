@@ -1,4 +1,5 @@
 import pino from "pino";
+import type { TurnFunding } from "./funding-source";
 import { withOutputBudgetRetry } from "./output-budget";
 import { generateObject, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
@@ -8,7 +9,11 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import {
+  chargeUsageCredits,
+  providerCostUsdMicros,
+  type CreditReason,
+} from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { defaultModel, modelIdOf } from "./models";
 import {
@@ -71,6 +76,15 @@ export interface GenerateObjectArgs<T> {
    * schema validation — louder than a silently short answer, but a failure.
    */
   maxOutputTokens?: number;
+  /**
+   * Who paid the vendor for this call (ADR-053 §3). `platform` (the default)
+   * charges the organisation's credits; `org` reports the usage and charges
+   * nothing, because the organisation's own key paid. Must match the
+   * funding source the `model` was selected with.
+   */
+  fundedBy?: TurnFunding;
+  /** Ledger reason for a platform-funded charge; callers keep the default. */
+  chargeReason?: CreditReason;
   /**
    * Optional abort signal forwarded to the AI SDK so a caller can bound the
    * wall-clock of a single generation. A hung gateway call otherwise never
@@ -344,18 +358,24 @@ export async function generateObjectFor<T>(
     orgId: args.telemetry.orgId,
     workspaceId: args.telemetry.workspaceId,
   };
-  try {
-    await runInTenantScope(capturedScope, async () => {
-      await chargeUsageCredits({
-        orgId: args.telemetry.orgId,
-        // null → undefined → NULL reference_id; never a non-UUID string.
-        referenceId: args.telemetry.messageId ?? undefined,
-        ...usage,
+  //
+  // ADR-053 §3: only when the platform key paid. A call the organisation's own
+  // key answered is reported above and charged nothing here.
+  if ((args.fundedBy ?? "platform") === "platform") {
+    try {
+      await runInTenantScope(capturedScope, async () => {
+        await chargeUsageCredits({
+          orgId: args.telemetry.orgId,
+          // null → undefined → NULL reference_id; never a non-UUID string.
+          referenceId: args.telemetry.messageId ?? undefined,
+          ...(args.chargeReason ? { reason: args.chargeReason } : {}),
+          ...usage,
+        });
       });
-    });
-  } catch (err) {
-    // Swallow — credit metering must never fail a capability call.
-    logger.error({ err }, "generateObject credit charge failed");
+    } catch (err) {
+      // Swallow — credit metering must never fail a capability call.
+      logger.error({ err }, "generateObject credit charge failed");
+    }
   }
 
   return {

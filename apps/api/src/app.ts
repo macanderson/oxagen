@@ -85,6 +85,7 @@ import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model_se
 import { promptSettingsReadRoute } from "./routes/v1/prompt.settings.read";
 import { promptSettingsWriteRoute } from "./routes/v1/prompt.settings.write";
 import { orgDataPlaneRoute } from "./routes/v1/org.data_plane";
+import { orgModelCredentialRoute } from "./routes/v1/org.model_credential";
 import { orgSettingsReadRoute } from "./routes/v1/org.settings.read";
 import { orgSettingsWriteRoute } from "./routes/v1/org.settings.write";
 import { workspaceSettingsReadRoute } from "./routes/v1/workspace.settings.read";
@@ -534,6 +535,7 @@ orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsWriteRoute);
 orgScoped.route("/org/settings", orgSettingsReadRoute);
 orgScoped.route("/org/data-plane", orgDataPlaneRoute);
+orgScoped.route("/org/model-credential", orgModelCredentialRoute);
 orgScoped.route("/org/settings", orgSettingsWriteRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsReadRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsWriteRoute);

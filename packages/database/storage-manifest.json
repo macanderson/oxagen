@@ -360,6 +360,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "delete_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "delete_schema",
       "reads": [],
@@ -740,6 +750,16 @@
     {
       "domain": "chat",
       "name": "get_message_execution",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "get_model_credential",
       "reads": [],
       "surfaces": [
         "api",
@@ -1980,6 +2000,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "set_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "set_plugin_enabled",
       "reads": [],
@@ -2425,6 +2455,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "verify_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "write_memory",
       "reads": [],
@@ -2436,7 +2476,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e3d4d5b85ac2982bc211d7f93cb4cdf6440301e7c63fd02a4185da3dd88a84a1",
+  "contentHash": "f31988ca0d459deede0214acf7fa1f250dd24dc8da237a1b5b5d86b9d27ca28c",
   "domains": [
     {
       "name": "agent",
@@ -2677,6 +2717,7 @@
         "neo4j:Tenant",
         "postgres:org.data_planes",
         "postgres:org.invitations",
+        "postgres:org.model_credentials",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
         "postgres:org.organizations"
@@ -2817,7 +2858,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 109
+      "tableCount": 110
     },
     {
       "domains": [
@@ -8195,6 +8236,12 @@
           "type": "bigint"
         },
         {
+          "name": "assistant_spend_cap_cents",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
           "name": "dunning_state",
           "nullable": false,
           "primaryKey": false,
@@ -12592,6 +12639,119 @@
       "domain": "org",
       "id": "postgres:org.invitations",
       "name": "invitations",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_ciphertext",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "key_key_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_hint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_verified_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "rotated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.model_credentials",
+      "name": "model_credentials",
       "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true

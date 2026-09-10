@@ -43,6 +43,7 @@
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
     "check:brand": "node tools/scripts/sync-brand-assets.mjs --check",
     "check:manifest": "node tools/scripts/check_manifest.mjs",
+    "inngest:verify": "tsx --env-file-if-exists=.env.local tools/scripts/inngest-verify.ts",
     "check:ui-parity": "node tools/scripts/check_ui_parity.mjs",
     "check:mobile-parity": "node tools/scripts/check_mobile_parity.mjs",
     "check:vision": "node --env-file-if-exists=.env.local tools/scripts/vision-gate.mjs",

@@ -16,7 +16,7 @@
  *  9. getOrgBillingSettings — throws when DB returns no row after insert
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterAll, describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // DB mock
@@ -30,6 +30,9 @@ const insertMock = vi.fn().mockReturnValue({ values: insertValuesMock });
 
 const updateSetMock = vi.fn();
 const updateWhereMock = vi.fn().mockResolvedValue(undefined);
+// `.where().returning()` — used by updateAssistantSpendCap, which reads the
+// updated row back from the same statement rather than re-selecting it.
+const updateReturningMock = vi.fn();
 updateSetMock.mockReturnValue({ where: updateWhereMock });
 const updateMock = vi.fn().mockReturnValue({ set: updateSetMock });
 
@@ -61,9 +64,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // Import after mocks.
-const { getOrgBillingSettings, updateAutoReloadSettings } = await import(
-  "./billing-settings"
-);
+const {
+  DEFAULT_ASSISTANT_SPEND_CAP_CENTS,
+  getOrgBillingSettings,
+  updateAssistantSpendCap,
+  updateAutoReloadSettings,
+} = await import("./billing-settings");
 const { withTenantDb, withSystemDb } = await import("@oxagen/database");
 
 // ---------------------------------------------------------------------------
@@ -78,6 +84,7 @@ function makeSettingsRow(overrides: Record<string, unknown> = {}) {
     autoReloadAmountCents: BigInt(2000),
     autoReloadPaymentMethodId: null,
     lowBalanceThresholdCents: BigInt(500),
+    assistantSpendCapCents: BigInt(2000),
     dunningState: "active",
     delinquentSince: null,
     graceEndsAt: null,
@@ -165,6 +172,116 @@ describe("getOrgBillingSettings", () => {
     findFirstMock.mockResolvedValue(undefined);
 
     await expect(getOrgBillingSettings("org-ghost")).rejects.toThrow(
+      "org-ghost",
+    );
+  });
+
+  // ── ADR-053 §3: the assistant spend cap ────────────────────────────────────
+
+  it("seeds a new row with the default assistant spend cap", async () => {
+    findFirstMock.mockResolvedValue(makeSettingsRow());
+    await getOrgBillingSettings("org-001");
+    const values = insertValuesMock.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(values.assistantSpendCapCents).toBe(
+      BigInt(DEFAULT_ASSISTANT_SPEND_CAP_CENTS),
+    );
+    expect(DEFAULT_ASSISTANT_SPEND_CAP_CENTS).toBe(2_000);
+  });
+
+  it("maps a numeric assistantSpendCapCents from bigint", async () => {
+    findFirstMock.mockResolvedValue(
+      makeSettingsRow({ assistantSpendCapCents: BigInt(7500) }),
+    );
+    const result = await getOrgBillingSettings("org-001");
+    expect(result.assistantSpendCapCents).toBe(7500);
+  });
+
+  it("maps a NULL assistantSpendCapCents to null (no cap), never to 0 or NaN", async () => {
+    findFirstMock.mockResolvedValue(
+      makeSettingsRow({ assistantSpendCapCents: null }),
+    );
+    const result = await getOrgBillingSettings("org-001");
+    expect(result.assistantSpendCapCents).toBeNull();
+  });
+});
+
+describe("updateAssistantSpendCap", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertOnConflictDoNothingMock.mockResolvedValue(undefined);
+    findFirstMock.mockResolvedValue(makeSettingsRow());
+    updateWhereMock.mockReturnValue({ returning: updateReturningMock });
+    updateReturningMock.mockResolvedValue([makeSettingsRow()]);
+  });
+
+  afterAll(() => {
+    updateWhereMock.mockResolvedValue(undefined);
+  });
+
+  it("rejects a negative cap before any DB write", async () => {
+    await expect(updateAssistantSpendCap("org-001", -1)).rejects.toThrow(
+      "assistantSpendCapCents must be a non-negative integer or null",
+    );
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-integer cap before any DB write", async () => {
+    await expect(updateAssistantSpendCap("org-001", 12.5)).rejects.toThrow(
+      "non-negative integer",
+    );
+    await expect(
+      updateAssistantSpendCap("org-001", Number.NaN),
+    ).rejects.toThrow("non-negative integer");
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("writes a numeric cap as BigInt and returns the mapped row", async () => {
+    updateReturningMock.mockResolvedValue([
+      makeSettingsRow({ assistantSpendCapCents: BigInt(5000) }),
+    ]);
+    const result = await updateAssistantSpendCap("org-001", 5000);
+    expect(updateMock).toHaveBeenCalledOnce();
+    const setArg = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(setArg.assistantSpendCapCents).toBe(BigInt(5000));
+    expect(setArg.updatedAt).toBeInstanceOf(Date);
+    expect(result.assistantSpendCapCents).toBe(5000);
+  });
+
+  it("accepts zero — the opt-out for an organisation with no key of its own", async () => {
+    updateReturningMock.mockResolvedValue([
+      makeSettingsRow({ assistantSpendCapCents: BigInt(0) }),
+    ]);
+    const result = await updateAssistantSpendCap("org-001", 0);
+    const setArg = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(setArg.assistantSpendCapCents).toBe(BigInt(0));
+    expect(result.assistantSpendCapCents).toBe(0);
+  });
+
+  it("accepts null and writes NULL (no cap)", async () => {
+    updateReturningMock.mockResolvedValue([
+      makeSettingsRow({ assistantSpendCapCents: null }),
+    ]);
+    const result = await updateAssistantSpendCap("org-001", null);
+    const setArg = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(setArg.assistantSpendCapCents).toBeNull();
+    expect(result.assistantSpendCapCents).toBeNull();
+  });
+
+  it("ensures the settings row exists before updating it", async () => {
+    await updateAssistantSpendCap("org-001", 100);
+    // getOrgBillingSettings ran first: its insert-on-conflict is the guarantee.
+    expect(insertMock).toHaveBeenCalledOnce();
+    expect(withTenantDb).toHaveBeenCalledTimes(2);
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("throws when the update returns no row", async () => {
+    updateReturningMock.mockResolvedValue([]);
+    await expect(updateAssistantSpendCap("org-ghost", 100)).rejects.toThrow(
       "org-ghost",
     );
   });

@@ -26,6 +26,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 
 /** Slug context the client carries from the URL; org/workspace ids resolve server-side. */
@@ -54,6 +55,9 @@ async function resolveScope(ctx: ConversationActionCtx) {
   const org = await resolveOrg(ctx.orgSlug);
   const ws = await resolveWorkspace(org.id, ctx.workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
+  // A server action is a direct POST — the workspace layout's membership check
+  // never runs, so assert it here.
+  await assertWorkspaceMember(ws.id, session.user.id);
   return {
     userId: session.user.id,
     capabilityCtx: {
