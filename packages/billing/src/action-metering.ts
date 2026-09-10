@@ -233,7 +233,7 @@ export function creditsForActions(
  * at the time, which is not the same number: an organisation that ends the year
  * at 3M actions paid the $20 rate on its first million and the $15 rate after,
  * where §4.1 prices all 3M at $15. The difference is a true-up owed to the
- * customer, and it is surfaced rather than absorbed — `get_governed_action_usage`
+ * customer, and it is surfaced rather than absorbed — `get_action_usage`
  * reports both figures so the amount is visible before the reconciliation, not
  * discovered after it.
  */
