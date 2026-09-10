@@ -54,6 +54,10 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mocks.resolveOrg,
   resolveWorkspace: mocks.resolveWorkspace,
   assertOrgMember: mocks.assertOrgMember,
+  // The route asserts workspace membership after resolving the workspace
+  // (#2817). This suite is about who pays for the tokens, so the caller is
+  // always a member here.
+  assertWorkspaceMember: async () => undefined,
 }));
 vi.mock("@oxagen/handlers/logger", () => ({ logger: mocks.logger }));
 vi.mock("@oxagen/ai", () => ({
