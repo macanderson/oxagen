@@ -328,66 +328,68 @@
   <section class="sec sec-alt" id="agent">
     <div class="wrap">
       <div class="sec-head reveal">
-        <p class="eyebrow">The agent — in your terminal</p>
-        <h2>An agent that already knows your codebase</h2>
-        <p>Type what you want done. The agent reads your code, makes the edits, runs the
-        checks, and shows its work — grounded in your team's shared map, not just the files in front of it.</p>
+        <p class="eyebrow">The governance CLI — in your terminal</p>
+        <h2>The four jobs, one command away</h2>
+        <p>The <code>oxagen</code> CLI is a governance client, not another coding agent — Stella
+        already owns that job. Query the graph, cap spend, replay a run, and manage the keys an
+        agent is allowed to use, all from the terminal.</p>
       </div>
 
       <div class="grid-2">
         <article class="card reveal">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M12 3l4 2.3v4.6L12 12.2 8 9.9V5.3L12 3z"/><path d="M17.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/><path d="M6.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/></svg>
           </div>
-          <h3>One command, done</h3>
-          <p>Ask in plain English. It plans, edits, verifies, and hands you the diff —
-          in an interactive session or a single shot.</p>
+          <h3>Grounded in your map</h3>
+          <p>Query your workspace's contract-scoped graph straight from the terminal. Every
+          result cites its source; nothing outside your principal's view comes back.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen "make the export async"</span></div>
-            <div><span class="g">✎</span> src/export/index.ts <span class="g">+12</span> <span class="r">−4</span></div>
-            <div><span class="g">✔</span> checks passed — diff ready for review</div>
+            <div><span class="p">$</span> <span class="c">oxagen graph search -q "who owns the billing policy?"</span></div>
+            <div><span class="g">✔</span> 3 nodes · scoped to your contract</div>
+            <div><span class="g">✔</span> every result cites its source</div>
           </div>
         </article>
 
         <article class="card reveal reveal-d1">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 4v5"/><path d="M12 9l-6 4"/><path d="M12 9l6 4"/><path d="M12 9v4"/><circle cx="12" cy="4" r="1.6"/><circle cx="6" cy="15" r="1.6"/><circle cx="12" cy="15" r="1.6"/><circle cx="18" cy="15" r="1.6"/><path d="M6 17v2M12 17v2M18 17v2"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg>
           </div>
-          <h3>Dispatch a fleet</h3>
-          <p>One goal becomes many tasks. Several agents work in parallel, each safely in
-          its own copy of the repo, and report back as one.</p>
+          <h3>Spend, capped and metered</h3>
+          <p>Set a hard ceiling per workspace. Every model call and tool action is attributed
+          and priced by the same loop that bills the platform itself.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">◆</span> <span class="c">4 tasks · 4 workers · isolated worktrees</span></div>
-            <div>worker/1 schema <span class="g">done</span> · worker/2 routes <span class="g">done</span></div>
-            <div>worker/3 webhooks <span class="i">running</span> · worker/4 tests <span class="i">running</span></div>
+            <div><span class="p">$</span> <span class="c">oxagen budget show</span></div>
+            <div><span class="i">◆</span> workspace ceiling: $900/mo</div>
+            <div>team/payments <span class="g">$612 burned</span> · every call attributed</div>
           </div>
         </article>
 
         <article class="card reveal reveal-d1">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 16h6"/></svg>
           </div>
-          <h3>Private by default</h3>
-          <p>Run the agent on a model that lives on your own machine. Works offline,
-          no key required, nothing leaves the laptop.</p>
+          <h3>Every run, on the record</h3>
+          <p>One trace per run: who asked, what the agent read, what it changed, what proved
+          it, and what it cost. Replayable evidence, not a log file to reconstruct later.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen models</span></div>
-            <div><span class="i">◆</span> on-device coordinator: <span class="g">ready</span> · fitted to your hardware</div>
-            <div><span class="i">◆</span> network: <span class="c">not required</span></div>
+            <div><span class="p">$</span> <span class="c">oxagen trace &lt;run-id&gt;</span></div>
+            <div><span class="i">◆</span> chain of custody · every node cited</div>
+            <div><span class="g">✔</span> audit record sealed · exportable</div>
           </div>
         </article>
 
         <article class="card reveal reveal-d2">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 3l4 2.3v4.6L12 12.2 8 9.9V5.3L12 3z"/><path d="M17.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/><path d="M6.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/></svg>
+            <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
           </div>
-          <h3>Grounded in your map</h3>
-          <p>Query your workspace's governed context through its live authorization boundary.
-          Exact checkout detail stays local; shared answers remain scoped and citable.</p>
+          <h3>Your keys, your graph, your model</h3>
+          <p>Bring your own model keys and your own Neo4j endpoint. Oxagen is vendor-neutral
+          by construction — a governance plane that can sit under vendors who compete, because
+          it doesn't compete with any of them.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen graph search -q "billing policy"</span></div>
-            <div><span class="i">◆</span> live query · workspace scoped · RBAC enforced</div>
-            <div><span class="g">✔</span> bounded results cite their sources</div>
+            <div><span class="p">$</span> <span class="c">oxagen env list</span></div>
+            <div><span class="i">◆</span> provider keys, per workspace — yours, not ours</div>
+            <div><span class="g">✔</span> self-hostable graph · neutral by construction</div>
           </div>
         </article>
       </div>
@@ -398,7 +400,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="1"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
           <span>Copy</span>
         </button>
-        <span class="note">Bring your own model keys — or run fully on-device. Your account plugs in when you want the shared map.</span>
+        <span class="note">Bring your own model keys and your own Neo4j endpoint — Oxagen governs whichever agent you already run.</span>
       </div>
     </div>
   </section>
