@@ -4,7 +4,7 @@
  *
  * Answers one question per PR: does this change advance, stay neutral to, or
  * drift from the north-star positioning ("the metered, governed, graph-grounded
- * control plane for teams that build and resell AI agents")? The verdict is
+ * control plane an enterprise uses to teach, govern, explain and learn")? The verdict is
  * advisory — it posts a sticky PR comment + step summary and never fails the
  * build unless VISION_GATE_STRICT=1.
  *
@@ -166,7 +166,7 @@ export function renderComment(v, model) {
   lines.push(
     "",
     "---",
-    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the Stripe-for-agents north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
+    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the teach/govern/explain/learn north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
   );
   return lines.join("\n");
 }
