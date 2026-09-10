@@ -365,7 +365,12 @@ chatStreamRoute.post("/", async (c) => {
         // the first token). The recalled block is injected per-turn AFTER the
         // cached system prefix (ADR-021 §2/§8), never into the system block.
         const [
-          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
+          {
+            tools: agentTools,
+            nameMap: toolNameMap,
+            mutatingToolNames,
+            governance: toolGovernance,
+          },
           promptConfig,
           recalledMemory,
         ] = await runInTenantScope(
@@ -542,6 +547,12 @@ chatStreamRoute.post("/", async (c) => {
             messageId,
           },
           model: turnModel,
+          ...(resolvedTier ? { tier: resolvedTier } : {}),
+          ...(funding.fundedBy === "org"
+            ? { credential: funding.credential }
+            : {}),
+          governance: toolGovernance,
+          ...(ctx.userId ? { principal: ctx.userId } : {}),
           // @oxagen/agent owns the governance agent's prompt — one baseline,
           // shared with the app surface. `chat.system` is append-only, so a
           // workspace can add instructions but never replace the governance

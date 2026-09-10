@@ -757,6 +757,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The engine has no public hostname: only app and api reach it, over
+          # loopback (ADR-053 §1). First in the matrix so it is up before the
+          # surfaces that call it deploy.
+          - service: stella-serve
+            hostname: ""
           - service: docs
             hostname: docs.oxagen.sh
           - service: app
