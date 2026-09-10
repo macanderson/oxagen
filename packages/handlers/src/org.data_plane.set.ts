@@ -10,6 +10,7 @@ import {
 } from "@oxagen/database/data-plane";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { DataPlaneKind } from "@oxagen/tenancy";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { toBindingDto } from "./org.data_plane.get";
 import { logger } from "./logger";
 
@@ -33,6 +34,14 @@ export function configDigest(config: unknown): string {
  * endpoint, or return it to the shared platform plane (ADR-042).
  *
  * Order matters and is deliberate:
+ *   0. Assert the caller's org role FIRST, before the input is touched. Binding
+ *      the data plane repoints where every `withTenantDb` for this org reads and
+ *      writes, and `invalidateDataPlaneCache` below makes it live at once — so a
+ *      caller who can reach this can redirect the organisation's Postgres, graph
+ *      and evidence to an endpoint they own. The contract restricts it to org
+ *      Owner/Admin, and the kernel's IAM gate consults no policy for an org below
+ *      the tier that unlocks ACLs (oxagen#2819). `scoped: false` also skips the
+ *      decision-rules gate, so nothing else asks.
  *   1. Encrypt FIRST. If the KEK is unconfigured we refuse before anything
  *      touches a column — a plaintext DSN must never reach Postgres, not even
  *      transiently, and "degrade gracefully by storing it unencrypted" is not
@@ -50,6 +59,8 @@ export function configDigest(config: unknown): string {
 export const orgDataPlaneSetHandler: CapabilityHandler<
   typeof orgDataPlaneSet
 > = async (input, ctx) => {
+  await assertCallerRole(orgDataPlaneSet, ctx);
+
   const kind: DataPlaneKind = input.kind;
   const dedicated = input.mode === "dedicated";
 
@@ -76,8 +87,10 @@ export const orgDataPlaneSetHandler: CapabilityHandler<
   const now = new Date();
   const row = await withSystemDb(async (tx) => {
     // See the docblock: platform state on the shared plane, read/written before
-    // any plane has been resolved. The org filter is the isolation boundary and
-    // the kernel's IAM gate has already proven the caller owns ctx.orgId.
+    // any plane has been resolved. The org filter is the isolation boundary.
+    // This used to say the kernel's IAM gate had already proven the caller owns
+    // ctx.orgId; it had not, below the enterprise tier (oxagen#2819). The role
+    // assertion at the top of the handler is what proves it now.
     const existing = await tx.query.dataPlanes.findFirst({
       where: and(
         eq(schema.dataPlanes.orgId, ctx.orgId),

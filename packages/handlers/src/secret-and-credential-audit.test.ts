@@ -47,6 +47,14 @@ vi.mock("@oxagen/plugins", async (importOriginal) => ({
 
 const listingRows: Array<Record<string, unknown>> = [];
 
+// The caller's org membership, read by the handler-side role guard
+// (lib/capability-role-guard). Owner by default so the audit cases above keep
+// asserting what they were written to assert; the role-guard cases below
+// override it per test.
+const mockMembershipRows = vi.fn(
+  (): Array<{ role: string }> => [{ role: "owner" }],
+);
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -55,6 +63,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       fn({
         select: () => ({
           from: () => ({ where: () => ({ limit: async () => listingRows }) }),
+        }),
+      }),
+    withSystemDb: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: async () => mockMembershipRows() }),
+          }),
         }),
       }),
   };
@@ -74,7 +90,7 @@ import { secretKeyListHandler } from "./secret.key.list";
 import { secretImportEnvHandler } from "./secret.import_env";
 import { handler as pluginCredentialSetHandler } from "./plugin.credential.set_secret";
 import { handler as pluginCredentialRevokeHandler } from "./plugin.credential.revoke";
-import { TEST_CTX } from "./test-utils/fixtures";
+import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 /** The single audit row a handler emitted. */
 function onlyEvent() {
@@ -92,6 +108,12 @@ function onlyEvent() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks() does not drain a mockReturnValueOnce queue, so a test whose
+  // once-value goes unconsumed would hand it to the next one. Reset the
+  // membership mock outright and restore the Owner default every case starts
+  // from.
+  mockMembershipRows.mockReset();
+  mockMembershipRows.mockReturnValue([{ role: "owner" }]);
   listingRows.length = 0;
   mocks.revealSecret.mockResolvedValue({
     key: "K",
@@ -203,5 +225,91 @@ describe("plugin credential lifecycle reaches the main audit log (#2533)", () =>
       ),
     ).rejects.toThrow("kms down");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
+// ── The handler-side role guard (oxagen#2819) ───────────────────────────────
+//
+// checkIAM returns tier_gate -> allow for every org below the enterprise tier,
+// so the contract's `defaultEffect: "deny"` and its Owner/Admin `defaultRoles`
+// were never read and any member of the org could call these three. Each case
+// below asserts BOTH halves: the call is refused, and the side effect it exists
+// to cause never happens.
+
+describe("secret and plugin-credential writes require an org Owner or Admin", () => {
+  it("a viewer cannot export the workspace's secrets", async () => {
+    mockMembershipRows.mockReturnValue([{ role: "viewer" }]);
+    await expect(secretExportHandler({}, TEST_CTX)).rejects.toThrow(
+      "Forbidden: export_secrets requires org Owner or Admin",
+    );
+    expect(mocks.exportSecrets).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("a viewer cannot reveal a secret", async () => {
+    mockMembershipRows.mockReturnValue([{ role: "viewer" }]);
+    await expect(
+      secretRevealHandler({ keyId: "k", environmentId: "e" }, TEST_CTX),
+    ).rejects.toThrow("Forbidden: reveal_secret requires org Owner or Admin");
+    expect(mocks.revealSecret).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("a member cannot overwrite a secret's value", async () => {
+    mockMembershipRows.mockReturnValue([{ role: "member" }]);
+    await expect(
+      secretValueSetHandler(
+        { keyId: "k", environmentId: "e", value: "attacker" },
+        TEST_CTX,
+      ),
+    ).rejects.toThrow(
+      "Forbidden: set_secret_value requires org Owner or Admin",
+    );
+    expect(mocks.setSecretValue).not.toHaveBeenCalled();
+  });
+
+  it("a member cannot store a plugin credential", async () => {
+    mockMembershipRows.mockReturnValue([{ role: "member" }]);
+    await expect(
+      pluginCredentialSetHandler(
+        { orgListingId: "ol_1", authKind: "secret", secret: "s" },
+        TEST_CTX,
+      ),
+    ).rejects.toThrow(
+      "Forbidden: set_plugin_secret requires org Owner or Admin",
+    );
+    expect(mocks.setWorkspaceSecret).not.toHaveBeenCalled();
+  });
+
+  it("a caller with no membership row at all is refused", async () => {
+    mockMembershipRows.mockReturnValue([]);
+    await expect(secretExportHandler({}, TEST_CTX)).rejects.toThrow(
+      "Forbidden: export_secrets requires org Owner or Admin",
+    );
+    expect(mocks.exportSecrets).not.toHaveBeenCalled();
+  });
+
+  it("accepts a TitleCase membership role — the column carries both casings", async () => {
+    mockMembershipRows.mockReturnValue([{ role: "Admin" }]);
+    await secretExportHandler({}, TEST_CTX);
+    expect(mocks.exportSecrets).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a caller with no authenticated principal", async () => {
+    await expect(
+      secretExportHandler({}, makeCTX({ userId: null, apiKeyId: null })),
+    ).rejects.toThrow(
+      "Unauthorized: export_secrets requires an authenticated principal",
+    );
+    expect(mocks.exportSecrets).not.toHaveBeenCalled();
+  });
+
+  it("lets an api-key principal through — it has no org_users row to read, and its authority is the key's scope", async () => {
+    await secretExportHandler(
+      {},
+      makeCTX({ userId: null, apiKeyId: "aky_ci" }),
+    );
+    expect(mocks.exportSecrets).toHaveBeenCalledTimes(1);
+    expect(mockMembershipRows).not.toHaveBeenCalled();
   });
 });
