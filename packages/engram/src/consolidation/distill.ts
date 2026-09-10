@@ -14,7 +14,9 @@
  */
 import { z } from "zod";
 import {
+  CREDIT_REASONS,
   generateObjectFor,
+  resolveModelFundingSource,
   selectModel,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
@@ -213,6 +215,16 @@ export async function extractFactFromCluster(
   if (!options || !hasGatewayKey()) return heuristic;
 
   try {
+    // Who pays the vendor for this call (ADR-053). Asked per organisation
+    // rather than assumed: an organisation that brought its own key must not be
+    // charged, and `resolveModelFundingSource` calls guessing `platform` "the
+    // one direction this seam must never err in". Distillation is a background
+    // job with no user waiting, so paying for the lookup costs nothing anybody
+    // notices, and it runs only on the path that is about to call a model.
+    const { fundedBy } = await resolveModelFundingSource(
+      options.telemetry.orgId,
+    );
+
     const { object } = await generateObjectFor({
       schema: DistilledFactSchema,
       // Small/cheap "fast" tier — distillation is a high-volume background job.
@@ -222,6 +234,11 @@ export async function extractFactFromCluster(
       system: DISTILL_SYSTEM_PROMPT,
       prompt: buildClusterPrompt(heuristic.fact, cluster),
       telemetry: options.telemetry,
+      fundedBy,
+      // Assistant tokens, which is what the assistant spend cap sums. The
+      // retired `consume_token_overage` must not be repurposed (ADR-052/053),
+      // and a reason outside that sum is invisible to the cap meant to bound it.
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     });
     const domain = object.domain.trim();
     // Decoration only: keep the deterministic fact, adopt the model's domain
