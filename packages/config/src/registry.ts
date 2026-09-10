@@ -1042,6 +1042,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  STELLA_SERVE_URL: {
+    group: "Agent engine",
+    description:
+      "Where the Stella engine (stella-serve) listens. The in-app agent's " +
+      "turns run there; every model call and tool call comes back to this " +
+      "process to answer (ADR-053). Loopback on the node.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ["production"],
+    valueOrigin: "static",
+    staticValue: {
+      development: "http://127.0.0.1:4200",
+      preview: "http://127.0.0.1:4200",
+      production: "http://127.0.0.1:4200",
+    },
+  },
+  STELLA_SERVE_TOKEN: {
+    group: "Agent engine",
+    description:
+      "Bearer token the Stella engine was started with. The same value the " +
+      "engine's own container reads under its prefix; without it the " +
+      "assistant reports the engine as unavailable.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ["production"],
+    valueOrigin: "manual",
+  },
   ANTHROPIC_API_KEY: {
     group: "AI providers",
     description:

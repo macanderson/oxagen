@@ -92,6 +92,28 @@ aws ssm start-session --target "$(aws ec2 describe-instances \
 ls /opt/oxagen/services/<service>/releases
 ```
 
+## The engine service
+
+`stella-serve` is the Stella engine the in-app agent runs on (ADR-053). It
+is not built here: the artifact is a manifest naming the published image
+`ghcr.io/macanderson/stella-serve:<version>`, written by
+`tools/scripts/package-for-node.sh stella-serve`, which is the one place the
+version is written. It listens on loopback port 4200 and has no Caddy route
+and no public hostname; `app` and `api` reach it as `http://127.0.0.1:4200`.
+
+Before its first deploy an operator creates three parameters:
+
+| Parameter | Value |
+| --- | --- |
+| `/oxagen/production/stella-serve/STELLA_SERVE_TOKEN` | SecureString, 32 or more random characters |
+| `/oxagen/production/STELLA_SERVE_TOKEN` | the same value |
+| `/oxagen/production/STELLA_SERVE_URL` | `http://127.0.0.1:4200` |
+
+The token lives twice because the engine's container reads its own prefix
+(`config_prefix` in the manifest) and the surfaces read the shared one.
+`stella-serve` refuses to start without a token, and the surfaces report
+"the assistant engine is unavailable" while theirs is missing or wrong.
+
 ## Adding a service
 
 1. Have its repository publish `<service>-standalone.tgz` with a manifest.

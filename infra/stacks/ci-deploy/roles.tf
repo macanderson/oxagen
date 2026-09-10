@@ -173,7 +173,7 @@ resource "aws_iam_role_policy" "cgp_protocol" {
 # --------------------------------------------------------------------------
 
 locals {
-  platform_services = ["docs", "app", "api", "mcp"]
+  platform_services = ["docs", "app", "api", "mcp", "stella-serve"]
 }
 
 data "aws_iam_policy_document" "oxagen_platform" {

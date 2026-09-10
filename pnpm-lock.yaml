@@ -624,6 +624,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/stella-engine-client':
+        specifier: workspace:*
+        version: link:../stella-engine-client
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

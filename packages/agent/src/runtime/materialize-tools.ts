@@ -181,6 +181,22 @@ export interface MaterializedTools {
   // know. They used to keep the shared concurrent lane on that same "unknown
   // semantics" reasoning, which had it the wrong way round (#2600).
   mutatingToolNames: string[];
+  /**
+   * Per-alias governance facts an external engine needs to declare each tool
+   * honestly (ADR-053 §1): the capability's risk level, whether it pauses for
+   * approval, and whether it only reads. The `execute` closures above carry
+   * the gates themselves; this is the declaration the engine's own policy
+   * reads before it dispatches a call, so a tool sent without it would be
+   * treated as untrusted and high risk.
+   */
+  governance: Record<string, ToolGovernance>;
+}
+
+export interface ToolGovernance {
+  riskLevel: "low" | "medium" | "high";
+  requiresApproval: boolean;
+  /** True when the capability does not mutate and may run beside other calls. */
+  readOnly: boolean;
 }
 
 // Provider tool-name constraint enforced by the Vercel AI Gateway (and the
@@ -277,6 +293,7 @@ export async function materializeTools(
   const nameMap: Record<string, string> = {};
 
   const mutatingToolNames: string[] = [];
+  const governance: Record<string, ToolGovernance> = {};
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
@@ -509,6 +526,11 @@ export async function materializeTools(
       }),
     );
     if (isMutatingCapability(cap)) mutatingToolNames.push(alias);
+    governance[alias] = {
+      riskLevel,
+      requiresApproval,
+      readOnly: !isMutatingCapability(cap),
+    };
   }
   // ── MCP tool integration ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
@@ -1048,9 +1070,16 @@ export async function materializeTools(
         }),
       );
       mutatingToolNames.push(externalAlias);
+      // An external tool's semantics are unknown here, so it is declared the
+      // way the engine would treat an undeclared one: high risk, mutating.
+      governance[externalAlias] = {
+        riskLevel: "high",
+        requiresApproval: false,
+        readOnly: false,
+      };
     }
   }
   // ── End installable-plugin tools ────────────────────────────────────────────
 
-  return { tools: out, nameMap, mutatingToolNames };
+  return { tools: out, nameMap, mutatingToolNames, governance };
 }

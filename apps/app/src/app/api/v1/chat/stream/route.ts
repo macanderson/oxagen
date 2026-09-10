@@ -751,7 +751,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
         const [
-          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
+          {
+            tools: agentTools,
+            nameMap: toolNameMap,
+            mutatingToolNames,
+            governance: toolGovernance,
+          },
           promptConfig,
           recalledMemory,
           turnBudgetPolicy,
@@ -1138,6 +1143,12 @@ export async function POST(request: NextRequest): Promise<Response> {
             messageId: capCtx.messageId,
           },
           model: turnModel,
+          ...(resolvedTier ? { tier: resolvedTier } : {}),
+          ...(funding.fundedBy === "org"
+            ? { credential: funding.credential }
+            : {}),
+          governance: toolGovernance,
+          principal: session.user.id,
           system: systemPrompt,
           history: historyForEngine,
           contextMessages: [

@@ -194,6 +194,12 @@ export const baseEnvSchema = z.object({
   // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
   // other deployment stays valid without it.
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // The Stella engine the in-app agent runs on (ADR-053 §1): a stella-serve
+  // container reached over loopback. The token is required for the assistant
+  // to work at all; when it is unset the agent runtime reports "the assistant
+  // engine is unavailable" rather than falling back to an in-process loop.
+  STELLA_SERVE_URL: z.string().url().default("http://127.0.0.1:4200"),
+  STELLA_SERVE_TOKEN: z.string().min(1).optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
   OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),

@@ -1,6 +1,6 @@
 # The in-app agent on Stella's headless engine — the wire, the answerer, and the gaps
 
-- **Status:** Proposed
+- **Status:** Implemented for slices 1 to 3 and the role routing of slice 4; the goal-shaped turn and its graph-rule witness remain (see §6)
 - **Date:** 2026-09-09
 - **Author:** platform
 - **Related:** [ADR-053](../../adr/ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md)
@@ -202,3 +202,44 @@ found it.
    a query through.
 
 Slice 1 has no dependency on the funding source. Slice 2 depends on both.
+
+## 6. What shipped, and what is left
+
+Shipped, in the pull request that closes the client and answerer slices:
+
+- `packages/stella-engine-client`: types copied from Stella's generated
+  declarations at 0.9.411 with the inbound bodies hand-written and pinned to
+  the schema; a fetch-only client for every route; a turn loop with
+  concurrent reverse-request answering, failure reporting, `?after=` resume,
+  truncated-replay recovery and cancel-on-abort; an in-process fake that
+  replays a turn recorded against the real binary; a smoke test that boots
+  the binary and drives the same turn.
+- `packages/agent`: `runGovernedTurn` drives the engine and keeps its
+  signature and result. Completions are answered through `streamAgentReply`
+  with the funding source and the assistant charge reason, one step per
+  request, with deltas streamed back. Tool calls are answered through the
+  materialised tools' own `execute`, which is where every gate lives, and
+  are declared to the engine as contracts carrying the capability's risk
+  level, approval flag and read-only bit (`materializeTools().governance`).
+  Engine events map onto the stream parts both translators read. An
+  unreachable or unready engine fails the turn with
+  `EngineUnavailableError` before anything streams. The `verdict` role is
+  answered on a tier other than the worker's; summarisation on the fast
+  tier.
+- Deploy: the `stella-serve` service manifest in `package-for-node.sh`,
+  first in the deploy matrix, its S3 grant in `roles.tf`, the three
+  Parameter Store entries in the node README, `STELLA_SERVE_URL` and
+  `STELLA_SERVE_TOKEN` in the env registry, and a dev container in
+  `docker-compose.dev.yml`. Stella publishes
+  `ghcr.io/macanderson/stella-serve:<version>` on every release.
+
+Left, each its own change:
+
+- A goal-shaped turn (`goal` on the request) for the schema builder and rule
+  authoring, so the engine's verify ladder judges the result, with a test in
+  which a rule authored across two sources is answered by a graph query.
+- The run-ledger write of the engine's events with their `seq` (§3).
+- Attachments from the engine's own file system, which this host never
+  mounts and refuses.
+- Bumping the client's pinned version and the image tag together when a
+  release changes the wire.

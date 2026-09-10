@@ -1,559 +1,518 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+/**
+ * The governed turn on the engine, against the client package's fake engine.
+ *
+ * `streamAgentReply` is mocked at the chokepoint, as the old loop's tests
+ * mocked it, so what these cases pin is the answerer: every completion the
+ * engine asks for goes through the chokepoint with the funding facts, every
+ * tool the engine asks for runs through the materialised `execute`, and the
+ * parts the routes read come out in the vocabulary their translators switch
+ * on. The engine itself is the fake replaying a turn recorded against the
+ * real binary; the smoke test in the client package keeps the fake honest.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CREDIT_REASONS } from "@oxagen/billing";
+import {
+  StellaEngineClient,
+  type ServerFrame,
+} from "@oxagen/stella-engine-client";
+import { FakeEngine, goldenScript } from "@oxagen/stella-engine-client/testing";
 
-// ── Mocks ────────────────────────────────────────────────────────────────────
-// `@oxagen/ai` is the LLM chokepoint the loop is required to go through, so the
-// test asserts on the arguments it receives rather than on any provider call.
 const streamAgentReply = vi.fn();
-const defaultModel = vi.fn(() => ({ modelId: "anthropic/claude-sonnet-5" }));
+const selectModel = vi.fn((s: { tier?: string }) => ({
+  modelId: `model-for-${s.tier ?? "default"}`,
+}));
 
 vi.mock("@oxagen/ai", () => ({
   streamAgentReply: (args: unknown) => streamAgentReply(args),
-  defaultModel: () => defaultModel(),
+  defaultModel: () => ({ modelId: "default-model" }),
   modelIdOf: (m: unknown) =>
-    typeof m === "string" ? m : ((m as { modelId: string }).modelId ?? ""),
-  // The real `stepCountIs` builds an SDK StopCondition; a tagged stand-in is
-  // enough to prove the cap is passed and at which count.
+    typeof m === "string" ? m : ((m as { modelId?: string }).modelId ?? ""),
+  selectModel: (s: { tier?: string }) => selectModel(s),
   stepCountIs: (n: number) => ({ __stepCountIs: n }),
 }));
-
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: <T>(_scope: unknown, fn: () => Promise<T> | T) => fn(),
+  runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
+}));
+vi.mock("@oxagen/config/env", () => ({
+  requireEnv: () => ({
+    STELLA_SERVE_URL: "http://engine.test",
+    STELLA_SERVE_TOKEN: "fake-token",
+  }),
 }));
 
-// The real constant: the assertion is that the loop names the ledger reason
-// ADR-053 §3 gave assistant usage, not a string the test happens to agree with.
-import { CREDIT_REASONS } from "@oxagen/billing";
-import type { GovernedTurnInput } from "./governed-turn";
-
-const {
-  runGovernedTurn,
-  serializeMutatingTools,
+import {
+  ENGINE_PROVIDER_ID,
+  ENGINE_REVERSE_REQUEST_TIMEOUT_MS,
+  EngineUnavailableError,
   aggregateStepUsage,
   buildTurnUserMessage,
-  DEFAULT_GOVERNED_TURN_MAX_STEPS,
-} = await import("./governed-turn");
+  runGovernedTurn,
+  serializeMutatingTools,
+} from "./governed-turn";
+import { modelForRole } from "./engine/provider";
 
-type AnyRecord = Record<string, unknown>;
-
-const TELEMETRY = {
-  orgId: "11111111-1111-1111-1111-111111111111",
-  workspaceId: "22222222-2222-2222-2222-222222222222",
-  surface: "app" as const,
-  messageId: "33333333-3333-3333-3333-333333333333",
-};
-
-/** A stand-in LanguageModel: `modelIdOf` is mocked, so only `modelId` matters. */
-function fakeModel(modelId: string): GovernedTurnInput["model"] {
-  return { modelId } as unknown as GovernedTurnInput["model"];
+interface FakeStreamOptions {
+  text?: string;
+  toolCalls?: Array<{ toolCallId: string; toolName: string; input: unknown }>;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    inputTokenDetails?: { cacheReadTokens?: number };
+  };
+  finishReason?: string;
+  deltas?: string[];
 }
 
-/** Build a fake StreamTextResult over a fixed list of parts. */
-function fakeStream(
-  parts: unknown[],
-  opts: { text?: string; usage?: AnyRecord } = {},
-) {
+function fakeStream(options: FakeStreamOptions = {}) {
+  const deltas = options.deltas ?? [];
   return {
     fullStream: (async function* () {
-      for (const p of parts) yield p;
+      for (const text of deltas) yield { type: "text-delta", id: "t", text };
     })(),
-    text: Promise.resolve(opts.text ?? ""),
-    totalUsage: Promise.resolve(
-      opts.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    text: Promise.resolve(options.text ?? ""),
+    toolCalls: Promise.resolve(options.toolCalls ?? []),
+    usage: Promise.resolve(
+      options.usage ?? { inputTokens: 10, outputTokens: 5 },
+    ),
+    finishReason: Promise.resolve(
+      options.finishReason ??
+        (options.toolCalls?.length ? "tool-calls" : "stop"),
     ),
   };
 }
 
-function baseInput(over: Partial<GovernedTurnInput> = {}): GovernedTurnInput {
-  return {
-    telemetry: TELEMETRY,
-    system: "SYSTEM",
-    history: [{ role: "user", content: "earlier" }],
-    instruction: "what did my agents do?",
-    tools: {},
-    ...over,
-  };
+function setup(script: ServerFrame[] = goldenScript()) {
+  const engine = new FakeEngine();
+  engine.scriptTurn(script);
+  const client = new StellaEngineClient({
+    baseUrl: "http://engine.test",
+    token: "fake-token",
+    fetchImpl: engine.fetch,
+  });
+  return { engine, client };
 }
 
-beforeEach(() => {
-  streamAgentReply.mockReset();
-  defaultModel.mockClear();
-  defaultModel.mockReturnValue({ modelId: "anthropic/claude-sonnet-5" });
-});
+async function drain(result: {
+  fullStream: AsyncIterable<unknown>;
+}): Promise<Array<{ type: string } & Record<string, unknown>>> {
+  const parts: Array<{ type: string } & Record<string, unknown>> = [];
+  for await (const part of result.fullStream)
+    parts.push(part as { type: string } & Record<string, unknown>);
+  return parts;
+}
 
-describe("runGovernedTurn — the tool loop reaches the model", () => {
-  it("calls streamAgentReply (never `ai` directly) with the materialised tools", async () => {
-    const tools = { list_executions: { description: "d", execute: vi.fn() } };
-    streamAgentReply.mockReturnValue(fakeStream([]));
+const telemetry = {
+  orgId: "org-1",
+  workspaceId: "ws-1",
+  surface: "app" as const,
+  messageId: "11111111-1111-4111-8111-111111111111",
+};
 
-    await runGovernedTurn(baseInput({ tools: tools as never }));
-
-    expect(streamAgentReply).toHaveBeenCalledTimes(1);
-    const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
-    expect(Object.keys(args["tools"] as AnyRecord)).toEqual([
-      "list_executions",
-    ]);
-    expect(args["system"]).toBe("SYSTEM");
-    expect(args["telemetry"]).toEqual(TELEMETRY);
-  });
-
-  it("orders messages history → context → the current user turn", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    await runGovernedTurn(
-      baseInput({
-        contextMessages: [
-          { role: "user", content: "## Recalled workspace memory" },
-          null,
-          undefined,
-          { role: "user", content: "## Current page" },
-        ],
-      }),
-    );
-
-    const messages = (streamAgentReply.mock.calls[0]![0] as AnyRecord)[
-      "messages"
-    ] as Array<{ role: string; content: unknown }>;
-    expect(messages.map((m) => m.content)).toEqual([
-      "earlier",
-      "## Recalled workspace memory",
-      "## Current page",
-      "what did my agents do?",
-    ]);
-  });
-
-  it("resolves the model through modelIdOf and reports the id on the result", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(
-      baseInput({ model: fakeModel("openai/gpt-5.3") }),
-    );
-
-    expect(result.modelId).toBe("openai/gpt-5.3");
-    expect(defaultModel).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the platform default model when none is supplied", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(baseInput());
-
-    expect(defaultModel).toHaveBeenCalledTimes(1);
-    expect(result.modelId).toBe("anthropic/claude-sonnet-5");
-  });
-
-  it("forwards reasoning effort only when the caller supplies one", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(baseInput({ effort: "high" }));
-    expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["effort"]).toBe(
-      "high",
-    );
-
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(baseInput({ effort: null }));
-    expect(streamAgentReply.mock.calls[1]![0] as AnyRecord).not.toHaveProperty(
-      "effort",
-    );
-  });
-
-  it("re-exposes the AI-SDK fullStream unchanged for the surface translators", async () => {
-    const parts = [
-      { type: "text-delta", text: "a" },
-      { type: "text-delta", text: "b" },
-    ];
-    streamAgentReply.mockReturnValue(fakeStream(parts, { text: "ab" }));
-
-    const result = await runGovernedTurn(baseInput());
-    const seen: unknown[] = [];
-    for await (const p of result.fullStream) seen.push(p);
-
-    expect(seen).toEqual(parts);
-    await expect(result.finalText).resolves.toBe("ab");
-  });
-
-  it("maps aggregated usage, reading prompt-cache reads from inputTokenDetails", async () => {
-    streamAgentReply.mockReturnValue(
-      fakeStream([], {
-        usage: {
-          inputTokens: 900,
-          outputTokens: 120,
-          totalTokens: 1020,
-          inputTokenDetails: { cacheReadTokens: 700 },
-        },
-      }),
-    );
-
-    const result = await runGovernedTurn(baseInput());
-
-    await expect(result.usage).resolves.toEqual({
-      inputTokens: 900,
-      outputTokens: 120,
-      totalTokens: 1020,
-      cachedInputTokens: 700,
-    });
-  });
-});
-
-describe("runGovernedTurn — who paid for the tokens (ADR-053 §3)", () => {
-  it("defaults to platform funding and reports it on the result", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(baseInput());
-
-    const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
-    expect(args["fundedBy"]).toBe("platform");
-    expect(result.fundedBy).toBe("platform");
-  });
-
-  it("hands org funding through to the chokepoint unchanged", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(baseInput({ fundedBy: "org" }));
-
-    const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
-    expect(args["fundedBy"]).toBe("org");
-    expect(result.fundedBy).toBe("org");
-  });
-
-  it("always charges under the assistant reason, whoever paid", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(baseInput({ fundedBy: "platform" }));
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(baseInput({ fundedBy: "org" }));
-
-    for (const call of streamAgentReply.mock.calls) {
-      expect((call[0] as AnyRecord)["chargeReason"]).toBe(
-        CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+describe("runGovernedTurn on the engine", () => {
+  beforeEach(() => {
+    streamAgentReply.mockReset();
+    selectModel.mockClear();
+    // First completion asks for the tool, second answers.
+    streamAgentReply
+      .mockImplementationOnce(() =>
+        fakeStream({
+          toolCalls: [
+            {
+              toolCallId: "call_1",
+              toolName: "search_nodes",
+              input: { q: "nodes" },
+            },
+          ],
+        }),
+      )
+      .mockImplementationOnce(() =>
+        fakeStream({
+          text: "There are 3 nodes.",
+          deltas: ["There are ", "3 nodes."],
+          usage: {
+            inputTokens: 20,
+            outputTokens: 6,
+            inputTokenDetails: { cacheReadTokens: 4 },
+          },
+        }),
       );
-    }
-    // The literal, so a renamed constant cannot silently repurpose the line.
-    expect(CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS).toBe(
-      "consume_assistant_tokens",
-    );
-  });
-});
-
-describe("runGovernedTurn — the step cap", () => {
-  it("bounds the loop at the default step count", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(baseInput());
-
-    expect(
-      (streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"],
-    ).toEqual({ __stepCountIs: DEFAULT_GOVERNED_TURN_MAX_STEPS });
-    expect(result.maxSteps).toBe(DEFAULT_GOVERNED_TURN_MAX_STEPS);
-    expect(result.budgeted).toBe(false);
   });
 
-  it("honours a caller-configured cap", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-
-    const result = await runGovernedTurn(baseInput({ maxSteps: 3 }));
-
-    expect(
-      (streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"],
-    ).toEqual({ __stepCountIs: 3 });
-    expect(result.maxSteps).toBe(3);
-  });
-
-  it("ORs the budget guard alongside the step cap and stops on its verdict", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    const budgetGuard = vi.fn().mockResolvedValue("stop");
-
-    const result = await runGovernedTurn(baseInput({ budgetGuard }));
-
-    expect(result.budgeted).toBe(true);
-    const stopWhen = (streamAgentReply.mock.calls[0]![0] as AnyRecord)[
-      "stopWhen"
-    ] as unknown[];
-    expect(stopWhen).toHaveLength(2);
-    expect(stopWhen[0]).toEqual({
-      __stepCountIs: DEFAULT_GOVERNED_TURN_MAX_STEPS,
+  it("answers both ports and yields the parts the translators read", async () => {
+    const { engine, client } = setup();
+    const execute = vi.fn(async (_input: unknown) => ({
+      rows: ["n1", "n2", "n3"],
+    }));
+    const result = await runGovernedTurn({
+      telemetry,
+      model: { modelId: "anthropic/claude-sonnet-4.6" } as never,
+      tier: "balanced",
+      system: "GOVERNANCE PROMPT",
+      history: [
+        { role: "user", content: "earlier" },
+        { role: "assistant", content: "before" },
+      ],
+      contextMessages: [null, { role: "user", content: "[memory]" }],
+      instruction: "list the nodes",
+      tools: {
+        search_nodes: {
+          description: "Search graph nodes",
+          inputSchema: {
+            type: "object",
+            properties: { q: { type: "string" } },
+          } as never,
+          execute,
+        } as never,
+      },
+      governance: {
+        search_nodes: {
+          riskLevel: "low",
+          requiresApproval: false,
+          readOnly: true,
+        },
+      },
+      principal: "user-1",
+      fundedBy: "org",
+      engine: client,
     });
 
-    const budgetStop = stopWhen[1] as (a: {
-      steps: unknown[];
-    }) => Promise<boolean>;
-    await expect(
-      budgetStop({
-        steps: [
-          { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
-          { usage: { inputTokens: 20, outputTokens: 1, totalTokens: 21 } },
-        ],
-      }),
-    ).resolves.toBe(true);
-    expect(budgetGuard).toHaveBeenCalledWith({
+    const parts = await drain(result);
+    expect(parts.map((p) => p.type)).toEqual([
+      "start-step",
+      "tool-call",
+      "tool-result",
+      "text-delta",
+      "finish-step",
+      "finish",
+    ]);
+    expect(parts.find((p) => p.type === "tool-result")).toMatchObject({
+      toolCallId: "call_1",
+      output: { rows: ["n1", "n2", "n3"] },
+    });
+    expect(await result.finalText).toBe("There are 3 nodes.");
+    expect(await result.usage).toEqual({
       inputTokens: 30,
-      outputTokens: 6,
-      totalTokens: 36,
-      cachedInputTokens: 0,
+      outputTokens: 11,
+      totalTokens: 41,
+      cachedInputTokens: 4,
     });
-  });
+    expect(result.modelId).toBe("anthropic/claude-sonnet-4.6");
+    expect(result.fundedBy).toBe("org");
+    expect(result.budgeted).toBe(false);
+    expect(result.maxSteps).toBe(12);
+    await expect(result.turnId).resolves.toMatch(/^turn-/);
 
-  it("keeps going when the budget guard says continue", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    const budgetGuard = vi.fn().mockResolvedValue("continue");
+    // The tool ran once, through its own execute, with the engine's request id as the call id.
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]![0]).toEqual({ q: "nodes" });
 
-    await runGovernedTurn(baseInput({ budgetGuard }));
-
-    const stopWhen = (streamAgentReply.mock.calls[0]![0] as AnyRecord)[
-      "stopWhen"
-    ] as unknown[];
-    const budgetStop = stopWhen[1] as (a: {
-      steps: unknown[];
-    }) => Promise<boolean>;
-    await expect(budgetStop({ steps: [] })).resolves.toBe(false);
-  });
-});
-
-describe("runGovernedTurn — approval pauses keep the turn streaming", () => {
-  it("emits approval-required before the tool result and never tears the turn down", async () => {
-    // The materialised tool is what blocks on waitForApproval; the loop's only
-    // duty is to keep the stream open across that pause.
-    const order: string[] = [];
-    let releaseApproval: (() => void) | undefined;
-    const approvalGate = new Promise<void>((res) => {
-      releaseApproval = res;
-    });
-
-    const tools = {
-      delete_agent_def: {
-        description: "d",
-        execute: async () => {
-          order.push("approval-required");
-          await approvalGate;
-          order.push("tool-executed");
-          return { ok: true };
-        },
-      },
-    };
-
-    // The fake stream drives the tool the way the SDK would: dispatch execute,
-    // keep yielding text while it is paused, then yield the result.
-    streamAgentReply.mockImplementation((args: AnyRecord) => {
-      const t = (args["tools"] as AnyRecord)["delete_agent_def"] as {
-        execute: () => Promise<unknown>;
-      };
-      const pending = t.execute();
-      return {
-        fullStream: (async function* () {
-          yield { type: "tool-call", toolCallId: "c1" };
-          order.push("streamed-while-paused");
-          yield { type: "text-delta", text: "waiting for approval…" };
-          releaseApproval?.();
-          const output = await pending;
-          order.push("streamed-result");
-          yield { type: "tool-result", toolCallId: "c1", output };
-        })(),
-        text: Promise.resolve("done"),
-        totalUsage: Promise.resolve({}),
-      };
-    });
-
-    const result = await runGovernedTurn(baseInput({ tools: tools as never }));
-    const seen: string[] = [];
-    for await (const p of result.fullStream) {
-      seen.push((p as { type: string }).type);
+    // Both completions went through the chokepoint with the funding facts and a single-step cap.
+    expect(streamAgentReply).toHaveBeenCalledTimes(2);
+    for (const call of streamAgentReply.mock.calls) {
+      const args = call[0] as Record<string, unknown>;
+      expect(args.fundedBy).toBe("org");
+      expect(args.chargeReason).toBe(CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS);
+      expect(args.stopWhen).toEqual({ __stepCountIs: 1 });
+      expect(args.telemetry).toEqual(telemetry);
+      expect(args.system).toBe("GOVERNANCE PROMPT");
+      // Schemas only: the SDK must never execute a tool itself.
+      expect(
+        (args.tools as Record<string, { execute?: unknown }>).search_nodes
+          ?.execute,
+      ).toBeUndefined();
     }
 
-    expect(order).toEqual([
-      "approval-required",
-      "streamed-while-paused",
-      "tool-executed",
-      "streamed-result",
-    ]);
-    expect(seen).toEqual(["tool-call", "text-delta", "tool-result"]);
-    await expect(result.finalText).resolves.toBe("done");
-  });
-});
-
-describe("runGovernedTurn — error part propagation", () => {
-  it("forwards an error part to the caller's translator instead of throwing", async () => {
-    const boom = new Error("gateway 502");
-    streamAgentReply.mockReturnValue(
-      fakeStream([
-        { type: "text-delta", text: "partial" },
-        { type: "error", error: boom },
-      ]),
+    // The engine was told who is acting, what the tools are, and how long to wait for us.
+    const request = engine.turnRequests[0] as Record<string, unknown>;
+    expect(request.provider_id).toBe(ENGINE_PROVIDER_ID);
+    expect(request.principal).toBe("user-1");
+    expect(request.max_steps).toBe(12);
+    expect(request.reverse_request_timeout_ms).toBe(
+      ENGINE_REVERSE_REQUEST_TIMEOUT_MS,
     );
-
-    const result = await runGovernedTurn(baseInput());
-    const seen: unknown[] = [];
-    for await (const p of result.fullStream) seen.push(p);
-
-    expect(seen).toEqual([
-      { type: "text-delta", text: "partial" },
-      { type: "error", error: boom },
+    expect(request.tools).toEqual([
+      expect.objectContaining({
+        version: 1,
+        risk: "low",
+        requires_approval: false,
+        provenance: "declared",
+        schema: expect.objectContaining({
+          name: "search_nodes",
+          read_only: true,
+        }),
+      }),
     ]);
+    // The transcript: system, history, context (null dropped), then the instruction.
+    expect(
+      (request.messages as Array<{ role: string; content?: string }>).map(
+        (m) => [m.role, m.content],
+      ),
+    ).toEqual([
+      ["system", "GOVERNANCE PROMPT"],
+      ["user", "earlier"],
+      ["assistant", "before"],
+      ["user", "[memory]"],
+      ["user", "list the nodes"],
+    ]);
+    // The streamed deltas reached the engine as provider-delta batches.
+    expect(
+      engine.posts.filter((p) => p.route === "provider-delta").length,
+    ).toBeGreaterThan(0);
   });
 
-  it("forwards the caller's onError hook to the chokepoint", async () => {
-    streamAgentReply.mockReturnValue(fakeStream([]));
-    const onError = vi.fn();
-
-    await runGovernedTurn(baseInput({ onError }));
-
-    expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["onError"]).toBe(
-      onError,
-    );
-  });
-
-  it("propagates a throw out of the stream to the caller", async () => {
-    streamAgentReply.mockReturnValue({
-      fullStream: (async function* () {
-        yield { type: "text-delta", text: "a" };
-        throw new Error("aborted");
-      })(),
-      text: Promise.resolve(""),
-      totalUsage: Promise.resolve({}),
+  it("defaults to platform funding and the assistant charge reason", async () => {
+    const { client } = setup();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => "ok",
+        } as never,
+      },
+      engine: client,
     });
+    await drain(result);
+    expect(result.fundedBy).toBe("platform");
+    expect(
+      (streamAgentReply.mock.calls[0]![0] as Record<string, unknown>).fundedBy,
+    ).toBe("platform");
+    expect(
+      (streamAgentReply.mock.calls[0]![0] as Record<string, unknown>)
+        .chargeReason,
+    ).toBe("consume_assistant_tokens");
+  });
 
-    const result = await runGovernedTurn(baseInput());
+  it("throws EngineUnavailableError before streaming when the engine is not ready", async () => {
+    const engine = new FakeEngine({ readiness: "starting" });
+    const client = new StellaEngineClient({
+      baseUrl: "http://engine.test",
+      token: "fake-token",
+      fetchImpl: engine.fetch,
+    });
     await expect(
-      (async () => {
-        for await (const _p of result.fullStream) void _p;
-      })(),
-    ).rejects.toThrow("aborted");
+      runGovernedTurn({
+        telemetry,
+        system: "s",
+        history: [],
+        instruction: "hi",
+        tools: {},
+        engine: client,
+      }),
+    ).rejects.toBeInstanceOf(EngineUnavailableError);
+    expect(streamAgentReply).not.toHaveBeenCalled();
+  });
+
+  it("throws EngineUnavailableError when the engine cannot be reached at all", async () => {
+    const client = new StellaEngineClient({
+      baseUrl: "http://engine.test",
+      token: "t",
+      fetchImpl: async () => {
+        throw Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        });
+      },
+    });
+    const err = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      engine: client,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EngineUnavailableError);
+    expect((err as Error).message).toMatch(/assistant engine is unavailable/);
+  });
+
+  it("renders a thrown tool as a tool-error part and tells the engine it was refused", async () => {
+    const { engine, client } = setup();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => {
+            throw new Error("approval denied for search_nodes");
+          },
+        } as never,
+      },
+      engine: client,
+    });
+    const parts = await drain(result);
+    expect(parts.find((p) => p.type === "tool-error")).toMatchObject({
+      toolCallId: "call_1",
+      toolName: "search_nodes",
+    });
+    const answer = engine.posts.find((p) => p.route === "tool-result")!
+      .body as { output: unknown };
+    expect(answer.output).toEqual({
+      error: {
+        message: "approval denied for search_nodes",
+        class: "refused_by_policy",
+      },
+    });
+  });
+
+  it("cancels the engine turn when the budget guard says stop", async () => {
+    const { engine, client } = setup();
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => "ok",
+        } as never,
+      },
+      budgetGuard: () => "stop",
+      engine: client,
+    });
+    expect(result.budgeted).toBe(true);
+    const parts = await drain(result);
+    expect(parts.at(-2)).toMatchObject({
+      type: "error",
+      error: expect.objectContaining({ code: "engine_aborted" }),
+    });
+    expect(parts.at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: "error",
+    });
+    expect(streamAgentReply).not.toHaveBeenCalled();
+    expect(engine.turnRequests[0]).toMatchObject({
+      budget: { mode: "observed" },
+    });
+  });
+
+  it("cancels the engine turn when the caller aborts, and ends the stream", async () => {
+    const { client } = setup();
+    const controller = new AbortController();
+    streamAgentReply.mockReset().mockImplementation(() => {
+      controller.abort();
+      return fakeStream({ text: "late" });
+    });
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      abortSignal: controller.signal,
+      engine: client,
+    });
+    const parts = await drain(result);
+    expect(parts.at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: "error",
+    });
+  });
+
+  it("routes the verdict role to a model that is not the worker's", () => {
+    const worker = { modelId: "worker" } as never;
+    expect(
+      modelForRole("worker", { model: worker, workerTier: "balanced" }).modelId,
+    ).toBe("worker");
+    expect(
+      modelForRole("verdict", { model: worker, workerTier: "balanced" })
+        .modelId,
+    ).toBe("model-for-precise");
+    expect(
+      modelForRole("verdict", { model: worker, workerTier: "precise" }).modelId,
+    ).toBe("model-for-balanced");
+    expect(
+      modelForRole("summarization", { model: worker, workerTier: "balanced" })
+        .modelId,
+    ).toBe("model-for-fast");
+    expect(
+      modelForRole("something_new", { model: worker, workerTier: "balanced" })
+        .modelId,
+    ).toBe("worker");
   });
 });
 
-/** Read back a wrapped tool's `execute` for direct invocation in a test. */
-function executeOf(tool: unknown): () => Promise<unknown> {
-  return (tool as { execute: () => Promise<unknown> }).execute;
-}
-
-describe("serializeMutatingTools", () => {
-  it("returns the same tool set when nothing mutates", () => {
-    const tools = { a: { execute: vi.fn() } };
-    expect(serializeMutatingTools(tools as never, [])).toBe(tools);
-  });
-
-  it("leaves non-mutating tools on the concurrent lane", async () => {
-    const order: string[] = [];
-    const mk = (name: string, delay: number) => ({
-      execute: async () => {
-        order.push(`${name}:start`);
-        await new Promise((r) => setTimeout(r, delay));
-        order.push(`${name}:end`);
-      },
-    });
-    const tools = { read_a: mk("read_a", 10), read_b: mk("read_b", 1) };
-    const out = serializeMutatingTools(tools as never, ["write_x"]);
-
-    await Promise.all([executeOf(out["read_a"])(), executeOf(out["read_b"])()]);
-
-    // Interleaved: b finished before a, so they genuinely ran side by side.
-    expect(order).toEqual([
-      "read_a:start",
-      "read_b:start",
-      "read_b:end",
-      "read_a:end",
-    ]);
-  });
-
-  it("serializes mutating tools against each other", async () => {
-    const order: string[] = [];
-    const mk = (name: string, delay: number) => ({
-      execute: async () => {
-        order.push(`${name}:start`);
-        await new Promise((r) => setTimeout(r, delay));
-        order.push(`${name}:end`);
-      },
-    });
-    const tools = { write_a: mk("write_a", 10), write_b: mk("write_b", 1) };
-    const out = serializeMutatingTools(tools as never, ["write_a", "write_b"]);
-
-    await Promise.all([
-      executeOf(out["write_a"])(),
-      executeOf(out["write_b"])(),
-    ]);
-
-    expect(order).toEqual([
-      "write_a:start",
-      "write_a:end",
-      "write_b:start",
-      "write_b:end",
-    ]);
-  });
-
-  it("does not wedge the lane when a mutating tool throws", async () => {
-    const after = vi.fn().mockResolvedValue("ok");
-    const tools = {
-      write_a: {
-        execute: async () => {
-          throw new Error("denied");
-        },
-      },
-      write_b: { execute: after },
-    };
-    const out = serializeMutatingTools(tools as never, ["write_a", "write_b"]);
-
-    const first = executeOf(out["write_a"])();
-    const second = executeOf(out["write_b"])();
-
-    await expect(first).rejects.toThrow("denied");
-    await expect(second).resolves.toBe("ok");
-    expect(after).toHaveBeenCalledTimes(1);
-  });
-
-  it("passes through a tool with no execute closure", () => {
-    const tools = { client_side: { description: "d" } };
-    const out = serializeMutatingTools(tools as never, ["client_side"]);
-    expect(out["client_side"]).toBe(tools.client_side);
-  });
-});
-
-describe("aggregateStepUsage", () => {
-  it("sums nothing to zeroes", () => {
-    expect(aggregateStepUsage([])).toEqual({
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      cachedInputTokens: 0,
-    });
-  });
-
-  it("skips steps that reported no usage and reads either cache spelling", () => {
+describe("helpers", () => {
+  it("aggregates step usage including prompt-cache reads", () => {
     expect(
       aggregateStepUsage([
-        {},
-        { usage: { inputTokens: 5, cachedInputTokens: 2 } },
         {
-          usage: { inputTokens: 5, inputTokenDetails: { cacheReadTokens: 3 } },
+          usage: {
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+            inputTokenDetails: { cacheReadTokens: 1 },
+          },
         },
+        {
+          usage: {
+            inputTokens: 4,
+            outputTokens: 5,
+            totalTokens: 9,
+            cachedInputTokens: 2,
+          },
+        },
+        {},
       ]),
     ).toEqual({
-      inputTokens: 10,
-      outputTokens: 0,
-      totalTokens: 0,
-      cachedInputTokens: 5,
-    });
-  });
-});
-
-describe("buildTurnUserMessage", () => {
-  it("is plain text with no attachments", () => {
-    expect(buildTurnUserMessage("hello")).toEqual({
-      role: "user",
-      content: "hello",
+      inputTokens: 5,
+      outputTokens: 7,
+      totalTokens: 12,
+      cachedInputTokens: 3,
     });
   });
 
-  it("carries images as image parts and everything else as file parts", () => {
-    const png = new Uint8Array([1, 2]);
-    const mp4 = new Uint8Array([3, 4]);
+  it("builds a user message with image and file parts", () => {
+    const bytes = new Uint8Array([1, 2]);
+    expect(buildTurnUserMessage("hi")).toEqual({ role: "user", content: "hi" });
     expect(
       buildTurnUserMessage("look", [
-        { kind: "image", data: png, mediaType: "image/png" },
-        { kind: "file", data: mp4, mediaType: "video/mp4" },
+        { kind: "image", data: bytes, mediaType: "image/png" },
+        { kind: "file", data: bytes, mediaType: "video/mp4" },
       ]),
     ).toEqual({
       role: "user",
       content: [
         { type: "text", text: "look" },
-        { type: "image", image: png, mediaType: "image/png" },
-        { type: "file", data: mp4, mediaType: "video/mp4" },
+        { type: "image", image: bytes, mediaType: "image/png" },
+        { type: "file", data: bytes, mediaType: "video/mp4" },
       ],
     });
+  });
+
+  it("serialises mutating tools and leaves the rest concurrent", async () => {
+    const order: string[] = [];
+    const slow = async (name: string, ms: number) => {
+      order.push(`${name}:start`);
+      await new Promise((r) => setTimeout(r, ms));
+      order.push(`${name}:end`);
+      return name;
+    };
+    const tools = {
+      write_a: { execute: () => slow("a", 20) },
+      write_b: { execute: () => slow("b", 5) },
+      read_c: { execute: () => slow("c", 5) },
+    } as never;
+    const out = serializeMutatingTools(tools, ["write_a", "write_b"]) as Record<
+      string,
+      { execute: (i: unknown, o: unknown) => Promise<string> }
+    >;
+    await Promise.all([
+      out.write_a!.execute({}, {}),
+      out.write_b!.execute({}, {}),
+      out.read_c!.execute({}, {}),
+    ]);
+    expect(order.indexOf("b:start")).toBeGreaterThan(order.indexOf("a:end"));
+    expect(order.indexOf("c:start")).toBeLessThan(order.indexOf("a:end"));
+    expect(serializeMutatingTools(tools, [])).toBe(tools);
   });
 });
