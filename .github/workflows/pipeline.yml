@@ -795,7 +795,11 @@ jobs:
       # A list of names in a workflow drifts the moment a route reads a new
       # variable, and its failure is a build crash naming a route instead of
       # the variable; the registry already knows which service needs what.
+      # The engine is a published image with nothing to build, so it has no
+      # build environment to resolve; build-env.ts refuses a service it does
+      # not know, which is what stopped the first engine deploy (#2833).
       - name: Resolve the build environment for ${{ matrix.service }}
+        if: matrix.service != 'stella-serve'
         env:
           PARAMETER_PREFIX: /oxagen/production
         run: |
@@ -819,9 +823,11 @@ jobs:
       - name: Package ${{ matrix.service }}
         run: |
           set -euo pipefail
-          set -a
-          . "$RUNNER_TEMP/build-env"
-          set +a
+          if [ -f "$RUNNER_TEMP/build-env" ]; then
+            set -a
+            . "$RUNNER_TEMP/build-env"
+            set +a
+          fi
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
       - uses: ./.github/actions/ship-to-node
