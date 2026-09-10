@@ -2,5 +2,22 @@
   "name": "@oxagen/web-v2",
   "version": "2.1.1",
   "private": true,
-  "description": "oxagen.sh public website (v2). Static for now — no build step, deployed as-is."
+  "description": "oxagen.sh public website (v2). Hand-authored HTML plus a blog built from MDX content; `pnpm build` assembles the publishable site into dist/.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/build.mjs && python3 -m http.server -d dist 5500",
+    "check:links": "node scripts/check-links.mjs",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@mdx-js/mdx": "3.1.1",
+    "@vitest/coverage-v8": "2.1.9",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "remark-gfm": "4.0.1",
+    "vitest": "2.1.9",
+    "yaml": "2.9.0"
+  }
 }

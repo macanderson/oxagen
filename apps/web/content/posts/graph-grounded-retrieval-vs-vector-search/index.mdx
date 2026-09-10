@@ -1,0 +1,216 @@
+---
+title: "Graph-Grounded Retrieval vs Vector Search"
+description: "Dense retrieval finds the passage that looks right. Graph-grounded retrieval finds the fact that is right. What the research says about the difference"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - ontologies
+tags:
+  - retrieval
+  - rag
+  - vector-search
+  - knowledge-graph
+  - graphrag
+  - cypher
+  - hallucination
+draft: false
+---
+
+A support agent is asked whether a customer's contract includes the uptime
+credit. It retrieves a chunk. The chunk is about uptime credits, it names the
+right product, and it reads like it was written for this exact question. The
+agent answers yes.
+
+The chunk came from the standard template. This customer negotiated it out
+fourteen months ago. Every part of the retrieval pipeline did its job, and the
+answer is wrong.
+
+## The right-looking chunk and the wrong fact
+
+Retrieval-augmented generation was introduced to attach a non-parametric memory
+to a generator, so that a model could pull from an index instead of relying on
+what its weights happened to encode.[^1] It works. It is also, as normally
+deployed, optimising for the wrong target.
+
+The standard hallucination survey grades generated text against the source it
+was given, splitting failures into intrinsic, where the output contradicts that
+source, and extrinsic, where the output cannot be verified against it.[^2] Note
+what is outside the frame. If the retriever supplies the wrong source, the
+generator can be perfectly faithful and still assert a falsehood, and it will
+score clean on faithfulness.
+
+Similarity is not truth. A passage that is about your question and a passage
+that answers your question are different objects, and cosine distance cannot
+tell them apart.
+
+## What dense retrieval is actually good at
+
+This is not an argument against embeddings. Dense retrieval earned its place
+with numbers.
+
+Dense Passage Retrieval showed that a dual-encoder trained on a modest number
+of question and passage pairs beats BM25 by 9 to 19 points absolute on top-20
+passage retrieval accuracy across open-domain QA benchmarks.[^3] That is a
+large, reproducible margin on the task of finding text about a topic. It is
+also cheap. You chunk a corpus, you embed it, and you have working retrieval in
+an afternoon over documents nobody ever modelled.
+
+Keep that. Dense retrieval is the right tool for the majority of what lives in
+a company: prose, tickets, transcripts, notes, and everything else that was
+never going to fit a schema. The argument is about which questions it should be
+answering.
+
+## Where similarity stops paying
+
+Two failure modes are well documented, and both are structural rather than a
+matter of picking a better embedding model.
+
+The first is hops. HotpotQA built 113,000 questions that require finding and
+reasoning over multiple supporting documents, and made systems produce the
+supporting facts alongside the answer.[^4] The moment a question needs a join,
+there is no single passage to rank. Retrieving top-k text turns each hop into
+an independent guess, and the error rates multiply.
+
+The second is what happens when you respond by stuffing more into the context.
+Liu and colleagues measured how models actually use long inputs and found a
+positional effect: accuracy is highest when the relevant information sits at
+the beginning or the end of the context, and degrades significantly when the
+model has to reach for something in the middle.[^5] This holds for models built
+for long contexts. Retrieving fifty passages instead of five does not fix a
+precision problem. It buries the answer in the region the model reads worst.
+
+Here is the comparison, stated plainly.
+
+| | Dense vector retrieval | Graph-grounded retrieval |
+|---|---|---|
+| What it returns | Passages ranked by embedding similarity | Nodes and edges matching a typed pattern |
+| Matching signal | Nearness in a learned space | Declared relations and constraints |
+| Multi-hop questions | Each hop is a fresh guess, errors compound | Traversal is one query |
+| Time | Present only if the text happens to mention it | An edge property, so "as of" is a parameter |
+| Provenance | The passage is the evidence | Source, extraction run, and confidence on the edge |
+| Setup cost | Chunk and embed, hours | Schema, extraction, entity resolution, weeks |
+| Unstructured prose | Works on anything | Only what was extracted into the schema |
+| Typical failure | A right-looking chunk with the wrong fact | A missing edge, and no answer at all |
+
+That last row is the trade. Vector search fails by answering confidently.
+Graph-grounded retrieval fails by coming back empty. The second failure is
+recoverable, because you can see it.
+
+## What graph grounding does instead
+
+The pattern is to resolve the question into entities and relations first, then
+retrieve facts, then let the model write.
+
+The simplest version already moves the number. KAPING verbalises the facts
+attached to entities found in the question and prepends them to the prompt, with
+no fine-tuning at all, and reports gains of up to 48 percent on average over
+comparable zero-shot baselines across models of several sizes.[^6] Nothing
+clever is happening there. The model is being handed the specific triples that
+bear on the question instead of paragraphs that resemble it.
+
+Think-on-Graph goes further and treats the model as an agent running beam
+search over the graph, extending reasoning paths one relation at a time.[^7]
+The path is the citation. You can read why the system concluded what it
+concluded, which is a property a similarity score does not have. The paper
+reports that this can let smaller models beat GPT-4 on some of these
+benchmarks.
+
+HippoRAG is the result to look at if cost is your constraint. It builds a graph
+index over the corpus and runs a single-step retrieval that matches iterative
+multi-step methods on multi-hop QA, with improvements of up to 20 percent, at
+10 to 30 times lower cost and 6 to 13 times lower latency than the iterative
+approaches it matches.[^8] Structure is not only more accurate here. It is
+cheaper, because you stop paying for repeated round trips to substitute for a
+join.
+
+GraphRAG addresses the question class that chunking handles worst: questions
+about the corpus as a whole. It extracts an entity graph, summarises detected
+communities of entities, and composes an answer from partial answers across
+them, improving comprehensiveness and diversity on corpora around a million
+tokens.[^9]
+
+What all four share is that the retrieval unit is a fact with a type, not a
+window of text. That lets you constrain it. A scoped, time-bounded neighbourhood
+query looks like this:
+
+```cypher
+// Contract terms in force for one customer on a given date,
+// scoped to the caller's workspace.
+MATCH (c:Customer { publicId: $customerId, workspaceId: $workspaceId })
+      -[r:HAS_TERM]->(t:ContractTerm)
+WHERE r.validFrom <= $asOf
+  AND (r.validTo IS NULL OR r.validTo > $asOf)
+RETURN t.displayName AS term,
+       t.value       AS value,
+       r.sourceDocId AS source,
+       r.validFrom   AS since
+ORDER BY r.validFrom DESC
+```
+
+Three things are true of that query that are not true of a vector search. It
+cannot return another tenant's data, because the scope is in the pattern. It
+cannot return a superseded term, because the validity window is in the
+predicate. And every row it returns carries the document it came from. The
+uptime credit answered wrongly at the top of this post is a row this query
+would not have returned.
+
+## Where graphs lose
+
+Being honest about this matters more than the pitch.
+
+**Schema is real work.** The knowledge graph survey by Hogan and eighteen
+co-authors spends most of its length on schema, identity, context, quality, and
+refinement rather than on querying.[^10] That distribution is the
+reality. Deciding what your classes are is a modelling exercise that involves
+people who disagree, and it does not finish.
+
+**Entity resolution is the hard part and it never fully works.** Deciding that
+two descriptions refer to the same real-world thing is its own research field,
+with a survey in ACM Computing Surveys covering the full pipeline from blocking
+through matching and clustering.[^11] Get it wrong in one direction and you
+merge two customers into one node. Get it wrong in the other and half your
+edges point at a duplicate nobody queries. Both are silent.
+
+**Coverage is bounded by extraction.** A vector index covers whatever you
+embedded. A graph covers whatever you successfully extracted into the schema,
+which is always less. Anything nuanced, hedged, or newly invented in a document
+does not survive the trip into a triple.
+
+**Question-to-traversal is its own failure surface.** The Cypher above is
+correct because a person wrote it. Generating that query from a natural
+language question moves the difficulty rather than removing it, and a
+plausible-looking traversal against the wrong relation returns confident rows.
+The mitigation is to expose a fixed set of parameterised queries and let the
+model pick and fill one, instead of letting it author graph queries freely.
+That caps expressivity on purpose, which is a real cost and the right trade for
+anything that touches contracts or money.
+
+<Callout kind="warn" title="The answer is usually both">
+Use the graph for the questions that have a shape: entities, relations, dates,
+amounts, permissions. Use dense retrieval for the prose that never had one.
+Route by question type, and treat a system that only has one of the two as
+incomplete rather than as having chosen a side.
+</Callout>
+
+## Where this meets Oxagen
+
+Oxagen governs agents, it does not run them. Grounding is one of its five jobs:
+answers are resolved against a Neo4j graph and an ontology, so the retrieval
+unit is a typed, cited, time-aware fact rather than a chunk that looked right.
+Explaining is another: the nodes and edges behind an answer stay on the record,
+so a wrong answer can be traced to the fact that produced it. That does not
+make the underlying model more accurate. It makes the difference between a
+right-looking answer and a correct one something a person can check.
+
+[^1]: Lewis et al. (2020). *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*. NeurIPS 2020. https://arxiv.org/abs/2005.11401
+[^2]: Ji et al. (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys 55(12). https://arxiv.org/abs/2202.03629
+[^3]: Karpukhin et al. (2020). *Dense Passage Retrieval for Open-Domain Question Answering*. EMNLP 2020. https://arxiv.org/abs/2004.04906
+[^4]: Yang et al. (2018). *HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering*. EMNLP 2018. https://arxiv.org/abs/1809.09600
+[^5]: Liu et al. (2024). *Lost in the Middle: How Language Models Use Long Contexts*. Transactions of the Association for Computational Linguistics. https://arxiv.org/abs/2307.03172
+[^6]: Baek, Aji, & Saffari (2023). *Knowledge-Augmented Language Model Prompting for Zero-Shot Knowledge Graph Question Answering*. https://arxiv.org/abs/2306.04136
+[^7]: Sun et al. (2024). *Think-on-Graph: Deep and Responsible Reasoning of Large Language Model on Knowledge Graph*. ICLR 2024. https://arxiv.org/abs/2307.07697
+[^8]: Gutiérrez et al. (2024). *HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models*. NeurIPS 2024. https://arxiv.org/abs/2405.14831
+[^9]: Edge et al. (2024). *From Local to Global: A Graph RAG Approach to Query-Focused Summarization*. https://arxiv.org/abs/2404.16130
+[^10]: Hogan et al. (2021). *Knowledge Graphs*. ACM Computing Surveys 54(4), 71:1-71:37. https://arxiv.org/abs/2003.02320
+[^11]: Christophides, Efthymiou, Palpanas, Papadakis, & Stefanidis (2020). *An Overview of End-to-End Entity Resolution for Big Data*. ACM Computing Surveys 53(6), Article 127. https://dl.acm.org/doi/10.1145/3418896

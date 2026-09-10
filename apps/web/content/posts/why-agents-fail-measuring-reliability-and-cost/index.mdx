@@ -1,0 +1,96 @@
+---
+title: "Why agents fail: measuring reliability and cost"
+description: "AgentBench, WebArena, GAIA, SWE-bench, and tau-bench measure five different things, and none of them report what a run costs. What that hides"
+date: 2026-09-09
+authors:
+  - Oxagen Research
+pillars:
+  - ai-agents
+  - coding-agents
+tags:
+  - benchmarks
+  - evaluation
+  - reliability
+  - cost
+  - metering
+draft: false
+---
+
+The agent works in the demo. It ships. Two weeks later support has a pattern: roughly one run in four does something wrong, the wrongness is different every time, and when finance asks what a successful run costs, the honest answer is that nobody knows. There is a token bill, but it is not broken down by outcome, so the cost of a run that worked and the cost of a run that failed three times and got retried look identical in the ledger.
+
+Both halves of that are measurement failures, and the research literature has been circling them since 2023. The benchmarks that made agents look good measure a single attempt at a task in a frozen environment, and almost none of them report cost. Read them carefully and the production failure rate stops being a surprise.
+
+## What the benchmarks actually measure
+
+Five benchmarks get quoted as if they measure the same thing. They do not.
+
+AgentBench put language models into 8 distinct interactive environments, from operating-system tasks to databases to card games, and scored task success in each.[^1] The headline was a wide gap between top commercial models and open models under 70B parameters. The diagnosis is the part worth keeping: Liu and colleagues attributed agent failure primarily to poor long-term reasoning, decision-making, and instruction following, rather than to a missing capability.
+
+WebArena went the other way and built one environment properly.[^2] Real, self-hosted, fully functional sites across e-commerce, a social forum, a software-development platform, and a content management system, plus supporting tools and documentation. Success is checked functionally against the resulting state, not by string-matching a summary. The best agent Zhou and colleagues tested finished 14.41 percent of tasks end to end. Humans on the same tasks finished 78.24 percent.
+
+GAIA takes 466 questions that are conceptually simple for a person and require reasoning, multimodality, browsing, and tool use to answer.[^3] Answers are short and exactly checkable. Human respondents scored 92 percent. GPT-4 with plugins scored 15 percent. Mialon and colleagues make the design argument explicitly: the interesting frontier is robustness on tasks humans find easy, not scores on tasks humans find hard.
+
+SWE-bench is the coding case, and its grader is the strictest of the five.[^4] It contains 2,294 real GitHub issues with their corresponding pull requests, drawn from 12 popular Python repositories. A submission succeeds when the repository's own test suite passes after the model's patch is applied. At publication the best system Jimenez and colleagues measured, Claude 2, resolved 1.96 percent of instances.
+
+Then tau-bench, which measures the thing the other four skip.[^5]
+
+| Benchmark | Task type | What success means | Cost reported |
+| --- | --- | --- | --- |
+| AgentBench | 8 interactive environments (OS, DB, web, games) | Per-environment task success, aggregated | No |
+| WebArena | Multi-step tasks on real self-hosted websites | Functional check of the resulting state | No |
+| GAIA | 466 real-world assistant questions | Exact match against a short ground-truth answer | No |
+| SWE-bench | 2,294 real GitHub issues in 12 Python repos | The repository's own test suite passes after the patch | No |
+| tau-bench | Tool-agent-user conversations under a domain policy | Final database state matches the goal state, measured over repeated trials | No |
+
+The right column is the point. Five benchmarks, five definitions of success, and not one of them treats what the attempt cost as part of the result.
+
+Two other things travel with that table. The grader outlives the score: published resolve rates on SWE-bench have climbed a long way since 1.96 percent, but they are comparable across years precisely because the test suites doing the grading did not move. A benchmark whose success criterion is a real check is still useful after its leaderboard is obsolete. And every one of these environments is frozen by design, which is what makes the comparison fair and also what makes it optimistic. Production sites change their markup, APIs deprecate fields, and a policy document gets edited on a Tuesday. An agent scored at 14 percent against a fixed copy of a web stack is not being tested on the thing that breaks it most often in the field.
+
+## One attempt is not a measurement
+
+Yao and colleagues built tau-bench around a scenario the others do not simulate: an agent talking to a user, using domain tools, and obeying a written domain policy at the same time.[^5] Success is evaluated by comparing the final database state to the goal state, which means the agent has to actually change the world correctly, not describe changing it.
+
+Their real contribution is the metric. Standard practice reports pass@k, the probability that at least one of k attempts succeeds. That is the right question for a research leaderboard and the wrong question for a production system, where you get one attempt and a customer on the other end. So they define pass^k: the probability that all k independent attempts at the same task succeed.
+
+The result is blunt. State-of-the-art function-calling agents including GPT-4o succeeded on under 50 percent of tasks, and pass^8 in the retail domain fell below 25 percent. An agent that is right half the time on a single try is right on all eight tries about a quarter of the time. That is the number that matches what support sees, and it is the number nobody publishes.
+
+<Callout kind="note" title="pass@k versus pass^k">
+pass@k rewards a system for being right occasionally. pass^k punishes it for being inconsistent. Sampling more attempts raises the first and lowers the second, so a system tuned on pass@k can get less reliable while its headline number improves.
+</Callout>
+
+## Errors compound, and reflection does not undo them
+
+Inconsistency is not bad luck. It is the arithmetic of long horizons.
+
+An agent doing a real task takes a chain of dependent steps: read the ticket, query the database, decide, call the API, verify. If each step is independently right 95 percent of the time, twenty dependent steps finish correctly 36 percent of the time. Ninety-nine percent per step still only gets you to 82 percent over twenty. Nothing about that is a model flaw, it is multiplication, and it is why per-step accuracy is a misleading thing to optimise on its own.
+
+The model behaviour underneath makes it worse. Dziri and colleagues studied transformers on compositional tasks such as multi-digit multiplication, logic puzzles, and dynamic programming, and concluded that the models solve them by reducing multi-step reasoning to linearised subgraph matching rather than by acquiring a systematic procedure.[^6] They argue both theoretically and empirically that autoregressive performance decays rapidly as task complexity grows. Per-step accuracy is not even constant across a long horizon. It degrades as the horizon gets longer.
+
+The obvious patch is to let the agent check its own work. That patch is weaker than it looks. Huang and colleagues found that models struggle to self-correct without external feedback, and that performance sometimes degrades after an unaided self-correction pass.[^7] Self-correction works when something outside the model can rule on the last attempt. A test suite can. A database state check can. The model's own confidence cannot.
+
+## Cost is half of the result
+
+Kapoor and colleagues made the argument the field had been avoiding: an accuracy number with no cost attached is not a result.[^8] Their analysis of agent benchmarking makes four claims that are worth reading together.
+
+First, benchmarks that score accuracy alone push researchers toward needlessly complex and expensive agents, because there is no penalty for spending more. Second, accuracy and cost should be optimised jointly, and when they did that they cut cost substantially while holding accuracy. Third, many agent benchmarks lack adequate holdout sets, which lets agents overfit and exploit shortcuts that will not exist in production. Fourth, the field conflates two different audiences: a model developer comparing systems and a downstream developer choosing one to deploy need different evaluations, and neither is well served by a single leaderboard column.
+
+Put that next to the previous post's numbers and the shape of the problem is clear. Tree of Thoughts took Game of 24 from 4 percent to 74 percent by searching over many candidate thoughts, which means many model calls per task.[^9] Reflexion reached 91 percent pass@1 on HumanEval by retrying with a written post-mortem after each failure, which means several attempts per task.[^10] Both are real results. Both buy accuracy with inference. Neither headline tells you the exchange rate, and the exchange rate is exactly what a team deciding whether to ship needs.
+
+Overfitting is the quieter half of their argument, and it is the one that explains the gap between the demo and the deployment. An agent tuned against a benchmark with no holdout set can learn the benchmark: the shape of its tasks, the quirks of its environment, the shortcuts its grader will accept. None of that transfers. A team that picks an agent design off a leaderboard and is then surprised by production is often not seeing a regression at all. They are seeing the first honest measurement.
+
+There is a practical version of this for anyone running an agent today. Accuracy per attempt is the wrong denominator. The number that matters is cost per verified outcome: total spend across every attempt, retry, and abandoned branch, divided by the count of outcomes something external confirmed were correct. That number is usually several times the naive one, it moves when reliability moves, and it is the only figure that makes a retry loop legible on a finance dashboard.
+
+## Where this meets Oxagen
+
+Oxagen governs agents, it does not run them. Two of its jobs fall straight out of the research above. It meters: every governed action is observed into ClickHouse and priced through to Stripe, so total spend can be divided by verified outcomes rather than by attempts, which is the pass^k problem expressed as a bill. And it records evidence: a typed contract binds the permitted action to a verified outcome and an audit record, so the external check that self-correction requires is a durable artifact rather than the model's own opinion. That does not make an agent reliable. It makes its reliability, and its cost, something you can quote a number for.
+
+[^1]: Liu, X., Yu, H., Zhang, H., Xu, Y., Lei, X., Lai, H., Gu, Y., Ding, H., Men, K., Yang, K., Zhang, S., Deng, X., Zeng, A., Du, Z., Zhang, C., Shen, S., Zhang, T., Su, Y., Sun, H., Huang, M., Dong, Y., & Tang, J. (2023). *AgentBench: Evaluating LLMs as Agents*. ICLR 2024. https://arxiv.org/abs/2308.03688
+[^2]: Zhou, S., Xu, F. F., Zhu, H., Zhou, X., Lo, R., Sridhar, A., Cheng, X., Ou, T., Bisk, Y., Fried, D., Alon, U., & Neubig, G. (2023). *WebArena: A Realistic Web Environment for Building Autonomous Agents*. ICLR 2024. https://arxiv.org/abs/2307.13854
+[^3]: Mialon, G., Fourrier, C., Swift, C., Wolf, T., LeCun, Y., & Scialom, T. (2023). *GAIA: a benchmark for General AI Assistants*. ICLR 2024. https://arxiv.org/abs/2311.12983
+[^4]: Jimenez, C. E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., & Narasimhan, K. (2023). *SWE-bench: Can Language Models Resolve Real-World GitHub Issues?*. ICLR 2024. https://arxiv.org/abs/2310.06770
+[^5]: Yao, S., Shinn, N., Razavi, P., & Narasimhan, K. (2024). *tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains*. arXiv. https://arxiv.org/abs/2406.12045
+[^6]: Dziri, N., Lu, X., Sclar, M., Li, X. L., Jiang, L., Lin, B. Y., West, P., Bhagavatula, C., Le Bras, R., Hwang, J. D., Sanyal, S., Welleck, S., Ren, X., Ettinger, A., Harchaoui, Z., & Choi, Y. (2023). *Faith and Fate: Limits of Transformers on Compositionality*. NeurIPS 2023. https://arxiv.org/abs/2305.18654
+[^7]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. ICLR 2024. https://arxiv.org/abs/2310.01798
+[^8]: Kapoor, S., Stroebl, B., Siegel, Z. S., Nadgir, N., & Narayanan, A. (2024). *AI Agents That Matter*. arXiv. https://arxiv.org/abs/2407.01502
+[^9]: Yao, S., Yu, D., Zhao, J., Shafran, I., Griffiths, T. L., Cao, Y., & Narasimhan, K. (2023). *Tree of Thoughts: Deliberate Problem Solving with Large Language Models*. NeurIPS 2023. https://arxiv.org/abs/2305.10601
+[^10]: Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., & Yao, S. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning*. NeurIPS 2023. https://arxiv.org/abs/2303.11366
