@@ -462,6 +462,68 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect("maxRetries" in arg).toBe(false);
   });
 
+  // ── ADR-053 §3: a token is billed only when Oxagen paid for it ────────────
+
+  it("charges nothing when the organisation's own key paid, and still reports the usage", async () => {
+    const { object } = await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "on the customer's key",
+      telemetry: TELEMETRY,
+      fundedBy: "org",
+    });
+
+    expect(object.answer).toBe("Paris");
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+    // Reported in full (ADR-052) even though billed at zero.
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+    )[0];
+    expect(rows[0]).toMatchObject({
+      input_tokens: 12,
+      output_tokens: 8,
+      cost_usd_micros: 156,
+    });
+  });
+
+  it("charges when the platform key paid (fundedBy: platform, the default made explicit)", async () => {
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "on the platform key",
+      telemetry: TELEMETRY,
+      fundedBy: "platform",
+    });
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards chargeReason as the ledger reason of a platform-paid charge", async () => {
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "assistant usage",
+      telemetry: TELEMETRY,
+      chargeReason: "consume_assistant_tokens",
+    });
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: TELEMETRY.orgId,
+        reason: "consume_assistant_tokens",
+      }),
+    );
+  });
+
+  it("sends no reason key when chargeReason is unset, so the meter's default applies", async () => {
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "default reason",
+      telemetry: TELEMETRY,
+    });
+    const arg = mocks.chargeUsageCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect("reason" in arg).toBe(false);
+  });
+
   it("propagates an AbortError when the underlying call is aborted", async () => {
     mocks.generateObject.mockRejectedValueOnce(
       Object.assign(new Error("The operation was aborted"), {

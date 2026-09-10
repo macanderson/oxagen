@@ -17,6 +17,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -72,6 +73,11 @@ export async function resolveWorkbenchScope(
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
+  // Workspace membership, not just org membership: a server action is a direct
+  // POST, so the workspace layout's assertWorkspaceMember never runs and org
+  // membership alone would open a tenant scope for a workspace the caller is
+  // not in.
+  await assertWorkspaceMember(ws.id, session.user.id);
 
   const roleRows = await runInTenantScope(
     { orgId: org.id, workspaceId: ws.id },

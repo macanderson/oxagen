@@ -476,6 +476,74 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 });
 
+// ── ADR-053 §3: a token is billed only when Oxagen paid for it ──────────────
+
+describe("streamAgentReply funding source (ADR-053)", () => {
+  it("charges nothing when the organisation's own key paid, and still reports the usage", async () => {
+    let calledOnFinish = false;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      fundedBy: "org",
+      onFinish: async () => {
+        calledOnFinish = true;
+      },
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+    // Reported in full (ADR-052) even though billed at zero.
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+    )[0];
+    expect(rows[0]).toMatchObject({
+      input_tokens: 10,
+      output_tokens: 20,
+      cost_usd_micros: 330,
+    });
+    expect(calledOnFinish).toBe(true);
+  });
+
+  it("charges when the platform key paid (fundedBy: platform, the default made explicit)", async () => {
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      fundedBy: "platform",
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards chargeReason as the ledger reason of a platform-paid charge", async () => {
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      chargeReason: "consume_assistant_tokens",
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: TELEMETRY.orgId,
+        reason: "consume_assistant_tokens",
+      }),
+    );
+  });
+
+  it("sends no reason key when chargeReason is unset, so the meter's default applies", async () => {
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+    const arg = mocks.chargeUsageCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect("reason" in arg).toBe(false);
+  });
+});
+
 // ── reasoningRequestConfig unit tests ────────────────────────────────────────
 
 describe("reasoningRequestConfig (@oxagen/ai)", () => {

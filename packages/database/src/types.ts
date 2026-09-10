@@ -33,6 +33,7 @@ import type {
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
   dataPlanes,
+  modelCredentials,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -215,3 +216,15 @@ export type DataPlaneRow = InferSelectModel<typeof dataPlanes>;
 
 /** INSERT shape for `org.data_planes`. */
 export type NewDataPlaneRow = InferInsertModel<typeof dataPlanes>;
+
+// ── Organisation model credentials (ADR-053) ─────────────────────────────────
+
+/**
+ * Full SELECT row from `org.model_credentials`. `keyCiphertext` is the KMS
+ * envelope — opaque bytes here, decrypted only by the model-credential
+ * resolver and never handed to a surface.
+ */
+export type ModelCredentialRow = InferSelectModel<typeof modelCredentials>;
+
+/** INSERT shape for `org.model_credentials`. */
+export type NewModelCredentialRow = InferInsertModel<typeof modelCredentials>;

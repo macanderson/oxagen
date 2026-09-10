@@ -30,6 +30,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: vi.fn(),
   resolveWorkspace: vi.fn(),
   assertOrgMember: vi.fn(),
+  assertWorkspaceMember: vi.fn(),
 }));
 
 vi.mock("@oxagen/oxagen", () => ({

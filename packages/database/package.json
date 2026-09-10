@@ -12,7 +12,8 @@
     "./security": "./src/security.ts",
     "./seed": "./src/seed.ts",
     "./tenant": "./src/tenant.ts",
-    "./data-plane": "./src/data-plane-resolver.ts"
+    "./data-plane": "./src/data-plane-resolver.ts",
+    "./model-credential": "./src/model-credential-resolver.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

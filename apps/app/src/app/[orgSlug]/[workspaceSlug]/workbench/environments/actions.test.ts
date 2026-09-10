@@ -26,6 +26,7 @@ const {
   mockResolveOrg,
   mockResolveWorkspace,
   mockAssertOrgMember,
+  mockAssertWorkspaceMember,
   mockRunInTenantScope,
   mockWithTenantDb,
   mockInvoke,
@@ -55,6 +56,7 @@ const {
     mockResolveOrg: vi.fn(),
     mockResolveWorkspace: vi.fn(),
     mockAssertOrgMember: vi.fn(),
+    mockAssertWorkspaceMember: vi.fn(),
     mockRunInTenantScope,
     mockWithTenantDb,
     mockInvoke: vi.fn(),
@@ -72,6 +74,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
+  assertWorkspaceMember: mockAssertWorkspaceMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
@@ -141,6 +144,7 @@ describe("importEnvAction", () => {
     mockResolveOrg.mockResolvedValue(ORG);
     mockResolveWorkspace.mockResolvedValue(WS);
     mockAssertOrgMember.mockResolvedValue(undefined);
+    mockAssertWorkspaceMember.mockResolvedValue(undefined);
   });
 
   it("preview path: returns rows and committed:false, calls secret.import_env with commit:false", async () => {
@@ -288,6 +292,7 @@ describe("setDefaultEnvironmentAction", () => {
     mockResolveOrg.mockResolvedValue(ORG);
     mockResolveWorkspace.mockResolvedValue(WS);
     mockAssertOrgMember.mockResolvedValue(undefined);
+    mockAssertWorkspaceMember.mockResolvedValue(undefined);
   });
 
   it("calls invoke with environment.set_default and returns ok:true with environment", async () => {
@@ -356,6 +361,7 @@ describe("upsertKeyAction", () => {
     mockResolveOrg.mockResolvedValue(ORG);
     mockResolveWorkspace.mockResolvedValue(WS);
     mockAssertOrgMember.mockResolvedValue(undefined);
+    mockAssertWorkspaceMember.mockResolvedValue(undefined);
   });
 
   it("happy path: calls invoke with secret.key.upsert and returns ok:true + id", async () => {

@@ -29,6 +29,16 @@
  * away, and — when the caller supplies one — the shared per-turn dollar guard
  * from `@oxagen/billing`, evaluated between steps off the same aggregated
  * usage the surface bills on.
+ *
+ * It also names who paid for the tokens (ADR-053 §3). The governed turn IS the
+ * in-app agent, so its charge reason is always `consume_assistant_tokens`: a
+ * platform-funded turn's tokens land on the ledger as their own "assistant
+ * usage" line, never folded into the action count. `fundedBy` is what the
+ * surface resolved for the organisation through `resolveModelFundingSource`;
+ * `org` means the organisation's own key paid the vendor and `streamAgentReply`
+ * charges nothing. The surface resolves it once and hands the same answer to
+ * `selectModel`, the credit gate and this loop, so the key the call was built
+ * on and the ledger's view of who paid can never disagree.
  */
 
 import {
@@ -41,7 +51,9 @@ import {
   type StreamAgentReplyArgs,
   type Tool,
   type ToolSet,
+  type TurnFunding,
 } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { runInTenantScope } from "@oxagen/tenancy";
 
 /**
@@ -77,9 +89,10 @@ export interface GovernedTurnUsage {
 
 /**
  * Per-step budget guard, structurally the value `createTurnBudgetGuard`
- * (`@oxagen/billing`) returns. Spelled structurally rather than imported so the
- * agent runtime does not take a dependency on the billing package just to name
- * a callback; the two shapes are checked against each other at the call site.
+ * (`@oxagen/billing`) returns. Spelled structurally rather than imported: the
+ * guard is a callback the surface builds, and naming the billing type here
+ * would tie this loop's signature to that package's; the two shapes are
+ * checked against each other at the call site.
  */
 export type GovernedTurnBudgetGuard = (usage: {
   inputTokens?: number;
@@ -133,6 +146,13 @@ export interface GovernedTurnInput {
   maxSteps?: number;
   /** Per-turn dollar guard; omit when the effective budget policy is off. */
   budgetGuard?: GovernedTurnBudgetGuard;
+  /**
+   * Who paid the vendor for this turn's tokens (ADR-053 §2). Defaults to
+   * `platform`. Pass what `resolveModelFundingSource` answered for the same
+   * organisation `model` was selected for: under `org` the tokens are metered
+   * and charged nothing, under `platform` they are charged as assistant usage.
+   */
+  fundedBy?: TurnFunding;
   /** Client-disconnect / cancel signal, forwarded to the provider call. */
   abortSignal?: AbortSignal;
   /** Observability hook for provider/stream errors; never swallows the part. */
@@ -152,6 +172,8 @@ export interface GovernedTurnResult {
   usage: Promise<GovernedTurnUsage>;
   /** Resolved gateway model id — the caller prices and records the turn on it. */
   modelId: string;
+  /** Who paid the vendor for the tokens — the value the ledger was told. */
+  fundedBy: TurnFunding;
   /** True when a budget guard is bounding the turn alongside the step cap. */
   budgeted: boolean;
   /** The step cap actually applied. */
@@ -317,6 +339,7 @@ export async function runGovernedTurn(
   // that also admits a bare id string — `.modelId` is not always reachable.
   const model = input.model ?? defaultModel();
   const modelId = modelIdOf(model);
+  const fundedBy: TurnFunding = input.fundedBy ?? "platform";
 
   // The materialised tools re-enter tenant scope inside their own `execute`,
   // but `streamAgentReply` captures the ambient scope SYNCHRONOUSLY here to
@@ -335,6 +358,10 @@ export async function runGovernedTurn(
         stopWhen,
         telemetry: input.telemetry,
         model,
+        fundedBy,
+        // Always the assistant reason: this loop is the in-app agent, and
+        // ADR-053 §3 gives its platform-paid tokens their own ledger line.
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
         ...(input.effort ? { effort: input.effort } : {}),
         ...(input.abortSignal !== undefined
           ? { abortSignal: input.abortSignal }
@@ -359,6 +386,7 @@ export async function runGovernedTurn(
     finalText: Promise.resolve(stream.text),
     usage,
     modelId,
+    fundedBy,
     budgeted: budgetGuard !== undefined,
     maxSteps,
   };

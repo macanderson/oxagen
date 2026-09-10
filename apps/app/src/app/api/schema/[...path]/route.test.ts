@@ -15,6 +15,7 @@ const {
   mockResolveOrg,
   mockResolveWorkspace,
   mockAssertOrgMember,
+  mockAssertWorkspaceMember,
   mockGetOrgRole,
   mockInvoke,
   mockLoggerError,
@@ -23,6 +24,7 @@ const {
   mockResolveOrg: vi.fn(),
   mockResolveWorkspace: vi.fn(),
   mockAssertOrgMember: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
   mockGetOrgRole: vi.fn(),
   mockInvoke: vi.fn(),
   mockLoggerError: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
+  assertWorkspaceMember: mockAssertWorkspaceMember,
   getOrgRole: mockGetOrgRole,
 }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -74,6 +77,7 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue(ORG);
   mockResolveWorkspace.mockResolvedValue(WORKSPACE);
   mockAssertOrgMember.mockResolvedValue(undefined);
+  mockAssertWorkspaceMember.mockResolvedValue(undefined);
   mockGetOrgRole.mockResolvedValue("member");
 });
 

@@ -79,3 +79,4 @@ first. Move a row into its epic when one fits.
 - [ADR-050](./ADR-050-secret-access-in-the-main-audit-log.md) — Privileged secret access is recorded in the main audit log, not only beside it
 - [ADR-051](./ADR-051-context-records-enter-the-turn-as-volatile-policy.md) — A workspace's context records enter the turn as volatile policy, not as prefix
 - [ADR-052](./ADR-052-governed-action-as-the-billable-unit.md) — The governed action is the billable unit; tokens are reported, never billed
+- [ADR-053](./ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md) — The in-app agent runs on Stella's headless engine, and a token is billed only when Oxagen paid for it

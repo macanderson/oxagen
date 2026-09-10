@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { org as orgRoutes } from "@/lib/routes";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
@@ -82,6 +83,8 @@ function errorToastTitle(code: string | undefined): string {
       return "Insufficient credits";
     case "billing_suspended":
       return "Billing suspended";
+    case "assistant_spend_cap":
+      return "Assistant cap reached";
     case "rate_limited":
     case "rate_limit_exceeded":
       return "Rate limited";
@@ -96,6 +99,15 @@ function errorToastTitle(code: string | undefined): string {
 /** True for the turn-error codes that mean "the org's credit balance is empty". */
 function isCreditsDepletedCode(code: string | undefined): boolean {
   return code === "insufficient_credits" || code === "credit_balance_empty";
+}
+
+/**
+ * True when the turn was refused by the org's monthly cap on assistant usage
+ * Oxagen pays for (ADR-053 §3). The server message names the cap; the toast
+ * adds the way out — raise the cap or bring a key — on the model-funding page.
+ */
+function isAssistantCapCode(code: string | undefined): boolean {
+  return code === "assistant_spend_cap";
 }
 
 /**
@@ -332,6 +344,17 @@ export function ChatShellClient({
             here
           </Link>{" "}
           to purchase additional credits.
+        </>
+      ) : isAssistantCapCode(turnError.code) ? (
+        <>
+          {turnError.message}{" "}
+          <Link
+            href={orgRoutes.settings.modelFunding({ orgSlug })}
+            className="font-semibold underline underline-offset-2"
+          >
+            Raise the cap or add your own key
+          </Link>
+          .
         </>
       ) : (
         turnError.message

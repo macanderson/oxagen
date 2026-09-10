@@ -8,6 +8,8 @@ import {
   loadEffectiveModelDefaults,
   resolvePrompt,
   loadWorkspacePromptConfigSafe,
+  resolveModelFundingSource,
+  type ModelFundingSource,
   type ModelMessage,
 } from "@oxagen/ai";
 import {
@@ -166,15 +168,32 @@ chatStreamRoute.post("/", async (c) => {
     executionStepId: messageId,
   };
 
+  // ── Who pays for this turn's tokens ─────────────────────────────────────────
+  // Resolved ONCE, BEFORE the credit gate, and handed to the gate, `selectModel`
+  // and the governed turn, so the key the call is built on and the ledger's
+  // view of who paid cannot disagree (ADR-053 §2). The gate applies the
+  // assistant spend cap only to platform-funded turns (§3), so it has to know
+  // who pays before it decides. A failed read is NOT caught here: answering
+  // "platform" for it would move an organisation that has its own key onto
+  // Oxagen's billed key for the length of an outage. The throw fails the turn
+  // through the app's error middleware before anything is spent; the resolver
+  // itself already answers "platform" for a missing or disabled key.
+  const funding: ModelFundingSource = await runInTenantScope(
+    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    () => resolveModelFundingSource(ctx.orgId),
+  );
+
   // ── Pre-turn credit admission gate ─────────────────────────────────────────
   // The top-level model call reaches @oxagen/ai directly, not through
   // invoke(), so without this a turn that calls no tool would skip the balance
   // check entirely and a suspended / depleted org would get a free model call.
-  // Blocks only on the affirmative billing outcomes and fails OPEN on anything
-  // else (see @oxagen/billing turn-credit-gate).
+  // Blocks only on the affirmative billing outcomes — insufficient credits, a
+  // suspended org, or a platform-funded org over its assistant spend cap — and
+  // fails OPEN on anything else (see @oxagen/billing turn-credit-gate). Every
+  // refusal maps to the same 402 envelope, `assistant_spend_cap` included.
   const creditGate = await runInTenantScope(
     { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-    () => evaluateTurnCreditGate(ctx.orgId),
+    () => evaluateTurnCreditGate(ctx.orgId, { fundedBy: funding.fundedBy }),
   );
   if (!creditGate.ok) {
     return c.json(
@@ -198,15 +217,28 @@ chatStreamRoute.post("/", async (c) => {
       // Fall through to system default inside selectModel().
     }
   }
+  // Under org funding the model is built on the organisation's own key and
+  // the platform key is never read (ADR-053 §2).
   const turnModel = selectModel({
     ...(resolvedModel
       ? { model: resolvedModel }
       : resolvedTier
         ? { tier: resolvedTier }
         : {}),
+    ...(funding.fundedBy === "org" ? { credential: funding.credential } : {}),
   });
   const modelId = modelIdOf(turnModel);
   const turnEffort = effort && supportsReasoning(modelId) ? effort : undefined;
+  // The key hint, never the key: enough to tell which credential a turn ran
+  // on when a customer reports one as broken.
+  console.info("[chat.stream] turn model", {
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    requestId: ctx.requestId,
+    modelId,
+    fundedBy: funding.fundedBy,
+    ...(funding.fundedBy === "org" ? { keyHint: funding.keyHint } : {}),
+  });
 
   const orgSlug = c.req.param("org_slug") ?? "";
   const workspaceSlug = c.req.param("workspace_slug") ?? "";
@@ -534,6 +566,9 @@ chatStreamRoute.post("/", async (c) => {
           mutatingToolNames,
           ...(turnEffort ? { effort: turnEffort } : {}),
           ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+          // The same answer `selectModel` above was built on, so the ledger
+          // charges exactly the tokens the platform key paid for.
+          fundedBy: funding.fundedBy,
           // Client-disconnect abort stops the loop.
           abortSignal: c.req.raw.signal,
         });

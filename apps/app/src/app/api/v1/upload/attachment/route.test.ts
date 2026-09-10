@@ -14,12 +14,14 @@ const {
   mockResolveOrg,
   mockResolveWorkspace,
   mockAssertOrgMember,
+  mockAssertWorkspaceMember,
   mockPersistGeneratedAsset,
 } = vi.hoisted(() => ({
   mockGetSessionOrRedirect: vi.fn(),
   mockResolveOrg: vi.fn(),
   mockResolveWorkspace: vi.fn(),
   mockAssertOrgMember: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
   mockPersistGeneratedAsset: vi.fn(),
 }));
 
@@ -30,6 +32,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
+  assertWorkspaceMember: mockAssertWorkspaceMember,
 }));
 vi.mock("@oxagen/handlers", () => ({
   persistGeneratedAsset: mockPersistGeneratedAsset,
@@ -74,6 +77,7 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue(ORG);
   mockResolveWorkspace.mockResolvedValue(WORKSPACE);
   mockAssertOrgMember.mockResolvedValue(undefined);
+  mockAssertWorkspaceMember.mockResolvedValue(undefined);
   mockPersistGeneratedAsset.mockResolvedValue({
     id: "uuid-1",
     publicId: "gen_abc123",
@@ -237,6 +241,24 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
 
   it("returns 404 (IDOR guard) when org membership is denied", async () => {
     mockAssertOrgMember.mockRejectedValueOnce(new Error("not a member"));
+
+    const res = await POST(
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 (IDOR guard) when workspace membership is denied", async () => {
+    // Org membership does not imply membership of THIS workspace, and a route
+    // handler never runs the workspace layout that would otherwise check it.
+    mockAssertWorkspaceMember.mockRejectedValueOnce(new Error("not a member"));
 
     const res = await POST(
       req({

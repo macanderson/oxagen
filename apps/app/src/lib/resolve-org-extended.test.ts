@@ -146,6 +146,24 @@ describe("getOrgRole", () => {
     setRows([{ role: "owner" }]);
     expect(await getOrgRole("org-1", "user-1")).toBe("owner");
   });
+
+  // org_users.role is written in BOTH casings: lowercase by organization.create
+  // and the invite-accept path, TitleCase by workspace.invite.send's mapRole()
+  // and org.member.role.change, which writes the IAM role NAME. The column's
+  // CHECK is `lower(role) IN (...)`, so both are valid rows. Every consumer
+  // compares against a lowercase Set, so a TitleCase row used to read as no
+  // role at all — promoting a member through the governed capability locked
+  // them out of billing, plugin governance, org admin, the audit export and the
+  // org privacy export.
+  it("lowercases a TitleCase role, so a promoted admin is not locked out", async () => {
+    setRows([{ role: "Admin" }]);
+    expect(await getOrgRole("org-1", "user-1")).toBe("admin");
+  });
+
+  it("lowercases a TitleCase owner", async () => {
+    setRows([{ role: "Owner" }]);
+    expect(await getOrgRole("org-1", "user-1")).toBe("owner");
+  });
 });
 
 // ---------------------------------------------------------------------------

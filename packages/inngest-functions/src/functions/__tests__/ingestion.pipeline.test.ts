@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   runInTenantScope: vi.fn(),
   loggerInfo: vi.fn(),
   loggerDebug: vi.fn(),
+  loggerWarn: vi.fn(),
   // scopedSession mock: default returns { found: false } for dedup-pass-a
   scopedSessionRun: vi.fn().mockResolvedValue({ records: [] }),
   scopedSessionClose: vi.fn().mockResolvedValue(undefined),
@@ -77,7 +78,12 @@ vi.mock("@oxagen/ingestion/dedup", () => ({
 }));
 
 vi.mock("../../logger", () => ({
-  logger: { info: mocks.loggerInfo, debug: mocks.loggerDebug, error: vi.fn() },
+  logger: {
+    info: mocks.loggerInfo,
+    debug: mocks.loggerDebug,
+    warn: mocks.loggerWarn,
+    error: vi.fn(),
+  },
 }));
 
 await import("../ingestion.pipeline");
@@ -161,6 +167,26 @@ describe("ingestion.pipeline Inngest function", () => {
 
       expect(mocks.embedEntity).not.toHaveBeenCalled();
       expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+    });
+
+    // Witness: the record is discarded and nothing retries it once a mapping
+    // is added, so this is configuration-caused data loss. At debug it was
+    // invisible in production, where a whole connector's records can be
+    // dropped without a line anyone reads.
+    it("reports the dropped record at warn, not debug", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({ execute: vi.fn().mockResolvedValue([]) }),
+      );
+
+      await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceRecordType: BASE_EVENT.sourceRecordType,
+        }),
+        expect.stringContaining("no entity_type_mappings row"),
+      );
     });
   });
 

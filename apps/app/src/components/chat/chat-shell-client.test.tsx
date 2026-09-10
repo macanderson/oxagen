@@ -845,6 +845,37 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     expect(link).toHaveAttribute("href", "/test-org/billing/subscription");
   });
 
+  it("raises an 'Assistant cap reached' toast with the server message + a model-funding link for assistant_spend_cap", async () => {
+    mockStream.overrides = {
+      turnError: {
+        code: "assistant_spend_cap",
+        message:
+          "This month's assistant usage has reached the organisation's cap of $25.00.",
+      },
+    };
+    await renderClient();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    const call = toastAdd.mock.calls[0]![0] as {
+      type: string;
+      title: string;
+      description: React.ReactNode;
+    };
+    expect(call.type).toBe("error");
+    expect(call.title).toBe("Assistant cap reached");
+
+    // The description keeps the server's sentence (it names the cap) and adds
+    // a link to the page where the cap or the key can be changed.
+    cleanup();
+    render(<>{call.description}</>);
+    expect(
+      screen.getByText(/reached the organisation's cap of \$25\.00/i),
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", {
+      name: /raise the cap or add your own key/i,
+    });
+    expect(link).toHaveAttribute("href", "/test-org/settings/model-funding");
+  });
+
   it("uses a generic title when the turnError carries no recognized code", async () => {
     mockStream.overrides = { turnError: { message: "Gateway timeout" } };
     await renderClient();

@@ -6,6 +6,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
 } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import {
@@ -17,6 +18,8 @@ import {
   loadEffectiveModelDefaults,
   loadWorkspacePromptConfig,
   resolvePrompt,
+  resolveModelFundingSource,
+  type ModelFundingSource,
   type ModelMessage,
 } from "@oxagen/ai";
 import {
@@ -265,6 +268,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       resolveWorkspace(tenant.id, workspaceSlug),
     ]);
     workspace = resolvedWorkspace;
+    // Org membership does not imply membership of THIS workspace, and a route
+    // handler never runs the workspace layout. Sequenced after the Promise.all
+    // because it needs the resolved workspace id; a non-member falls into the
+    // same generic 404 as an unknown workspace.
+    await assertWorkspaceMember(workspace.id, session.user.id);
   } catch {
     return NextResponse.json(
       { error: "Org or workspace not found" },
@@ -272,20 +280,41 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
+  // ── Who pays for this turn's tokens ─────────────────────────────────────────
+  // Resolved ONCE, BEFORE the credit gate, and handed to the gate, every
+  // `selectModel` call and the governed turn, so the key the call is built on
+  // and the ledger's view of who paid cannot disagree (ADR-053 §2). The gate
+  // applies the assistant spend cap only to platform-funded turns (§3), so it
+  // has to know who pays before it decides. A failed read is NOT caught here:
+  // answering "platform" for it would move an organisation that has its own
+  // key onto Oxagen's billed key for the length of an outage. The throw fails
+  // the request before anything is spent; the resolver itself already answers
+  // "platform" for a missing or disabled key.
+  const funding: ModelFundingSource = await runInTenantScope(
+    { orgId: tenant.id, workspaceId: workspace.id },
+    () => resolveModelFundingSource(tenant.id),
+  );
+  // Spread into every `selectModel` call below, so under org funding no model
+  // this turn touches is built on the platform key (ADR-053 §2).
+  const modelCredential =
+    funding.fundedBy === "org" ? { credential: funding.credential } : {};
+
   // ── Pre-turn credit admission gate ───────────────────────────────────────────
   // Run the SAME admission gate (assertCanStartTurn) that already fires on every
   // scoped contract.invoke() tool call, BEFORE the top-level model turn begins —
   // the model stream reaches `streamAgentReply` as a direct @oxagen/ai
   // call, not an invoke(), so without this a no-tool-call turn skipped the
   // balance check and a suspended / zero-balance org got a full model call for
-  // free. Blocks ONLY on the affirmative InsufficientCredits / BillingSuspended
-  // outcomes (every org has a $5 Free signup grant ⇒ zero balance = depleted,
-  // never billing-absent) and fails OPEN on any non-billing error, so a metering
-  // hiccup never blocks a paying customer (credit-gate.ts). Runs inside the
+  // free. Blocks ONLY on the affirmative outcomes — InsufficientCredits,
+  // BillingSuspended, and a platform-funded org over its assistant spend cap
+  // (every org has a $5 Free signup grant ⇒ zero balance = depleted, never
+  // billing-absent) — and fails OPEN on any non-billing error, so a metering
+  // hiccup never blocks a paying customer (credit-gate.ts). Every refusal maps
+  // to the same 402 envelope, `assistant_spend_cap` included. Runs inside the
   // tenant scope the underlying withTenantDb reads require.
   const creditGate = await runInTenantScope(
     { orgId: tenant.id, workspaceId: workspace.id },
-    () => evaluateTurnCreditGate(tenant.id),
+    () => evaluateTurnCreditGate(tenant.id, { fundedBy: funding.fundedBy }),
   );
   if (!creditGate.ok) {
     return NextResponse.json(
@@ -324,6 +353,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       : resolvedTier
         ? { tier: resolvedTier }
         : {}),
+    ...modelCredential,
   });
 
   // Reasoning effort is only valid on reasoning-capable models. Re-check
@@ -331,6 +361,20 @@ export async function POST(request: NextRequest): Promise<Response> {
   // a stray `effort` for a non-reasoning model is dropped rather than forwarded.
   const turnEffort =
     effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
+
+  // The key hint, never the key: enough to tell which credential a turn ran
+  // on when a customer reports one as broken. Logged before the attachment
+  // guard below, which may still swap the model — that swap logs itself.
+  logger.info(
+    {
+      orgId: tenant.id,
+      workspaceId: workspace.id,
+      modelId: modelIdOf(turnModel),
+      fundedBy: funding.fundedBy,
+      ...(funding.fundedBy === "org" ? { keyHint: funding.keyHint } : {}),
+    },
+    "[chat/stream] turn model",
+  );
 
   // ── Attachments (Phase 1 images + Phase 2 video) ──────────────────────────
   // Resolve the current turn's attachment publicIds org-scoped (ownership +
@@ -401,7 +445,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       .map((a) => ({ publicId: a.publicId }));
 
     const upgradeCandidates = ATTACHMENT_VISION_TIER_FALLBACK.map(
-      (fallbackTier) => modelIdOf(selectModel({ tier: fallbackTier })),
+      (fallbackTier) =>
+        modelIdOf(selectModel({ tier: fallbackTier, ...modelCredential })),
     );
     const decision = decideAttachmentRouting({
       model: modelIdOf(turnModel),
@@ -426,7 +471,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
         "[chat/stream] auto-upgraded model for multimodal attachments",
       );
-      turnModel = selectModel({ model: decision.model });
+      turnModel = selectModel({ model: decision.model, ...modelCredential });
     }
 
     imageAttachments = decision.imagePublicIds.map((id) => {
@@ -1123,6 +1168,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           mutatingToolNames,
           effort: turnEffort ?? null,
           ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+          // The same answer every `selectModel` above was built on, so the
+          // ledger charges exactly the tokens the platform key paid for.
+          fundedBy: funding.fundedBy,
           abortSignal: request.signal,
         });
 

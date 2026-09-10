@@ -7,7 +7,7 @@ description: Which models are available on each plan, how workspace model defaul
 
 ## Model access by plan
 
-Oxagen routes all AI inference through the Vercel AI Gateway. No provider API keys are held in the Oxagen codebase or deployment — the gateway handles provider authentication.
+Oxagen routes all AI inference through the Vercel AI Gateway. No direct provider API keys are held in the Oxagen codebase — the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own key instead; see [Bring your own key](#bring-your-own-key-byok) below.
 
 Available models depend on your subscription tier:
 
@@ -33,7 +33,43 @@ Workspace administrators can configure default model selection for their workspa
 
 Different workspaces can use different model defaults — for example, a cost-sensitive workspace can be pinned to Haiku while a high-capability workspace uses Sonnet.
 
-> **BYOK (bring your own model API keys)** is a planned feature and is not yet implemented. All inference currently routes through the Vercel AI Gateway using Oxagen-managed provider credentials.
+## Bring your own key (BYOK)
+
+An organisation can pay its model vendor directly instead of buying tokens through Oxagen. You store your own API key once, at the organisation level, and the in-app assistant runs on it from the next turn on.
+
+**Who pays for tokens:**
+
+| Funding source | Who pays the vendor | What Oxagen bills for tokens |
+|---|---|---|
+| Your own key | You, on your own vendor account | Nothing. Tokens are reported in full and billed at zero. |
+| Oxagen's key (the default) | Oxagen | Assistant usage, at the vendor rate plus a published markup, as its own line. |
+
+Governed actions are billed the same way either way. The key only changes who pays for tokens.
+
+**Two providers today:**
+
+- **OpenRouter.** One key reaches every model in the catalog. OpenRouter does not serve embeddings, so under an OpenRouter key embeddings stay on Oxagen's key and are billed as assistant usage.
+- **Vercel AI Gateway.** One key reaches every model and serves embeddings too.
+
+Direct Anthropic and OpenAI keys are not supported yet.
+
+**To set your key:**
+
+1. Go to **Organisation settings → Model funding**. You need the org Owner or Admin role.
+2. Choose the provider and paste the key.
+3. Test the key. Oxagen asks the vendor whether it accepts the key. This check spends no tokens.
+4. Save. The key is encrypted before it is stored. Nobody can read it back, not even an Owner. The page shows only its last four characters, when it was last tested, and when it was last changed.
+
+Setting a new key replaces the old one. Clearing the key returns your organisation to Oxagen's key.
+
+**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). A turn that would cross the cap is refused before it starts, and the message names the cap. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
+
+**From the API.** The same settings are available at `/v1/:org/:workspace/org/model-credential`:
+
+- `PUT /v1/:org/:workspace/org/model-credential` with `{ "provider": "openrouter" | "gateway", "apiKey": "..." }` stores or replaces the key.
+- `GET` returns the redacted view. `DELETE` clears the key. `POST .../verify` tests a key before you store it, or tests the stored key when the body is `{}`.
+
+Every set and clear is recorded in the audit log. The key itself never appears there.
 
 ## Restricting model access per workspace
 

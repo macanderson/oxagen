@@ -15,6 +15,11 @@ export const CREDIT_REASONS = {
   CONSUME_EXECUTION: "consume_execution",
   CONSUME_TOOL_CALL: "consume_tool_call",
   CONSUME_TOKEN_OVERAGE: "consume_token_overage",
+  // ADR-053 §3: tokens the in-app agent spent on the PLATFORM key, billed back
+  // as their own line. Never written when the organisation's own key paid the
+  // vendor, and never repurposed from CONSUME_TOKEN_OVERAGE, which ADR-052
+  // retired — a historical row keeps meaning what it meant.
+  CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens",
   REFUND: "refund",
   CLAWBACK_DISPUTE: "clawback_dispute",
   ADJUSTMENT: "adjustment",

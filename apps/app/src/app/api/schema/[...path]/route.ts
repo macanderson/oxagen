@@ -7,6 +7,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
   getOrgRole,
 } from "@/lib/resolve-org";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -135,6 +136,10 @@ export async function POST(
     tenant = await resolveOrg(orgSlug);
     await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
+    // Org membership does not imply membership of THIS workspace, and a route
+    // handler never runs the workspace layout. Both failure modes fall into the
+    // same generic 404 below, which is the intended information hiding.
+    await assertWorkspaceMember(workspace.id, session.user.id);
   } catch {
     return NextResponse.json(
       { error: "Org or workspace not found" },
