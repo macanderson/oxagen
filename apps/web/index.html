@@ -193,13 +193,15 @@
   <section class="hero tex tex-hex" id="top">
     <div class="wrap hero-in">
       <div class="hero-copy">
-        <p class="eyebrow">AI coding agents · grounded in your context</p>
-        <h1>Everyone has the same models.<br><span class="gold">Your edge is context.</span></h1>
+        <p class="eyebrow">The governed control plane for AI agents</p>
+        <h1>Stop renting intelligence.<br><span class="gold">Start owning it.</span></h1>
         <p class="hero-sub">
-          Oxagen is an <strong>AI coding agent for your terminal</strong> and a
-          <strong>control plane for your whole fleet</strong>. It turns your code and business
-          data into one connected map, so agents get the right answer the first time —
-          and every action they take is approved, measured, and on the record.
+          Oxagen <strong>teaches</strong> every agent your team runs — Stella, or your own —
+          your business, <strong>governs</strong> what it's allowed to know and do,
+          <strong>explains</strong> every run in one trace, and <strong>learns</strong> from
+          the ones that pass. One typed contract binds identity, knowledge scope, action,
+          commercial terms, verified outcome and audit record — enforced before a node of
+          your graph ever reaches a model.
         </p>
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
@@ -210,7 +212,7 @@
 
       <!-- role="img": without a role the aria-label on a plain div is dropped,
            and the typed-out lines below are decoration, not readable content. -->
-      <div class="term" role="img" aria-label="A simulated Oxagen CLI session: the agent reads the workspace map, plans a fix, edits two files, and reports passing tests.">
+      <div class="term" role="img" aria-label="A simulated Oxagen CLI session: a graph query resolves against a caller's contracted scope, a retrieval is denied outside that scope, and spend is metered per workspace.">
         <div class="app-bar" aria-hidden="true">
           <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
           <span class="app-title">oxagen — zsh</span>
@@ -221,30 +223,25 @@
       <script type="application/json" id="heroScript">
       [
         [
-          {"cls":"cmd","text":"oxagen \"fix the failing auth test\""},
-          {"cls":"t-dim","text":"◆ reading your workspace map · 34 files · 12 services linked"},
-          {"cls":"t-note","text":"◆ plan: patch token refresh in auth/session.ts, update the test"},
-          {"cls":"t-diff","text":"✎ src/auth/session.ts        +9 −3"},
-          {"cls":"t-diff","text":"✎ src/auth/session.test.ts   +4 −1"},
-          {"cls":"t-ok","text":"▶ tests: 8 passed · 0 failed"},
-          {"cls":"t-ok","text":"✔ done in 41s — every step logged"}
-        ],
-        [
-          {"cls":"cmd","text":"oxagen agents \"migrate billing to the new schema\""},
-          {"cls":"t-note","text":"◆ plan: 4 tasks · 4 workers · isolated copies of the repo"},
-          {"cls":"t-dim","text":"worker/1  schema + migration          ▮▮▮▮▮▮▮▮ done"},
-          {"cls":"t-dim","text":"worker/2  api routes                  ▮▮▮▮▮▮▮▮ done"},
-          {"cls":"t-dim","text":"worker/3  webhooks                    ▮▮▮▮▮▮▯▯ running"},
-          {"cls":"t-dim","text":"worker/4  tests + docs                ▮▮▮▮▮▮▮▯ running"},
-          {"cls":"t-ok","text":"✔ 2 pull requests open · 2 on the way"}
-        ],
-        [
           {"cls":"cmd","text":"oxagen graph search -q \"who owns the billing policy?\""},
-          {"cls":"t-dim","text":"◆ live workspace query · RBAC scoped · bounded results"},
+          {"cls":"t-dim","text":"◆ resolving against contract: agent/support-bot · scope: read:billing.policy"},
           {"cls":"t-diff","text":"1. Billing Platform team        owner · directory source"},
           {"cls":"t-diff","text":"2. Subscription Policy          document · Drive source"},
           {"cls":"t-diff","text":"3. PR #842                      provider metadata · GitHub"},
           {"cls":"t-ok","text":"✔ 3 results · each answer cites its source"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen graph search -q \"customer PII fields in checkout\""},
+          {"cls":"t-dim","text":"◆ resolving against contract: agent/support-bot · scope: read:crm.contacts"},
+          {"cls":"t-note","text":"✗ denied — 1 subgraph outside contracted scope: finance.ledger"},
+          {"cls":"t-ok","text":"✔ 14 nodes returned — the denied subgraph never left the store"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen budget show"},
+          {"cls":"t-dim","text":"◆ workspace ceiling: $900/mo"},
+          {"cls":"t-diff","text":"team/payments        $612 burned · every call attributed"},
+          {"cls":"t-diff","text":"agent/support-bot     $88 burned · priced by the same loop that bills the platform"},
+          {"cls":"t-ok","text":"✔ metered, not estimated"}
         ]
       ]
       </script>
