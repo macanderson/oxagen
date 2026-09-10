@@ -10,6 +10,11 @@
 // ADR-021 §1/§3: pure, parameterized SQL — zero model calls, and every list
 // this returns is LIMIT-bounded before it reaches a caller/model.
 //
+// ClickHouse has no row-level security, so the WHERE clause IS the tenant
+// boundary here — both halves of it. Filtering org_id alone handed a
+// workspace-scoped caller every sibling workspace's errors, message text
+// included.
+//
 // A mocked ClickHouse client accepts invalid SQL without complaint, so an
 // aggregate query that passes unit tests can still fail in production
 // (error 184 — "column X is not under aggregate function and not in GROUP
@@ -59,9 +64,9 @@ function chDateTime(ms: number): string {
 }
 
 /**
- * Cluster the `error_events` captured for an org within a lookback window,
- * grouped by `fingerprint`. Bounded by `limit` (≤ 100 clusters, ranked by
- * occurrence count) and a time window (`sinceMs`, an absolute epoch-ms floor
+ * Cluster the `error_events` captured for one workspace within a lookback
+ * window, grouped by `fingerprint`. Bounded by `limit` (≤ 100 clusters, ranked
+ * by occurrence count) and a time window (`sinceMs`, an absolute epoch-ms floor
  * on `created_at`). Optionally narrowed to one `severity` and/or `source`.
  *
  * `totalErrors`/`distinctClusters` reflect the WHOLE filtered window (not just
@@ -70,6 +75,19 @@ function chDateTime(ms: number): string {
  */
 export async function clusterErrorEvents(args: {
   orgId: string;
+  /**
+   * The workspace whose errors this reads. ClickHouse has no RLS, so this
+   * WHERE clause is the entire workspace boundary — required rather than
+   * optional so a caller cannot reach the org's whole error stream by leaving
+   * it off, which is how the org-only filter read every sibling workspace's
+   * errors.
+   *
+   * Errors captured before a scope was resolved carry the nil-UUID sentinel
+   * (migrations/0020_error_events.sql) and therefore match no workspace. They
+   * are out of reach of this surface by design; an operator-wide error view
+   * would need its own capability rather than a widened filter here.
+   */
+  workspaceId: string;
   /** Absolute epoch-ms floor on created_at. Defaults to now − 24h. */
   sinceMs?: number;
   severity?: ErrorClusterSeverity;
@@ -82,10 +100,12 @@ export async function clusterErrorEvents(args: {
 
   const filters: string[] = [
     "org_id = {orgId:UUID}",
+    "workspace_id = {workspaceId:UUID}",
     "created_at >= {since:DateTime64(3)}",
   ];
   const params: Record<string, unknown> = {
     orgId: args.orgId,
+    workspaceId: args.workspaceId,
     since: chDateTime(since),
   };
   if (args.severity) {
