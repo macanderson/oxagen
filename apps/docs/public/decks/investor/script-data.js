@@ -30,7 +30,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Metering to billing",
-    say: "The business model is built into the same event stream. Every token is observed, attributed to a team and an agent, and priced. The record that satisfies an auditor is the record that meters chargeback. And because agents resell downstream, the loop bills your customers too, on your own keys. Usage in, governed invoice out. Metering becomes revenue, not just a cost dashboard.",
+    say: "The business model is built into the same event stream. Every token is observed, attributed to a team and an agent, and priced. The record that satisfies an auditor is the record that meters chargeback. Every business unit sees what its own agents cost, on your own keys. Usage in, governed invoice out. Metering becomes revenue, not just a cost dashboard.",
   },
   {
     title: "Where we sit",

@@ -46,7 +46,7 @@ one-to-one onto the vision wedge. Use these four words in decks, the homepage, a
  │ Studio │      │Knowledge│      │ Access │        │Billing │
  │ Agents │      │ Graph   │      │ Roles  │        │ Usage  │
  │ Skills │      │Ontology │      │Approvals│       │Budgets │
- │ Prompts│      │ Memory  │      │Security │        │Reseller│
+ │ Prompts│      │ Memory  │      │Security │        │ Usage  │
  │Commands│      │Connections│    │ Audit  │        │meters  │
  │ Tools  │      └────────┘       └────────┘        └────────┘
  └────────┘
@@ -128,7 +128,6 @@ Fleets, and Approvals are the operational triad; Approvals carries a live count 
  │  METER                        │
  │   ◇ Billing                   │   /billing        (Subscription · Usage · Invoices)
  │   ◇ Budgets                   │   /billing/budgets
- │   ◇ Reseller                  │   /billing/reseller  (NEW, meter-to-revenue)
  │                               │
  │  DEVELOP                      │
  │   ◇ API & Endpoints           │   /developer      (Keys · MCP endpoint · Webhooks)
@@ -140,7 +139,7 @@ Fleets, and Approvals are the operational triad; Approvals carries a live count 
 
 Two moves matter here. **Members and Access merge into "Members & Roles"** — one place for
 people, their roles, the capability-grant matrix, JIT access requests, sessions, and reviews.
-**Billing grows a Reseller tab** — the meter-to-revenue loop is the wedge; it deserves a
+**Billing keeps Usage front and centre** — the meter-to-revenue loop is the wedge; it deserves a
 named home where a customer configures how they bill *their* customers for observed agent
 usage. That is the single most on-vision new surface in the whole spec.
 
@@ -173,7 +172,6 @@ Nothing is deleted without a redirect (deep links must survive, as `chat` → `a
 | **Fleets** | — (none) | `/fleets`, `/fleets/[id]` | **NEW** |
 | **Approvals** | inline cards | `/approvals` | **NEW** |
 | **Roles/grants** | inline role change | `/access/roles`, `/access/roles/[id]` | **NEW** |
-| **Reseller billing** | — | `/billing/reseller` | **NEW** |
 
 ---
 

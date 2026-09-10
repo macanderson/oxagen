@@ -28,7 +28,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Roadmap",
-    say: "Where it goes. In weeks: a real typecheck delta, so an edit that breaks a sibling file's types is refused at write time. Next quarter: AST transforms, where anchors attach to syntax nodes and survive reformatting entirely, plus lineage edges in Neo4j so edit history becomes queryable. Then cross-language gates through tree-sitter. And the destination: the edit itself as a metered, IAM-gated capability contract. Scope which paths an agent may touch, price mutation classes, resell governed edit capacity.",
+    say: "Where it goes. In weeks: a real typecheck delta, so an edit that breaks a sibling file's types is refused at write time. Next quarter: AST transforms, where anchors attach to syntax nodes and survive reformatting entirely, plus lineage edges in Neo4j so edit history becomes queryable. Then cross-language gates through tree-sitter. And the destination: the edit itself as a metered, IAM-gated capability contract. Scope which paths an agent may touch, price mutation classes, meter governed edit capacity.",
   },
   {
     title: "Why it matters",

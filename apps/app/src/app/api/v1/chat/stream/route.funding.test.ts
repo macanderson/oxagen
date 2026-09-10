@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   resolveOrg: vi.fn(),
   resolveWorkspace: vi.fn(),
   assertOrgMember: vi.fn(),
+  assertWorkspaceMember: vi.fn(),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -54,10 +55,7 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mocks.resolveOrg,
   resolveWorkspace: mocks.resolveWorkspace,
   assertOrgMember: mocks.assertOrgMember,
-  // The route asserts workspace membership after resolving the workspace
-  // (#2817). This suite is about who pays for the tokens, so the caller is
-  // always a member here.
-  assertWorkspaceMember: async () => undefined,
+  assertWorkspaceMember: mocks.assertWorkspaceMember,
 }));
 vi.mock("@oxagen/handlers/logger", () => ({ logger: mocks.logger }));
 vi.mock("@oxagen/ai", () => ({
@@ -213,6 +211,7 @@ beforeEach(() => {
   mocks.resolveOrg.mockResolvedValue(ORG);
   mocks.resolveWorkspace.mockResolvedValue(WORKSPACE);
   mocks.assertOrgMember.mockResolvedValue(undefined);
+  mocks.assertWorkspaceMember.mockResolvedValue(undefined);
   mocks.selectModel.mockReturnValue({ modelId: "anthropic/claude-sonnet-5" });
   // No picker selection and no saved default: the route calls selectModel
   // with only the funding-derived fields, which is what the tests read.

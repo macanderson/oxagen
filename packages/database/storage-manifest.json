@@ -56,16 +56,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "archive_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -176,16 +166,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "configure_reseller_stripe",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "create_agent_def",
       "reads": [],
@@ -235,26 +215,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "create_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "create_reseller_price_plan",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -402,16 +362,6 @@
     {
       "domain": "org",
       "name": "delete_model_credential",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "delete_reseller_attribution_rule",
       "reads": [],
       "surfaces": [
         "api",
@@ -950,17 +900,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "get_reseller_stripe_status",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "get_routing_policy",
       "reads": [],
@@ -1440,50 +1379,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "list_reseller_attribution_rules",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_customers",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_price_plans",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_reseller_rebill_runs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "list_routing_stats",
       "reads": [],
@@ -1656,17 +1551,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "preview_reseller_rebill",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "router",
       "name": "preview_routing_decision",
       "reads": [],
@@ -1743,16 +1627,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "push_reseller_rebill",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2002,16 +1876,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "save_reseller_attribution_rule",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2456,26 +2320,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "update_reseller_customer",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "update_reseller_price_plan",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -2632,7 +2476,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ee7df429fb60793e9314c54ec6f8bc7cd090d6b535f9e140366754dec7b698ee",
+  "contentHash": "f31988ca0d459deede0214acf7fa1f250dd24dc8da237a1b5b5d86b9d27ca28c",
   "domains": [
     {
       "name": "agent",
@@ -2722,12 +2566,6 @@
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
-        "postgres:billing.reseller_attribution_rules",
-        "postgres:billing.reseller_customers",
-        "postgres:billing.reseller_price_plans",
-        "postgres:billing.reseller_rebill_line_items",
-        "postgres:billing.reseller_rebill_runs",
-        "postgres:billing.reseller_settings",
         "postgres:billing.spend_budgets",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
@@ -3020,7 +2858,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 116
+      "tableCount": 110
     },
     {
       "domains": [
@@ -8694,580 +8532,6 @@
       "name": "plans",
       "store": "postgres",
       "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "match_kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_value",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_label",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "customer_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_customers",
-          "type": "uuid"
-        },
-        {
-          "name": "priority",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_attribution_rules",
-      "name": "reseller_attribution_rules",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "external_ref",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_customer_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "price_plan_id",
-          "nullable": true,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_price_plans",
-          "type": "uuid"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_customers",
-      "name": "reseller_customers",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "pricing_mode",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "markup_bps",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "unit_price_cents",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "currency",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_price_plans",
-      "name": "reseller_price_plans",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_rebill_runs",
-          "type": "uuid"
-        },
-        {
-          "name": "label",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_kind",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "match_value",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "raw_cost_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "unit_price_cents",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "amount_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_rebill_line_items",
-      "name": "reseller_rebill_line_items",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "customer_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.reseller_customers",
-          "type": "uuid"
-        },
-        {
-          "name": "period_start",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "period_end",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "currency",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "subtotal_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "total_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "provider_invoice_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "provider_customer_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "hosted_invoice_url",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "error",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_rebill_runs",
-      "name": "reseller_rebill_runs",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "stripe_secret_ciphertext",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "bytea"
-        },
-        {
-          "name": "stripe_secret_key_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_secret_last4",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stripe_account_label",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.reseller_settings",
-      "name": "reseller_settings",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
     },
     {
       "columns": [

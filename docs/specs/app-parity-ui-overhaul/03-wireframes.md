@@ -420,33 +420,7 @@ Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Audit
 
 ---
 
-## 14. Billing → Reseller (meter-to-revenue — the wedge, new)
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Billing   [ Subscription ] [ Usage ] [ Invoices ] [ Budgets ] [ Reseller ]  │
-├── Reseller tab (meter-to-revenue) ──────────────────────────────────────────┤
-│  Turn observed agent usage into bills for YOUR customers.                     │
-│  «ClickHouse usage → Stripe loop»                                            │
-│                                                                              │
-│  Your customers        Plan          This month usage    You bill them        │
-│  ─────────────────────────────────────────────────────────────────────────  │
-│  Northwind Co.         metered       48k tokens · 1.2k runs   $312            │
-│  Contoso               flat + over   210k tokens             $1,940           │
-│                                                                              │
-│  Meters you resell:   [ tokens ×1.4 ]  [ runs $0.02 ]  [ tool: repo.pr $0.50]│
-│                        «meter markup rules → Stripe prices»                   │
-│  [ + Define a reseller meter ]   [ Sync to Stripe ]   [ Preview invoice ]     │
-│                                                                              │
-│  This is Oxagen's core wedge on one screen: you meter what agents did, mark   │
-│  it up, and bill your customers through Stripe. Not a spend dashboard,        │
-│  revenue infrastructure.                                                      │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 15. The golden path, screen by screen
+## 14. The golden path, screen by screen
 
 The end-to-end story, showing how the surfaces connect. This is the demo script and the
 e2e test spine.
@@ -489,7 +463,6 @@ e2e test spine.
  8. Runs → aex_9f2  the trace, grounded-in citations, $4.10 metered.
                               │
                               ▼
- 9. Billing → Reseller  the $4.10 (×1.4) becomes a $5.74 line on Northwind's invoice.
 ```
 
 Nine screens, one story, every noun a first-class object, every step a governed, metered,

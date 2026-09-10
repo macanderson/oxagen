@@ -19,7 +19,7 @@
    know. Sold to regulated enterprises deploying coding agents.
 2. **Capability-contract entitlements + metering for agent-native ISVs** — one
    primitive that enforces what a customer's agents may do AND meters it for billing;
-   the ISV resells governed agent capability to *their* customers.
+   the enterprise governs agent capability across *its own* teams.
 3. **Outcome verification layer** — structurally verify agent work (diff merged,
    tests passed, blast radius contained) and sign the meter event, enabling
    trustworthy outcome-based pricing.
@@ -35,7 +35,7 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
 
 | | Play 1: Permission-scoped context | Play 2: ISV entitlements + metering | Play 3: Outcome verification |
 |---|---|---|---|
-| **Verdict** | Not close — tenant-scoped, never principal-scoped | Real single-tenant primitive; reseller story not built | Strong raw material; verification-to-signed-meter spine missing |
+| **Verdict** | Not close — tenant-scoped, never principal-scoped | Real single-tenant primitive | Strong raw material; verification-to-signed-meter spine missing |
 | **Strongest existing asset** | Fail-closed org+workspace scoping (`packages/tenancy/src/scope.ts`) | Entitlement gate at `invoke()` (`packages/plugins/src/entitlements/`) + per-turn budgets | Durable execution trace + hash-chained audit log; typed file-evidence ingest remains a gap |
 | **Biggest gap** | No node/edge ACLs; principal never reaches Cypher | No sub-tenancy; usage never reported to Stripe; org-grained metering only | No first-class outcome events; meter rows unsigned and mutable |
 
@@ -186,15 +186,6 @@ Upgrade integrity from "append-only by convention" to third-party verifiable.
 - **Done when:** a customer (or their auditor) can independently verify that a meter
   event's outcome and amount were not altered after emission.
 
-### Epic 9 — Sub-tenancy & reseller billing *(play 2 capstone)*
-The ISV story: Oxagen customers govern, meter, and bill *their* customers.
-- End-customer entity below org→workspace; ISV-defined plans, prices, and
-  entitlement bundles applied to their end-customers' principals/keys (Epic 5).
-- Per-end-customer usage export and invoicing; Stripe Connect (or usage-export-first
-  as the neutral BYO-billing option) with revenue share.
-- White-label surfaces for the ISV's customer-facing usage/billing views.
-- **Done when:** an ISV onboards an end-customer, assigns a plan, and that
-  end-customer's agent usage lands on the end-customer's invoice.
 
 ### Epic 10 — Outcome-priced billing + compliance evidence plane *(capstone)*
 Monetize verification; close the loop for "a compliance officer signs off."

@@ -9,7 +9,7 @@ create an agent, equip it with skills and a chosen subset of tools, wire trigger
 fleet, and read the metered cost. A buyer sitting in the web app can do almost none of
 that. The app today is a chat window with a knowledge graph bolted on and a pile of
 settings pages. The most valuable thing the platform does, letting a team build, govern,
-and resell agents, has no home on screen.
+and meter agents, has no home on screen.
 
 Worse, the pieces that *do* exist are scattered by accident of history, not by design:
 
@@ -34,10 +34,10 @@ The frontend hides it.
 ## Why this is a vision problem, not a polish problem
 
 `docs/VISION.md` names the wedge Oxagen wins: the metered, governed, graph-grounded control
-plane for teams that build and resell AI agents. Three of the five drift tests the Vision
+plane for the enterprise team that runs the agents. Three of the five drift tests the Vision
 Gate asks are about surfaces this overhaul creates or fixes:
 
-- *"Does this help a team that builds and resells AI agents meter, govern, ground, or bill
+- *"Does this help the team that runs the agents meter, govern, ground, or bill
   their product?"* The app is where that team lives. A team cannot govern what it cannot
   see. Today the app shows them almost none of the governance, grounding, or metering the
   backend performs.
@@ -91,7 +91,7 @@ We split the 287 into three buckets:
    answer. This is the accuracy moat made visible.
 
 5. **Cost is always in frame.** Every run, fleet, and agent shows its metered cost. This is
-   the meter-to-revenue wedge made visible, and the reseller's daily reason to log in.
+   the meter-to-revenue wedge made visible, and a finance owner's daily reason to log in.
 
 6. **Parity is enforced, not promised.** The `app` layer in `check:manifest` fails CI when
    an operable capability has no app surface. Parity that is not measured will drift; we
@@ -118,4 +118,4 @@ After this overhaul, a buyer opens the app and finds, in order: a place to **ask
 **studio** to build agents, a view of their **fleets** and **runs**, an **approvals** inbox,
 the **knowledge** that grounds it all, a **marketplace** to extend it, and clear
 **governance** and **billing**. The app finally looks like what the backend already is:
-infrastructure for building, governing, grounding, and reselling agents.
+infrastructure for building, governing, grounding and metering agents.

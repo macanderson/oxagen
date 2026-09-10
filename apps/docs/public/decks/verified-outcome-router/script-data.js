@@ -40,7 +40,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Roadmap: the endgame",
-    say: "And here is the endgame, the pure Stripe-for-agents move. An SLA attached to a task class: at least ninety-five percent verified success at fifty cents or less, or the credits come back. Enforced by the same metering-to-Stripe loop that billed the usage. No ticket, no dispute thread, an automatic ledger entry with a full audit trail. Finance teams get per-invoice attainment statements, and resellers publish their own SLAs on top of ours with their own margin.",
+    say: "And here is the endgame, the pure Stripe-for-agents move. An SLA attached to a task class: at least ninety-five percent verified success at fifty cents or less, or the credits come back. Enforced by the same metering-to-Stripe loop that billed the usage. No ticket, no dispute thread, an automatic ledger entry with a full audit trail. Finance teams get per-invoice attainment statements, and each business unit gets the attainment curve for the task classes it actually runs.",
   },
   {
     title: "Why it matters",

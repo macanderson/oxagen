@@ -91,7 +91,7 @@
   .step .card b{font-family:var(--mono);font-size:13px}
   .step .card .bind{font-family:var(--mono);font-size:11px;color:var(--new)}
   .connector{width:30px;display:flex;justify-content:center;color:var(--soft);height:18px}
-  /* reseller */
+  /* metering tables */
   table.rs{border-collapse:collapse;width:100%;font-size:13px}
   table.rs th,table.rs td{border:1.5px solid var(--line);padding:7px 10px;text-align:left;font-family:var(--mono);font-size:12px}
   table.rs th{background:var(--fill)}
@@ -132,7 +132,7 @@
       <ul><li>Members &amp; Roles</li><li>Approvals</li><li>Audit</li><li>Compliance</li></ul>
       <div class="promise">"safe by default"</div></div>
     <div class="plane"><h3>METER</h3><div class="tag">Billing</div>
-      <ul><li>Usage</li><li>Budgets</li><li>Invoices</li><li>Reseller meters</li></ul>
+      <ul><li>Usage</li><li>Budgets</li><li>Invoices</li></ul>
       <div class="promise">"metered billing you can read"</div></div>
   </div>
   <div class="cut"><span>Operate ▸ Ask · Runs · Fleets · Approvals</span><span>Extend ▸ Marketplace · Plugins · MCP</span></div>
@@ -174,13 +174,12 @@
         <li class="grouphdr">METER</li>
         <li><span class="diamond">◇</span> Billing <span class="path">/billing</span></li>
         <li><span class="diamond">◇</span> Budgets <span class="path">/billing/budgets</span></li>
-        <li><span class="diamond">◇</span> Reseller <span class="n">NEW</span><span class="path">/billing/reseller</span></li>
         <li class="grouphdr">DEVELOP</li>
         <li><span class="diamond">◇</span> API &amp; Endpoints <span class="path">/developer</span></li>
       </ul>
       <div style="padding:14px;font-size:12px;color:var(--soft)">
         Members + Access merge into one <b>Members &amp; Roles</b> home with the capability grant matrix.
-        Billing grows a <b>Reseller</b> tab — the meter-to-revenue wedge gets a named surface.
+        Billing keeps <b>Usage</b> front and centre — the meter-to-revenue wedge gets a named surface.
       </div>
     </nav>
   </div>
@@ -237,10 +236,10 @@
     <div class="row" style="opacity:.75"><span class="type skill">skill</span><span>Accessibility Check <span style="color:var(--soft)">v1</span></span><span class="grow"></span><span class="risk">install</span><span>+</span></div>
   </div>
 
-  <h2 class="sec">The golden path — nine screens, one story</h2>
+  <h2 class="sec">The golden path — eight screens, one story</h2>
   <div class="caption">The exact scenario that does not work today: a Brand Voice skill, an agent equipped with it
     and a tool subset, a saved audit prompt, a <code>/audit</code> command, a fleet, approvals, a metered run,
-    and a reseller invoice.</div>
+    and a metered invoice.</div>
   <div class="flow">
     <div class="step"><div class="num">1</div><div class="card"><b>Studio → Skills → New skill</b><br>Create "Brand Voice", weight high. <span class="bind">«skill.create»</span></div></div>
     <div class="connector">│</div>
@@ -258,24 +257,4 @@
     <div class="connector">│</div>
     <div class="step"><div class="num">8</div><div class="card"><b>Runs → aex_9f2</b><br>The trace, grounded-in citations by label, $4.10 metered. <span class="bind">«agent.trace.get»</span></div></div>
     <div class="connector">│</div>
-    <div class="step"><div class="num">9</div><div class="card"><b>Billing → Reseller</b><br>The $4.10 (×1.4) becomes a $5.74 line on Northwind's invoice. <span class="bind">«ClickHouse → Stripe»</span></div></div>
   </div>
-
-  <h2 class="sec">Billing → Reseller — the wedge on one screen <span class="newtag">NEW</span></h2>
-  <div class="caption">Turn observed agent usage into bills for your customers. Not a spend dashboard, revenue infrastructure.</div>
-  <div class="frame" style="padding:18px 20px">
-    <table class="rs">
-      <tr><th>Your customers</th><th>Plan</th><th>This month usage</th><th>You bill them</th></tr>
-      <tr><td>Northwind Co.</td><td>metered</td><td>48k tokens · 1.2k runs</td><td>$312</td></tr>
-      <tr><td>Contoso</td><td>flat + overage</td><td>210k tokens</td><td>$1,940</td></tr>
-    </table>
-    <div class="meters"><span>tokens ×1.4</span><span>runs $0.02</span><span>tool: repo.pr $0.50</span><span>+ define meter</span></div>
-    <div style="font-family:var(--mono);font-size:12px;color:var(--soft)">meter markup rules → Stripe prices &nbsp;·&nbsp; [ Sync to Stripe ] &nbsp; [ Preview invoice ]</div>
-  </div>
-
-  <div class="footer">
-    Parity is enforced, not promised: add an <b style="color:var(--new)">app</b> layer to
-    <code>check:manifest</code> so CI flags any operable capability with no app surface.
-    Full spec: README · 01-proposal · 02-information-architecture · 03-wireframes · 04-build-plan-and-prompts.
-  </div>
-</div>
