@@ -8,9 +8,9 @@ Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agen
 
 ```
 apps/       customer-facing applications (6: api, app, cli, docs, mcp, web)
-packages/   shared platform libraries (27 packages — single source of truth for platform code)
-tools/      dev tooling (scripts, env-manager)
-docs/       capability specs, ADRs, architecture docs
+packages/   shared platform libraries (30 packages — single source of truth for platform code)
+tools/      dev tooling (scripts, env-manager, codemods) — also a pnpm workspace member
+docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/specs)
 ```
 
 ### Apps
@@ -22,21 +22,23 @@ docs/       capability specs, ADRs, architecture docs
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
 | `cli` | `apps/cli/src/index.ts` | Commander governance-ops CLI over the platform API; former coding-agent commands print a retirement notice |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
-| `web` | `apps/web/` | oxagen.sh public website |
+| `web` | `apps/web/` | oxagen.sh public website — static HTML, no build step, deployed to S3 + CloudFront |
 
 ### Core Packages
 
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~238 registered capabilities (count drifts; Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~245 registered capabilities (count drifts; Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `oxagen` | `src/registry.ts` | Capability registry (`registerCapability`, `getCapability`) |
 | `oxagen` | `src/plugins/` | Plugin manifest registry + built-in plugin catalogs |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
-| `database` | `src/schema/` | The Drizzle Postgres schema files (org, auth, workspace, agent, chat, content, billing, security, iam, mcp, plugin, notification, privacy, ingestion, evidence, schema-registry, environments, ai, ratelimit + mixins) |
+| `database` | `src/schema/` | 21 Drizzle Postgres domain schema files (org, auth, workspace, agent, chat, content, billing, reseller, security, iam, mcp, plugin, notification, privacy, ingestion, run-evidence-foundation, schema-registry, environments, ai, ratelimit, tacho) plus `_mixins.ts`, `_schemas.ts`, `index.ts` |
+| `tacho` | `src/` | Leaf package (no `@oxagen/*` runtime dep) that records, gates and evidences agents Oxagen does not run — Claude Code, Agent SDK, custom agents; spec in `docs/specs/tacho/` |
+| `context-provider` | `src/frames.ts` | Serves one workspace's engram memory as budgeted, scored Context Graph Protocol frames |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
@@ -54,7 +56,9 @@ docs/       capability specs, ADRs, architecture docs
 | `auth` | | Better Auth integration (sessions, rate limits, org members) |
 | `iam` | | IAM schema, roles, permissions, policy seeding |
 | `ontology` | | Neo4j ontology contracts + graph queries |
-| `engram` | | Agent memory engram writer/bootstrap |
+| `engram` | | Agent memory substrate: content-addressed records, compiler, consolidation, decay |
+| `functions` | `src/types.ts` | Provider-agnostic durable-function contracts that `inngest-functions` implements |
+| `glob` | `src/glob.ts` | The one path-glob implementation for the repo (`matchesGlob`, `globToRegExp`) |
 | `storage` | `src/vercel-blob.ts` | Vercel Blob + filesystem blob driver |
 | `config` | | Shared configuration schema + resolution |
 | `crypto` | | Encryption utilities |
@@ -92,7 +96,7 @@ Then wire it into MCP (`apps/mcp/src/tools/<name>.ts`) and CLI (`apps/cli/src/co
 - `setBillingAdmissionGate(gate)` — credit check (fires after IAM, before handler; `noBillingGate: true` skips)
 - `setCapabilityEntitlementGate(gate)` — plugin entitlement (fires after billing; only for plugin-claimed contracts)
 
-**Handler registration** — handlers are lazy-loaded via `registerHandler(name, () => import('./handler').then(m => m.handler))` in `register.ts`. The entire file is wrapped in `registerHandlersOnce("@oxagen/handlers", () => { ... })` to prevent duplicate-registration on hot reload. **Critical gotcha**: the registered capability `name` (verb-first snake_case) often differs from the handler filename (old dotted stem) — e.g. `workflow.run.ts` registers `"run_workflow"`. Always check the contract's `name` field, not the filename.
+**Handler registration** — handlers are lazy-loaded via `registerHandler(name, () => import('./handler').then(m => m.handler))` in `register.ts`. The entire file is wrapped in `registerHandlersOnce("@oxagen/handlers", () => { ... })` to prevent duplicate-registration on hot reload. **Critical gotcha**: the registered capability `name` (verb-first snake_case) often differs from the handler filename (old dotted stem) — e.g. `ontology.query.ts` registers `"query_ontology"` and `prompt.settings.read.ts` registers `"get_prompt_settings"`. Always check the contract's `name` field, not the filename.
 
 Never eagerly import heavy deps in the kernel — `import "@oxagen/handlers/register"` before any `invoke()` call; forgetting silently no-ops metering/IAM.
 
@@ -115,7 +119,8 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 |---|---|
 | `pnpm dev` | Start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687) |
 | `pnpm kill` | Kill all background dev processes |
-| `pnpm gate` | Full verification: lint + typecheck + unit tests + build + manifest + contracts + ui-parity + mobile-parity + env check + db lint + atlas validate |
+| `pnpm gate` | Verification over packages changed since `origin/main`: lint + typecheck + unit tests + coverage + build, then `check:brand`, `check:manifest`, `check:ui-parity`, `check:mobile-parity`, `check:contracts`, `check:connector-schemas`, `check:contextgraph-fixtures`, `check:mcp-externals`, `env:check`, `db:lint-migrations`, `db:atlas-validate` |
+| `pnpm gate:full` | The same over every package (`--concurrency=4`), plus `pnpm test:e2e` |
 | `pnpm build` | Full monorepo build via Turborepo |
 | `pnpm lint` | ESLint across all packages (zero warnings enforced) |
 | `pnpm format` | Biome format (ADR-015; Biome is the sole formatter) |
@@ -132,8 +137,11 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm db:lint-migrations` | Verifies Atlas migration file integrity |
 | `pnpm db:atlas-validate` | Validates Atlas schema against current DB state |
 | `pnpm db:seed-iam` | Seed IAM roles and permissions |
-| `pnpm db:seed-skills` | Seed agent skill definitions |
-| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync + optional NPM publish |
+| `pnpm db:seed-platform` | Seed platform defaults (also runs at the end of `db:migrate`) |
+| `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the sibling `../oxagen-house-brand` build outputs) |
+| `pnpm check:naming` | ADR-025 naming compliance |
+| `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
+| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
 | `pnpm test:e2e` | Run Playwright e2e tests (`apps/app`) |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit -- <file>.test.ts`
@@ -153,7 +161,6 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 - **Coverage ratchet**: thresholds only go up, capped at 90. Never reduce a threshold. Keep at least 2.5% headroom below actual coverage.
 - **Lint**: zero warnings. `eslint-disable` requires inline comment explaining why.
 - **LLM calls**: all LLM calls must go through `@oxagen/ai` (re-exports `streamText`/`generateText`/`generateObject`/`embed`). Never import directly from `ai`. The `@oxagen/ai` layer emits metering, duration tracking, surface tagging, and prompt hashing to ClickHouse. Use `modelIdOf()` for model resolution — never hard-code slugs.
-- **Tool list**: a turn advertises its whole tool set before anyone speaks, and that is most of what it sends — measured here at 45,007 tokens across 271 tools against 3,704 tokens of instructions (#2611). `RunCodingAgentResult.toolList` reports the count, the exact bytes and a bytes/4 token estimate for every turn, so the cost is visible rather than something to measure by hand. A turn is refused before the request when its provider publishes a cap it exceeds — OpenAI takes 128 tools — with a `ToolLimitExceededError` naming the provider, the cap and the count. A provider with no verified published cap is not checked: inventing one would refuse turns that work. The table is `PROVIDER_TOOL_LIMITS` in `packages/agent-runner/src/stella/tool-budget.ts`.
 - **`bootstrapEntitlementRuntime()`** must be called at startup of any new runtime that invokes capability-gated handlers; forgetting silently skips the entitlement gate.
 
 ## Local Development
@@ -166,15 +173,15 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 **App ports**: `apps/app` → `:3000`, `apps/docs` → `:3300`, API → `:4000`, MCP → `:4100`.
 
-**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}/{ws}/ask`. Returning: `/login`.
+**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (the org dashboard, the usage/metering home). The workspace chat front door is `/{org}/{ws}/sessions`; other workspace surfaces are `knowledge`, `marketplace`, `workbench` (agents, environments, tools) and `settings`. Returning: `/login`.
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory). CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` jobs: `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets` which files Linear tickets for parity gaps); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `pnpm gate` mirrors the checks and test jobs. Other workflows: `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml`, `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 **Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
-**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check` only — no test suites (those run in CI).
+**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check`, plus `check:contextgraph-fixtures` when the CGP fixtures change — no test suites (those run in CI).
 
 ## Git Workflow
 
@@ -184,15 +191,16 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 | Path | Content |
 |---|---|
-| `.agents/summary/index.md` | Full documentation index with routing guide |
-| `.agents/summary/architecture.md` | Kernel, surfaces, gate injection, storage boundaries |
-| `.agents/summary/components.md` | Every package/app explained with key files |
-| `.agents/summary/interfaces.md` | Type signatures, HTTP routes, MCP protocol |
-| `.agents/summary/data_models.md` | All Postgres schemas, Neo4j model, billing model |
-| `.agents/summary/workflows.md` | Chat turn, ingestion, IAM, billing, release, GDPR |
-| `docs/capabilities/_index.md` | Index of capability doc files |
-| `docs/adr/` | Architecture Decision Records |
+| `README.md` | Product framing, monorepo layout, getting started, the gate, AWS deployment |
+| `docs/VISION.md` | Positioning and drift tests the Vision Gate judges against |
+| `docs/capabilities/_index.md` | Index of capability doc files (one `<dotted-stem>.md` per contract) |
+| `docs/adr/` | Architecture Decision Records (ADR-043 runtime excision, ADR-042 data planes, ADR-046 CI concurrency, …) |
+| `docs/scr/` | Steering Context Records — the standing decisions summarised at the bottom of this file |
+| `docs/specs/` | Specs: `tacho/`, `adr025-naming-mapping.md`, and per-feature designs |
+| `CONTRIBUTING.md` | Branch / PR workflow and the capability-parity checklist |
 | `CLAUDE.md` | Engineering operating rules (prime directive, test gate, CI policy) |
+
+(The generated `.agents/summary/*` codemaps were deleted with the rest of `.agents/` on 2026-07-10; do not reference them.)
 
 ## Custom Instructions
 
