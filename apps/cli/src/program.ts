@@ -603,6 +603,109 @@ export function buildProgram(): Command {
       handleTelemetry(subcommand);
     });
 
+  // ── tacho: put this machine's Claude Code sessions under Oxagen control ──────
+  //
+  // docs/specs/tacho/spec.md section 5.1. The work lives in @oxagen/tacho;
+  // these commands lend it the CLI's credentials so `oxagen tacho enroll`
+  // needs no --token after `oxagen login`.
+
+  const tacho = program
+    .command("tacho")
+    .description(
+      "Record and gate this machine's Claude Code sessions through Oxagen (Tacho)",
+    );
+
+  tacho
+    .command("enroll")
+    .description(
+      "Enroll this machine: device key, host API key, tachod service, Claude Code hooks",
+    )
+    .option(
+      "--token <apiKey>",
+      "Platform API token (default: the logged-in session)",
+    )
+    .option("--org <slug>", "Organization slug (default: the logged-in org)")
+    .option(
+      "--workspace <slug>",
+      "Workspace slug (default: the logged-in workspace)",
+    )
+    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option("--no-service", "Do not install the user service")
+    .option("--managed", "Also print the managed settings document for MDM")
+    .option(
+      "--print-managed",
+      "Only print the managed settings document; do not write user settings",
+    )
+    .option("--force", "Enroll again even if already enrolled")
+    .option("--verify", "Run a headless Claude Code turn afterwards")
+    .action(
+      async (opts: {
+        token?: string;
+        org?: string;
+        workspace?: string;
+        port?: number;
+        service?: boolean;
+        managed?: boolean;
+        printManaged?: boolean;
+        force?: boolean;
+        verify?: boolean;
+      }) => {
+        const { handleTachoEnroll } = await import("./commands/tacho.js");
+        if (!(await handleTachoEnroll(opts))) process.exitCode = 1;
+      },
+    );
+
+  tacho
+    .command("status")
+    .description("Enrollment, daemon, hooks, bundle, and spool status")
+    .option("--json", "Machine-readable output")
+    .action(async (opts: { json?: boolean }) => {
+      const { handleTachoStatus } = await import("./commands/tacho.js");
+      if (!(await handleTachoStatus(opts))) process.exitCode = 1;
+    });
+
+  tacho
+    .command("unenroll")
+    .description(
+      "Remove the hooks and the service, revoke the enrollment, delete the host key",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--purge", "Also delete the local WAL, spool, and quarantine")
+    .option("--reason <text>", "Reason recorded with the revoke")
+    .action(
+      async (opts: { token?: string; purge?: boolean; reason?: string }) => {
+        const { handleTachoUnenroll } = await import("./commands/tacho.js");
+        if (!(await handleTachoUnenroll(opts))) process.exitCode = 1;
+      },
+    );
+
+  tacho
+    .command("export")
+    .description("Export a session from the local WAL")
+    .option("--session <id>", "Claude Code session id or Tacho session uuid")
+    .option("--format <fmt>", "tacho | trace | otlp", "tacho")
+    .option("--out <file>", "Write to a file instead of stdout")
+    .option("--list", "List sessions in the WAL")
+    .action(
+      async (opts: {
+        session?: string;
+        format?: "tacho" | "trace" | "otlp";
+        out?: string;
+        list?: boolean;
+      }) => {
+        const { handleTachoExport } = await import("./commands/tacho.js");
+        if (!(await handleTachoExport(opts))) process.exitCode = 1;
+      },
+    );
+
+  tacho
+    .command("verify")
+    .description("Run one headless Claude Code turn and confirm it was chained")
+    .action(async () => {
+      const { handleTachoVerify } = await import("./commands/tacho.js");
+      if (!(await handleTachoVerify())) process.exitCode = 1;
+    });
+
   // ── login / logout: platform authentication ─────────────────────────────────
 
   program

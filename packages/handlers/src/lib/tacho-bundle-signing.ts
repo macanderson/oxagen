@@ -8,8 +8,12 @@
  * bundle offline and refuses one it cannot verify, even with the daemon and
  * the network down (fail-closed enforcement).
  */
-import { createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
-import { digestJcs, jcs, type JsonValue } from "@oxagen/tacho";
+import { createPrivateKey, createPublicKey, sign } from "node:crypto";
+import { jcs, type JsonValue } from "@oxagen/tacho";
+import {
+  keyIdForPublicKey,
+  verifyBundle as verifyBundleOffline,
+} from "@oxagen/tacho/host";
 import type { PolicyBundle } from "@oxagen/oxagen/tacho/schemas";
 
 export const TACHO_BUNDLE_SIGNING_KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";
@@ -26,7 +30,7 @@ function toJson(value: unknown): JsonValue {
 
 /** The key id is the digest of the public key, so rotation is visible by name. */
 export function keyIdFor(publicKeyPem: string): string {
-  return digestJcs(publicKeyPem).slice("sha256:".length, "sha256:".length + 16);
+  return keyIdForPublicKey(publicKeyPem);
 }
 
 export function bundleSignerFromPem(privateKeyPem: string): BundleSigner {
@@ -55,28 +59,12 @@ export function bundleSignerFromPem(privateKeyPem: string): BundleSigner {
   };
 }
 
-/** Verify a bundle against a public key; what the host does offline. */
+/** Verify a bundle against a public key; the same check the host runs offline. */
 export function verifyBundle(
   bundle: PolicyBundle,
   publicKeyPem: string,
 ): boolean {
-  const { signature, ...unsigned } = bundle;
-  if (
-    signature.alg !== "ed25519" ||
-    signature.key_id !== keyIdFor(publicKeyPem)
-  ) {
-    return false;
-  }
-  try {
-    return verify(
-      null,
-      Buffer.from(jcs(toJson(unsigned)), "utf8"),
-      createPublicKey(publicKeyPem),
-      Buffer.from(signature.sig, "base64"),
-    );
-  } catch {
-    return false;
-  }
+  return verifyBundleOffline(bundle, publicKeyPem).ok;
 }
 
 /** The signer from the environment; undefined when the deployment has no key. */
