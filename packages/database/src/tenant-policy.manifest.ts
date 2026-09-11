@@ -93,6 +93,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
+  // ADR-052 governed-action counter. org_id NOT NULL, no workspace_id — the
+  // allowance and the volume band are both annual and org-wide, so a workspace
+  // column would imply a per-workspace allowance that does not exist.
+  { table: "billing.governed_action_counters", policyClass: "org_only" },
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },

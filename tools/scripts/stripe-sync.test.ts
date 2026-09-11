@@ -10,15 +10,24 @@
 import { describe, expect, it } from "vitest";
 import { productDiffersFromDesired } from "./stripe-sync";
 
-const desired = {
+// Typed explicitly rather than inferred. An inferred literal gives `metadata`
+// the exact three keys, which then rejects both a fixture that drops one and a
+// fixture that adds a foreign one — the two cases these tests exist to cover.
+interface DesiredProduct {
+  name: string;
+  active?: boolean;
+  metadata: Record<string, string>;
+}
+
+const desired: DesiredProduct = {
   name: "Build",
   active: true,
   metadata: { oxagen_slug: "build-v2", oxagen_version: "v2", tier: "build" },
 };
 
-const existing = (over: Partial<typeof desired> = {}) => ({
+const existing = (over: Partial<DesiredProduct> = {}) => ({
   name: desired.name,
-  active: desired.active,
+  active: desired.active ?? true,
   metadata: { ...desired.metadata },
   ...over,
 });

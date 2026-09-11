@@ -158,10 +158,20 @@ function actionLabel(a: SyncAction): string {
  */
 export function productDiffersFromDesired(
   existing: Pick<Stripe.Product, "name" | "active" | "metadata">,
-  desired: { name: string; active: boolean; metadata: Record<string, string> },
+  desired: {
+    name: string;
+    // Optional because that is what Stripe's own ProductUpdateParams says.
+    // `undefined` means the caller is not asserting an active state, so it is
+    // not a difference — asserting nothing and matching are the same outcome,
+    // and treating absence as drift would report an update on every run.
+    active?: boolean;
+    metadata: Record<string, string>;
+  },
 ): boolean {
   if (existing.name !== desired.name) return true;
-  if (existing.active !== desired.active) return true;
+  if (desired.active !== undefined && existing.active !== desired.active) {
+    return true;
+  }
   for (const [key, value] of Object.entries(desired.metadata)) {
     if (existing.metadata?.[key] !== value) return true;
   }
@@ -200,7 +210,17 @@ async function ensureProduct(
   },
 ): Promise<{ id: string; action: SyncAction }> {
   const existing = await findProductBySlug(stripe, args.slug);
-  const params: Stripe.ProductUpdateParams & Stripe.ProductCreateParams = {
+  // Declared with the concrete types this function actually produces, not with
+  // Stripe's params type. `Stripe.ProductUpdateParams` makes name, active and
+  // metadata all optional — true of the API, false of anything built here — and
+  // comparing against an optional-everything type would mean the drift check
+  // could not tell "absent" from "different". The object is still assignable to
+  // Stripe's params on the way out.
+  const desired: {
+    name: string;
+    active: boolean;
+    metadata: Record<string, string>;
+  } = {
     name: args.name,
     active: true,
     metadata: {
@@ -209,13 +229,15 @@ async function ensureProduct(
       ...args.metadata,
     },
   };
+  const params: Stripe.ProductUpdateParams & Stripe.ProductCreateParams =
+    desired;
   if (existing) {
     // `reuse` when nothing this script manages has changed, so a dry run
     // distinguishes "already correct" from "would be rewritten". Writing is
     // still unconditional under --apply: the update is idempotent, and
     // skipping it would make the apply path depend on a comparison rather
     // than on the desired state.
-    const differs = productDiffersFromDesired(existing, params);
+    const differs = productDiffersFromDesired(existing, desired);
     if (args.apply) await stripe.products.update(existing.id, params);
     return {
       id: existing.id,
