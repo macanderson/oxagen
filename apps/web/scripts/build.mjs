@@ -147,6 +147,21 @@ export async function build({ log = console.log } = {}) {
     pillars,
     includeDrafts: process.env.BLOG_DRAFTS === "1",
   });
+  for (const post of posts) {
+    if (!post.image) {
+      throw new ContentError(
+        `post "${post.slug}" has no \`image\` — run \`node scripts/gen-cover.mjs ${post.slug}\` and add \`image: /assets/blog/posts/${post.slug}/cover.png\` to its frontmatter`,
+        path.relative(ROOT, post.file),
+      );
+    }
+    const onDisk = path.join(ROOT, post.image.replace(/^\//, ""));
+    const info = await stat(onDisk).catch(() => null);
+    if (!info?.isFile())
+      throw new ContentError(
+        `post "${post.slug}" image ${post.image} is missing`,
+        path.relative(ROOT, post.file),
+      );
+  }
   const wordmark = inlineWordmark(
     await readFile(
       path.join(ROOT, "assets/brand/oxagen-wordmark-on-dark.svg"),

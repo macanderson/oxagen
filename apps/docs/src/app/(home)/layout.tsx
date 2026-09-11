@@ -113,8 +113,8 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             {/* The wordmark alone — never the mark beside the word. */}
             <OxagenWordmark className="h-5" />
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              Governed, auditable, tenant-isolated AI — every model call through
-              one metered, IAM-gated, audit-logged chokepoint.
+              Oxagen teaches your agents your business, governs what they may
+              do, explains every run, and learns from each one.
             </p>
           </div>
           {FOOTER.map((col) => (
