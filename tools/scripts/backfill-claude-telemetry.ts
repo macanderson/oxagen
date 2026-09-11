@@ -16,7 +16,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // ── JSONL entry interfaces ────────────────────────────────────────────────────
 
@@ -194,7 +194,7 @@ function computeCostMicros(
 
 // ── Insert row ────────────────────────────────────────────────────────────────
 
-interface ClaudeSessionRow {
+export interface ClaudeSessionRow {
   timestamp: string;
   entry_uuid: string;
   session_id: string;
@@ -379,7 +379,7 @@ async function parseFile(
 
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
-interface FileRef {
+export interface FileRef {
   path: string;
   isSubagent: boolean;
 }
@@ -462,6 +462,53 @@ async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
   }
 }
 
+// ── Parse loop ────────────────────────────────────────────────────────────────
+
+export interface ParseAllSummary {
+  rows: ClaudeSessionRow[];
+  ok: number;
+  fail: number;
+  /** One entry per file that threw, so a reader can act on the count rather than just see it. */
+  failures: Array<{ path: string; message: string }>;
+}
+
+/**
+ * Parse every discovered file, isolating one bad transcript from the rest.
+ * A JSONL file can be truncated by a crash or hand-edited mid-session, and
+ * that must not abort the whole backfill — but the previous `catch { fail++ }`
+ * threw away which file failed and why, leaving "N errors" on the summary
+ * line with nothing a reader could act on short of re-running under a
+ * debugger. Each failure is now named and its message kept.
+ */
+export async function parseAllFiles(
+  files: readonly FileRef[],
+  parse: (path: string, isSubagent: boolean) => Promise<ClaudeSessionRow[]>,
+  write: (line: string) => void = (line) => process.stdout.write(line),
+): Promise<ParseAllSummary> {
+  const allRows: ClaudeSessionRow[] = [];
+  const failures: Array<{ path: string; message: string }> = [];
+  let ok = 0;
+
+  for (const { path, isSubagent } of files) {
+    try {
+      const rows = await parse(path, isSubagent);
+      if (rows.length > 0) {
+        allRows.push(...rows);
+        write(
+          `  ✓ ${basename(path)} — ${rows.length} rows${isSubagent ? " (subagent)" : ""}\n`,
+        );
+      }
+      ok++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push({ path, message });
+      write(`  ✗ ${basename(path)} — ${message}\n`);
+    }
+  }
+
+  return { rows: allRows, ok, fail: failures.length, failures };
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -486,22 +533,17 @@ async function main(): Promise<void> {
     `Found ${files.length} JSONL files (top-level + subagents)\n\n`,
   );
 
-  const allRows: ClaudeSessionRow[] = [];
-  let ok = 0,
-    fail = 0;
+  const {
+    rows: allRows,
+    ok,
+    fail,
+    failures,
+  } = await parseAllFiles(files, parseFile);
 
-  for (const { path, isSubagent } of files) {
-    try {
-      const rows = await parseFile(path, isSubagent);
-      if (rows.length > 0) {
-        allRows.push(...rows);
-        process.stdout.write(
-          `  ✓ ${basename(path)} — ${rows.length} rows${isSubagent ? " (subagent)" : ""}\n`,
-        );
-      }
-      ok++;
-    } catch {
-      fail++;
+  if (failures.length > 0) {
+    process.stdout.write("\nFailed files:\n");
+    for (const f of failures) {
+      process.stdout.write(`  ${basename(f.path)}: ${f.message}\n`);
     }
   }
 
@@ -521,9 +563,21 @@ async function main(): Promise<void> {
   );
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(
-    `Fatal: ${err instanceof Error ? err.message : String(err)}\n`,
-  );
-  process.exit(1);
-});
+// Only run when invoked directly (`tsx backfill-claude-telemetry.ts`), never
+// on import. Without this guard, `main()` fired the moment anything imported
+// the module — including a unit test importing `parseAllFiles` — and did a
+// real home-directory scan followed by a ClickHouse insert attempt that would
+// call `process.exit(1)` on a missing credential, taking the test runner down
+// with it. That is why this script had no regression test before now.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((err: unknown) => {
+    process.stderr.write(
+      `Fatal: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exit(1);
+  });
+}

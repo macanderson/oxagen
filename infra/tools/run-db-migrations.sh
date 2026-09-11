@@ -107,7 +107,40 @@ fi
 # over loopback, so the session is worth encrypting. `require` asks for TLS
 # without verifying the CA, which is what lets this run with no RDS CA bundle
 # staged on the node.
-export DATABASE_URL="postgres://__PGUSER__:${PGPW}@__PGHOST__:__PGPORT__/__PGDB__?sslmode=require"
+#
+# The `options` query parameter, carrying `app.rls_bypass` turned on and
+# percent-encoded, is what makes the directory applicable at all against a
+# managed cluster (#1368). Every Postgres this
+# pipeline has ever applied to before Aurora ran the migrations as a real
+# superuser, and a superuser bypasses RLS for free. Aurora has none: the master
+# user gets `rds_superuser`, which is not that bit. So a rebuild from empty
+# stops at file 14 of the directory:
+#
+#   20260614000000_seed_official_mcp_registry.sql inserts the global registry
+#   row with org_id = NULL. mcp.registries has FORCE ROW LEVEL SECURITY, so the
+#   table's own owner is subject to tenant_isolation, and the policy in force at
+#   that point in history (20260612210000) has an `org_id IS NULL` arm in its
+#   USING and none in its WITH CHECK. NULL = <uuid> is NULL, the check fails:
+#
+#     pq: new row violates row-level security policy for table "registries" (42501)
+#
+# A forward migration cannot fix that, which is the whole reason the bypass
+# lives here rather than in the schema. Atlas replays in version order, so the
+# seed runs against the policy as it stood ~90 files ago; a policy corrected
+# today is corrected long after the statement that needs it. The historical file
+# cannot be edited either — its hash is in atlas.sum and in every deployed
+# atlas_schema_revisions. Only the connection can carry the fix.
+#
+# Granting it costs no privilege. `app.rls_bypass` is a GUC the policies read,
+# not a Postgres permission, so the role stays NOSUPERUSER NOBYPASSRLS and the
+# rds-compatibility job still catches genuinely superuser-only statements. It is
+# the same GUC the application's own withSystemDb path sets for system writes,
+# and a role applying schema changes and seeds is the system.
+#
+# tools/scripts/rds-sim-check.sh connects exactly this way and applies the whole
+# directory as a NOSUPERUSER NOBYPASSRLS role on every PR, which is the standing
+# evidence that Atlas honours the parameter and that the directory needs it.
+export DATABASE_URL="postgres://__PGUSER__:${PGPW}@__PGHOST__:__PGPORT__/__PGDB__?sslmode=require&options=-c%20app.rls_bypass%3Don"
 set -x
 
 # Not `|| true`. A status that cannot run is a database this script cannot

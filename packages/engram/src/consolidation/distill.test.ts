@@ -217,3 +217,48 @@ describe("distill — LLM path integration", () => {
     expect(result.newFacts[0]!.fact).toEqual(extractFactHeuristic(cluster));
   });
 });
+
+// ── A silent fall back and a working heuristic look identical from outside ───
+//
+// The LLM path resolves funding before it calls a model, and that lookup reads
+// through withTenantDb. Consolidation is a background job, so a scopeless run
+// throws — and the catch turned that into the same deterministic result a
+// healthy run produces. The degradation is permanent and looks like normal
+// operation. `onError` is how it becomes visible, and `phase` is how a funding
+// failure is told from a model outage.
+describe("extractFactFromCluster — reporting a failure it swallows", () => {
+  beforeEach(() => vi.stubEnv("AI_GATEWAY_API_KEY", "test-key"));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("reports a funding failure as phase 'funding', and still falls back", async () => {
+    const onError = vi.fn();
+    resolveModelFundingSource.mockRejectedValueOnce(
+      new Error("No active tenant scope"),
+    );
+
+    const fact = await extractFactFromCluster(cluster, {
+      ...TELEMETRY,
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]![1]).toEqual({ phase: "funding" });
+    expect(generateObjectFor).not.toHaveBeenCalled();
+    // Still degrades rather than failing consolidation.
+    expect(fact!.fact).toBe(extractFactHeuristic(cluster)!.fact);
+  });
+
+  it("reports a model failure as phase 'generate'", async () => {
+    const onError = vi.fn();
+    generateObjectFor.mockRejectedValueOnce(new Error("gateway down"));
+
+    const fact = await extractFactFromCluster(cluster, {
+      ...TELEMETRY,
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]![1]).toEqual({ phase: "generate" });
+    expect(fact!.fact).toBe(extractFactHeuristic(cluster)!.fact);
+  });
+});

@@ -14,6 +14,18 @@ export default defineConfig({
         "src/index.ts",
         "src/trace/index.ts",
         "src/claude-code/index.ts",
+        "src/collector/index.ts",
+        "src/collector/main.ts",
+        "src/host/index.ts",
+        "src/cli/index.ts",
+        "src/cli/main.ts",
+        "src/claude-code/hook-main.ts",
+        "src/host/test-support.ts",
+        "src/test-helpers.ts",
+        "src/bench/**",
+        "bin/**",
+        "scripts/**",
+        "dist-standalone/**",
       ],
       // Ratchet only: never lowered, capped at 90, with headroom below the
       // measured figure so environment noise cannot fail CI.

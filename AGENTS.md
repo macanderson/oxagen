@@ -22,7 +22,7 @@ docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/spec
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
 | `cli` | `apps/cli/src/index.ts` | Commander governance-ops CLI over the platform API; former coding-agent commands print a retirement notice |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
-| `web` | `apps/web/` | oxagen.sh public website — static HTML, no build step, deployed to S3 + CloudFront |
+| `web` | `apps/web/` | oxagen.sh public website + `/blog` — hand-authored HTML plus MDX posts from `content/`, built to `dist/`, deployed to S3 + CloudFront |
 
 ### Core Packages
 
@@ -173,6 +173,7 @@ is unambiguous.
 - **Lint**: zero warnings. `eslint-disable` requires inline comment explaining why.
 - **LLM calls**: all LLM calls must go through `@oxagen/ai` (re-exports `streamText`/`generateText`/`generateObject`/`embed`). Never import directly from `ai`. The `@oxagen/ai` layer emits metering, duration tracking, surface tagging, and prompt hashing to ClickHouse. Use `modelIdOf()` for model resolution — never hard-code slugs.
 - **`bootstrapEntitlementRuntime()`** must be called at startup of any new runtime that invokes capability-gated handlers; forgetting silently skips the entitlement gate.
+- **The tool list is the largest thing a turn sends, and it is checked before the request goes out.** `assertToolListFitsProvider` (`packages/agent/src/runtime/tool-budget.ts`) refuses a turn whose tool count exceeds a provider's per-request cap — OpenAI's is 128 — with a message naming the model, the limit and the count, rather than letting the gateway refuse it with a provider-shaped error about a request nobody can inspect. `PROVIDER_TOOL_LIMITS` is keyed by model-id **prefix**, not exact id, so a new model on a capped provider inherits the cap; a provider absent from that table means *no cap this codebase has confirmed*, not *no cap*. Every turn also logs the tool count and estimated tokens, because the figure that started this (45,007 tokens across 271 tools, 92.4% of the cacheable prefix) took a manual measurement to establish, and a number nobody can see is a number nobody manages (#2611).
 
 ## Local Development
 

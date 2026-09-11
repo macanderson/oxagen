@@ -56,6 +56,25 @@ lacks "$DRY" "localhost:5432" "dry run: does not connect to loopback"
 contains "$DRY" "@clus.example.rds.amazonaws.com:5432/oxagen" "dry run: connects to the given endpoint"
 contains "$DRY" "sslmode=require" "dry run: requires TLS"
 
+# The connection carries the RLS bypass, and it is the reason a managed cluster
+# can run this directory at all (#1368). Aurora has no superuser, so nothing
+# bypasses RLS for free; the seed in 20260614000000 inserts mcp.registries'
+# global row with org_id = NULL, and the tenant_isolation policy in force at
+# that point in the history has the `org_id IS NULL` arm in USING and not in
+# WITH CHECK. Without the GUC the apply stops there, 42501, on file 14 of the
+# directory. Atlas replays in version order, so no forward migration can reach
+# back and fix the policy the seed runs under — the connection is the only
+# place this can live, which is why it is asserted here rather than in SQL.
+contains "$DRY" "app.rls_bypass" "dry run: the migration connection carries the RLS bypass"
+contains "$DRY" "options=-c%20app.rls_bypass%3Don" \
+  "dry run: the bypass is percent-encoded, as a URL query value must be"
+contains "$DRY" "sslmode=require&options=" \
+  "dry run: appended to the existing query string with & rather than a second ?"
+# A raw space or a raw `=` in the value would be read as URL structure and the
+# parameter would arrive malformed or not at all — a failure that looks like
+# the policy refusing the row rather than like a broken connection string.
+lacks "$DRY" "options=-c app.rls_bypass=on" "dry run: the bypass is not left unencoded"
+
 # The bug that split this file out: the upload used a variable and the
 # download used a literal, so they could name different buckets.
 contains "$DRY" "s3://test-bucket/_deploy/atlas-migrations.tgz" "dry run: bucket substituted into the download"
@@ -72,6 +91,10 @@ contains "$DRY" "atlas migrate status --env ci" "dry run: reports status"
 APPLY=$(render_remote_migration \
   "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "1" "0")
 contains "$APPLY" "atlas migrate apply --env ci" "apply: applies"
+# The apply is the run that actually meets the seed, so it is the one that must
+# carry the bypass. Asserted separately from the dry run because the two are
+# rendered down different branches.
+contains "$APPLY" "options=-c%20app.rls_bypass%3Don" "apply: carries the RLS bypass"
 lacks "$APPLY" "--allow-dirty" "apply: clean by default"
 
 DIRTY=$(render_remote_migration \

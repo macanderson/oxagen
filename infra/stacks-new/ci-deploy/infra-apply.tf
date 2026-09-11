@@ -10,11 +10,27 @@
  *
  * The trust conditions differ in the same way. `plan` is pinned to this
  * repository and nothing narrower, because a plan is harmless from any branch.
- * `apply` is pinned to the `production` environment, which is a GitHub setting
- * rather than a Terraform one — required reviewers and branch restrictions are
- * configured there, and that gate is the real control on this role. Widening
- * it is a decision made in the repository settings, deliberately, rather than
- * by editing a condition here.
+ * `apply` is pinned to the `production` environment AND to the one workflow
+ * file allowed to run it.
+ *
+ * The environment alone is not a control. GitHub's OIDC `sub` for a job that
+ * declares `environment: production` is `repo:<repo>:environment:production`
+ * whatever workflow the job lives in, and seven jobs across five workflows
+ * declare it — `pipeline.yml` twice, `store-migrate.yml`, `stripe-sync.yml`,
+ * `where-is-production.yml` and `infra.yml`. Any of them could assume this
+ * role, which carries AdministratorAccess. Two of those are `workflow_dispatch`.
+ *
+ * An earlier version of this comment said required reviewers on the
+ * `production` environment were "the real control on this role". They are not
+ * configured: `gh api repos/macanderson/oxagen/environments/production` returns
+ * one protection rule, a branch policy, and an empty reviewer list.
+ * `db-migrate.yml` had already recorded that in its own header. Do not restore
+ * the claim without re-reading the API.
+ *
+ * So the binding condition is `job_workflow_ref`, which names the workflow file
+ * the token was minted for. Adding reviewers to the environment is still worth
+ * doing and is a repository-settings decision, not a Terraform one — but this
+ * role should not depend on a setting nobody has made.
  *
  * Both are pinned to the immutable `owner_id`/`repo_id` form as well as the
  * human-readable one, matching `local.deploy_subjects`: a repository can be
@@ -38,6 +54,14 @@ locals {
   tflock_table_arn   = "arn:aws:dynamodb:${var.region}:${var.account_id}:table/oxagen-tflock"
 
   infra_repo_id = local.deployers["oxagen-platform"].repo_id
+
+  # The one workflow file allowed to assume the apply role. Named here rather
+  # than inline so the condition below and this comment cannot drift apart: if
+  # the apply job ever moves to another file, this is the line that moves with
+  # it, and the apply will fail loudly on the next run rather than silently
+  # widening. `main` is hard-coded in the ref because infra.yml applies only on
+  # a push to the default branch.
+  infra_apply_workflow = "infra.yml"
 
   # Both the readable form and the immutable owner@id/repo@id form, matching
   # `local.deploy_subjects`. Apply names one exact environment subject; plan
@@ -76,6 +100,22 @@ data "aws_iam_policy_document" "infra_assume" {
       test     = each.key == "apply" ? "StringEquals" : "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values   = local.infra_subjects[each.key]
+    }
+
+    # Apply only: the workflow file the token was minted for. `sub` cannot tell
+    # infra.yml's apply job from any other job that declares
+    # `environment: production`, and six other jobs do. `job_workflow_ref` can.
+    #
+    # Plan is deliberately left un-pinned: it reads and writes nothing, and
+    # pinning it would stop a future workflow from rendering a plan.
+    dynamic "condition" {
+      for_each = each.key == "apply" ? [1] : []
+
+      content {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:job_workflow_ref"
+        values   = ["${local.infra_repository}/.github/workflows/${local.infra_apply_workflow}@refs/heads/main"]
+      }
     }
   }
 }
@@ -141,9 +181,10 @@ resource "aws_iam_role_policy" "infra_plan_state" {
  * predictable response to that is to widen it in a hurry rather than
  * deliberately.
  *
- * The control is the `production` environment gate in the trust policy above,
- * where required reviewers live, plus the fact that a pull request runs the
- * plan role and can never reach this one.
+ * The controls are the `job_workflow_ref` pin in the trust policy above, which
+ * admits only `infra.yml`, and the fact that a pull request runs the plan role
+ * and can never reach this one. The `production` environment carries no
+ * required reviewers today, so it is not one of them.
  */
 resource "aws_iam_role_policy_attachment" "infra_apply_admin" {
   role       = aws_iam_role.infra["apply"].name

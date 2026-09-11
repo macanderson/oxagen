@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@oxagen/billing": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "commander": "12.1.0"
   },
   "devDependencies": {

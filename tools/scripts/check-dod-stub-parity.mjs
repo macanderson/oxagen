@@ -15,11 +15,29 @@
 //   - `dod-recheck.yml` must be byte-identical across the repos that carry the
 //     stub, since there is nothing in it to legitimately differ.
 //
+//   - `dod-close-guard.yml` must pin a commit too, and all four must resolve to
+//     the same file. This is the stub that carries `issues: write`, so it is the
+//     one where a moving ref hands another repository the ability to change what
+//     closes an issue here with no commit to review — which is #1336. Three of
+//     the four sat on `@main` until 2026-09-11 and nothing here noticed, because
+//     this script only ever looked at the other two workflows.
+//
 // ## Why the pin is compared and the bytes are not
 //
 // The `dod-check.yml` stubs are not byte-identical and should not be: their
 // header comments were written separately and say the same thing differently.
 // The pinned ref is the fact worth holding; the prose around it is not.
+//
+// ## Why the close guard compares the resolved file and not the pinned ref
+//
+// The same rule as `dod-check.yml` would be wrong here. stella pins
+// `2b61b052` and the other three pin `84fe021b`, and both resolve to the same
+// bytes — the second commit did not change the file. Comparing the ref strings
+// would report drift where there is none. Comparing what each ref RESOLVES to
+// asks the question the rule is actually for: are all four running the same
+// close guard? That still catches a partial re-pin, because a re-pin that
+// changes the file in three repos and not the fourth changes the blob in three
+// and not the fourth.
 //
 // ## The declared exception
 //
@@ -42,6 +60,7 @@ const CALLERS = [
 ];
 const CHECK = ".github/workflows/dod-check.yml";
 const RECHECK = ".github/workflows/dod-recheck.yml";
+const CLOSE_GUARD = ".github/workflows/dod-close-guard.yml";
 
 /** Repos that implement the recheck themselves, with why. */
 export const RECHECK_EXCEPTIONS = {
@@ -49,9 +68,15 @@ export const RECHECK_EXCEPTIONS = {
     "implements the recheck in scripts/dod-recheck.sh with its own tests and make target; the verdict still comes from oxagen's dod-check.yml",
 };
 
-/** The oxagen commit a stub's `uses:` line pins, or null. */
-export function pinnedRef(source) {
-  const m = /dod-check\.yml@([0-9a-f]{7,40})\b/.exec(source ?? "");
+/**
+ * The oxagen commit a stub's `uses:` line pins, or null.
+ *
+ * `workflow` names which stub is being read, because a repo carries more than
+ * one and a regex that matched any of them would read the wrong line.
+ */
+export function pinnedRef(source, workflow = "dod-check.yml") {
+  const escaped = workflow.replace(/\./g, "\\.");
+  const m = new RegExp(`${escaped}@([0-9a-f]{7,40})\\b`).exec(source ?? "");
   return m ? m[1] : null;
 }
 
@@ -102,6 +127,41 @@ export function divergence(observed) {
     );
   }
 
+  const guardBlobs = new Map();
+  for (const [repo, facts] of Object.entries(observed)) {
+    const source = facts.closeGuardSource ?? "";
+    if (source === "") {
+      problems.push(
+        `${repo}: ${CLOSE_GUARD} is missing — nothing there holds an issue closed against its DoD`,
+      );
+      continue;
+    }
+    if (!pinnedRef(source, "dod-close-guard.yml")) {
+      problems.push(
+        `${repo}: ${CLOSE_GUARD} pins no oxagen commit — a moving ref on the one stub that carries issues: write (#1336)`,
+      );
+      continue;
+    }
+    // A pin that cannot be resolved is reported by the caller as null rather
+    // than thrown, so a deleted commit reads as drift instead of taking the
+    // whole check down with it.
+    if (!facts.closeGuardBlob) {
+      problems.push(
+        `${repo}: ${CLOSE_GUARD} pins a commit that no longer resolves — the workflow it names is gone`,
+      );
+      continue;
+    }
+    guardBlobs.set(repo, facts.closeGuardBlob);
+  }
+  if (new Set(guardBlobs.values()).size > 1) {
+    const listed = [...guardBlobs]
+      .map(([r, b]) => `${r}=${b.slice(0, 8)}`)
+      .join(", ");
+    problems.push(
+      `${CLOSE_GUARD} pins resolve to different files: ${listed}. The pins may differ; what they point at may not.`,
+    );
+  }
+
   return problems;
 }
 
@@ -118,23 +178,47 @@ async function api(path) {
   return res.json();
 }
 
+/**
+ * The blob sha of the close guard AS THE CALLER PINS IT, or null.
+ *
+ * Reading the file at the pinned ref rather than at oxagen's `main` is the
+ * whole point: what a caller runs is the version it named, and that is what has
+ * to agree between the four. A ref that no longer resolves returns null so the
+ * caller can call it drift, rather than throwing into the fail-open path and
+ * reporting nothing at all.
+ */
+async function resolveCloseGuardBlob(guardSource) {
+  const ref = pinnedRef(guardSource, "dod-close-guard.yml");
+  if (!ref) return null;
+  const at = await api(
+    `/repos/${OWNER}/oxagen/contents/${CLOSE_GUARD}?ref=${ref}`,
+  );
+  return at?.sha ?? null;
+}
+
 async function main() {
   const observed = {};
   for (const repo of CALLERS) {
     const check = await api(`/repos/${OWNER}/${repo}/contents/${CHECK}`);
     const recheck = await api(`/repos/${OWNER}/${repo}/contents/${RECHECK}`);
+    const guard = await api(`/repos/${OWNER}/${repo}/contents/${CLOSE_GUARD}`);
+    const guardSource = guard
+      ? Buffer.from(guard.content, "base64").toString("utf8")
+      : "";
     observed[repo] = {
       checkSource: check
         ? Buffer.from(check.content, "base64").toString("utf8")
         : "",
       recheckSha: recheck?.sha ?? null,
+      closeGuardSource: guardSource,
+      closeGuardBlob: await resolveCloseGuardBlob(guardSource),
     };
   }
 
   const problems = divergence(observed);
   if (problems.length === 0) {
     console.log(
-      "[dod-stub-parity] every caller pins the same commit, and the recheck stubs match",
+      "[dod-stub-parity] every caller pins the same commit, the recheck stubs match, and every close guard resolves to one file",
     );
     for (const [repo, why] of Object.entries(RECHECK_EXCEPTIONS)) {
       console.log(`  (${repo} implements the recheck itself: ${why})`);

@@ -6,6 +6,7 @@ import {
   PLATFORM_ALLOWLIST,
   type EnvCheckReport,
   type ReconcileInput,
+  failureCount,
   reconcile,
   scanSourceReferences,
 } from "./env-check";
@@ -32,7 +33,6 @@ function makeInput(overrides: Partial<ReconcileInput> = {}): ReconcileInput {
       ["AI_GATEWAY_API_KEY", ["api", "app", "mcp"]],
       ["VERCEL_TOKEN", []],
     ]),
-    loadEnvFound: false,
     ...overrides,
   };
 }
@@ -86,35 +86,36 @@ describe("reconcile — fail classification", () => {
   });
 });
 
-describe("reconcile — warnDead classification", () => {
-  it("in-registry-with-services but not referenced → warnDead", () => {
+describe("reconcile — dead classification", () => {
+  it("in-registry-with-services but not referenced → dead", () => {
     const input = makeInput({ referenced: new Map() });
     const report = reconcile(input);
     // AI_GATEWAY_API_KEY has services but is not referenced
-    expect(report.warnDead.some((f) => f.key === "AI_GATEWAY_API_KEY")).toBe(
-      true,
-    );
+    expect(report.dead.some((f) => f.key === "AI_GATEWAY_API_KEY")).toBe(true);
     // DATABASE_URL also has services and isn't referenced in this fixture
-    expect(report.warnDead.some((f) => f.key === "DATABASE_URL")).toBe(true);
+    expect(report.dead.some((f) => f.key === "DATABASE_URL")).toBe(true);
   });
 
-  it("tooling-only (services: []) vars are NOT in warnDead even if unreferenced", () => {
+  it("tooling-only (services: []) vars are NOT dead even if unreferenced", () => {
     const input = makeInput({ referenced: new Map() });
     const report = reconcile(input);
-    expect(report.warnDead.some((f) => f.key === "VERCEL_TOKEN")).toBe(false);
+    expect(report.dead.some((f) => f.key === "VERCEL_TOKEN")).toBe(false);
   });
-});
 
-describe("reconcile — loadEnv suppresses dead warnings for schema keys", () => {
-  it("when loadEnvFound=true, schema keys are implicitly consumed → not dead", () => {
-    const input = makeInput({ referenced: new Map(), loadEnvFound: true });
-    const report = reconcile(input);
-    // DATABASE_URL is in schemaKeySet → implicitly consumed → not dead
-    expect(report.warnDead.some((f) => f.key === "DATABASE_URL")).toBe(false);
-    // AI_GATEWAY_API_KEY is NOT in schemaKeySet → still dead
-    expect(report.warnDead.some((f) => f.key === "AI_GATEWAY_API_KEY")).toBe(
+  it("a schema key is dead unless something actually reads it (#2823)", () => {
+    // The check used to mark every schema key consumed the moment any scanned
+    // file called loadEnv(), and apps/api/src/bootstrap.ts calls it to validate
+    // the schema and reads nothing off the result — so no key could be dead.
+    const input = makeInput({ referenced: new Map() });
+    expect(reconcile(input).dead.some((f) => f.key === "DATABASE_URL")).toBe(
       true,
     );
+  });
+
+  it("a dead key fails the run", () => {
+    const report = reconcile(makeInput({ referenced: new Map() }));
+    expect(report.fail).toHaveLength(0);
+    expect(failureCount(report, false)).toBeGreaterThan(0);
   });
 });
 
@@ -133,7 +134,7 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       ...report.ok,
       ...report.warnUnvalidated,
       ...report.fail,
-      ...report.warnDead,
+      ...report.dead,
     ].map((f) => f.key);
     for (const k of ["VERCEL_ENV", "NEXT_PHASE", "CI", "NEO4J_URL"]) {
       expect(allKeys, `${k} should be silently ignored`).not.toContain(k);
@@ -176,6 +177,55 @@ describe("reconcile — empty referenced map → only dead warnings (no fail)", 
 // ── scanSourceReferences ─────────────────────────────────────────────────────
 
 describe("scanSourceReferences", () => {
+  it("does not read awk's own variables as environment references", () => {
+    // `$NF` inside an awk program is awk's field count, not a shell parameter,
+    // and the expansion pattern cannot see the quotes that make it so. The
+    // script never assigns it either, so without an explicit exclusion it
+    // surfaces as an undeclared env var and fails a file that is correct.
+    // The exclusion is the scanner's, not the platform allowlist's: these are
+    // set by nobody, so listing them as platform-supplied would be false, and
+    // it must cover every builtin rather than the two somebody has hit so far.
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "drift.sh"),
+        [
+          "#!/usr/bin/env bash",
+          "count=$(echo \"$line\" | awk '{print $NF}')",
+          "total=$(awk 'END {print NR}' \"$file\")",
+          "name=$(awk '{print $FILENAME, $FS}' \"$file\")",
+          'echo "$REAL_ENV_VAR"',
+          "",
+        ].join("\n"),
+      );
+      const result = scanSourceReferences([dir]);
+      // FILENAME and FS are the point: they are not in PLATFORM_ALLOWLIST, so
+      // this fails unless the exclusion covers the whole family.
+      for (const builtin of ["NF", "NR", "FILENAME", "FS"])
+        expect(
+          result.referenced.has(builtin),
+          `${builtin} is an awk builtin and must not be reported`,
+        ).toBe(false);
+      // The exclusion must stay narrow: a genuine reference in the same file is
+      // still found, otherwise this would hide real misses rather than noise.
+      expect(result.referenced.has("REAL_ENV_VAR")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("does not carry awk builtins in the platform allowlist", () => {
+    // That list means "supplied by Vercel, Next.js, Turborepo or the CI
+    // harness". An awk builtin is supplied by nobody, so an entry there would
+    // make the list's own description untrue — and would cover only the names
+    // somebody has already tripped over.
+    for (const builtin of ["NF", "NR", "FS", "RS"])
+      expect(
+        PLATFORM_ALLOWLIST.has(builtin),
+        `${builtin} belongs to the scanner's awk exclusion, not the allowlist`,
+      ).toBe(false);
+  });
+
   it("finds process.env.KEY references and records file:line", () => {
     const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
     try {
@@ -237,12 +287,81 @@ describe("scanSourceReferences", () => {
     }
   });
 
-  it("detects loadEnv() calls", () => {
+  it("finds a read off a validated env object, not just process.env", () => {
+    // packages/auth reads loadEnv().BETTER_AUTH_URL and the OAuth refresh
+    // strategies read env["SLACK_DATA_CLIENT_ID"]; neither is a process.env
+    // access, and both used to look like nothing at all.
     const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
     try {
-      writeFileSync(join(dir, "test.ts"), `const env = loadEnv();\n`);
+      writeFileSync(
+        join(dir, "test.ts"),
+        `const a = loadEnv().BETTER_AUTH_URL;\nconst b = env["SLACK_DATA_CLIENT_ID"];\n`,
+      );
       const result = scanSourceReferences([dir]);
-      expect(result.loadEnvFound).toBe(true);
+      expect(result.referenced.has("BETTER_AUTH_URL")).toBe(true);
+      expect(result.referenced.has("SLACK_DATA_CLIENT_ID")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("reads .mjs — next.config.mjs is where two live vars were hiding", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "next.config.mjs"),
+        `const origins = process.env.SERVER_ACTIONS_ALLOWED_ORIGINS;\n`,
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("SERVER_ACTIONS_ALLOWED_ORIGINS")).toBe(
+        true,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("reads shell expansions but not the script's own locals", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "deploy.sh"),
+        `LOCAL_DIR="/tmp/build"\necho "$LOCAL_DIR" "\${DEPLOY_TARGET:-prod}"\n`,
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("DEPLOY_TARGET")).toBe(true);
+      expect(result.referenced.has("LOCAL_DIR")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("reads python os.environ access", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "handler.py"),
+        `BUS = os.environ["EVENT_BUS_NAME"]\nOPT = os.getenv("OPTIONAL_THING")\n`,
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("EVENT_BUS_NAME")).toBe(true);
+      expect(result.referenced.has("OPTIONAL_THING")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("does not read a var named only in a whole-line comment", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "doc.ts"),
+        `// Matches process.env.EXAMPLE_ONLY and env["ALSO_PROSE"].\nconst real = process.env.REAL_READ;\n`,
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("EXAMPLE_ONLY")).toBe(false);
+      expect(result.referenced.has("ALSO_PROSE")).toBe(false);
+      expect(result.referenced.has("REAL_READ")).toBe(true);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -289,7 +408,6 @@ describe("scanSourceReferences", () => {
     try {
       const result = scanSourceReferences([dir]);
       expect(result.referenced.size).toBe(0);
-      expect(result.loadEnvFound).toBe(false);
     } finally {
       rmSync(dir, { recursive: true });
     }

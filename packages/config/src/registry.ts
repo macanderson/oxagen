@@ -693,11 +693,14 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
     description:
-      "Stripe publishable key (pk_live in prod, pk_test in preview/dev).",
+      "Stripe publishable key (pk_live in prod, pk_test in preview/dev). " +
+      "Provisioning-only: no service reads it. The browser reads the " +
+      "NEXT_PUBLIC_ prefixed name, and env-manager pulls this one from the " +
+      "secret store so the two stay in step.",
     secret: false,
     clientExposed: false,
-    services: ["api", "app"],
-    requiredIn: ALL,
+    services: [],
+    requiredIn: [],
     valueOrigin: "manual",
     placeholder: "pk_test_replace_me",
   },
@@ -732,15 +735,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "false",
   },
-
-  // Google Maps / Places: the two entries this block used to describe were
-  // deleted. They were declared for a billing-address autocomplete that was
-  // never built, and an operator was being asked for a value that nothing read.
-  // The rule they were an example of survives them and applies to every entry
-  // below: a secret must never carry a `NEXT_PUBLIC_` prefix, because Next.js
-  // inlines every such variable into the client bundle. Set `clientExposed`
-  // honestly — it is what `check:env` and `build-env.ts` read to decide whether
-  // a value reaches a browser (#1182).
 
   // ── Billing / usage meter ────────────────────────────────────────────────────
   OXAGEN_TARGET_MARGIN: {
@@ -1460,6 +1454,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "",
   },
 
+  SERVER_ACTIONS_ALLOWED_ORIGINS: {
+    group: "Security",
+    description:
+      "Extra hosts allowed to POST a Next server action to apps/app, comma-separated. " +
+      "Next rejects a server action whose Origin is not the deployment's own host, so a " +
+      "custom domain in front of the app has to be named here or every mutation 403s.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "app.oxagen.sh",
+  },
+
   // ── CLI / tooling ────────────────────────────────────────────────────────────
   OXAGEN_API_TOKEN: {
     group: "CLI",
@@ -1611,6 +1619,344 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { development: "0", preview: "0", production: "30" },
+  },
+
+  // ── Operator scripts, build flags and deploy tooling ─────────────────────
+  BLOG_DRAFTS: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to include draft posts when building the static research blog " +
+      "(apps/web/scripts/build.mjs). Unset in every deploy, so drafts never ship.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  WEB_PORT: {
+    group: "Operator scripts",
+    description:
+      "Port for the apps/web static dev server (apps/web/scripts/dev.mjs). " +
+      "Defaults to 5500; local convenience only, never read by a deploy.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "5500",
+  },
+  STANDALONE: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to build apps/app or apps/docs with Next's standalone output. " +
+      "tools/scripts/package-for-node.sh sets it for the self-hosted node bundle; " +
+      "Vercel builds leave it unset and get the default output.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  WRITE_MANIFEST_IMAGE: {
+    group: "Operator scripts",
+    description:
+      "Container image the packaged node bundle's run manifest names. " +
+      "Defaults to node:22-alpine.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "node:22-alpine",
+  },
+  NPM_TOKEN: {
+    group: "Operator scripts",
+    description:
+      "npm automation token used to publish the CLI package. Unset skips the npm " +
+      "publish step of `pnpm release` rather than failing it.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  OXAGEN_INSTALL_BASE: {
+    group: "Operator scripts",
+    description:
+      "Base URL the published install.sh downloads CLI release archives from. " +
+      "Set it to install from a staging bucket instead of cli.oxagen.sh.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "https://cli.oxagen.sh/releases/latest",
+  },
+  OXAGEN_INSTALL_DIR: {
+    group: "Operator scripts",
+    description:
+      "Directory install.sh puts the oxagen binary in. Defaults to ~/.local/bin.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "$HOME/.local/bin",
+  },
+
+  ADMIN_DATABASE_URL: {
+    group: "Operator scripts",
+    description:
+      "Superuser Postgres connection used by provision-rls-role.ts to create the " +
+      "least-privilege app role. Kept separate from DATABASE_URL so the provisioning " +
+      "step cannot silently run through the restricted connection it is about to create.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PRODUCTION_DATABASE_URL: {
+    group: "Operator scripts",
+    description:
+      "Migration connection for tools/scripts/vercel-migrate.sh, holding a role that may " +
+      "run DDL against pre-existing schemas. The app role may only CREATE in schemas it " +
+      "owns, so migrating through DATABASE_URL fails 42501 on billing and friends.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  DB_MIGRATE_STORES: {
+    group: "Operator scripts",
+    description:
+      "Comma-separated stores `pnpm db:migrate` should migrate. Defaults to " +
+      "clickhouse,neo4j — Postgres is Atlas's job and is deliberately not in the list.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "clickhouse,neo4j",
+  },
+  PGSUPERUSER: {
+    group: "Operator scripts",
+    description:
+      "Superuser on the cluster tools/scripts/rds-sim-check.sh simulates RDS against. " +
+      "The script refuses to run without it.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PGSUPERPASS: {
+    group: "Operator scripts",
+    description: "Password for PGSUPERUSER.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PRODUCTION_ANALYTICS_URL: {
+    group: "Operator scripts",
+    description:
+      "Production ClickHouse endpoint tools/scripts/backfill-claude-telemetry.ts writes " +
+      "backfilled session rows to.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PRODUCTION_ANALYTICS_USER: {
+    group: "Operator scripts",
+    description: "Username for PRODUCTION_ANALYTICS_URL.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PRODUCTION_ANALYTICS_PASSWORD: {
+    group: "Operator scripts",
+    description: "Password for PRODUCTION_ANALYTICS_USER.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  USER_EMAIL: {
+    group: "Operator scripts",
+    description:
+      "Email stamped on rows the Claude telemetry backfill writes, so a backfilled " +
+      "session is attributable to whoever ran the script.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  INNGEST_DEV: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to point the Inngest SDK at a local dev server instead of Inngest Cloud. " +
+      "tools/scripts/inngest-dev.ts sets it for every child turbo spawns.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  GCP_PROJECT: {
+    group: "Operator scripts",
+    description:
+      "Google Cloud project the env-manager pulls Secret Manager secrets from. " +
+      "Defaults to oxagen-490023.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen-490023",
+  },
+  CONTEXT_GRAPH_PROTOCOL_DIR: {
+    group: "Operator scripts",
+    description:
+      "Path to a local context-graph-protocol checkout. check-contextgraph-fixtures.ts " +
+      "verifies the vendored profile against it when set.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MAIN_VERIFIED_WINDOW: {
+    group: "Operator scripts",
+    description:
+      "How many recent commits on main check-main-verified.mjs asks about. Defaults to 10.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10",
+  },
+  SCR_OWNER: {
+    group: "Operator scripts",
+    description:
+      "GitHub owner whose repos the SCR corpus check reads. Defaults to macanderson.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "macanderson",
+  },
+  OXAGEN_HOUSE_BRAND: {
+    group: "Operator scripts",
+    description:
+      "Path to the oxagen-house-brand checkout sync-brand-assets.mjs copies marks from. " +
+      "Defaults to a sibling directory of this repository.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VISION_GATE_MODEL: {
+    group: "Operator scripts",
+    description: "Model the vision gate judges a diff with.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VISION_GATE_BASE: {
+    group: "Operator scripts",
+    description: "Ref the vision gate diffs against. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  VISION_GATE_STRICT: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to make a drifts verdict fail the vision gate instead of only printing it.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+
+  // ── Infrastructure (read by infra/ scripts and provisioned Lambdas) ────────
+  NODE_NAME: {
+    group: "Infrastructure",
+    description:
+      "Name tag of the EC2 instance the infra/tools scripts target. Defaults to oxagen-app.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen-app",
+  },
+  DATA_NODE_NAME: {
+    group: "Infrastructure",
+    description:
+      "Name tag of the data-plane EC2 instance the DB-client tunnel scripts target. " +
+      "Defaults to oxagen-data.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen-data",
+  },
+  AURORA_ENDPOINT: {
+    group: "Infrastructure",
+    description:
+      "Aurora writer endpoint for run-db-migrations.sh. Set it to skip the AWS lookup " +
+      "the script otherwise does.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  AURORA_PORT: {
+    group: "Infrastructure",
+    description: "Port for AURORA_ENDPOINT. Defaults to 5432.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "5432",
+  },
+  EVENT_BUS_NAME: {
+    group: "Infrastructure",
+    description:
+      "EventBridge bus the log-event-publisher Lambda puts events on. The stack sets it " +
+      "on the function; the handler refuses to import without it.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
 };
 
