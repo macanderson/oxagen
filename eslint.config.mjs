@@ -27,11 +27,16 @@ export default tseslint.config(
       // plugins only registered there (e.g. react-hooks/exhaustive-deps).
       "apps/app/**",
       "apps/docs/**",
-      // apps/web is the static oxagen.sh site: no build step, no tsconfig,
-      // and its one script is browser vanilla JS. The project service has no
-      // project to resolve it against, so linting it here is a parse error
-      // rather than a finding.
-      "apps/web/**",
+      // apps/web's browser JS and its build OUTPUT stay unlinted: the site has
+      // no tsconfig, so the project service has no project to resolve them
+      // against and reports a parse error rather than a finding. This used to
+      // ignore `apps/web/**` wholesale, which was right when the directory held
+      // one vanilla-JS file — but the blog build put ~2.4k lines of real Node
+      // source under `apps/web/scripts/`, and a wholesale ignore silently
+      // exempted all of it from the zero-warning gate. Those files are linted
+      // by the `apps/web/scripts` block further down.
+      "apps/web/assets/**",
+      "apps/web/dist/**",
     ],
   },
   // Base TS config without type-checking (fast; runs on all TS files).

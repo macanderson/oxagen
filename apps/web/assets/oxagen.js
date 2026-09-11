@@ -1,7 +1,9 @@
 /* ==========================================================================
    oxagen.sh — shared behaviour
    Nav, dropdown, drawer, reveal, copy, the typewriters, and the lead forms.
-   Vanilla and dependency-free: the site has no build step.
+   Vanilla and dependency-free: this file ships to the browser byte-for-byte.
+   The site's build (scripts/build.mjs) only assembles pages into dist/; it
+   never bundles, transpiles or touches this file.
    ========================================================================== */
 (function () {
   "use strict";

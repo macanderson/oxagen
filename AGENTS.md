@@ -22,7 +22,7 @@ docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/spec
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
 | `cli` | `apps/cli/src/index.ts` | Commander governance-ops CLI over the platform API; former coding-agent commands print a retirement notice |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
-| `web` | `apps/web/` | oxagen.sh public website — static HTML, no build step, deployed to S3 + CloudFront |
+| `web` | `apps/web/` | oxagen.sh public website + `/blog` — hand-authored HTML plus MDX posts from `content/`, built to `dist/`, deployed to S3 + CloudFront |
 
 ### Core Packages
 

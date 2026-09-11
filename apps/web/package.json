@@ -9,6 +9,7 @@
     "dev": "node scripts/dev.mjs",
     "preview": "node scripts/build.mjs && python3 -m http.server -d dist 5500",
     "check:links": "node scripts/check-links.mjs",
+    "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
