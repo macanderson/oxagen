@@ -137,6 +137,12 @@ vi.mock("./credits", async (importOriginal) => {
   return importOriginal<typeof import("./credits")>();
 });
 
+const {
+  CREDIT_REASONS,
+  RETIRED_CREDIT_REASONS,
+  HISTORICAL_CREDIT_REASONS,
+} = await import("./constants");
+
 const { createCreditLot, grantCredits, effectiveBalance } = await import(
   "./credits"
 );
@@ -314,7 +320,6 @@ describe("grantCredits shim", () => {
     "grant_manual",
     "consume_execution",
     "consume_tool_call",
-    "consume_token_overage",
     "refund",
     "adjustment",
   ] as const)("accepts allowed reason: %s", async (reason) => {
@@ -337,6 +342,41 @@ describe("grantCredits shim", () => {
       await expect(
         grantCredits({ orgId: "org-abc", deltaCents: -1n, reason }),
       ).resolves.toBeDefined();
+    }
+  });
+
+  // ── ADR-052: the retirement is enforced on writes, not documented ─────────
+  //
+  // `consume_token_overage` priced a token bill at a markup. ADR-052 says
+  // Oxagen no longer charges for that, so no new row may claim it did — while
+  // every row that already says it keeps saying it. That is a one-directional
+  // retirement: writes reject, reads accept. These two tests are the
+  // enforcement; without them the constant could drift back into the write
+  // vocabulary and nothing would notice until a customer's 2027 invoice
+  // carried a 2025 reason.
+  it("rejects the retired consume_token_overage on a write, before any DB interaction", async () => {
+    await expect(
+      grantCredits({
+        orgId: "org-abc",
+        deltaCents: -1n,
+        reason: RETIRED_CREDIT_REASONS.CONSUME_TOKEN_OVERAGE,
+      }),
+    ).rejects.toThrow("invalid credit reason: consume_token_overage");
+
+    expect(state.transactionCalled).toBe(false);
+  });
+
+  it("keeps the retired reason readable — it is absent from the write vocabulary and present in the historical one", () => {
+    expect(Object.values(CREDIT_REASONS)).not.toContain(
+      "consume_token_overage",
+    );
+    expect(Object.values(HISTORICAL_CREDIT_REASONS)).toContain(
+      "consume_token_overage",
+    );
+    // Every live reason is still readable: the historical vocabulary is a
+    // superset, never a replacement.
+    for (const reason of Object.values(CREDIT_REASONS)) {
+      expect(Object.values(HISTORICAL_CREDIT_REASONS)).toContain(reason);
     }
   });
 });
