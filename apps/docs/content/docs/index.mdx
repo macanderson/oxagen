@@ -1,6 +1,6 @@
 ---
 title: Oxagen for the enterprise
-description: Governed, auditable, tenant-isolated AI — every model call through one metered, IAM-gated, audit-logged chokepoint.
+description: Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. One typed contract, not a log file to reconstruct after the fact.
 ---
 
 <IllustrationOverview />
@@ -9,19 +9,19 @@ description: Governed, auditable, tenant-isolated AI — every model call throug
 
 AI adoption is accelerating faster than governance can follow. Engineers connect directly to OpenAI. Sales teams paste customer data into ChatGPT. Finance analysts build automations in LLM notebooks no one approved. Every one of those interactions is invisible to your security team, unaudited, and unaccountable.
 
-This is shadow AI — and the exposure it creates is real: data sent to unknown models, no audit trail for your next SOC 2 review, no way to enforce which teams can do what, no metering to understand what you are actually spending.
+This is shadow AI — and the exposure it creates is real: data sent to unknown models, no audit trail for your next SOC 2 review, no way to enforce which teams can do what, no metering to understand what you are actually spending. The agent doesn't know your business either, so it starts every job from zero and forgets what it learned by morning. You rent intelligence by the token and own none of it.
 
-## The governed-AI answer
+## What Oxagen does
 
-Oxagen gives enterprises a single platform where every AI action is authorized before it runs, metered as it runs, and logged after it runs — across the in-app agent, the REST API, and the MCP server simultaneously.
+Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. Four jobs, one platform, one loop: what a proven run teaches feeds back into what the next run is taught.
 
-Your teams get capable AI. Your security and compliance teams get the controls they require. Neither group has to compromise.
+### Teach
 
-## Four pillars
+Oxagen gives every agent your company's knowledge and rules at run time, from a typed knowledge graph — not by training a model. The agent starts each job already knowing your customers, your code, and how you work. See [the knowledge graph](/docs/knowledge).
 
-### One audited chokepoint
+### Govern
 
-Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary. That boundary enforces IAM, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural.
+Every agent gets an identity, a role, and a budget. Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary that checks it against those before the action runs, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural. See [governance and RBAC](/docs/governance/overview).
 
 <Mermaid
   chart="
@@ -35,6 +35,16 @@ flowchart LR
 />
 
 *Every action carries identity through one contract-bound chokepoint — no capability reaches a handler without IAM, metering, and an audit record.*
+
+### Explain
+
+Oxagen saves every run as a trace next to the data it touched. Anyone with the right role can see who asked, what the agent read, what it changed, what proved it, and what it cost. See [audit logging](/docs/security/audit-logging).
+
+### Learn
+
+Proven runs write skills, tools, and tuned settings back to the graph the next run starts with. Over time, the proven runs can train a model you own. See [agent memory](/docs/agent/memory).
+
+## Built for the enterprise security review
 
 ### Tenant isolation with row-level security
 
