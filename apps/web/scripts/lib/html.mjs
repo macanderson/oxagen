@@ -154,6 +154,7 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
  * The document shell shared by every blog page.
  * @param {{
  *   title: string, description: string, path: string, image: string,
+ *   imageAlt?: string,
  *   type?: "website" | "article", ldjson?: object, body: string,
  *   wordmark: string, pillars: Array<{slug: string, name: string}>,
  *   extraHead?: string,
@@ -178,6 +179,9 @@ export function layout(o) {
 <meta property="og:title" content="${esc(o.title)}">
 <meta property="og:description" content="${esc(o.description)}">
 <meta property="og:image" content="${esc(image)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(o.imageAlt ?? o.title)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
 <meta name="twitter:title" content="${esc(o.title)}">
@@ -224,13 +228,27 @@ export function pillarChips(pillars, slugs) {
 }
 
 /**
- * @param {object} post
- * @param {Array<{slug: string, name: string, image: {src: string, alt: string}}>} pillars
+ * An image with a light and a dark rendering: the dark one is the <img>
+ * (the site's declared scheme) and the light one is offered to a viewer who
+ * prefers light. When both are the same file there is nothing to choose.
+ * @param {{ dark: string, light: string }} image
+ * @param {{ alt: string, width: number, height: number, lazy?: boolean, priority?: boolean }} o
+ */
+export function picture(image, o) {
+  const loading = o.lazy ? ' loading="lazy"' : "";
+  const priority = o.priority ? ' fetchpriority="high"' : "";
+  const img = `<img src="${esc(image.dark)}" alt="${esc(o.alt)}" width="${o.width}" height="${o.height}"${loading} decoding="async"${priority}>`;
+  if (image.light === image.dark) return img;
+  return `<picture><source srcset="${esc(image.light)}" media="(prefers-color-scheme: light)">${img}</picture>`;
+}
+
+/**
+ * @param {object} post with `images` from the build
+ * @param {Array<{slug: string, name: string}>} pillars
  */
 export function postCard(post, pillars) {
-  const hero = heroFor(post, pillars);
   return `<article class="post-card">
-  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true"><img src="${esc(hero.src)}" alt="" loading="lazy" decoding="async" width="800" height="450"></a>
+  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true">${picture(post.images.thumb, { alt: "", width: 800, height: 450, lazy: true })}</a>
   <div class="post-card-meta">
     ${pillarChips(pillars, post.pillars)}
     <h3><a href="${urls.post(post.slug)}">${esc(post.title)}</a></h3>
@@ -240,24 +258,8 @@ export function postCard(post, pillars) {
 </article>`;
 }
 
-/** @param {{image: string|null, pillars: string[]}} post @param {Array<{slug: string, image: {src: string, alt: string}}>} pillars */
-export function heroFor(post, pillars) {
-  const primary = pillars.find((p) => p.slug === post.pillars[0]);
-  if (post.image) return { src: post.image, alt: "", credit: null };
-  return {
-    src: primary.image.src,
-    alt: primary.image.alt,
-    credit: primary.image.credit,
-  };
-}
-
-/** @param {{author: string, authorUrl: string, source: string, sourceUrl: string, license: string}} credit */
-export function creditLine(credit) {
-  return `Photo by <a href="${esc(credit.authorUrl)}" target="_blank" rel="noopener">${esc(credit.author)}</a> on <a href="${esc(credit.sourceUrl)}" target="_blank" rel="noopener">${esc(credit.source)}</a> (${esc(credit.license)})`;
-}
-
-/** @param {{ pillars: object[], posts: object[], wordmark: string }} o */
-export function indexPage({ pillars, posts, wordmark }) {
+/** @param {{ pillars: object[], posts: object[], wordmark: string, image: string }} o */
+export function indexPage({ pillars, posts, wordmark, image }) {
   const body = `
   <section class="blog-hero tex tex-hex">
     <div class="wrap">
@@ -273,7 +275,7 @@ export function indexPage({ pillars, posts, wordmark }) {
 ${pillars
   .map(
     (p) => `        <a class="pillar-card" href="${urls.pillar(p.slug)}">
-          <img src="${esc(p.image.src)}" alt="" loading="lazy" decoding="async" width="640" height="360">
+          ${picture(p.images.thumb, { alt: "", width: 640, height: 360, lazy: true })}
           <div class="pillar-card-body"><h3>${esc(p.name)}</h3><p>${esc(p.tagline)}</p><span class="pillar-count">${posts.filter((x) => x.pillars.includes(p.slug)).length} posts</span></div>
         </a>`,
   )
@@ -293,7 +295,8 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
     title: `${BLOG_TITLE} — the science of ontologies, agents, and self-improving systems`,
     description: BLOG_DESCRIPTION,
     path: urls.blog(),
-    image: "/og.png",
+    image,
+    imageAlt: BLOG_TITLE,
     body,
     wordmark,
     pillars,
@@ -312,13 +315,12 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
 export function pillarPage({ pillar, pillars, posts, wordmark }) {
   const body = `
   <section class="pillar-hero">
-    <div class="pillar-hero-shot"><img src="${esc(pillar.image.src)}" alt="${esc(pillar.image.alt)}" width="1600" height="900" decoding="async" fetchpriority="high"></div>
+    <div class="pillar-hero-shot">${picture(pillar.images.banner, { alt: "", width: 1600, height: 900, priority: true })}</div>
     <div class="wrap pillar-hero-copy">
       <p class="eyebrow"><a href="${urls.blog()}">Research</a> · Pillar</p>
       <h1>${esc(pillar.name)}</h1>
       <p class="pillar-tagline">${esc(pillar.tagline)}</p>
       <p class="pillar-desc">${esc(pillar.description)}</p>
-      <p class="credit">${creditLine(pillar.image.credit)}</p>
     </div>
   </section>
   <section class="sec-tight sec-alt">
@@ -341,7 +343,8 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     title: `${pillar.name} — ${BLOG_TITLE}`,
     description: pillar.description,
     path: urls.pillar(pillar.slug),
-    image: pillar.image.src,
+    image: pillar.images.og.dark,
+    imageAlt: pillar.name,
     body,
     wordmark,
     pillars,
@@ -361,7 +364,6 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
  *   pillars: object[], related: object[], wordmark: string }} o
  */
 export function postPage({ post, html, headings, pillars, related, wordmark }) {
-  const hero = heroFor(post, pillars);
   // remark-rehype hardcodes the footnote section's heading id; keep it out of the TOC
   const toc = headings.filter(
     (h) => h.depth === 2 && h.id !== "footnote-label",
@@ -382,8 +384,7 @@ export function postPage({ post, html, headings, pillars, related, wordmark }) {
         ${pillarChips(pillars, post.pillars)}
       </div>
       <figure class="post-hero">
-        <img src="${esc(hero.src)}" alt="${esc(hero.alt)}" width="1600" height="900" decoding="async" fetchpriority="high">
-        ${hero.credit ? `<figcaption class="credit">${creditLine(hero.credit)}</figcaption>` : ""}
+        ${picture(post.images.banner, { alt: "", width: 1600, height: 900, priority: true })}
       </figure>
     </header>
     <div class="wrap post-body">
@@ -403,7 +404,8 @@ ${html}
     title: `${post.title} — ${BLOG_TITLE}`,
     description: post.description,
     path: urls.post(post.slug),
-    image: hero.src,
+    image: post.images.og.dark,
+    imageAlt: post.title,
     type: "article",
     body,
     wordmark,
@@ -423,7 +425,7 @@ ${html}
         url: SITE,
         logo: `${SITE}/assets/brand/oxagen-wordmark.svg`,
       },
-      image: SITE + hero.src,
+      image: SITE + post.images.og.dark,
       url: SITE + urls.post(post.slug),
       mainEntityOfPage: SITE + urls.post(post.slug),
       keywords: [
