@@ -845,6 +845,35 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     expect(link).toHaveAttribute("href", "/test-org/billing/subscription");
   });
 
+  // Regression — #1456. A spend-ceiling denial reaches the client with code
+  // "budget_exceeded"; before the fix the switch had no case for it and the
+  // toast read "Request failed", which tells the user nothing about why.
+  it("raises a 'Spend limit reached' toast carrying the server message for budget_exceeded", async () => {
+    mockStream.overrides = {
+      turnError: {
+        code: "budget_exceeded",
+        message:
+          "Spend budget exceeded: the workspace monthly ceiling of $50.00 has been reached.",
+      },
+    };
+    await renderClient();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    const call = toastAdd.mock.calls[0]![0] as {
+      type: string;
+      title: string;
+      description: React.ReactNode;
+    };
+    expect(call.type).toBe("error");
+    expect(call.title).toBe("Spend limit reached");
+    cleanup();
+    render(<>{call.description}</>);
+    // The server message names WHICH ceiling stopped the turn — surface it
+    // verbatim rather than a generic apology.
+    expect(
+      screen.getByText(/workspace monthly ceiling of \$50\.00/i),
+    ).toBeInTheDocument();
+  });
+
   it("raises an 'Assistant cap reached' toast with the server message + a model-funding link for assistant_spend_cap", async () => {
     mockStream.overrides = {
       turnError: {

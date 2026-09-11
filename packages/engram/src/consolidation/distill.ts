@@ -14,9 +14,10 @@
  */
 import { z } from "zod";
 import {
-  generateObjectFor,
-  selectModel,
   CREDIT_REASONS,
+  generateObjectFor,
+  resolveModelFundingSource,
+  selectModel,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
@@ -66,16 +67,6 @@ export interface DistillationLlmOptions {
   telemetry: GenerateObjectArgs<
     z.infer<typeof DistilledFactSchema>
   >["telemetry"];
-  /**
-   * Who paid the vendor for the distillation call (ADR-053 §3). Supplied by the
-   * caller, not resolved here: `resolveModelFundingSource` reads through
-   * `withTenantDb` and needs an active tenant scope, and consolidation runs as a
-   * background job. Resolving it inside would throw scopeless, and the catch
-   * below would swallow that into a silent fall back to the heuristic — the LLM
-   * path would quietly stop running for exactly the organisations that brought
-   * their own key.
-   */
-  fundedBy: GenerateObjectArgs<z.infer<typeof DistilledFactSchema>>["fundedBy"];
 }
 
 /** True when the Vercel AI Gateway key is configured (LLM path is viable). */
@@ -224,6 +215,16 @@ export async function extractFactFromCluster(
   if (!options || !hasGatewayKey()) return heuristic;
 
   try {
+    // Who pays the vendor for this call (ADR-053). Asked per organisation
+    // rather than assumed: an organisation that brought its own key must not be
+    // charged, and `resolveModelFundingSource` calls guessing `platform` "the
+    // one direction this seam must never err in". Distillation is a background
+    // job with no user waiting, so paying for the lookup costs nothing anybody
+    // notices, and it runs only on the path that is about to call a model.
+    const { fundedBy } = await resolveModelFundingSource(
+      options.telemetry.orgId,
+    );
+
     const { object } = await generateObjectFor({
       schema: DistilledFactSchema,
       // Small/cheap "fast" tier — distillation is a high-volume background job.
@@ -233,7 +234,10 @@ export async function extractFactFromCluster(
       system: DISTILL_SYSTEM_PROMPT,
       prompt: buildClusterPrompt(heuristic.fact, cluster),
       telemetry: options.telemetry,
-      fundedBy: options.fundedBy,
+      fundedBy,
+      // Assistant tokens, which is what the assistant spend cap sums. The
+      // retired `consume_token_overage` must not be repurposed (ADR-052/053),
+      // and a reason outside that sum is invisible to the cap meant to bound it.
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     });
     const domain = object.domain.trim();

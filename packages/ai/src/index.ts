@@ -17,6 +17,19 @@ export {
 } from "./funding-source";
 export type { ModelFundingSource, TurnFunding } from "./funding-source";
 
+// The ledger reasons a caller needs to satisfy `chargeReason`, re-exported
+// from `@oxagen/billing` rather than left to be imported past this package.
+//
+// `generateObjectFor` and `generateTextFor` require a `CreditReason`, and this
+// package is the one chokepoint every LLM call goes through. A caller that has
+// to add a dependency on `@oxagen/billing` purely to name a constant is being
+// asked to reach around the seam to satisfy the seam — which is how
+// `packages/engram` ended up unable to satisfy an argument it was required to
+// pass, and `main` red on its typecheck. Requiring an argument means exporting
+// what answers it.
+export { CREDIT_REASONS } from "@oxagen/billing";
+export type { CreditReason } from "@oxagen/billing";
+
 // Re-export the client-safe catalog from the package root for server callers
 // (route guards, RSC). Client components should import from "@oxagen/ai/catalog"
 // directly to avoid pulling the provider SDKs into the browser bundle.
@@ -167,10 +180,3 @@ export type {
   CredentialProbeResult,
   ProbeModelCredentialArgs,
 } from "./credential-probe";
-
-// The ledger reason a caller must pass alongside `fundedBy`. Re-exported from
-// @oxagen/billing so a package that calls `generateObjectFor` needs one import
-// rather than a second dependency edge — @oxagen/engram takes @oxagen/ai and
-// nothing else, and the reason is not a good enough reason to widen that.
-export { CREDIT_REASONS } from "@oxagen/billing";
-export type { CreditReason } from "@oxagen/billing";

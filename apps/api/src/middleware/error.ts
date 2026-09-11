@@ -7,7 +7,20 @@ import { logger } from "./logger";
 import type { AppEnv } from "../app";
 
 // Typed error codes we duck-type from @oxagen/billing to avoid a direct dep.
-type BillingErrorCode = "insufficient_credits" | "billing_suspended";
+// Every one of these is a PAYMENT decision, not a server fault, so each maps to
+// 402 Payment Required:
+//   - insufficient_credits — the org's credit balance is empty (metering.ts)
+//   - billing_suspended    — the org's subscription is suspended (dunning.ts)
+//   - budget_exceeded      — a spend ceiling was reached (spend-budget.ts)
+// The list is a hand-maintained mirror of the throwing classes in
+// @oxagen/billing; BILLING_ERROR_CODES is exported so a test can assert the
+// mirror stays complete rather than discovering a gap as a production 500.
+export const BILLING_ERROR_CODES = [
+  "insufficient_credits",
+  "billing_suspended",
+  "budget_exceeded",
+] as const;
+type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
 interface BillingError extends Error {
   readonly code: BillingErrorCode;
 }
@@ -15,7 +28,7 @@ interface BillingError extends Error {
 function isBillingError(err: unknown): err is BillingError {
   if (typeof err !== "object" || err === null) return false;
   const code = (err as Record<string, unknown>).code;
-  return code === "insufficient_credits" || code === "billing_suspended";
+  return (BILLING_ERROR_CODES as readonly string[]).includes(code as string);
 }
 
 export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {

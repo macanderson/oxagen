@@ -272,10 +272,12 @@ gh run watch                                    # confirm CI green
 
 ## Deployment
 
-Everything ships to AWS account `578673726240` on merge to `main`, from the
+Everything ships to AWS account `916294258235` on merge to `main`, from the
 `deploy-web` and `deploy-node` jobs at the bottom of
 `.github/workflows/pipeline.yml`. There is no hosting dashboard in the path and
-no stored AWS key.
+no stored AWS key. (`578673726240` was the pre-cutover account; the 2026-08-27
+migration to `916294258235` is what #2542 traced the deploy pipeline's
+contradictory database comments back to.)
 
 This replaced Vercel, whose account was suspended over an unpaid balance —
 every site behind it answers `402`. Vercel is not a fallback and nothing here
@@ -290,11 +292,14 @@ may depend on it.
 | `apps/mcp` | Node on the shared instance | `mcp.oxagen.sh` |
 
 Four of the five are processes on one EC2 instance rather than functions,
-because three of them reach Postgres, Neo4j and ClickHouse over `127.0.0.1`.
-Those ports are bound to loopback and the security group opens nothing to them,
-so a VPC-attached Lambda would need a NAT gateway costing more per month than
-everything else in this account combined. Caddy on the instance terminates TLS
-and routes by hostname.
+because three of them reach Neo4j and ClickHouse over `127.0.0.1`. Those ports
+are bound to loopback and the security group opens nothing to them, so a
+VPC-attached Lambda would need a NAT gateway costing more per month than
+everything else in this account combined. Postgres is not one of the loopback
+services — it moved to a separate Aurora PostgreSQL Serverless v2 cluster
+(`oxagen-postgres`) reached over a connection string from Parameter Store, not
+over the instance's loopback (see `infra/stacks-new/oxagen/data-services.tf`
+and #2542). Caddy on the instance terminates TLS and routes by hostname.
 
 ### Packaging
 
@@ -314,7 +319,8 @@ tools/scripts/package-for-node.sh api
 
 ### Four things that will bite
 
-- **The instance is `arm64`** (a `t4g.medium`). `deploy-node` runs on
+- **The instance is `arm64`** (a `t4g.large`, verified 2026-09-10 via the
+  `where-is-production` workflow). `deploy-node` runs on
   `ubuntu-24.04-arm` for that reason. An artifact built on an x86 runner
   installs and tests green and then fails to load a native module at first
   request.
@@ -348,8 +354,9 @@ The instance keeps the last three releases per service. If a new one does not
 answer its health check within 60 seconds, the container and the `current`
 symlink go back to the previous release — and the job still fails, so a merge
 that boots red shows up red rather than quietly serving old code. Deploys are
-serialized (`max-parallel: 1`) because all four land on the same 4 GB instance,
-alongside the three databases.
+serialized (`max-parallel: 1`) because all four land on the same 8 GB instance,
+alongside Neo4j and ClickHouse. Postgres is not on this instance — see
+"Deployment" above.
 
 The infrastructure, the node-side script and the `oxagen-run.json` contract live
 in this repository under [`infra/`](infra/) — `infra/stacks-new/ci-deploy/`,
@@ -357,6 +364,26 @@ in this repository under [`infra/`](infra/) — `infra/stacks-new/ci-deploy/`,
 `oxagen-aws-infra` repository; that repository is archived, and the OIDC trust
 policy on `gha-infra-apply` names this one, so `infra/` here is the only place
 production infrastructure can be changed from.
+
+### Workflows nothing triggers for you
+
+Four things reach production only when a human dispatches them. None runs on a
+push, and each was made a workflow of its own rather than a step inside a job
+gated on something else — a step buried in a job whose gating is about
+something adjacent is how the Stripe sync became unreachable for months without
+anybody noticing (#1371).
+
+| Workflow | What it does | Safe default |
+| --- | --- | --- |
+| `db-migrate.yml` | Applies committed Atlas migrations to production Postgres | `apply=false` prints the pending list and changes nothing |
+| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations | `apply=false` prints the pending list |
+| `stripe-sync.yml` | Reconciles Stripe products and prices with `packages/billing/src/pricing.ts` | `apply=false` is a dry run that writes nothing |
+| `infra.yml` | Plans and applies OpenTofu — this one *does* apply on a push to `main` | plans on every pull request |
+
+Each of the three manual ones refuses to run when the credential it needs is
+absent, and says which secret to set. That is deliberate: a dispatch that
+quietly does nothing and reports success is worse than one that fails, because
+the person who dispatched it goes away believing the work happened.
 
 
 ## Security

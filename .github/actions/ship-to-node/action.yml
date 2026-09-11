@@ -45,9 +45,11 @@ runs:
         # Parsed here rather than discovered on the instance: a malformed
         # manifest should fail the job that produced it, not a deploy that has
         # already stopped the running container.
-        jq -e '.port and .image and (.command | type == "array" and length > 0)' \
+        # An empty command array is legal: it runs the image's own entrypoint
+        # (the engine's image names its binary there).
+        jq -e '.port and .image and (.command | type == "array")' \
           "$DIRECTORY/oxagen-run.json" > /dev/null \
-          || { echo "::error::oxagen-run.json needs port, image and a non-empty command array"; exit 1; }
+          || { echo "::error::oxagen-run.json needs port, image and a command array"; exit 1; }
 
         tar -czf "/tmp/$SERVICE-standalone.tgz" -C "$DIRECTORY" .
         echo "packaged $SERVICE ($(du -h "/tmp/$SERVICE-standalone.tgz" | cut -f1))"

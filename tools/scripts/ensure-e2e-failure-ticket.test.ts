@@ -10,11 +10,26 @@
  * leaves an annotation on the run summary, and says whether it will happen
  * again tomorrow.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   failureReport,
   isPermanentFailure,
 } from "./ensure-e2e-failure-ticket.js";
+
+/**
+ * `main()` reads its config into top-level consts when the module is
+ * imported, so each scenario needs its own fresh module instance with
+ * `process.env` set before import — otherwise every test would share
+ * whichever env was live when the file was first imported.
+ */
+const ORIGINAL_ENV = { ...process.env };
+
+async function freshMain(env: Record<string, string | undefined>) {
+  process.env = { ...ORIGINAL_ENV, ...env };
+  vi.resetModules();
+  const mod = await import("./ensure-e2e-failure-ticket.js");
+  return mod.main;
+}
 
 describe("isPermanentFailure (#2555)", () => {
   it("calls a rejected credential permanent", () => {
@@ -70,5 +85,117 @@ describe("failureReport (#2555)", () => {
     const { summary } = failureReport(rejected);
     expect(summary).toContain("was NOT filed");
     expect(summary).not.toMatch(/idempotenc|telemetry sink|observability/i);
+  });
+});
+
+describe("main() (#2555)", () => {
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("no LINEAR_API_KEY: silent no-op, never calls Linear (a fork's default)", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: undefined,
+      LINEAR_PROJECT_ID: "proj-1",
+    });
+
+    await expect(main()).resolves.toBeUndefined();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("no LINEAR_PROJECT_ID: also a silent no-op", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: "lin_api_test",
+      LINEAR_PROJECT_ID: undefined,
+    });
+
+    await expect(main()).resolves.toBeUndefined();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("key present, no existing tracker: creates a new ticket and succeeds", async () => {
+    const responses = [
+      // findTracker — nothing open yet.
+      { data: { issues: { nodes: [] } } },
+      // resolveContext — project + team + labels.
+      {
+        data: {
+          project: { id: "proj-uuid", teams: { nodes: [{ id: "team-1" }] } },
+          issueLabels: { nodes: [] },
+        },
+      },
+      // createTracker — the mutation succeeds.
+      {
+        data: {
+          issueCreate: {
+            success: true,
+            issue: {
+              id: "issue-1",
+              identifier: "OX-9",
+              url: "https://linear.app/issue/OX-9",
+            },
+          },
+        },
+      },
+    ];
+    let call = 0;
+    const fetchSpy = vi.fn(async () => ({
+      json: async () => responses[call++],
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: "lin_api_test",
+      LINEAR_PROJECT_ID: "proj-1",
+      GITHUB_RUN_ID: "123",
+      GITHUB_SHA: "abcdef1234567890",
+    });
+
+    await expect(main()).resolves.toBeUndefined();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("key present, tracker already open: appends a comment instead of duplicating", async () => {
+    const responses = [
+      // findTracker — an existing open tracker carrying the hidden marker.
+      {
+        data: {
+          issues: {
+            nodes: [
+              {
+                id: "issue-1",
+                identifier: "OX-9",
+                url: "https://linear.app/issue/OX-9",
+                description: "<!-- oxagen:e2e-failure-tracker v1 -->\nbody",
+                state: { type: "unstarted" },
+              },
+            ],
+          },
+        },
+      },
+      // appendComment — the mutation succeeds.
+      { data: { commentCreate: { success: true } } },
+    ];
+    let call = 0;
+    const fetchSpy = vi.fn(async () => ({
+      json: async () => responses[call++],
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: "lin_api_test",
+      LINEAR_PROJECT_ID: "proj-1",
+    });
+
+    await expect(main()).resolves.toBeUndefined();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });

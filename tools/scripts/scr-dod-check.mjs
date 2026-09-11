@@ -115,11 +115,40 @@ const CLOSING_KEYWORDS = [
 ];
 
 const CLOSING_PATTERN = new RegExp(
-  // keyword, then an optional `owner/repo` prefix, then `#number`
   String.raw`\b(?:${CLOSING_KEYWORDS.join("|")})\b\s*:?\s+` +
-    String.raw`(?:([\w.-]+)/([\w.-]+))?#(\d+)`,
+    // Either the short form — an optional `owner/repo` prefix then `#number` —
+    // or the full issue URL. GitHub honours both, and until the URL arm existed
+    // this gate saw only the first: a pull request written as
+    // `Closes https://github.com/owner/repo/issues/7` closed the issue on merge
+    // while the definition-of-done check found nothing to verify and passed.
+    // A control that a supported spelling walks straight past is not a control,
+    // and this is the spelling GitHub's own UI produces when someone pastes a
+    // link.
+    String.raw`(?:` +
+    String.raw`(?:([\w.-]+)/([\w.-]+))?#(\d+)` +
+    String.raw`|https?://(?:www\.)?github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)` +
+    String.raw`)`,
   "gi",
 );
+
+/**
+ * Normalise one `CLOSING_PATTERN` match to `{ owner, repo, number }`.
+ *
+ * The two arms fill different capture slots — 1–3 for the `#N` form, 4–6 for
+ * the URL form — so a caller reading fixed indexes would silently see `null`
+ * for every URL match. Kept beside the pattern so the two cannot drift.
+ */
+function closingMatchParts(match) {
+  const [, shortOwner, shortRepo, shortNumber, urlOwner, urlRepo, urlNumber] =
+    match;
+  return shortNumber !== undefined
+    ? {
+        owner: shortOwner ?? null,
+        repo: shortRepo ?? null,
+        number: shortNumber,
+      }
+    : { owner: urlOwner ?? null, repo: urlRepo ?? null, number: urlNumber };
+}
 
 // The org's own convention (stella's AGENTS.md, "Closing the issue on
 // merge"): `Refs #N` when a PR advances an issue without finishing it. Unlike
@@ -201,11 +230,31 @@ function isNegated(text, matchIndex) {
   );
 }
 
-/** Strip fenced code blocks and HTML comments before scanning prose. */
+/**
+ * Strip the spans GitHub does not read closing keywords out of, before
+ * scanning prose: fenced code blocks, HTML comments, and inline code spans.
+ *
+ * Inline code was the omission, and it cost a real merge. PR #2844's only
+ * close-claim was `## `Closes #2648`` — a keyword inside backticks in a
+ * heading. GitHub ignored it, so #2648 stayed open when that PR merged; this
+ * gate did not, and demanded a ticked checklist for an issue the merge was
+ * never going to close.
+ *
+ * That asymmetry is the worst kind for a gate to have. It blocks work over a
+ * close that will not happen, and the obvious way out — ticking boxes to get
+ * green — records a verification nobody performed, which is exactly what
+ * SCR-003 exists to prevent. Matching GitHub's own reading is the only way the
+ * gate's answer means what it says.
+ *
+ * Double-backtick spans are stripped before single, so a ``literal ` inside``
+ * span is not mistaken for two single-backtick spans with prose between them.
+ */
 function withoutNonProse(markdown) {
   return markdown
     .replace(/```[\s\S]*?```/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/``[^`]*``/g, "")
+    .replace(/`[^`\n]*`/g, "");
 }
 
 /** Run a keyword pattern over cleaned prose, dropping negated closing matches. */
@@ -215,7 +264,11 @@ function matchesOf(prBody, pattern, { skipNegated }) {
   const seen = new Map();
   for (const match of clean.matchAll(pattern)) {
     if (skipNegated && isNegated(clean, match.index)) continue;
-    const [, owner = null, repo = null, number] = match;
+    // `CLOSING_PATTERN` has two arms filling different capture slots, so the
+    // parts are read by name rather than by fixed index. `REFS_PATTERN` has one
+    // arm and falls through to the same first three slots.
+    const { owner, repo, number } = closingMatchParts(match);
+    if (number === undefined) continue;
     const key = `${owner ?? ""}/${repo ?? ""}#${number}`;
     if (!seen.has(key)) {
       seen.set(key, { owner, repo, number: Number(number) });
