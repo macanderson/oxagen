@@ -168,6 +168,19 @@ contains "$BAD" "ClickHouse" "report: names the store"
 contains "$BAD" "0003_b.sql" "report: names what is missing"
 contains "$BAD" "Store Migrate" "report: names the workflow that applies it"
 
+# An existing but EMPTY ledger is the state production ClickHouse was actually
+# in, and the counting has to survive it. `grep -c .` prints 0 and exits 1 on an
+# empty file, so the obvious inline form emits "0" twice and the verdict reads
+# "0\n0 present" — mangling the one line a reader pastes into an incident.
+: > "$WORK/empty-ledger.txt"
+expect_code 0 "$(count_names "$WORK/empty-ledger.txt")" "count: an empty file counts 0, once"
+expect_code 0 "$(count_names "$WORK/no-such-file.txt")" "count: an absent file counts 0, once"
+expect_code 3 "$(count_names "$WORK/declared.txt")" "count: three declared counts 3"
+
+EMPTY=$(report_drift "ClickHouse" "$WORK/declared.txt" "$WORK/empty-ledger.txt" 2>&1); CODE=$?
+expect_code 1 "$CODE" "report: an empty ledger is behind, not current"
+contains "$EMPTY" "3 declared, 0 present" "report: an empty ledger counts once, on one line"
+
 NEVER=$(report_drift "Neo4j" "$WORK/declared.txt" "$WORK/does-not-exist.txt" 2>&1); CODE=$?
 expect_code 1 "$CODE" "report: a store that has never been migrated exits 1"
 contains "$NEVER" "Neo4j" "report: names the store that has never been migrated"

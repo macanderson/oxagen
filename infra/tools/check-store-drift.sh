@@ -112,6 +112,22 @@ neo4j_declared_names() {
     sort -u
 }
 
+# count_names FILE
+#
+# How many distinct non-empty lines FILE holds; 0 for an absent or empty file.
+#
+# Its own function because the obvious inline version is wrong in the one case
+# that matters most. `grep -c .` prints 0 AND exits 1 on an empty file, so
+# `$(... | grep -c . || echo 0)` emits "0" twice and the verdict reads
+# "0\n0 present" — mangling precisely the line someone pastes into an incident,
+# for precisely the state production ClickHouse was in from the 2026-08-27
+# cutover: a ledger that exists and is empty.
+count_names() {
+  local file=$1
+  [[ -f $file ]] || { echo 0; return 0; }
+  sort -u "$file" | grep -c . || true
+}
+
 # report_drift STORE DECLARED_FILE PRESENT_FILE
 #
 # Prints a verdict a person can act on and returns 0 (current) or 1 (behind).
@@ -131,8 +147,8 @@ report_drift() {
   fi
 
   local n_declared n_present
-  n_declared=$(sort -u "$declared" | grep -c . || true)
-  n_present=$([[ -f $present ]] && sort -u "$present" | grep -c . || echo 0)
+  n_declared=$(count_names "$declared")
+  n_present=$(count_names "$present")
 
   if [[ $rc -eq 0 ]]; then
     echo "$store: current — $n_declared declared, $n_present present."
