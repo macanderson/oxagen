@@ -45,9 +45,9 @@ describe("parseAllFiles (#2556)", () => {
     // The old behavior only ever incremented a counter — nothing written for
     // a failing file. The fix must write a line naming it, not just tally it.
     expect(lines.some((l) => l.includes("truncated.jsonl"))).toBe(true);
-    expect(
-      lines.some((l) => l.includes("Unexpected end of JSON input")),
-    ).toBe(true);
+    expect(lines.some((l) => l.includes("Unexpected end of JSON input"))).toBe(
+      true,
+    );
   });
 
   it("does not lose rows already parsed before a later file fails", async () => {
@@ -60,9 +60,7 @@ describe("parseAllFiles (#2556)", () => {
       files,
       async (path, isSubagent) => {
         if (isSubagent) throw new Error("boom");
-        return [
-          { session_id: "kept" } as unknown as ClaudeSessionRow,
-        ];
+        return [{ session_id: "kept" } as unknown as ClaudeSessionRow];
       },
       () => {},
     );
@@ -79,7 +77,6 @@ describe("parseAllFiles (#2556)", () => {
     const summary = await parseAllFiles(
       files,
       async () => {
-         
         throw "not an Error instance";
       },
       () => {},
