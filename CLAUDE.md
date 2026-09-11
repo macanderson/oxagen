@@ -224,7 +224,7 @@ Authorized and encouraged every session without asking permission. Use `creds.js
 
 ## Key dependency versions
 
-- **Next.js `16.2.10`** + React `19.2.6` — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
+- **Next.js `16.3.1`** + React `19.2.6` — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
 - **AI SDK `ai@7.0.14`** — use `modelIdOf()` for model resolution. `streamText`/`generateObject`/`generateText` are correct. `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**. `@ai-sdk/react` permitted for non-chat client surfaces only.
 - **TypeScript `6.0.3`** (pinned via `pnpm-workspace.yaml` overrides, alongside `drizzle-orm@0.45.2`) — no `any`.
 - **Hono `4.12.x`**, **Better Auth `1.6.x`**, **xmcp `0.6.x`**, **Vitest `2.1.x`**, **Playwright `1.60.x`**, **Node `>=24`**, **pnpm `11.7.0`** (`packageManager`).
