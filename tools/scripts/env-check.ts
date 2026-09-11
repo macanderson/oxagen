@@ -82,7 +82,14 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "HOME",
   "TMPDIR",
   "USER",
+  "SHELL",
   "BASH_SOURCE",
+  // awk's own field-count and record-number builtins, which appear inside a
+  // shell script as `$NF` and `$NR` — three characters indistinguishable from
+  // an environment read once they are outside awk's quotes. Neither is a name
+  // anything would ever give a variable, so allowlisting them costs no cover.
+  "NF",
+  "NR",
   // libpq's own variables: psql and atlas read them directly, so a value here
   // configures those tools rather than any Oxagen service.
   "PGHOST",
@@ -102,12 +109,33 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "GITHUB_STEP_SUMMARY",
   // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
   "AWS_REGION",
+  // Set by nightly.yml on the step that files the failure ticket, so the marker
+  // names the job that actually failed rather than always saying "e2e"
+  // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
+  // operator's.
+  "NIGHTLY_FAILED_JOB",
+  // @oxagen/tacho's own placement knobs, all three local to a machine running
+  // the collector rather than to any deployed service. TACHO_BUNDLED is set by
+  // esbuild's `define` at bundle time and never read from a real environment;
+  // TACHO_BIN_DIR and TACHO_HOME relocate the binary and the state directory,
+  // and both default to a path under the user's home. tacho is a leaf package
+  // with no @oxagen/* runtime dependency, so it deliberately does not read the
+  // config registry these would otherwise live in.
+  "TACHO_BUNDLED",
+  "TACHO_BIN_DIR",
+  "TACHO_HOME",
   // Claude Code sets these in the session and hook processes it spawns; the
   // tacho collector and the session-summary script read what it left. They are
   // that tool's contract, not anything an operator configures here.
   "CLAUDE_PID",
   "CLAUDE_CODE_EXECPATH",
   "CLAUDE_CODE_CHILD_SESSION",
+  // Read and written by `tacho enroll` (packages/tacho/src/cli/enroll.ts,
+  // host/paths.ts, host/settings-writer.ts). Both belong to Claude Code's own
+  // configuration surface — where it keeps its settings, and whether it emits
+  // telemetry — so a value here configures that tool, not an Oxagen service.
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_CODE_ENABLE_TELEMETRY",
   "CLAUDE_CODE_BRIDGE_SESSION_ID",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_EFFORT",
