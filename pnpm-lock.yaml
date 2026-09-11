@@ -409,6 +409,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../../packages/tacho
       commander:
         specifier: 12.1.0
         version: 12.1.0
@@ -1558,6 +1561,9 @@ importers:
       canonicalize:
         specifier: 1.0.8
         version: 1.0.8
+      commander:
+        specifier: 12.1.0
+        version: 12.1.0
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -1568,6 +1574,12 @@ importers:
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      esbuild:
+        specifier: 0.28.0
+        version: 0.28.0
+      tsx:
+        specifier: 4.22.3
+        version: 4.22.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -1794,6 +1806,9 @@ importers:
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
       typescript:
         specifier: 6.0.3
         version: 6.0.3

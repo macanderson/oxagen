@@ -102,7 +102,7 @@ oxagen/
 │   ├── mcp          MCP server (streamable HTTP at /mcp) — mcp.oxagen.sh
 │   ├── cli          Governance-operations CLI (Commander; no agent loop — ADR-043)
 │   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
-│   └── web          Public website (static, no build step) — oxagen.sh
+│   └── web          Public website + research blog (static, built to dist/) — oxagen.sh
 │
 ├── packages/        (30 workspace packages)
 │   ├── oxagen       Capability kernel, contracts, IAM resolution (source of truth)

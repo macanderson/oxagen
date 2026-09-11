@@ -56,6 +56,11 @@ on:
       # workflow here is usually the change the callers have to follow.
       - ".github/workflows/dod-check.yml"
       - ".github/workflows/dod-recheck.yml"
+      # The close guard is the third replicated stub and the one carrying
+      # issues: write (oxagen#1336). Changing it here is exactly the moment
+      # four callers have to re-pin, so it belongs on this list for the same
+      # reason as the other two.
+      - ".github/workflows/dod-close-guard.yml"
 
 permissions:
   contents: read

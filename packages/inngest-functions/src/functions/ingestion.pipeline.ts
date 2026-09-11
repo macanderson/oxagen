@@ -426,7 +426,7 @@ export const [ingestionPipeline] = createFunction(
     const isCreate = dedup.action === "created_principal";
     const changeEvent = isCreate
       ? {
-          name: "ingestion/entity.created" as never,
+          name: "ingestion/entity.created",
           data: {
             nodeId: dedup.principalNodeId,
             entityType: mutation.entityType,
@@ -438,7 +438,7 @@ export const [ingestionPipeline] = createFunction(
           },
         }
       : {
-          name: "ingestion/entity.updated" as never,
+          name: "ingestion/entity.updated",
           data: {
             nodeId: dedup.principalNodeId,
             entityType: mutation.entityType,

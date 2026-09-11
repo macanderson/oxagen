@@ -67,6 +67,19 @@ export interface DistillationLlmOptions {
   telemetry: GenerateObjectArgs<
     z.infer<typeof DistilledFactSchema>
   >["telemetry"];
+  /**
+   * Optional error sink. Invoked (best-effort) when the LLM path fails, so a
+   * caller can wire a logger without this package taking a hard logging
+   * dependency — the same shape `compileContext`'s `onError` takes.
+   *
+   * The catch below cannot distinguish a model outage, which is expected and
+   * self-healing, from a funding lookup that throws because there is no active
+   * tenant scope, which is neither: consolidation is a background job, and a
+   * scopeless `resolveModelFundingSource` would make every distillation fall
+   * back to the heuristic forever. Both looked identical from outside, because
+   * the catch was bare. This is how the second one becomes visible.
+   */
+  onError?: (err: unknown, context: { phase: "funding" | "generate" }) => void;
 }
 
 /** True when the Vercel AI Gateway key is configured (LLM path is viable). */
@@ -214,6 +227,7 @@ export async function extractFactFromCluster(
   // (ADR-021 §1). No LLM context or no gateway → deterministic path entirely.
   if (!options || !hasGatewayKey()) return heuristic;
 
+  let phase: "funding" | "generate" = "funding";
   try {
     // Who pays the vendor for this call (ADR-053). Asked per organisation
     // rather than assumed: an organisation that brought its own key must not be
@@ -224,6 +238,8 @@ export async function extractFactFromCluster(
     const { fundedBy } = await resolveModelFundingSource(
       options.telemetry.orgId,
     );
+
+    phase = "generate";
 
     const { object } = await generateObjectFor({
       schema: DistilledFactSchema,
@@ -244,8 +260,12 @@ export async function extractFactFromCluster(
     // Decoration only: keep the deterministic fact, adopt the model's domain
     // label when non-empty, else keep the heuristic domain.
     return { fact: heuristic.fact, domain: domain || heuristic.domain };
-  } catch {
-    // Gateway/model failure must never fail consolidation — fall back.
+  } catch (err) {
+    // Gateway/model failure must never fail consolidation — fall back. Report
+    // it first: a silent fall back and a working deterministic path are
+    // indistinguishable from the outside, which is what let a permanent
+    // degradation look like normal operation.
+    options.onError?.(err, { phase });
     return heuristic;
   }
 }

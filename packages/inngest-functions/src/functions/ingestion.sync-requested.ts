@@ -135,7 +135,7 @@ export const [ingestionSyncRequested] = createFunction(
           }
 
           await inngest.send({
-            name: "ingestion/github.initial-sync" as never,
+            name: "ingestion/github.initial-sync",
             data: {
               connectionId,
               orgId,

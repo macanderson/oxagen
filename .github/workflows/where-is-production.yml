@@ -43,9 +43,13 @@ jobs:
     # sts:AssumeRoleWithWebIdentity" -- which reads like a missing permission
     # and is actually a missing claim (run 34181668242).
     #
-    # It is the same line pipeline.yml's deploy jobs carry, and it also puts
-    # this behind whatever reviewers that environment requires, which is the
-    # right gate for something holding a production credential.
+    # It is the same line pipeline.yml's deploy jobs carry. It does NOT put this
+    # behind a reviewer: the `production` environment has one protection rule, a
+    # branch policy, and an empty reviewer list — check it with
+    # `gh api repos/macanderson/oxagen/environments/production` rather than
+    # assuming. db-migrate.yml's header says the same. What actually keeps this
+    # job away from the AdministratorAccess apply role is that role's
+    # `job_workflow_ref` condition, which admits only infra.yml.
     environment: production
     permissions:
       contents: read
