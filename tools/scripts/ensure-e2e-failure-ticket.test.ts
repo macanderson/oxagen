@@ -198,4 +198,44 @@ describe("main() (#2555)", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
+  // #2555's title is "nightly test failures don't file a ticket", and until
+  // now only the e2e job filed one. A nightly red on typecheck — 2026-09-10,
+  // @oxagen/engram — filed nothing at all.
+  it("searches for a tracker scoped to the job that failed, not a shared one", async () => {
+    const queries: string[] = [];
+    const fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      queries.push(init.body);
+      return { json: async () => ({ data: { issues: { nodes: [] } } }) };
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: "lin_api_test",
+      LINEAR_PROJECT_ID: "proj-1",
+      NIGHTLY_FAILED_JOB: "typecheck",
+    });
+
+    await main().catch(() => undefined);
+
+    // A typecheck failure must not append to the browser suite's tracker.
+    expect(queries.join(" ")).toContain("oxagen:typecheck-failure-tracker");
+    expect(queries.join(" ")).not.toContain("oxagen:e2e-failure-tracker");
+  });
+
+  it("defaults to e2e, so the marker it has always looked for is unchanged", async () => {
+    const queries: string[] = [];
+    const fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      queries.push(init.body);
+      return { json: async () => ({ data: { issues: { nodes: [] } } }) };
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const main = await freshMain({
+      LINEAR_API_KEY: "lin_api_test",
+      LINEAR_PROJECT_ID: "proj-1",
+      NIGHTLY_FAILED_JOB: undefined,
+    });
+
+    await main().catch(() => undefined);
+
+    expect(queries.join(" ")).toContain("oxagen:e2e-failure-tracker v1");
+  });
 });
