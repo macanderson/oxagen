@@ -133,8 +133,26 @@ describe("tenant policy manifest", () => {
     // manifest and this count (and regenerating the Atlas RLS migration), so
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
-    // 97 as of org.model_credentials (ADR-053).
-    expect(POLICY_MANIFEST.length).toBe(91);
+    //
+    // 92 as of billing.governed_action_counters (ADR-052). The preceding note
+    // read "97 as of org.model_credentials" while the assertion said 91, so it
+    // had already drifted from the number it was describing — a count nobody
+    // can check against its own comment is a pin with no ratchet behind it.
+    expect(POLICY_MANIFEST.length).toBe(92);
+  });
+
+  it("covers billing.governed_action_counters as org_only (ADR-052)", () => {
+    // Named as well as counted. The count above catches a table that gains an
+    // org_id without a policy; it cannot catch this one being swapped for a
+    // different table while the total stays the same, and the governed-action
+    // counter is the row a customer's invoice is computed from.
+    const entry = POLICY_MANIFEST.find(
+      (e) => e.table === "billing.governed_action_counters",
+    );
+    expect(entry).toBeDefined();
+    // org_only rather than standard: the allowance and the volume band are both
+    // annual and org-wide, so the table carries no workspace_id to scope by.
+    expect(entry?.policyClass).toBe("org_only");
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {
