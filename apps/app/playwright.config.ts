@@ -94,7 +94,6 @@ export default defineConfig({
   // the assertion is waiting on a server round-trip and a re-render, not on the
   // DOM settling.
   //
-  // That mismatch is #2559's "rotating navigation timeout, one spec at a time".
   // A sweep of `apps/app/e2e` found 34 specs containing at least one assertion
   // that follows a mutation and takes the 5 s default — so on any given run,
   // whichever one loses the race under load is the one that fails, and it is a
@@ -102,8 +101,18 @@ export default defineConfig({
   // 34540186574 and failed all three attempts, which is not a flake being
   // unlucky; 5 s was simply not enough that run.
   //
-  // Raising the floor is the fix for the class. It costs nothing when an
-  // assertion passes — Playwright polls and returns as soon as it is true — and
+  // This is NOT the fix for #2559, and an earlier version of this comment said
+  // it was. That issue's failures are `page.waitForURL` calls, which are a
+  // navigation primitive rather than an assertion, so `expect.timeout` does not
+  // govern them at all — and each already passes an explicit timeout larger
+  // than the value set here (15 s in account-nav.spec.ts, 20 s in
+  // agent-rbac-builder.spec.ts). Raising this default could not have changed
+  // those waits before or after. #2559 is a dropped client-side router commit
+  // and stays open on its own evidence; believing it was fixed here is how it
+  // would stop being looked for.
+  //
+  // Raising the floor is the fix for the class described above. It costs
+  // nothing when an assertion passes — Playwright polls and returns as soon as it is true — and
   // only changes how long a genuinely failing one waits before saying so. The
   // per-test budget above stays 60 s, so a hung test still fails at the same
   // point it always did.

@@ -134,6 +134,30 @@ jobs:
       - name: Full ${{ matrix.task }} (no affected filter)
         run: pnpm turbo run ${{ matrix.task }}
 
+      # The e2e job has filed a ticket on failure since #1206; this job never
+      # did, so a nightly red on lint, typecheck, test:unit or build produced
+      # nothing to act on. That is not hypothetical — 2026-09-10 went red on
+      # @oxagen/engram's typecheck and filed nothing (#2555). Each matrix leg
+      # gets its own rolling tracker via NIGHTLY_FAILED_JOB, because one shared
+      # ticket would mean a red typecheck commenting on a ticket about the
+      # browser suite and neither being legible.
+      #
+      # `continue-on-error` for the same reason as its twin below: the job's
+      # verdict belongs to the task that just failed, and a Linear outage must
+      # not be able to change it. The script says so loudly and exits 0.
+      - name: File Linear ticket on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          NIGHTLY_FAILED_JOB: ${{ matrix.task }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: pnpm e2e:failure-ticket
+
   # ────────────────────────────────────────────────────────────────────────
   # End-to-end (full Playwright suite). Kept off the PR path to keep PRs lean;
   # runs nightly + on main. Needs the same service containers + env as `full`,
