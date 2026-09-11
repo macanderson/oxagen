@@ -84,12 +84,6 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "USER",
   "SHELL",
   "BASH_SOURCE",
-  // awk's own field-count and record-number builtins, which appear inside a
-  // shell script as `$NF` and `$NR` — three characters indistinguishable from
-  // an environment read once they are outside awk's quotes. Neither is a name
-  // anything would ever give a variable, so allowlisting them costs no cover.
-  "NF",
-  "NR",
   // libpq's own variables: psql and atlas read them directly, so a value here
   // configures those tools rather than any Oxagen service.
   "PGHOST",
@@ -314,6 +308,49 @@ const RE_SHELL_ASSIGNMENT =
 /** `read -r -d '' NAME <<EOF` — the option arguments make a positional match unreliable. */
 const RE_SHELL_READ = /^\s*read\b.*$/gm;
 
+/**
+ * awk's own variables, which are not environment variables and never were.
+ *
+ * A shell script that pipes through awk writes `$NF` or `$NR` inside the awk
+ * program, and the expansion pattern above cannot see the quotes that make it
+ * awk's field count rather than the shell's parameter. The script never assigns
+ * them either — awk does — so `shellAssignedNames` does not filter them and they
+ * surface as undeclared environment references.
+ *
+ * #2861 reached for `PLATFORM_ALLOWLIST` for `NF` and `NR`, which cleared the
+ * two names it had hit. Two problems with keeping it there. That list documents
+ * itself as names "set by Vercel, Next.js, Turborepo, or the CI harness", and
+ * these are set by nobody — they are not environment variables in any
+ * environment, so an entry there makes the list's own description untrue. And it
+ * covers two of the sixteen: the next script to write `$FS`, `$RS`, `$FILENAME`
+ * or `$ENVIRON` fails the same way and someone allowlists that one too.
+ *
+ * The category is "awk's, not the shell's", so it belongs where the scanner
+ * decides what a shell expansion is, not in a list of platform-supplied values.
+ *
+ * Listed rather than pattern-matched because the set is small, closed and
+ * standard (POSIX awk plus gawk's common additions); a pattern wide enough to
+ * catch them would swallow real names.
+ */
+const AWK_BUILTIN_NAMES = new Set([
+  "NF",
+  "NR",
+  "FNR",
+  "FS",
+  "OFS",
+  "ORS",
+  "RS",
+  "RSTART",
+  "RLENGTH",
+  "SUBSEP",
+  "FILENAME",
+  "CONVFMT",
+  "OFMT",
+  "ENVIRON",
+  "ARGC",
+  "ARGV",
+]);
+
 function shellAssignedNames(content: string): Set<string> {
   const assigned = new Set<string>();
   for (const m of content.matchAll(RE_SHELL_ASSIGNMENT)) {
@@ -379,7 +416,10 @@ export function scanSourceReferences(roots: string[]): ScanResult {
 
         if (isShell) {
           for (const m of line.matchAll(RE_SHELL_EXPANSION)) {
-            if (!assigned.has(m[1]!)) record(m[1]!, loc);
+            const name = m[1]!;
+            if (assigned.has(name)) continue;
+            if (AWK_BUILTIN_NAMES.has(name)) continue;
+            record(name, loc);
           }
           continue;
         }

@@ -177,6 +177,55 @@ describe("reconcile — empty referenced map → only dead warnings (no fail)", 
 // ── scanSourceReferences ─────────────────────────────────────────────────────
 
 describe("scanSourceReferences", () => {
+  it("does not read awk's own variables as environment references", () => {
+    // `$NF` inside an awk program is awk's field count, not a shell parameter,
+    // and the expansion pattern cannot see the quotes that make it so. The
+    // script never assigns it either, so without an explicit exclusion it
+    // surfaces as an undeclared env var and fails a file that is correct.
+    // The exclusion is the scanner's, not the platform allowlist's: these are
+    // set by nobody, so listing them as platform-supplied would be false, and
+    // it must cover every builtin rather than the two somebody has hit so far.
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "drift.sh"),
+        [
+          "#!/usr/bin/env bash",
+          "count=$(echo \"$line\" | awk '{print $NF}')",
+          "total=$(awk 'END {print NR}' \"$file\")",
+          "name=$(awk '{print $FILENAME, $FS}' \"$file\")",
+          'echo "$REAL_ENV_VAR"',
+          "",
+        ].join("\n"),
+      );
+      const result = scanSourceReferences([dir]);
+      // FILENAME and FS are the point: they are not in PLATFORM_ALLOWLIST, so
+      // this fails unless the exclusion covers the whole family.
+      for (const builtin of ["NF", "NR", "FILENAME", "FS"])
+        expect(
+          result.referenced.has(builtin),
+          `${builtin} is an awk builtin and must not be reported`,
+        ).toBe(false);
+      // The exclusion must stay narrow: a genuine reference in the same file is
+      // still found, otherwise this would hide real misses rather than noise.
+      expect(result.referenced.has("REAL_ENV_VAR")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("does not carry awk builtins in the platform allowlist", () => {
+    // That list means "supplied by Vercel, Next.js, Turborepo or the CI
+    // harness". An awk builtin is supplied by nobody, so an entry there would
+    // make the list's own description untrue — and would cover only the names
+    // somebody has already tripped over.
+    for (const builtin of ["NF", "NR", "FS", "RS"])
+      expect(
+        PLATFORM_ALLOWLIST.has(builtin),
+        `${builtin} belongs to the scanner's awk exclusion, not the allowlist`,
+      ).toBe(false);
+  });
+
   it("finds process.env.KEY references and records file:line", () => {
     const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
     try {
