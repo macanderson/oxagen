@@ -50,7 +50,7 @@ const SURFACES = [
   },
   {
     title: "CLI",
-    body: "Install the oxagen CLI, run the agent loop locally, query the knowledge graph from your terminal.",
+    body: "Install the oxagen CLI to govern, ground, explain, meter, and rate your agents from the terminal — Stella runs them, Oxagen governs the run.",
     href: "/docs/cli",
   },
   {
@@ -64,8 +64,8 @@ const SURFACES = [
     href: "/docs/mcp/overview",
   },
   {
-    title: "Agent platform",
-    body: "Tools and capabilities, agent memory, plan mode and approvals, code execution, the research swarm.",
+    title: "In-app agent",
+    body: "A governed turn loop over the fleet record and the knowledge graph — what your agents did, what context they had, what it cost, what is pending approval.",
     href: "/docs/agent/overview",
   },
   {
