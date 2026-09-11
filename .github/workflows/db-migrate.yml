@@ -106,6 +106,26 @@ jobs:
       - name: Carry the RLS bypass on the migration connection
         run: |
           set -euo pipefail
+
+          # Already carrying it is fine and is not worth a second copy.
+          case "$DATABASE_URL" in
+            *app.rls_bypass*)
+              echo "The secret already carries app.rls_bypass. Left alone."
+              exit 0 ;;
+          esac
+
+          # A secret carrying some OTHER `options=` is the one case this must
+          # not paper over. libpq takes a single `options` parameter, so a
+          # second one does not merge — one of the two silently wins, and which
+          # is not something to find out against a database. Stop and say so.
+          case "$DATABASE_URL" in
+            *options=*)
+              echo "::error::The connection string already sets an 'options' parameter."
+              echo "::error::libpq takes only one, so appending a second would silently drop either it or the RLS bypass."
+              echo "::error::Add -c app.rls_bypass=on to the existing options in the secret instead."
+              exit 1 ;;
+          esac
+
           case "$DATABASE_URL" in
             *\?*) sep='&' ;;
             *)    sep='?' ;;
