@@ -87,6 +87,34 @@ jobs:
           fi
           echo "Target: ${{ github.event.inputs.target }} — DATABASE_URL is set (value masked)."
 
+      # Without this the directory cannot be applied by anything that is not a
+      # Postgres superuser, which every managed cluster is not (#1368). The
+      # seed in 20260614000000 inserts mcp.registries' global row with
+      # org_id = NULL, and the tenant_isolation policy in force at that point
+      # in history has an `org_id IS NULL` arm in USING and none in WITH CHECK,
+      # so the insert is refused 42501. A forward migration cannot reach back
+      # ninety files to fix the policy the seed runs under, and the historical
+      # file's hash is in atlas.sum, so the connection is the only place the
+      # fix can live. `app.rls_bypass` is a GUC the policies read rather than a
+      # privilege — the role keeps NOSUPERUSER NOBYPASSRLS. See
+      # infra/tools/run-db-migrations.sh for the long version.
+      #
+      # The secret may or may not already carry a query string, so the
+      # separator is chosen rather than assumed. The composed value is masked
+      # before it is exported: GitHub redacts the secret substring inside a
+      # longer string, but the mask is stated here rather than relied upon.
+      - name: Carry the RLS bypass on the migration connection
+        run: |
+          set -euo pipefail
+          case "$DATABASE_URL" in
+            *\?*) sep='&' ;;
+            *)    sep='?' ;;
+          esac
+          composed="${DATABASE_URL}${sep}options=-c%20app.rls_bypass%3Don"
+          echo "::add-mask::$composed"
+          echo "DATABASE_URL=$composed" >> "$GITHUB_ENV"
+          echo "Appended options=-c app.rls_bypass=on to the connection (separator '$sep')."
+
       # A hosted runner is outside the VPC. On the current account
       # (916294258235) Aurora sits in private subnets and its only security
       # group admits 5432 from the APP NODE's security group and nothing else
