@@ -53,9 +53,14 @@ The logic lives in `infra/tools/check-store-drift.sh` and is unit-tested by
 `infra/tools/tests/check-store-drift.test.sh`, which runs in CI through
 `check:db-migrate-script`.
 
-On a failing run it opens (or comments on) a GitHub issue titled *Production
-store schema is behind this repository*, and closes it again when the check next
-passes. A red scheduled run on its own is something people learn to scroll past.
+On a failing run it opens or comments on the issue carrying the `store-drift`
+label, and closes it again when the check next passes — the same shape
+`infra-drift.yml` uses next door, found by label rather than by matching a title.
+A red scheduled run on its own is something people learn to scroll past.
+
+Exit 2 neither closes the issue nor reports drift. It says the check did not
+happen, under its own title, because a recovery is claimed off an answer and
+never off the absence of one.
 
 Three outcomes, deliberately kept apart:
 
