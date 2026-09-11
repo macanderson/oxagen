@@ -111,9 +111,15 @@ neo4j_declared_names() {
     return 2
   fi
 
+  # The name is the last whitespace-separated token of the matched prefix.
+  # `awk '{ print $NF }'` reads it just as well, and cannot be used here: to a
+  # scanner reading a .sh file, awk's NF is indistinguishable from an
+  # environment variable, because from outside the quotes the two are the same
+  # three characters. env-check flags it as an undeclared reference and is right
+  # to. sed costs nothing and says the same thing.
   sed -e 's|//.*||' "$file" |
     grep -Eio '^[[:space:]]*CREATE[[:space:]]+(CONSTRAINT|(RANGE|TEXT|POINT|VECTOR|FULLTEXT)[[:space:]]+INDEX|INDEX)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' |
-    awk '{ print $NF }' |
+    sed -E 's/.*[[:space:]]//' |
     # An UNNAMED `CREATE CONSTRAINT IF NOT EXISTS FOR …` ends its matched
     # prefix on the word IF, which would enter the declared set as a constraint
     # called "IF" and report drift that can never clear. Neo4j auto-names such
@@ -142,7 +148,7 @@ clickhouse_declared_tables() {
 
   sed -e 's|--.*||' "$file" |
     grep -Eio '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?[A-Za-z_][A-Za-z0-9_.]*' |
-    awk '{ print $NF }' |
+    sed -E 's/.*[[:space:]]//' |
     sed 's/^.*\.//' |
     sort -u
 }
