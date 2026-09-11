@@ -26,9 +26,14 @@
 #
 # HOW EACH STORE IS ASKED
 #
-# ClickHouse keeps a ledger. `db-migrate.ts` records each applied file in
-# `<database>._migrations` (column `filename`), so the question is a set
-# difference against `packages/telemetry/src/migrations/*.sql`.
+# ClickHouse is asked twice, because its schema arrives two ways. `db-migrate.ts`
+# records each applied file in `<database>._migrations` (column `filename`), so
+# one question is a set difference against
+# `packages/telemetry/src/migrations/*.sql`. But `packages/telemetry/src/migrate.ts`
+# also applies `schema.sql` on EVERY call, outside the ledger, and that file
+# holds twelve table definitions the ledger will never mention — so the second
+# question compares the tables it creates against `system.tables`. Checking only
+# the ledger would call a store current while most of its tables were missing.
 #
 # Neo4j keeps none — its migration is idempotent `CREATE ... IF NOT EXISTS` and
 # forgets what it did. But every constraint and index in `schema.cypher` is
@@ -109,6 +114,36 @@ neo4j_declared_names() {
   sed -e 's|//.*||' "$file" |
     grep -Eio '^[[:space:]]*CREATE[[:space:]]+(CONSTRAINT|(RANGE|TEXT|POINT|VECTOR|FULLTEXT)[[:space:]]+INDEX|INDEX)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' |
     awk '{ print $NF }' |
+    # An UNNAMED `CREATE CONSTRAINT IF NOT EXISTS FOR …` ends its matched
+    # prefix on the word IF, which would enter the declared set as a constraint
+    # called "IF" and report drift that can never clear. Neo4j auto-names such
+    # a constraint, so there is nothing here that could ever match it anyway.
+    grep -vix 'IF' |
+    sort -u
+}
+
+# clickhouse_declared_tables SCHEMA_SQL
+#
+# Every table name `schema.sql` creates, one per line.
+#
+# Needed because the ledger does not cover them. packages/telemetry/src/migrate.ts
+# applies schema.sql on EVERY call, outside `_migrations`, and its own comment
+# says so: "schema.sql holds most, but not all, table definitions … Treat
+# schema.sql plus migrations/ together as the desired state." So a store with a
+# complete ledger and none of those twelve tables would answer this check
+# "current" — the false green that would make the whole thing decorative.
+clickhouse_declared_tables() {
+  local file=$1
+
+  if [[ ! -f $file ]]; then
+    echo "clickhouse_declared_tables: no such file: $file" >&2
+    return 2
+  fi
+
+  sed -e 's|--.*||' "$file" |
+    grep -Eio '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?[A-Za-z_][A-Za-z0-9_.]*' |
+    awk '{ print $NF }' |
+    sed 's/^.*\.//' |
     sort -u
 }
 
@@ -161,6 +196,69 @@ report_drift() {
   return 1
 }
 
+# bump_status NEW
+#
+# Raises `status` without ever lowering it, and lets 2 dominate 1.
+#
+# The obvious `|| status=1` at each call site is wrong in a way that matters:
+# ClickHouse unreadable (2) followed by Neo4j behind (1) would have overwritten
+# the 2, exited 1, and reported "a store is behind" while saying nothing about
+# the store nobody could read. Unknown outranks behind, because the response to
+# each is different.
+bump_status() {
+  local new=$1
+  [[ $status -eq 2 ]] && return 0
+  [[ $new -gt $status ]] && status=$new
+  return 0
+}
+
+# require_declarations LABEL FILE
+#
+# An empty DECLARED list is a check that did not happen, never a pass.
+#
+# The script is careful that a store answering nothing means "behind"; without
+# this it was careless in the mirror image. A renamed directory would leave the
+# declared list empty, every store would compare current, the run would exit 0
+# and it would CLOSE the open drift issue — an active claim of recovery off no
+# answer. The tests guard the paths, but they hold their own copies of them, so
+# only a runtime invariant catches a rename in the script itself.
+require_declarations() {
+  local label=$1 file=$2
+  [[ $(count_names "$file") -gt 0 ]] && return 0
+  echo "::error::$label: nothing is declared, so there is nothing to compare."
+  echo "::error::$label: this is a broken check, not a clean store — see #1370."
+  bump_status 2
+  return 1
+}
+
+# ch_missing_object OUT ERR
+#
+# True when the failure was "no such table/database" rather than a failure to
+# reach the store. Both files are searched, for the reason above.
+ch_missing_object() {
+  grep -qiE 'UNKNOWN_TABLE|UNKNOWN_DATABASE|does not exist|doesn.t exist' "$1" "$2"
+}
+
+# ch_url_readonly URL
+#
+# The ClickHouse endpoint with `readonly=1` on it.
+#
+# Read-only is ENFORCED here rather than asserted about the source. The test
+# used to check this by grepping the script for `INSERT INTO`, which would have
+# missed `ALTER TABLE … DELETE`, `TRUNCATE`, `DROP` and `OPTIMIZE`, and which
+# tests the text rather than what the server is allowed to do. With this on,
+# ClickHouse refuses any write regardless of what a future edit sends.
+#
+# The separator is chosen rather than assumed: the endpoint may already carry a
+# query string, and a second `?` makes the setting part of the path instead.
+ch_url_readonly() {
+  local url=$1
+  case "$url" in
+    *\?*) printf '%s&readonly=1\n' "$url" ;;
+    *)    printf '%s?readonly=1\n' "$url" ;;
+  esac
+}
+
 # ---------------------------------------------------------------------------
 # Sourcing stops here. Below this line the script talks to two databases.
 # ---------------------------------------------------------------------------
@@ -185,9 +283,27 @@ trap 'rm -rf "$WORK"' EXIT
 
 status=0
 
-# --- ClickHouse ------------------------------------------------------------
+# ch_query BODY OUT ERR
+#
+# POSTs BODY to ClickHouse. Credentials go in on stdin rather than in argv, so
+# they are not visible in the process table.
+#
+# Both streams are captured because they carry different halves of the answer:
+# `--fail-with-body` sends the SERVER's error body to STDOUT and only curl's own
+# generic line ("curl: (22) … returned error: 404") to stderr. Classifying a
+# remote error by grepping stderr therefore never matches, which is how the one
+# state this check exists for read as "could not be queried".
+ch_query() {
+  local body=$1 out=$2 err=$3
+  printf 'user = "%s"\npassword = "%s"\n' \
+    "$CLICKHOUSE_USERNAME" "$CLICKHOUSE_PASSWORD" |
+    curl -sS --fail-with-body --max-time 30 --config - \
+      "$(ch_url_readonly "$CLICKHOUSE_URL")" --data-binary "$body" > "$out" 2>"$err"
+}
 
-echo "== ClickHouse =="
+# --- ClickHouse: the migration ledger ---------------------------------------
+
+echo "== ClickHouse migrations =="
 # A glob rather than `ls | xargs basename`, so a filename with a space could
 # not silently split into two migrations that neither exist nor are missing.
 : > "$WORK/ch-declared.txt"
@@ -196,54 +312,94 @@ for f in "$REPO"/packages/telemetry/src/migrations/*.sql; do
   basename "$f" >> "$WORK/ch-declared.txt"
 done
 
-# A query that fails and a store with no ledger are different answers and must
-# not collapse into one. No ledger means never migrated, which is drift; a
-# failed query means the check did not happen, which is not a verdict.
-ch_body="SELECT DISTINCT filename FROM ${CLICKHOUSE_DATABASE}._migrations ORDER BY filename"
-if curl -sS --fail-with-body --max-time 30 \
-     --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
-     "$CLICKHOUSE_URL" --data-binary "$ch_body" > "$WORK/ch-present.txt" 2>"$WORK/ch-err.txt"; then
-  :
-elif grep -qiE 'UNKNOWN_TABLE|does not exist|Table .* doesn.t exist' "$WORK/ch-err.txt"; then
-  echo "  no _migrations ledger — this store has never been migrated."
-  : > "$WORK/ch-present.txt"
-else
-  echo "::error::ClickHouse could not be queried. The store's state is unknown, which is not the same as current."
-  sed 's/^/::error::  /' "$WORK/ch-err.txt" | head -5
-  status=2
-  : > "$WORK/ch-present.txt"
+ch_reachable=1
+if require_declarations "ClickHouse migrations" "$WORK/ch-declared.txt"; then
+  if ch_query "SELECT DISTINCT filename FROM ${CLICKHOUSE_DATABASE}._migrations ORDER BY filename" \
+       "$WORK/ch-present.txt" "$WORK/ch-err.txt"; then
+    :
+  elif ch_missing_object "$WORK/ch-err.txt" "$WORK/ch-present.txt"; then
+    echo "  no _migrations ledger — this store has never been migrated."
+    : > "$WORK/ch-present.txt"
+  else
+    echo "::error::ClickHouse could not be queried. The store's state is unknown, which is not the same as current."
+    # The server's own exception is on stdout; curl's line is on stderr. Both,
+    # because whichever one explains it varies with how the request failed.
+    cat "$WORK/ch-present.txt" "$WORK/ch-err.txt" 2>/dev/null |
+      sed 's/^/::error::  /' | head -5
+    bump_status 2
+    ch_reachable=0
+    : > "$WORK/ch-present.txt"
+  fi
+
+  if [[ $ch_reachable -eq 1 ]]; then
+    report_drift "ClickHouse migrations" "$WORK/ch-declared.txt" "$WORK/ch-present.txt"
+    bump_status $?
+  fi
 fi
 
-if [[ $status -ne 2 ]]; then
-  report_drift "ClickHouse" "$WORK/ch-declared.txt" "$WORK/ch-present.txt" || status=1
+# --- ClickHouse: the tables schema.sql creates outside the ledger -----------
+
+echo
+echo "== ClickHouse tables =="
+clickhouse_declared_tables "$REPO/packages/telemetry/src/schema.sql" \
+  > "$WORK/ch-tables-declared.txt" || bump_status 2
+
+if [[ $ch_reachable -eq 1 ]] && require_declarations "ClickHouse tables" "$WORK/ch-tables-declared.txt"; then
+  if ch_query "SELECT name FROM system.tables WHERE database = '${CLICKHOUSE_DATABASE}' ORDER BY name" \
+       "$WORK/ch-tables-present.txt" "$WORK/ch-tables-err.txt"; then
+    report_drift "ClickHouse tables" "$WORK/ch-tables-declared.txt" "$WORK/ch-tables-present.txt"
+    bump_status $?
+  else
+    # system.tables always exists, so a failure here is a failure to reach the
+    # store rather than an empty database — an empty database returns no rows.
+    echo "::error::ClickHouse system.tables could not be read. The store's state is unknown."
+    cat "$WORK/ch-tables-present.txt" "$WORK/ch-tables-err.txt" 2>/dev/null |
+      sed 's/^/::error::  /' | head -5
+    bump_status 2
+  fi
 fi
 
 # --- Neo4j -----------------------------------------------------------------
 
 echo
 echo "== Neo4j =="
-neo4j_declared_names "$REPO/packages/ontology/src/schema.cypher" > "$WORK/neo-declared.txt"
+neo4j_declared_names "$REPO/packages/ontology/src/schema.cypher" \
+  > "$WORK/neo-declared.txt" || bump_status 2
 
-# cypher-shell over the same forwarded port the workflow opened. `--format
-# plain` with a bare name column gives one name per line and a header, which is
-# dropped below.
-if command -v cypher-shell >/dev/null 2>&1; then
-  if cypher-shell -a "$NEO4J_URI" -u "$NEO4J_USERNAME" -p "$NEO4J_PASSWORD" \
-       --format plain --non-interactive \
-       "SHOW CONSTRAINTS YIELD name RETURN name UNION ALL SHOW INDEXES YIELD name RETURN name" \
-       > "$WORK/neo-raw.txt" 2>"$WORK/neo-err.txt"; then
-    # Drop the `name` header and any quoting cypher-shell adds.
-    tail -n +2 "$WORK/neo-raw.txt" | tr -d '"' | sed '/^$/d' | sort -u > "$WORK/neo-present.txt"
-    report_drift "Neo4j" "$WORK/neo-declared.txt" "$WORK/neo-present.txt" || status=1
+# Credentials come from the environment rather than -u/-p, so they stay out of
+# the process table; cypher-shell reads NEO4J_USERNAME and NEO4J_PASSWORD
+# itself, and both are already exported by the caller.
+#
+# TWO statements, not one. A SHOW cannot be a branch of a set-union in Cypher:
+# Neo4j 5.24 answers the combined form with
+# `Neo.ClientError.Statement.SyntaxError: Invalid input 'UNION'`. Joined into a
+# single statement this check could never succeed at all, and the job would have
+# been permanently red on "could not be read" — the state that teaches people to
+# stop reading it.
+neo_cypher() {
+  cypher-shell -a "$NEO4J_URI" --format plain --non-interactive "$1"
+}
+
+if ! command -v cypher-shell >/dev/null 2>&1; then
+  echo "::error::cypher-shell is not installed, so Neo4j was not checked."
+  echo "::error::A skipped store must not read as a passing one — see #1370."
+  bump_status 2
+elif require_declarations "Neo4j" "$WORK/neo-declared.txt"; then
+  if neo_cypher "SHOW CONSTRAINTS YIELD name RETURN name" \
+       > "$WORK/neo-c.txt" 2>"$WORK/neo-err.txt" &&
+     neo_cypher "SHOW INDEXES YIELD name RETURN name" \
+       > "$WORK/neo-i.txt" 2>>"$WORK/neo-err.txt"; then
+    # Each result carries a `name` header line, dropped here. A constraint's
+    # backing index repeats the constraint's name; sort -u absorbs that.
+    { tail -n +2 "$WORK/neo-c.txt"; tail -n +2 "$WORK/neo-i.txt"; } |
+      tr -d '"' | sed '/^$/d' | sort -u > "$WORK/neo-present.txt"
+    report_drift "Neo4j" "$WORK/neo-declared.txt" "$WORK/neo-present.txt"
+    bump_status $?
   else
     echo "::error::Neo4j could not be queried. The store's state is unknown, which is not the same as current."
     sed 's/^/::error::  /' "$WORK/neo-err.txt" | head -5
-    status=2
+    bump_status 2
   fi
-else
-  echo "::error::cypher-shell is not installed, so Neo4j was not checked."
-  echo "::error::A skipped store must not read as a passing one — see #1370."
-  status=2
 fi
 
 echo

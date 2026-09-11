@@ -123,13 +123,20 @@ jobs:
           # Waited for rather than slept through: SSM takes a few seconds and a
           # fixed sleep is either short on a bad day or wasted on a good one.
           for port in 8123 7687; do
+            opened=0
             for _ in $(seq 1 30); do
               if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
                 echo "  port $port is open"
+                opened=1
                 break
               fi
               sleep 2
             done
+            # Naming the port that never opened turns "could not be read" into
+            # a cause. Not fatal here: the check below produces the right
+            # verdict either way, and a store answering over one tunnel while
+            # the other is dead is worth seeing rather than aborting on.
+            [ "$opened" = "1" ] || echo "::warning::port $port never opened after 60s"
           done
           echo "--- tunnel logs ---"
           tail -3 /tmp/tunnel-*.log || true
@@ -232,9 +239,18 @@ jobs:
             body += `\nRun: ${runUrl}\n\n<details><summary>output</summary>\n\n\`\`\`\n${detail}\n\`\`\`\n\n</details>\n`
 
             if (existing) {
-              await github.rest.issues.update({
-                owner, repo, issue_number: existing.number, title,
-              })
+              // Comment, and retitle only UPWARD. A slow tunnel one morning
+              // must not turn an open "the schema is behind" report into "the
+              // check could not read the stores", because the body that
+              // follows would then send the responder to the SSM runbook for a
+              // migration that genuinely has not been applied. infra-drift.yml
+              // never retitles at all; this goes one step further only in the
+              // direction that adds information.
+              if (behind && existing.title !== title) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, title,
+                })
+              }
               await github.rest.issues.createComment({
                 owner, repo, issue_number: existing.number, body,
               })

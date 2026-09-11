@@ -188,6 +188,109 @@ NEVER=$(report_drift "Neo4j" "$WORK/declared.txt" "$WORK/does-not-exist.txt" 2>&
 expect_code 1 "$CODE" "report: a store that has never been migrated exits 1"
 contains "$NEVER" "Neo4j" "report: names the store that has never been migrated"
 
+# --- what a code review found, and what now holds it -----------------------
+#
+# Every case below is a defect that shipped past the first version of this file.
+# They share a shape worth naming: the pure half was well tested, and the half
+# that talks to a database was "tested" by grepping the script's own source —
+# which cannot notice that a query is invalid, that an error was classified off
+# the wrong stream, or that nothing was declared.
+
+# An UNNAMED `CREATE CONSTRAINT IF NOT EXISTS` ends the matched prefix on the
+# word IF. Left in, "IF" enters the declared set and reports drift no apply can
+# ever clear, because Neo4j auto-names such a constraint.
+cat > "$WORK/unnamed.cypher" <<'CYPHER'
+CREATE CONSTRAINT IF NOT EXISTS FOR (n:X) REQUIRE n.id IS UNIQUE;
+CREATE INDEX IF NOT EXISTS FOR (n:Y) ON (n.z);
+CREATE CONSTRAINT real_name IF NOT EXISTS FOR (n:Z) REQUIRE n.id IS UNIQUE;
+CYPHER
+UNNAMED=$(neo4j_declared_names "$WORK/unnamed.cypher")
+contains "$UNNAMED" "real_name" "cypher: a named declaration beside unnamed ones is still read"
+case "$UNNAMED" in
+  *IF*) fail "cypher: an unnamed declaration must not enter the set as 'IF'" ;;
+  *) pass ;;
+esac
+if [[ $(printf '%s\n' "$UNNAMED" | grep -c .) -eq 1 ]]; then pass; else
+  fail "cypher: expected only the named one, got: $(printf '%s' "$UNNAMED" | tr '\n' ' ')"
+fi
+
+# schema.sql is applied on every call OUTSIDE the ledger, so a store with a
+# complete `_migrations` table and none of these tables would have answered
+# "current" — the false green that would make this whole check decorative.
+cat > "$WORK/schema.sql" <<'SQL'
+-- CREATE TABLE commented_out (x Int8) ENGINE = Log;
+CREATE TABLE IF NOT EXISTS execution_logs (x Int8) ENGINE = Log;
+CREATE TABLE events (x Int8) ENGINE = Log;
+CREATE TABLE IF NOT EXISTS oxagen.token_usage (x Int8) ENGINE = Log;
+ALTER TABLE events ADD COLUMN y Int8;
+SQL
+TBL=$(clickhouse_declared_tables "$WORK/schema.sql")
+contains "$TBL" "execution_logs" "schema.sql: reads IF NOT EXISTS form"
+contains "$TBL" "events" "schema.sql: reads the bare CREATE TABLE form"
+contains "$TBL" "token_usage" "schema.sql: strips the database qualifier"
+case "$TBL" in
+  *commented_out*) fail "schema.sql: a commented-out table must not count" ;;
+  *) pass ;;
+esac
+case "$TBL" in
+  *ALTER*) fail "schema.sql: ALTER must not be read as a declaration" ;;
+  *) pass ;;
+esac
+clickhouse_declared_tables "$WORK/no-such.sql" >/dev/null 2>&1
+expect_code 2 "$?" "schema.sql: an unreadable file is 'unknown', not 'nothing declared'"
+
+REAL_SQL="$REPO/packages/telemetry/src/schema.sql"
+if [[ -f $REAL_SQL ]]; then
+  n=$(clickhouse_declared_tables "$REAL_SQL" | grep -c .)
+  if [[ $n -gt 5 ]]; then pass; else fail "the real schema.sql parsed to only $n tables"; fi
+else
+  fail "packages/telemetry/src/schema.sql is gone — half the ClickHouse check has no input"
+fi
+
+# Unknown must outrank behind. ClickHouse unreadable then Neo4j behind used to
+# exit 1 and report "a store is behind", saying nothing about the store nobody
+# could read — and the two need different responses.
+status=0; bump_status 1; expect_code 1 "$status" "status: clean then behind is behind"
+status=0; bump_status 2; bump_status 1; expect_code 2 "$status" "status: unknown is not overwritten by behind"
+status=0; bump_status 1; bump_status 2; expect_code 2 "$status" "status: behind is raised to unknown"
+status=0; bump_status 0; expect_code 0 "$status" "status: clean stays clean"
+status=1; bump_status 0; expect_code 1 "$status" "status: a later clean store does not clear an earlier one"
+
+# An empty DECLARED list is a check that did not happen. Without this a renamed
+# directory would compare every store current, exit 0, and CLOSE the open drift
+# issue — claiming a recovery off no answer at all.
+status=0
+: > "$WORK/nothing.txt"
+require_declarations "ClickHouse" "$WORK/nothing.txt" >/dev/null 2>&1
+expect_code 1 "$?" "declared: an empty list is refused"
+expect_code 2 "$status" "declared: an empty list makes the run 'unknown', not 'behind'"
+EMPTY_MSG=$(require_declarations "ClickHouse" "$WORK/nothing.txt" 2>&1)
+contains "$EMPTY_MSG" "broken check, not a clean store" "declared: says which of the two it is"
+status=0
+require_declarations "ClickHouse" "$WORK/declared.txt" >/dev/null 2>&1
+expect_code 0 "$?" "declared: a populated list is accepted"
+expect_code 0 "$status" "declared: a populated list does not disturb the status"
+
+# curl --fail-with-body writes the SERVER's error body to STDOUT and only its
+# own generic line to stderr. Classifying the remote error by grepping stderr
+# never matched, so "this store has never been migrated" — the one state this
+# check was built for — reported as "could not be read" and sent the responder
+# to the SSM runbook.
+printf 'curl: (22) The requested URL returned error: 404\n' > "$WORK/err.txt"
+printf 'Code: 60. DB::Exception: Table oxagen._migrations does not exist. (UNKNOWN_TABLE)\n' > "$WORK/body.txt"
+ch_missing_object "$WORK/err.txt" "$WORK/body.txt"
+expect_code 0 "$?" "clickhouse: a missing table is recognised from the body on stdout"
+printf 'curl: (7) Failed to connect to 127.0.0.1 port 8123\n' > "$WORK/err2.txt"
+: > "$WORK/body2.txt"
+ch_missing_object "$WORK/err2.txt" "$WORK/body2.txt"
+expect_code 1 "$?" "clickhouse: a refused connection is not a missing table"
+
+# Read-only is enforced on the server rather than asserted about the source.
+expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/") == "http://h:8123/?readonly=1" ]] && echo 0 || echo 1)" \
+  "readonly: appended with ? when there is no query string"
+expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/?database=x") == "http://h:8123/?database=x&readonly=1" ]] && echo 0 || echo 1)" \
+  "readonly: appended with & when there is one"
+
 # --- the shipped script ----------------------------------------------------
 
 SCRIPT=$(cat "$TOOLS/check-store-drift.sh")
@@ -202,14 +305,37 @@ case "$SCRIPT" in
   *"npx "*|*"tsx "*) fail "script: must not invoke the applier — this check is read-only" ;;
   *) pass ;;
 esac
-# The two statements it does send are reads. An INSERT or a CREATE here would
-# make a scheduled job into the thing that migrates production at 3am.
+# What it SENDS is read, checked structurally rather than by scanning the whole
+# file for forbidden words — the file legitimately mentions CREATE TABLE, since
+# it parses schema.sql for exactly those. Every ch_query call site must open
+# with SELECT, and every neo_cypher call site with SHOW.
+bad=$(grep -oE 'ch_query "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'ch_query "SELECT' || true)
+expect_code 0 "$bad" "script: every ClickHouse statement it sends is a SELECT"
+sent=$(grep -cE 'ch_query "SELECT' "$TOOLS/check-store-drift.sh" || true)
+if [[ $sent -ge 2 ]]; then pass; else fail "script: expected both ClickHouse reads, found $sent"; fi
+
+bad=$(grep -oE 'neo_cypher "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'neo_cypher "SHOW' || true)
+expect_code 0 "$bad" "script: every Neo4j statement it sends is a SHOW"
+contains "$SCRIPT" "_migrations" "script: reads the ledger db-migrate.ts actually writes"
+contains "$SCRIPT" "system.tables" "script: also asks which tables exist, not only the ledger"
+contains "$SCRIPT" "readonly=1" "script: read-only is enforced on the server, not asserted about the text"
+
+# SHOW cannot be a UNION branch — Neo4j 5.24 answers that with a syntax error,
+# so a single combined statement made the Neo4j half permanently unrunnable and
+# the job permanently red on "could not be read". Two statements now.
+contains "$SCRIPT" "SHOW CONSTRAINTS YIELD name RETURN name" "script: asks Neo4j for its constraint names"
+contains "$SCRIPT" "SHOW INDEXES YIELD name RETURN name" "script: asks Neo4j for its index names separately"
 case "$SCRIPT" in
-  *"INSERT INTO"*|*"CREATE TABLE"*) fail "script: must send no write statement" ;;
+  *"UNION ALL SHOW"*) fail "script: SHOW cannot be a UNION branch in Cypher" ;;
   *) pass ;;
 esac
-contains "$SCRIPT" "_migrations" "script: reads the ledger db-migrate.ts actually writes"
-contains "$SCRIPT" "SHOW CONSTRAINTS" "script: asks Neo4j for its constraint names"
+
+# Credentials belong out of the process table on a shared runner.
+case "$SCRIPT" in
+  *'-u "$NEO4J_USERNAME"'*|*'--user "$CLICKHOUSE_USERNAME'*)
+    fail "script: a store password must not be passed in argv" ;;
+  *) pass ;;
+esac
 # A store that was not checked must not read as a store that passed.
 contains "$SCRIPT" "cypher-shell is not installed" "script: a skipped Neo4j check is an error"
 

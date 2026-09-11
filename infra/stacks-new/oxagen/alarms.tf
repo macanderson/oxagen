@@ -291,13 +291,21 @@ resource "aws_cloudwatch_metric_alarm" "node_disk" {
 # ClickHouse is back on this node rather than on a separate one (#2693), so it
 # is this instance's CPU that would carry it.
 #
-# 85% over 30 minutes, not 5: this box legitimately pins a core through a
-# deploy, an ingestion burst or a ClickHouse merge, and an alarm that fires on
-# every deploy is one people mute. The 2026-08 runaway held above 80% for
-# twenty-six hours, so half an hour is nowhere near the resolution it needs.
+# The threshold is stated in the metric's OWN units, which is the trap here.
+# `AWS/EC2 CPUUtilization` is normalised 0-100 whatever the vCPU count, while
+# the incident was recorded in `docker stats` per-core terms: ClickHouse at
+# "171% of 200%" is 85.5% to CloudWatch. A threshold of 85 would have had half a
+# point of headroom over six consecutive periods, and the same incident's other
+# figure — "held above 80%" — is below it outright. An alarm that would not have
+# fired during the incident it was written for is decoration.
+#
+# So 75, and 5 of 6 periods rather than all 6: still well clear of a deploy or an
+# ingestion burst, which spike and subside, and comfortably under a runaway,
+# which does not. The runaway held for twenty-six hours, so half an hour is
+# nowhere near the resolution this needs.
 resource "aws_cloudwatch_metric_alarm" "node_cpu" {
   alarm_name        = "oxagen-node-cpu"
-  alarm_description = "The app node has been near-saturated for half an hour. On 2026-08-25 this was ClickHouse burning 171% of 200% on its own system logs for 26 hours, found by hand. Check `docker stats` before assuming load."
+  alarm_description = "The app node has averaged over 75% CPU (CloudWatch's normalised 0-100 scale) for half an hour. On 2026-08-25 this was ClickHouse burning its own system logs for 26 hours at what `docker stats` called 171% of 200%, which is 85.5% here. Check `docker stats` before assuming load."
 
   namespace   = "AWS/EC2"
   metric_name = "CPUUtilization"
@@ -306,7 +314,8 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu" {
 
   period              = 300
   evaluation_periods  = 6
-  threshold           = 85
+  datapoints_to_alarm = 5
+  threshold           = 75
   comparison_operator = "GreaterThanThreshold"
   # Absent EC2 CPU means the instance is gone, which node_status_check and
   # no_healthy_host both say more clearly. Alarming here too would be three
@@ -351,6 +360,18 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu_credits" {
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
+
+  # Only burstable instances publish CPUCreditBalance. Move the node off the
+  # t-family and this alarm stops receiving data entirely, and with
+  # `notBreaching` it would sit in INSUFFICIENT_DATA forever rather than say so
+  # — a monitor that has quietly stopped monitoring. Failing the plan is the
+  # honest outcome: whoever changes the instance type decides what replaces it.
+  lifecycle {
+    precondition {
+      condition     = startswith(module.app.instance_type, "t")
+      error_message = "oxagen-node-cpu-credits alarms on CPUCreditBalance, which only burstable (t-family) instances publish. The app node is ${module.app.instance_type}. Remove this alarm or choose the metric that replaces it."
+    }
+  }
 }
 
 # The agent has been collecting `mem_used_percent` since #2797 and nothing read

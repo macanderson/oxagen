@@ -46,8 +46,20 @@ repository:
 
 | Store | Declared by | Production asked via |
 |---|---|---|
-| ClickHouse | `packages/telemetry/src/migrations/*.sql` | `SELECT DISTINCT filename FROM <db>._migrations` |
+| ClickHouse migrations | `packages/telemetry/src/migrations/*.sql` | `SELECT DISTINCT filename FROM <db>._migrations` |
+| ClickHouse tables | `CREATE TABLE` in `packages/telemetry/src/schema.sql` | `SELECT name FROM system.tables` |
 | Neo4j | named constraints and indexes in `packages/ontology/src/schema.cypher` | `SHOW CONSTRAINTS` / `SHOW INDEXES` |
+
+ClickHouse is asked **twice** because its schema arrives two ways.
+`packages/telemetry/src/migrate.ts` applies `schema.sql` on every call, outside
+the ledger, and that file holds twelve table definitions `_migrations` will
+never mention. Checking only the ledger would call a store current while most of
+its tables were missing. Its own comment says as much: *"Treat schema.sql plus
+migrations/ together as the desired state."*
+
+Every statement sent is a `SELECT` or a `SHOW`, and the ClickHouse requests
+carry `readonly=1`, so the server refuses a write regardless of what a later
+edit sends. Read-only is enforced rather than asserted.
 
 The logic lives in `infra/tools/check-store-drift.sh` and is unit-tested by
 `infra/tools/tests/check-store-drift.test.sh`, which runs in CI through

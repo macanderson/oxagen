@@ -28,3 +28,12 @@ output "neo4j_connection_help" {
   }
 }
 
+
+# Read by stacks-new/oxagen/alarms.tf, which alarms on CPUCreditBalance — a
+# metric only burstable (t-family) instances publish. Exported so that coupling
+# can be enforced by a precondition rather than left as a comment that a later
+# instance-type change would not have to read.
+output "instance_type" {
+  value       = aws_instance.node.instance_type
+  description = "The instance type this node runs on."
+}
