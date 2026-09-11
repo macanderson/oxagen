@@ -302,6 +302,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
+  TRUSTED_PROXY_HOP_COUNT: {
+    group: "Rate limiting",
+    description:
+      "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
+      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
+      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
+      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
   ALERT_WEBHOOK_URL: {
     group: "Error alerting",
@@ -995,6 +1010,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],
+    valueOrigin: "manual",
+  },
+  STELLA_SERVE_URL: {
+    group: "Agent engine",
+    description:
+      "Where the Stella engine (stella-serve) listens. The in-app agent's " +
+      "turns run there; every model call and tool call comes back to this " +
+      "process to answer (ADR-053). Loopback on the node.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ["production"],
+    valueOrigin: "static",
+    staticValue: {
+      development: "http://127.0.0.1:4300",
+      preview: "http://127.0.0.1:4300",
+      production: "http://127.0.0.1:4300",
+    },
+  },
+  STELLA_SERVE_TOKEN: {
+    group: "Agent engine",
+    description:
+      "Bearer token the Stella engine was started with. The same value the " +
+      "engine's own container reads under its prefix; without it the " +
+      "assistant reports the engine as unavailable.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ["production"],
     valueOrigin: "manual",
   },
   ANTHROPIC_API_KEY: {

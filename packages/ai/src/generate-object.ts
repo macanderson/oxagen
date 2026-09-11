@@ -77,14 +77,26 @@ export interface GenerateObjectArgs<T> {
    */
   maxOutputTokens?: number;
   /**
-   * Who paid the vendor for this call (ADR-053 §3). `platform` (the default)
-   * charges the organisation's credits; `org` reports the usage and charges
-   * nothing, because the organisation's own key paid. Must match the
-   * funding source the `model` was selected with.
+   * Who paid the vendor for this call (ADR-053 §3). `platform` charges the
+   * organisation's credits; `org` reports the usage and charges nothing,
+   * because the organisation's own key paid. Must match the funding source the
+   * `model` was selected with.
+   *
+   * Required, and deliberately so. It used to default to `platform`, and every
+   * caller took the default — so an organisation that had brought its own key
+   * was still billed for these calls. `resolveModelFundingSource`'s own doc
+   * says guessing `platform` "is the one direction this seam must never err
+   * in"; a silent default is that guess, made permanently. Pass what
+   * `resolveModelFundingSource` answered for the same organisation.
    */
-  fundedBy?: TurnFunding;
-  /** Ledger reason for a platform-funded charge; callers keep the default. */
-  chargeReason?: CreditReason;
+  fundedBy: TurnFunding;
+  /**
+   * Ledger reason for a platform-funded charge. Required for the same reason:
+   * the old default was `consume_token_overage`, which ADR-052 retired and
+   * ADR-053 says must not be repurposed, and it is invisible to the assistant
+   * spend cap, which sums `consume_assistant_tokens` alone.
+   */
+  chargeReason: CreditReason;
   /**
    * Optional abort signal forwarded to the AI SDK so a caller can bound the
    * wall-clock of a single generation. A hung gateway call otherwise never
@@ -361,14 +373,14 @@ export async function generateObjectFor<T>(
   //
   // ADR-053 §3: only when the platform key paid. A call the organisation's own
   // key answered is reported above and charged nothing here.
-  if ((args.fundedBy ?? "platform") === "platform") {
+  if (args.fundedBy === "platform") {
     try {
       await runInTenantScope(capturedScope, async () => {
         await chargeUsageCredits({
           orgId: args.telemetry.orgId,
           // null → undefined → NULL reference_id; never a non-UUID string.
           referenceId: args.telemetry.messageId ?? undefined,
-          ...(args.chargeReason ? { reason: args.chargeReason } : {}),
+          reason: args.chargeReason,
           ...usage,
         });
       });

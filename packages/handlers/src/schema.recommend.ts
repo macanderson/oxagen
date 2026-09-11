@@ -8,7 +8,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaRecommend } from "@oxagen/oxagen/contracts/schema.recommend";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { generateObjectFor } from "@oxagen/ai";
+import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import { logger } from "./logger";
 
@@ -111,6 +112,13 @@ Graph context:
 Please propose 1-3 schemas with appropriate node labels, relationship types, and key properties. Each schema should group logically related entities. Focus on the most important properties for deduplication and grounding.`;
 
   const { object } = await generateObjectFor({
+    // Platform-vs-org funding, resolved rather than assumed. The
+    // parameter is required for that reason: it used to default to
+    // `platform`, and every caller took the default, so an organisation
+    // that had brought its own key was billed for this call anyway
+    // (ADR-053 §3).
+    fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+    chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     schema: proposalSchema,
     prompt,
     system:

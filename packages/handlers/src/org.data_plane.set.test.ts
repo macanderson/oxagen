@@ -8,12 +8,21 @@ const mocks = vi.hoisted(() => ({
   resolveKms: vi.fn(),
   emit: vi.fn(),
   encrypt: vi.fn(),
+  // The caller's org_users row, read by the handler-side role guard
+  // (lib/capability-role-guard). Owner by default so every case below keeps
+  // asserting what it was written to assert; the guard's own cases override it.
+  membershipRows: vi.fn((): Array<{ role: string }> => [{ role: "owner" }]),
 }));
 
 /** Minimal Drizzle chain doubles: .update().set().where().returning() etc. */
 function makeTx() {
   return {
     query: { dataPlanes: { findFirst: mocks.findFirst } },
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => mocks.membershipRows() }),
+      }),
+    }),
     update: () => ({
       set: (values: unknown) => ({
         where: () => ({
@@ -58,7 +67,7 @@ vi.mock("@oxagen/crypto", () => ({
 
 import { configDigest, orgDataPlaneSetHandler } from "./org.data_plane.set";
 import { orgDataPlaneSet } from "@oxagen/oxagen/contracts/org.data_plane.set";
-import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { TEST_CTX as CTX, makeCTX } from "./test-utils/fixtures";
 
 const PG_CONFIG = {
   host: "pg.acme.example",
@@ -71,6 +80,8 @@ const PG_CONFIG = {
 
 beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
+  // mockReset() drops the factory's default implementation, so restore it.
+  mocks.membershipRows.mockReturnValue([{ role: "owner" }]);
   mocks.resolveKms.mockReturnValue({
     adapter: {},
     keyId: "data_plane_v1",
@@ -211,5 +222,60 @@ describe("org.data_plane.set handler — back to shared", () => {
     await orgDataPlaneSetHandler(input, CTX);
     expect(mocks.invalidate).toHaveBeenCalledWith(CTX.orgId, "neo4j");
     expect(mocks.emit).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── The handler-side role guard (oxagen#2819) ───────────────────────────────
+//
+// set_data_plane repoints where every withTenantDb for the org reads and
+// writes, and invalidateDataPlaneCache makes it live at once. Its only
+// authorization was a comment crediting the kernel's IAM gate, which returns
+// tier_gate -> allow for every org below the enterprise tier — and `scoped:
+// false` skips the decision-rules gate too, so nothing asked. Each case asserts
+// both that the call is refused and that no binding was written.
+
+describe("org.data_plane.set requires an org Owner or Admin", () => {
+  const input = {
+    kind: "postgres" as const,
+    mode: "dedicated" as const,
+    config: PG_CONFIG,
+  };
+
+  it("refuses a viewer, and writes no binding", async () => {
+    mocks.membershipRows.mockReturnValue([{ role: "viewer" }]);
+    mocks.findFirst.mockResolvedValue(undefined);
+    await expect(orgDataPlaneSetHandler(input, CTX)).rejects.toThrow(
+      "Forbidden: set_data_plane requires org Owner or Admin",
+    );
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+    // Refused before the config is even encrypted: the attacker's DSN never
+    // reaches the KMS, let alone a column.
+    expect(mocks.encrypt).not.toHaveBeenCalled();
+  });
+
+  it("refuses a member holding no org_users row at all", async () => {
+    mocks.membershipRows.mockReturnValue([]);
+    await expect(orgDataPlaneSetHandler(input, CTX)).rejects.toThrow(
+      "Forbidden: set_data_plane requires org Owner or Admin",
+    );
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
+  it("accepts a TitleCase membership role — the column carries both casings", async () => {
+    mocks.membershipRows.mockReturnValue([{ role: "Admin" }]);
+    mocks.findFirst.mockResolvedValue(undefined);
+    await orgDataPlaneSetHandler(input, CTX);
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a caller with no authenticated principal", async () => {
+    await expect(
+      orgDataPlaneSetHandler(input, makeCTX({ userId: null, apiKeyId: null })),
+    ).rejects.toThrow(
+      "Unauthorized: set_data_plane requires an authenticated principal",
+    );
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 });

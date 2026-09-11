@@ -1,5 +1,7 @@
 import { exportSecrets } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { secretExport } from "@oxagen/oxagen/contracts/secret.export";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
@@ -10,6 +12,12 @@ export const secretExportHandler: CapabilityHandlerFn = async (input, ctx) => {
     throw new Error(
       "[secret.export] workspaceId is required (scoped capability)",
     );
+  // The response is every secret in the workspace, in plaintext. The contract
+  // restricts that to org Owner/Admin, and the kernel's IAM gate is where that
+  // is meant to be enforced — but the gate consults no policy for an org below
+  // the tier that unlocks ACLs, so on every other tier a viewer could call this
+  // and read the lot (oxagen#2819). Re-read the caller's membership here.
+  await assertCallerRole(secretExport, ctx);
   const { environmentId, keyIds } = input as {
     environmentId?: string | null;
     keyIds?: string[] | null;

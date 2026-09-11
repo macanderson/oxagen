@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/ai", () => ({
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
   generateObjectFor: mocks.generateObjectFor,
   selectModel: mocks.selectModel,
 }));
@@ -35,11 +38,18 @@ vi.mock("@oxagen/database", () => ({
     mocks.withTenantDb(fn),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...a: unknown[]) => ({ and: a }),
-  eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
-  desc: (a: unknown) => ({ desc: a }),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  // Partial: the handler now imports CREDIT_REASONS from @oxagen/billing, whose
+  // module graph reaches drizzle's `sql`. Keeping the real exports beats listing
+  // every one the chain happens to touch.
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    and: (...a: unknown[]) => ({ and: a }),
+    eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
+    desc: (a: unknown) => ({ desc: a }),
+  };
+});
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

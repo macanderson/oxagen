@@ -2,6 +2,8 @@ import pino from "pino";
 import { z } from "zod";
 import type { Surface } from "@oxagen/telemetry";
 import { generateObjectFor } from "../generate-object";
+import type { TurnFunding } from "../funding-source";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { selectModel } from "../models";
 
 const logger = pino({
@@ -63,6 +65,15 @@ export interface EnhancePromptArgs {
     surface: Surface;
     messageId: string | null;
   };
+  /**
+   * Who paid the vendor for the judge call (ADR-053 §3). Supplied by the
+   * caller, not resolved here: `resolveModelFundingSource` reads through
+   * `withTenantDb` and so needs an active tenant scope, and this helper runs
+   * wherever its caller runs. Resolving once at the request boundary and
+   * threading the answer down is the same discipline the chat and agent turns
+   * already follow.
+   */
+  fundedBy: TurnFunding;
 }
 
 export interface EnhancePromptResult {
@@ -86,6 +97,12 @@ export async function enhancePromptIfInsufficient(
       prompt: args.prompt,
       temperature: 0.2,
       telemetry: args.telemetry,
+      // Platform-vs-org funding, resolved rather than assumed. The parameter is
+      // required for that reason: it used to default to `platform`, and every
+      // caller took the default, so an organisation that had brought its own
+      // key was billed for this call anyway (ADR-053 §3).
+      fundedBy: args.fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     });
     const enhanced = object.enhancedPrompt?.trim();
     if (object.sufficient || !enhanced) {

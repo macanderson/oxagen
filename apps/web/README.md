@@ -4,10 +4,13 @@ Hand-authored static pages plus a blog compiled from MDX. `pnpm build` (from
 the repo root, or `pnpm --filter @oxagen/web-v2 build`) assembles the
 publishable site into `dist/`: every static file here except source, config
 and tooling, plus the generated `blog/` tree and a `sitemap.xml` that includes
-it. CI's `deploy-web` job builds and syncs `dist/` to the S3 bucket behind
-CloudFront; `vercel.json` points the Vercel project (**oxagen-v2-web**, root
-directory `apps/web`) at the same build command and output directory. Nothing
-in `dist/` is committed.
+it. **oxagen.sh is served from an S3 bucket behind CloudFront** (ids in
+`infra/stacks-new/ci-deploy/terraform.tfvars`): CI's `deploy-web` job builds
+and syncs `dist/` there on every push to `main`, then checks the public
+hostname. There is no per-branch preview deployment. `vercel.json` is kept
+pointing at the same build command and output directory for the legacy Vercel
+project, but nothing in CI deploys through it. Nothing in `dist/` is
+committed.
 
 ## Layout
 
@@ -181,9 +184,15 @@ are the YAML.**
 
 ## Local preview
 
+`pnpm dev` at the repo root starts this package's `dev` script alongside the
+other apps: it builds `dist/`, serves it at http://localhost:5500 with
+production's clean-URL rules, and rebuilds when anything under `content/`,
+`assets/`, or a page changes. The API allows this origin in non-production.
+On its own:
+
 ```bash
-pnpm --filter @oxagen/web-v2 preview
-# builds dist/ and serves it at http://localhost:5500 — the API allows this origin in non-production
+pnpm --filter @oxagen/web-v2 dev       # build, serve on :5500, rebuild on change
+pnpm --filter @oxagen/web-v2 preview   # one build, static server, no watching
 ```
 
 The forms still post to `localhost:4000`, so run the API too if you want to

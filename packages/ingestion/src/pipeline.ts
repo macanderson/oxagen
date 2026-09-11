@@ -227,15 +227,24 @@ export async function runPipeline(
       mutation.displayName,
       mutation.properties,
     );
-    await embedEntity({
-      nodeId: principalNodeId,
-      entityType: mutation.entityType,
-      text,
-      workspaceId: mutation.workspaceId,
-      orgId: mutation.orgId,
-      connectionId: mutation.connectionId,
-    });
-    embedded = true;
+    // The node is already written by the dedup step above, so an unreachable
+    // embedding backend costs this record its vector and nothing else. Letting
+    // it throw here would discard an entity that is already in the graph, which
+    // is the failure `embedded` exists to describe. A node with no vector is
+    // found by `MATCH (n:EntityNode) WHERE n.embedding IS NULL`.
+    try {
+      await embedEntity({
+        nodeId: principalNodeId,
+        entityType: mutation.entityType,
+        text,
+        workspaceId: mutation.workspaceId,
+        orgId: mutation.orgId,
+        connectionId: mutation.connectionId,
+      });
+      embedded = true;
+    } catch {
+      embedded = false;
+    }
   }
 
   return {

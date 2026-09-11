@@ -27,6 +27,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # The Stella engine the in-app agent runs on (ADR-053). Published by the
+  # Stella repository on every release; the tag here tracks
+  # STELLA_SERVE_IMAGE_TAG in tools/scripts/package-for-node.sh. Point the
+  # surfaces at it with STELLA_SERVE_URL=http://127.0.0.1:4300 and
+  # STELLA_SERVE_TOKEN=dev-token-change-me in .env.local.
+  stella-serve:
+    image: ghcr.io/macanderson/stella-serve:${STELLA_SERVE_IMAGE_TAG:-0.9.414}
+    container_name: oxagen-v2-stella-serve
+    restart: unless-stopped
+    environment:
+      STELLA_SERVE_TOKEN: dev-token-change-me
+      STELLA_SERVE_TOOLS: remote
+      STELLA_SERVE_LOG: info
+    ports:
+      - "4300:8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/stella-serve", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   neo4j:
     image: neo4j:5.24-community
     container_name: oxagen-v2-neo4j

@@ -17,7 +17,7 @@ locals {
   # lands as a red `main` after the merge, on a step no pre-merge check runs.
   # `worker` cost exactly that: oxagen#2567 added the durable-run worker as a
   # deploy target, and oxagen#2619 is the red it produced until this line grew.
-  platform_services = ["docs", "app", "api", "mcp"]
+  platform_services = ["docs", "app", "api", "mcp", "stella-serve"]
 }
 
 # --------------------------------------------------------------------------

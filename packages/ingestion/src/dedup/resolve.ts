@@ -117,18 +117,49 @@ export async function resolveEntity(
   }
   const entityText = textParts.join("  ");
 
-  const vector = await embedText(entityText, {
-    telemetry: {
-      orgId: mutation.orgId,
-      workspaceId: mutation.workspaceId,
-      surface: "ingestion",
-      // No execution step for dedup-resolution embeds. Must be a UUID or null —
-      // a synthesized `dedup:<naturalKey>` string broke the ClickHouse UUID
-      // insert (CANNOT_PARSE_INPUT_ASSERTION_FAILED) and the Postgres uuid
-      // credit charge. See @oxagen/telemetry NIL_UUID.
-      executionStepId: null,
-    },
-  });
+  // An unreachable embedding backend must not cost us the record. This call
+  // used to be unguarded, so a failure took the whole dedup step down before
+  // the node was ever written — and since nothing replays a failed ingestion
+  // step once its retries are spent, every record that arrived during the
+  // outage was gone. A Vercel AI Gateway credential that could not
+  // authenticate, and then a free-tier rate limit, each emptied an entire
+  // GitHub backfill this way while every other part of the pipeline worked.
+  //
+  // So a failure here degrades to "Pass B found nothing" rather than aborting:
+  // the entity is written as its own principal and flagged `similarityDeferred`
+  // for the caller to report. It carries no `embedding` property, which is what
+  // a later backfill selects on.
+  let vector: number[] | null = null;
+  try {
+    vector = await embedText(entityText, {
+      telemetry: {
+        orgId: mutation.orgId,
+        workspaceId: mutation.workspaceId,
+        surface: "ingestion",
+        // No execution step for dedup-resolution embeds. Must be a UUID or null —
+        // a synthesized `dedup:<naturalKey>` string broke the ClickHouse UUID
+        // insert (CANNOT_PARSE_INPUT_ASSERTION_FAILED) and the Postgres uuid
+        // credit charge. See @oxagen/telemetry NIL_UUID.
+        executionStepId: null,
+      },
+    });
+  } catch {
+    vector = null;
+  }
+
+  if (vector === null) {
+    const deferred = await upsertEntityNode(mutation, orgId, opts);
+    if (deferred.rejected || deferred.nodeId == null) {
+      return rejectedResult(deferred.conformanceScore);
+    }
+    return {
+      principalNodeId: deferred.nodeId,
+      action: "created_principal",
+      confidence: 1.0,
+      conformanceScore: deferred.conformanceScore,
+      similarityDeferred: true,
+    };
+  }
 
   // Query the entity_node_embedding_index for similar nodes of the same entityType.
   const searchSession = scopedSession();

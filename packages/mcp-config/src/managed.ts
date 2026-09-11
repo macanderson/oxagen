@@ -48,10 +48,6 @@ const MANAGED_CONFIG_PATH = join(
   "managed.json",
 );
 
-export function getManagedConfigPath(): string {
-  return MANAGED_CONFIG_PATH;
-}
-
 // ── Loading ───────────────────────────────────────────────────────────────────
 
 /**

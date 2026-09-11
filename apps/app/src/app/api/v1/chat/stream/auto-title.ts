@@ -6,7 +6,9 @@ import {
   resolvePrompt,
   conversationTitlePrompt,
   loadWorkspacePromptConfig,
+  resolveModelFundingSource,
 } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "@oxagen/handlers/logger";
@@ -34,6 +36,12 @@ export async function autoTitleConversation(opts: {
       () => loadWorkspacePromptConfig(opts.workspaceId),
     ).catch(() => ({}));
     const { object } = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The parameter is
+      // required for that reason: it used to default to `platform`, and every
+      // caller took the default, so an organisation that had brought its own
+      // key was billed for this call anyway (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(opts.orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: z.object({ title: z.string().max(80) }),
       model: selectModel({ tier: "fast" }),
       system: resolvePrompt({

@@ -175,6 +175,7 @@ describe("embedText (@oxagen/ai)", () => {
       referenceId: "req_abc",
       inputTokens: 7,
       outputTokens: 0,
+      reason: "consume_embedding",
       cachedTokens: 0,
     });
   });

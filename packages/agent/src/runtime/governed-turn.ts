@@ -1,74 +1,103 @@
 /**
- * `runGovernedTurn` — the in-app governance agent's turn loop (ADR-043 §2).
+ * `runGovernedTurn` — the in-app governance agent's turn, run on Stella's
+ * headless engine (ADR-053 §1; ADR-043 §2 for what the agent is for).
  *
- * Oxagen governs agents; it does not run them. What is left of "running" is
- * this: ONE bounded, metered, tool-calling model turn whose tools are the
- * platform's own capability contracts, materialised by
- * `runtime/materialize-tools.ts` and dispatched through `kernel.invoke()` so
- * IAM → entitlement → tool RBAC → consent → approval → telemetry apply per
- * call. There is no sandbox, no file system, no browser, no subagent fan-out
- * and no background-task machinery underneath it, and none may be added.
+ * Oxagen governs agents; it does not run them. The loop that runs this turn
+ * is `stella-serve`, a container on the node, and it holds no key and runs no
+ * tool. Every completion it wants comes back here as a `provider_request`,
+ * answered through `streamAgentReply`, the only permitted LLM chokepoint, on
+ * whichever key the organisation's funding source names (ADR-053 §2). Every
+ * tool it wants comes back as a `tool_request`, answered through the
+ * materialised tool's own `execute`, where IAM, entitlement, tool RBAC,
+ * consent, the approval pause and the audit row already live. The engine
+ * sees a tool result; it never sees a credential. That is the whole of the
+ * governance argument, and it is why no tool runs anywhere else.
  *
- * The loop deliberately owns almost nothing:
+ * What the engine owns, that the old in-process loop had to approximate: the
+ * step cap, loop detection, compaction, cancellation at a step boundary, a
+ * budget it can enforce, and a replayable event stream with a `seq` on every
+ * frame.
  *
- *   • It calls `streamAgentReply` from `@oxagen/ai` — the ONLY permitted LLM
- *     chokepoint, which meters tokens to ClickHouse, charges credits, hashes
- *     the prompt and tags the surface. Importing `streamText` from `ai` here
- *     would silently un-meter every chat turn.
- *   • It hands back the raw AI-SDK `fullStream` so each surface keeps its own
- *     published wire format (`apps/app`'s `translateAgentStream`, `apps/api`'s
- *     `createApiStreamTranslator`) with no translation layer in between.
- *   • Approval and consent pauses are NOT its business: a materialised tool
- *     blocks inside its own `execute` on `waitForApproval` and the surface has
- *     already been told through `materializeTools`'
- *     `onApprovalRequired`/`onConsentRequired` hooks. The loop's only duty is
- *     to keep streaming across that pause rather than tearing the turn down.
+ * What this function keeps: its signature and its result. Both chat routes
+ * consume a turn as AI-SDK-shaped stream parts and translate them into their
+ * own wire formats, one of which is pinned byte for byte. The engine's events
+ * are mapped onto that vocabulary in `engine/parts.ts`, and nothing
+ * downstream learns which loop ran the turn.
  *
- * What it DOES own is the two bounds a governed turn must never be without:
- * a hard step cap (`stopWhen: stepCountIs`) so an agentic tool loop cannot run
- * away, and — when the caller supplies one — the shared per-turn dollar guard
- * from `@oxagen/billing`, evaluated between steps off the same aggregated
- * usage the surface bills on.
- *
- * It also names who paid for the tokens (ADR-053 §3). The governed turn IS the
- * in-app agent, so its charge reason is always `consume_assistant_tokens`: a
- * platform-funded turn's tokens land on the ledger as their own "assistant
- * usage" line, never folded into the action count. `fundedBy` is what the
- * surface resolved for the organisation through `resolveModelFundingSource`;
- * `org` means the organisation's own key paid the vendor and `streamAgentReply`
- * charges nothing. The surface resolves it once and hands the same answer to
- * `selectModel`, the credit gate and this loop, so the key the call was built
- * on and the ledger's view of who paid can never disagree.
+ * There is no fallback. When the engine cannot be reached the turn fails with
+ * `EngineUnavailableError` before anything streams (ADR-053 §4): a quiet
+ * in-process substitute would be the second copy of the loop this ADR exists
+ * to prevent.
  */
 
 import {
   defaultModel,
   modelIdOf,
-  stepCountIs,
-  streamAgentReply,
   type EffortLevel,
+  type ModelCredential,
   type ModelMessage,
+  type OxagenTier,
   type StreamAgentReplyArgs,
   type Tool,
   type ToolSet,
   type TurnFunding,
 } from "@oxagen/ai";
-import { CREDIT_REASONS } from "@oxagen/billing";
-import { runInTenantScope } from "@oxagen/tenancy";
+import {
+  driveTurn,
+  type CompletionUsage,
+  type StellaEngineClient,
+  type TurnOutcomeWire,
+} from "@oxagen/stella-engine-client";
+import {
+  EngineUnavailableError,
+  engineClientFromEnv,
+  isEngineUnavailable,
+} from "./engine/client";
+import { fromModelMessage, toCompletionMessages } from "./engine/messages";
+import { createPartMapper, type EnginePart } from "./engine/parts";
+import { createProviderPort } from "./engine/provider";
+import { AsyncQueue } from "./engine/queue";
+import {
+  executeToolRequest,
+  schemaOnlyTools,
+  toToolContracts,
+} from "./engine/tools";
+import pino from "pino";
+import type { ToolGovernance } from "./materialize-tools";
+import { assertToolListFitsProvider } from "./tool-budget";
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { pkg: "agent.governed-turn" },
+});
 
 /**
  * Default hard ceiling on model steps in one turn. A governance answer is a
  * handful of reads plus a reply; twelve steps is generous for that and still
- * bounds the runaway case (the AI SDK's own default is `stepCountIs(1)`, which
- * would execute a tool and then never let the model read the result).
+ * bounds the runaway case.
  */
 export const DEFAULT_GOVERNED_TURN_MAX_STEPS = 12;
 
 /**
+ * How long the engine waits for this process to answer a reverse request.
+ * An approval pause blocks inside a tool's `execute` for up to five minutes
+ * (`APPROVAL_TTL_MS` in `materialize-tools.ts`), so the engine's deadline
+ * sits a minute past that; a streamed completion resets it on every delta
+ * batch, so a long answer never trips it.
+ */
+export const ENGINE_REVERSE_REQUEST_TIMEOUT_MS = 6 * 60 * 1000;
+
+/**
+ * The provider id the engine echoes on every completion request. Opaque to
+ * the engine and to the vendor: the host maps it, with the request's role,
+ * to a model. One value, because the host is the only provider there is.
+ */
+export const ENGINE_PROVIDER_ID = "oxagen";
+
+/**
  * A binary attachment carried into the turn as a multimodal message part.
  * `kind` decides the part shape: an image rides as an AI-SDK `image` part, and
- * anything else (video, and any future document type) as a `file` part — the
- * providers that accept video input take it that way.
+ * anything else (video, and any future document type) as a `file` part.
  */
 export interface GovernedTurnAttachment {
   kind: "image" | "file";
@@ -89,10 +118,8 @@ export interface GovernedTurnUsage {
 
 /**
  * Per-step budget guard, structurally the value `createTurnBudgetGuard`
- * (`@oxagen/billing`) returns. Spelled structurally rather than imported: the
- * guard is a callback the surface builds, and naming the billing type here
- * would tie this loop's signature to that package's; the two shapes are
- * checked against each other at the call site.
+ * (`@oxagen/billing`) returns. Evaluated before every model call on the usage
+ * the host has metered so far; a `stop` cancels the turn on the engine.
  */
 export type GovernedTurnBudgetGuard = (usage: {
   inputTokens?: number;
@@ -104,18 +131,24 @@ export type GovernedTurnBudgetGuard = (usage: {
 export interface GovernedTurnInput {
   /**
    * Org + workspace + surface + the UUID of the user message that opened the
-   * turn. Forwarded verbatim to `streamAgentReply`, which writes it to
-   * `token_usage` and charges credits against it — `messageId` MUST be a UUID.
+   * turn. Forwarded verbatim to `streamAgentReply` on every completion, which
+   * writes it to `token_usage` and charges credits against it — `messageId`
+   * MUST be a UUID.
    */
   telemetry: StreamAgentReplyArgs["telemetry"];
-  /** Resolved language model. Omit to take the platform's balanced-tier default. */
+  /** Resolved language model for the worker role. Omit for the balanced default. */
   model?: StreamAgentReplyArgs["model"];
   /**
-   * The fully-resolved system prompt: `buildChatSystemPrompt(ctx)` layered with
-   * the bound agent's instructions and the workspace's prompt config through
-   * `resolvePrompt`. Byte-stable across turns of a conversation so the
-   * provider's prompt cache keeps hitting — volatile per-turn context belongs
-   * in `contextMessages`, never here (ADR-021 §2).
+   * The tier `model` is on. The engine's other roles pick a model relative
+   * to it: a verdict never runs on the worker's tier. Defaults to balanced.
+   */
+  tier?: OxagenTier;
+  /** The organisation's own key, when it brought one, for the other roles' models. */
+  credential?: ModelCredential;
+  /**
+   * The fully-resolved system prompt. Byte-stable across turns of a
+   * conversation so the provider's prompt cache keeps hitting — volatile
+   * per-turn context belongs in `contextMessages`, never here (ADR-021 §2).
    */
   system: string;
   /** Prior turns, chronological, EXCLUDING the current user message. */
@@ -123,8 +156,7 @@ export interface GovernedTurnInput {
   /**
    * Volatile per-turn context (recalled memory, page context, @-mention
    * hydration), injected as USER messages after history and before the
-   * instruction. `null`/`undefined` entries are dropped so callers can pass
-   * optional slots positionally.
+   * instruction. `null`/`undefined` entries are dropped.
    */
   contextMessages?: ReadonlyArray<ModelMessage | null | undefined>;
   /** This turn's user text. */
@@ -134,12 +166,19 @@ export interface GovernedTurnInput {
   /** The materialised, governed tool set (`materializeTools().tools`). */
   tools: ToolSet;
   /**
-   * Model-safe aliases of the tools that mutate
-   * (`materializeTools().mutatingToolNames`). They are serialized against each
-   * other for the life of the turn, so two writes the model emitted in one
-   * step cannot interleave.
+   * Model-safe aliases of the tools that mutate. The engine serialises them
+   * from the contracts' `read_only` bit; this list is also applied host-side
+   * so a misdeclared contract cannot interleave two writes.
    */
   mutatingToolNames?: readonly string[];
+  /**
+   * Per-alias governance facts (`materializeTools().governance`), declared to
+   * the engine as each tool's contract. A tool with no entry is declared high
+   * risk and mutating, which is how the engine treats an undeclared one.
+   */
+  governance?: Record<string, ToolGovernance>;
+  /** The acting user's id, attributed to every tool call the engine makes. */
+  principal?: string;
   /** Reasoning effort; forward only for models that support it. */
   effort?: EffortLevel | null;
   /** Hard step cap. Defaults to {@link DEFAULT_GOVERNED_TURN_MAX_STEPS}. */
@@ -149,28 +188,33 @@ export interface GovernedTurnInput {
   /**
    * Who paid the vendor for this turn's tokens (ADR-053 §2). Defaults to
    * `platform`. Pass what `resolveModelFundingSource` answered for the same
-   * organisation `model` was selected for: under `org` the tokens are metered
-   * and charged nothing, under `platform` they are charged as assistant usage.
+   * organisation `model` was selected for.
    */
   fundedBy?: TurnFunding;
-  /** Client-disconnect / cancel signal, forwarded to the provider call. */
+  /** Client-disconnect / cancel signal; cancels the turn on the engine. */
   abortSignal?: AbortSignal;
   /** Observability hook for provider/stream errors; never swallows the part. */
   onError?: StreamAgentReplyArgs["onError"];
+  /**
+   * The engine client to use. Tests inject one bound to a fake; production
+   * leaves it unset and the client is built from `STELLA_SERVE_URL` and
+   * `STELLA_SERVE_TOKEN`.
+   */
+  engine?: StellaEngineClient;
 }
 
 export interface GovernedTurnResult {
   /**
-   * The raw AI-SDK stream. Every surface's translator consumes this directly —
-   * consume it to completion BEFORE awaiting `finalText`/`usage`, which only
-   * settle once the stream ends.
+   * The stream of AI-SDK-shaped parts. Every surface's translator consumes
+   * this directly — consume it to completion BEFORE awaiting
+   * `finalText`/`usage`, which only settle once the stream ends.
    */
   fullStream: AsyncIterable<unknown>;
   /** The turn's assistant prose, once the stream is drained. */
   finalText: Promise<string>;
-  /** Aggregated usage across every step, once the stream is drained. */
+  /** Aggregated usage across every completion, as this process metered it. */
   usage: Promise<GovernedTurnUsage>;
-  /** Resolved gateway model id — the caller prices and records the turn on it. */
+  /** Resolved gateway model id of the worker — the caller records the turn on it. */
   modelId: string;
   /** Who paid the vendor for the tokens — the value the ledger was told. */
   fundedBy: TurnFunding;
@@ -178,6 +222,8 @@ export interface GovernedTurnResult {
   budgeted: boolean;
   /** The step cap actually applied. */
   maxSteps: number;
+  /** The engine's turn id, for a ledger or a log line. */
+  turnId: Promise<string>;
 }
 
 /** The `execute` closure of a materialised tool, narrowed to what we wrap. */
@@ -197,7 +243,7 @@ interface StepUsageSnapshot {
   };
 }
 
-/** Sum per-step usage into the turn total the budget guard is priced on. */
+/** Sum per-step usage into a turn total. */
 export function aggregateStepUsage(
   steps: readonly StepUsageSnapshot[],
 ): GovernedTurnUsage {
@@ -222,16 +268,13 @@ export function aggregateStepUsage(
 /**
  * Serialize the mutating tools against one another for the life of the turn.
  *
- * `materializeTools` classifies every capability that WRITES (and every
- * external MCP tool, whose semantics this process cannot know). When a model
- * emits several tool calls in one step the SDK dispatches their `execute`
- * closures concurrently; two writes racing inside one step is exactly the
- * interleaving a governed turn must not produce. Non-mutating reads keep the
- * concurrent lane — they are the common case and the reason the turn is fast.
- *
- * The lock is a promise chain scoped to this call, so it never leaks across
- * turns and a throwing tool cannot wedge it (the chain is advanced in a
- * `finally`).
+ * The engine partitions a step's calls on each contract's `read_only` bit and
+ * dispatches only the read-only ones together, so this lock is ordinarily
+ * idle. It stays because a contract is a declaration, and two writes racing
+ * inside one step is exactly the interleaving a governed turn must not
+ * produce whatever a declaration said. The lock is a promise chain scoped to
+ * this call, so it never leaks across turns and a throwing tool cannot wedge
+ * it.
  */
 export function serializeMutatingTools(
   tools: ToolSet,
@@ -249,21 +292,16 @@ export function serializeMutatingTools(
       continue;
     }
     const serializedExecute: ToolExecuteFn = (inputValue, options) => {
-      // `then` on BOTH settlements: a rejected predecessor must not skip the
-      // queue for the calls behind it.
       const run = lock.then(
         () => execute(inputValue, options),
         () => execute(inputValue, options),
       );
-      // Advance the chain on settle — a throwing tool must not wedge the lane.
       lock = run.then(
         () => undefined,
         () => undefined,
       );
       return run;
     };
-    // Tool is a union over its input/output generics, so a spread-with-override
-    // cannot be expressed without one cast; the shape is otherwise unchanged.
     out[name] = { ...definition, execute: serializedExecute } as Tool;
   }
   return out;
@@ -283,28 +321,20 @@ export function buildTurnUserMessage(
       { type: "text", text: instruction },
       ...attachments.map((a) =>
         a.kind === "image"
-          ? ({
-              type: "image",
-              image: a.data,
-              mediaType: a.mediaType,
-            } as const)
-          : ({
-              type: "file",
-              data: a.data,
-              mediaType: a.mediaType,
-            } as const),
+          ? ({ type: "image", image: a.data, mediaType: a.mediaType } as const)
+          : ({ type: "file", data: a.data, mediaType: a.mediaType } as const),
       ),
     ],
   };
 }
 
 /**
- * Run one governed turn.
+ * Run one governed turn on the engine.
  *
- * Returns as soon as the provider call is open: the caller drives the turn by
+ * Returns once the engine has been reached: the caller drives the turn by
  * consuming {@link GovernedTurnResult.fullStream}, and only then awaits
- * `finalText`/`usage`. Awaiting either first deadlocks — those promises settle
- * from the stream the caller has not yet read.
+ * `finalText`/`usage`. Throws `EngineUnavailableError` when the engine is not
+ * configured, not reachable, or not ready, before anything streams.
  */
 export async function runGovernedTurn(
   input: GovernedTurnInput,
@@ -314,80 +344,215 @@ export async function runGovernedTurn(
     input.tools,
     input.mutatingToolNames ?? [],
   );
-
-  const messages: ModelMessage[] = [
-    ...input.history,
-    ...(input.contextMessages ?? []).filter(
-      (m): m is ModelMessage => m !== null && m !== undefined,
-    ),
-    buildTurnUserMessage(input.instruction, input.attachments),
-  ];
-
-  // Both bounds are OR-ed by the SDK: the turn halts at whichever trips first.
-  const stepCap = stepCountIs(maxSteps);
-  const budgetGuard = input.budgetGuard;
-  const stopWhen: StreamAgentReplyArgs["stopWhen"] = budgetGuard
-    ? [
-        stepCap,
-        async ({ steps }: { steps: readonly StepUsageSnapshot[] }) =>
-          (await budgetGuard(aggregateStepUsage(steps))) === "stop",
-      ]
-    : stepCap;
-
-  // Resolve the model once so the id the caller records is the id the provider
-  // was actually called with. `modelIdOf` because `LanguageModel` is a union
-  // that also admits a bare id string — `.modelId` is not always reachable.
   const model = input.model ?? defaultModel();
   const modelId = modelIdOf(model);
-  const fundedBy: TurnFunding = input.fundedBy ?? "platform";
 
-  // The materialised tools re-enter tenant scope inside their own `execute`,
-  // but `streamAgentReply` captures the ambient scope SYNCHRONOUSLY here to
-  // re-establish it in `onFinish` for the credit charge. Entering it explicitly
-  // means a caller that dispatched the turn from outside a scope still bills.
-  const stream = await runInTenantScope(
+  // What the tool list costs this turn, and whether the provider will take it
+  // (#2611). Both answers are wanted before the request goes out, not after:
+  // a provider that caps tools per request refuses the whole turn, and letting
+  // the gateway be the one to say so produces a provider-shaped error about a
+  // request nobody can inspect, on every turn, for every workspace pinned to
+  // that model. This throws a sentence naming the model, the limit and the
+  // count instead.
+  //
+  // The size is logged whether or not it is a problem, because it was not
+  // visible at all before: establishing that the list ran to 45,007 tokens —
+  // 92.4% of the cacheable prefix — took a manual measurement, and a number
+  // nobody can see is a number nobody manages. The list grows one tool at a
+  // time, and each one looks free.
+  const toolBudget = assertToolListFitsProvider(modelId, tools);
+  logger.info(
     {
-      orgId: input.telemetry.orgId,
-      workspaceId: input.telemetry.workspaceId,
+      modelId,
+      toolCount: toolBudget.toolCount,
+      estimatedToolTokens: toolBudget.estimatedTokens,
+      largestTool: toolBudget.largestTool,
     },
-    async () =>
-      streamAgentReply({
-        messages,
-        system: input.system,
-        tools,
-        stopWhen,
-        telemetry: input.telemetry,
-        model,
-        fundedBy,
-        // Always the assistant reason: this loop is the in-app agent, and
-        // ADR-053 §3 gives its platform-paid tokens their own ledger line.
-        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
-        ...(input.effort ? { effort: input.effort } : {}),
-        ...(input.abortSignal !== undefined
-          ? { abortSignal: input.abortSignal }
-          : {}),
-        ...(input.onError !== undefined ? { onError: input.onError } : {}),
-      }),
+    "governed turn tool budget",
   );
+  const fundedBy: TurnFunding = input.fundedBy ?? "platform";
+  const tier: OxagenTier = input.tier ?? "balanced";
 
-  const usage: Promise<GovernedTurnUsage> = Promise.resolve(
-    stream.totalUsage,
-  ).then((u) => ({
-    inputTokens: u.inputTokens ?? 0,
-    outputTokens: u.outputTokens ?? 0,
-    totalTokens: u.totalTokens ?? 0,
-    // v7 exposes prompt-cache reads under inputTokenDetails; the flat
-    // `cachedInputTokens` was the v6 spelling and is gone from the type.
-    cachedInputTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
-  }));
+  const client = input.engine ?? engineClientFromEnv();
+  await assertEngineReady(client);
+
+  const contracts = await toToolContracts(tools, input.governance ?? {});
+  const messages = toCompletionMessages({
+    system: input.system,
+    history: input.history,
+    context: (input.contextMessages ?? []).filter(
+      (m): m is ModelMessage => m !== null && m !== undefined,
+    ),
+    user: buildTurnUserMessage(input.instruction, input.attachments),
+  });
+
+  const parts = new AsyncQueue<EnginePart>();
+  const mapper = createPartMapper();
+  const hostUsage: GovernedTurnUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cachedInputTokens: 0,
+  };
+  const onUsage = (usage: CompletionUsage): void => {
+    hostUsage.inputTokens += usage.input_tokens;
+    hostUsage.outputTokens += usage.output_tokens;
+    hostUsage.totalTokens += usage.input_tokens + usage.output_tokens;
+    hostUsage.cachedInputTokens += usage.cached_input_tokens ?? 0;
+  };
+
+  const provider = createProviderPort({
+    model,
+    workerTier: tier,
+    ...(input.credential ? { credential: input.credential } : {}),
+    system: input.system,
+    tools: schemaOnlyTools(tools),
+    telemetry: input.telemetry,
+    fundedBy,
+    effort: input.effort,
+    onUsage,
+  });
+
+  // The budget guard runs before each completion on what this process has
+  // metered so far. A `stop` cancels the turn on the engine, which reports
+  // the abort as its outcome; the reverse request in flight is rejected as
+  // cancelled so the engine does not wait on it.
+  const budgetGuard = input.budgetGuard;
+  const turnAbort = new AbortController();
+  if (input.abortSignal?.aborted) turnAbort.abort();
+  input.abortSignal?.addEventListener("abort", () => turnAbort.abort(), {
+    once: true,
+  });
+
+  let resolveText!: (text: string) => void;
+  let rejectText!: (err: unknown) => void;
+  const finalText = new Promise<string>((resolve, reject) => {
+    resolveText = resolve;
+    rejectText = reject;
+  });
+  let resolveUsage!: (usage: GovernedTurnUsage) => void;
+  let rejectUsage!: (err: unknown) => void;
+  const usage = new Promise<GovernedTurnUsage>((resolve, reject) => {
+    resolveUsage = resolve;
+    rejectUsage = reject;
+  });
+  let resolveTurnId!: (id: string) => void;
+  let rejectTurnId!: (err: unknown) => void;
+  const turnId = new Promise<string>((resolve, reject) => {
+    resolveTurnId = resolve;
+    rejectTurnId = reject;
+  });
+  // A route that never reads these must not surface an unhandled rejection.
+  for (const p of [finalText, usage, turnId]) p.catch(() => undefined);
+
+  const emit = (list: EnginePart[]): void => {
+    for (const part of list) parts.push(part);
+  };
+  const settle = (outcome: TurnOutcomeWire): void => {
+    emit(mapper.finish(outcome, hostUsage));
+    parts.end();
+    resolveText(mapper.text);
+    resolveUsage({ ...hostUsage });
+  };
+
+  void driveTurn(client, {
+    request: {
+      provider_id: ENGINE_PROVIDER_ID,
+      messages,
+      tools: contracts,
+      ...(input.principal ? { principal: input.principal } : {}),
+      max_steps: maxSteps,
+      reverse_request_timeout_ms: ENGINE_REVERSE_REQUEST_TIMEOUT_MS,
+      budget: { mode: budgetGuard ? "observed" : "off" },
+      ...(input.effort ? { engine: { effort: input.effort } } : {}),
+    },
+    signal: turnAbort.signal,
+    handlers: {
+      onProviderRequest: async (request, context) => {
+        if (budgetGuard && (await budgetGuard(hostUsage)) === "stop") {
+          turnAbort.abort();
+          throw Object.assign(new Error("turn budget exhausted"), {
+            name: "AbortError",
+          });
+        }
+        return provider(request, context);
+      },
+      onToolRequest: async (request, context) => {
+        const execution = await executeToolRequest(
+          tools,
+          request.name,
+          request.input,
+          { toolCallId: request.request_id, signal: context.signal },
+        );
+        mapper.recordToolReturn(
+          request.name,
+          request.input,
+          execution.raw,
+          execution.failed,
+          execution.error,
+        );
+        return execution.output;
+      },
+      onEvent: (event) => emit(mapper.map(event)),
+    },
+  })
+    .then((result) => {
+      resolveTurnId(result.turnId);
+      settle(result.outcome);
+    })
+    .catch((err: unknown) => {
+      const error = isEngineUnavailable(err)
+        ? new EngineUnavailableError(errorMessage(err), err)
+        : err;
+      input.onError?.({ error });
+      // The failure reaches the surface as a part, the way the old loop's
+      // stream errors did, and the promises reject for a caller awaiting them.
+      parts.push({ type: "error", error });
+      parts.end();
+      rejectTurnId(error);
+      rejectText(error);
+      rejectUsage(error);
+    });
 
   return {
-    fullStream: stream.fullStream as AsyncIterable<unknown>,
-    finalText: Promise.resolve(stream.text),
+    fullStream: parts as AsyncIterable<unknown>,
+    finalText,
     usage,
     modelId,
     fundedBy,
     budgeted: budgetGuard !== undefined,
     maxSteps,
+    turnId,
   };
 }
+
+/**
+ * One readiness probe before the turn. It is cheap, it is unauthenticated,
+ * and it turns "connection refused" into the one error every surface knows
+ * how to show. A 503 is the engine starting or draining, which is the same
+ * answer for the person waiting.
+ */
+async function assertEngineReady(client: StellaEngineClient): Promise<void> {
+  let ready: { ready: boolean; state: string };
+  try {
+    ready = await client.ready();
+  } catch (err) {
+    throw new EngineUnavailableError(errorMessage(err), err);
+  }
+  if (!ready.ready) {
+    throw new EngineUnavailableError(`engine is ${ready.state}`);
+  }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+export {
+  EngineUnavailableError,
+  ENGINE_UNAVAILABLE_MESSAGE,
+} from "./engine/client";
+export type { EnginePart } from "./engine/parts";
+// Re-exported so a surface can build the engine's transcript the way the
+// turn does, for a ledger or a replay.
+export { fromModelMessage };

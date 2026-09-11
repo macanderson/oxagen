@@ -20,6 +20,12 @@ export const CREDIT_REASONS = {
   // vendor, and never repurposed from CONSUME_TOKEN_OVERAGE, which ADR-052
   // retired — a historical row keeps meaning what it meant.
   CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens",
+  // Platform-paid embedding calls (ingestion, recall). Its own reason rather
+  // than the assistant's: the assistant spend cap sums
+  // consume_assistant_tokens, and an ingestion backfill is not an assistant
+  // turn — folding them together would let a large import exhaust the cap that
+  // exists to bound interactive use.
+  CONSUME_EMBEDDING: "consume_embedding",
   REFUND: "refund",
   CLAWBACK_DISPUTE: "clawback_dispute",
   ADJUSTMENT: "adjustment",

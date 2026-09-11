@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { eventClient } from "./event-client";
 import { HTTPException } from "hono/http-exception";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 export const connectionDeleteHandler: CapabilityHandler<
@@ -12,6 +13,13 @@ export const connectionDeleteHandler: CapabilityHandler<
   if (!ctx.userId) {
     throw new Error("connection.delete requires an authenticated user");
   }
+
+  // `mode: "full"` destroys the connection's ingested graph data as well as its
+  // config, and none of it is recoverable from here. The contract restricts that
+  // to org Owner/Admin or a workspace Owner, and the kernel's IAM gate consults
+  // no policy for an org below the tier that unlocks ACLs (oxagen#2819) — the
+  // org and workspace middleware above check membership, not role. Ask here.
+  await assertCallerRole(connectionDelete, ctx);
 
   // Verify connection belongs to this org/workspace and is not already deleted
   const [conn] = await withTenantDb((tx) =>

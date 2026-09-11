@@ -54,13 +54,35 @@ for as long as it did.
 Deleting the Terraform would not delete the keys. It would delete the only
 record of how they were made.
 
-## What nobody has established
+## What is settled, and the one thing left
 
-Which account the running platform uses is settled above, from the new
-account's own store: the old one, for ingestion. What is still open:
+Both questions this section used to hold open are answered.
 
-- Whether the new account has equivalent keys to move to, and what the re-wrap
-  path is for ciphertext already written under the old key.
+**The new account has its own key.** `alias/oxagen-app/ingestion` in
+`916294258235`, created by `infra/stacks-new/oxagen/crypto.tf` and applied to
+production on 2026-09-09 by [run 34411814281](https://github.com/macanderson/oxagen/actions/runs/34411814281)
+— key, alias, the node role's grant, and the parameter that names it.
+
+**There is no re-wrap path because there is nothing to re-wrap.** Every
+ciphertext column in production was empty on 2026-09-09, including
+`token_kms_key_id` on both `auth.accounts` rows. The old key's policy admits
+only this account's root and the new account's node role was granted nothing
+on it, so nothing over there had ever been able to encrypt — the configured
+key was one the platform could never call, which is also why the GitHub
+connect flow returned 500 at its OAuth callback on every attempt after the
+cutover.
+
+What remains is a verification, not work: run
+`infra/tools/verify-ingestion-key.sh` with credentials for `916294258235` and
+confirm the running container holds the new ARN and completes a round trip
+through it. Repointing a parameter does not change a process already running —
+`tools/node/deploy-service.sh` reads Parameter Store once, at deploy time — so
+the parameter and the platform are two different facts and only the second one
+counts. `docs/ops/ingestion-key-cutover.md` is the runbook.
+
+**Do not delete the keys here as part of that.** Retiring them is a separate
+act with its own confirmation, and it should follow a passing verification
+rather than accompany it.
 
 ## The second alias: nothing can use it, whatever the parameters say
 

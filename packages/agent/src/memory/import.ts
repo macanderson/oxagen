@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { generateObjectFor } from "@oxagen/ai";
+import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import {
   memoryClassEnum,
   memoryKindSchema,
@@ -73,6 +74,12 @@ export async function extractMemoriesFromDocument(args: {
   ctx: CapabilityContext;
 }): Promise<ExtractedMemory[]> {
   const { object } = await generateObjectFor({
+    // Platform-vs-org funding, resolved rather than assumed. The parameter is
+    // required for that reason: it used to default to `platform`, and every
+    // caller took the default, so an organisation that had brought its own
+    // key was billed for this call anyway (ADR-053 §3).
+    fundedBy: (await resolveModelFundingSource(args.ctx.orgId)).fundedBy,
+    chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     schema: extractionSchema,
     system: EXTRACTION_SYSTEM,
     // Lead with the filename so the model can use it as a topical hint, then the

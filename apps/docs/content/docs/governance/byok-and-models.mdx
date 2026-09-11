@@ -33,6 +33,15 @@ Workspace administrators can configure default model selection for their workspa
 
 Different workspaces can use different model defaults — for example, a cost-sensitive workspace can be pinned to Haiku while a high-capability workspace uses Sonnet.
 
+## The assistant runs on Stella
+
+The in-app assistant is a turn on Stella's headless engine, running as a
+container beside the platform. The engine holds no model key and runs no
+tool. Every completion it needs comes back to Oxagen, which answers it on
+the key your funding source names, and every tool call comes back through
+the same gates as any other governed action. If the engine is down, the
+assistant says so rather than answering from a fallback.
+
 ## Bring your own key (BYOK)
 
 An organisation can pay its model vendor directly instead of buying tokens through Oxagen. You store your own API key once, at the organisation level, and the in-app assistant runs on it from the next turn on.

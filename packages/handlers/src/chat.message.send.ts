@@ -3,7 +3,8 @@ import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { generateObjectFor } from "@oxagen/ai";
+import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { logger } from "./logger";
 
 /**
@@ -170,6 +171,12 @@ async function generateConversationTitleAsync(
     });
 
     const { object } = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The parameter is
+      // required for that reason: it used to default to `platform`, and every
+      // caller took the default, so an organisation that had brought its own key
+      // was billed for this call anyway (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: titleSchema,
       prompt: `Generate a concise 3-8 word title for a conversation that starts with: "${userMessage.substring(0, 200)}"`,
       telemetry: {

@@ -14,6 +14,7 @@ export const APP_PORTS: readonly AppPort[] = [
   { port: 3300, name: "docs" },
   { port: 4000, name: "api" },
   { port: 4100, name: "mcp" },
+  { port: 5500, name: "web" },
 ];
 
 // True if something is already listening on `port` on the loopback interface.

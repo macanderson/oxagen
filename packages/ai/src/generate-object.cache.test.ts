@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 
 // Isolated coverage for the opt-in cache branch of generateObjectFor. The base
@@ -38,6 +39,8 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
+  // The module under test names a reason constant; the factory must carry it.
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
 }));
 vi.mock("@oxagen/tenancy", () => ({
   getScope: () => undefined,
@@ -97,6 +100,8 @@ describe("generateObjectFor cache option", () => {
     });
 
     const res = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       model: { modelId: "openai/gpt" } as never,
       prompt: "classify me",
@@ -123,6 +128,8 @@ describe("generateObjectFor cache option", () => {
     });
 
     const res = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       model: { modelId: "openai/gpt" } as never,
       prompt: "classify me",
@@ -143,6 +150,8 @@ describe("generateObjectFor cache option", () => {
 
   it("does not touch the cache when no cache option is passed", async () => {
     await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: SCHEMA,
       model: { modelId: "openai/gpt" } as never,
       prompt: "no cache",

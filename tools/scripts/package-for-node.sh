@@ -2,14 +2,14 @@
 #
 # Build one app and lay it out as an artifact the shared AWS instance can run.
 #
-#   tools/scripts/package-for-node.sh <docs|app|api|mcp>
+#   tools/scripts/package-for-node.sh <docs|app|api|mcp|stella-serve>
 #
 # Writes `dist-deploy/<service>/`, whose root carries an `oxagen-run.json`
 # telling the node's `deploy-service.sh` which image to start, on which port,
 # with which command, and where to read its configuration. That contract is
-# documented in the oxagen-aws-infra repository, `tools/node/README.md`.
+# documented in `infra/tools/node/README.md`.
 #
-# This is a script rather than four blocks of YAML because the four services
+# This is a script rather than five blocks of YAML because the five services
 # are packaged in genuinely different ways and the differences are the
 # interesting part — they should be readable in one file, next to each other,
 # instead of spread across a workflow where only a diff shows them.
@@ -20,8 +20,16 @@
 
 set -euo pipefail
 
+# The one place the engine's version is written. `stella-serve` ships as a
+# published image rather than a build of this repository, so bumping the
+# engine is a change to this line (or an override in the environment for a
+# one-off deploy of another tag), and nothing else in the tree names the tag.
+# ADR-053 §1 is why the engine is a separate container at all.
+STELLA_SERVE_IMAGE_TAG="${STELLA_SERVE_IMAGE_TAG:-0.9.414}"
+readonly STELLA_SERVE_IMAGE_TAG
+
 if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <docs|app|api|mcp>" >&2
+  echo "usage: $0 <docs|app|api|mcp|stella-serve>" >&2
   exit 2
 fi
 
@@ -41,9 +49,8 @@ mkdir -p "$OUT"
 log() { printf '==> %s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-# Ports. These must match `tools/caddy/Caddyfile` in oxagen-aws-infra, which is
-# what proxies to them; nothing enforces the agreement and a mismatch shows up
-# as a 502.
+# Ports. These must match `infra/tools/caddy/Caddyfile`, which is what proxies
+# to them; nothing enforces the agreement and a mismatch shows up as a 502.
 #
 # app/api/mcp match `PORTS` in @oxagen/config, so a service started by hand from
 # a checkout lands where a developer expects. `docs` does NOT: @oxagen/config
@@ -51,12 +58,19 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # whatever the Caddyfile proxies to, and it is the Caddyfile — not this file and
 # not @oxagen/config — that decides it. Change one without the other and docs
 # 502s.
+#
+# `stella-serve` has no Caddyfile entry on purpose: nothing outside the node
+# may reach the engine. `app` and `api` call it over loopback as
+# `http://127.0.0.1:4300`, which is `STELLA_SERVE_URL`'s static value in
+# @oxagen/config's registry — the same number, held in two places, and a
+# mismatch shows up as "the assistant engine is unavailable" (ADR-053 §4).
 port_for() {
   case $1 in
-    app)    echo 3000 ;;
-    docs)   echo 3002 ;;
-    api)    echo 4000 ;;
-    mcp)    echo 4100 ;;
+    app)          echo 3000 ;;
+    docs)         echo 3002 ;;
+    api)          echo 4000 ;;
+    mcp)          echo 4100 ;;
+    stella-serve) echo 4300 ;;
     *)    fail "unknown service '$1'" ;;
   esac
 }
@@ -70,7 +84,14 @@ write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
   local command_json
-  command_json=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
+  # No command means "run the image's own entrypoint": an external image such
+  # as the engine's already names its binary, and appending it again hands the
+  # binary its own path as an argument.
+  if [[ $# -eq 0 ]]; then
+    command_json='[]'
+  else
+    command_json=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
+  fi
 
   jq -n \
     --argjson port "$port" \
@@ -203,9 +224,53 @@ case $SERVICE in
     mv "$tmp" "$OUT/oxagen-run.json"
     ;;
 
+  stella-serve)
+    # Nothing is built. The engine is a published Rust binary in its own
+    # image, so the artifact is the manifest and a note saying so —
+    # `deploy-service.sh` reads only `oxagen-run.json` from the unpacked
+    # tarball and mounts the directory at /app, and the note is there so a
+    # person listing a release directory on the node does not take a
+    # one-file release for a broken upload.
+    #
+    # No command: the image's entrypoint is the binary, and a command would be
+    # appended to it as an argument the binary refuses.
+    #
+    # 384m: the binary is a single static executable holding no model and no
+    # tool runtime — every completion and every tool call is a reverse request
+    # the app answers (ADR-053 §1) — so its working set is the transcripts of
+    # the live turns. The node has 4 GB shared with Neo4j, ClickHouse and four
+    # other containers, and 512m (the default) would be a quarter of what is
+    # left for a process that does no work of its own.
+    #
+    # STELLA_SERVE_BIND: host networking, so the binary's default of
+    # 0.0.0.0:8080 would answer on the instance's own address. Loopback and
+    # the port above, like every other service here. STELLA_SERVE_TOOLS is the
+    # only value the binary accepts; it is written so a reader sees it.
+    # STELLA_SERVE_TOKEN is not here — it is a secret, and this file ships in
+    # a public CI artifact — it arrives from Parameter Store under the
+    # engine's own prefix (see infra/tools/node/README.md).
+    log "manifest for ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG"
+    printf '%s\n' \
+      "This release is a manifest only. stella-serve runs from the published" \
+      "image named in oxagen-run.json; nothing here is executed. See" \
+      "tools/scripts/package-for-node.sh in oxageninc/oxagen-platform." \
+      > "$OUT/README.txt"
+    WRITE_MANIFEST_IMAGE="ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG" \
+      write_manifest "$(port_for stella-serve)" 384m "/healthz" \
+        "/oxagen/production/stella-serve"
+    tmp=$(mktemp)
+    jq --arg bind "127.0.0.1:$(port_for stella-serve)" \
+      '.env = {
+         STELLA_SERVE_BIND: $bind,
+         STELLA_SERVE_TOOLS: "remote",
+         STELLA_SERVE_LOG: "info"
+       }' "$OUT/oxagen-run.json" > "$tmp"
+    mv "$tmp" "$OUT/oxagen-run.json"
+    log "manifest: $(jq -c . "$OUT/oxagen-run.json")"
+    ;;
 
   *)
-    fail "unknown service '$SERVICE' — expected docs, app, api or mcp"
+    fail "unknown service '$SERVICE' — expected docs, app, api, mcp or stella-serve"
     ;;
 esac
 

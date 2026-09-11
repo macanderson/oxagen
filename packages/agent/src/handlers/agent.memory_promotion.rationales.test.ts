@@ -2,11 +2,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const {
   generateObjectForMock,
+  resolveModelFundingSourceMock,
   selectModelMock,
   getMemoryByIdMock,
   isKnowledgeGraphEnabledMock,
 } = vi.hoisted(() => ({
   generateObjectForMock: vi.fn(),
+  resolveModelFundingSourceMock: vi
+    .fn()
+    .mockResolvedValue({ fundedBy: "platform" }),
   selectModelMock: vi.fn(() => "mock-model"),
   getMemoryByIdMock: vi.fn(),
   isKnowledgeGraphEnabledMock: vi.fn(),
@@ -15,6 +19,9 @@ const {
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: generateObjectForMock,
   selectModel: selectModelMock,
+  // Funding is resolved before the model call (ADR-053 §3); an org with no
+  // stored key is platform-funded, which is what these fixtures exercise.
+  resolveModelFundingSource: resolveModelFundingSourceMock,
 }));
 vi.mock("../memory/neo4j", () => ({ getMemoryById: getMemoryByIdMock }));
 vi.mock("../runtime/knowledge-graph", () => ({

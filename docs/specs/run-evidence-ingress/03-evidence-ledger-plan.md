@@ -125,8 +125,8 @@ PR 2A may run in parallel with PR 1A. PR 2B depends on both PR 1A and PR 2A. PR 
 - Create: `infra/modules/agent-worker/variables.tf`
 - Create: `infra/modules/agent-worker/outputs.tf`
 - Create: `packages/agent-worker/Dockerfile`
-- Modify: `infra/environments/production/main.tf`
-- Modify: `infra/environments/production/outputs.tf`
+- Modify: `infra/legacy/environments/production/main.tf`
+- Modify: `infra/legacy/environments/production/outputs.tf`
 - Modify: `packages/config/src/registry.ts`
 - Modify: `packages/config/src/registry.test.ts`
 - Modify: `tools/env-manager/README.md`
