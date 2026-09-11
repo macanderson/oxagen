@@ -26,6 +26,31 @@ export const RUN_CLASSES = [
   "long_running",
 ] as const;
 
+// Per-field schema exported so surfaces (e.g. the xmcp tool) can build their own
+// arg map from the same shape the contract's `input` wraps, rather than drifting.
+export const billingActionEstimateFields = {
+  /** Runs the customer expects per year. */
+  runsPerYear: z
+    .number()
+    .int()
+    .positive()
+    .max(1_000_000_000)
+    .describe("Projected agent runs per year"),
+  /**
+   * Which run class those runs look like. Drives the actions-per-run ratio
+   * from spec §3.4. Defaults to the standard task, the middle of the range.
+   */
+  runClass: z.enum(RUN_CLASSES).optional().default("standard_task"),
+  /**
+   * Override the actions-per-run ratio directly, for a customer who has
+   * measured their own. Wins over `runClass` when both are given — a measured
+   * ratio beats a published typical one.
+   */
+  actionsPerRun: z.number().positive().max(10_000).optional(),
+  /** Tier to price against. Defaults to `scale`. */
+  tier: z.enum(["free", "build", "scale", "enterprise"]).optional(),
+} as const;
+
 export const billingActionEstimate = registerCapability({
   name: "preview_action_cost",
   domain: "billing",
@@ -49,28 +74,7 @@ export const billingActionEstimate = registerCapability({
     },
     workspace: {},
   },
-  input: z.object({
-    /** Runs the customer expects per year. */
-    runsPerYear: z
-      .number()
-      .int()
-      .positive()
-      .max(1_000_000_000)
-      .describe("Projected agent runs per year"),
-    /**
-     * Which run class those runs look like. Drives the actions-per-run ratio
-     * from spec §3.4. Defaults to the standard task, the middle of the range.
-     */
-    runClass: z.enum(RUN_CLASSES).optional().default("standard_task"),
-    /**
-     * Override the actions-per-run ratio directly, for a customer who has
-     * measured their own. Wins over `runClass` when both are given — a measured
-     * ratio beats a published typical one.
-     */
-    actionsPerRun: z.number().positive().max(10_000).optional(),
-    /** Tier to price against. Defaults to `scale`. */
-    tier: z.enum(["free", "build", "scale", "enterprise"]).optional(),
-  }),
+  input: z.object(billingActionEstimateFields),
   output: z.object({
     /** The ratio actually used, and where it came from. */
     assumptions: z.object({

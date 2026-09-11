@@ -23,6 +23,10 @@ import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.r
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
+import { billingActionRateCardRoute } from "./routes/v1/billing.action_rate_card";
+import { billingActionUsageRoute } from "./routes/v1/billing.action_usage";
+import { billingActionEstimateRoute } from "./routes/v1/billing.action_estimate";
+import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_retention";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
@@ -406,6 +410,16 @@ orgScoped.route(
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
+// Governed-action meter (ADR-052, docs/specs/governed-action-metering.md):
+// the rate card, this org's usage against it, the run->action estimator, and
+// evidence-retention posture. All four are noBillingGate reads.
+orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
+orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
+orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
+orgScoped.route(
+  "/billing/evidence/retention",
+  billingEvidenceRetentionRoute,
+);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);

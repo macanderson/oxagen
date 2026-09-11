@@ -23,6 +23,16 @@ const capabilityRow = z.object({
   actions: z.number().int().nonnegative(),
 });
 
+// Per-field schema exported so surfaces (e.g. the xmcp tool) can build their own
+// arg map from the same shape the contract's `input` wraps, rather than drifting.
+export const billingActionUsageFields = {
+  /**
+   * Include the per-capability breakdown. Off by default: it is a ClickHouse
+   * scan, and the headline numbers come from one indexed Postgres row.
+   */
+  includeBreakdown: z.boolean().optional().default(false),
+} as const;
+
 export const billingActionUsage = registerCapability({
   name: "get_action_usage",
   domain: "billing",
@@ -41,13 +51,7 @@ export const billingActionUsage = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
-  input: z.object({
-    /**
-     * Include the per-capability breakdown. Off by default: it is a ClickHouse
-     * scan, and the headline numbers come from one indexed Postgres row.
-     */
-    includeBreakdown: z.boolean().optional().default(false),
-  }),
+  input: z.object(billingActionUsageFields),
   output: z.object({
     period: z.object({
       /** First instant of the entitlement year, ISO-8601. */

@@ -782,6 +782,51 @@
       }
     },
     {
+      "name": "preview_action_cost",
+      "file": "billing.action_estimate.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_rate_card",
+      "file": "billing.action_rate_card.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_action_usage",
+      "file": "billing.action_usage.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_spend_budget",
       "file": "billing.budget.get.ts",
       "domain": "billing",
@@ -824,6 +869,21 @@
         "unit": true,
         "e2e": false,
         "docs": true
+      }
+    },
+    {
+      "name": "get_evidence_retention",
+      "file": "billing.evidence_retention.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
       }
     },
     {
