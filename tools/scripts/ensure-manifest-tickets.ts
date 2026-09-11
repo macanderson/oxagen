@@ -19,8 +19,20 @@
  *
  * Safe by design: missing LINEAR_API_KEY → no-op exit 0 (so PRs / local runs
  * without the key don't error). In CI this runs on main only, continue-on-error.
+ *
+ * `continue-on-error` is right — a Linear outage must not fail the `checks` job
+ * or block a merge; the job's verdict belongs to the gates above this step. But
+ * it swallows the reason along with the exit code, and this script used to exit
+ * 1 with the explanation in a log nobody opens. A rejected credential therefore
+ * read as a yellow mark on a green job, while every parity gap from then on went
+ * unticketed (#2555 is the same defect on the nightly's twin of this script;
+ * #2556 is the epic for the shape).
+ *
+ * So a failure now prints a GitHub Actions annotation and appends to the run
+ * summary, and the process still exits 0 — visible without being fatal.
  */
 import { execFileSync } from "node:child_process";
+import { reportTicketFailure } from "./lib/ticket-failure";
 
 const DRY = process.argv.includes("--dry-run");
 const API_KEY = process.env.LINEAR_API_KEY;
@@ -328,9 +340,18 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(
-    "[manifest-tickets] FAILED:",
-    err instanceof Error ? err.message : err,
+  reportTicketFailure(
+    {
+      what: "manifest parity tickets",
+      consequence:
+        "every capability-parity gap found from here on goes untracked",
+      issue: "#2556",
+    },
+    err,
   );
-  process.exit(1);
+  // Exit 0 deliberately. The step carries `continue-on-error: true`, so a
+  // non-zero exit would be swallowed into the same yellow mark this change
+  // exists to replace — the annotation above is what actually reaches a reader.
+  // The `checks` job's verdict is decided by the gates above this step.
+  process.exit(0);
 });

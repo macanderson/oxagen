@@ -61,12 +61,25 @@ url() { # url <user> <password> <database> [extra query]
 # writes. Granting it costs no privilege the guard is looking for: it is a GUC
 # the policies read, not a permission.
 #
-# TODAY'S PRODUCTION DOES NOT SET IT and does not need to —
-# `infra/tools/run-db-migrations.sh` applies against the Dockerised Postgres on
-# the oxagen-data node as `oxagen`, which is that container's superuser. An
-# Aurora rebuild has no superuser and would be refused here. That is a real
-# finding about the deploy rather than about this script, and it is filed as
-# macanderson/oxagen#2652.
+# TODAY'S PRODUCTION DOES NOT SET IT, and as of the 2026-08-27 cutover it does
+# need to. That is a finding about the deploy rather than about this script, and
+# it is filed as #2652 and #1368 — two views of one defect.
+#
+# The reasoning that used to sit here was written before the cutover and has
+# been corrected rather than deleted, because the *shape* of it is still how the
+# bug is understood. It said: `infra/tools/run-db-migrations.sh` applies against
+# the Dockerised Postgres on the `oxagen-data` node as `oxagen`, that container's
+# superuser, so RLS is bypassed and the seed lands. There is no `oxagen-data`
+# node any more — a `where-is-production.yml` dispatch on 2026-09-10 (run
+# 34456388188) shows only `oxagen-nat` and `oxagen-app` running, and production
+# Postgres is the Aurora Serverless v2 cluster declared at
+# `infra/stacks-new/oxagen/data-services.tf`.
+#
+# Aurora has no superuser. So the arrangement that made the seed land no longer
+# exists, and a rebuild from empty would be refused by the policy exactly as
+# this script simulates. Whether the fix is to set `app.rls_bypass` on the
+# migration path or to give the WITH CHECK clause the `org_id IS NULL` arm its
+# USING already has is #2652's to decide.
 SIM_OPTS="&options=-c%20app.rls_bypass%3Don"
 
 SUPERUSER_URL="$(url "$PGSUPERUSER" "$PGSUPERPASS" "$PGSUPERDB")"

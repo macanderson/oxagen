@@ -431,7 +431,9 @@ describe("verdict", () => {
     // to its diff, on an issue that does say what done means.
     const result = verdict(
       { body: "Closes #1321", labels: [] },
-      issue("## Done when\n\n- [x] the parser is fixed\n- [x] a test covers it"),
+      issue(
+        "## Done when\n\n- [x] the parser is fixed\n- [x] a test covers it",
+      ),
     );
     expect(result.ok).toBe(true);
     expect(result.reasons).toEqual([]);
@@ -440,7 +442,9 @@ describe("verdict", () => {
   it("still fails an older-heading issue whose boxes are not all ticked", () => {
     const result = verdict(
       { body: "Closes #1321", labels: [] },
-      issue("## Done when\n\n- [x] the parser is fixed\n- [ ] a test covers it"),
+      issue(
+        "## Done when\n\n- [x] the parser is fixed\n- [ ] a test covers it",
+      ),
     );
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain("1 unchecked DoD item(s)");
@@ -697,5 +701,84 @@ describe("a waiver label does not waive a PR that closes something (#2742 review
     expect(
       verdict({ labels: [CLOSES_NOTHING_LABEL], body: "Refs #9" }, []).ok,
     ).toBe(true);
+  });
+});
+
+describe("matching GitHub's own reading of a close claim (oxagen#1354)", () => {
+  // The gate's answer is only worth anything if it agrees with what GitHub will
+  // actually do on merge. Each case below is a spelling where the two disagreed.
+
+  describe("spans GitHub does not read keywords out of", () => {
+    it("ignores a keyword inside an inline code span", () => {
+      // The case that cost a merge. PR #2844's only close-claim was
+      // `## `Closes #2648`` in a heading. GitHub ignored it — #2648 stayed open
+      // when that PR merged — and this gate did not, demanding a ticked
+      // checklist for an issue the merge was never going to close.
+      expect(linkedIssues("## `Closes #2648` — bootstrap the roles")).toEqual(
+        [],
+      );
+      expect(linkedIssues("`fixes #11`")).toEqual([]);
+    });
+
+    it("ignores a keyword inside a double-backtick span, but not after it", () => {
+      // Double-backtick spans are stripped first, so a literal ` inside one
+      // cannot be mistaken for two single-backtick spans with prose between.
+      expect(
+        linkedIssues("``a ` b`` then Closes #16").map((r) => r.number),
+      ).toEqual([16]);
+    });
+
+    it("still ignores fenced code and HTML comments", () => {
+      expect(linkedIssues("```\nCloses #9\n```")).toEqual([]);
+      expect(linkedIssues("<!-- Closes #15 -->")).toEqual([]);
+    });
+  });
+
+  describe("spellings GitHub does honour", () => {
+    it("reads a full issue URL as a close", () => {
+      // The serious direction of the same defect: GitHub closes on this form,
+      // and until the URL arm existed the gate saw nothing to verify and
+      // passed. A control a supported spelling walks past is not a control —
+      // and this is the spelling GitHub's UI produces when someone pastes a
+      // link.
+      expect(
+        linkedIssues(
+          "Closes https://github.com/macanderson/oxagen/issues/7",
+        ).map((r) => ({ owner: r.owner, repo: r.repo, number: r.number })),
+      ).toEqual([{ owner: "macanderson", repo: "oxagen", number: 7 }]);
+    });
+
+    it("reads a URL carrying www", () => {
+      expect(
+        linkedIssues("Fixes https://www.github.com/o/r/issues/70").map(
+          (r) => r.number,
+        ),
+      ).toEqual([70]);
+    });
+
+    it("still reads the short and cross-repo forms", () => {
+      expect(linkedIssues("Closes #1").map((r) => r.number)).toEqual([1]);
+      expect(
+        linkedIssues("Closes owner/repo#12").map((r) => ({
+          owner: r.owner,
+          repo: r.repo,
+          number: r.number,
+        })),
+      ).toEqual([{ owner: "owner", repo: "repo", number: 12 }]);
+    });
+  });
+
+  describe("negation, which was this issue's original report", () => {
+    it("does not read a disclaimed keyword as a claim", () => {
+      expect(linkedIssues("This does not close #2")).toEqual([]);
+      expect(linkedIssues("this PR doesn't close #3")).toEqual([]);
+      expect(linkedIssues("We will not fix #8 here")).toEqual([]);
+      expect(linkedIssues("Do NOT close #10 with this")).toEqual([]);
+    });
+  });
+
+  it("leaves Refs alone — it never closes anything", () => {
+    expect(linkedIssues("Refs #4")).toEqual([]);
+    expect(referencedIssues("Refs #4").map((r) => r.number)).toEqual([4]);
   });
 });

@@ -1037,9 +1037,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: ["production"],
     valueOrigin: "static",
     staticValue: {
-      development: "http://127.0.0.1:4200",
-      preview: "http://127.0.0.1:4200",
-      production: "http://127.0.0.1:4200",
+      development: "http://127.0.0.1:4300",
+      preview: "http://127.0.0.1:4300",
+      production: "http://127.0.0.1:4300",
     },
   },
   STELLA_SERVE_TOKEN: {

@@ -202,7 +202,7 @@ export const baseEnvSchema = z.object({
   // container reached over loopback. The token is required for the assistant
   // to work at all; when it is unset the agent runtime reports "the assistant
   // engine is unavailable" rather than falling back to an in-process loop.
-  STELLA_SERVE_URL: z.string().url().default("http://127.0.0.1:4200"),
+  STELLA_SERVE_URL: z.string().url().default("http://127.0.0.1:4300"),
   STELLA_SERVE_TOKEN: z.string().min(1).optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),

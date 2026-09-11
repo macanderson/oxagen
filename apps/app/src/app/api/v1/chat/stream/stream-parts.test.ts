@@ -135,6 +135,58 @@ describe("formatStreamError — non-envelope fallbacks", () => {
   });
 });
 
+// Regression — #1456. A typed error thrown in-process carries its stable `code`
+// on the object, not inside a stringified envelope. formatStreamError narrowed
+// straight to `.message`, so a spend-ceiling denial reached the chat toast with
+// no code and rendered as a generic "Request failed".
+describe("formatStreamError — code carried on a thrown Error", () => {
+  it("recovers `budget_exceeded` from a thrown BudgetExceededError-shaped error", () => {
+    const err = Object.assign(new Error("Spend budget exceeded: ..."), {
+      code: "budget_exceeded",
+    });
+    expect(formatStreamError(err)).toEqual({
+      code: "budget_exceeded",
+      message: "Spend budget exceeded: ...",
+    });
+  });
+
+  it("recovers the code from the other in-process billing errors too", () => {
+    for (const code of ["insufficient_credits", "billing_suspended"]) {
+      const err = Object.assign(new Error("denied"), { code });
+      expect(formatStreamError(err).code).toBe(code);
+    }
+  });
+
+  it("an envelope code still wins over the thrown error's own code", () => {
+    const err = Object.assign(
+      new Error(
+        JSON.stringify({
+          error: { code: "rate_limited", message: "slow down" },
+        }),
+      ),
+      { code: "budget_exceeded" },
+    );
+    expect(formatStreamError(err)).toEqual({
+      code: "rate_limited",
+      message: "slow down",
+    });
+  });
+
+  it("ignores a non-string or blank code rather than emitting an empty one", () => {
+    expect(
+      formatStreamError(Object.assign(new Error("boom"), { code: 402 })).code,
+    ).toBeUndefined();
+    expect(
+      formatStreamError(Object.assign(new Error("boom"), { code: "  " })).code,
+    ).toBeUndefined();
+  });
+
+  it("leaves a plain Error and a plain string uncoded", () => {
+    expect(formatStreamError(new Error("boom")).code).toBeUndefined();
+    expect(formatStreamError("boom").code).toBeUndefined();
+  });
+});
+
 // Guard the sibling helpers so this module's public surface stays covered.
 describe("stream-parts misc helpers", () => {
   it("errorMessageOf normalizes Error / string / other", () => {

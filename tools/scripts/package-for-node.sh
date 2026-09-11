@@ -61,7 +61,7 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 #
 # `stella-serve` has no Caddyfile entry on purpose: nothing outside the node
 # may reach the engine. `app` and `api` call it over loopback as
-# `http://127.0.0.1:4200`, which is `STELLA_SERVE_URL`'s static value in
+# `http://127.0.0.1:4300`, which is `STELLA_SERVE_URL`'s static value in
 # @oxagen/config's registry — the same number, held in two places, and a
 # mismatch shows up as "the assistant engine is unavailable" (ADR-053 §4).
 port_for() {
@@ -70,7 +70,7 @@ port_for() {
     docs)         echo 3002 ;;
     api)          echo 4000 ;;
     mcp)          echo 4100 ;;
-    stella-serve) echo 4200 ;;
+    stella-serve) echo 4300 ;;
     *)    fail "unknown service '$1'" ;;
   esac
 }
@@ -84,7 +84,14 @@ write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
   local command_json
-  command_json=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
+  # No command means "run the image's own entrypoint": an external image such
+  # as the engine's already names its binary, and appending it again hands the
+  # binary its own path as an argument.
+  if [[ $# -eq 0 ]]; then
+    command_json='[]'
+  else
+    command_json=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
+  fi
 
   jq -n \
     --argjson port "$port" \
@@ -225,9 +232,8 @@ case $SERVICE in
     # person listing a release directory on the node does not take a
     # one-file release for a broken upload.
     #
-    # The command is an absolute path because the node sets `-w /app` (this
-    # directory), so a bare `stella-serve` would be looked up there, not on the
-    # image's PATH.
+    # No command: the image's entrypoint is the binary, and a command would be
+    # appended to it as an argument the binary refuses.
     #
     # 384m: the binary is a single static executable holding no model and no
     # tool runtime — every completion and every tool call is a reverse request
@@ -251,7 +257,7 @@ case $SERVICE in
       > "$OUT/README.txt"
     WRITE_MANIFEST_IMAGE="ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG" \
       write_manifest "$(port_for stella-serve)" 384m "/healthz" \
-        "/oxagen/production/stella-serve" /usr/local/bin/stella-serve
+        "/oxagen/production/stella-serve"
     tmp=$(mktemp)
     jq --arg bind "127.0.0.1:$(port_for stella-serve)" \
       '.env = {

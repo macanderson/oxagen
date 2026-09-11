@@ -88,6 +88,26 @@ export default defineConfig({
     "**/screenshots-capture.spec.ts",
   ],
   timeout: 60_000,
+  // Playwright's default assertion timeout is 5 s, tuned for assertions that
+  // resolve in the browser. Most of this suite's do not: nearly every screen
+  // here mutates through a Server Action and then waits for a revalidation, so
+  // the assertion is waiting on a server round-trip and a re-render, not on the
+  // DOM settling.
+  //
+  // That mismatch is #2559's "rotating navigation timeout, one spec at a time".
+  // A sweep of `apps/app/e2e` found 34 specs containing at least one assertion
+  // that follows a mutation and takes the 5 s default — so on any given run,
+  // whichever one loses the race under load is the one that fails, and it is a
+  // different one each time. developer-tokens.spec.ts lost it on run
+  // 34540186574 and failed all three attempts, which is not a flake being
+  // unlucky; 5 s was simply not enough that run.
+  //
+  // Raising the floor is the fix for the class. It costs nothing when an
+  // assertion passes — Playwright polls and returns as soon as it is true — and
+  // only changes how long a genuinely failing one waits before saying so. The
+  // per-test budget above stays 60 s, so a hung test still fails at the same
+  // point it always did.
+  expect: { timeout: 10_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
