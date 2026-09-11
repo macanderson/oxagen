@@ -135,6 +135,10 @@ describe("org route builders", () => {
     expect(org.billing.subscription(orgCtx)).toBe(
       "/acme/billing/subscription",
     ));
+  it("billing.governedActions → /{org}/billing/governed-actions", () =>
+    expect(org.billing.governedActions(orgCtx)).toBe(
+      "/acme/billing/governed-actions",
+    ));
   it("developer.mcp → /{org}/developer/mcp", () =>
     expect(org.developer.mcp(orgCtx)).toBe("/acme/developer/mcp"));
   it("settings.general → /{org}/settings/general", () =>
