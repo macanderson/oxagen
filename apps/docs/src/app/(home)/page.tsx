@@ -8,36 +8,36 @@ import { CopyCommand } from "@/components/landing/copy-command";
 import { HexField } from "@/components/ui/hex-field";
 
 export const metadata: Metadata = {
-  title: "Oxagen — context, governed",
+  title: "Oxagen Docs — the governed control plane for AI agents",
   description:
-    "Oxagen keeps the context window free, not full: a typed knowledge graph and RBAC-scoped retrieval feed every model call only what it is authorized to see — through one metered, audited chokepoint, across the API, MCP server, and in-app agent.",
+    "Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. Docs for the API, MCP server, CLI, and in-app agent.",
 };
 
-/* The four governed-AI pillars, mirrored from the docs landing copy. */
-const PILLARS = [
+/* The four jobs, mirrored from oxagen.sh and docs.oxagen.sh/docs. */
+const FOUR_JOBS = [
   {
-    title: "One audited chokepoint",
-    body: "Every capability — model call, tool invocation, code execution, memory write — passes through a single invoke() kernel that enforces IAM, meters credits, and writes an immutable audit record. There is no alternate path.",
-    href: "/docs/security/overview",
-    cta: "Security overview",
+    title: "Teach",
+    body: "Oxagen gives every agent your company's knowledge and rules at run time, from a typed knowledge graph — not by training a model. The agent starts each job already knowing your customers, your code, and how you work.",
+    href: "/docs/knowledge",
+    cta: "The knowledge graph",
   },
   {
-    title: "Tenant isolation with RLS",
-    body: "Every tenant-scoped row carries org_id and workspace_id, and Postgres row-level security is enforced by the database. The oxagen_app role has no BYPASSRLS — an unscoped query returns zero rows, not another tenant's.",
-    href: "/docs/security/tenant-isolation-rls",
-    cta: "How isolation works",
+    title: "Govern",
+    body: "Every agent gets an identity, a role, and a budget. Every action — model call, tool invocation, code execution, memory write — passes a single invoke() kernel boundary that checks it against those before it runs. There is no alternate path.",
+    href: "/docs/governance/overview",
+    cta: "Roles and RBAC",
   },
   {
-    title: "SOC 2-aligned controls",
-    body: "Designed SOC 2-first. Role-based IAM with default-deny, two independent audit stores with 7-year retention and chain-hash tamper evidence, versioned migrations, and sandboxed code execution that is network-denied by default.",
-    href: "/docs/security/soc2",
-    cta: "SOC 2 mapping",
+    title: "Explain",
+    body: "Every run is saved as a trace next to the data it touched: who asked, what the agent read, what it changed, what proved it, and what it cost.",
+    href: "/docs/security/audit-logging",
+    cta: "Audit logging",
   },
   {
-    title: "Parity across every surface",
-    body: "Each capability is declared once in the contract registry and exposed identically across the REST API, the MCP server, and the in-app agent. The same action produces the same audit record no matter where it came from.",
-    href: "/docs/api/capabilities",
-    cta: "Capability model",
+    title: "Learn",
+    body: "Proven runs write skills, tools, and tuned settings back to the graph the next run starts with. Over time, the proven runs can train a model you own.",
+    href: "/docs/agent/memory",
+    cta: "Agent memory",
   },
 ];
 
@@ -105,24 +105,25 @@ export default function HomePage(): ReactNode {
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
-                Governed AI · for the enterprise
+                Teach. Govern. Explain. Learn.
               </span>
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Give your agents <span className="lp-grad-text">context</span> —
-              not the whole haystack.
+              The governed control plane{" "}
+              <span className="lp-grad-text">for AI agents</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen keeps the context window{" "}
-              <span className="text-foreground">free, not full</span>. A typed
-              knowledge graph and RBAC-scoped retrieval feed every model call
-              only what it is authorized to see — through one metered, audited{" "}
+              Oxagen teaches every agent your team runs — Stella, or your own —
+              your business, governs what it{"'"}s allowed to know and do,
+              explains every run in one trace, and learns from the ones that
+              pass. These docs cover the API, MCP server, CLI, and in-app agent
+              that make up the control plane — all through one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
-              chokepoint, across the API, MCP server, and in-app agent.
+              boundary.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -157,16 +158,17 @@ export default function HomePage(): ReactNode {
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1fr_1.1fr] lg:py-28">
           <div>
-            <span className="ox-eyebrow">The core idea</span>
+            <span className="ox-eyebrow">How Teach works</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              More <span className="lp-grad-text">free</span> than full.
+              A graph, not a <span className="lp-grad-text">fine-tune</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
+              Teaching an agent your business does not mean training a model —
+              it means handing the agent a typed knowledge graph at run time.
               The naive pattern stuffs every document into the prompt until the
-              window saturates — latency and cost climb, and recall collapses in
-              the noise. Oxagen does the opposite: it retrieves only the
-              precise, authorized slice your task needs, so the window stays
-              open and the model stays sharp.
+              window saturates; Oxagen retrieves only the precise, authorized
+              slice the task needs, so the window stays open and the model stays
+              sharp.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
@@ -200,18 +202,17 @@ export default function HomePage(): ReactNode {
         </div>
       </section>
 
-      {/* ── Four pillars ──────────────────────────────────────────────────── */}
+      {/* ── Four jobs ──────────────────────────────────────────────────── */}
       <section className="relative isolate overflow-hidden border-b border-border">
         <div className="relative mx-auto w-full max-w-7xl px-6 py-20 lg:py-28">
           <div className="max-w-2xl">
-            <span className="ox-eyebrow">Why teams choose Oxagen</span>
+            <span className="ox-eyebrow">The platform</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Capable AI for your teams. The controls your security team
-              requires.
+              Four jobs. One platform. One loop.
             </h2>
           </div>
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-2">
-            {PILLARS.map((p) => (
+            {FOUR_JOBS.map((p) => (
               <div
                 key={p.title}
                 className="group relative flex flex-col bg-background p-7 sm:p-8"
@@ -286,8 +287,7 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Start with the context window{" "}
-            <span className="lp-grad-text">open</span>.
+            Start <span className="lp-grad-text">teaching</span> your agents.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and ask your codebase a question, or read the
