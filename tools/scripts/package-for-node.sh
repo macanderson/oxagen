@@ -49,9 +49,8 @@ mkdir -p "$OUT"
 log() { printf '==> %s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-# Ports. These must match `tools/caddy/Caddyfile` in oxagen-aws-infra, which is
-# what proxies to them; nothing enforces the agreement and a mismatch shows up
-# as a 502.
+# Ports. These must match `infra/tools/caddy/Caddyfile`, which is what proxies
+# to them; nothing enforces the agreement and a mismatch shows up as a 502.
 #
 # app/api/mcp match `PORTS` in @oxagen/config, so a service started by hand from
 # a checkout lands where a developer expects. `docs` does NOT: @oxagen/config

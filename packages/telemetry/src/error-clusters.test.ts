@@ -7,6 +7,11 @@
 // every other column goes through an aggregate, ORDER BY count DESC, the
 // mandatory org_id + window filter, optional severity/source filters, LIMIT
 // clamping, and the string→typed coercion.
+//
+// ClickHouse has no RLS, so the workspace_id clause is the whole boundary
+// between one workspace's errors and its siblings'. It is pinned here in both
+// queries — the cluster page and the totals — because a totals row that counted
+// the org's errors would leak the shape of them even with the page filtered.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -30,6 +35,7 @@ vi.mock("./clickhouse", async (importOriginal) => {
 import { clusterErrorEvents } from "./error-clusters";
 
 const ORG = "11111111-1111-1111-1111-111111111111";
+const WS = "22222222-2222-2222-2222-222222222222";
 
 function mockCalls(clusterRows: unknown[], totalsRows: unknown[]): void {
   queryMock
@@ -48,9 +54,22 @@ afterEach(() => {
 });
 
 describe("clusterErrorEvents", () => {
+  it("filters on workspace_id in both the cluster query and the totals query", async () => {
+    // The boundary itself: org_id alone returned every sibling workspace's
+    // errors, message text included, to a workspace-scoped caller.
+    mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
+    await clusterErrorEvents({ orgId: ORG, workspaceId: WS });
+
+    for (const index of [0, 1]) {
+      const call = callAt(index);
+      expect(call.query).toContain("workspace_id = {workspaceId:UUID}");
+      expect(call.query_params.workspaceId).toBe(WS);
+    }
+  });
+
   it("groups strictly by fingerprint, aggregates every other column, and orders by count desc", async () => {
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG });
+    await clusterErrorEvents({ orgId: ORG, workspaceId: WS });
 
     const clusterQuery = callAt(0);
     expect(clusterQuery.query).toContain("FROM error_events");
@@ -88,7 +107,12 @@ describe("clusterErrorEvents", () => {
 
   it("issues a second, non-grouped aggregate for totalErrors/distinctClusters over the same filters", async () => {
     mockCalls([], [{ total_errors: 42, distinct_clusters: 5 }]);
-    await clusterErrorEvents({ orgId: ORG, severity: "error", source: "api" });
+    await clusterErrorEvents({
+      orgId: ORG,
+      workspaceId: WS,
+      severity: "error",
+      source: "api",
+    });
 
     const totalsQuery = callAt(1);
     expect(totalsQuery.query).toContain("count() AS total_errors");
@@ -105,12 +129,17 @@ describe("clusterErrorEvents", () => {
 
   it("adds severity/source filters only when supplied", async () => {
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG });
+    await clusterErrorEvents({ orgId: ORG, workspaceId: WS });
     expect(callAt(0).query).not.toContain("severity = {severity:String}");
     expect(callAt(0).query).not.toContain("source = {source:String}");
 
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG, severity: "fatal", source: "mcp" });
+    await clusterErrorEvents({
+      orgId: ORG,
+      workspaceId: WS,
+      severity: "fatal",
+      source: "mcp",
+    });
     expect(callAt(2).query).toContain("severity = {severity:String}");
     expect(callAt(2).query).toContain("source = {source:String}");
     expect(callAt(2).query_params).toMatchObject({
@@ -121,11 +150,11 @@ describe("clusterErrorEvents", () => {
 
   it("clamps limit to the 100 ceiling and floors sub-1 values to the default", async () => {
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG, limit: 100000 });
+    await clusterErrorEvents({ orgId: ORG, workspaceId: WS, limit: 100000 });
     expect(callAt(0).query_params.limit).toBe(100);
 
     mockCalls([], [{ total_errors: 0, distinct_clusters: 0 }]);
-    await clusterErrorEvents({ orgId: ORG, limit: 0 });
+    await clusterErrorEvents({ orgId: ORG, workspaceId: WS, limit: 0 });
     expect(callAt(2).query_params.limit).toBe(20);
   });
 
@@ -145,7 +174,7 @@ describe("clusterErrorEvents", () => {
       ],
       [{ total_errors: "50", distinct_clusters: "3" }],
     );
-    const out = await clusterErrorEvents({ orgId: ORG });
+    const out = await clusterErrorEvents({ orgId: ORG, workspaceId: WS });
     expect(out.clusters).toEqual([
       {
         fingerprint: "fp1",
@@ -164,7 +193,7 @@ describe("clusterErrorEvents", () => {
 
   it("defaults totals to zero when the totals query returns no row", async () => {
     mockCalls([], []);
-    const out = await clusterErrorEvents({ orgId: ORG });
+    const out = await clusterErrorEvents({ orgId: ORG, workspaceId: WS });
     expect(out.totalErrors).toBe(0);
     expect(out.distinctClusters).toBe(0);
     expect(out.clusters).toEqual([]);

@@ -352,8 +352,11 @@ serialized (`max-parallel: 1`) because all four land on the same 4 GB instance,
 alongside the three databases.
 
 The infrastructure, the node-side script and the `oxagen-run.json` contract live
-in the `oxagen-aws-infra` repository — `stacks/ci-deploy/`, `tools/node/` and
-`tools/caddy/`.
+in this repository under [`infra/`](infra/) — `infra/stacks-new/ci-deploy/`,
+`infra/tools/node/` and `infra/tools/caddy/`. They used to live in a separate
+`oxagen-aws-infra` repository; that repository is archived, and the OIDC trust
+policy on `gha-infra-apply` names this one, so `infra/` here is the only place
+production infrastructure can be changed from.
 
 
 ## Security

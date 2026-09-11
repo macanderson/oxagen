@@ -34,10 +34,21 @@ const WS_ONLY_ALLOWLIST = new Set<string>([]);
 
 describe("RLS manifest coverage", () => {
   it("every table with an org_id column is in the manifest or allowlist", async () => {
-    // Exclude child partitions (relispartition = true): they inherit their
-    // parent's RLS policy when accessed through the parent and are never
-    // independently policied. The partitioned parent itself (relispartition =
-    // false) is still required to be in the manifest.
+    // Exclude child partitions (relispartition = true): a partition is policied
+    // through its parent, not on its own, and the partitioned parent
+    // (relispartition = false) is still required to be in the manifest.
+    //
+    // The exclusion matches nothing today. security.security_events is the only
+    // table this repo ever partitioned, and it is partitioned only in the
+    // frozen drizzle series (drizzle/0000_baseline.sql). Atlas owns Postgres
+    // now, `drizzle-kit export` does not model partitioning, and
+    // atlas/migrations/20260611233016_initial_schema.sql creates it as a plain
+    // heap — so `relkind` is 'r' in every Atlas-built database, including
+    // production. That also means the monthly rollover cron
+    // (packages/inngest-functions/src/functions/security.audit-partition-rollover.ts)
+    // cannot run: `CREATE TABLE ... PARTITION OF` errors with
+    // `"security_events" is not partitioned`. Restoring the partitioning is the
+    // change that would make this clause do work again.
     const rows = await sql<{ schema_name: string; table_name: string }[]>`
       SELECT col.table_schema AS schema_name, col.table_name
       FROM information_schema.columns col

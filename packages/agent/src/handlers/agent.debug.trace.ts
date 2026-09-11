@@ -5,7 +5,12 @@ import {
   fetchLogsForExecution,
   type ExecutionErrorEvent,
 } from "@oxagen/telemetry";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolveModelFundingSource,
+} from "@oxagen/ai";
+import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import type { CapabilityContext } from "../types";
 import type {
@@ -305,6 +310,12 @@ async function summarizeDiagnosis(
   });
   try {
     const { object } = await generateObjectFor({
+      // Platform-vs-org funding, resolved rather than assumed. The parameter is
+      // required for that reason: it used to default to `platform`, and every
+      // caller took the default, so an organisation that had brought its own
+      // key was billed for this call anyway (ADR-053 §3).
+      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: diagnosisSchema,
       model: selectModel({ tier: "balanced" }),
       system: DIAGNOSIS_SYSTEM,

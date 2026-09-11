@@ -454,6 +454,9 @@ describe("POST /v1/telemetry/stella/operational", () => {
   });
 
   it("invokes the API capability with tenant scope exclusively from the API key", async () => {
+    // Two hops with one trusted proxy: 203.0.113.9 is whatever the caller put
+    // in the header, 10.0.0.1 is what the proxy appended. clientIp is the
+    // latter — see extractClientIp in src/lib/context.ts.
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
       "x-forwarded-for": "203.0.113.9, 10.0.0.1",
@@ -472,7 +475,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
         requestId: REQUEST_ID,
         surface: "api",
         messageId: null,
-        clientIp: "203.0.113.9",
+        clientIp: "10.0.0.1",
       },
       { surface: "api" },
     );
