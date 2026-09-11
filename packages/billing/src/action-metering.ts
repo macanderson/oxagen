@@ -490,8 +490,19 @@ export async function recordGovernedAction(
   }
 
   const microCredits = microCreditsForActions(billable, band);
-  const { chargedCents, shortfallCents, carryMicroCents } =
-    await consumeCredits({
+  let chargedCents = 0n;
+  let shortfallCredits = 0n;
+
+  // The debit (and the second counter write it unlocks) are wrapped so a
+  // consumeCredits failure cannot escape this function — see the "never
+  // throws" note above. On failure the action stays counted but uncharged,
+  // which is the gap incrementActionCounter's own docstring says to expect.
+  try {
+    const {
+      chargedCents: charged,
+      shortfallCents,
+      carryMicroCents,
+    } = await consumeCredits({
       orgId: args.orgId,
       requestedMicroCents: microCredits,
       // ADR-052: `consume_execution` survives and takes on the action meter.
@@ -505,38 +516,66 @@ export async function recordGovernedAction(
       // under a run that did not happen.
       referenceId: args.runId ?? undefined,
     });
+    chargedCents = charged;
+    shortfallCredits = shortfallCents;
 
-  // Record what was charged, separately from what was counted. The gap between
-  // the two columns is the audit answer to "did every overage action bill".
-  await incrementActionCounter(args.orgId, 0, billable, now);
+    // Record what was charged, separately from what was counted. The gap between
+    // the two columns is the audit answer to "did every overage action bill".
+    await incrementActionCounter(args.orgId, 0, billable, now);
 
-  logger.info(
-    {
-      orgId: args.orgId,
-      capability: args.capability,
-      actions,
-      periodActions: after,
-      allowance,
-      billableActions: billable,
-      band: band.id,
-      usdPer1000: band.usdPer1000,
-      microCredits: Number(microCredits),
-      creditsCharged: Number(chargedCents),
-      shortfallCredits: Number(shortfallCents),
-      carryMicroCents: Number(carryMicroCents),
-      runId: args.runId ?? null,
-      mode,
-      durationMs: Date.now() - start,
-    },
-    "billing: governed action charged",
-  );
+    logger.info(
+      {
+        orgId: args.orgId,
+        capability: args.capability,
+        actions,
+        periodActions: after,
+        allowance,
+        billableActions: billable,
+        band: band.id,
+        usdPer1000: band.usdPer1000,
+        microCredits: Number(microCredits),
+        creditsCharged: Number(chargedCents),
+        shortfallCredits: Number(shortfallCredits),
+        carryMicroCents: Number(carryMicroCents),
+        runId: args.runId ?? null,
+        mode,
+        durationMs: Date.now() - start,
+      },
+      "billing: governed action charged",
+    );
+  } catch (error) {
+    // Never throws on a billing failure. The kernel calls this after the
+    // action has already happened and the customer's response is already
+    // correct; a throw here could only turn a missed charge into a broken
+    // request. shortfallCredits reports the whole overage as unbilled — the
+    // debit did not partially land, it did not run — using the same
+    // whole-credit display figure {@link creditsForActions} publishes
+    // elsewhere in this file.
+    shortfallCredits = creditsForActions(billable, band);
+    logger.error(
+      {
+        orgId: args.orgId,
+        capability: args.capability,
+        actions,
+        periodActions: after,
+        allowance,
+        billableActions: billable,
+        band: band.id,
+        runId: args.runId ?? null,
+        mode,
+        durationMs: Date.now() - start,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "billing: governed action debit failed — action counted, not charged",
+    );
+  }
 
   return {
     periodActions: after,
     billableActions: billable,
     band,
     creditsCharged: chargedCents,
-    shortfallCredits: shortfallCents,
+    shortfallCredits,
     mode,
   };
 }
