@@ -271,3 +271,117 @@ resource "aws_cloudwatch_metric_alarm" "node_disk" {
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
 }
+
+# ---------------------------------------------------------------------------
+# The node's own CPU, and what it costs when it runs out
+# ---------------------------------------------------------------------------
+
+# The incident this is for: on the old data node ClickHouse burned 171% of the
+# 200% available for more than 26 hours, and nothing said so (#1315). It was
+# not serving queries. `metric_log` and `asynchronous_metric_log` write a row a
+# second, the shipped logger level was `trace`, and the merges over those tables
+# hit the container's memory limit and failed 37,300 times — each failure
+# logging more at trace level, making more parts to merge. Sixty-eight million
+# rows of telemetry against a database holding about ten rows of real data.
+#
+# `modules/app-node/user-data.sh.tftpl` now ships the config.d file that turns
+# those four system logs off, so the specific loop cannot restart. This alarm is
+# for the next one. The shape of that failure — a runaway with no external
+# symptom, found by hand after a day — is not specific to ClickHouse, and
+# ClickHouse is back on this node rather than on a separate one (#2693), so it
+# is this instance's CPU that would carry it.
+#
+# 85% over 30 minutes, not 5: this box legitimately pins a core through a
+# deploy, an ingestion burst or a ClickHouse merge, and an alarm that fires on
+# every deploy is one people mute. The 2026-08 runaway held above 80% for
+# twenty-six hours, so half an hour is nowhere near the resolution it needs.
+resource "aws_cloudwatch_metric_alarm" "node_cpu" {
+  alarm_name        = "oxagen-node-cpu"
+  alarm_description = "The app node has been near-saturated for half an hour. On 2026-08-25 this was ClickHouse burning 171% of 200% on its own system logs for 26 hours, found by hand. Check `docker stats` before assuming load."
+
+  namespace   = "AWS/EC2"
+  metric_name = "CPUUtilization"
+  statistic   = "Average"
+  dimensions  = { InstanceId = module.app.instance_id }
+
+  period              = 300
+  evaluation_periods  = 6
+  threshold           = 85
+  comparison_operator = "GreaterThanThreshold"
+  # Absent EC2 CPU means the instance is gone, which node_status_check and
+  # no_healthy_host both say more clearly. Alarming here too would be three
+  # pages for one event.
+  treat_missing_data = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}
+
+# The one that distinguishes busy from broken, and the one that was billing.
+#
+# `t4g.large` is burstable. In `unlimited` mode — the default, and what the node
+# runs — exhausting the credit balance does not throttle it; it charges for the
+# surplus, per vCPU-hour, silently and indefinitely. During the ClickHouse
+# runaway the balance sat at 0.0 with surplus credits pegged at the 576 maximum
+# for over a day. Nothing in AWS objects to that, which is exactly why it needs
+# an alarm rather than a dashboard.
+#
+# CPUCreditBalance is the better signal of the two: a deploy spends credits and
+# earns them back, so a balance that stays near zero means consumption has
+# outrun the baseline rather than spiked past it. `oxagen-node-cpu` can fire on
+# honest load; this one firing with it means the load is not a burst.
+resource "aws_cloudwatch_metric_alarm" "node_cpu_credits" {
+  alarm_name        = "oxagen-node-cpu-credits"
+  alarm_description = "The app node has run its CPU credit balance down and is buying surplus credits. In `unlimited` mode this bills rather than throttles, so it can run for days without any other symptom — it did, for 26 hours, in August 2026."
+
+  namespace   = "AWS/EC2"
+  metric_name = "CPUCreditBalance"
+  statistic   = "Minimum"
+  dimensions  = { InstanceId = module.app.instance_id }
+
+  period              = 300
+  evaluation_periods  = 6
+  threshold           = 10
+  comparison_operator = "LessThanThreshold"
+  # T-instances publish this every five minutes while running. Missing data is
+  # a stopped instance, which is already alarmed above.
+  treat_missing_data = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}
+
+# The agent has been collecting `mem_used_percent` since #2797 and nothing read
+# it. Worth closing in the same pass as the CPU alarms, because this node's
+# memory is the constraint its instance type was raised for: two databases and
+# six Node services on 8 GB, and the process the OOM killer reaches for first is
+# always a database. A ClickHouse killed by the OOM killer at 3am presents as
+# 5xx from the API's telemetry writes, which no alarm here would attribute
+# correctly.
+#
+# 90%, not 80%: the page cache makes this number look alarming at rest, and the
+# figure that matters is how close the box is to having nothing left to give.
+resource "aws_cloudwatch_metric_alarm" "node_memory" {
+  alarm_name        = "oxagen-node-memory"
+  alarm_description = "The app node is over 90% memory. Neo4j and ClickHouse both live here; the OOM killer takes the largest process, which is one of them."
+
+  namespace   = "CWAgent"
+  metric_name = "mem_used_percent"
+  statistic   = "Average"
+  dimensions  = { InstanceId = module.app.instance_id }
+
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = 90
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  # Same reasoning as node_disk: the agent is the only source of this metric,
+  # so no metric means no agent, and a node with no agent is a node whose disk
+  # and memory are both unwatched.
+  treat_missing_data = "breaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}
