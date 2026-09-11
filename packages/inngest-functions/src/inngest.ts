@@ -12,32 +12,6 @@ import { z } from "zod";
 // the only place the full event surface is written down, and restoring real
 // inference is a one-line type change away.
 type Events = {
-  "stripe/subscription.updated": { data: { stripeSubscriptionId: string } };
-  "stripe/invoice.updated": { data: { stripeInvoiceId: string } };
-  "chat/message.streamed": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      conversationId: string;
-      assistantMessageId: string;
-      content: string;
-      tokenUsage: {
-        model: string;
-        inputTokens: number;
-        outputTokens: number;
-        cachedTokens: number;
-        costMicros: number;
-        /** AI provider — "anthropic" | "openai" | "" (OXA-1498). */
-        provider?: "" | "anthropic" | "openai";
-        /** Wall-clock duration of the LLM call in ms (OXA-1498). */
-        durationMs?: number;
-        /** SHA-256 first-16-bytes hex of the rendered prompt (OXA-1498). */
-        promptHash?: string;
-        /** Originating surface of the turn — "app" | "api" | "mcp" (OXA-1498). Defaults to "app". */
-        surface?: "app" | "api" | "mcp";
-      } | null;
-    };
-  };
   "privacy/export.process": {
     data: {
       exportId: string;

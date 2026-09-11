@@ -88,7 +88,7 @@ export const [ingestionPollScheduler] = createFunction(
     await step.sendEvent(
       "dispatch-connection-polls",
       due.map((c) => ({
-        name: "ingestion/connection.poll" as never,
+        name: "ingestion/connection.poll",
         data: {
           connectionId: c.id,
           orgId: c.org_id,
