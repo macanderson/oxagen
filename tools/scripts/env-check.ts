@@ -2,9 +2,20 @@
 /**
  * env-check.ts — static environment-variable health checker.
  *
- * Scans apps/ and packages/ for env-var references (no network, no secrets)
- * and reconciles them against the canonical ENV_REGISTRY, then verifies
- * .env.example is up-to-date with `renderEnvExample()`.
+ * Scans apps/, packages/, tools/ and infra/ for env-var references (no network,
+ * no secrets) and reconciles them against the canonical ENV_REGISTRY, then
+ * verifies .env.example is up-to-date with `renderEnvExample()`.
+ *
+ * A registry key nothing reads fails the check, and that is new (#2823). Two
+ * blind spots had made the dead half unreachable:
+ *
+ *   - Any file calling `loadEnv()` used to mark every schema key implicitly
+ *     consumed. `apps/api/src/bootstrap.ts` calls it to validate the whole
+ *     schema at boot and reads nothing off the result, so the entire registry
+ *     read as consumed and no key could ever be reported dead.
+ *   - The walker read `.tsx?` under apps/ and packages/ only, so operator
+ *     scripts, `next.config.mjs` and shell were invisible in both directions:
+ *     a var they read went unregistered, and a var only they read read as dead.
  *
  * Modes:
  *   (default)   reconcile + example-check; exit 1 on any FAIL
@@ -60,6 +71,81 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Legacy E2E aliases for canonical schema names (e2e fixtures only)
   "NEO4J_URL", // alias for NEO4J_URI
   "NEO4J_USER", // alias for NEO4J_USERNAME
+  // Vercel build-time: the project's production domain, read by
+  // apps/app/next.config.mjs to build the server-actions origin list
+  "VERCEL_PROJECT_PRODUCTION_URL",
+  // The shell and the OS set these. A `.sh` file cannot tell an environment
+  // read from a local (both are `$NAME`), so the scanner only records a name
+  // the script never assigns — which leaves the inherited ones, and these are
+  // the inherited ones that belong to the machine rather than to this project.
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "USER",
+  "SHELL",
+  "BASH_SOURCE",
+  // awk's own field-count and record-number builtins, which appear inside a
+  // shell script as `$NF` and `$NR` — three characters indistinguishable from
+  // an environment read once they are outside awk's quotes. Neither is a name
+  // anything would ever give a variable, so allowlisting them costs no cover.
+  "NF",
+  "NR",
+  // libpq's own variables: psql and atlas read them directly, so a value here
+  // configures those tools rather than any Oxagen service.
+  "PGHOST",
+  "PGPORT",
+  "PGUSER",
+  "PGPASSWORD",
+  // GitHub Actions and the gh CLI inject these into a workflow step. GH_TOKEN
+  // is gh's spelling of the same credential GITHUB_TOKEN carries.
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITHUB_REPOSITORY",
+  "GITHUB_SHA",
+  "GITHUB_RUN_ID",
+  "GITHUB_SERVER_URL",
+  "GITHUB_EVENT_PATH",
+  "GITHUB_OUTPUT",
+  "GITHUB_STEP_SUMMARY",
+  // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
+  "AWS_REGION",
+  // Set by nightly.yml on the step that files the failure ticket, so the marker
+  // names the job that actually failed rather than always saying "e2e"
+  // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
+  // operator's.
+  "NIGHTLY_FAILED_JOB",
+  // @oxagen/tacho's own placement knobs, all three local to a machine running
+  // the collector rather than to any deployed service. TACHO_BUNDLED is set by
+  // esbuild's `define` at bundle time and never read from a real environment;
+  // TACHO_BIN_DIR and TACHO_HOME relocate the binary and the state directory,
+  // and both default to a path under the user's home. tacho is a leaf package
+  // with no @oxagen/* runtime dependency, so it deliberately does not read the
+  // config registry these would otherwise live in.
+  "TACHO_BUNDLED",
+  "TACHO_BIN_DIR",
+  "TACHO_HOME",
+  // Claude Code sets these in the session and hook processes it spawns; the
+  // tacho collector and the session-summary script read what it left. They are
+  // that tool's contract, not anything an operator configures here.
+  "CLAUDE_PID",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_CODE_CHILD_SESSION",
+  // Read and written by `tacho enroll` (packages/tacho/src/cli/enroll.ts,
+  // host/paths.ts, host/settings-writer.ts). Both belong to Claude Code's own
+  // configuration surface — where it keeps its settings, and whether it emits
+  // telemetry — so a value here configures that tool, not an Oxagen service.
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_CODE_ENABLE_TELEMETRY",
+  "CLAUDE_CODE_BRIDGE_SESSION_ID",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_EFFORT",
+  "CLAUDE_PROJECT_DIR",
+  "CLAUDE_SESSION_ID",
+  "CLAUDE_SESSION_SUMMARY",
+  "CLAUDE_CODE_MODEL",
+  "ANTHROPIC_MODEL",
+  // Terminal emulators set this; tacho reads it to name the host program
+  "TERM_PROGRAM",
 ]);
 
 // ── Schema-exempt keys ────────────────────────────────────────────────────────
@@ -86,12 +172,55 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "ANTHROPIC_API_KEY",
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
   "OXAGEN_LOCAL_DEV",
+  // Operator scripts and build flags (#2823). Registered so `.env.example` and
+  // the env-manager document them, but read straight off process.env by a
+  // script or a Next config — never through loadEnv(), so a schema entry would
+  // validate them for services that never see them.
+  "STANDALONE",
+  "WRITE_MANIFEST_IMAGE",
+  "NPM_TOKEN",
+  "OXAGEN_INSTALL_BASE",
+  "OXAGEN_INSTALL_DIR",
+  "ADMIN_DATABASE_URL",
+  "PRODUCTION_DATABASE_URL",
+  "DB_MIGRATE_STORES",
+  "PGSUPERUSER",
+  "PGSUPERPASS",
+  "PRODUCTION_ANALYTICS_URL",
+  "PRODUCTION_ANALYTICS_USER",
+  "PRODUCTION_ANALYTICS_PASSWORD",
+  "USER_EMAIL",
+  "INNGEST_DEV",
+  "GCP_PROJECT",
+  "CONTEXT_GRAPH_PROTOCOL_DIR",
+  "MAIN_VERIFIED_WINDOW",
+  "SCR_OWNER",
+  "OXAGEN_HOUSE_BRAND",
+  "VISION_GATE_MODEL",
+  "VISION_GATE_BASE",
+  "VISION_GATE_STRICT",
+  "NODE_NAME",
+  "DATA_NODE_NAME",
+  "AURORA_ENDPOINT",
+  "AURORA_PORT",
+  "EVENT_BUS_NAME",
 ]);
 
 // ── File walker ───────────────────────────────────────────────────────────────
 
+/**
+ * Every directory that can hold code reading an env var. tools/ and infra/ are
+ * new (#2823): the operator and deploy scripts read a long tail of vars the
+ * registry had never heard of, and are the only reader of several it lists.
+ */
+export const SOURCE_ROOTS = ["apps", "packages", "tools", "infra"] as const;
+
 const SKIP_DIRS = new Set<string>([
   "node_modules",
+  ".venv",
+  "__pycache__",
+  ".terraform",
+  "cdk.out",
   ".next",
   "dist",
   ".xmcp",
@@ -103,6 +232,15 @@ const SKIP_DIRS = new Set<string>([
   "build",
   ".vercel",
 ]);
+
+/**
+ * Every file kind that can read an env var here. `.mjs` is Next's config
+ * format, `.sh` is the deploy and packaging scripts, `.py` the analysis ones —
+ * all three used to be unreadable to this check in both directions.
+ */
+const SOURCE_FILE = /\.(?:tsx?|mjs|cjs|jsx?|sh|py)$/;
+const TEST_FILE = /\.(?:test|spec)\.[a-z]+$/;
+const DECLARATION_FILE = /\.d\.[cm]?ts$/;
 
 function walkSourceFiles(dir: string, results: string[] = []): string[] {
   let entries: string[];
@@ -118,7 +256,11 @@ function walkSourceFiles(dir: string, results: string[] = []): string[] {
     if (!stat) continue;
     if (stat.isDirectory()) {
       walkSourceFiles(full, results);
-    } else if (/\.tsx?$/.test(name) && !/\.(test|spec)\.tsx?$/.test(name)) {
+    } else if (
+      SOURCE_FILE.test(name) &&
+      !TEST_FILE.test(name) &&
+      !DECLARATION_FILE.test(name)
+    ) {
       results.push(full);
     }
   }
@@ -132,9 +274,69 @@ const RE_KEY = /^[A-Z][A-Z0-9_]+$/;
 export interface ScanResult {
   /** varName → list of "file:line" locations */
   referenced: Map<string, string[]>;
-  /** True if any scanned file calls loadEnv() — implies all required schema keys are consumed. */
-  loadEnvFound: boolean;
 }
+
+/**
+ * An env-bearing object, read by property or by subscript. `process.env.KEY` is
+ * the common case; the rest matter because a validated env object is the thing
+ * most code actually reads. `loadEnv().BETTER_AUTH_URL` in packages/auth and
+ * `env["SLACK_DATA_CLIENT_ID"]` in the OAuth refresh strategies are both live
+ * reads of a key that used to look dead to this scanner.
+ *
+ * Anchored on an identifier ending in `env`/`Env` rather than on any object, so
+ * an unrelated `Foo.SOME_CONSTANT` is not mistaken for a var read — a false
+ * "consumed" is what makes a dead key invisible.
+ */
+const RE_ENV_MEMBER =
+  /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\.([A-Z][A-Z0-9_]+)\b/g;
+const RE_ENV_SUBSCRIPT =
+  /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\[\s*['"]([A-Z][A-Z0-9_]+)['"]\s*\]/g;
+
+/** os.environ["KEY"], os.environ.get("KEY"), os.getenv("KEY"). */
+const RE_PYTHON_ENV =
+  /os\.(?:environ(?:\.get)?\(?\[?|getenv\()\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
+
+/** $NAME and ${NAME}, ${NAME:-default}, ${NAME%suffix} — every expansion form. */
+const RE_SHELL_EXPANSION = /\$\{?([A-Z][A-Z0-9_]+)\b/g;
+
+/**
+ * Names the script gives itself: `NAME=`, `export NAME=`, `local NAME=`,
+ * `declare -r NAME=`, `for NAME in`.
+ *
+ * `$NAME` is the same expression whether NAME came from the environment or from
+ * two lines up, so whether the file assigns it is the only thing that separates
+ * them. Without this, `MIGRATE_URL` and `SIM_DB` and every other script-local
+ * constant would be reported as an env var missing from the registry.
+ */
+const RE_SHELL_ASSIGNMENT =
+  /^\s*(?:export\s+|local\s+|readonly\s+|declare\s+(?:-\w+\s+)*)?([A-Z][A-Z0-9_]+)=|^\s*for\s+([A-Z][A-Z0-9_]+)\s+in\b/gm;
+
+/** `read -r -d '' NAME <<EOF` — the option arguments make a positional match unreliable. */
+const RE_SHELL_READ = /^\s*read\b.*$/gm;
+
+function shellAssignedNames(content: string): Set<string> {
+  const assigned = new Set<string>();
+  for (const m of content.matchAll(RE_SHELL_ASSIGNMENT)) {
+    const name = m[1] ?? m[2];
+    if (name) assigned.add(name);
+  }
+  for (const line of content.match(RE_SHELL_READ) ?? []) {
+    for (const m of line.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g))
+      assigned.add(m[1]!);
+  }
+  return assigned;
+}
+
+/**
+ * A line that is nothing but a comment.
+ *
+ * A doc comment naming `process.env.FOO` as an example is not a reference, and
+ * counting it as one cuts both ways: an undeclared name in prose fails the
+ * check, and a registry key mentioned only in a comment reads as alive. Only
+ * whole-line comments are dropped — a trailing `// why` after a real read is
+ * still on a line the scanner must read.
+ */
+const RE_COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*\/?|#)/;
 
 /**
  * Walk the given directory roots and extract every statically-resolvable
@@ -143,10 +345,10 @@ export interface ScanResult {
  */
 export function scanSourceReferences(roots: string[]): ScanResult {
   const referenced = new Map<string, string[]>();
-  let loadEnvFound = false;
   const cwd = process.cwd();
 
   function record(key: string, location: string): void {
+    if (!RE_KEY.test(key)) return;
     if (!referenced.has(key)) referenced.set(key, []);
     referenced.get(key)!.push(location);
   }
@@ -161,25 +363,35 @@ export function scanSourceReferences(roots: string[]): ScanResult {
         continue;
       }
 
-      if (/\bloadEnv\s*\(/.test(content)) loadEnvFound = true;
+      const isShell = file.endsWith(".sh");
+      const isPython = file.endsWith(".py");
+      const assigned = isShell
+        ? shellAssignedNames(content)
+        : new Set<string>();
 
-      // Line-by-line for dot-access and bracket-access (gives accurate line numbers)
+      // Line-by-line so a finding carries the line it was found on.
       const lines = content.split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
         const loc = `${rel}:${i + 1}`;
 
-        // process.env.KEY
-        for (const m of line.matchAll(/\bprocess\.env\.([A-Z][A-Z0-9_]+)\b/g)) {
-          if (RE_KEY.test(m[1]!)) record(m[1]!, loc);
+        if (RE_COMMENT_LINE.test(line)) continue;
+
+        if (isShell) {
+          for (const m of line.matchAll(RE_SHELL_EXPANSION)) {
+            if (!assigned.has(m[1]!)) record(m[1]!, loc);
+          }
+          continue;
         }
-        // process.env["KEY"] or process.env['KEY']
-        for (const m of line.matchAll(
-          /\bprocess\.env\[['"]([A-Z][A-Z0-9_]+)['"]\]/g,
-        )) {
-          if (RE_KEY.test(m[1]!)) record(m[1]!, loc);
+        if (isPython) {
+          for (const m of line.matchAll(RE_PYTHON_ENV)) record(m[1]!, loc);
+          continue;
         }
+        for (const m of line.matchAll(RE_ENV_MEMBER)) record(m[1]!, loc);
+        for (const m of line.matchAll(RE_ENV_SUBSCRIPT)) record(m[1]!, loc);
       }
+
+      if (isShell || isPython) continue;
 
       // requireEnv([...]) — may span lines; match on full file content
       for (const m of content.matchAll(/\brequireEnv\s*\(\s*\[([^\]]+)\]/g)) {
@@ -187,13 +399,13 @@ export function scanSourceReferences(roots: string[]): ScanResult {
         const matchLine = content.slice(0, m.index).split("\n").length;
         const loc = `${rel}:${matchLine}`;
         for (const km of arrayStr.matchAll(/['"]([A-Z][A-Z0-9_]+)['"]/g)) {
-          if (RE_KEY.test(km[1]!)) record(km[1]!, loc);
+          record(km[1]!, loc);
         }
       }
     }
   }
 
-  return { referenced, loadEnvFound };
+  return { referenced };
 }
 
 // ── Reconciler ────────────────────────────────────────────────────────────────
@@ -210,7 +422,7 @@ export interface EnvCheckReport {
   /** Referenced in code, documented in registry, but NOT in baseEnvSchema. */
   warnUnvalidated: Finding[];
   /** In registry with services listed, but never referenced in source. */
-  warnDead: Finding[];
+  dead: Finding[];
   /** Referenced in code but completely absent from ENV_REGISTRY (and not allowlisted). */
   fail: Finding[];
 }
@@ -221,7 +433,6 @@ export interface ReconcileInput {
   schemaKeySet: Set<string>;
   /** key → service list (for dead-detection; pass from ENV_REGISTRY). */
   registryServiceMap: Map<string, string[]>;
-  loadEnvFound: boolean;
 }
 
 /**
@@ -233,22 +444,13 @@ export function reconcile({
   registryKeySet,
   schemaKeySet,
   registryServiceMap,
-  loadEnvFound,
 }: ReconcileInput): EnvCheckReport {
   const report: EnvCheckReport = {
     ok: [],
     warnUnvalidated: [],
-    warnDead: [],
+    dead: [],
     fail: [],
   };
-
-  // If loadEnv() is found, it validates all schema keys at boot — mark all of
-  // them as implicitly consumed (prevents false "dead" warnings for required vars
-  // that are only consumed through the full-schema boot check).
-  const implicitlyConsumed = new Set<string>();
-  if (loadEnvFound) {
-    for (const k of schemaKeySet) implicitlyConsumed.add(k);
-  }
 
   // Classify each key referenced in source code
   for (const [key, locations] of referenced) {
@@ -281,9 +483,9 @@ export function reconcile({
   // Detect dead declarations: registry entries that have services but no source reference
   for (const [key, services] of registryServiceMap) {
     if (services.length === 0) continue; // tooling-only vars; expected to be unreferenced
+    if (PLATFORM_ALLOWLIST.has(key)) continue;
     if (referenced.has(key)) continue;
-    if (implicitlyConsumed.has(key)) continue;
-    report.warnDead.push({
+    report.dead.push({
       key,
       reason: `services [${services.join(", ")}] listed but no source reference found`,
     });
@@ -294,9 +496,17 @@ export function reconcile({
 
 // ── Reporter ──────────────────────────────────────────────────────────────────
 
+/** Everything that makes this run exit non-zero. */
+export function failureCount(
+  report: EnvCheckReport,
+  exampleDrift: boolean,
+): number {
+  return report.fail.length + report.dead.length + (exampleDrift ? 1 : 0);
+}
+
 function printReport(report: EnvCheckReport, exampleDrift: boolean): void {
-  const failCount = report.fail.length + (exampleDrift ? 1 : 0);
-  const warnCount = report.warnUnvalidated.length + report.warnDead.length;
+  const failCount = failureCount(report, exampleDrift);
+  const warnCount = report.warnUnvalidated.length;
 
   // One-line summary for CI log scanners
   console.log(
@@ -322,15 +532,18 @@ function printReport(report: EnvCheckReport, exampleDrift: boolean): void {
     }
   }
 
-  if (report.warnDead.length > 0) {
+  if (report.dead.length > 0) {
     console.log(
-      kleur.yellow(
-        "\n⚠ WARN — possibly dead (in registry, no source reference)",
+      kleur.red().bold("\n✗ FAIL — dead registry keys (nothing reads them)"),
+    );
+    for (const f of report.dead) {
+      console.log(kleur.red(`  ${f.key}`) + ` — ${f.reason}`);
+    }
+    console.log(
+      kleur.dim(
+        "  Delete the entry, or clear its `services` list if it is tooling-only.",
       ),
     );
-    for (const f of report.warnDead) {
-      console.log(kleur.yellow(`  ${f.key}`) + ` — ${f.reason}`);
-    }
   }
 
   if (exampleDrift) {
@@ -361,8 +574,8 @@ function main(): void {
     exit(0);
   }
 
-  const roots = [join(MONOREPO_ROOT, "apps"), join(MONOREPO_ROOT, "packages")];
-  const { referenced, loadEnvFound } = scanSourceReferences(roots);
+  const roots = SOURCE_ROOTS.map((d) => join(MONOREPO_ROOT, d));
+  const { referenced } = scanSourceReferences(roots);
 
   const registryKeySet = new Set(registryKeys());
   const schemaKeySet = new Set(Object.keys(baseEnvSchema.shape));
@@ -375,7 +588,6 @@ function main(): void {
     registryKeySet,
     schemaKeySet,
     registryServiceMap,
-    loadEnvFound,
   });
 
   // Check .env.example drift
@@ -389,11 +601,11 @@ function main(): void {
 
   if (jsonMode) {
     console.log(JSON.stringify({ ...report, exampleDrift }, null, 2));
-    exit(report.fail.length + (exampleDrift ? 1 : 0) > 0 ? 1 : 0);
+    exit(failureCount(report, exampleDrift) > 0 ? 1 : 0);
   }
 
   printReport(report, exampleDrift);
-  exit(report.fail.length + (exampleDrift ? 1 : 0) > 0 ? 1 : 0);
+  exit(failureCount(report, exampleDrift) > 0 ? 1 : 0);
 }
 
 // Only run when this file is the entrypoint (tsx env-check.ts), not when imported by tests.

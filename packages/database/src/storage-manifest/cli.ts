@@ -11,16 +11,17 @@
 // canonical bytes against the committed file byte-for-byte, so any drift in an
 // input (a new table, a renamed column, an added capability) is caught.
 //
-// --check is NOT wired into `pnpm gate` or any CI workflow today, so it only
-// catches drift when someone runs it. Adding a schema table or capability
-// without re-running `pnpm schema:manifest` therefore lands a stale manifest
-// silently.
+// --check runs in `pnpm gate`, `pnpm gate:full` and the pipeline `checks` job.
+// It did not until #2823, and the committed manifest had by then missed the
+// eight `tacho.*` tables migration 20260908120000 added: adding a table or a
+// capability without re-running `pnpm schema:manifest` landed a stale manifest
+// with every check green.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { buildManifest, manifestSummary } from "./generate";
-import { canonicalJson } from "./canonical-json";
+import { canonicalJson, contentHashOf } from "./canonical-json";
 import type { StorageManifest } from "./types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -64,8 +65,15 @@ function main(): void {
         "storage-manifest DRIFT DETECTED — committed file is stale.",
       );
       const committedManifest = JSON.parse(committed) as StorageManifest;
+      // Recompute over the committed body rather than printing its recorded
+      // `contentHash` field: a hand-edited manifest carries a hash of the
+      // content it used to have, so the recorded value can match the
+      // regenerated one on a file that has genuinely drifted — two identical
+      // hashes under a DRIFT DETECTED banner read as a bug in the check.
       console.error(
-        `  committed contentHash: ${committedManifest.contentHash}`,
+        `  committed contentHash: ${contentHashOf(
+          committedManifest as unknown as Record<string, unknown>,
+        )}`,
       );
       console.error(`  regenerated contentHash: ${manifest.contentHash}`);
       console.error("  Run `pnpm schema:manifest` and commit the result.");

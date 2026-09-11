@@ -1,17 +1,24 @@
 #!/usr/bin/env tsx
 /**
- * ensure-e2e-failure-ticket.ts — idempotent Linear ticket for a failing nightly e2e job.
+ * ensure-e2e-failure-ticket.ts — idempotent Linear ticket for a failing nightly job.
  *
- * When the nightly e2e job fails this script is invoked on-failure. It searches
- * Linear for an existing OPEN "nightly e2e failing" tracking ticket (identified by a
- * hidden marker in its description). If found, it appends a comment with the failing
+ * When a nightly job fails this script is invoked on-failure. It searches Linear
+ * for an existing OPEN tracking ticket for THAT job (identified by a hidden
+ * marker in its description). If found, it appends a comment with the failing
  * run URL + commit SHA. If not found, it creates the ticket with that info.
+ *
+ * The name says e2e because that is the only job it once covered, and the name
+ * is kept so the workflow step, the `e2e:failure-ticket` package script and
+ * this file stay the single place this behaviour lives. It now serves every
+ * nightly job: NIGHTLY_FAILED_JOB names which one, defaulting to "e2e" so the
+ * marker it has always searched for is byte-identical.
  *
  * Idempotent: one rolling tracker ticket — never creates duplicates. The ticket
  * stays OPEN until a human closes it, signalling the suite is green again.
  *
- * Usage (CI — called on-failure from .github/workflows/nightly.yml):
- *   pnpm e2e:failure-ticket
+ * Usage (CI — called on-failure from .github/workflows/nightly.yml, from both
+ * the `e2e` job and each leg of the `full` matrix):
+ *   NIGHTLY_FAILED_JOB=typecheck pnpm e2e:failure-ticket
  *
  * Three outcomes, honestly reported (#2555):
  *   1. No LINEAR_API_KEY configured (e.g. a fork) → silent no-op, exit 0.
@@ -25,11 +32,12 @@
  *      worded differently from a transient network blip (see
  *      `isPermanentFailure`).
  *   3. Success → ticket filed or updated, exit 0.
- * In every case the script exits 0. The nightly e2e job's own conclusion is
+ * In every case the script exits 0. The nightly job's own conclusion is
  * decided by the tests, never by this script — a Linear outage must not
  * flip the job red, and a Linear success must not paper over a red suite.
  *
  * Env vars (all provided by GitHub Actions context):
+ *   NIGHTLY_FAILED_JOB    — which job failed (e2e, lint, typecheck, …); default e2e
  *   LINEAR_API_KEY        — repo secret (lin_api_… personal key)
  *   LINEAR_PROJECT_ID     — repo var (e.g. oxagen-v2-355ea6b2a3f7)
  *   GITHUB_RUN_ID         — e.g. 14567890123
@@ -51,7 +59,22 @@ const GITHUB_REPOSITORY =
   process.env["GITHUB_REPOSITORY"] ?? "oxagen-ai/oxagen-monorepo";
 
 /** Marker embedded in the tracker description so we can find our own ticket. */
-const MARKER = "<!-- oxagen:e2e-failure-tracker v1 -->";
+/**
+ * Which nightly job failed, and therefore which tracker this run belongs to.
+ *
+ * The nightly is two jobs, not one: `e2e`, and a `full` matrix of lint,
+ * typecheck, test:unit and build. Only `e2e` ever filed a ticket, so a nightly
+ * that went red on typecheck — as 2026-09-10 did, on @oxagen/engram — filed
+ * nothing, and the issue's title ("nightly test failures don't file a ticket")
+ * was only half true (#2555).
+ *
+ * Each job gets its OWN rolling tracker. One shared ticket would mean a red
+ * typecheck appending comments to a ticket about the browser suite, and neither
+ * failure legible. Defaulting to "e2e" keeps the existing marker byte-identical,
+ * so the tracker this has always looked for is still the one it finds.
+ */
+const FAILED_JOB = process.env["NIGHTLY_FAILED_JOB"] ?? "e2e";
+const MARKER = `<!-- oxagen:${FAILED_JOB}-failure-tracker v1 -->`;
 const ENDPOINT = "https://api.linear.app/graphql";
 
 /** Mac Anderson's Linear UUID — assignee for all auto-filed tickets. */
@@ -62,7 +85,7 @@ const LABEL_SLUGS = ["testing", "ci", "reliability"] as const;
 type LabelSlug = (typeof LABEL_SLUGS)[number];
 
 function log(...args: unknown[]): void {
-  console.log("[e2e-failure-ticket]", ...args);
+  console.log(`[${FAILED_JOB}-failure-ticket]`, ...args);
 }
 
 /** GitHub Actions run URL for the failing run. */
@@ -188,7 +211,7 @@ async function findTracker(): Promise<TrackerIssue | null> {
 async function appendComment(issueId: string): Promise<void> {
   type CommentData = { commentCreate: { success: boolean } };
   const body = [
-    `**Nightly e2e still failing** — run [${GITHUB_RUN_ID}](${runUrl()}) on commit \`${shortSha()}\`.`,
+    `**Nightly ${FAILED_JOB} still failing** — run [${GITHUB_RUN_ID}](${runUrl()}) on commit \`${shortSha()}\`.`,
     "",
     `> Commit: \`${GITHUB_SHA}\``,
     `> Run: ${runUrl()}`,
@@ -214,10 +237,10 @@ async function createTracker(
 ): Promise<{ id: string; identifier: string; url: string }> {
   const description = [
     MARKER,
-    "## Nightly e2e suite is failing",
+    `## Nightly ${FAILED_JOB} is failing`,
     "",
     "Auto-filed by `tools/scripts/ensure-e2e-failure-ticket.ts` when the nightly",
-    "`e2e` job in `.github/workflows/nightly.yml` fails.",
+    `\`${FAILED_JOB}\` job in \`.github/workflows/nightly.yml\` fails.`,
     "",
     "**This ticket stays open as a rolling tracker.** Each new failing run appends",
     "a comment. Close it manually once the suite is green again.",
@@ -229,7 +252,7 @@ async function createTracker(
     "",
     "### Acceptance criteria",
     "- [ ] Root cause identified.",
-    "- [ ] Nightly e2e suite passes on the next scheduled run.",
+    `- [ ] Nightly ${FAILED_JOB} passes on the next scheduled run.`,
     "- [ ] No regressions introduced by the fix.",
     "",
     "### Risks",
@@ -260,7 +283,7 @@ async function createTracker(
         priority: 1,
         // S (2) — diagnosis + fix is typically half-day; can grow but starts here.
         estimate: 2,
-        title: "Nightly e2e suite failing",
+        title: `Nightly ${FAILED_JOB} failing`,
         description,
       },
     },
@@ -337,12 +360,12 @@ export function failureReport(err: unknown): {
   const detail = err instanceof Error ? err.message : String(err);
   const permanent = isPermanentFailure(err);
   const headline = permanent
-    ? "The nightly e2e failure ticket was NOT filed, and will not be filed until someone fixes the Linear key."
-    : "The nightly e2e failure ticket was not filed this run.";
+    ? `The nightly ${FAILED_JOB} failure ticket was NOT filed, and will not be filed until someone fixes the Linear key.`
+    : `The nightly ${FAILED_JOB} failure ticket was not filed this run.`;
   return {
-    annotation: `::error title=e2e failure ticket not filed::${headline} ${detail}`,
+    annotation: `::error title=${FAILED_JOB} failure ticket not filed::${headline} ${detail}`,
     summary: [
-      "### e2e failure ticket not filed",
+      `### ${FAILED_JOB} failure ticket not filed`,
       "",
       headline,
       "",
@@ -359,7 +382,7 @@ export function failureReport(err: unknown): {
 export function reportFailure(err: unknown): void {
   const { annotation, summary } = failureReport(err);
   console.error(
-    "[e2e-failure-ticket] FAILED:",
+    `[${FAILED_JOB}-failure-ticket] FAILED:`,
     err instanceof Error ? err.message : err,
   );
   console.log(annotation);

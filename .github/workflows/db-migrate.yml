@@ -49,6 +49,11 @@ concurrency:
   group: db-migrate-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
+# This workflow reads PRODUCTION_DATABASE_URL and needs nothing but the code.
+# Stated rather than inherited from the repository default.
+permissions:
+  contents: read
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
@@ -63,10 +68,12 @@ jobs:
     # with no second person involved. Naming a reviewer that does not exist is
     # worse than naming none, because it is the reason someone stops looking.
     environment: ${{ github.event.inputs.target }}
-    env:
-      # Mirror pipeline.yml: pick the prod or preview connection string. Atlas's
-      # `ci` env reads getenv("DATABASE_URL").
-      DATABASE_URL: ${{ github.event.inputs.target == 'production' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
+    # DATABASE_URL is deliberately NOT set at job level. The step below is its
+    # one writer, via $GITHUB_ENV, because that step has to rewrite the value
+    # and a job-level `env:` of the same name would leave which one wins to
+    # runner precedence — an implementation detail carrying the whole point of
+    # the step. One writer, no precedence question. Atlas's `ci` env reads
+    # getenv("DATABASE_URL").
     defaults:
       run:
         working-directory: packages/database
@@ -80,12 +87,73 @@ jobs:
           version: v1.2.2
 
       - name: Guard — DATABASE_URL is set
+        env:
+          # Mirror pipeline.yml: pick the prod or preview connection string.
+          # Scoped to this step; the composed value below is what every later
+          # step sees.
+          SECRET_URL: ${{ github.event.inputs.target == 'production' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
         run: |
-          if [ -z "${DATABASE_URL:-}" ]; then
+          if [ -z "${SECRET_URL:-}" ]; then
             echo "::error::DATABASE_URL secret for target '${{ github.event.inputs.target }}' is empty. Check the PRODUCTION_DATABASE_URL / PREVIEW_DATABASE_URL secret."
             exit 1
           fi
+          echo "DATABASE_URL=$SECRET_URL" >> "$GITHUB_ENV"
           echo "Target: ${{ github.event.inputs.target }} — DATABASE_URL is set (value masked)."
+
+      # Without this the directory cannot be applied by anything that is not a
+      # Postgres superuser, which every managed cluster is not (#1368). The
+      # seed in 20260614000000 inserts mcp.registries' global row with
+      # org_id = NULL, and the tenant_isolation policy in force at that point
+      # in history has an `org_id IS NULL` arm in USING and none in WITH CHECK,
+      # so the insert is refused 42501. A forward migration cannot reach back
+      # ninety files to fix the policy the seed runs under, and the historical
+      # file's hash is in atlas.sum, so the connection is the only place the
+      # fix can live. `app.rls_bypass` is a GUC the policies read rather than a
+      # privilege — the role keeps NOSUPERUSER NOBYPASSRLS. See
+      # infra/tools/run-db-migrations.sh for the long version.
+      #
+      # The secret may or may not already carry a query string, so the
+      # separator is chosen rather than assumed. The composed value is masked
+      # before it is exported: GitHub redacts the secret substring inside a
+      # longer string, but the mask is stated here rather than relied upon.
+      - name: Carry the RLS bypass on the migration connection
+        run: |
+          set -euo pipefail
+
+          # Already carrying it turned ON is fine and is not worth a second
+          # copy. Carrying it turned OFF is not the same thing at all, and the
+          # loose match used to print the reassuring "left alone" before the
+          # apply failed at file 14 anyway.
+          case "$DATABASE_URL" in
+            *app.rls_bypass%3Don*|*app.rls_bypass=on*)
+              echo "The secret already turns app.rls_bypass on. Left alone."
+              exit 0 ;;
+            *app.rls_bypass*)
+              echo "::error::The connection string sets app.rls_bypass to something other than 'on'."
+              echo "::error::The seed in 20260614000000 is refused unless it is on — see ADR-054."
+              exit 1 ;;
+          esac
+
+          # A secret carrying some OTHER `options=` is the one case this must
+          # not paper over. libpq takes a single `options` parameter, so a
+          # second one does not merge — one of the two silently wins, and which
+          # is not something to find out against a database. Stop and say so.
+          case "$DATABASE_URL" in
+            *options=*)
+              echo "::error::The connection string already sets an 'options' parameter."
+              echo "::error::libpq takes only one, so appending a second would silently drop either it or the RLS bypass."
+              echo "::error::Add -c app.rls_bypass=on to the existing options in the secret instead."
+              exit 1 ;;
+          esac
+
+          case "$DATABASE_URL" in
+            *\?*) sep='&' ;;
+            *)    sep='?' ;;
+          esac
+          composed="${DATABASE_URL}${sep}options=-c%20app.rls_bypass%3Don"
+          echo "::add-mask::$composed"
+          echo "DATABASE_URL=$composed" >> "$GITHUB_ENV"
+          echo "Appended options=-c app.rls_bypass=on to the connection (separator '$sep')."
 
       # A hosted runner is outside the VPC. On the current account
       # (916294258235) Aurora sits in private subnets and its only security

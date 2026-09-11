@@ -61,9 +61,18 @@ url() { # url <user> <password> <database> [extra query]
 # writes. Granting it costs no privilege the guard is looking for: it is a GUC
 # the policies read, not a permission.
 #
-# TODAY'S PRODUCTION DOES NOT SET IT, and as of the 2026-08-27 cutover it does
-# need to. That is a finding about the deploy rather than about this script, and
-# it is filed as #2652 and #1368 — two views of one defect.
+# PRODUCTION NOW SETS IT TOO. It did not until #1368, and as of the 2026-08-27
+# cutover it had to: `infra/tools/run-db-migrations.sh` and
+# `.github/workflows/db-migrate.yml` both append the same percent-encoded
+# `options` parameter to their connection. ADR-054 records why the fix lives on
+# the connection rather than in the policy — Atlas replays in version order, so
+# a forward migration is ninety files too late to change the policy the seed
+# runs under, and widening the WITH CHECK today would re-admit a global row the
+# schema deliberately dropped at 20260617120000.
+#
+# So SIM_OPTS is not scaffolding. Removing it as apparent dead weight fails this
+# job on file 14 of the directory, which is the point: this line is the standing
+# proof that the production path needs the one it carries.
 #
 # The reasoning that used to sit here was written before the cutover and has
 # been corrected rather than deleted, because the *shape* of it is still how the
@@ -77,9 +86,9 @@ url() { # url <user> <password> <database> [extra query]
 #
 # Aurora has no superuser. So the arrangement that made the seed land no longer
 # exists, and a rebuild from empty would be refused by the policy exactly as
-# this script simulates. Whether the fix is to set `app.rls_bypass` on the
-# migration path or to give the WITH CHECK clause the `org_id IS NULL` arm its
-# USING already has is #2652's to decide.
+# this script simulates. That was #2652's to decide and it is decided: the
+# migration path sets `app.rls_bypass`, the policy keeps its narrower WITH
+# CHECK, and ADR-054 holds the reasoning.
 SIM_OPTS="&options=-c%20app.rls_bypass%3Don"
 
 SUPERUSER_URL="$(url "$PGSUPERUSER" "$PGSUPERPASS" "$PGSUPERDB")"

@@ -1,7 +1,4 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
-import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
-import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
-import { chatPersistStream } from "./functions/chat.persist-stream";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -38,9 +35,6 @@ import { observabilityCaptureFailure } from "./functions/observability.capture-f
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   billingDunningSweep,
-  stripeSyncSubscription,
-  stripeSyncInvoice,
-  chatPersistStream,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,

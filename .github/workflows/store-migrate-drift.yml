@@ -1,0 +1,283 @@
+# store-migrate-drift.yml — does production carry the store schema we committed?
+#
+# The gap this closes (#1370). A ClickHouse or Neo4j schema change merges green
+# and reaches no database. The `test` and `e2e` jobs both run `db-migrate.ts`
+# against their own ephemeral service containers, so the migrations are proven
+# to APPLY on every PR — what nothing proved is that anybody applied them to the
+# store the platform uses. Postgres has `atlas migrate status` and a revision
+# table to answer that; these two had neither a caller nor an equivalent.
+#
+# It has already been paid for once. Production ClickHouse carried no schema at
+# all from the 2026-08-27 cutover onward, and the API's error sink failed on
+# every capture with `Table oxagen.error_events does not exist`. Nothing
+# reported it, because a failing error reporter is the one component whose
+# failure it cannot report. `store-migrate.yml` beside this file is how the
+# schema gets applied; this is the thing that notices it has not been.
+#
+# Read-only, by construction. It opens the same tunnels `store-migrate.yml`
+# opens, runs two SELECT-shaped queries, and compares them with lists from the
+# repository. `infra/tools/tests/check-store-drift.test.sh` asserts that the
+# script invokes no runner and sends no write statement — a scheduled job that
+# could apply would quietly become the thing that migrates production at 3am,
+# which is the decision #1341 already made the other way.
+#
+# Why scheduled rather than per-PR: a PR cannot reach production, and a check
+# that ran on every PR would be red for every PR between adding a migration and
+# applying it — which is a normal state, not a defect. Daily is the resolution
+# that matters for "a schema change merged a while ago and never landed".
+name: Store Drift (scheduled)
+
+on:
+  schedule:
+    # 06:20 UTC. Off the hour on purpose: the hour is when every scheduled job
+    # on GitHub starts at once and the queue is longest.
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: store-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  # A red scheduled run is easy to not look at. The last step turns a failure
+  # into an issue, which is what makes this visible rather than merely recorded.
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      # Without the plugin `start-session` fails on "SessionManagerPlugin is
+      # not found", which reads like a missing instance rather than a missing
+      # package on the runner.
+      - name: Install the Session Manager plugin
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/sm.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+          sudo dpkg -i /tmp/sm.deb
+          session-manager-plugin --version
+
+      # Neo4j keeps no migration ledger, so the only way to ask what it has is
+      # to ask it. cypher-shell comes from Neo4j's own apt repository; the
+      # runner has no Neo4j otherwise.
+      - name: Install cypher-shell
+        run: |
+          set -euo pipefail
+          curl -fsSL https://debian.neo4j.com/neotechnology.gpg.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/neo4j.gpg
+          echo "deb [signed-by=/usr/share/keyrings/neo4j.gpg] https://debian.neo4j.com stable latest" \
+            | sudo tee /etc/apt/sources.list.d/neo4j.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cypher-shell
+          cypher-shell --version
+
+      # By tag, not by a pinned id: the node is replaced whenever its user data
+      # changes, and a pinned id points at a terminated box after the first
+      # replacement. Same reasoning as the deploy and store-migrate.yml.
+      - name: Find the node
+        id: node
+        run: |
+          set -euo pipefail
+          INSTANCE=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=oxagen-app" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          if [ "$(printf '%s' "$INSTANCE" | wc -w)" -ne 1 ]; then
+            echo "::error::expected exactly one running instance tagged Name=oxagen-app, got: $INSTANCE"
+            exit 1
+          fi
+          echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
+          echo "node: $INSTANCE"
+
+      # Both stores bind 127.0.0.1 on the node and neither is exposed to the
+      # VPC, so a forwarded port is the only way in. Backgrounded, then waited
+      # on: `start-session` does not return once the tunnel is up.
+      - name: Open the tunnels
+        run: |
+          set -euo pipefail
+          open_tunnel() {
+            local remote=$1 local_port=$2 label=$3
+            aws ssm start-session \
+              --target "${{ steps.node.outputs.instance }}" \
+              --document-name AWS-StartPortForwardingSession \
+              --parameters "{\"portNumber\":[\"$remote\"],\"localPortNumber\":[\"$local_port\"]}" \
+              > "/tmp/tunnel-$label.log" 2>&1 &
+            echo $! > "/tmp/tunnel-$label.pid"
+          }
+          open_tunnel 8123 8123 clickhouse
+          open_tunnel 7687 7687 neo4j
+
+          # Waited for rather than slept through: SSM takes a few seconds and a
+          # fixed sleep is either short on a bad day or wasted on a good one.
+          for port in 8123 7687; do
+            opened=0
+            for _ in $(seq 1 30); do
+              if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                echo "  port $port is open"
+                opened=1
+                break
+              fi
+              sleep 2
+            done
+            # Naming the port that never opened turns "could not be read" into
+            # a cause. Not fatal here: the check below produces the right
+            # verdict either way, and a store answering over one tunnel while
+            # the other is dead is worth seeing rather than aborting on.
+            [ "$opened" = "1" ] || echo "::warning::port $port never opened after 60s"
+          done
+          echo "--- tunnel logs ---"
+          tail -3 /tmp/tunnel-*.log || true
+
+      - name: Read the production store config
+        run: |
+          set -euo pipefail
+          # Written to the environment file rather than echoed: these are
+          # SecureString values and a `set -x` here would print them.
+          for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+            value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
+              --with-decryption --query Parameter.Value --output text)
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
+          echo "read 7 parameters"
+
+      # The parameters name the stores as the node reaches them, over loopback.
+      # This runner reaches them over a forwarded port on its own loopback, so
+      # the host is right and only the scheme/port need to survive the trip.
+      # Rewritten here rather than in the script, because the tunnel is this
+      # workflow's arrangement and the script should not have to know about it.
+      - name: Point the endpoints at the tunnel
+        run: |
+          set -euo pipefail
+          echo "CLICKHOUSE_URL=http://127.0.0.1:8123/" >> "$GITHUB_ENV"
+          echo "NEO4J_URI=bolt://127.0.0.1:7687" >> "$GITHUB_ENV"
+          echo "endpoints point at the forwarded ports"
+
+      # The exit code is captured rather than allowed to fail the step, because
+      # the three outcomes this script distinguishes have to survive into the
+      # reporting below. The run is failed at the end instead, so a red run
+      # still means what it means.
+      - name: Compare production against this repository
+        id: drift
+        run: |
+          set +e
+          bash infra/tools/check-store-drift.sh | tee /tmp/drift.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # Matches infra-drift.yml next door: found by a dedicated label rather
+      # than by matching a title, closed only on a real clean answer, and
+      # written with github-script for the same reason that file uses it.
+      #
+      # The distinction that matters here is the one the script exists to draw.
+      # Exit 2 means the stores could not be read, which is NOT the same as a
+      # store being behind and is NOT a recovery. So it neither closes the
+      # issue nor claims drift — it says the check did not happen. A recovery
+      # is claimed off an answer, never off the absence of one.
+      - name: File, update, or close the drift issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          CODE: ${{ steps.drift.outputs.code }}
+        with:
+          script: |
+            const fs = require('fs')
+            const code = process.env.CODE || '2'
+            const LABEL = 'store-drift'
+            const { owner, repo } = context.repo
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`
+
+            const existing = (await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: LABEL,
+            })).data[0]
+
+            if (code === '0') {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Both stores carry the schema this repository declares, as of ${new Date().toISOString()}. Closing.`,
+                })
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, state: 'closed',
+                })
+              }
+              core.info('both stores current')
+              return
+            }
+
+            let detail = ''
+            try { detail = fs.readFileSync('/tmp/drift.txt', 'utf8').slice(-6000) }
+            catch { detail = '(output unavailable)' }
+
+            const behind = code === '1'
+            const title = behind
+              ? 'Production store schema is behind this repository'
+              : 'The store drift check could not read the stores'
+
+            let body = behind
+              ? 'A committed ClickHouse or Neo4j migration has not reached production.\n\n'
+                + 'Apply it with the **Store Migrate (manual)** workflow, and read its pending list before setting `apply`: '
+                + 'a store whose ledger was lost reports its whole history as pending, and applying from there is not what you want.\n'
+              : 'The check did not complete, so nothing here says the stores are current — this is not a drift report.\n\n'
+                + 'Usual causes are the SSM tunnel not coming up and a credential that no longer reads `/oxagen/production/*`.\n'
+
+            body += `\nRun: ${runUrl}\n\n<details><summary>output</summary>\n\n\`\`\`\n${detail}\n\`\`\`\n\n</details>\n`
+
+            if (existing) {
+              // Comment, and retitle only UPWARD. A slow tunnel one morning
+              // must not turn an open "the schema is behind" report into "the
+              // check could not read the stores", because the body that
+              // follows would then send the responder to the SSM runbook for a
+              // migration that genuinely has not been applied. infra-drift.yml
+              // never retitles at all; this goes one step further only in the
+              // direction that adds information.
+              if (behind && existing.title !== title) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, title,
+                })
+              }
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number, body,
+              })
+              core.info(`commented on #${existing.number}`)
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body, labels: [LABEL, 'triage'],
+              })
+              core.info(`opened #${created.data.number}`)
+            }
+
+      # The run is red when a store is behind or could not be read. Done after
+      # the issue is filed so a reporting failure cannot swallow the verdict.
+      - name: Fail the run on anything but a clean answer
+        if: always() && steps.drift.outputs.code != '0'
+        run: |
+          if [ "${{ steps.drift.outputs.code }}" = "1" ]; then
+            echo "::error::A store is behind this repository. See the issue this run filed."
+          else
+            echo "::error::The stores could not be read, so nothing here says they are current."
+          fi
+          exit 1
+
+      - name: Close the tunnels
+        if: always()
+        run: |
+          for f in /tmp/tunnel-*.pid; do
+            [ -f "$f" ] || continue
+            kill "$(cat "$f")" 2>/dev/null || true
+          done
