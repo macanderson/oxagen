@@ -41,3 +41,4 @@ Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · 
 - [github-ingestion-deliveryconfig-not-populated](github-ingestion-deliveryconfig-not-populated.md) — Zod stripped undeclared wizard fields → deliveryConfig null → owner/repo="" → GitHub 404 → 0 graph nodes · bug · 2026-06-22
 - [Atlas skips a migration whose timestamp prefix collides](atlas-duplicate-timestamp-prefix-skips-migration.md) — db:migrate reports success and the table is never created · bug · 2026-09-11 07:00pm GMT
 - [A "never throws" docstring with no try/catch behind it](jsdoc-never-throws-was-not-implemented.md) — a confident comment reads like verification and is not · observation · 2026-09-11 07:00pm GMT
+- [A timestamptz arrives as a Date or an ISO string, depending on the path](timestamptz-arrives-as-date-or-iso-string.md) — row types declare one shape and receive the other; fixtures cannot catch it · observation · 2026-09-11 07:35pm GMT
