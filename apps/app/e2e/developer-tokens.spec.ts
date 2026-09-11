@@ -18,6 +18,27 @@
  */
 
 import { test, expect } from "@playwright/test";
+
+/**
+ * For assertions that wait on a SERVER round-trip, not on the browser.
+ *
+ * Every mutation here is a Server Action followed by a revalidation, so the
+ * token list re-renders only after the server has answered. The modal
+ * confirming a new secret appears client-side and is quick; the list beneath it
+ * is not, and under CI load the gap between them exceeds Playwright's 5 s
+ * default.
+ *
+ * That gap is what made this spec flaky (#2559: "a rotating navigation timeout,
+ * one spec at a time"). The assertions were inconsistent about it — the modal
+ * asked for 10 s and 15 s, two list assertions asked for 10 s, and the rest
+ * took the 5 s default. So the slowest thing in the test had the least patience,
+ * which is exactly backwards.
+ *
+ * Naming it rather than sprinkling `{ timeout: 10_000 }` keeps the reason
+ * attached to the choice: a reader can see which assertions are waiting on a
+ * server and why they differ from the ordinary ones.
+ */
+const expectAfterServerAction = expect.configure({ timeout: 10_000 });
 import { signUpFreshUser } from "./helpers/signup";
 import { gotoStable } from "./helpers/nav";
 
@@ -53,13 +74,17 @@ test("developer tokens: create, rotate, and revoke an API key end-to-end", async
   const firstRawKey = await rawKeyCode.innerText();
   expect(firstRawKey.length).toBeGreaterThan(10);
 
-  await expect(
+  await expectAfterServerAction(
     page.getByText("No API tokens yet. Create one above to get started."),
   ).toHaveCount(0);
-  await expect(page.getByText("e2e key").first()).toBeVisible();
+  await expectAfterServerAction(
+    page.getByText("e2e key").first(),
+  ).toBeVisible();
   const rotateButton = page.getByRole("button", { name: "Rotate" });
-  await expect(rotateButton).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(1);
+  await expectAfterServerAction(rotateButton).toHaveCount(1);
+  await expectAfterServerAction(
+    page.getByRole("button", { name: "Revoke" }),
+  ).toHaveCount(1);
 
   // ── 3. Rotate — a new raw key is shown once; the old key is now revoked ────
   await rotateButton.click();
@@ -73,17 +98,27 @@ test("developer tokens: create, rotate, and revoke an API key end-to-end", async
 
   // Rotation replaces the secret but keeps exactly one key active — the old
   // secret's row moves into "Revoked / expired" alongside it.
-  await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(1);
-  await expect(page.getByText("Revoked", { exact: true })).toHaveCount(1);
+  await expectAfterServerAction(
+    page.getByRole("button", { name: "Rotate" }),
+  ).toHaveCount(1);
+  await expectAfterServerAction(
+    page.getByRole("button", { name: "Revoke" }),
+  ).toHaveCount(1);
+  await expectAfterServerAction(
+    page.getByText("Revoked", { exact: true }),
+  ).toHaveCount(1);
 
   // ── 4. Revoke the (new) active key — confirmation required ─────────────────
   await page.getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
 
-  await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(0, {
-    timeout: 10_000,
-  });
-  await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(0);
-  await expect(page.getByText("Revoked", { exact: true })).toHaveCount(2);
+  await expectAfterServerAction(
+    page.getByRole("button", { name: "Rotate" }),
+  ).toHaveCount(0);
+  await expectAfterServerAction(
+    page.getByRole("button", { name: "Revoke" }),
+  ).toHaveCount(0);
+  await expectAfterServerAction(
+    page.getByText("Revoked", { exact: true }),
+  ).toHaveCount(2);
 });
