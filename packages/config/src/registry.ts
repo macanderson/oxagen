@@ -736,20 +736,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "false",
   },
 
-  // ── Google Maps / Places ────────────────────────────────────────────────────
-  // NEITHER VAR HAS A CONSUMER. Both were declared for a billing-address
-  // autocomplete in onboarding that does not exist in apps/app: a repo-wide
-  // search for either name finds only this registry and baseEnvSchema. They
-  // still render into .env.example and still ask operators for values, so
-  // either build the address form or delete both entries (and their
-  // baseEnvSchema fields, and regenerate .env.example) — do not leave a
-  // deployed secret standing for a feature nothing calls.
-  //
-  // If the form is built: the KEY is the only value it needs in the browser
-  // (lock it down with HTTP-referrer restrictions in the Google Cloud
-  // console); the SECRET is server-only and must never carry a NEXT_PUBLIC_
-  // prefix, because Next.js inlines every NEXT_PUBLIC_ var into the bundle.
-
   // ── Billing / usage meter ────────────────────────────────────────────────────
   OXAGEN_TARGET_MARGIN: {
     group: "Billing",

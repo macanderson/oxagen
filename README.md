@@ -344,9 +344,34 @@ no secret rides in a tarball built by CI. `apps/docs` is given no prefix at all:
 it renders MDX and holds no credentials.
 
 `NEXT_PUBLIC_*` values are the exception. They are compiled into the client
-bundle, so they are build inputs and are set in the workflow. Only the three
-hostnames are set today; PostHog, the Stripe publishable key and Google Maps are
-not wired, and those features degrade until they are.
+bundle, so they have to be a build input rather than something the container
+reads at start. `deploy-node`'s "Resolve the build environment" step reads the
+same `/oxagen/production` Parameter Store prefix used at runtime — recursively,
+with decryption — and pipes the result through `tools/scripts/build-env.ts`,
+which derives the exact variable set from `ENV_REGISTRY`
+(`packages/config/src/registry.ts`, the same registry behind `.env.example` and
+`pnpm env:check`) instead of a hand-written list in the workflow. That keeps
+configuration in one system: a `requiredIn`-this-environment registry entry
+missing from both the registry's static values and Parameter Store fails the
+build; an optional `clientExposed` entry that's missing instead emits a
+`::warning::` naming the variable, so an unset public value is loud rather than
+silently `undefined` (#1182). The `gha-deploy-oxagen-platform` role already
+carries `ssm:GetParameter`/`GetParameters`/`GetParametersByPath` and
+`kms:Decrypt` scoped to `/oxagen/production` and `/oxagen/production/*`
+(`infra/stacks-new/ci-deploy/roles.tf`, `node.tf`), so this needed no new IAM
+and no second configuration system such as a GitHub Actions environment
+variable.
+
+`NEXT_PUBLIC_APP_URL`/`API_URL`/`DOCS_URL` come from the registry's own
+per-environment static values, not Parameter Store. Of the client values #1182
+originally flagged, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the one still read
+by shipping code (`apps/app/src/app/[orgSlug]/billing/subscription/subscription-body.tsx`)
+with no value in Parameter Store yet — pasting the real `pk_live_…` key there
+is the one action left, and it needs a credential this repository does not
+hold. `NEXT_PUBLIC_POSTHOG_KEY`/`_HOST` have no reader anywhere in the tree (no
+PostHog client is wired up yet), so setting them would only bake two unused
+strings into the bundle; the Google Maps pair was never wired to a consumer
+either and was deleted as dead config rather than supplied.
 
 ### Rollback
 
