@@ -143,7 +143,10 @@ else
   fail "packages/ontology/src/schema.cypher is gone — the Neo4j half of this check has no input"
 fi
 
-n=$(ls "$REPO"/packages/telemetry/src/migrations/*.sql 2>/dev/null | grep -c . || true)
+n=0
+for f in "$REPO"/packages/telemetry/src/migrations/*.sql; do
+  [[ -e $f ]] && n=$((n + 1))
+done
 if [[ $n -gt 0 ]]; then pass; else
   fail "no ClickHouse migrations found — the ClickHouse half of this check has no input"
 fi

@@ -188,8 +188,13 @@ status=0
 # --- ClickHouse ------------------------------------------------------------
 
 echo "== ClickHouse =="
-ls "$REPO"/packages/telemetry/src/migrations/*.sql |
-  xargs -n1 basename > "$WORK/ch-declared.txt"
+# A glob rather than `ls | xargs basename`, so a filename with a space could
+# not silently split into two migrations that neither exist nor are missing.
+: > "$WORK/ch-declared.txt"
+for f in "$REPO"/packages/telemetry/src/migrations/*.sql; do
+  [[ -e $f ]] || continue
+  basename "$f" >> "$WORK/ch-declared.txt"
+done
 
 # A query that fails and a store with no ledger are different answers and must
 # not collapse into one. No ledger means never migrated, which is drift; a
