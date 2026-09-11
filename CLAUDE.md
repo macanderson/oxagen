@@ -33,7 +33,7 @@ When you encounter a bug, broken path, dead value, mispriced meter, stale config
 - **Open a pull request for your work.** Open a PR against `main` (a draft early on is fine) and keep pushing to it. The PR is where CI runs the full affected gate and where the work gets reviewed and merged.
 - **Don't over-optimize for cleanliness.** Many agents touch this tree at once, so unrelated changes will occasionally land in the same branch or PR by accident, and commit history will be messy. **That is fine and expected.** Do not rebase, squash, or cherry-pick to "tidy" shared history, and do not block on perfect commit or PR boundaries. Correct, complete, pushed work beats a pretty history every time.
 - **Never burn CPU on redundant or parallel heavy runs.** Verify with the **narrowest** command that proves the change — a single package's `test:unit` / `test:coverage`, or one test file — not a whole-repo run. Before launching anything heavy, check for an in-flight run (`pgrep -fl vitest`, `pgrep -fl lefthook`) and **wait** rather than stack on top of it. Never run two full suites at once.
-- **NEVER run all tests — this is a hard rule for every agent and subagent.** Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite. Run ONLY the specific tests obviously implicated by the files you changed: map each changed file to its nearest test and run just that file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit -- grants.test.ts`). Subagents make edits and write tests but do **not** execute suites unless explicitly told to run one specific file. The full gate runs in CI on every push and PR — that is the authoritative gate, not your laptop. When you dispatch any subagent, restate this rule in its prompt verbatim.
+- **NEVER run all tests — this is a hard rule for every agent and subagent.** Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite. Run ONLY the specific tests obviously implicated by the files you changed: map each changed file to its nearest test and run just that file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit grants.test.ts`). Subagents make edits and write tests but do **not** execute suites unless explicitly told to run one specific file. The full gate runs in CI on every push and PR — that is the authoritative gate, not your laptop. When you dispatch any subagent, restate this rule in its prompt verbatim.
 - **Always start from a fresh, synced cut of `main`:**
   1. `git fetch origin`.
   2. If `origin/main` is ahead of local `main`, bring local up first: `git switch main && git rebase origin/main`, and **resolve any rebase conflicts** before continuing.
@@ -262,7 +262,7 @@ Fumadocs/MDX. Statically generated. No interactive runtime.
 ```bash
 pnpm dev                         # start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687)
 pnpm typecheck                   # run TS across the monorepo
-pnpm test                        # DO NOT run directly (see "NEVER run all tests"); use `pnpm --filter <pkg> test:unit -- <file>` for narrow runs
+pnpm test                        # DO NOT run directly (see "NEVER run all tests"); use `pnpm --filter <pkg> test:unit <file>` for narrow runs
 pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
 pnpm check:manifest --json       # machine-readable parity output
 pnpm check:contracts             # verify contract definitions
