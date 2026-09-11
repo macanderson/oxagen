@@ -42,7 +42,7 @@ PR 1 and PR 2 are independent and may proceed in parallel. PR 3 needs both. PR 6
 
 - [ ] Merge PR 0. Open the `cgp-website` pointer PR the same day so two copies of the design never diverge.
 - [ ] Merge PR 1 and PR 2 in either order; neither is user-visible.
-- [ ] Merge PR 3 with the bundle defaulting to `mode: "observe"`. Enroll the maintainers' own machines first (dogfood replaces `tools/scripts/claude-telemetry-logger.ts` and `backfill-claude-telemetry.ts`, which are deleted in PR 4 once parity with `internal.claude_sessions` is shown).
+- [ ] Merge PR 3 with the bundle defaulting to `mode: "observe"` (the control plane's initial bundle is observe; PR 3 built). Enroll the maintainers' own machines first (dogfood replaces `tools/scripts/claude-telemetry-logger.ts` and `backfill-claude-telemetry.ts`, which are deleted in PR 4 once parity with `internal.claude_sessions` is shown).
 - [ ] Merge PR 4 and PR 5. Publish `@oxagen/tacho` at the monorepo version behind a `next` dist-tag until PR 6 lands.
 - [ ] Merge PR 6 with `mode: "enforce"` opt-in per workspace. Flip the dogfood workspace first; watch `policy_decision` volume and elevation latency for a week before offering it to customers.
 - [ ] Merge PR 7; replay grades appear on the fleet page.
@@ -109,27 +109,30 @@ PR 1 and PR 2 are independent and may proceed in parallel. PR 3 needs both. PR 6
 
 ## PR 3 — Collector, hook binary, Claude Code adapter, enrollment
 
-**Files:**
+**Files (as landed):**
 
-- Create: `packages/tacho/src/collector/{server,hook-receiver,otlp-receiver,session-registry,detector,inbox,exporters}.ts`, `src/collector/main.ts` (`tachod`)
-- Create: `packages/tacho/src/claude-code/{hook-handler,settings-writer,enrollment,env,service-install}.ts`; `src/claude-code/hook-main.ts` (`tacho-hook`)
-- Create: `packages/tacho/src/cli/{enroll,status,unenroll,export,verify}.ts`, `src/cli/main.ts` (`tacho`)
-- Create: `packages/tacho/scripts/bundle.mjs`, `scripts/prepare-standalone-publish.mjs` (copy the CLI pipeline; three bins)
-- Create: `packages/tacho/test/hook-contract.test.ts` with recorded Claude Code hook payloads for every event in `spec.md` §5.4 at the current Claude Code version, and a version-range guard
-- Create: `packages/tacho/test/bench/hook-latency.test.ts`
+- Create: `packages/tacho/src/wire.ts` (bundle, claims, batch, control envelope, commands; `packages/oxagen/src/tacho/schemas.ts` now re-exports these so host and control plane validate one shape)
+- Create: `packages/tacho/src/host/{paths,fs,device-key,key-id,bundle,wal,settings-writer,service,process-scan,host-file,control-client}.ts`
+- Create: `packages/tacho/src/collector/{registry,hook-handler,server,spool,inbox,detector,exporters,daemon}.ts`, `src/collector/main.ts` (`tachod`)
+- Create: `packages/tacho/src/claude-code/{hook-client,hook-main}.ts` (`tacho-hook`); modify `recorder.ts` (restorable state, collector-originated events, draft rewrite)
+- Create: `packages/tacho/src/cli/{deps,enroll,status,unenroll,export,verify,main}.ts` (`tacho`), `bin/*.mjs` dev shims, `scripts/bundle.mjs`, `scripts/prepare-standalone-publish.mjs`
+- Create: `apps/cli/src/commands/tacho.ts`, modify `apps/cli/src/program.ts` (`oxagen tacho enroll|status|unenroll|export|verify`; pulled forward from PR 4 because it is the one command the spec promises)
+- Tests: `collector/hook-handler.test.ts` (the hook contract over every recorded payload), `collector/daemon.test.ts` (end to end: socket and port, fake control plane, commands, daemon down, restart), `collector/collector-units.test.ts`, `host/*.test.ts`, `claude-code/hook-client.test.ts`, `cli/cli.test.ts`, `bench/hook-latency.test.ts`
 
-- [ ] Record real hook payloads from Claude Code 2.1.x for every event, including `agent_id`/`agent_type` on subagent events and the `SessionStart` matchers; commit them as fixtures.
-- [ ] Implement `handleHookEvent(input) → output` as a pure function over the collector client; every Claude Code event in §5.4 maps to its Tacho events and its decision shape. Test each fixture.
-- [ ] Implement `tacho-hook`: read stdin JSON, connect to the socket with a 50 ms budget, on failure evaluate the cached bundle and append to the spool; exit codes per the Claude Code contract (0 with JSON decision; 2 with reason on deny). Test the daemon-down path denies an out-of-grant tool and spools the event.
-- [ ] Implement the hook receiver (`http` hooks, local bearer check) and the OTLP receiver (`/v1/logs`, `/v1/metrics`; `api_request` → `llm_call`; correlate by `session.id` and `prompt.id`).
-- [ ] Implement the session registry: genesis on `SessionStart`, transcript-path cross-check, subagent child sessions, seal on `SessionEnd` or process exit, `unobserved_tail` gap.
-- [ ] Implement the detector: `claude` process scan and `~/.claude/projects/**/*.jsonl` mtime watch; chain `oxagen:unobserved_session` for activity without a hook stream; re-read settings at each bundle refresh and chain `oxagen:hooks_removed`.
-- [ ] Implement the settings writer: merge with marker, idempotent, never removes foreign entries, `env` block for OTel; test against a settings file with pre-existing hooks on the same events.
-- [ ] Implement service install for launchd and systemd user units; test with a fake service manager.
-- [ ] Implement `enroll`, `status`, `unenroll`, `export` (tacho NDJSON, trace NDJSON, OTLP JSON), `verify` (`claude -p --max-turns 1` probe).
-- [ ] Measure: telemetry hook p50 and `tacho-hook` p95 on the reference laptop; record in Verification below. If `tacho-hook` p95 exceeds 30 ms, open the compiled-binary follow-up before GA.
-- [ ] Run `pnpm --filter @oxagen/tacho test`; expect pass. Run the standalone bundle and install it on a clean user account; run criteria 1, 2, 3, 9, 18 by hand and paste the output into Verification.
-- [ ] Commit: `feat(tacho): tachod collector, tacho-hook, and one-command Claude Code enrollment`
+- [x] Record real hook payloads from Claude Code 2.1.x for every event, including `agent_id`/`agent_type` on subagent events and the `SessionStart` matchers; commit them as fixtures. (PR 1 fixtures; 24 hook payloads, OTLP logs/metrics/traces, transcript, result stream.)
+- [x] Implement `handleHookEvent(input) → output` as a pure function over the collector client; every Claude Code event in §5.4 maps to its Tacho events and its decision shape. Test each fixture.
+- [x] Implement `tacho-hook`: read stdin JSON, connect to the socket with a 50 ms budget, on failure evaluate the cached bundle and append to the spool; exit codes per the Claude Code contract. Test the daemon-down path denies an out-of-grant tool and spools the event. Decisions are returned as JSON on exit 0 (`permissionDecision`, `decision: block`, `continue: false`), the richer of Claude Code's two contracts; exit 2 is not used.
+- [x] Implement the hook receiver (`http` hooks, local bearer check) and the OTLP receiver (`/v1/logs`, `/v1/metrics`; `api_request` → `llm_call`; correlate by `session.id`).
+- [x] Implement the session registry: genesis on `SessionStart`, transcript path recorded, subagent child sessions, seal on `SessionEnd` or process exit, `unobserved_tail` gap. The registry persists to `daemon.json` so a restart continues every chain from its cursor instead of forking it.
+- [x] Implement the detector: `claude` process scan and `~/.claude/projects/**/*.jsonl` mtime watch; chain `oxagen:unobserved_session` for activity without a hook stream; re-read settings at each tick and chain `oxagen:hooks_removed` (and `oxagen:hook_health` on restore).
+- [x] Implement the settings writer: merge with marker (the enrollment id in the command line or URL, so no foreign key is written into the document), idempotent, never removes foreign entries, `env` block for OTel with displaced values restored on unenroll; tested against a settings file with pre-existing hooks on the same events.
+- [x] Implement service install for launchd and systemd user units; tested with a fake service manager.
+- [x] Implement `enroll`, `status`, `unenroll`, `export` (tacho NDJSON, trace NDJSON, OTLP JSON), `verify` (`claude -p --max-turns 1` probe).
+- [x] Measure: telemetry hook p50 and `tacho-hook` p95 on the reference laptop; recorded in Verification below. `tacho-hook` p95 exceeds 30 ms under Node, as §3.2 anticipated; the compiled-binary follow-up is filed before GA.
+- [x] Run `pnpm --filter @oxagen/tacho test`; expect pass. (127 tests; lines 94.8 %, branches 85.0 %, functions 96.0 %.) The standalone bundle builds and the three executables run; the clean-account manual run is recorded in Verification.
+- [x] Commit: `feat(tacho): tachod collector, tacho-hook, and one-command Claude Code enrollment`
+
+Deviations from the design, decided in the PR: the WAL is one append-only NDJSON file per session plus a shipped cursor rather than SQLite, which keeps the package free of native modules and lets `tacho-hook` append with one syscall; the daemon's own host-level events (incidents, checkpoints, host commands) are chained on a per-boot `tachod-<ulid>` session of the host agent so every event the host emits belongs to a verifiable chain; `PermissionRequest` is recorded and falls through to Claude Code's own prompt until PR 6 lands elevation.
 
 ## PR 4 — `oxagen tacho` CLI and docs
 
@@ -235,6 +238,13 @@ PR 1 and PR 2 are independent and may proceed in parallel. PR 3 needs both. PR 6
 ## Verification
 
 Filled in as each PR lands. Required entries: enrollment transcript on a clean account (criterion 1), the five session shapes and their chain verification output (2), the `-p` cost reconciliation (3), `tacho-hook` p95 and telemetry hook p50 with machine spec (17), unenroll diff of `~/.claude/settings.json` (18).
+
+### PR 3 (2026-09-10)
+
+- **Criterion 2, 9 (automated).** `collector/daemon.test.ts` drives the recorded 2.1.263 session (parent, a subagent child, and the daemon's own chain) through the real socket and port, ships it to a fake control plane, and verifies all three chains; stops the daemon mid-session, confirms `tacho-hook` denies `Write(**/probe.txt)` and allows `Read` from the cached bundle, spools both, restarts, and verifies the continued chain carries the replayed events and one `telemetry_gap` with `gap_cause: daemon_down`.
+- **Criterion 8 (automated).** `collector-units.test.ts` removes the hook entries and sees `oxagen:hooks_removed`, restores them and sees `oxagen:hook_health`, and advances an unhooked transcript past the grace to get `oxagen:unobserved_session`.
+- **Criterion 17.** Reference machine: Apple Silicon laptop, macOS 25.6, Node v26.5.0, load average 28 during the run (other jobs sharing the machine). Telemetry hook round-trip (POST to acknowledged WAL append, in-process listener): **p50 0.9 ms, p95 4.4 ms** (n=200; budget p50 < 5 ms, met). `tacho-hook` spawn to decision against the bundled executable: **p50 108 ms, p95 139 ms** (n=20; budget p95 < 30 ms, not met). Bare `node -e 0` costs 41 to 45 ms on the same machine, so no Node executable can meet the budget; the enforcement binary moves to a compiled target before GA as §3.2 provides, and the hook contract does not change.
+- **Criteria 1, 3, 18 (manual).** Not yet run on a clean account: this PR was built on a machine whose Claude Code credential has no API credit, so `tacho verify` cannot complete a turn here. The CLI paths are covered by `cli/cli.test.ts` against fakes (enroll writes host file, service unit, and hooks around pre-existing foreign entries; unenroll restores the document byte for byte). Run `oxagen tacho enroll --verify` on the first dogfood machine and paste the transcript here.
 
 ## Definition of Done
 

@@ -9,22 +9,36 @@
   "exports": {
     ".": "./src/index.ts",
     "./claude-code": "./src/claude-code/index.ts",
+    "./collector": "./src/collector/index.ts",
+    "./host": "./src/host/index.ts",
+    "./cli": "./src/cli/index.ts",
     "./trace": "./src/trace/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bundle": "node scripts/bundle.mjs",
+    "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
+    "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone"
   },
   "dependencies": {
     "canonicalize": "1.0.8",
+    "commander": "12.1.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
+    "esbuild": "0.28.0",
+    "tsx": "4.22.3",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
+  },
+  "bin": {
+    "tacho": "./bin/tacho.mjs",
+    "tachod": "./bin/tachod.mjs",
+    "tacho-hook": "./bin/tacho-hook.mjs"
   }
 }

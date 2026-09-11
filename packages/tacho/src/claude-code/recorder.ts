@@ -51,12 +51,39 @@ export interface RecorderOptions {
     spawnToolUseId?: string;
     spawnDepth: number;
   };
+  /** Continue a chain the collector persisted before a restart. */
+  restore?: RecorderState;
 }
 
 interface SubagentLink {
   recorder: SessionRecorder;
   type?: string;
   open: boolean;
+}
+
+/** Everything a recorder needs to continue its chain after a restart. */
+export interface RecorderState {
+  cursor: ChainCursor;
+  turnSeq: number;
+  turnOpen: boolean;
+  promptId?: string;
+  started: boolean;
+  stopped: boolean;
+  context: Context;
+  host: Host;
+  anthropic: Anthropic;
+  harnessVersion?: string;
+  envSnapshot?: Record<string, string>;
+  totals: Partial<TranscriptTotals>;
+  children: Record<
+    string,
+    {
+      state: RecorderState;
+      type?: string;
+      open: boolean;
+      spawnToolUseId?: string;
+    }
+  >;
 }
 
 export interface SessionSnapshot {
@@ -111,6 +138,124 @@ export class SessionRecorder {
     this.rootSessionUuid = options.parent?.rootSessionUuid ?? this.sessionUuid;
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
+    if (options.restore) this.restore(options.restore);
+  }
+
+  private restore(state: RecorderState): void {
+    this.cursor = { ...state.cursor };
+    this.turnSeq = state.turnSeq;
+    this.turnOpen = state.turnOpen;
+    this.promptId = state.promptId;
+    this.started = state.started;
+    this.stopped = state.stopped;
+    this.context = { ...state.context };
+    this.host = { ...state.host };
+    this.anthropic = { ...state.anthropic };
+    this.harnessVersion = state.harnessVersion ?? this.harnessVersion;
+    this.envSnapshot = state.envSnapshot;
+    Object.assign(this.totals, state.totals);
+    for (const [subagentId, link] of Object.entries(state.children)) {
+      const recorder = new SessionRecorder({
+        context: this.options.context,
+        harnessSessionId: this.harnessSessionId,
+        scope: this.options.scope,
+        parent: {
+          sessionUuid: this.sessionUuid,
+          rootSessionUuid: this.rootSessionUuid,
+          subagentId,
+          ...(link.type !== undefined ? { subagentType: link.type } : {}),
+          ...(link.spawnToolUseId !== undefined
+            ? { spawnToolUseId: link.spawnToolUseId }
+            : {}),
+          spawnDepth: (this.options.parent?.spawnDepth ?? 0) + 1,
+        },
+        restore: link.state,
+      });
+      this.children.set(subagentId, {
+        recorder,
+        ...(link.type !== undefined ? { type: link.type } : {}),
+        open: link.open,
+      });
+    }
+  }
+
+  /** The chain position and sticky context, for persistence across restarts. */
+  state(): RecorderState {
+    const children: RecorderState["children"] = {};
+    for (const [subagentId, link] of this.children) {
+      children[subagentId] = {
+        state: link.recorder.state(),
+        ...(link.type !== undefined ? { type: link.type } : {}),
+        open: link.open,
+        ...(link.recorder.options.parent?.spawnToolUseId !== undefined
+          ? { spawnToolUseId: link.recorder.options.parent.spawnToolUseId }
+          : {}),
+      };
+    }
+    return {
+      cursor: { ...this.cursor },
+      turnSeq: this.turnSeq,
+      turnOpen: this.turnOpen,
+      ...(this.promptId !== undefined ? { promptId: this.promptId } : {}),
+      started: this.started,
+      stopped: this.stopped,
+      context: { ...this.context },
+      host: { ...this.host },
+      anthropic: { ...this.anthropic },
+      ...(this.harnessVersion !== undefined
+        ? { harnessVersion: this.harnessVersion }
+        : {}),
+      ...(this.envSnapshot !== undefined
+        ? { envSnapshot: this.envSnapshot }
+        : {}),
+      totals: { ...this.totals },
+      children,
+    };
+  }
+
+  /** The chain head after the last sealed event. */
+  get chainCursor(): ChainCursor {
+    return this.cursor;
+  }
+
+  /** Open child recorders, for routing and status. */
+  get openChildren(): ReadonlyMap<string, SessionRecorder> {
+    const out = new Map<string, SessionRecorder>();
+    for (const [id, link] of this.children) {
+      if (link.open) out.set(id, link.recorder);
+    }
+    return out;
+  }
+
+  /**
+   * Seal a collector-originated event on this chain (a policy decision, a
+   * checkpoint, a gap, an applied command). Body members are the typed
+   * columns of the kind; extra facts go to `attrs`.
+   */
+  sealCollectorEvent(
+    kind: TachoKind,
+    body: Record<string, unknown>,
+    fields: {
+      ts?: string;
+      source?: TachoEvent["source"];
+      hook_event_name?: string;
+      attrs?: Record<string, string>;
+    } = {},
+  ): TachoEvent {
+    if (kind === "agent_start") this.started = true;
+    if (kind === "agent_stop") {
+      this.stopped = true;
+      this.turnOpen = false;
+    }
+    return this.seal(kind, body, {
+      ts: fields.ts ?? this.now(),
+      source: fields.source ?? "collector",
+      ...(fields.hook_event_name !== undefined
+        ? { hook_event_name: fields.hook_event_name }
+        : {}),
+      attrs: fields.attrs ?? {},
+      turn: {},
+    });
   }
 
   get hasStarted(): boolean {
@@ -287,6 +432,7 @@ export class SessionRecorder {
     raw: unknown,
     env: Record<string, string | undefined>,
     at?: string,
+    rewrite?: (draft: HookDraft) => HookDraft,
   ): TachoEvent[] {
     const drafts = normalizeHook(raw, env, { sessionUuid: this.sessionUuid });
     const first = drafts[0];
@@ -329,7 +475,7 @@ export class SessionRecorder {
           ),
         );
       }
-      out.push(...child.ingestHook(raw, env, ts));
+      out.push(...child.ingestHook(raw, env, ts, rewrite));
       if (first.hook_event_name === "SubagentStop") {
         out.push(...child.finalize("completed", ts));
         const link = this.children.get(subagentId);
@@ -359,7 +505,7 @@ export class SessionRecorder {
     }
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
-      out.push(this.sealHookDraft(draft, env, ts));
+      out.push(this.sealHookDraft(rewrite ? rewrite(draft) : draft, env, ts));
     }
     return out;
   }
