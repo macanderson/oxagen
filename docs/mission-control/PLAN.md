@@ -35,15 +35,30 @@ to be *carried*, not authored. See `TOOL-MATRIX.md` for the row-by-row mapping.
 
 ### 2.1 The frontend is kept and emptied. It is not rebuilt.
 
-Measured in `apps/app`:
+Measured in `apps/app` by **import reachability** from the surviving route set, not by
+directory name. `tools/scripts/mission-control/reachability.mjs` walks the import graph from
+the ten surviving pages plus the sign-in/callback routes and every Next.js entry convention
+(`layout`, `middleware`, `route`, `error`, `manifest`), and asks which files nothing surviving
+can reach.
 
-| Layer | LOC | Disposition |
-|---|---|---|
-| `src/app` — 70 routes | 80,652 | 52 absorbed, 9 sign-in/callback stay, 9 fold into survivors |
-| `src/components` | 99,680 | ~85,000 belongs to deleted pages |
-| ↳ `shell`,`ui`,`auth`,`avatar`,`brand`,`loading`,`lists`,`org`,`workspace`,`pwa` | 14,616 | **keep** |
-| `src/hooks` + `src/lib` | 14,412 | mostly keep |
-| `packages/ui` | 9,860 | **keep** |
+| Set | Files | LOC | Disposition |
+|---|---|---|---|
+| Reachable from a surviving route | 318 | 43,685 | **keep** |
+| Reachable **only** from a dying route | 318 | 61,539 | delete — proven unreachable |
+| Tests belonging to those dying files | 197 | 43,036 | delete with their subjects |
+| **Total deletion** | **515** | **104,575** | 53% of `apps/app/src` |
+| `packages/ui` | — | 9,860 | **keep** |
+
+An earlier estimate in this document put the deletion at ~85,000 LOC of components based on
+directory names. Reachability is the better instrument and disagrees with it in both
+directions: it clears files in feature-named directories that a surviving page still imports,
+and it condemns files in innocuous-looking ones. The manifest is
+`docs/mission-control/delete-manifest.json`.
+
+Reachability also found 28 files that nothing imports at all. All 28 are legitimate framework
+entry points (`app/manifest.ts`, `app/robots.ts`, server actions, `*.d.ts`, vitest setup), not
+dead code — an import walk cannot see a framework convention, so it reports them as orphans.
+The other 422 "orphans" are test files, which nothing imports by construction.
 
 The stack — `next@16.3.1`, `react@19.2.6`, `@base-ui/react`, Tailwind, `better-auth`,
 `lucide-react`, `motion` — is current and is what a greenfield choice would land on.

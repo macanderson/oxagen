@@ -1,0 +1,1371 @@
+{
+  "assigned": 96,
+  "assignments": [
+    {
+      "tool": "create_org",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.organizations",
+        "org.org_users",
+        "org.data_planes",
+        "iam.principals",
+        "iam.roles",
+        "billing.subscriptions",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "§17 M0 delivers \"org and workspace creation including a Neo4j database\". §5.1: an org owns a KEK, the Neo4j database, a billing account and an optional dedicated data plane — hence org.organizations (kek_key_id, neo4j_database, stripe_customer_id), org.data_planes (the initial shared-plane binding) and billing.subscriptions (the free-plan row). The creator becomes an owner (org.org_users + iam.principals) and the builtin roles are seeded per org (iam.roles, \"builtin | the seeded roles cannot be deleted\"). The proposal's auth.accounts is wrong — that is Better Auth's SSO-provider table, untouched here. Screen caveat: Appendix F classes \"create the first organization\" as a sign-in flow, not one of the ten pages; the Organization page is where an existing org is then managed, and the in-app agent's onboarding run (M1) also calls this tool."
+    },
+    {
+      "tool": "update_org",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.organizations",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Appendix E scopes this to \"name, settings, retention policy\" only — funding and routes are separate tools (set_funding_source, set_model_route in the Spend and billing group), so despite §14's \"set funding, set route\" on this screen they are not this tool's writes. The proposal's tools.policy_versions is wrong: retention policy is org.organizations.retention_days/retention_mode, not a Cedar policy version. Milestone is medium: the settings write ships with org creation at M0, but the retention tiers it configures are only enforced by the archiver at M5 (§13, §17 M5)."
+    },
+    {
+      "tool": "invite_member",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.org_users",
+        "wrk.workspace_users",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Both membership tables carry invite_token_hash/invite_expires_at and status='invited', so the invite is a row in one of them depending on scope — no separate invitations table exists. Appendix F routes both `members` and `members/pending` to the Organization page, and \"invite\" is one of its §14 primary actions. iam.principals is not written until the invitee accepts."
+    },
+    {
+      "tool": "respond_to_invite",
+      "screens": [
+        "headless"
+      ],
+      "tables": [
+        "org.org_users",
+        "wrk.workspace_users",
+        "iam.principals",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Honest answer for screens: none of the ten. Appendix F lists \"accept an invite\" among the seven sign-in flows that \"are not screens and are not counted\". It is exposed on API/MCP/CLI and on that sign-in flow, but wiring it into the Organization page would be wrong — the actor is the invitee, who has no org access yet. Acceptance flips status to 'active', sets joined_at, and creates the human principal (§6.1, bound to auth.users)."
+    },
+    {
+      "tool": "set_member_role",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.org_users",
+        "wrk.workspace_users",
+        "iam.roles",
+        "iam.principal_role_assignments",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "\"change role\" is a §14 Organization primary action. Writes the role column on the membership row and the matching iam.principal_role_assignments row (reading iam.roles to resolve the role); removal is role `none`, which sets status='removed' rather than deleting. The mockup states outright that changing a role \"passes IAM, writes an audit record\"."
+    },
+    {
+      "tool": "list_members",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.org_users",
+        "wrk.workspace_users",
+        "auth.users",
+        "iam.roles",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Read-only; auth.users supplies name/email/two-factor for the People tab."
+    },
+    {
+      "tool": "create_workspace",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users",
+        "wrk.repositories",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "The proposal's M4 is wrong: M0's acceptance test is literally \"A workspace cannot be created without a main repo\", and M0 delivers \"workspace creation including a Neo4j database and repo binding\". The absorbed configure_repo writes wrk.repositories with role='main' and production_branch — the table the proposal missed. The repo binding is later managed on Ontology's Repositories tab, but creation is a §14 Organization action (\"create workspace\")."
+    },
+    {
+      "tool": "update_workspace",
+      "screens": [
+        "Organization",
+        "Spend"
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "billing.budgets",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Appendix F folds the workspace `settings`/`settings/general` routes into the Organization page; the budget half it absorbs (update_budget_policy) surfaces on Spend, whose §14 job lists \"Budgets\" and whose action is \"set budget\". Note the spec overlaps itself here: the Spend and billing group has dedicated set_budget and set_model_route tools, so billing.budgets is shared and model routes are really set_model_route's (org.organizations.model_routes). The proposal's audit.legal_holds is wrong — retention_mode on wrk.workspaces is not a legal hold. Milestone medium: governance/retention/settings ship with M0 workspace creation, but budgets land M2 and promotion thresholds (§9.2) land M3, so the tool is completed across three milestones."
+    },
+    {
+      "tool": "list_workspaces",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users",
+        "org.organizations",
+        "org.org_users"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "It absorbs list_orgs as well, so it reads the org tables too; it also backs the workspace/org switcher present on every screen, but the Workspaces tab on Organization is its §14 surface."
+    },
+    {
+      "tool": "get_data_plane",
+      "screens": [
+        "Organization",
+        "Audit"
+      ],
+      "tables": [
+        "org.data_planes"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Two screens: Organization has the Data plane tab, and §14's Audit job explicitly names \"data plane\" alongside audit events and key rotation. Read-only and the DSN is never returned, so config_ciphertext is never decrypted out of this call. Part of M0 tenancy (ADR-042 data planes carry over)."
+    },
+    {
+      "tool": "set_data_plane",
+      "screens": [
+        "Organization",
+        "Approvals"
+      ],
+      "tables": [
+        "org.data_planes",
+        "control.approvals",
+        "audit.audit_events"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "Approvals is the panel, hosted on Fleet (and as a strip on Run) — it appears there when the change is requested inside an agent run; a human owner requests it from Organization's Data plane tab. Milestone M2 rather than M0 because the tool is approval-gated by definition and control.approvals with tokens is an M2 deliverable; a dedicated plane itself is Series A (§17.1)."
+    },
+    {
+      "tool": "create_api_key",
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "tables": [
+        "iam.credentials",
+        "iam.principals",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Proposal's M4 and empty table list are both wrong. M0 delivers \"IAM\", which is iam.credentials (kind api_key/agent_credential/service_token, purpose-locked, secret_hash, expires_at). Organization's API keys tab is the primary surface (Appendix F sends `developer/tokens` there); Agents is the second surface because purpose='agent' mints the long-lived agent credential that §14's Agents job calls the \"run credential\". iam.principals because the mockup states each key becomes a service principal. I deliberately left iam.role_grants off: the mockup says \"a key carries grants, not roles\", which points at iam.credentials.scope rather than the role tables — low confidence on that one point."
+    },
+    {
+      "tool": "rotate_api_key",
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "tables": [
+        "iam.credentials",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Issues a new secret_hash and keeps the old credential valid for a grace window (so likely two rows), then records a control-plane audit event. Distinct from the Audit page's \"rotate\", which is the organization KEK (org.organizations.kek_key_id) — do not wire this tool to Audit."
+    },
+    {
+      "tool": "revoke_api_key",
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "tables": [
+        "iam.credentials",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Sets revoked_at/revoked_by on iam.credentials; revoking an agent credential is what invalidates its run tokens at the next call (§6.2), which is why it also belongs on Agents (\"revoke\" is a §14 Agents action)."
+    },
+    {
+      "tool": "register_agent",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.principals",
+        "iam.role_grants",
+        "iam.principal_role_assignments",
+        "wrk.repositories",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Proposal's cost.fx_rates is nonsense. Appendix F sends `workbench/agents/new` to the Agents page, and \"register\" is its first §14 action. Important timing detail from §6.2: the call itself only opens a Context PR against the main repo (wrk.repositories is read to find it) — nothing is written to Postgres until merge, when the principal, its roles and its toolbelt are created and definition_digest/definition_commit_sha are stamped. Milestone medium for exactly that reason: identity creation is M0 IAM and agents must exist for M1's \"gateway wraps Stella and Claude Code\", but the Context PR delivery path depends on the GitHub App machinery that §17 lists under M3."
+    },
+    {
+      "tool": "update_agent",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.principals",
+        "iam.role_grants",
+        "iam.principal_role_assignments",
+        "wrk.repositories",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Same shape and the same M0/M3 tension as register_agent: a Context PR changing `.oxagen/agents/<slug>.toml`, with identity and belt updated on merge (definition_digest, definition_commit_sha, status). The mockup's agent source editor plus commit dialog on the Agents page is this tool's surface."
+    },
+    {
+      "tool": "retire_agent",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.principals",
+        "iam.principal_role_assignments",
+        "iam.credentials",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "§6.2: \"The principal is retired, never deleted, so its runs keep their identity\" — status='retired', assignments dropped, credentials revoked (the table the proposal missed). Same Context-PR dependency on M3 as the other two definition tools."
+    },
+    {
+      "tool": "get_agent",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.principals",
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments",
+        "iam.credentials",
+        "tools.tool_versions",
+        "tools.mandates"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Appendix E: \"identity, roles, belt, mandates\". The belt is grants ∩ ceiling ∩ bundle ∩ kill switches resolved against tools.tool_versions (§6.6), and iam.credentials supplies the run credential §14 asks the Agents page to show. I included tools.mandates but not tools.mandate_ledger — the ledger view is list_mandates' job (§6). Milestone medium: the identity/roles/belt read ships at M0 with IAM and the tool registry, but the mandates section only has anything to show once M2 lands mandates. The proposal put this at M2 for that reason; I think the tool itself is M0 with an M2 field."
+    },
+    {
+      "tool": "list_agents",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.principals"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Proposal's M4 and empty table list are both wrong; this is a plain read of iam.principals where kind='agent', delivered with M0's IAM."
+    },
+    {
+      "tool": "set_agent_role",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.principal_role_assignments",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "\"grant\" is a §14 Agents primary action. Writes (or expires) the assignment row and reads iam.roles; it does not itself edit iam.role_grants — that is set_role_grants."
+    },
+    {
+      "tool": "set_role_grants",
+      "screens": [
+        "Organization",
+        "Agents",
+        "Tools"
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.role_grants",
+        "wrk.workspaces",
+        "audit.audit_events"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Three screens, each grounded: Organization has the Roles tab (§14 job names \"roles\"), Agents is where a grant is made (\"grant\"), and Appendix E says its read side list_roles is \"folded into get_agent and the Tools page\". wrk.workspaces is the non-obvious write — bundle_version is documented as \"bumped on every publish or grant change\", so a grant edit must bump it to invalidate cached toolbelts (§6.6). I dropped the proposal's tools.tool_servers/tools.tool_versions/tools.credential_grants/control.tool_calls: a grant subject is a glob string, not a registry foreign key, and it never touches tool-call rows. Milestone medium: the grant table is M0 IAM, but resource_scope's Cedar conditions (iam.role_grants.conditions, §6.12) only become real at M2."
+    },
+    {
+      "tool": "enroll_host",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "control.enrollments",
+        "iam.principals",
+        "iam.credentials",
+        "audit.audit_events"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "§14 Agents lists \"enroll\" as a primary action and \"enrollment status\" in its job; mc.html's \"Wrap Claude Code\" button is in pAgents (line 4965) and pAgent's Enrollment tab (line 5130). The matrix proposal of Fleet/Run is wrong — Fleet is runs, not hosts. Tables: writes control.enrollments, creates the host principal (iam.principals, kind service/agent with harness + harness_version) and the device key (iam.credentials, kind host_device_key, purpose wrap_host, public_key); an IAM change is control-plane audit per §13.3. bundle_version_served links to the policy version it was handed (get_policy_bundle owns that read). Milestone M1: enrollment is how §7.2 wraps Claude Code and Codex, and M1's acceptance is \"the gateway wraps Stella and Claude Code\"; the signed bundle it serves hardens in M2. Also reachable from the onboarding gate at /{org} (§4.4 step 2), which §14 says is not a page."
+    },
+    {
+      "tool": "revoke_enrollment",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "control.enrollments",
+        "iam.credentials",
+        "audit.audit_events",
+        "wrk.workspaces"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Agents' primary actions include \"revoke\"; mc.html pAgent Enrollment tab has the Unenroll button (line 5140). Sets control.enrollments.status='revoked' and iam.credentials.revoked_at/revoked_by; an IAM/credential change is a control-plane audit event (§13.3). wrk.workspaces is included because §7.4 promises revoke \"suspends the host in the bundle. Denies even if the daemon is down\", which requires a bundle_version/deny_generation bump — medium confidence on that one table. M1 with enroll_host (same lifecycle); nothing in M0's delivers covers the wrapper."
+    },
+    {
+      "tool": "list_hosts",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [
+        "control.enrollments",
+        "iam.principals"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Read side of enrollment, so it sits where enrollment status is shown (§14 Agents). Joins the host principal for hostname/harness/last_seen. Milestone follows enroll_host."
+    },
+    {
+      "tool": "get_policy_bundle",
+      "screens": [
+        "Agents",
+        "Tools"
+      ],
+      "tables": [
+        "tools.policy_versions",
+        "tools.tool_versions",
+        "iam.role_grants",
+        "tools.mandates",
+        "billing.budgets",
+        "wrk.workspaces",
+        "org.organizations",
+        "control.enrollments"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "M2 is explicit: \"Bundles, commands, approvals with tokens\" and \"Cedar policy with tests and simulation\". Its real consumer is the host daemon (a long-poll every N minutes), so the UI surface is a read: the agent's computed belt on Agents (§14 \"its toolbelt … with per-tool decision rules\") and the policy version on Tools (§14 \"policy versions with their tests and simulation\"). Appendix E does not mark it headless, so it is not \"headless\". Tables are the belt formula of §6.6 (grants ∩ delegation ceiling ∩ policy bundle ∩ kill switches) plus §12.5's \"hard budgets are also enforced in the policy bundle for harness-tier runs\" and the two deny_generation counters (A.10: iam.deny_generations became columns on org.organizations and wrk.workspaces). Much of this is precompiled into tools.policy_versions, so a leaner implementation may read only that plus the two counters — hence medium."
+    },
+    {
+      "tool": "ingest_frames",
+      "screens": [
+        "headless"
+      ],
+      "tables": [
+        "control.enrollments",
+        "control.commands",
+        "audit.audit_events",
+        "cost.run_totals",
+        "audit.archive_segments"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "Appendix E marks it headless outright. M1 delivers \"Frames, chain, seal, and attestation\". The frames themselves are NOT Postgres — A.10 sends tacho_*/agent_executions to graph nodes and archive segments — so the Postgres writes are side effects: control.enrollments.last_seen_at/bundle_version_served on each ingest; command status transitions to acknowledged/applied with applied_at_seq (§7.4 says commands ride \"the next ingest response\" and §7.6 makes \"did the agent see it\" answerable from the frame that applied it); incident kinds chain_break, hooks_removed, unobserved_session, telemetry gaps into audit.audit_events with detected_by='collector' (§8.3: a repeated seq with a different hash is refused and reported); rollups into cost.run_totals (§12.7); and the seal writing audit.archive_segments (§13.3 \"written at seal time\") — medium confidence on that last one if the sealer is a separate service. The recorder also updates the per-budget running counter in billing.budgets (§12.5), which I left off as arguably the cost pipeline's write, not the ingress's."
+    },
+    {
+      "tool": "fetch_commands",
+      "screens": [
+        "headless"
+      ],
+      "tables": [
+        "control.commands",
+        "control.enrollments"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Appendix E marks it headless. Reads queued rows for the host and moves them to sent/received (§7.4 status vocabulary); authenticates against the enrollment's device key and touches last_seen_at. Milestone is the M1/M2 seam: M2's delivers names \"commands\", but M1's acceptance test is \"A run can be halted mid-loop from the UI\", which cannot pass without a control channel for hook-enrolled hosts. Read as: minimal channel in M1, full vocabulary (steer modes, kill switches, refresh_bundle) in M2."
+    },
+    {
+      "tool": "dispatch_command",
+      "screens": [
+        "Fleet",
+        "Run",
+        "Agents"
+      ],
+      "tables": [
+        "control.commands"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Fleet's primary actions are pause/resume/cancel and Run's are steer (with a delivery mode)/pause/cancel (§14); Agents' \"revoke\" is the same command. mc.html: pFleet line 3438 (fleet-wide steer), pRun lines 3698-3702 (steer/pause on the run). Writes one row per target into control.commands and nothing else — the effects (credential death on revoke, deny_generation bump on kill_switch_on) are applied by the tools that own those rows, so I did not list iam.credentials or wrk.workspaces here. Milestone: M1's acceptance test names halting a run mid-loop from the UI, and the Fleet/Run pages are M1; the steer delivery modes of §7.3 and kill_switch_on/off arrive with M2."
+    },
+    {
+      "tool": "list_runs",
+      "screens": [
+        "Fleet",
+        "Agents"
+      ],
+      "tables": [
+        "cost.run_totals"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "Fleet is literally this tool's page (\"Every run, live and recent, with its enforcement tier, replay grade, cost so far\"), and Appendix F maps sessions/workbench/dashboard onto it; the agent detail page also has a Runs tab (mc.html line 5045). The run ledger is Neo4j (A.10, §13.3), so the only Postgres read is the cost rollup behind \"cost so far\". M1 delivers \"the Fleet and Run pages with render replay\" — the matrix's M0 proposal is wrong, M0 has no UI and no frames."
+    },
+    {
+      "tool": "get_run",
+      "screens": [
+        "Run",
+        "Fleet"
+      ],
+      "tables": [
+        "cost.run_totals",
+        "control.tool_calls",
+        "control.approvals",
+        "control.commands",
+        "audit.archive_segments"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "Run is the frame-by-frame player; Fleet reads the same object for its row detail. The run, attempt and frames are graph plus segments, so Postgres supplies the receipts (control.tool_calls, §6.10), the approvals on this run (§14 \"approvals on this run\"), the commands/steers applied to it with applied_at_seq, the cost strip (cost.run_totals; §8.4 says the per-position prefix sum is computed, never stored), and the segment pointer for a compacted run (§13.3 \"render replay of a compacted run reads the segment\"). M1, not the proposed M2: render replay is M1's delivers."
+    },
+    {
+      "tool": "export_run",
+      "screens": [
+        "Run",
+        "Audit"
+      ],
+      "tables": [
+        "audit.archive_segments",
+        "audit.audit_events",
+        "cost.run_totals"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "\"export\" is a Run primary action, and \"exports\" is an Audit primary action (§14). Appendix E says it absorbs export_data (run part), so the matrix's NEW grade is wrong — it is INHERIT. Reads the segment, merkle root, attestation key id and signature (§13.4 \"Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script\"); the cost figure rides in the bundle; the export itself is a control-plane audit event. M1 because M1's acceptance test is \"An exported run can be verified offline\" — not M0. Bulk/organization export at retention scale is M5's archiver, but that is export_data, a different tool."
+    },
+    {
+      "tool": "list_approvals",
+      "screens": [
+        "Approvals"
+      ],
+      "tables": [
+        "control.approvals",
+        "control.tool_calls",
+        "iam.principals"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Approvals is not a page: §14 puts it as a panel on Fleet and a strip on Run, and Appendix F confirms \"the approvals queue as a panel\" on Fleet. The four-hop chain (who asked, which agent, which action, which rule) is assembled from control.approvals (rule_ids, mandate_id, taint_sources), the parked control.tool_calls row it points at, and the operator/agent principals. M2 delivers \"approvals with tokens\" and its acceptance test parks and approves a require_approval call; Appendix E marks this tool new, and new tools \"land from M2 onward\"."
+    },
+    {
+      "tool": "resolve_approval",
+      "screens": [
+        "Approvals"
+      ],
+      "tables": [
+        "control.approvals",
+        "control.tool_calls"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Same panel on Fleet and Run (approve/deny/add reason). Writes decision, resolved_by, reason, resolved_at and the single-use token fields (token_id, token_bound_digest, token_expires_at) on control.approvals, and moves the parked control.tool_calls row from parked to decided/denied with approval_id set. The approve/deny/expiry events are frames (§7.5), not Postgres audit rows, so I left audit.audit_events off. M2: \"approvals with tokens\", and the M2 acceptance test approves from Slack — same tool, different surface (§14.1's four surfaces)."
+    },
+    {
+      "tool": "send_message",
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "tables": [
+        "control.commands"
+      ],
+      "milestone": "M2",
+      "confidence": "low",
+      "note": "§7.6 is explicit that \"the delivery queue is the commands table with command kind message\", so the table is high-confidence; the milestone is why this row is low. §17.1 puts \"agent messaging (§7.6)\" in Series A, but neither Series A milestone delivers it — M5 is archive/erasure/reconciliation and M6 is witness/proof. I assign M2 because that is when the machinery it rides (commands, the closed delivery-status vocabulary, steer delivery modes) lands; the feature itself is gated to Series A and has no milestone of its own. Worth a spec fix. Screens: fleet-wide @agents from Fleet (mc.html pFleet line 3438 openSteerFleet) and a single run id from Run (line 3698); @<agent-slug> addressing is also natural on Agents."
+    },
+    {
+      "tool": "list_messages",
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "tables": [
+        "control.commands"
+      ],
+      "milestone": "M2",
+      "confidence": "low",
+      "note": "Read side of send_message over the same command rows filtered to kind message, showing the delivery outcome per recipient — §7.6: \"A delivery report therefore reads as a list of runs\", which is Fleet's shape, and the per-run history is on Run. Same milestone caveat as send_message: marked new in Appendix E, deferred to Series A by §17.1, no milestone actually delivers it."
+    },
+    {
+      "tool": "ask_assistant",
+      "screens": [
+        "Fleet",
+        "Run",
+        "Agents",
+        "Tools",
+        "Ontology",
+        "Steering",
+        "Spend",
+        "Organization",
+        "Billing",
+        "Audit"
+      ],
+      "tables": [
+        "org.organizations"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "§14.1: \"The in-app agent (§4.4) sits on every screen as a side panel\" — mc.html confirms it is global chrome, appended to every page in render() (line 8467, assistant()). So the honest answer is all ten, not the proposed Organization alone. Tables: A.10 sends chat.* conversations to \"runs of the in-app agent\", so the turn is recorded as frames in the graph, not Postgres; the only Postgres touch per turn is reading org.organizations for funding_source, funding_connection_id, model_routes and assistant_spend_cap_micros (§4.5, §12.1) — medium confidence on whether that read belongs to this tool or to the model layer behind it. M1 delivers \"the Stella engine container and the in-app agent's onboarding flow\" and its acceptance test is the assistant onboarding an organization end to end with its turns replaying as runs."
+    },
+    {
+      "tool": "list_conversations",
+      "screens": [
+        "Fleet",
+        "Run",
+        "Agents",
+        "Tools",
+        "Ontology",
+        "Steering",
+        "Spend",
+        "Organization",
+        "Billing",
+        "Audit"
+      ],
+      "tables": [],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Same global assistant dock as ask_assistant; mc.html's dock (line 6694) shows one thread and no history list, so this tool has no rendered surface in the mockup yet. No Postgres table: conversations are runs of the in-app agent (A.10), so listing them reads the graph. Flag for the spec: the absorbed actions archive/delete/purge conflict with §13.1's \"the run ledger is retained forever\" and with legal holds — deleting an assistant conversation cannot delete the run it was. M1 with the assistant itself."
+    },
+    {
+      "tool": "set_preferences",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [],
+      "milestone": "M0",
+      "confidence": "low",
+      "note": "Not really a screen: Appendix F says the account pages collapse into an Account dialog reached from the user menu, and it is a dialog, not a page; mc.html opens it as openDialog('account','preferences') from global chrome on every screen (lines 3389, 6945). Organization is only the nearest page-scope owner. Tables empty is a finding, not a shrug: Appendix A has no per-user preference store — auth.users is Better Auth's own and unchanged, and neither org.org_users nor wrk.workspace_users has a settings column, though org.organizations.settings/default_locale and wrk.workspaces.settings exist at the wrong grain. The likely fix is a settings jsonb on org.org_users and wrk.workspace_users; as written the target schema cannot store what this tool sets. Milestone is a guess: nothing in §17 places it. M0 as account plumbing that arrives with users and orgs; M1 is defensible since no UI exists before then."
+    },
+    {
+      "tool": "list_notifications",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "audit.audit_events",
+        "control.approvals"
+      ],
+      "milestone": "M2",
+      "confidence": "low",
+      "note": "Global chrome again — the bell in the top bar, openDialog('notifs') (mc.html line 3361), not a page; Organization is the nearest page-scope owner. Tables come from the mockup's own rule (line 6941): \"every kind here maps to a frame kind or an audit event, never to something invented for a bell\" — so it reads audit.audit_events plus pending control.approvals, with frame-kind notifications coming from the graph. Milestone: the first thing that needs to notify a human is the parked approval of §7.5 (\"It then notifies (Mission Control, Slack, email)\") and the budget breach, both M2; §16 carries notifications over from today's code, so an earlier landing is possible."
+    },
+    {
+      "tool": "mark_notification",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "audit.audit_events"
+      ],
+      "milestone": "M2",
+      "confidence": "low",
+      "note": "Same notifications dialog. The audit write is grounded in the mockup, not invented: mc.html markAllRead() (line 3385) says \"Reading a notification is itself recorded, so the audit record shows who saw what\" — which is an audit.audit_events row. The read/unread state itself has no home in Appendix A (same gap as set_preferences). Milestone paired with list_notifications."
+    },
+    {
+      "tool": "get_install_instructions",
+      "screens": [
+        "Agents"
+      ],
+      "tables": [],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "§7.2: \"On the Agents page, 'Wrap Claude Code' and 'Wrap Codex' produce a signed installer link\" — mc.html pAgents lines 4965/4991. Also served in the onboarding gate at /{org} step 2 (§4.4), which §14 explicitly says is not a page, so I did not add Organization. No table: it returns per-harness install copy and endpoints; the one-time enrollment token embedded in the installer link is minted by enroll_host, which owns iam.credentials and control.enrollments. M1 delivers the one-click installers and the onboarding flow; the matrix's M0 predates any of that."
+    },
+    {
+      "tool": "link_repository",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.repositories",
+        "tools.connections"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "§14 Ontology primary actions name \"link repo\" and \"set production branch\" (Repositories tab, mc.html pOntology tab `repositories`, line 5499). Milestone is M0, not the proposed M4: M0's acceptance test is literally \"A workspace cannot be created without a main repo. A second repo can be linked and unlinked\" and M0 delivers \"org and workspace creation including a Neo4j database and repo binding\". Medium because the other three things linking does (§11.4: event subscription, issue backfill, code-graph build) only work once M4 ships, so the tool's full behaviour straddles M0 and M4. Writes wrk.repositories (installation_id, role main/linked, production_branch, issues_enabled). tools.connections is the GitHub App installation credential (kind `github_app`, A.5) that the absorbed install_integration created — medium confidence on whether link_repository writes that row or only reads one the App install already created. The GitHub ontology fragment merged on first link (§11.2) lands in git/graph, not Postgres. Dropped the proposal's iam.roles / iam.role_grants / iam.principal_role_assignments: those came from the word \"role\" in the Does column, which here means the repo's role (main/linked), a wrk.repositories column."
+    },
+    {
+      "tool": "unlink_repository",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.repositories",
+        "tools.connections"
+      ],
+      "milestone": "M0",
+      "confidence": "medium",
+      "note": "Ontology → Repositories. M0 by the same acceptance clause as link_repository (\"a second repo can be linked and unlinked\"). Writes wrk.repositories (soft delete via deleted_at per A.0, or indexing_status/pause for the absorbed pause_repo; A.0 says rows are never hard-deleted). tools.connections at medium: the absorbed delete_integration revokes the App installation credential, but an installation may back several repos, so the connection is only revoked when the last repo unlinks."
+    },
+    {
+      "tool": "sync_repository",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.repositories"
+      ],
+      "milestone": "M4",
+      "confidence": "high",
+      "note": "§11.4 names sync_repository explicitly as \"a governed action on the Ontology page and the API\" doing a full idempotent re-index; mc.html has the \"Sync now\" buttons on the Sources and Repositories tabs (lines 5482, 5576). M4 delivers \"the code graph with webhook-driven incremental updates and manual sync\". Writes last_indexed_sha, last_indexed_at, indexing_status on wrk.repositories; the re-parsed File/Symbol nodes and the valid_to archival go to Neo4j."
+    },
+    {
+      "tool": "add_source",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "tools.connections",
+        "tools.tool_servers"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "§14 Ontology primary action \"add source\"; Sources tab. M4 delivers \"the ontology engine and three connectors\" and is accepted when \"a customer's Linear and GitHub data produce an ontology proposal\". Tables are medium because Appendix A has no `sources` table at all: A.10 routes today's `ingestion.*` cursors and health to \"columns on wrk.repositories and tools.tool_servers, and :Source nodes\", so a non-GitHub connector source is a tools.tool_servers row plus its credential in tools.connections (kind oauth/api_key/model_provider; absorbed create_connection is the ingestion half of the same contract that set_connection owns on the Tools page). The :Source/:SyncRun nodes and the mapping are graph-side. The proposal's empty list is wrong — a connector's credential and health must persist transactionally somewhere, and these are the only two candidates in the 37."
+    },
+    {
+      "tool": "update_source",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.connections"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "Ontology → Sources (pause, re-map, preview). tools.tool_servers.status carries the paused/active state and the sync bookkeeping (A.10); tools.connections when the credential or its scopes change (absorbed update_connection / reauth). Mappings themselves (source field → ontology class) are graph and `.oxagen/ontology/` material, not Postgres, and suggest_connection_mappings is a model call that persists nothing. Same M4 reasoning as add_source. Medium for the same reason: the source row's home table is inferred from A.10 rather than stated."
+    },
+    {
+      "tool": "remove_source",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.connections"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "Ontology → Sources. Soft-deletes the source registration and its credential (A.0: never hard-deleted); ingested :SourceRecord nodes and the entities derived from them stay in the graph with their provenance. M4 with the connectors. Medium on the table mapping, per add_source."
+    },
+    {
+      "tool": "list_sources",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.connections",
+        "wrk.repositories"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "Read side of the Sources tab (health, cursors, counts) — mc.html renders SOURCES at line 5473. Reads tools.tool_servers (last_import_at/digest, status) and tools.connections (owner, status, last_test_result; never returns secrets). wrk.repositories is included at medium because the absorbed get_reconcile_status and get_integration_metrics cover the GitHub integration and event health, and no other tool in the 96 reads the Repositories tab's row data — if that read belongs to link_repository's get-shape instead, drop it. M4."
+    },
+    {
+      "tool": "propose_ontology_version",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.repositories"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "§14 Ontology primary action \"open an ontology proposal\"; Versions tab (mc.html line 5535). M4 delivers the ontology engine. Tables: the proposal is a branch and PR on the main repo (§11.2 step 3, §11.8), so it reads wrk.repositories to resolve the main repo and its branch; the proposal, its diff, and its profiler provenance live in the graph and in `.oxagen/ontology/`. The proposal JSON's tools.tool_versions / tools.policy_versions are keyword artefacts of the word \"version\" and are wrong — those are the tool registry and Cedar policy. Note that wrk.workspaces.active_ontology_version (the pin) moves on merge, driven by the GitHub webhook, not by this tool: §11.8 says \"nothing activates any other way\", which is exactly what the absorbed pin_schema_version and toggle_schema lost. Medium because one could argue the merge handler is part of this tool's contract, in which case wrk.workspaces joins the list."
+    },
+    {
+      "tool": "get_ontology",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.workspaces"
+      ],
+      "milestone": "M4",
+      "confidence": "medium",
+      "note": "Backs the Ontology Model and Versions tabs, and is served to agents as `graph` context frames (§11.6 item 1). Reads wrk.workspaces.active_ontology_version — the pin is the only ontology fact left in Postgres after §16 retired the schema_registry.* tables; classes, properties, relation types, synonyms, diffs and every prior version live in Neo4j, indexed from git by digest. Drops the proposed tools.tool_versions/tools.policy_versions for the same reason as propose_ontology_version. M4 (ontology engine). Medium on the table: if the pin is read through the graph's :OntologyVersion nodes instead of the workspace row, this is an empty list."
+    },
+    {
+      "tool": "update_ontology",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [
+        "wrk.repositories"
+      ],
+      "milestone": "M4",
+      "confidence": "low",
+      "note": "Ontology → Versions / Model, editing a class or relation on an open proposal branch. Low confidence on tables: the edit writes JSON files under `.oxagen/ontology/` on a branch of the main repo and the validators (validate_schema_node/relationship) are pure functions over the manifest, so the only Postgres touch is resolving which repo and branch to commit to — wrk.repositories, and arguably that read belongs to the git service rather than this tool, making the honest answer empty. M4 with the engine."
+    },
+    {
+      "tool": "search_graph",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [],
+      "milestone": "M4",
+      "confidence": "high",
+      "note": "Ontology → Graph (\"explore instances\", \"ask the graph\"); one of M4's \"three graph query agent tools\". Empty table list is a real answer: §11.6 says all four are read-only against the organization's Neo4j database on a read-only role, and §11.5's hybrid retrieval plus rerank touches vector and full-text indexes in Neo4j only. The caller's label/hop/node/time budgets come from iam.role_grants.resource_scope, but that read is the authorization pipeline's, not this tool's; the Voyage query embedding is a model call billed by the proxy."
+    },
+    {
+      "tool": "expand_graph",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [],
+      "milestone": "M4",
+      "confidence": "high",
+      "note": "Ontology → Graph, typed traversal from seed nodes up to a hop budget (§11.6 item 3). Graph-only, no Postgres, same reasoning as search_graph. M4."
+    },
+    {
+      "tool": "query_graph",
+      "screens": [
+        "Ontology"
+      ],
+      "tables": [],
+      "milestone": "M4",
+      "confidence": "high",
+      "note": "Ontology → Graph: \"ask in plain English and see the Cypher graph query and the citations behind the answer\" (§14), and M4's acceptance test is precisely this tool — \"A natural-language question returns cited nodes with its Cypher shown. A question that would write or scan past budget is rejected before it runs\" — which is the parser/injector/EXPLAIN chain of §11.6 item 4. Tables empty: the compiler is a `complex`-tier model call and entity linking a `light`-tier one, both metered by the model proxy into cost.run_totals — this tool does not write them — and the question, Cypher, digests and result are frames in the graph."
+    },
+    {
+      "tool": "register_tool_server",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.connections"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "§17 M0 delivers \"the tool registry\"; the Tools page that renders it only lands in M2, so the tool ships headless-first and gets its UI at M2. tools.connections is read because tool_servers.connection_id binds a credential (A.5)."
+    },
+    {
+      "tool": "remove_tool_server",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Removal is a status change (`disabled`/`killed`) on the server and its versions, not a delete — A.5 gives both tables a status enum and §6.11 kills at either level."
+    },
+    {
+      "tool": "list_tool_servers",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Reads versions for the per-server tool/version counts the Tools registry tab shows (mc.html pTools registry rows). It absorbs list_mcp_consents, but consent state now lives in policy/approval rules, not a table this read touches."
+    },
+    {
+      "tool": "import_tools",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.tool_servers"
+      ],
+      "milestone": "M0",
+      "confidence": "high",
+      "note": "Writes a version row per imported tool and stamps last_import_at / last_import_digest on the server (A.5). §14 Tools primary action \"import server\"."
+    },
+    {
+      "tool": "approve_tool_schema",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_versions"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "Writes output_schema, schema_origin=observed_approved and approved_by (A.5). Milestone is the judgement call: the observed-output inference is gateway work (M1), but the approval queue is a Tools-page action (\"approve observed schema\", §14) and Appendix E marks it new, and new toolbelt tools \"land from M2 onward\"."
+    },
+    {
+      "tool": "search_tools",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "iam.role_grants"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "Two halves with one name. The agent-facing half indexes the belt only (§6.6), so it reads tool versions plus the grants the belt is computed from; its own calls are recorded as frames in the graph, not as a Postgres write of its own. The UI half is the global command menu — chrome on every screen, not a page — which is why the only §14 screen it really belongs to is Tools. M2 because §6.13's \"search for a tool outside the belt returns zero results\" is an adversarial-suite case and M2's acceptance is that the suite passes; the command-menu half could ship with the M1 pages."
+    },
+    {
+      "tool": "load_tools",
+      "screens": [
+        "Tools",
+        "Agents"
+      ],
+      "tables": [
+        "tools.tool_versions"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "Primarily model-facing: the second half of the searchable belt (§6.6), inseparable from search_tools, so it takes the same milestone; Appendix E marks it new, and new toolbelt tools land from M2 onward. Not marked headless in Appendix E, and its human equivalent is the full definition + schema view — the tool detail on Tools and the belt tab on Agents (§14 Agents: \"the tools it may call, with schemas\")."
+    },
+    {
+      "tool": "set_connection",
+      "screens": [
+        "Tools",
+        "Organization"
+      ],
+      "tables": [
+        "tools.connections"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Dual surface: tool-server and API credentials on Tools (\"add connection\"), model-provider keys on Organization's \"Model funding and routes\" tab (§14 \"set funding\"; Appendix F folds settings/model-funding into Organization; mc.html pOrganization funding tab offers customer_key). Milestone is arguable — the kind=`model_provider` row is needed for M1's \"model layer with OpenRouter routes and funding sources\", while the broker that consumes the same rows for tool calls is M2."
+    },
+    {
+      "tool": "delete_connection",
+      "screens": [
+        "Tools",
+        "Organization"
+      ],
+      "tables": [
+        "tools.connections",
+        "tools.credential_grants"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "Sets status=revoked; §6.8 says revoking a connection invalidates its grants at next use, so the grant rows are marked too. Pairs with set_connection on milestone and on both surfaces."
+    },
+    {
+      "tool": "list_connections",
+      "screens": [
+        "Tools",
+        "Organization"
+      ],
+      "tables": [
+        "tools.connections",
+        "tools.credential_grants"
+      ],
+      "milestone": "M1",
+      "confidence": "medium",
+      "note": "§14 Tools lists \"connections and their owners, credential grants\", and no other Appendix E tool reads credential grants outside a receipt, so the grants read folds in here. Never returns secret_ciphertext."
+    },
+    {
+      "tool": "grant_mandate",
+      "screens": [
+        "Tools",
+        "Agents"
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Two screens by §14: Tools hosts \"grant mandate\" and the mandates ledger; Agents hosts \"request mandate\" and \"the mandates it holds\" (mc.html has a pMandate page routed under /agents/<slug>/mandates/<id>). M2 delivers \"Mandates and the ledger\" explicitly."
+    },
+    {
+      "tool": "set_approval_rules",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.policy_versions"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Appendix E: \"as a policy version\" — an approval rule is policy (§6.9, §6.12), so it writes a policy version, not control.approvals; approval rows are written by the call pipeline at decision time. Surfaces on the Tools page's Auto-approvals and Policy tabs."
+    },
+    {
+      "tool": "revoke_mandate",
+      "screens": [
+        "Tools",
+        "Agents"
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Status/revoked_by/revoked_reason on the mandate; §6.9 says revoking ends in-flight calls that have not dispatched, which appends `release` entries to the append-only ledger."
+    },
+    {
+      "tool": "list_mandates",
+      "screens": [
+        "Tools",
+        "Agents"
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Appendix E calls it the \"ledger view\": the Tools page's mandates ledger showing \"who granted what authority to which agent, how much is used\" (§6.9) needs both the grant rows and the ledger balances."
+    },
+    {
+      "tool": "set_policy",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.policy_versions",
+        "wrk.workspaces"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "M2 delivers \"Cedar policy with tests and simulation\". wrk.workspaces is medium-confidence within this row: A.3 says bundle_version is \"bumped on every publish or grant change\", and activating a policy version restamps the signed bundle."
+    },
+    {
+      "tool": "simulate_policy",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "tools.policy_versions"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "Writes simulation_id / simulation_summary and moves status to `simulated` (A.5). Deliberately no control.tool_calls: §6.12 says the replay runs \"against the workspace's last N days of tool calls from the frames\" — the frames are graph nodes, so the history read is Neo4j, not Postgres."
+    },
+    {
+      "tool": "set_kill_switch",
+      "screens": [
+        "Tools"
+      ],
+      "tables": [
+        "control.commands",
+        "audit.audit_events",
+        "org.organizations",
+        "wrk.workspaces",
+        "tools.tool_versions",
+        "tools.tool_servers",
+        "tools.connections"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "The script's M0 proposal is wrong: §17 puts \"Kill switches\" in M2, and M2's acceptance includes the flip-a-switch-mid-run case. The table fan-out is what makes this medium: the flip is a control.commands row (its command vocabulary literally carries kill_switch_on/off and target_kind tool_version|tool_server|connection|workspace|org|class), it is \"a security event\" (§6.11) in audit.audit_events, it bumps the deny-generation counters that A.10 relocated onto org.organizations and wrk.workspaces, and at the target level it sets status=`killed` on a version or server, or revokes a connection. Agent-, operator- and class-level flips ride the same command row rather than a table of their own."
+    },
+    {
+      "tool": "append_record",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Empty is the real answer: §9 stores records as :Record nodes in the organization's Neo4j database and §4.2 puts \"context records and their lineage\" in Neo4j, never Postgres. Appendix A has no context schema. Its primary caller is a harness hitting the provider's context/append endpoint; Steering is where the appended records are read back. M3 delivers \"the records endpoint\"."
+    },
+    {
+      "tool": "get_record",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Graph read only (§9 Storage). Marked new in Appendix E, which is consistent with M3."
+    },
+    {
+      "tool": "list_records",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Graph read only. Backs the Steering page's Records tab and its kind filter, and the effect metrics of §10.4 (runs that rendered, cited or violated a record) which are also graph-derived. The proof-rate column in effect metrics only becomes meaningful once M6 stamps proofs, but the tool itself ships at M3."
+    },
+    {
+      "tool": "retract_record",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "medium",
+      "note": "Appendix E: \"new record on the lineage\" — a graph write, so no Postgres table. Medium because retirement of a *published* record is §10.3.5, a Context PR that sets status=\"archived\" in place, and that path runs through open_context_pr's git side rather than this tool. Steering's \"retire\" action is the surface either way."
+    },
+    {
+      "tool": "recall_context",
+      "screens": [
+        "Steering",
+        "Run"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "medium",
+      "note": "The proposal's tools.*/cost.provider_usage entries are wrong: this is the provider's context query over the graph (and over the published-record index), and cost.provider_usage is the provider invoice-line table for reconciliation, written by the collector, not by a tool. Run is listed because §14 Run shows \"what the agent was told\" — the recalled records arrive as the context frames the player renders. M3 for the retrieval endpoint; its semantic half only gets Voyage hybrid retrieval and reranking at M4 (§11.5)."
+    },
+    {
+      "tool": "propose_record",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Graph write (a record_proposal node, §9.2). M3 delivers \"the promoter\"; the Steering page's Proposals tab is its surface."
+    },
+    {
+      "tool": "open_context_pr",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [
+        "wrk.repositories",
+        "wrk.workspaces",
+        "audit.audit_events"
+      ],
+      "milestone": "M3",
+      "confidence": "medium",
+      "note": "The only Context-and-steering tool with a real Postgres footprint. It reads wrk.repositories to find the GitHub App installation and target — the main repo for workspace-scoped records, the linked repo for repository-scoped ones (§10.1, §10.3.1). The other two are the merge side of the same lifecycle rather than the open call: §10.3.4 says merge triggers \"a bundle version bump for the workspace\" (wrk.workspaces.bundle_version) and a `steering_published` audit event — flag if the matrix wants those attributed to the webhook handler instead. M3 delivers \"Context PRs through the GitHub App\"."
+    },
+    {
+      "tool": "list_proposals",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Graph read; Steering's Proposals tab."
+    },
+    {
+      "tool": "dismiss_proposal",
+      "screens": [
+        "Steering"
+      ],
+      "tables": [],
+      "milestone": "M3",
+      "confidence": "high",
+      "note": "Graph write on the proposal's status; no Postgres. Steering's \"review\" action."
+    },
+    {
+      "tool": "get_spend",
+      "screens": [
+        "Spend",
+        "Agents"
+      ],
+      "tables": [
+        "cost.run_totals",
+        "billing.budgets"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "§14 Spend is the home (\"Cost by operator, agent, model, provider key, and task\"); the Agents page's Budgets tab also renders spend 30d / proven spend 30d / productive ratio for one agent (mc.html pAgent ~5107-5111), so it is a second surface. Tables: §12.7 materializes rollups in cost.turn_totals / cost.daily_totals, but Appendix A ships only cost.run_totals, so that is the one legal name; billing.budgets supplies the \"budget position\" column on the By-operator table. Milestone M2, not the proposed M0 — §17 M2 delivers \"cost records with normalized token classes, the price book, and rollups to operator level\" and its acceptance test is \"an operator's statement sums exactly to their agents' runs\". M6 then extends this same tool with proven spend (\"proven spend in the Spend page\"); it does not deliver it."
+    },
+    {
+      "tool": "list_findings",
+      "screens": [
+        "Spend",
+        "Agents"
+      ],
+      "tables": [
+        "cost.run_totals"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "§14 Spend leads with findings (\"Findings ranked by the money at stake\", action \"act on a finding\"); mc.html pAgent also renders a \"Findings for this agent\" panel (~5113). Tables are uncertain: §12.8 says the findings job \"writes cost.findings rows\", but cost.findings is NOT among Appendix A's 37 tables, so I cannot name it. The job reads frames (graph) and the run rollup, hence cost.run_totals only. This is a real spec gap between §12.8 and Appendix A. Milestone M2 (\"the findings job and the Spend page\"), not the proposed M0."
+    },
+    {
+      "tool": "get_reconciliation",
+      "screens": [
+        "Spend"
+      ],
+      "tables": [
+        "cost.reconciliations",
+        "cost.provider_usage",
+        "cost.run_totals"
+      ],
+      "milestone": "M5",
+      "confidence": "high",
+      "note": "§14 Spend: \"Reconciliation status and variance\", action \"open exception\". Not Billing — Billing is Oxagen revenue (plan, invoices), reconciliation is the customer's provider spend (§12.1 keeps the two apart). cost.provider_usage holds the imported provider/invoice lines, cost.reconciliations the matched/variance/exception rows, cost.run_totals the ledger side matched at levels 2 and 3. M5 delivers \"reconciliation against a real provider invoice\" with acceptance \"the provider invoice matches above 99.9% by frame\"."
+    },
+    {
+      "tool": "export_statement",
+      "screens": [
+        "Spend"
+      ],
+      "tables": [
+        "cost.run_totals",
+        "cost.reconciliations"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "§14 Spend action \"export statement\"; mc.html puts the Export statement button on the Spend Reconciliation tab. Not Billing (Billing hosts Stripe invoices, not the customer's spend statement). Milestone M2, not the proposed M5: M2's acceptance test literally reads \"An operator's statement sums exactly to their agents' runs\", so statements must exist at M2. The reconciliation-status column on the statement (§12.9) only fills in at M5, which is why confidence is medium rather than high."
+    },
+    {
+      "tool": "set_budget",
+      "screens": [
+        "Spend",
+        "Agents"
+      ],
+      "tables": [
+        "billing.budgets"
+      ],
+      "milestone": "M2",
+      "confidence": "high",
+      "note": "\"set budget\" is a stated primary action on both §14 Spend and §14 Agents; mc.html confirms both (Spend Budgets tab, Agent Budgets tab, same 'budget' dialog). §12.5 says budgets live in billing.spend_budgets, which Appendix A names billing.budgets — the only legal name. M2 delivers budgets; acceptance \"A budget breach pauses a run\". Enforcement writes a policy.decision frame and a pause, not a Postgres row, so control.commands is deliberately not listed."
+    },
+    {
+      "tool": "set_model_route",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.organizations"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "Corrects the proposal's Spend/Billing guess: §14 Organization's job is \"model funding and routes\" with primary action \"set route\", and Appendix F gives Organization today's settings/model-funding route. mc.html pOrganization has a \"Model funding and routes\" tab. §4.5 rule 2: \"Routes are organization settings\" → org.organizations.model_routes. Milestone M1, not M0 — M1 delivers \"the model layer with OpenRouter routes and funding sources\"."
+    },
+    {
+      "tool": "set_funding_source",
+      "screens": [
+        "Organization"
+      ],
+      "tables": [
+        "org.organizations",
+        "tools.connections"
+      ],
+      "milestone": "M1",
+      "confidence": "high",
+      "note": "§14 Organization primary action \"set funding\"; mc.html pOrganization funding tab has the \"Change funding source\" dialog. Writes org.organizations.funding_source / funding_connection_id / assistant_spend_cap_micros; the customer_key case points at a row in tools.connections (the enveloped provider key, tested before save per §4.5). M1 (\"funding sources\"), not the proposed M4."
+    },
+    {
+      "tool": "get_subscription",
+      "screens": [
+        "Billing"
+      ],
+      "tables": [
+        "billing.subscriptions",
+        "org.organizations"
+      ],
+      "milestone": "M0",
+      "confidence": "low",
+      "note": "Screen is Billing only (§14: \"Governed-action usage, the retention meter, plan, and invoices\"); the proposal's Spend was wrong, and its control.event_subscriptions table was a keyword collision on the word \"subscription\" — this tool is Stripe plans, not §7.7 outbound events. Tables: billing.subscriptions (plan, included_runs, runs_this_period, retained_gb) plus org.organizations (plan, stripe_customer_id). Milestone is genuinely unassigned: §17 never names billing or Stripe in any milestone. I place it at M0 because Appendix E's create_org explicitly creates the \"billing account\" and M0 delivers org creation — but M1 is equally arguable, since runs_this_period needs sealed runs, which M1 delivers. Low confidence, worth a maintainer decision."
+    },
+    {
+      "tool": "change_subscription",
+      "screens": [
+        "Billing"
+      ],
+      "tables": [
+        "billing.subscriptions",
+        "org.organizations"
+      ],
+      "milestone": "M0",
+      "confidence": "low",
+      "note": "§14 Billing's only primary action is \"change plan\"; mc.html pBilling has the 'plan' dialog. Same table correction as get_subscription: billing.subscriptions, not control.event_subscriptions. org.organizations carries plan and stripe_customer_id and, per §12.1's onboarding discount, onboarding_state / unlocked_at / discount_offered_at. Note it absorbs purchase_credits but §12.1 says \"There are no credits\", so the credits half is dropped, not carried. Milestone unassigned in §17 for the same reason as get_subscription — M0 by the create_org argument, M1 arguable."
+    },
+    {
+      "tool": "query_audit_log",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "audit.audit_events",
+        "control.tool_calls",
+        "control.approvals"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "§14 Audit: \"Control-plane audit events\"; Appendix F adds \"receipts search\"; mc.html pAudit has Events and Receipts tabs. Dropped the proposal's org.data_planes and control.event_subscriptions — neither is read to answer an audit-log query. §6.10 says a receipt is assembled from frames and stored as its own frame, so the Postgres side of a receipt search is control.tool_calls (input/output digests, decision, enforcement tier, receipt_frame_seq) joined to control.approvals for the authority hop. Milestone M2 because receipts are what the page searches and M2 delivers \"the full call pipeline with taint and receipts\"; audit_events themselves start being written at M0, so an M0 assignment is defensible for the control-plane-events half."
+    },
+    {
+      "tool": "export_data",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "audit.archive_segments",
+        "audit.audit_events",
+        "org.organizations"
+      ],
+      "milestone": "M5",
+      "confidence": "medium",
+      "note": "§14 Audit primary action \"export\"; mc.html pAudit's header button is \"Export evidence bundle\" and the Exports tab shows the signed bundle with its verifier. §13.4: \"Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script\" → audit.archive_segments (object_key, merkle_root, attestation signature) plus org.organizations.kek_key_id for the key ids; the export itself is recorded as an audit event (mc.html writes export.created). M5, not the proposed M0 — the archiver that produces segments is M5. Note the run-scoped sibling export_run (Wrapping group) is M1; this is the organization-wide one."
+    },
+    {
+      "tool": "erase_data",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "audit.archive_segments",
+        "audit.legal_holds",
+        "audit.audit_events"
+      ],
+      "milestone": "M5",
+      "confidence": "medium",
+      "note": "§14 Audit hosts it (mc.html pAudit Retention tab, the erasure-request flow). M5 delivers \"holds, erasure\" with acceptance \"Erasure leaves a verifiable chain\" — the proposal's M0 was wrong. Tables: a hold blocks erasure (audit.legal_holds — mc.html shows the \"blocked by hold\" state), segments carry retention_until/legal_hold_id, and the request plus its tombstone are recorded as audit events. Dropped the proposal's org.data_planes. Medium confidence on one point: §13.5 says bodies are encrypted under a per-subject data key and erasure destroys that key, but none of the 37 tables holds per-subject data keys (org.organizations only has kek_key_id), so the key registry is either in the graph, in KMS, or a gap in Appendix A."
+    },
+    {
+      "tool": "set_legal_hold",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "audit.legal_holds",
+        "audit.archive_segments",
+        "audit.audit_events"
+      ],
+      "milestone": "M5",
+      "confidence": "high",
+      "note": "§14 Audit primary action \"hold\"; mc.html pAudit has the Holds tab and the place/release dialogs. Adds audit.archive_segments to the proposal: §13.4 says a hold \"pins retention\", and archive_segments carries both retention_until and a legal_hold_id FK, so placing or releasing a hold writes there too. The place and release are recorded as audit events (mc.html: hold.placed / hold.released). M5 (\"holds\")."
+    },
+    {
+      "tool": "list_incidents",
+      "screens": [
+        "Audit",
+        "Agents"
+      ],
+      "tables": [
+        "audit.audit_events"
+      ],
+      "milestone": "M2",
+      "confidence": "medium",
+      "note": "Corrects the proposal's tables outright: incidents are rows in audit.audit_events, whose kind column enumerates exactly the incident kinds Appendix E names (chain_break, token_replay, witness_probe, mandate_exception, credential_probe, hooks_removed) with severity and resolved_at/resolved_by — tools.mandates and tools.mandate_ledger are not read to list them. Second screen is Agents: §14 Agents' job ends \"...enrollment status, and tamper incidents\", and mc.html pAgent links from there to #/audit/incidents. M2, because mandate exceptions and the §6.13 adversarial suite land at M2 and chain breaks at M1; the witness_probe and tampered kinds only start appearing at M6 (\"tamper exclusion\"), so M6 extends this tool rather than delivering it."
+    },
+    {
+      "tool": "set_event_subscription",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "control.event_subscriptions",
+        "audit.audit_events"
+      ],
+      "milestone": "M5",
+      "confidence": "low",
+      "note": "Screen: neither §14 nor Appendix F lists outbound events on any page, but §7.7 says \"A dead-letter view ... sits on the Audit page\", and mc.html puts an \"Outbound events / Series A\" panel inside pAudit's Exports tab (line ~6522). So Audit, not headless. Tables: control.event_subscriptions only — billing.subscriptions and audit.audit_events were a keyword collision in the proposal, though audit.audit_events is genuinely written here because §7.7 says creating or changing a subscription is a governed action with the third-party egress class and every delivery is audited. Milestone is the weak point: §7.7 and Appendix A both mark this Series A, and §17.1 puts Series A at M5/M6, but neither M5 nor M6's \"Delivers\" text mentions outbound events. I place it at M5 because M5 is the Series A audit/compliance milestone and the surface lives on the Audit page; M6 is strictly witness and proof. Low confidence — §17 needs a row for this."
+    },
+    {
+      "tool": "list_event_subscriptions",
+      "screens": [
+        "Audit"
+      ],
+      "tables": [
+        "control.event_subscriptions"
+      ],
+      "milestone": "M5",
+      "confidence": "low",
+      "note": "Read side of the above, on the same Audit surface (§7.7's dead-letter view; mc.html pAudit Exports tab). \"Delivery health and dead letters\" are columns on control.event_subscriptions itself (status, last_delivery_at, failed_deliveries), so this is a single-table read — billing.subscriptions and audit.audit_events in the proposal were both keyword collisions. Same §17 gap as set_event_subscription: Series A per §7.7, but no milestone row claims it. Low confidence."
+    }
+  ],
+  "audit": {
+    "corrections": [
+      {
+        "tool": "list_approvals",
+        "field": "screens",
+        "from": "Approvals",
+        "to": "Fleet, Run",
+        "why": "§14 opening: \"Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run.\" \"Approvals\" is not one of the ten SCREENS, so the value is unusable in the matrix. Appendix F row 1 gives Fleet \"the approvals queue as a panel\" and row 2 gives Run \"approvals on this run\". The row's own note says exactly this and then writes the wrong value anyway — and grades itself high."
+      },
+      {
+        "tool": "resolve_approval",
+        "field": "screens",
+        "from": "Approvals",
+        "to": "Fleet, Run",
+        "why": "Same §14 rule. Additionally §14's Run row lists \"approve\" among Run's own primary actions, which settles Run directly rather than by inheritance from the panel."
+      },
+      {
+        "tool": "set_data_plane",
+        "field": "screens",
+        "from": "Organization, Approvals",
+        "to": "Organization",
+        "why": "§14: Approvals is not a page. §14 Organization's job names \"the data plane\"; §14 Audit's job names it too but Audit's primary actions are only export/hold/rotate, so the write belongs to Organization. If the approval-gate surface is wanted it is the Fleet panel / Run strip, never a screen named Approvals."
+      },
+      {
+        "tool": "register_agent",
+        "field": "milestone",
+        "from": "M0",
+        "to": "M3",
+        "why": "§6.2 is unconditional: \"Creating or changing an agent in Mission Control (register_agent, update_agent) does not write Postgres first. It opens a Context PR on the main repo… Merge creates or updates the principal, the roles the definition asks for, and the toolbelt.\" §17 dates Context-PR delivery to M3 (\"Context PRs through the GitHub App\"); M0 delivers only \"IAM\" and M0/M1 have the App installation for repo binding, not PR authoring. The tool as specified cannot execute before M3. The row's own note names this dependency and still assigns M0."
+      },
+      {
+        "tool": "update_agent",
+        "field": "milestone",
+        "from": "M0",
+        "to": "M3",
+        "why": "Same §6.2 mechanism (\"a Context PR changing the definition; identity and belt update on merge\", Appendix E) and the same §17 M3 dependency on Context PRs through the GitHub App."
+      },
+      {
+        "tool": "retire_agent",
+        "field": "milestone",
+        "from": "M0",
+        "to": "M3",
+        "why": "Appendix E: \"a Context PR removing the file; principal retired, never deleted\". §6.2: \"Deleting an agent is a PR that removes the file.\" Same M3 dependency as its two siblings."
+      },
+      {
+        "tool": "respond_to_invite",
+        "field": "screens",
+        "from": "headless",
+        "to": "(none — sign-in flow, not a page)",
+        "why": "Appendix E marks exactly two tools headless — ingest_frames and fetch_commands — and states every other tool \"is exposed on API, MCP, and the UI unless marked headless\". Appendix F settles the surface instead: \"accept an invite\" is one of the seven sign-in flows that \"are not screens and are not counted\". The honest value is no screen with that citation, not the reserved word headless."
+      }
+    ],
+    "gaps": [
+      "M6 has zero tools out of 96, and the fault is not the assignment — no Appendix E row is M6-first. §17 M6 delivers the witness runner, the witness author, the L0 airlock, tamper exclusion, proof stamping and \"proven spend in the Spend page\": backend services plus fields on tools that already exist (get_run renders §8.5's proof.observed frame, get_spend adds proven spend, list_incidents starts seeing witness_probe/tampered). §8.5 invariant 2 forbids an agent tool from ever addressing witness storage (\"A tool call whose target resolves to witness storage is denied by policy and raises a witness_probe incident\"), so no agent-facing witness tool can exist by design. What Appendix E genuinely lacks is the human-facing half: nothing sets the disclosure grain, though §8.5 says \"A workspace may raise the grain as an explicit policy decision by a human, recorded as a security event\", and nothing declares which classes of change require proof. Both could ride set_policy (M2, Tools). The deeper defect is the matrix's single-valued milestone column: it cannot express \"ships at M1, completed at M6\", which is the true state of get_run, get_spend and list_incidents.",
+      "Five of the 37 tables are touched by no tool. Three are expected: auth.sessions, auth.accounts and auth.verifications are Better Auth's own (A.1: \"platform scope, Better Auth's own tables, unchanged\") and auth.users is correctly read only by list_members. Two are real gaps. cost.price_entries has no tool despite §12.2's \"Organizations may override prices to record negotiated rates\" — a customer-visible write with no contract, on the page (§14 Spend, \"Every number that is money shows its basis\") that depends on it; §17 M2 delivers \"the price book\" with nothing to administer it. cost.fx_rates has no importer or reader (§15 Currency: \"Conversions use a dated rate table (cost.fx_rates)\"); defensible as a platform job, but then it is a table no product surface reaches.",
+      "Five §14 primary actions have no tool in Appendix E at all. Audit's \"rotate\" (§14 Audit job: \"key rotation\"; the key is org.organizations.kek_key_id, and §13.3 lists \"key rotations\" as a control-plane audit kind) — rotate_api_key is iam.credentials and explicitly is not this. Ontology's \"resolve entity\" and \"upgrade an embedding index\" (§11.5's indexes with recall and citation rate are rendered on the page with no tool behind either action). Run's \"fork replay\" and \"bisect\" (§17.1 defers them to Series A, but deferral is not a row, and Appendix E closes with \"Nothing is added back without a row in this appendix\"). Each is a screen action the matrix can never trace.",
+      "§14 Tools' job ends \"and the last result from the assurance suite\", and Appendix F gives the Audit page \"assurance suite results\" — §6.13 makes the adversarial suite a shipped, customer-runnable artifact and part of the export an auditor receives. No tool in the 96 runs it or reads its result. Two screens render something nothing produces.",
+      "§17 delivers only four of the ten pages by name: Fleet and Run at M1, the Tools page and the Spend page at M2, the Ontology page in §17.1's wedge list. Agents, Steering, Organization, Billing and Audit are never delivered by any milestone. This is the root cause of the largest milestone disagreement in the matrix: 29 tools landed at M0, a milestone whose Delivers row contains no UI whatsoever, because the Organization and Agents pages have no milestone to land on. Billing is worse — §17 never names billing or Stripe in any milestone, which both subscription rows correctly flagged as unassignable.",
+      "Eight table names appear in the spec's own prose that are not among the 37, against A.0's \"This is the definitive list. A table not here does not exist\": tools.tools (§6.4), approvals.requests (§7.5), prices.price_books and prices.price_entries (§12.2, vs Appendix A's cost.price_entries), billing.spend_budgets (§12.5, vs billing.budgets), cost.turn_totals and cost.daily_totals (§12.3, §12.7), and cost.findings (§12.8). Every one of them forced an assignment to guess — get_spend, set_budget, list_findings and register_tool_server all carry a note about it. §12.8's findings job is the sharpest: it \"writes cost.findings rows\" into a table that does not exist, so list_findings can name no write target.",
+      "Three pieces of state the tools are specified to change have no home in Appendix A. set_preferences (Appendix E absorbs four preference contracts) has no table: org.org_users and wrk.workspace_users carry no settings column, org.organizations.settings and wrk.workspaces.settings are the wrong grain, and auth.users is Better Auth's and unchanged. mark_notification has nowhere to store read state. §13.5 erasure destroys \"a per-subject data key\" that no table holds — org.organizations has only kek_key_id — so erase_data's central mechanism is unrepresented.",
+      "Appendix E's closing arithmetic does not hold, and the matrix leaned on it. It says the wedge is \"the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward\". There are twenty (new) markers, not eighteen, and they sit in six families: identity and access (set_role_grants), wrapping (3), toolbelt (9), context and steering (get_record), spend and billing (2), audit and compliance (4). The knowledge family, which the sentence names, has none. 96 − 20 = 76, not 78. The rule \"new tools land from M2 onward\" was used to date load_tools, approve_tool_schema, get_record and set_role_grants, so the miscount propagates into milestones.",
+      "Two screen values used across the assignments are not members of the SCREENS array: \"Approvals\" (three tools) and \"headless\" (three tools). Only two tools are actually headless in Appendix E. Any consumer joining on the screen column breaks on both.",
+      "Global chrome has no representation and got encoded two incompatible ways. ask_assistant and list_conversations were given all ten screens (correct per §14.1: \"The in-app agent (§4.4) sits on every screen as a side panel\"), while set_preferences, list_notifications and mark_notification — equally global, and explicitly not pages per Appendix F's Account-dialog paragraph — were parked on Organization, and search_tools' command-menu half was parked on Tools. Same phenomenon, three encodings. The ten-screen model needs a chrome value, or those four rows will keep drifting.",
+      "control.tool_calls, tools.credential_grants, tools.mandate_ledger's reserve/settle entries, and cost.run_totals are written by the gateway pipeline (§6.7 steps 3–10), the broker (§6.8) and the recorder (§12.3), none of which is an agent tool. The matrix therefore shows four tables as read-only when they are among the most written in the system. Not an assignment error — a limit of a tool-keyed matrix that a reader will misread as a coverage gap.",
+      "Honesty flags on rows graded high that the spec does not support. rotate_api_key: \"keeps the old credential valid for a grace window (so likely two rows)\" appears nowhere — §15's rotation-with-validity-windows language is about bundle and attestation keys, not API keys; iam.credentials has no grace column. ingest_frames: the note itself says \"medium confidence on that last one\" about audit.archive_segments while the row is graded high (the claim is in fact correct — §13.3, \"The archive segment is written at seal time\" — but a hedged table inside a high row is a grading error). set_policy and ask_assistant repeat that pattern with wrk.workspaces and org.organizations. list_approvals and resolve_approval are graded high while naming a screen §14 says does not exist. set_member_role is high on iam.principal_role_assignments, which is inferred: the spec gives only org.org_users.role and wrk.workspace_users.role for membership, and §6.3's roles are the tool-grant roles.",
+      "Worth recording on the credit side, because it constrains how much of the above is the matrix's fault rather than the spec's: across 96 rows there is not one invented table name — every entry is among the 37, which is a real improvement over the proposal (cost.fx_rates on register_agent, control.event_subscriptions on both subscription tools, audit.legal_holds on update_workspace, tools.policy_versions on update_org and on the ontology tools were all keyword collisions, and all were removed with the reasoning shown). All ten screens have tools. Several milestone errors were overturned correctly against the spec: link_repository M4→M0 (M0's acceptance test is verbatim \"A second repo can be linked and unlinked\"), list_runs M0→M1, get_run M2→M1 and export_run M0→M1 (M1 delivers render replay and \"An exported run can be verified offline\"), get_spend and list_findings M0→M2, export_statement M5→M2 (M2 acceptance: \"An operator's statement sums exactly to their agents' runs\"), export_data and erase_data M0→M5, set_kill_switch M0→M2 (§17 M2 \"Kill switches\"), set_funding_source M4→M1, set_model_route to Organization per §4.5 rule 2, and export_run's grade NEW→INHERIT (Appendix E: absorbs \"export_data (run part)\")."
+    ],
+    "verdict": "Strong work with a small number of hard errors and one systemic weakness. Table hygiene is excellent — zero invented names across 96 rows, and roughly a dozen of the proposal's keyword-collision tables were correctly overturned with the section that settles each. Milestone reasoning is mostly better than the matrix it audits, and the overturns (link_repository to M0, the M1 run tools, the M2 spend tools, the M5 audit tools) are defensible from §17's acceptance tests. Seven corrections stand: three tools name \"Approvals\" as a screen when §14 states in its first paragraph that Approvals is not a page, and does so in rows graded high that quote that very sentence in their own notes; the three agent-definition tools sit at M0 when §6.2 makes them Context-PR-first and §17 dates Context PRs to M3, a dependency each note identifies and then ignores; and respond_to_invite borrows Appendix E's reserved \"headless\" marking, which belongs to ingest_frames and fetch_commands alone. The systemic weakness is not the assignments' fault and should be read as a spec finding: M6 has no tool because none exists, five §14 primary actions and the assurance suite have no tool at all, five of the ten pages are delivered by no milestone, eight table names in the prose violate A.0's own \"a table not here does not exist\", and Appendix E's count of new tools is off by two with the wrong families named. Checked: all 96 table lists against the 37; all screen values against the 10 and against each screen's §14 job and primary actions; every milestone against §17's Delivers and Accepted-when columns and §17.1's phases; both coverage directions; and the \"high\" confidence rows against the sections cited."
+  }
+}
