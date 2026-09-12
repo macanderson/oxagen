@@ -22,6 +22,8 @@ export * from "./spend-budget";
 export * from "./spend-budget-store";
 export * from "./spend-budget-gate";
 export * from "./discount";
+export * from "./action-metering";
+export * from "./plan-allowance";
 export * from "./metering";
 export * from "./tier";
 export * from "./entitlements";

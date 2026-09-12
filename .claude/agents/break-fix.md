@@ -51,7 +51,7 @@ Smallest safe change that resolves the root cause — not the symptom. Grep for 
 - **E2E only for critical paths.** If — and only if — the bug sits on a critical user flow (login/signup, org creation, the chat/ask path, checkout/billing), add or update a Playwright e2e in `apps/app/e2e/` with a screenshot of the success state. This is your judgement call; do not add e2e for non-critical fixes — it burns CI minutes for little value.
 
 ### 5. Run the test you wrote — before committing, always
-Run the **narrowest** command that proves the fix — the single test file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit -- grants.test.ts`). Confirm it is green. **Never run the whole suite, `pnpm test`, `turbo run test`, or a whole-repo gate — hard rule for every agent.** You are sharing this machine with parallel agents; a full run can saturate every core. Before launching anything heavy, check `pgrep -fl vitest` and wait rather than stack on top of an in-flight run. CI runs the full gate after Mac pushes.
+Run the **narrowest** command that proves the fix — the single test file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit grants.test.ts`). Confirm it is green. **Never run the whole suite, `pnpm test`, `turbo run test`, or a whole-repo gate — hard rule for every agent.** You are sharing this machine with parallel agents; a full run can saturate every core. Before launching anything heavy, check `pgrep -fl vitest` and wait rather than stack on top of an in-flight run. CI runs the full gate after Mac pushes.
 
 ### 6. Record memories — bug fix + behavioral observation
 See **Memory protocol** below. Write the memory before you consider the fix done.

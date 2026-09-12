@@ -138,6 +138,46 @@ function actionLabel(a: SyncAction): string {
   return kleur.dim("reuse ");
 }
 
+/**
+ * Whether the product Stripe already holds differs from what this repo would
+ * write.
+ *
+ * This exists because the product path used to return `UPDATE` unconditionally
+ * whenever the product existed, so a dry run printed `UPDATE` against all six
+ * products whether or not anything had drifted. The whole point of a dry run —
+ * and of #1371, which is about a sync that reported success while doing
+ * nothing — is to tell a reader what actually differs, and six yellow UPDATE
+ * lines that mean "these exist" read as "these have all drifted".
+ *
+ * The metadata comparison is a SUBSET check on the keys this script manages.
+ * Anything else on the Stripe object was put there by something else, and
+ * treating a foreign key as drift would make every run report an update
+ * forever — which is the same failure in the other direction.
+ *
+ * Pure, so it is testable without a Stripe client.
+ */
+export function productDiffersFromDesired(
+  existing: Pick<Stripe.Product, "name" | "active" | "metadata">,
+  desired: {
+    name: string;
+    // Optional because that is what Stripe's own ProductUpdateParams says.
+    // `undefined` means the caller is not asserting an active state, so it is
+    // not a difference — asserting nothing and matching are the same outcome,
+    // and treating absence as drift would report an update on every run.
+    active?: boolean;
+    metadata: Record<string, string>;
+  },
+): boolean {
+  if (existing.name !== desired.name) return true;
+  if (desired.active !== undefined && existing.active !== desired.active) {
+    return true;
+  }
+  for (const [key, value] of Object.entries(desired.metadata)) {
+    if (existing.metadata?.[key] !== value) return true;
+  }
+  return false;
+}
+
 async function findProductBySlug(
   stripe: Stripe,
   slug: string,
@@ -170,7 +210,17 @@ async function ensureProduct(
   },
 ): Promise<{ id: string; action: SyncAction }> {
   const existing = await findProductBySlug(stripe, args.slug);
-  const params: Stripe.ProductUpdateParams & Stripe.ProductCreateParams = {
+  // Declared with the concrete types this function actually produces, not with
+  // Stripe's params type. `Stripe.ProductUpdateParams` makes name, active and
+  // metadata all optional — true of the API, false of anything built here — and
+  // comparing against an optional-everything type would mean the drift check
+  // could not tell "absent" from "different". The object is still assignable to
+  // Stripe's params on the way out.
+  const desired: {
+    name: string;
+    active: boolean;
+    metadata: Record<string, string>;
+  } = {
     name: args.name,
     active: true,
     metadata: {
@@ -179,9 +229,20 @@ async function ensureProduct(
       ...args.metadata,
     },
   };
+  const params: Stripe.ProductUpdateParams & Stripe.ProductCreateParams =
+    desired;
   if (existing) {
+    // `reuse` when nothing this script manages has changed, so a dry run
+    // distinguishes "already correct" from "would be rewritten". Writing is
+    // still unconditional under --apply: the update is idempotent, and
+    // skipping it would make the apply path depend on a comparison rather
+    // than on the desired state.
+    const differs = productDiffersFromDesired(existing, desired);
     if (args.apply) await stripe.products.update(existing.id, params);
-    return { id: existing.id, action: SyncAction.UPDATE };
+    return {
+      id: existing.id,
+      action: differs ? SyncAction.UPDATE : SyncAction.REUSE,
+    };
   }
   if (!args.apply)
     return { id: `prod_DRYRUN_${args.slug}`, action: SyncAction.CREATE };
@@ -485,14 +546,27 @@ async function main(): Promise<void> {
   );
 }
 
-main()
-  .then(() => closeDatabase())
-  .then(() => process.exit(0))
-  .catch(async (err) => {
-    console.error(
-      kleur.red("\nstripe-sync failed:"),
-      err instanceof Error ? err.message : err,
-    );
-    await closeDatabase().catch(() => {});
-    process.exit(1);
-  });
+// Run only when invoked directly. Without this guard the module reconciled
+// Stripe as a side effect of being imported — which is why this file had no
+// tests: importing it to test one pure function ran the whole sync, failed on
+// the absent STRIPE_SECRET_KEY, and called process.exit(1) inside the test
+// runner. Vitest's own warning for that case is that it "might cause false
+// positive tests", so an untestable file was also a file that could corrupt a
+// neighbouring suite's result. Same pattern as count-unenforced-iam-orgs.ts.
+const isEntrypoint =
+  process.argv[1] !== undefined &&
+  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+
+if (isEntrypoint) {
+  main()
+    .then(() => closeDatabase())
+    .then(() => process.exit(0))
+    .catch(async (err) => {
+      console.error(
+        kleur.red("\nstripe-sync failed:"),
+        err instanceof Error ? err.message : err,
+      );
+      await closeDatabase().catch(() => {});
+      process.exit(1);
+    });
+}

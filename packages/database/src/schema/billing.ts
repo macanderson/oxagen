@@ -32,6 +32,17 @@ export const plans = billingSchema.table(
     annualCents: integer("annual_cents"),
     includedCreditCents: integer("included_credit_cents").notNull().default(0),
     includedSeats: integer("included_seats").notNull().default(1),
+    /**
+     * ADR-052 §4.2: governed actions included in this plan per entitlement
+     * year. Stored rather than implied — an absent allowance is
+     * indistinguishable from an unlimited one, and enterprise's "negotiated"
+     * figure has to live somewhere a query can read it. CHECK: >= 0.
+     */
+    includedActionsAnnual: bigint("included_actions_annual", {
+      mode: "bigint",
+    })
+      .notNull()
+      .default(sql`25000`),
     features: jsonb("features").notNull().default(sql`'{}'::jsonb`),
     isPublic: boolean("is_public").notNull().default(true),
   },
@@ -428,6 +439,17 @@ export const orgBillingSettings = billingSchema.table(
     assistantSpendCapCents: bigint("assistant_spend_cap_cents", {
       mode: "bigint",
     }).default(sql`2000`),
+    /**
+     * ADR-052 §4.3 / spec §7.4: bill for evidence retained beyond the included
+     * twelve months. OPT-IN, and the default is the whole point — silently
+     * accruing storage charges on evidence a customer forgot they were keeping
+     * is the surprise this pricing model exists to avoid.
+     */
+    extendedEvidenceRetentionEnabled: boolean(
+      "extended_evidence_retention_enabled",
+    )
+      .notNull()
+      .default(false),
 
     // ── Dunning (failed-payment recovery) ───────────────────────────────────────
     // CHECK: dunning_state IN ('active','grace','suspended').
@@ -612,5 +634,68 @@ export const spendBudgets = billingSchema.table(
       sql`(${t.period} = 'rolling' AND ${t.windowDays} IS NOT NULL AND ${t.windowDays} > 0) OR (${t.period} = 'monthly' AND ${t.windowDays} IS NULL)`,
     ),
     limitCheck: check("spend_budgets_limit_check", sql`${t.limitMicros} > 0`),
+  }),
+);
+
+// ── governed_action_counters ─────────────────────────────────────────────────
+//
+// ADR-052: the running count of governed actions an organisation has taken in
+// its current entitlement year, and how many of those were charged as overage.
+//
+// This is transactional state, not analytics, and the distinction is load
+// bearing. Deciding whether THIS action falls inside the allowance needs the
+// count INCLUDING this action, atomically. The recorder does one
+// INSERT … ON CONFLICT DO UPDATE … RETURNING, which takes the row lock and
+// answers in a single round trip on the invoke() hot path. The equivalent
+// ClickHouse read would be eventually consistent and a second query per
+// action; the per-capability breakdown stays there, where append-only
+// analytics belongs.
+//
+// `actionsUsed` counts free actions too. Without that an organisation could
+// not see how close it is to its allowance, because the ledger only records
+// what it was charged for.
+export const governedActionCounters = billingSchema.table(
+  "governed_action_counters",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id — CASCADE so the counter vanishes with the org.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    /** First instant of the entitlement year this row counts, UTC. */
+    periodStart: timestamp("period_start", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    /** Governed actions taken in the period, allowance-covered ones included. */
+    actionsUsed: bigint("actions_used", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    /** Of those, the ones charged as overage past the allowance. */
+    actionsCharged: bigint("actions_charged", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // The ON CONFLICT arbiter for the recorder's upsert, and the only read
+    // path, so one index covers both.
+    orgPeriodIdx: uniqueIndex("governed_action_counters_org_period_idx").on(
+      t.orgId,
+      t.periodStart,
+    ),
+    nonNegativeCheck: check(
+      "governed_action_counters_used_non_negative",
+      sql`${t.actionsUsed} >= 0 AND ${t.actionsCharged} >= 0`,
+    ),
+    chargedWithinUsedCheck: check(
+      "governed_action_counters_charged_within_used",
+      sql`${t.actionsCharged} <= ${t.actionsUsed}`,
+    ),
   }),
 );

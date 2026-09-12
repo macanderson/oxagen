@@ -61,6 +61,23 @@ interface ConnectionRow {
   status: string;
 }
 
+/**
+ * A `timestamptz` as it actually arrives — a Date from the driver, an ISO
+ * string across an Inngest step boundary — rendered as one ISO string.
+ *
+ * The two-shapes problem is already documented in
+ * `auth.session-expiry-audit.ts`, which handles it inline. This keeps the
+ * conversion at the query boundary so everything downstream sees one type.
+ */
+function toIsoOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  if (typeof value === "string") return value.length > 0 ? value : null;
+  return null;
+}
+
 export interface ProvisionResult {
   outcome: "subscribed" | "skipped" | "unsupported";
   reason?: string;
@@ -178,7 +195,19 @@ export async function provisionWebhookSubscription(
         updated_at               = NOW()
       RETURNING id, expires_at
     `);
-    return Array.from(rows) as Array<{ id: string; expires_at: string | null }>;
+    // `expires_at` is a timestamptz, which the driver decodes to a Date, not a
+    // string — and a step boundary would JSON-serialise it to an ISO string
+    // anyway, so the same field arrives as two different types depending on the
+    // path. Normalising here is what makes `ProvisionResult.expiresAt: string`
+    // true rather than aspirational; the alternative is a caller writing
+    // `.slice()` on a Date and finding out in production.
+    return Array.from(rows).map((r) => {
+      const raw = (r as { id: string; expires_at: unknown }).expires_at;
+      return {
+        id: (r as { id: string }).id,
+        expires_at: toIsoOrNull(raw),
+      };
+    });
   });
 
   const row = upserted[0];

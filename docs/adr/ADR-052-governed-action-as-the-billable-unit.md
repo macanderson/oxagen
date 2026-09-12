@@ -145,6 +145,41 @@ in `constants.ts` was written for a cost-derived world. `CONSUME_EXECUTION` and
 `CONSUME_TOOL_CALL` survive; the token reason is retired rather than repurposed,
 so a historical ledger row keeps meaning what it meant.
 
+### What retirement means, exactly — writes reject, reads accept
+
+Retiring a ledger reason is ambiguous until someone says which direction it
+binds, and the ambiguity is not academic: the write allowlist in `credits.ts`
+and the read filters in the usage and dispute paths both derive from the same
+constant, so a single answer has to serve both. Three readings were available.
+
+1. **Retire for writes only.** The string stays legal on a row and illegal in a
+   new one.
+2. **Keep accepting it during a deprecation window**, with the allowlist warning
+   rather than rejecting.
+3. **Retire it fully** and migrate every historical row to another reason.
+
+**Decision: (1).** `consume_token_overage` is rejected by `consumeCredits`,
+`grantCredits` and `adjustCredits` — anything that writes — and remains valid
+everywhere a row is read, filtered or refunded.
+
+(2) is rejected because a warning is not a boundary. The interval it opens is an
+interval in which a newly-written row carries a reason this ADR says no longer
+describes anything, and the person who writes that row is exactly the person who
+did not read the warning. There is no live writer today, so the window would
+protect nobody and permit only the mistake.
+
+(3) is rejected because it is the one option that breaks the invariant the
+retirement exists to protect. Rewriting 2024–2026's rows to `consume_execution`
+would make a cost-derived debit claim to be an action-derived one, and a ledger
+whose past rows change meaning is not a ledger. The rows stay as they are.
+
+In code this is `CREDIT_REASONS` (the write vocabulary) and
+`HISTORICAL_CREDIT_REASONS` (write plus `RETIRED_CREDIT_REASONS`, the read
+vocabulary), in `packages/billing/src/constants.ts`. The `credit_ledger.reason`
+column is plain `text` with no CHECK constraint in the Atlas schema, so the
+enforcement is the allowlist and nothing else — which is why the allowlist
+rejecting rather than warning is load-bearing.
+
 **Buyers need a conversion.** "Governed action" is precise and "run" is legible,
 and they are not the same word. A published calculator — typical runs by class,
 with their action counts — is part of shipping this, not a nicety.
