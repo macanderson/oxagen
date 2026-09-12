@@ -1,0 +1,33 @@
+// SVG → PNG for the build. resvg is a self-contained renderer, so the site
+// builds the same on a laptop and in CI with nothing installed; the text is
+// already outlines (text.mjs), so no font is ever looked up.
+//
+// Generation is deterministic, so a render is memoised on its source: the dev
+// server rebuilds on every saved file and should not redraw fifty images to
+// do it.
+
+import { Resvg } from "@resvg/resvg-js";
+
+const cache = new Map();
+const MAX_CACHE = 512;
+
+/**
+ * @param {string} svg
+ * @param {{ width: number }} o the output width in px; height follows the SVG's aspect
+ * @returns {Buffer} PNG bytes
+ */
+export function renderPng(svg, { width }) {
+  const key = `${width}|${svg}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  // no <text> anywhere, so skip the system font scan: 1.5s per image otherwise
+  const png = new Resvg(svg, {
+    fitTo: { mode: "width", value: width },
+    font: { loadSystemFonts: false },
+  })
+    .render()
+    .asPng();
+  if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value);
+  cache.set(key, png);
+  return png;
+}

@@ -12,37 +12,28 @@ import {
   WORDS_PER_MINUTE,
 } from "./content.mjs";
 
-const image = (n) => `
-    image:
-      src: /assets/blog/pillars/${n}.jpg
-      alt: A picture
-      credit:
-        author: Someone
-        authorUrl: https://unsplash.com/@someone
-        source: Unsplash
-        sourceUrl: https://unsplash.com/photos/abc
-        license: Unsplash License`;
-
 const PILLARS_YAML = `
 pillars:
   - slug: beta
     name: Beta
     tagline: Second.
     description: The second pillar.
-    order: 2${image("beta")}
+    order: 2
   - slug: alpha
     name: Alpha
     tagline: First.
     description: The first pillar.
-    order: 1${image("alpha")}
+    order: 1
+    treatment: loop
 `;
 
 describe("loadPillars", () => {
   it("parses, normalises, and sorts by order", () => {
     const pillars = loadPillars(PILLARS_YAML);
     expect(pillars.map((p) => p.slug)).toEqual(["alpha", "beta"]);
-    expect(pillars[0].image.credit.license).toBe("Unsplash License");
     expect(pillars[0].description).toBe("The first pillar.");
+    expect(pillars[0].treatment).toBe("loop");
+    expect(pillars[1].treatment).toBeNull();
   });
 
   it("rejects an empty file", () => {
@@ -57,7 +48,7 @@ describe("loadPillars", () => {
     expect(() => loadPillars(bad)).toThrow(/kebab-case/);
   });
 
-  it("requires every field including the image credit", () => {
+  it("requires every field and a known treatment", () => {
     expect(() =>
       loadPillars(PILLARS_YAML.replace("tagline: First.", 'tagline: ""')),
     ).toThrow(/`tagline` is required/);
@@ -65,21 +56,8 @@ describe("loadPillars", () => {
       loadPillars(PILLARS_YAML.replace("order: 1", "order: first")),
     ).toThrow(/`order` must be an integer/);
     expect(() =>
-      loadPillars(
-        PILLARS_YAML.replace(
-          "src: /assets/blog/pillars/alpha.jpg",
-          "src: alpha.jpg",
-        ),
-      ),
-    ).toThrow(/site-absolute/);
-    expect(() =>
-      loadPillars(PILLARS_YAML.replace("alt: A picture", 'alt: ""')),
-    ).toThrow(/image.alt/);
-    expect(() =>
-      loadPillars(
-        PILLARS_YAML.replace("license: Unsplash License", 'license: ""'),
-      ),
-    ).toThrow(/image.credit.license/);
+      loadPillars(PILLARS_YAML.replace("treatment: loop", "treatment: photo")),
+    ).toThrow(/`treatment` must be one of graph, ontology, loop/);
   });
 });
 
