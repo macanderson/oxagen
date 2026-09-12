@@ -1,0 +1,992 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Credentialed Access and the Fleet Channel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+/* Tokens are the house set, copied from the consolidated mockup (mc.html) so
+   these surfaces drop straight in. Dark is bare :root; light arrives by
+   preference and by explicit toggle, so both directions work. */
+:root{
+  --ink:#10100F; --void:#0A0A09; --panel:#181715; --hl:#201F1C; --border:#292722; --rule:#34322D;
+  --fg:#F2EEE5; --body:#DDD8CD; --muted:#9B958A; --dim:#6E6A62;
+  --gold:#D6962C; --gold-bright:#F1C364; --gold-deep:#8B5E1A; --accent-text:#D6962C;
+  --on-gold:#10100F;
+  --st-allowed:#57A97C; --st-approval:#5B93D6; --st-denied:#C66A4A;
+  --st-proven:#3FA2A2; --st-failed:#C0453C; --st-critical:#D6455E; --st-observe:#9B958A;
+  --shadow:0 1px 0 rgba(255,255,255,.03),0 18px 44px rgba(0,0,0,.5);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --font:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
+  --dock:56px;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --ink:#F2EEE5; --void:#E9E3D8; --panel:#F8F5EE; --hl:#EFEAE0; --border:#D8CDBD; --rule:#C9BFAE;
+  --fg:#10100F; --body:#2A2823; --muted:#6B665C; --dim:#8C877C;
+  --accent-text:#8B5E1A; --on-gold:#10100F;
+  --st-allowed:#2F7D52; --st-approval:#2E6BA8; --st-denied:#9B4526;
+  --st-proven:#1F7676; --st-failed:#992F28; --st-critical:#AE2540; --st-observe:#6B665C;
+  --shadow:0 1px 0 rgba(255,255,255,.7),0 18px 44px rgba(16,16,15,.08);
+  --shadow-sm:0 1px 2px rgba(16,16,15,.06);
+}}
+:root[data-theme="light"]{
+  --ink:#F2EEE5; --void:#E9E3D8; --panel:#F8F5EE; --hl:#EFEAE0; --border:#D8CDBD; --rule:#C9BFAE;
+  --fg:#10100F; --body:#2A2823; --muted:#6B665C; --dim:#8C877C;
+  --accent-text:#8B5E1A; --on-gold:#10100F;
+  --st-allowed:#2F7D52; --st-approval:#2E6BA8; --st-denied:#9B4526;
+  --st-proven:#1F7676; --st-failed:#992F28; --st-critical:#AE2540; --st-observe:#6B665C;
+  --shadow:0 1px 0 rgba(255,255,255,.7),0 18px 44px rgba(16,16,15,.08);
+  --shadow-sm:0 1px 2px rgba(16,16,15,.06);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0;text-align:left}
+svg{display:block;flex:none}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:13px;height:13px}
+.ic.lg{width:20px;height:20px}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)} .dim{color:var(--dim)}
+
+/* ============================ harness chrome ============================ */
+#harness{position:fixed;inset:0 0 auto 0;z-index:60;display:flex;gap:8px;align-items:center;
+  padding:8px 12px;background:var(--void);border-bottom:1px solid var(--border);flex-wrap:wrap}
+#harness .hb{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-right:auto}
+.hbtn{border:1px solid var(--border);border-radius:7px;padding:4px 9px;font-size:12px;color:var(--body);
+  background:var(--panel);display:inline-flex;gap:6px;align-items:center}
+.hbtn[aria-pressed="true"]{border-color:var(--gold);color:var(--accent-text)}
+#stage{padding-top:44px}
+#viewport{max-width:1220px;margin:0 auto}
+#viewport.phone{max-width:400px;border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh}
+
+/* ============================== app shell ============================== */
+.app{display:grid;grid-template-columns:216px 1fr;min-height:calc(100vh - 44px)}
+.side{border-right:1px solid var(--border);background:var(--void);padding:14px 10px 24px;position:sticky;top:44px;
+  align-self:start;height:calc(100vh - 44px);overflow:auto}
+.brand{display:flex;gap:9px;align-items:center;padding:4px 8px 14px}
+.brand .mk{width:22px;height:22px;border-radius:6px;background:var(--gold);display:grid;place-items:center;color:var(--on-gold);
+  font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.wsx{margin:0 4px 14px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font-size:12.5px;
+  display:flex;gap:7px;align-items:center}
+.wsx .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:12px 10px 5px}
+.navitem{display:flex;gap:9px;align-items:center;padding:7px 10px;border-radius:8px;color:var(--body);font-size:13px;width:100%}
+.navitem:hover{background:var(--hl)}
+.navitem.on{background:var(--hl);color:var(--fg);box-shadow:inset 2px 0 0 var(--gold)}
+.navitem .ct{margin-left:auto;font-family:var(--mono);font-size:10.5px;border:1px solid var(--border);border-radius:20px;padding:0 6px;color:var(--muted)}
+.navitem .ct.hot{color:var(--st-approval);border-color:color-mix(in srgb,var(--st-approval) 40%,transparent)}
+.main{min-width:0;padding:0 0 calc(var(--dock) + 26px)}
+.topbar{display:flex;gap:10px;align-items:center;padding:11px 20px;border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--ink) 88%,transparent);position:sticky;top:44px;z-index:20;backdrop-filter:blur(8px)}
+.crumb{font-size:12.5px;color:var(--muted);display:flex;gap:7px;align-items:center;min-width:0;flex:1}
+.crumb b{color:var(--fg);font-weight:600}
+.iconbtn{width:30px;height:30px;border:1px solid var(--border);border-radius:8px;display:grid;place-items:center;
+  background:var(--panel);color:var(--body);position:relative;flex:none}
+.iconbtn .dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--st-approval)}
+.menub{display:none}
+.wrap{padding:18px 20px 0}
+.h1{font-size:19px;font-weight:600;letter-spacing:-.015em;margin:0 0 3px}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 16px;max-width:66ch}
+
+/* mobile: nav becomes a sheet, the bottom stays the agent's */
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;top:44px;left:0;bottom:0;width:270px;z-index:45;transform:translateX(-100%);
+    transition:transform .18s ease;height:auto}
+  .side.open{transform:none;box-shadow:var(--shadow)}
+  .menub{display:grid}
+  .wrap{padding:14px 14px 0}
+  .topbar{padding:10px 14px}
+  .scrim{position:fixed;inset:44px 0 0;background:rgba(0,0,0,.45);z-index:40}
+}
+#viewport.phone .app{grid-template-columns:1fr}
+#viewport.phone .side{position:absolute;transform:translateX(-100%)}
+#viewport.phone .side.open{transform:none}
+#viewport.phone .menub{display:grid}
+#viewport.phone .wrap{padding:14px 14px 0}
+#viewport.phone .topbar{padding:10px 14px}
+#viewport.phone{position:relative}
+
+/* =============================== atoms =============================== */
+.panel{border:1px solid var(--border);border-radius:12px;background:var(--panel);overflow:hidden;min-width:0}
+.panel-h{display:flex;gap:10px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.panel-h b{font-size:13px;font-weight:600}
+.panel-h .g{flex:1}
+.panel-b{padding:13px 14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:12px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+/* The rail stacks under the content until there is room for a full table
+   beside it. A laptop gets the table's width; a wide screen gets both. */
+.split{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
+@media(max-width:1320px){.split{grid-template-columns:1fr}}
+@media(max-width:860px){.cols2,.cols3{grid-template-columns:1fr}}
+#viewport.phone .cols2,#viewport.phone .cols3,#viewport.phone .split{grid-template-columns:1fr}
+
+.b{display:inline-flex;gap:5px;align-items:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;
+  border:1px solid var(--border);border-radius:20px;padding:1px 7px;color:var(--muted);white-space:nowrap}
+.b-allowed{color:var(--st-allowed);border-color:color-mix(in srgb,var(--st-allowed) 42%,transparent);background:color-mix(in srgb,var(--st-allowed) 11%,transparent)}
+.b-approval{color:var(--st-approval);border-color:color-mix(in srgb,var(--st-approval) 42%,transparent);background:color-mix(in srgb,var(--st-approval) 11%,transparent)}
+.b-denied{color:var(--st-denied);border-color:color-mix(in srgb,var(--st-denied) 42%,transparent);background:color-mix(in srgb,var(--st-denied) 11%,transparent)}
+.b-critical{color:var(--st-critical);border-color:color-mix(in srgb,var(--st-critical) 45%,transparent);background:color-mix(in srgb,var(--st-critical) 12%,transparent)}
+.b-proven{color:var(--st-proven);border-color:color-mix(in srgb,var(--st-proven) 42%,transparent);background:color-mix(in srgb,var(--st-proven) 11%,transparent)}
+.b-observe{color:var(--st-observe);border-style:dashed}
+.b-gold{color:var(--accent-text);border-color:color-mix(in srgb,var(--gold) 50%,transparent)}
+
+.btn{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px 11px;
+  font-size:12.5px;font-weight:500;background:var(--panel);color:var(--body);min-height:32px}
+.btn:hover{background:var(--hl);color:var(--fg)}
+.btn.p{background:var(--gold);border-color:var(--gold);color:var(--on-gold);font-weight:600}
+.btn.p:hover{background:var(--gold-bright)}
+.btn.dz{border-color:color-mix(in srgb,var(--st-denied) 48%,transparent);color:var(--st-denied)}
+.btn.sm{padding:3px 8px;font-size:11.5px;min-height:26px;border-radius:7px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.inp{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--ink);padding:7px 10px;font-size:13px;min-height:34px}
+.sel{border:1px solid var(--border);border-radius:8px;background:var(--panel);padding:5px 8px;font-size:12px}
+
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;
+  padding:8px 12px;border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:12.5px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--hl)}
+.tw{overflow-x:auto}
+/* A table is wide by nature. Let it scroll inside its own box rather than
+   wrapping every cell into two lines, and never let it widen the page. */
+td.nw,th.nw{white-space:nowrap}
+
+/* card list: the mobile form of every table */
+.cl{display:grid;gap:9px;padding:12px}
+.cd{border:1px solid var(--border);border-radius:10px;background:var(--ink);padding:11px 12px;display:grid;gap:7px}
+.cd .t{display:flex;gap:8px;align-items:center}
+.cd .t b{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd .m{display:flex;gap:6px;flex-wrap:wrap}
+.cd .kv{display:flex;gap:6px;font-size:11.5px;color:var(--muted)}
+.cd .kv span{color:var(--body)}
+
+/* skeletons + empties + errors */
+.sk{background:linear-gradient(90deg,var(--hl) 25%,var(--border) 37%,var(--hl) 63%);background-size:300% 100%;
+  animation:shim 1.3s linear infinite;border-radius:6px;height:11px}
+@keyframes shim{0%{background-position:150% 0}100%{background-position:-150% 0}}
+.empty{padding:40px 20px;text-align:center;color:var(--muted);display:grid;gap:9px;justify-items:center}
+.empty .g{width:38px;height:38px;border-radius:11px;border:1px dashed var(--rule);display:grid;place-items:center;color:var(--dim)}
+.empty b{color:var(--fg);font-size:13.5px;font-weight:600}
+.empty p{margin:0;font-size:12.5px;max-width:44ch}
+.errbox{margin:12px;border:1px solid color-mix(in srgb,var(--st-failed) 45%,var(--border));border-radius:10px;
+  background:color-mix(in srgb,var(--st-failed) 8%,transparent);padding:12px 13px;display:flex;gap:10px;align-items:flex-start}
+.errbox b{font-size:13px;display:block;margin-bottom:2px}
+
+/* ==================== the small approval card ====================
+   Same anatomy as the full-size card (clock, terms, two actions), at a size
+   that never owns a page. It is a row in a list, not a hero. */
+.apc{border:1px solid color-mix(in srgb,var(--st-approval) 34%,var(--border));border-radius:10px;background:var(--ink);
+  padding:10px 11px;display:grid;gap:8px;min-width:0}
+.apc.crit{border-color:color-mix(in srgb,var(--st-critical) 40%,var(--border))}
+.apc.done{border-color:var(--border);opacity:.72}
+.apc-h{display:flex;gap:9px;align-items:center;min-width:0}
+.apc-h .g{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
+  color:var(--st-approval);background:color-mix(in srgb,var(--st-approval) 13%,transparent)}
+.apc.crit .apc-h .g{color:var(--st-critical);background:color-mix(in srgb,var(--st-critical) 13%,transparent)}
+.apc-h .tt{min-width:0;flex:1}
+.apc-h .tt b{display:block;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apc-h .tt span{display:block;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apc-clk{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--st-approval);font-variant-numeric:tabular-nums;flex:none}
+.apc.crit .apc-clk{color:var(--st-critical)}
+.apc-t{display:grid;gap:3px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.apc-t i{font-style:normal;color:var(--body)}
+/* Actions keep their own width so a card that happens to sit in a wide
+   column does not grow a pair of billboard-sized buttons. They only fill
+   when the card itself is narrow, which is where a thumb needs the target. */
+.apc-a{display:flex;gap:6px;flex-wrap:wrap}
+.apc-a .btn{flex:0 1 auto;justify-content:center;min-width:92px}
+.apstrip{display:grid;gap:9px}
+.apstrip>.apc{max-width:520px}
+@media(min-width:861px){.apstrip.wide{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.apc-a .btn{flex:1 1 auto}}
+#viewport.phone .apc-a .btn{flex:1 1 auto}
+
+/* containment tiers: a glyph and a word, never a hue that implies safety */
+.tier{display:inline-flex;gap:5px;align-items:center;font-family:var(--mono);font-size:10.5px;border:1px solid var(--border);
+  border-radius:6px;padding:1px 6px;color:var(--body);white-space:nowrap}
+.tier.brokered{border-color:color-mix(in srgb,var(--st-proven) 50%,transparent);color:var(--st-proven)}
+.tier.leased{border-color:color-mix(in srgb,var(--st-allowed) 45%,transparent);color:var(--st-allowed)}
+.tier.injected{border-color:color-mix(in srgb,var(--st-denied) 48%,transparent);color:var(--st-denied);border-style:dashed}
+.tier.delegated{border-style:dotted}
+
+/* ============================ the thread ============================ */
+.thr{display:grid;gap:10px;padding:13px 14px}
+.msg{display:grid;grid-template-columns:28px 1fr;gap:10px;min-width:0}
+.msg .av{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;border:1px solid var(--border);
+  background:var(--ink);color:var(--muted)}
+.msg.op .av{color:var(--accent-text);border-color:color-mix(in srgb,var(--gold) 45%,transparent)}
+.msg.ag .av{color:var(--body)}
+.msg.sys .av{border-style:dashed;color:var(--dim)}
+.bub{border:1px solid var(--border);border-radius:10px;background:var(--ink);padding:9px 11px;min-width:0}
+.msg.op .bub{background:color-mix(in srgb,var(--gold) 5%,var(--ink))}
+.msg.sys .bub{background:transparent;border-style:dashed}
+.bub .mh{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.bub .mh b{font-size:12.5px;font-weight:600}
+.bub .mh .tm{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-left:auto}
+.bub p{margin:0;font-size:13px;color:var(--body)}
+.bub .q{border-left:2px solid var(--rule);padding-left:9px;font-size:12px;color:var(--muted);margin:0 0 6px}
+
+/* delivery lifecycle */
+.life{display:flex;gap:0;align-items:center;flex-wrap:wrap;margin-top:7px;font-family:var(--mono);font-size:10px}
+.life i{font-style:normal;border:1px solid var(--border);padding:1px 7px;color:var(--dim);border-right:0}
+.life i:first-child{border-radius:6px 0 0 6px}
+.life i:last-child{border-radius:0 6px 6px 0;border-right:1px solid var(--border)}
+.life i.on{color:var(--fg);background:var(--hl);border-color:var(--rule)}
+.life i.bad{color:var(--st-denied);border-color:color-mix(in srgb,var(--st-denied) 45%,transparent);
+  background:color-mix(in srgb,var(--st-denied) 10%,transparent)}
+.life i.good{color:var(--st-allowed);border-color:color-mix(in srgb,var(--st-allowed) 45%,transparent);
+  background:color-mix(in srgb,var(--st-allowed) 10%,transparent)}
+
+/* ============================ the bottom dock ============================
+   The in-app agent lives here. Bottom edge is the thumb's edge on a phone,
+   and a persistent bar on a desktop, so the agent is one reach away on every
+   page without ever owning one. */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--void);border-top:1px solid var(--border);
+  padding-bottom:env(safe-area-inset-bottom)}
+#viewport.phone .dock{position:absolute;left:0;right:0}
+.dock-bar{display:flex;gap:9px;align-items:center;padding:9px 14px;max-width:1220px;margin:0 auto;min-height:var(--dock)}
+.dock-g{width:28px;height:28px;border-radius:9px;flex:none;display:grid;place-items:center;color:var(--on-gold);
+  background:var(--gold)}
+.dock-in{flex:1;min-width:0;border:1px solid var(--border);border-radius:9px;background:var(--panel);padding:7px 11px;
+  font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.dock-in span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock-k{font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:5px;padding:0 5px;color:var(--dim)}
+.dock-sheet{max-width:1220px;margin:0 auto;border-top:1px solid var(--border);max-height:56vh;overflow:auto}
+.dock-sheet .thr{padding:12px 14px}
+.dock-note{padding:8px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--dim);
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media(max-width:860px){.dock-bar{padding:9px 12px}.dock-sheet{max-height:64vh}}
+
+/* dialogs */
+.layer{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:18px}
+.dlg{width:min(560px,100%);max-height:86vh;overflow:auto;border:1px solid var(--rule);border-radius:14px;background:var(--panel);
+  box-shadow:var(--shadow)}
+.dlg-h{display:flex;gap:10px;align-items:center;padding:13px 15px;border-bottom:1px solid var(--border)}
+.dlg-h b{font-size:14px;font-weight:600;flex:1}
+.dlg-b{padding:14px 15px;display:grid;gap:12px}
+.dlg-f{display:flex;gap:8px;padding:12px 15px;border-top:1px solid var(--border);flex-wrap:wrap}
+.dlg-f .g{flex:1}
+@media(max-width:860px){.layer{padding:0;place-items:end}.dlg{width:100%;max-height:92vh;border-radius:14px 14px 0 0}}
+#viewport.phone .layer{position:absolute;padding:0;place-items:end}
+#viewport.phone .dlg{width:100%;border-radius:14px 14px 0 0}
+
+/* key/value blocks, diffs, meters */
+.kvs{display:grid;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.kvs div{display:grid;grid-template-columns:132px 1fr;gap:10px;padding:8px 11px;border-bottom:1px solid var(--border);font-size:12.5px}
+.kvs div:last-child{border-bottom:0}
+.kvs div>i{font-style:normal;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+@media(max-width:520px){.kvs div{grid-template-columns:1fr;gap:2px}}
+#viewport.phone .kvs div{grid-template-columns:1fr;gap:2px}
+pre.src{margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.7;padding:12px 14px;overflow-x:auto;color:var(--body);
+  background:var(--ink);border-radius:10px;border:1px solid var(--border)}
+pre.src .a{color:var(--st-allowed)} pre.src .d{color:var(--st-denied)} pre.src .c{color:var(--dim)}
+pre.src .k{color:var(--accent-text)}
+.bar{height:6px;border-radius:20px;background:var(--hl);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--st-approval)}
+.note{border:1px dashed var(--rule);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted)}
+.warnbox{border:1px solid color-mix(in srgb,var(--st-denied) 45%,var(--border));border-radius:9px;
+  background:color-mix(in srgb,var(--st-denied) 8%,transparent);padding:10px 11px;font-size:12.5px;color:var(--body);
+  display:flex;gap:9px;align-items:flex-start}
+.statepick{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--void)}
+.statepick .btn.sm[aria-pressed="true"]{border-color:var(--gold);color:var(--accent-text)}
+.legend{display:grid;gap:7px;font-size:12px;color:var(--muted)}
+.legend div{display:flex;gap:8px;align-items:flex-start}
+.hopchain{display:grid;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:12.5px}
+.hop{display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid var(--border)}
+.hop:last-child{border-bottom:0}
+.hop .n{width:20px;height:20px;border-radius:6px;background:var(--hl);display:grid;place-items:center;font-family:var(--mono);
+  font-size:10px;color:var(--muted);flex:none}
+.hop .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ===================== responsive visibility, last =====================
+   These come last and carry two classes on purpose. A one-class .mobonly
+   loses to a later one-class .cl{display:grid} on source order alone, which
+   is how the card list leaked onto the desktop the first time. */
+.deskonly{display:block}
+.cl.mobonly,.mobonly{display:none}
+@media(max-width:860px){
+  .deskonly{display:none}
+  .mobonly{display:block}
+  .cl.mobonly{display:grid}
+}
+#viewport.phone .deskonly{display:none}
+#viewport.phone .mobonly{display:block}
+#viewport.phone .cl.mobonly{display:grid}
+</style>
+
+<div id="harness">
+  <span class="hb">Oxagen spec designs</span>
+  <button class="hbtn" id="tt" onclick="toggleTheme()"></button>
+  <button class="hbtn" id="pt" onclick="S.phone=!S.phone;render()" aria-pressed="false">Phone</button>
+</div>
+<div id="stage"><div id="viewport"></div></div>
+
+<script>
+/* ============================== icons ============================== */
+var I={
+ fleet:'<path d="M3 6h18M3 12h11M3 18h7"/><circle cx="18" cy="17" r="3"/>',
+ key:'<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3m-4 1 3 3m-5 1 3 3"/>',
+ shield:'<path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z"/>',
+ git:'<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M8.5 6H14a2 2 0 0 1 2 2v.5"/>',
+ blast:'<circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="10"/>',
+ msg:'<path d="M4 5h16v11H9l-5 4z"/>',
+ pause:'<path d="M9 5v14M15 5v14"/>',
+ play:'<path d="M7 4l12 8-12 8z"/>',
+ x:'<path d="M6 6l12 12M18 6 6 18"/>',
+ check:'<path d="M4 12l5 5L20 6"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ chev:'<path d="M9 5l7 7-7 7"/>',
+ chevd:'<path d="M5 9l7 7 7-7"/>',
+ chevu:'<path d="M5 15l7-7 7 7"/>',
+ alert:'<path d="M12 3 2 20h20z"/><path d="M12 9v5M12 17h.01"/>',
+ menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+ sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/>',
+ moon:'<path d="M20 14A8 8 0 1 1 10 4a7 7 0 0 0 10 10z"/>',
+ send:'<path d="M4 12l16-8-6 16-3-6z"/>',
+ agent:'<path d="M12 3v3m0 12v3M5 12H2m20 0h-3"/><rect x="7" y="7" width="10" height="10" rx="3"/>',
+ db:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+ lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+ user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 21c0-3.5 3-6 7-6s7 2.5 7 6"/>',
+ search:'<circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/>',
+ stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',
+ file:'<path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/>',
+ eye:'<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>'
+};
+function ico(n,c){return '<svg class="ic'+(c?" "+c:"")+'" viewBox="0 0 24 24" aria-hidden="true">'+(I[n]||"")+'</svg>';}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+/* ============================== state ============================== */
+var S={page:"fleet",phone:false,side:false,dock:false,dlg:null,dlgArg:null,
+  fleetState:"ready",vaultState:"ready",sel:{},cred:"stripe-live",thrState:"asking"};
+
+var ORG={slug:"acme",name:"Acme Corp"}, WS={slug:"core-platform",name:"Core Platform"};
+
+/* sessions on the fleet. host is org-scoped, the session carries its own workspace,
+   which is the defect D7 fix made visible: the row says which workspace owns it. */
+var SESSIONS=[
+ {id:"ses_01K5RT9X",agent:"acme.refund-bot",host:"mba-marcus",ws:"core-platform",status:"asking",
+  tier:"gateway",turn:"turn 7 / step 3",spend:"0.42",started:"9m",ask:"stripe-live"},
+ {id:"ses_01K5RTB2",agent:"acme.release-manager",host:"ci-runner-4",ws:"core-platform",status:"running",
+  tier:"gateway",turn:"turn 2 / step 1",spend:"1.08",started:"3m"},
+ {id:"ses_01K5RTC8",agent:"acme.core.triage",host:"mba-priya",ws:"core-platform",status:"paused",
+  tier:"harness",turn:"turn 11 / step 2",spend:"0.19",started:"41m",by:"Priya Raman"},
+ {id:"ses_01K5RTD1",agent:"acme.warehouse-reader",host:"ci-runner-4",ws:"core-platform",status:"running",
+  tier:"gateway",turn:"turn 1 / step 4",spend:"0.07",started:"1m"},
+ {id:"ses_01K5RTE6",agent:"acme.refund-bot",host:"mba-dana",ws:"payments",status:"running",
+  tier:"gateway",turn:"turn 4 / step 2",spend:"0.31",started:"12m",other:true},
+ {id:"ses_01K5RTF9",agent:"acme.doc-writer",host:"mba-sam",ws:"core-platform",status:"offline",
+  tier:"observe",turn:"turn 3 / step 1",spend:"0.02",started:"2h"}
+];
+
+var CREDS=[
+ {slug:"stripe-live",name:"Stripe live",kind:"key_secret",tier:"brokered",system:"api.stripe.com",
+  owner:"Marcus Bell",status:"active",rot:"31d",leases:14,uses:9},
+ {slug:"warehouse-ro",name:"Warehouse read only",kind:"connection_string",tier:"leased",system:"analytics.rds",
+  owner:"Priya Raman",status:"active",rot:"7d",leases:206,uses:1841},
+ {slug:"github-app",name:"GitHub App",kind:"workload_identity",tier:"brokered",system:"api.github.com",
+  owner:"Marcus Bell",status:"active",rot:"auto",leases:412,uses:3902},
+ {slug:"legacy-erp",name:"Legacy ERP",kind:"basic_auth",tier:"injected",system:"erp.internal:1521",
+  owner:"Dana Okafor",status:"active",rot:"90d",leases:3,uses:3},
+ {slug:"sftp-payouts",name:"SFTP payouts",kind:"basic_auth",tier:"delegated",system:"sftp.partner.net",
+  owner:"Dana Okafor",status:"active",rot:"never",leases:0,uses:0},
+ {slug:"segment-old",name:"Segment (old)",kind:"key_secret",tier:"brokered",system:"api.segment.io",
+  owner:"Marcus Bell",status:"revoked",rot:"expired",leases:31,uses:118}
+];
+function credBySlug(s){for(var i=0;i<CREDS.length;i++)if(CREDS[i].slug===s)return CREDS[i];return CREDS[0];}
+
+var KINDLAB={key_secret:"key and secret",connection_string:"connection string",basic_auth:"username and password",
+  workload_identity:"workload identity",oauth:"OAuth",delegated:"delegated"};
+var TIERNOTE={
+ brokered:"The material never leaves Oxagen's broker. The agent sends an intent and reads the response.",
+ leased:"A derived short lived credential goes to the runtime. The long lived secret stays in the vault.",
+ injected:"The material enters a runtime Oxagen does not control. Containment is that runtime's, not ours.",
+ delegated:"Oxagen never sees the material. Your broker performs the call and returns the evidence."};
+
+/* ============================== helpers ============================== */
+function sBadge(st){
+ var m={asking:['b-approval','asking'],running:['b-allowed','running'],paused:['b-approval','paused'],
+   offline:['b-observe','offline'],done:['b-proven','sealed'],denied:['b-denied','denied']};
+ var v=m[st]||['',''+st];
+ return '<span class="b '+v[0]+'">'+v[1]+'</span>';
+}
+function tierBadge(t){return '<span class="tier '+t+'">'+ico(t==="injected"?"alert":t==="delegated"?"shield":"lock","sm")+t+'</span>';}
+function act(msg){S.dlg="toast";S.dlgArg=msg;render();}
+function go(p){S.page=p;S.side=false;location.hash="#/"+p;render();}
+function toggleTheme(){
+ var r=document.documentElement, cur=r.getAttribute("data-theme");
+ if(!cur){var dark=!window.matchMedia("(prefers-color-scheme:light)").matches;r.setAttribute("data-theme",dark?"light":"dark");}
+ else r.setAttribute("data-theme",cur==="dark"?"light":"dark");
+ paintThemeBtn();
+}
+function paintThemeBtn(){
+ var r=document.documentElement.getAttribute("data-theme");
+ var dark = r ? r==="dark" : !window.matchMedia("(prefers-color-scheme:light)").matches;
+ document.getElementById("tt").innerHTML=ico(dark?"moon":"sun","sm")+(dark?"Dark":"Light");
+}
+
+/* ============================== shell ============================== */
+var PAGES={fleet:"Fleet",thread:"Session",vault:"Credentials",credential:"Credentials",
+  declaration:"Declaration",blast:"Blast radius",states:"State gallery"};
+
+function nav(){
+ function it(p,icn,label,ct,hot){
+  return '<button class="navitem'+(S.page===p||(p==="vault"&&S.page==="credential")?" on":"")+'" onclick="go(\''+p+'\')">'+
+   ico(icn)+'<span>'+label+'</span>'+(ct?'<span class="ct'+(hot?" hot":"")+'">'+ct+'</span>':'')+'</button>';
+ }
+ return '<aside class="side'+(S.side?" open":"")+'" id="side">'+
+  '<div class="brand"><span class="mk">O</span><b>Oxagen</b></div>'+
+  '<div class="wsx">'+ico("db","sm")+'<span class="g">'+WS.name+'</span>'+ico("chevd","sm")+'</div>'+
+  '<div class="navlab">Activity</div>'+
+  it("fleet","fleet","Fleet","1",true)+
+  it("thread","msg","Session thread")+
+  '<div class="navlab">Access</div>'+
+  it("vault","key","Credentials","6")+
+  it("declaration","git","Declarations")+
+  it("blast","blast","Blast radius")+
+  '<div class="navlab">Reference</div>'+
+  it("states","shield","State gallery")+
+  '</aside>';
+}
+
+function topbar(title){
+ return '<div class="topbar">'+
+  '<button class="iconbtn menub" onclick="S.side=!S.side;render()" aria-label="Menu">'+ico("menu")+'</button>'+
+  '<div class="crumb">'+esc(ORG.name)+' '+ico("chev","sm")+' '+esc(WS.name)+' '+ico("chev","sm")+' <b>'+esc(title)+'</b></div>'+
+  '<button class="iconbtn" onclick="openDlg(\'approvals\')" aria-label="Pending approvals">'+ico("shield")+'<span class="dot"></span></button>'+
+  '<button class="iconbtn" onclick="act(\'Search is a mockup here.\')" aria-label="Search">'+ico("search")+'</button>'+
+  '</div>';
+}
+
+/* ======================= the in-app agent dock ======================= */
+function dock(){
+ var sheet = S.dock ? '<div class="dock-sheet">'+
+   '<div class="thr">'+
+     msg("ag","agent","Oxagen assistant","just now",
+       '<p>Two sessions are waiting on <i>stripe-live</i>. One is inside its declaration, one is not. Want me to open the one that is?</p>',
+       '<div class="row" style="margin-top:8px"><button class="btn sm" onclick="go(\'thread\')">Open ses_01K5RT9X</button>'+
+       '<button class="btn sm" onclick="go(\'declaration\')">Show the diff</button></div>')+
+     msg("op","user","Marcus Bell","just now",'<p>Which one is outside it?</p>')+
+     msg("ag","agent","Oxagen assistant","just now",
+       '<p><i>acme.refund-bot</i> on <i>mba-dana</i> asked for a lease the committed declaration does not name. I refused it and left the tool held.</p>')+
+   '</div>'+
+   '<div class="dock-note">'+ico("shield","sm")+'Every turn here is a governed action. It passes IAM, writes an audit record, and bills as one action.</div>'+
+ '</div>' : "";
+ return '<div class="dock">'+sheet+
+  '<div class="dock-bar">'+
+   '<span class="dock-g">'+ico("agent","sm")+'</span>'+
+   '<button class="dock-in" onclick="S.dock=!S.dock;render()">'+
+     '<span>'+(S.dock?"Ask anything about this workspace":"Ask Oxagen about this fleet")+'</span>'+
+     '<span class="dock-k">glm-flash</span>'+
+   '</button>'+
+   '<button class="iconbtn" onclick="S.dock=!S.dock;render()" aria-label="'+(S.dock?"Collapse":"Expand")+'" aria-expanded="'+(S.dock?"true":"false")+'">'+
+     ico(S.dock?"chevd":"chevu")+'</button>'+
+   '<button class="iconbtn" onclick="act(\'Send is a mockup here.\')" aria-label="Send">'+ico("send")+'</button>'+
+  '</div></div>';
+}
+
+/* ============================== fleet ============================== */
+function pFleet(){
+ var n=0; for(var k in S.sel) if(S.sel[k]) n++;
+ var body;
+ if(S.fleetState==="loading"){
+  body='<div class="panel"><div class="panel-h"><b>Sessions</b></div><div class="cl">'+
+   Array(4).join().split(",").map(function(){return '<div class="cd"><div class="sk" style="width:46%"></div>'+
+     '<div class="sk" style="width:76%"></div><div class="sk" style="width:30%"></div></div>';}).join("")+'</div></div>';
+ } else if(S.fleetState==="empty"){
+  body='<div class="panel"><div class="panel-h"><b>Sessions</b></div><div class="empty"><span class="g">'+ico("fleet")+'</span>'+
+   '<b>No sessions yet</b><p>Enroll a host with <span class="mono">oxagen tacho enroll</span> and its sessions appear here within ten seconds of starting.</p>'+
+   '<button class="btn p" onclick="act(\'Enrollment is a mockup here.\')">Enroll a host</button></div></div>';
+ } else if(S.fleetState==="error"){
+  body='<div class="panel"><div class="panel-h"><b>Sessions</b></div>'+
+   '<div class="errbox">'+ico("alert")+'<div><b>Could not reach the control plane</b>'+
+   '<span class="muted" style="font-size:12.5px">Commands already queued still apply. Nothing new can be dispatched until this clears.</span>'+
+   '<div class="row" style="margin-top:8px"><button class="btn sm" onclick="S.fleetState=\'ready\';render()">Retry</button></div></div></div></div>';
+ } else {
+  body='<div class="panel">'+
+   '<div class="panel-h"><b>Sessions</b><span class="muted" style="font-size:12px">6 live</span><span class="g"></span>'+
+   '<select class="sel" onchange="act(\'Filtering is a mockup here.\')"><option>All statuses</option><option>Asking</option><option>Running</option><option>Paused</option></select>'+
+   '</div>'+
+   (n?'<div class="statepick"><b style="font-size:12.5px">'+n+' selected</b><span class="g" style="flex:1"></span>'+
+     '<button class="btn sm" onclick="openDlg(\'steer\')">'+ico("msg","sm")+'Steer</button>'+
+     '<button class="btn sm" onclick="act(\'Queued a pause for \'+'+n+'+\' sessions.\')">'+ico("pause","sm")+'Pause</button>'+
+     '<button class="btn sm dz" onclick="openDlg(\'broadcast\')">'+ico("stop","sm")+'Stop</button></div>':"")+
+   '<div class="tw deskonly"><table><thead><tr><th style="width:34px"></th><th>Agent</th><th>Status</th><th>Host</th>'+
+   '<th>Workspace</th><th>Position</th><th>Spend</th><th style="width:44px"></th></tr></thead><tbody>'+
+   SESSIONS.map(function(s){
+    return '<tr><td><input type="checkbox" '+(S.sel[s.id]?"checked":"")+' onchange="S.sel[\''+s.id+'\']=this.checked;render()" aria-label="Select '+s.id+'"></td>'+
+     '<td class="nw"><b>'+esc(s.agent)+'</b><div class="dim mono" style="font-size:10.5px">'+s.id+'</div></td>'+
+     '<td class="nw">'+sBadge(s.status)+(s.status==="asking"?' <span class="b b-gold">needs you</span>':"")+'</td>'+
+     '<td class="mono nw">'+esc(s.host)+'</td>'+
+     '<td class="nw">'+(s.other?'<span class="b b-observe">'+esc(s.ws)+'</span>':esc(s.ws))+'</td>'+
+     '<td class="mono dim nw">'+esc(s.turn)+'</td><td class="mono nw">$'+s.spend+'</td>'+
+     '<td><button class="iconbtn" onclick="go(\'thread\')" aria-label="Open">'+ico("chev","sm")+'</button></td></tr>';
+   }).join("")+'</tbody></table></div>'+
+   '<div class="cl mobonly">'+SESSIONS.map(function(s){
+    return '<div class="cd"><div class="t"><b>'+esc(s.agent)+'</b><span class="g" style="flex:1"></span>'+sBadge(s.status)+'</div>'+
+     '<div class="m">'+(s.status==="asking"?'<span class="b b-gold">needs you</span>':"")+
+      (s.other?'<span class="b b-observe">'+esc(s.ws)+'</span>':"")+'<span class="b">'+esc(s.host)+'</span><span class="b">$'+s.spend+'</span></div>'+
+     '<div class="kv">'+esc(s.turn)+' <span>'+s.started+' ago</span></div>'+
+     '<div class="apc-a"><button class="btn sm" onclick="go(\'thread\')">Open thread</button>'+
+      '<button class="btn sm" onclick="act(\'Queued a pause.\')">'+ico("pause","sm")+'Pause</button></div></div>';
+   }).join("")+'</div></div>';
+ }
+
+ /* pending approvals ride in a compact rail. On a phone they sit under the
+    fleet, still compact, and still not the page's subject. */
+ var rail='<div class="panel"><div class="panel-h">'+ico("shield","sm")+'<b>Waiting on you</b>'+
+   '<span class="g"></span><span class="b b-approval">2</span></div>'+
+   '<div class="panel-b"><div class="apstrip wide">'+apc(AP[0])+apc(AP[1])+'</div>'+
+   '<div class="note" style="margin-top:10px">Approving issues a lease, not a key. The material never reaches the agent.</div></div></div>';
+
+ return '<div class="wrap"><h1 class="h1">Fleet</h1>'+
+  '<p class="sub">Every session Oxagen can see, and the three things you can send one: control, steering, and authority. A command applies at the next prompt or tool boundary, never mid tool.</p>'+
+  '<div class="statepick" style="border:1px solid var(--border);border-radius:10px;margin-bottom:13px">'+
+   '<span class="mono dim" style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;align-self:center">State</span>'+
+   ["ready","loading","empty","error"].map(function(x){
+    return '<button class="btn sm" aria-pressed="'+(S.fleetState===x?"true":"false")+'" onclick="S.fleetState=\''+x+'\';render()">'+x+'</button>';}).join("")+
+  '</div>'+
+  '<div class="split">'+body+rail+'</div></div>';
+}
+
+/* ===================== the small approval card ===================== */
+var AP=[
+ {id:"apr_01K5RTG2",tool:"mcp.stripe.create_refund",agent:"acme.refund-bot",cred:"stripe-live",tier:"brokered",
+  clock:"0:51",terms:[["Lease","5 min, 1 use"],["Target","cus_Q41x refund 240.00 USD"]],declared:true,crit:false,state:"open"},
+ {id:"apr_01K5RTH7",tool:"sql.query",agent:"acme.warehouse-reader",cred:"warehouse-ro",tier:"leased",
+  clock:"3:12",terms:[["Lease","15 min, read only"],["Target","analytics.public"]],declared:true,crit:false,state:"open"},
+ {id:"apr_01K5RTJ4",tool:"erp.post_journal",agent:"acme.refund-bot",cred:"legacy-erp",tier:"injected",
+  clock:"0:09",terms:[["Lease","2 min, 1 use"],["Target","erp.internal journal 8841"]],declared:false,crit:true,state:"open"}
+];
+function apc(a,done){
+ var cls="apc"+(a.crit?" crit":"")+(done||a.state!=="open"?" done":"");
+ var head='<div class="apc-h"><span class="g">'+ico(a.crit?"alert":"shield","sm")+'</span>'+
+   '<span class="tt"><b>'+esc(a.tool)+'</b><span>'+esc(a.agent)+'</span></span>'+
+   (a.state==="open"?'<span class="apc-clk">'+a.clock+'</span>':'')+'</div>';
+ var terms='<div class="apc-t">'+a.terms.map(function(t){return '<div>'+t[0]+' <i>'+esc(t[1])+'</i></div>';}).join("")+
+   '<div>Credential <i>'+esc(a.cred)+'</i> '+tierBadge(a.tier)+'</div>'+
+   (a.declared?'':'<div style="color:var(--st-denied)">Not in the committed declaration</div>')+'</div>';
+ var acts = a.state==="approved" ? '<div class="apc-a"><span class="b b-allowed">'+ico("check","sm")+'approved, lease lse_01K5RTM9</span></div>'
+  : a.state==="denied" ? '<div class="apc-a"><span class="b b-denied">'+ico("x","sm")+'denied, reason sent</span></div>'
+  : a.state==="expired" ? '<div class="apc-a"><span class="b b-observe">'+ico("clock","sm")+'expired unanswered</span></div>'
+  : '<div class="apc-a"><button class="btn p" onclick="openDlg(\'approve\',\''+a.id+'\')">Review</button>'+
+    '<button class="btn dz" onclick="act(\'Denied. The agent reads your reason.\')">Deny</button></div>';
+ return '<div class="'+cls+'">'+head+terms+acts+'</div>';
+}
+
+/* ============================== thread ============================== */
+function msg(kind,icn,who,when,body,extra){
+ return '<div class="msg '+kind+'"><span class="av">'+ico(icn,"sm")+'</span>'+
+  '<div class="bub"><div class="mh"><b>'+esc(who)+'</b>'+
+   (kind==="op"?'<span class="b b-gold">operator</span>':kind==="ag"?'<span class="b">agent</span>':'<span class="b b-observe">system</span>')+
+   '<span class="tm">'+when+'</span></div>'+body+(extra||"")+'</div></div>';
+}
+function life(states,cur,bad){
+ return '<div class="life">'+states.map(function(s){
+  var c = s===cur ? (bad?" bad":" good") : (states.indexOf(s)<states.indexOf(cur)?" on":"");
+  return '<i class="'+c.trim()+'">'+s+'</i>';}).join("")+'</div>';
+}
+function pThread(){
+ var s=SESSIONS[0];
+ var head='<div class="panel"><div class="panel-h">'+
+  '<div style="min-width:0;flex:1"><b>'+esc(s.agent)+'</b>'+
+  '<div class="dim mono" style="font-size:10.5px">'+s.id+' on '+esc(s.host)+' '+s.turn+'</div></div>'+
+  sBadge(s.status)+'<span class="b b-proven">gateway</span></div>'+
+  '<div class="statepick">'+
+   '<button class="btn sm" onclick="act(\'Queued. Applies at the next tool boundary.\')">'+ico("pause","sm")+'Pause</button>'+
+   '<button class="btn sm" onclick="act(\'Queued.\')">'+ico("play","sm")+'Resume</button>'+
+   '<button class="btn sm dz" onclick="openDlg(\'broadcast\')">'+ico("stop","sm")+'Cancel</button>'+
+   '<span class="g" style="flex:1"></span><span class="b b-observe">you hold steer, not authorize</span></div></div>';
+
+ var thread='<div class="panel"><div class="panel-h">'+ico("msg","sm")+'<b>Control channel</b><span class="g"></span>'+
+  '<span class="mono dim" style="font-size:10.5px">at most once, boundary aligned</span></div><div class="thr">'+
+
+  msg("sys","git","Declaration pinned","14:02:01",
+   '<p class="muted" style="font-size:12.5px">Reading <i>.oxagen/access.yaml</i> at <span class="mono">a41c9e2</span>. Two requests declared.</p>')+
+
+  msg("op","user","Marcus Bell","14:03:12",'<p>Skip the staging deploy, go straight to the smoke test.</p>',
+   life(["queued","delivered","applied"],"applied")+
+   '<div class="dim mono" style="font-size:10.5px;margin-top:5px">applied at turn 6 boundary, span sp_01K5RT9X7</div>')+
+
+  msg("op","user","Priya Raman","14:04:40",'<p>Actually pause after this tool.</p>',
+   life(["queued","delivered","superseded"],"superseded",true)+
+   '<div class="dim mono" style="font-size:10.5px;margin-top:5px">superseded by cmd_01K5RTB8 (cancel)</div>')+
+
+  msg("ag","agent","acme.refund-bot","14:05:02",
+   '<div class="q">mcp.stripe.create_refund needs stripe-live and I hold no lease for it.</div>'+
+   '<p>Stopping here. The refund is 240.00 USD for cus_Q41x, which the playbook says is inside policy. I need authority I do not have.</p>',
+   '<div style="margin-top:9px">'+apc(AP[0])+'</div>')+
+
+  msg("sys","clock","Awaiting authority","14:05:02",
+   '<p class="muted" style="font-size:12.5px">The tool is <i>held at the boundary</i>, not failed. It resumes on approval, or expires in 51 seconds.</p>')+
+ '</div>'+
+ '<div class="dock-note" style="border-top:1px solid var(--border)">'+ico("shield","sm")+
+  'Steering text reaches the model as data, never as policy. It is chained to your principal and shown as human origin in the transcript.</div></div>';
+
+ var side='<div class="grid">'+
+  '<div class="panel"><div class="panel-h"><b>Who is accountable</b></div><div class="panel-b">'+
+   '<div class="hopchain">'+
+    ['Operator · Marcus Bell · usr_01K2B7XN','Grant · rsg_0041 · credential:use · require_approval',
+     'Agent · acme.refund-bot · prn_01K0A1','Lease · pending','Call · held','Evidence · open']
+    .map(function(h,i){return '<div class="hop"><span class="n">'+(i+1)+'</span><span class="g">'+esc(h)+'</span></div>';}).join("")+
+   '</div><div class="note" style="margin-top:10px">Six hops, each a row, navigable both ways. This is what makes a credentialed act attributable.</div>'+
+  '</div></div>'+
+  '<div class="panel"><div class="panel-h"><b>Your verbs here</b></div><div class="panel-b legend">'+
+   '<div>'+ico("check","sm")+'<span><b>control</b> pause, resume, cancel. Granted.</span></div>'+
+   '<div>'+ico("check","sm")+'<span><b>steer</b> send an instruction. Granted.</span></div>'+
+   '<div>'+ico("x","sm")+'<span><b>authorize</b> issue a credential lease. <span class="muted">Not granted to you. Ask a credential approver.</span></span></div>'+
+   '</div></div>'+
+ '</div>';
+
+ return '<div class="wrap"><h1 class="h1">Session thread</h1>'+
+  '<p class="sub">One session, one ordered channel. Control, steering, and authority are three different permissions, so pausing a runaway agent never implies handing out production credentials.</p>'+
+  head+'<div style="height:13px"></div><div class="split">'+thread+side+'</div></div>';
+}
+
+/* ============================== vault ============================== */
+function pVault(){
+ if(S.vaultState==="empty"){
+  return '<div class="wrap"><h1 class="h1">Credentials</h1><p class="sub">One catalog for every credential an agent can be leased.</p>'+
+   '<div class="panel"><div class="empty"><span class="g">'+ico("key")+'</span><b>No credentials yet</b>'+
+   '<p>Add one, then declare it in the agent\'s <span class="mono">.oxagen/access.yaml</span>. Both have to agree before a lease is issued.</p>'+
+   '<button class="btn p" onclick="act(\'Adding is a mockup here.\')">Add a credential</button></div></div></div>';
+ }
+ var rows=CREDS.map(function(c){
+  return '<tr><td><button onclick="S.cred=\''+c.slug+'\';go(\'credential\')" style="color:inherit"><b>'+esc(c.name)+'</b>'+
+   '<div class="dim mono" style="font-size:10.5px">'+c.slug+'</div></button></td>'+
+   '<td class="nw">'+tierBadge(c.tier)+'</td><td class="muted nw">'+KINDLAB[c.kind]+'</td>'+
+   '<td class="mono nw">'+esc(c.system)+'</td><td class="nw">'+esc(c.owner)+'</td>'+
+   '<td>'+(c.status==="revoked"?'<span class="b b-denied">revoked</span>':'<span class="b b-allowed">active</span>')+'</td>'+
+   '<td class="mono dim">'+c.rot+'</td>'+
+   '<td><button class="iconbtn" onclick="S.cred=\''+c.slug+'\';go(\'credential\')" aria-label="Open">'+ico("chev","sm")+'</button></td></tr>';
+ }).join("");
+ var cards=CREDS.map(function(c){
+  return '<div class="cd"><div class="t"><b>'+esc(c.name)+'</b><span class="g" style="flex:1"></span>'+
+   (c.status==="revoked"?'<span class="b b-denied">revoked</span>':'<span class="b b-allowed">active</span>')+'</div>'+
+   '<div class="m">'+tierBadge(c.tier)+'<span class="b">'+KINDLAB[c.kind]+'</span></div>'+
+   '<div class="kv">'+esc(c.system)+' <span>'+esc(c.owner)+'</span></div>'+
+   '<div class="apc-a"><button class="btn sm" onclick="S.cred=\''+c.slug+'\';go(\'credential\')">Open</button></div></div>';
+ }).join("");
+
+ return '<div class="wrap"><h1 class="h1">Credentials</h1>'+
+  '<p class="sub">Every credential carries a containment tier, and the product uses the tier\'s real name. A weaker tier is never described with a stronger tier\'s language.</p>'+
+  '<div class="cols2" style="margin-bottom:13px">'+
+   ['brokered','leased','injected','delegated'].map(function(t){
+    return '<div class="panel"><div class="panel-b" style="display:grid;gap:6px">'+tierBadge(t)+
+     '<p class="muted" style="margin:0;font-size:12px">'+TIERNOTE[t]+'</p></div></div>';}).join("")+
+  '</div>'+
+  '<div class="panel"><div class="panel-h"><b>Catalog</b><span class="muted" style="font-size:12px">6</span><span class="g"></span>'+
+   '<button class="btn sm" onclick="S.vaultState=(S.vaultState===\'empty\'?\'ready\':\'empty\');render()">Toggle empty state</button>'+
+   '<button class="btn p sm" onclick="act(\'Adding is a mockup here.\')">Add</button></div>'+
+  '<div class="tw deskonly"><table><thead><tr><th>Credential</th><th>Containment</th><th>Kind</th><th>System</th>'+
+   '<th>Owner</th><th>Status</th><th>Rotates</th><th style="width:44px"></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  '<div class="cl mobonly">'+cards+'</div></div></div>';
+}
+
+/* ========================== credential detail ========================== */
+function pCredential(){
+ var c=credBySlug(S.cred);
+ var warn = c.tier==="injected" ? '<div class="warnbox">'+ico("alert")+
+   '<div><b>Containment is the runtime\'s, not ours.</b> This credential\'s material enters <span class="mono">erp-gateway-1</span>, a host Oxagen does not control. It is redacted from telemetry, bound to that one enrollment, and revocable. We do not claim the agent cannot leak it.</div></div>' : "";
+ return '<div class="wrap">'+
+  '<div class="row" style="margin-bottom:4px"><button class="btn sm" onclick="go(\'vault\')">'+ico("chev","sm")+'Credentials</button></div>'+
+  '<h1 class="h1">'+esc(c.name)+'</h1>'+
+  '<p class="sub">'+TIERNOTE[c.tier]+'</p>'+warn+
+  '<div style="height:13px"></div>'+
+  '<div class="split"><div class="grid">'+
+   '<div class="panel"><div class="panel-h"><b>Leases</b><span class="muted" style="font-size:12px">'+c.leases+' issued, '+c.uses+' redemptions</span></div>'+
+   '<div class="tw deskonly"><table><thead><tr><th>Lease</th><th>Agent</th><th>Tool</th><th>Tier</th><th>Expires</th><th>Uses</th><th>State</th></tr></thead><tbody>'+
+    [['lse_01K5RTM9','acme.refund-bot','mcp.stripe.create_refund','in 4m 12s','0 / 1','live','b-allowed'],
+     ['lse_01K5RTL2','acme.refund-bot','mcp.stripe.create_refund','expired','1 / 1','spent','b-proven'],
+     ['lse_01K5RTK7','acme.refund-bot','mcp.stripe.list_charges','expired','0 / 1','expired unused','b-observe'],
+     ['lse_01K5RTJ1','acme.refund-bot','mcp.stripe.create_refund','revoked','0 / 1','revoked','b-denied']]
+    .map(function(r){return '<tr><td class="mono nw">'+r[0]+'</td><td class="nw">'+r[1]+'</td><td class="mono nw" style="font-size:11.5px">'+r[2]+'</td>'+
+      '<td class="nw">'+tierBadge(c.tier)+'</td><td class="mono dim nw">'+r[3]+'</td><td class="mono nw">'+r[4]+'</td>'+
+      '<td class="nw"><span class="b '+r[6]+'">'+r[5]+'</span></td></tr>';}).join("")+
+   '</tbody></table></div>'+
+   '<div class="cl mobonly">'+[['lse_01K5RTM9','live','b-allowed','in 4m 12s'],['lse_01K5RTL2','spent','b-proven','expired'],
+     ['lse_01K5RTK7','expired unused','b-observe','expired'],['lse_01K5RTJ1','revoked','b-denied','revoked']]
+    .map(function(r){return '<div class="cd"><div class="t"><b class="mono">'+r[0]+'</b><span class="g" style="flex:1"></span>'+
+     '<span class="b '+r[2]+'">'+r[1]+'</span></div><div class="kv">acme.refund-bot <span>'+r[3]+'</span></div></div>';}).join("")+'</div></div>'+
+
+   '<div class="panel"><div class="panel-h"><b>Declaration</b><span class="g"></span>'+
+    '<span class="b b-proven">pinned a41c9e2</span></div>'+
+    '<div class="panel-b"><pre class="src"><span class="c"># .oxagen/access.yaml, reviewed in PR #418</span>\n'+
+    '<span class="k">- credential:</span> '+esc(c.slug)+'\n'+
+    '<span class="k">  tool:</span> mcp.stripe.create_refund\n'+
+    '<span class="k">  containment:</span> brokered      <span class="c"># a ceiling, not a request</span>\n'+
+    '<span class="k">  max_lease_ttl:</span> 5m\n'+
+    '<span class="k">  max_uses:</span> 1</pre>'+
+    '<div class="note" style="margin-top:10px">Merging this granted nothing. A lease needs this file <b>and</b> a grant a named human made in Oxagen.</div></div></div>'+
+  '</div>'+
+
+  '<div class="grid">'+
+   '<div class="panel"><div class="panel-h"><b>Facts</b></div><div class="panel-b">'+
+    '<div class="kvs">'+
+     '<div><i>kind</i><span>'+KINDLAB[c.kind]+'</span></div>'+
+     '<div><i>containment</i><span>'+tierBadge(c.tier)+'</span></div>'+
+     '<div><i>system</i><span class="mono">'+esc(c.system)+'</span></div>'+
+     '<div><i>owner</i><span>'+esc(c.owner)+'</span></div>'+
+     '<div><i>rotates</i><span>'+c.rot+'</span></div>'+
+     '<div><i>key</i><span class="mono">org:acme:vault:v1</span></div>'+
+    '</div></div></div>'+
+   '<div class="panel"><div class="panel-h"><b>Privileged actions</b></div><div class="panel-b" style="display:grid;gap:9px">'+
+    '<button class="btn" onclick="openDlg(\'reveal\')">'+ico("eye","sm")+'Reveal to me</button>'+
+    '<button class="btn" onclick="act(\'Rotation is a mockup here.\')">Rotate now</button>'+
+    '<button class="btn dz" onclick="act(\'Revoking kills every outstanding lease.\')">Revoke</button>'+
+    '<div class="note">A reveal cannot happen without a receipt. The read and the audit row are one transaction.</div>'+
+   '</div></div>'+
+   '<div class="panel"><div class="panel-h"><b>Grants</b></div><div class="panel-b legend">'+
+    '<div>'+ico("shield","sm")+'<span><b>acme.refund-bot</b> credential:use <span class="b b-approval">require_approval</span></span></div>'+
+    '<div>'+ico("shield","sm")+'<span><b>role payments.approver</b> credential:authorize <span class="b b-allowed">allow</span></span></div>'+
+    '<div>'+ico("x","sm")+'<span><b>acme.doc-writer</b> credential:use <span class="b b-denied">deny</span></span></div>'+
+   '</div></div>'+
+  '</div></div></div>';
+}
+
+/* ============================ declarations ============================ */
+function pDeclaration(){
+ return '<div class="wrap"><h1 class="h1">Declarations</h1>'+
+  '<p class="sub">What an agent may ask for lives in git, reviewed as code. What it may actually have lives in Postgres, granted by a named human. Neither one alone issues a lease.</p>'+
+  '<div class="split"><div class="grid">'+
+  '<div class="panel"><div class="panel-h">'+ico("git","sm")+'<b>PR #418</b>'+
+   '<span class="muted" style="font-size:12px">acme/agents, .oxagen/access.yaml</span><span class="g"></span>'+
+   '<span class="b b-proven">merged a41c9e2</span></div>'+
+   '<div class="panel-b"><pre class="src">'+
+   ' <span class="c">agent: acme/refund-bot</span>\n'+
+   ' <span class="c">requests:</span>\n'+
+   '<span class="a">+  - credential: stripe-live</span>\n'+
+   '<span class="a">+    tool: mcp.stripe.create_refund</span>\n'+
+   '<span class="a">+    containment: brokered</span>\n'+
+   '<span class="a">+    max_lease_ttl: 5m</span>\n'+
+   '<span class="a">+    max_uses: 1</span>\n'+
+   '<span class="a">+    justification: "Refund step in the support playbook"</span>\n'+
+   '<span class="d">-  - credential: legacy-erp</span>\n'+
+   '<span class="d">-    containment: injected</span>'+
+   '</pre>'+
+   '<div class="note" style="margin-top:10px">Reviewed by Priya Raman. A reviewer read the appetite before any human granted it. That is the review no secrets manager gives you.</div></div></div>'+
+
+  '<div class="panel"><div class="panel-h"><b>Declared against granted</b></div>'+
+   '<div class="tw deskonly"><table><thead><tr><th>Credential</th><th>Tool</th><th>Declared</th><th>Granted</th><th>Result</th></tr></thead><tbody>'+
+   [['stripe-live','mcp.stripe.create_refund','brokered','require_approval','leasable on approval','b-approval'],
+    ['warehouse-ro','sql.query','leased','allow','leasable','b-allowed'],
+    ['legacy-erp','erp.post_journal','not declared','allow','denied, no declaration','b-denied'],
+    ['github-app','github.create_pr','brokered','not granted','denied, no grant','b-denied']]
+   .map(function(r){return '<tr><td class="mono nw">'+r[0]+'</td><td class="mono nw" style="font-size:11.5px">'+r[1]+'</td>'+
+     '<td class="nw">'+r[2]+'</td><td class="nw">'+r[3]+'</td><td class="nw"><span class="b '+r[5]+'">'+r[4]+'</span></td></tr>';}).join("")+
+   '</tbody></table></div>'+
+   '<div class="cl mobonly">'+[['stripe-live','leasable on approval','b-approval'],['warehouse-ro','leasable','b-allowed'],
+    ['legacy-erp','denied, no declaration','b-denied'],['github-app','denied, no grant','b-denied']]
+    .map(function(r){return '<div class="cd"><div class="t"><b class="mono">'+r[0]+'</b><span class="g" style="flex:1"></span>'+
+     '<span class="b '+r[2]+'">'+r[1]+'</span></div></div>';}).join("")+'</div></div>'+
+  '</div>'+
+  '<div class="panel"><div class="panel-h"><b>Why two authorities</b></div><div class="panel-b legend">'+
+   '<div>'+ico("git","sm")+'<span>An attacker who lands a pull request gets a <b>request</b> nobody answered.</span></div>'+
+   '<div>'+ico("lock","sm")+'<span>An attacker in the console gets nothing the reviewed code did not already declare.</span></div>'+
+   '<div>'+ico("shield","sm")+'<span>The lease records the commit SHA, so "the declaration changed afterwards" is detectable.</span></div>'+
+  '</div></div></div></div>';
+}
+
+/* ============================ blast radius ============================ */
+function pBlast(){
+ return '<div class="wrap"><h1 class="h1">Blast radius</h1>'+
+  '<p class="sub">A credential was exposed. This is the question a customer asks during an incident, when the answer has to arrive in minutes, and it is the reason the knowledge graph earns its place.</p>'+
+  '<div class="panel" style="margin-bottom:13px"><div class="panel-h">'+ico("alert","sm")+
+   '<b>stripe-live</b><span class="muted" style="font-size:12px">exposed 2026-09-10 14:02Z</span><span class="g"></span>'+
+   '<button class="btn dz sm" onclick="act(\'Revoking kills every outstanding lease.\')">Revoke and rotate</button></div>'+
+   '<div class="panel-b"><div class="cols3">'+
+    [['14','leases issued','b-approval'],['9','redemptions','b-denied'],['4','runs tainted','b-denied']]
+    .map(function(m){return '<div><div class="mono" style="font-size:22px;font-weight:700">'+m[0]+'</div>'+
+      '<div class="muted" style="font-size:12px">'+m[1]+'</div></div>';}).join("")+
+   '</div></div></div>'+
+  '<div class="split"><div class="panel"><div class="panel-h"><b>What it touched</b>'+
+   '<span class="g"></span><span class="mono dim" style="font-size:10.5px">one bounded traversal, 1.2s</span></div>'+
+   '<div class="panel-b"><div class="hopchain">'+
+   [['Credential','stripe-live'],['Lease','lse_01K5RTM9, lse_01K5RTL2, and 7 more'],
+    ['Execution','run_01K5RT9X4M2 turn 7 step 3'],['Execution','run_01K5RTB2K1 turn 2 step 1'],
+    ['Artifact','refund receipt cus_Q41x, sent to the customer'],['Message','3 operator messages that authorized a lease']]
+   .map(function(h,i){return '<div class="hop"><span class="n">'+(i+1)+'</span>'+
+     '<span class="mono dim" style="font-size:10.5px;width:82px;flex:none">'+h[0]+'</span>'+
+     '<span class="g">'+esc(h[1])+'</span></div>';}).join("")+'</div>'+
+   '<div class="note" style="margin-top:11px">In Postgres this is a recursive join across four ledgers. In the graph it is one traversal. The graph is never asked whether something is allowed, only what connects to what.</div>'+
+   '</div></div>'+
+  '<div class="grid">'+
+   '<div class="panel"><div class="panel-h"><b>Transitive reach</b></div><div class="panel-b legend">'+
+    '<div>'+ico("chev","sm")+'<span><b>acme.refund-bot</b> reaches api.stripe.com directly</span></div>'+
+    '<div>'+ico("chev","sm")+'<span>and erp.internal <span class="muted">through erp.post_journal</span></span></div>'+
+    '<div>'+ico("chev","sm")+'<span>and analytics.rds <span class="muted">through an agent it may dispatch</span></span></div>'+
+   '</div></div>'+
+   '<div class="panel"><div class="panel-h"><b>Separation of duties</b></div><div class="panel-b">'+
+    '<div class="warnbox">'+ico("alert")+'<div>One path lets <b>acme.refund-bot</b> both approve a refund and issue it. Break it by removing <span class="mono">credential:authorize</span> from its role.</div></div>'+
+   '</div></div>'+
+  '</div></div></div>';
+}
+
+/* =========================== state gallery =========================== */
+function pStates(){
+ var deliveries=[
+  ["queued","delivered","applied"],["queued","delivered","acknowledged"],["queued","expired"],
+  ["queued","delivered","superseded"],["queued","rejected"],["queued","undeliverable"]
+ ];
+ return '<div class="wrap"><h1 class="h1">State gallery</h1>'+
+  '<p class="sub">Every state these surfaces can be in, on one page, so a builder can see them without hunting for the data that produces them.</p>'+
+  '<div class="grid">'+
+  '<div class="panel"><div class="panel-h"><b>Approval card, every state</b><span class="g"></span>'+
+   '<span class="mono dim" style="font-size:10.5px">small by design, never a page\'s subject</span></div>'+
+   '<div class="panel-b"><div class="apstrip wide">'+
+    apc(AP[0])+apc(AP[2])+
+    apc({id:"a",tool:"mcp.stripe.create_refund",agent:"acme.refund-bot",cred:"stripe-live",tier:"brokered",clock:"",
+      terms:[["Lease","5 min, 1 use"],["Target","cus_Q41x 240.00 USD"]],declared:true,state:"approved"})+
+    apc({id:"b",tool:"erp.post_journal",agent:"acme.refund-bot",cred:"legacy-erp",tier:"injected",clock:"",
+      terms:[["Lease","2 min, 1 use"],["Target","journal 8841"]],declared:false,crit:true,state:"denied"})+
+    apc({id:"c",tool:"sql.query",agent:"acme.warehouse-reader",cred:"warehouse-ro",tier:"leased",clock:"",
+      terms:[["Lease","15 min, read only"],["Target","analytics.public"]],declared:true,state:"expired"})+
+   '</div></div></div>'+
+
+  '<div class="panel"><div class="panel-h"><b>Delivery lifecycle, every outcome</b></div><div class="panel-b grid">'+
+   deliveries.map(function(d){
+    var last=d[d.length-1], bad=["expired","superseded","rejected","undeliverable"].indexOf(last)>=0;
+    return '<div class="row"><span class="mono dim" style="font-size:10.5px;width:116px">'+last+'</span>'+life(d,last,bad)+'</div>';
+   }).join("")+
+   '<div class="note">At most once, boundary aligned. An unapplied command at expiry becomes <span class="mono">expired</span> and is never applied later.</div>'+
+  '</div></div>'+
+
+  '<div class="cols2">'+
+   '<div class="panel"><div class="panel-h"><b>Containment tiers</b></div><div class="panel-b grid">'+
+    ['brokered','leased','injected','delegated'].map(function(t){
+     return '<div>'+tierBadge(t)+'<p class="muted" style="margin:4px 0 0;font-size:12px">'+TIERNOTE[t]+'</p></div>';}).join("")+
+   '</div></div>'+
+   '<div class="panel"><div class="panel-h"><b>Session statuses</b></div><div class="panel-b row">'+
+    ["asking","running","paused","offline","done","denied"].map(sBadge).join(" ")+
+   '</div></div>'+
+  '</div>'+
+
+  '<div class="cols2">'+
+   '<div class="panel"><div class="panel-h"><b>Loading</b></div><div class="cl">'+
+    '<div class="cd"><div class="sk" style="width:52%"></div><div class="sk" style="width:80%"></div><div class="sk" style="width:34%"></div></div>'+
+    '<div class="cd"><div class="sk" style="width:44%"></div><div class="sk" style="width:70%"></div></div></div></div>'+
+   '<div class="panel"><div class="panel-h"><b>Empty and error</b></div>'+
+    '<div class="empty"><span class="g">'+ico("fleet")+'</span><b>No sessions yet</b><p>Enroll a host and its sessions appear within ten seconds.</p></div>'+
+    '<div class="errbox">'+ico("alert")+'<div><b>Could not reach the control plane</b>'+
+    '<span class="muted" style="font-size:12.5px">Queued commands still apply. Nothing new can be dispatched.</span></div></div></div>'+
+  '</div></div></div>';
+}
+
+/* ============================== dialogs ============================== */
+function openDlg(k,arg){S.dlg=k;S.dlgArg=arg||null;render();}
+function closeDlg(){S.dlg=null;S.dlgArg=null;render();}
+function layer(){
+ if(!S.dlg) return "";
+ var b="";
+ if(S.dlg==="toast"){
+  b='<div class="dlg" style="width:min(420px,100%)"><div class="dlg-b"><p style="margin:0">'+esc(S.dlgArg||"")+'</p></div>'+
+   '<div class="dlg-f"><span class="g"></span><button class="btn p" onclick="closeDlg()">OK</button></div></div>';
+ } else if(S.dlg==="approve"){
+  var a=AP[0]; for(var i=0;i<AP.length;i++) if(AP[i].id===S.dlgArg) a=AP[i];
+  b='<div class="dlg"><div class="dlg-h">'+ico(a.crit?"alert":"shield","lg")+'<b>Authorize a lease</b>'+
+   '<span class="apc-clk">'+a.clock+'</span>'+
+   '<button class="iconbtn" onclick="closeDlg()" aria-label="Close">'+ico("x","sm")+'</button></div>'+
+   '<div class="dlg-b">'+
+   '<p style="margin:0;font-size:13px;color:var(--body)"><b>'+esc(a.agent)+'</b> wants to call <span class="mono">'+esc(a.tool)+'</span>. '+
+    'Approving issues a lease, not a key.</p>'+
+   '<div class="kvs">'+
+    '<div><i>credential</i><span>'+esc(a.cred)+' '+tierBadge(a.tier)+'</span></div>'+
+    '<div><i>lease</i><span>'+esc(a.terms[0][1])+'</span></div>'+
+    '<div><i>target</i><span class="mono">'+esc(a.terms[1][1])+'</span></div>'+
+    '<div><i>declaration</i><span>'+(a.declared?'<span class="b b-proven">pinned a41c9e2</span>':'<span class="b b-denied">not declared</span>')+'</span></div>'+
+    '<div><i>blast radius</i><span>4 runs, 1 customer artifact</span></div>'+
+   '</div>'+
+   (a.declared?'':'<div class="warnbox">'+ico("alert")+'<div><b>Outside the committed declaration.</b> No reviewer has seen this request. Granting it here would be the only human check. Open PR #418 first.</div></div>')+
+   '<div class="note">'+TIERNOTE[a.tier]+'</div>'+
+   '<label class="sr" for="rz">Reason</label>'+
+   '<input class="inp" id="rz" placeholder="Reason, read by the agent and kept in the receipt">'+
+   '</div>'+
+   '<div class="dlg-f"><button class="btn dz" onclick="act(\'Denied. The reason reaches the agent and the receipt.\')">Deny</button>'+
+    '<span class="g"></span>'+
+    '<button class="btn" onclick="act(\'Granted for this run. 5 minutes, 1 use.\')">This run</button>'+
+    '<button class="btn p" onclick="act(\'Approved once. Lease lse_01K5RTM9 issued for 5 minutes.\')">Approve once</button></div></div>';
+ } else if(S.dlg==="approvals"){
+  b='<div class="dlg"><div class="dlg-h">'+ico("shield","lg")+'<b>Waiting on you</b>'+
+   '<button class="iconbtn" onclick="closeDlg()" aria-label="Close">'+ico("x","sm")+'</button></div>'+
+   '<div class="dlg-b"><div class="apstrip">'+AP.map(function(a){return apc(a);}).join("")+'</div></div>'+
+   '<div class="dlg-f"><span class="g"></span><button class="btn" onclick="closeDlg()">Close</button></div></div>';
+ } else if(S.dlg==="steer"){
+  b='<div class="dlg"><div class="dlg-h">'+ico("msg","lg")+'<b>Steer 2 sessions</b>'+
+   '<button class="iconbtn" onclick="closeDlg()" aria-label="Close">'+ico("x","sm")+'</button></div>'+
+   '<div class="dlg-b">'+
+   '<textarea class="inp" rows="3" placeholder="One instruction. It reaches the model as data, never as policy."></textarea>'+
+   '<div class="kvs"><div><i>applies</i><span>at the next prompt or tool boundary</span></div>'+
+    '<div><i>expires</i><span>in 1 hour if never applied</span></div>'+
+    '<div><i>chained to</i><span>Marcus Bell, usr_01K2B7XN</span></div></div>'+
+   '<div class="note">Steering is a different permission from authority. This cannot issue a credential lease.</div></div>'+
+   '<div class="dlg-f"><span class="g"></span><button class="btn" onclick="closeDlg()">Cancel</button>'+
+   '<button class="btn p" onclick="act(\'Queued for 2 sessions. You will see per target delivery.\')">Queue</button></div></div>';
+ } else if(S.dlg==="broadcast"){
+  b='<div class="dlg"><div class="dlg-h">'+ico("stop","lg")+'<b>Stop the fleet</b>'+
+   '<button class="iconbtn" onclick="closeDlg()" aria-label="Close">'+ico("x","sm")+'</button></div>'+
+   '<div class="dlg-b">'+
+   '<div class="warnbox">'+ico("alert")+'<div>This refuses every tool that is not read only, on every enrolled host in this workspace, within one ingest interval. It fails closed if the control plane is unreachable.</div></div>'+
+   '<div class="kvs"><div><i>targets</i><span>6 sessions on 4 hosts</span></div>'+
+    '<div><i>leases</i><span>3 outstanding, all invalidated</span></div>'+
+    '<div><i>reversible</i><span>yes, by lifting the deny generation</span></div></div>'+
+   '<label class="sr" for="cf">Type STOP</label><input class="inp" id="cf" placeholder="Type STOP to confirm">'+
+   '</div>'+
+   '<div class="dlg-f"><span class="g"></span><button class="btn" onclick="closeDlg()">Cancel</button>'+
+   '<button class="btn dz" onclick="act(\'Stopped. Every non read only tool is refused fleet wide.\')">Stop everything</button></div></div>';
+ } else if(S.dlg==="reveal"){
+  b='<div class="dlg"><div class="dlg-h">'+ico("eye","lg")+'<b>Reveal to me</b>'+
+   '<button class="iconbtn" onclick="closeDlg()" aria-label="Close">'+ico("x","sm")+'</button></div>'+
+   '<div class="dlg-b">'+
+   '<div class="warnbox">'+ico("alert")+'<div>Reading a secret in the clear is the privileged act the trail exists to catch. This writes a <span class="mono">secret.revealed</span> row to the audit log, in the same transaction as the read. There is no reveal without a receipt.</div></div>'+
+   '<div class="kvs"><div><i>credential</i><span>stripe-live</span></div>'+
+    '<div><i>recorded as</i><span>Marcus Bell, usr_01K2B7XN</span></div>'+
+    '<div><i>visible to</i><span>every org Owner, Admin, and Compliance role</span></div></div>'+
+   '<label class="sr" for="rr">Reason</label><input class="inp" id="rr" placeholder="Why you need it in the clear">'+
+   '</div>'+
+   '<div class="dlg-f"><span class="g"></span><button class="btn" onclick="closeDlg()">Cancel</button>'+
+   '<button class="btn p" onclick="act(\'Revealed once. A receipt is now in the audit log.\')">Reveal and record</button></div></div>';
+ }
+ return '<div class="layer" onclick="if(event.target===this)closeDlg()">'+b+'</div>';
+}
+
+/* ============================== render ============================== */
+function body(){
+ switch(S.page){
+  case "thread": return pThread();
+  case "vault": return pVault();
+  case "credential": return pCredential();
+  case "declaration": return pDeclaration();
+  case "blast": return pBlast();
+  case "states": return pStates();
+  default: return pFleet();
+ }
+}
+function render(){
+ var vp=document.getElementById("viewport");
+ vp.className=S.phone?"phone":"";
+ document.getElementById("pt").setAttribute("aria-pressed",S.phone?"true":"false");
+ vp.innerHTML='<div class="app">'+nav()+
+  '<div class="main">'+topbar(PAGES[S.page]||"Fleet")+body()+'</div></div>'+
+  (S.side?'<div class="scrim" onclick="S.side=false;render()"></div>':"")+
+  dock()+layer();
+}
+window.addEventListener("hashchange",function(){
+ var p=location.hash.replace(/^#\/?/,"");
+ if(p&&PAGES[p]){S.page=p;render();}
+});
+(function(){
+ var p=location.hash.replace(/^#\/?/,"");
+ if(p&&PAGES[p]) S.page=p;
+ paintThemeBtn();render();
+})();
+</script>
