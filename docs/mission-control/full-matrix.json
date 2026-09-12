@@ -1,0 +1,3300 @@
+{
+  "rows": [
+    {
+      "tool": "create_org",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "organization, Neo4j database, keys, billing account",
+      "absorbs": [
+        {
+          "name": "create_org",
+          "file": "org.create.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "auth.accounts",
+        "org.organizations",
+        "org.data_planes"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "update_org",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "name, settings, retention policy",
+      "absorbs": [
+        {
+          "name": "update_org_settings",
+          "file": "org.settings.write.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "tools.policy_versions"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "invite_member",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "invite to org or workspace with role",
+      "absorbs": [
+        {
+          "name": "send_workspace_invite",
+          "file": "workspace.invite.send.ts"
+        },
+        {
+          "name": "add_org_member",
+          "file": "org.member.add.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users",
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "respond_to_invite",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "accept or decline",
+      "absorbs": [
+        {
+          "name": "accept_member_invite",
+          "file": "org.member_invite.accept.ts"
+        },
+        {
+          "name": "decline_member_invite",
+          "file": "org.member_invite.decline.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_member_role",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "set a role or remove (role `none`) at org or workspace",
+      "absorbs": [
+        {
+          "name": "change_member_role",
+          "file": "org.member_role.change.ts"
+        },
+        {
+          "name": "remove_org_member",
+          "file": "org.member.remove.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users",
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_members",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "members with roles at either scope",
+      "absorbs": [
+        {
+          "name": "list_workspace_members",
+          "file": "workspace.member.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "create_workspace",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "workspace plus its main repo binding and production branch",
+      "absorbs": [
+        {
+          "name": "create_workspace",
+          "file": "workspace.create.ts"
+        },
+        {
+          "name": "configure_repo",
+          "file": "repo.configure.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "update_workspace",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "governance mode, retention mode, promotion thresholds, budgets, model routes",
+      "absorbs": [
+        {
+          "name": "update_workspace_settings",
+          "file": "workspace.settings.write.ts"
+        },
+        {
+          "name": "update_memory_policy",
+          "file": "agent.memory_policy.write.ts"
+        },
+        {
+          "name": "update_budget_policy",
+          "file": "workspace.budget_policy.write.ts"
+        },
+        {
+          "name": "set_routing_policy",
+          "file": "router.policy.set.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users",
+        "billing.budgets",
+        "audit.legal_holds"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "list_workspaces",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "scoped listing",
+      "absorbs": [
+        {
+          "name": "list_workspaces",
+          "file": "workspace.list.ts"
+        },
+        {
+          "name": "list_orgs",
+          "file": "org.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "wrk.workspaces",
+        "wrk.workspace_users"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "get_data_plane",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "plane binding, DSN never returned",
+      "absorbs": [
+        {
+          "name": "get_data_plane",
+          "file": "org.data_plane.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "org.data_planes"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_data_plane",
+      "grade": "INHERIT",
+      "group": "Organization and workspace",
+      "does": "approval-gated",
+      "absorbs": [
+        {
+          "name": "set_data_plane",
+          "file": "org.data_plane.set.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [
+        "org.data_planes",
+        "control.approvals"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "create_api_key",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "purpose-locked keys for humans and services",
+      "absorbs": [
+        {
+          "name": "create_api_key",
+          "file": "api.key.create.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "rotate_api_key",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "rotate_api_key",
+          "file": "api.key.rotate.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "revoke_api_key",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "revoke_api_key",
+          "file": "api.key.revoke.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "register_agent",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "opens a Context PR adding `.oxagen/agents/<slug>.toml` and the generated harness files; identity is created on merge",
+      "absorbs": [
+        {
+          "name": "create_agent_def",
+          "file": "agent.definition.create.ts"
+        },
+        {
+          "name": "suggest_agent_def",
+          "file": "agent.definition.suggest.ts"
+        },
+        {
+          "name": "summarize_agent_def",
+          "file": "agent.definition.summarize.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [
+        "cost.fx_rates"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "update_agent",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "a Context PR changing the definition; identity and belt update on merge",
+      "absorbs": [
+        {
+          "name": "update_agent_def",
+          "file": "agent.definition.update.ts"
+        },
+        {
+          "name": "revise_agent_def",
+          "file": "agent.definition.revise.ts"
+        },
+        {
+          "name": "publish_agent_def",
+          "file": "agent.definition.publish.ts"
+        },
+        {
+          "name": "deploy_agent",
+          "file": "agent.deploy.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "retire_agent",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "a Context PR removing the file; principal retired, never deleted",
+      "absorbs": [
+        {
+          "name": "delete_agent_def",
+          "file": "agent.definition.delete.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [
+        "iam.principals",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "get_agent",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "identity, roles, belt, mandates",
+      "absorbs": [
+        {
+          "name": "get_agent_def",
+          "file": "agent.definition.get.ts"
+        },
+        {
+          "name": "get_agent_role",
+          "file": "agent.role.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments",
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "list_agents",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "list_agent_defs",
+          "file": "agent.definition.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "set_agent_role",
+      "grade": "INHERIT",
+      "group": "Identity and access",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "assign_agent_role",
+          "file": "agent.role.assign.ts"
+        },
+        {
+          "name": "revoke_agent_role",
+          "file": "agent.role.revoke.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "set_role_grants",
+      "grade": "NEW",
+      "group": "Identity and access",
+      "does": "role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Organization",
+        "Agents"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        },
+        {
+          "fn": "pAgents",
+          "line": 4875
+        },
+        {
+          "fn": "pAgent",
+          "line": 4921
+        },
+        {
+          "fn": "pMandate",
+          "line": 5072
+        },
+        {
+          "fn": "pAgentSource",
+          "line": 2980
+        }
+      ],
+      "tables": [
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments",
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "tools.credential_grants",
+        "control.tool_calls"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "enroll_host",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "device key, host agent, bundle, hooks",
+      "absorbs": [
+        {
+          "name": "create_tacho_enrollment",
+          "file": "tacho.enrollment.create.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "revoke_enrollment",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "revoke_tacho_enrollment",
+          "file": "tacho.enrollment.revoke.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "control.enrollments"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_hosts",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "list_tacho_hosts",
+          "file": "tacho.host.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "get_policy_bundle",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "signed bundle for a host or agent",
+      "absorbs": [
+        {
+          "name": "get_tacho_bundle",
+          "file": "tacho.bundle.get.ts"
+        },
+        {
+          "name": "get_registry_config",
+          "file": "schema.registry.config.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "tools.policy_versions"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "ingest_frames",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "the one evidence ingress; headless",
+      "absorbs": [
+        {
+          "name": "ingest_tacho_events",
+          "file": "tacho.events.ingest.ts"
+        },
+        {
+          "name": "record_execution",
+          "file": "agent.execution.record.ts"
+        },
+        {
+          "name": "ingest_stella_operational_telemetry",
+          "file": "telemetry.stella.ingest.ts"
+        },
+        {
+          "name": "debug_execution",
+          "file": "agent.debug.trace.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M1"
+    },
+    {
+      "tool": "fetch_commands",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "control channel; headless",
+      "absorbs": [
+        {
+          "name": "fetch_tacho_commands",
+          "file": "tacho.command.fetch.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "control.commands"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "dispatch_command",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "pause, resume, steer, cancel, revoke",
+      "absorbs": [
+        {
+          "name": "dispatch_tacho_command",
+          "file": "tacho.command.dispatch.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "control.commands"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_runs",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "by operator, agent, task, tier, verdict",
+      "absorbs": [
+        {
+          "name": "list_executions",
+          "file": "agent.execution.list.ts"
+        },
+        {
+          "name": "list_tacho_sessions",
+          "file": "tacho.session.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "get_run",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "run with turns, steps, frames, receipts, cost",
+      "absorbs": [
+        {
+          "name": "get_tacho_session",
+          "file": "tacho.session.get.ts"
+        },
+        {
+          "name": "get_execution_trace",
+          "file": "agent.trace.get.ts"
+        },
+        {
+          "name": "get_message_execution",
+          "file": "chat.message.execution.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M2"
+    },
+    {
+      "tool": "export_run",
+      "grade": "NEW",
+      "group": "Wrapping and control",
+      "does": "signed bundle with verifier",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_approvals",
+      "grade": "NEW",
+      "group": "Wrapping and control",
+      "does": "queue with the four-hop chain",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "control.approvals"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "resolve_approval",
+      "grade": "INHERIT",
+      "group": "Wrapping and control",
+      "does": "approve or deny, mints the token",
+      "absorbs": [
+        {
+          "name": "resolve_approval",
+          "file": "agent.approval.resolve.ts"
+        },
+        {
+          "name": "resolve_mcp_consent",
+          "file": "agent.mcp_consent.resolve.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [
+        "control.approvals"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "send_message",
+      "grade": "NEW",
+      "group": "Wrapping and control",
+      "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6)",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_messages",
+      "grade": "NEW",
+      "group": "Wrapping and control",
+      "does": "sent and received, with delivery outcome",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Fleet",
+        "Run"
+      ],
+      "renderFns": [
+        {
+          "fn": "pFleet",
+          "line": 3351
+        },
+        {
+          "fn": "pRun",
+          "line": 3595
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "register_tool_server",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "MCP or HTTP server",
+      "absorbs": [
+        {
+          "name": "register_mcp_server",
+          "file": "agent.mcp.register.ts"
+        },
+        {
+          "name": "set_mcp_enabled",
+          "file": "agent.mcp.set_enabled.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "remove_tool_server",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "delete_mcp_server",
+          "file": "agent.mcp.delete.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_tool_servers",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "list_mcp_servers",
+          "file": "agent.mcp.list.ts"
+        },
+        {
+          "name": "resolve_mcp_servers",
+          "file": "agent.mcp.resolve.ts"
+        },
+        {
+          "name": "list_mcp_consents",
+          "file": "agent.mcp_consent.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "import_tools",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "pull `tools/list`, version, store schemas",
+      "absorbs": [
+        {
+          "name": "list_tool_declarations",
+          "file": "tool.declaration.list.ts"
+        },
+        {
+          "name": "publish_tool_declaration",
+          "file": "tool.declaration.publish.ts"
+        },
+        {
+          "name": "list_agent_tools",
+          "file": "agent.tool.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "tools.policy_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "approve_tool_schema",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "accept an observed output schema",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "search_tools",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "belt search meta-tool; also the UI's command menu",
+      "absorbs": [
+        {
+          "name": "search_command_menu",
+          "file": "command.menu.search.ts"
+        },
+        {
+          "name": "suggest_commands",
+          "file": "command.menu.suggest.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.commands",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "load_tools",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "belt definitions meta-tool",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_connection",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "credential to a tool server or provider, tested before save",
+      "absorbs": [
+        {
+          "name": "set_model_credential",
+          "file": "org.model_credential.set.ts"
+        },
+        {
+          "name": "verify_model_credential",
+          "file": "org.model_credential.verify.ts"
+        },
+        {
+          "name": "upsert_secret_key",
+          "file": "secret.key.upsert.ts"
+        },
+        {
+          "name": "set_secret_value",
+          "file": "secret.value.set.ts"
+        },
+        {
+          "name": "set_plugin_secret",
+          "file": "plugin.credential.set_secret.ts"
+        },
+        {
+          "name": "reauth_plugin_credential",
+          "file": "plugin.credential.reauth.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "iam.credentials",
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "tools.connections",
+        "tools.credential_grants",
+        "control.tool_calls",
+        "cost.provider_usage"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "delete_connection",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "delete_connection",
+          "file": "connection.delete.ts"
+        },
+        {
+          "name": "delete_model_credential",
+          "file": "org.model_credential.delete.ts"
+        },
+        {
+          "name": "delete_secret_key",
+          "file": "secret.key.delete.ts"
+        },
+        {
+          "name": "unset_secret_value",
+          "file": "secret.value.unset.ts"
+        },
+        {
+          "name": "revoke_plugin_credential",
+          "file": "plugin.credential.revoke.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.connections"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_connections",
+      "grade": "INHERIT",
+      "group": "Toolbelt",
+      "does": "never returns secrets",
+      "absorbs": [
+        {
+          "name": "list_connections",
+          "file": "connection.list.ts"
+        },
+        {
+          "name": "list_secret_keys",
+          "file": "secret.key.list.ts"
+        },
+        {
+          "name": "get_model_credential",
+          "file": "org.model_credential.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.connections"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "grant_mandate",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "bounded authority for a consequence tag to an agent",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "iam.role_grants",
+        "tools.credential_grants",
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "set_approval_rules",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "the customer's approval and auto-approval rules, as a policy version",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.policy_versions",
+        "control.approvals"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "revoke_mandate",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "list_mandates",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "ledger view",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "set_policy",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "new policy version with tests",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.policy_versions"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "simulate_policy",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "replay a version against history",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.policy_versions"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "set_kill_switch",
+      "grade": "NEW",
+      "group": "Toolbelt",
+      "does": "any level",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Tools"
+      ],
+      "renderFns": [
+        {
+          "fn": "pTools",
+          "line": 5122
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "link_repository",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "link, role, production branch, issue import",
+      "absorbs": [
+        {
+          "name": "configure_repo",
+          "file": "repo.configure.ts"
+        },
+        {
+          "name": "sync_repo",
+          "file": "repo.sync.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [
+        "wrk.repositories",
+        "iam.roles",
+        "iam.role_grants",
+        "iam.principal_role_assignments"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "unlink_repository",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "pause_repo",
+          "file": "repo.pause.ts"
+        },
+        {
+          "name": "delete_integration",
+          "file": "integration.delete.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [
+        "wrk.repositories"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "sync_repository",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "manual full re-index",
+      "absorbs": [
+        {
+          "name": "sync_repo",
+          "file": "repo.sync.ts"
+        },
+        {
+          "name": "resume_repo",
+          "file": "repo.resume.ts"
+        },
+        {
+          "name": "sync_integration",
+          "file": "integration.sync.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [
+        "wrk.repositories"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "add_source",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "connector source",
+      "absorbs": [
+        {
+          "name": "install_plugin",
+          "file": "plugin.org.install.ts"
+        },
+        {
+          "name": "configure_integration",
+          "file": "integration.configure.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "update_source",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "mappings, state",
+      "absorbs": [
+        {
+          "name": "update_connection",
+          "file": "connection.update.ts"
+        },
+        {
+          "name": "set_connection_mappings",
+          "file": "connection.mappings.set.ts"
+        },
+        {
+          "name": "suggest_connection_mappings",
+          "file": "connection.mappings.suggest.ts"
+        },
+        {
+          "name": "pause_connection",
+          "file": "connection.pause.ts"
+        },
+        {
+          "name": "preview_connection",
+          "file": "connection.preview.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "remove_source",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "delete_connection",
+          "file": "connection.delete.ts"
+        },
+        {
+          "name": "uninstall_plugin",
+          "file": "plugin.org.uninstall.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "list_sources",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "health, cursors, counts",
+      "absorbs": [
+        {
+          "name": "list_connections",
+          "file": "connection.list.ts"
+        },
+        {
+          "name": "list_integrations",
+          "file": "integration.list.ts"
+        },
+        {
+          "name": "list_plugins",
+          "file": "plugin.org.list.ts"
+        },
+        {
+          "name": "get_integration",
+          "file": "integration.get.ts"
+        },
+        {
+          "name": "get_integration_metrics",
+          "file": "integration.metrics.ts"
+        },
+        {
+          "name": "get_reconcile_status",
+          "file": "schema.reconcile.status.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "propose_ontology_version",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "profiler plus author; opens the pull request on the main repo (merge activates, §11.8)",
+      "absorbs": [
+        {
+          "name": "recommend_schema",
+          "file": "schema.recommend.ts"
+        },
+        {
+          "name": "setup_schema",
+          "file": "schema.setup.ts"
+        },
+        {
+          "name": "create_schema_version",
+          "file": "schema.version.create.ts"
+        },
+        {
+          "name": "run_schema_chat",
+          "file": "schema.chat.ts"
+        },
+        {
+          "name": "pin_schema_version",
+          "file": "schema.version.pin.ts"
+        },
+        {
+          "name": "toggle_schema",
+          "file": "schema.toggle.ts"
+        },
+        {
+          "name": "dispatch_schema_reconcile",
+          "file": "schema.reconcile.dispatch.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.policy_versions"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "get_ontology",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "active version, classes, relations, synonyms, proposals, diffs; also served to agents as `graph` frames",
+      "absorbs": [
+        {
+          "name": "get_schema_registry",
+          "file": "schema.registry.get.ts"
+        },
+        {
+          "name": "list_schema_versions",
+          "file": "schema.version.list.ts"
+        },
+        {
+          "name": "list_schemas",
+          "file": "schema.list.ts"
+        },
+        {
+          "name": "diff_schema_versions",
+          "file": "schema.version.diff.ts"
+        },
+        {
+          "name": "export_schema",
+          "file": "schema.export.ts"
+        },
+        {
+          "name": "get_node_labels",
+          "file": "graph.node_label.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [
+        "tools.tool_versions",
+        "tools.policy_versions"
+      ],
+      "milestone": "M4"
+    },
+    {
+      "tool": "update_ontology",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "edits on a proposal branch",
+      "absorbs": [
+        {
+          "name": "upsert_schema_label",
+          "file": "schema.label.upsert.ts"
+        },
+        {
+          "name": "upsert_schema_property",
+          "file": "schema.property.upsert.ts"
+        },
+        {
+          "name": "upsert_schema_relationship",
+          "file": "schema.relationship.upsert.ts"
+        },
+        {
+          "name": "delete_schema_label",
+          "file": "schema.label.delete.ts"
+        },
+        {
+          "name": "delete_schema_property",
+          "file": "schema.property.delete.ts"
+        },
+        {
+          "name": "delete_schema_relationship",
+          "file": "schema.relationship.delete.ts"
+        },
+        {
+          "name": "validate_schema_node",
+          "file": "schema.validate.node.ts"
+        },
+        {
+          "name": "validate_schema_relationship",
+          "file": "schema.validate.relationship.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "search_graph",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "hybrid semantic",
+      "absorbs": [
+        {
+          "name": "search_graph",
+          "file": "graph.search.ts"
+        },
+        {
+          "name": "search_nodes",
+          "file": "graph.node.search.ts"
+        },
+        {
+          "name": "search_references",
+          "file": "reference.search.ts"
+        },
+        {
+          "name": "list_nodes",
+          "file": "graph.node.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "expand_graph",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "typed traversal",
+      "absorbs": [
+        {
+          "name": "get_ontology_neighbors",
+          "file": "ontology.neighbors.ts"
+        },
+        {
+          "name": "get_node",
+          "file": "graph.node.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "query_graph",
+      "grade": "INHERIT",
+      "group": "Ontology and knowledge",
+      "does": "natural language to Cypher",
+      "absorbs": [
+        {
+          "name": "query_ontology",
+          "file": "ontology.query.ts"
+        },
+        {
+          "name": "get_graph_stats",
+          "file": "graph.stats.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Ontology"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOntology",
+          "line": 5306
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "append_record",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "the protocol's append",
+      "absorbs": [
+        {
+          "name": "write_memory",
+          "file": "agent.memory.write.ts"
+        },
+        {
+          "name": "save_memory",
+          "file": "agent.memory.remember.ts"
+        },
+        {
+          "name": "attach_memory_evidence",
+          "file": "agent.memory_evidence.attach.ts"
+        },
+        {
+          "name": "cite_memory",
+          "file": "agent.memory.cite.ts"
+        },
+        {
+          "name": "cite_reference",
+          "file": "reference.cite.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "get_record",
+      "grade": "NEW",
+      "group": "Context and steering",
+      "does": "",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "list_records",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "by kind, scope, status, lineage",
+      "absorbs": [
+        {
+          "name": "list_context_records",
+          "file": "context.record.list.ts"
+        },
+        {
+          "name": "list_memories",
+          "file": "agent.memory.list.ts"
+        },
+        {
+          "name": "list_memory_citations",
+          "file": "agent.memory_citation.list.ts"
+        },
+        {
+          "name": "get_citation_stats",
+          "file": "agent.memory_citation.stats.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "retract_record",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "new record on the lineage",
+      "absorbs": [
+        {
+          "name": "delete_memory",
+          "file": "agent.memory.delete.ts"
+        },
+        {
+          "name": "demote_memory",
+          "file": "agent.memory.demote.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "recall_context",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "the provider's query, as a tool for agents",
+      "absorbs": [
+        {
+          "name": "recall_memory",
+          "file": "agent.memory.recall.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [
+        "tools.tool_servers",
+        "tools.tool_versions",
+        "control.tool_calls",
+        "cost.provider_usage"
+      ],
+      "milestone": "M3"
+    },
+    {
+      "tool": "propose_record",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "a proposal",
+      "absorbs": [
+        {
+          "name": "promote_memory",
+          "file": "agent.memory.promote.ts"
+        },
+        {
+          "name": "promote_context_record",
+          "file": "context.record.promote.ts"
+        },
+        {
+          "name": "suggest_promotion_rationales",
+          "file": "agent.memory_promotion.rationales.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "open_context_pr",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "the pull request",
+      "absorbs": [
+        {
+          "name": "publish_context_record",
+          "file": "context.record.publish.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "list_proposals",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "list_memory_promotions",
+          "file": "agent.memory_promotion.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "dismiss_proposal",
+      "grade": "INHERIT",
+      "group": "Context and steering",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "dismiss_memory_promotion",
+          "file": "agent.memory_promotion.dismiss.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Steering"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSteering",
+          "line": 5499
+        }
+      ],
+      "tables": [],
+      "milestone": "M3"
+    },
+    {
+      "tool": "get_spend",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "rollups at any level with basis",
+      "absorbs": [
+        {
+          "name": "get_usage_breakdown",
+          "file": "billing.usage.breakdown.ts"
+        },
+        {
+          "name": "list_routing_stats",
+          "file": "router.stats.list.ts"
+        },
+        {
+          "name": "get_repo_metrics",
+          "file": "repo.metrics.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_findings",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "ranked optimizations",
+      "absorbs": [
+        {
+          "name": "list_error_clusters",
+          "file": "telemetry.error.cluster.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "get_reconciliation",
+      "grade": "NEW",
+      "group": "Spend and billing",
+      "does": "matched, variance, exceptions",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [
+        "cost.reconciliations"
+      ],
+      "milestone": "M5"
+    },
+    {
+      "tool": "export_statement",
+      "grade": "NEW",
+      "group": "Spend and billing",
+      "does": "",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [],
+      "milestone": "M5"
+    },
+    {
+      "tool": "set_budget",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "any level",
+      "absorbs": [
+        {
+          "name": "set_spend_budget",
+          "file": "billing.budget.set.ts"
+        },
+        {
+          "name": "get_spend_budget",
+          "file": "billing.budget.get.ts"
+        },
+        {
+          "name": "update_user_budget",
+          "file": "budget.policy.write.ts"
+        },
+        {
+          "name": "get_user_budget",
+          "file": "budget.policy.read.ts"
+        },
+        {
+          "name": "get_budget_policy",
+          "file": "workspace.budget_policy.read.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [
+        "billing.budgets"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "set_model_route",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "tiers and fallbacks",
+      "absorbs": [
+        {
+          "name": "update_model_settings",
+          "file": "workspace.model_settings.write.ts"
+        },
+        {
+          "name": "get_model_settings",
+          "file": "workspace.model_settings.read.ts"
+        },
+        {
+          "name": "preview_routing_decision",
+          "file": "router.decision.preview.ts"
+        },
+        {
+          "name": "get_routing_policy",
+          "file": "router.policy.get.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_funding_source",
+      "grade": "NEW",
+      "group": "Spend and billing",
+      "does": "platform or customer key",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [],
+      "milestone": "M4"
+    },
+    {
+      "tool": "get_subscription",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "get_subscription",
+          "file": "billing.subscription.read.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [
+        "control.event_subscriptions",
+        "billing.subscriptions"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "change_subscription",
+      "grade": "INHERIT",
+      "group": "Spend and billing",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "start_subscription_upgrade",
+          "file": "billing.subscription_upgrade.start.ts"
+        },
+        {
+          "name": "purchase_credits",
+          "file": "billing.credits.purchase.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Spend",
+        "Billing"
+      ],
+      "renderFns": [
+        {
+          "fn": "pSpend",
+          "line": 5615
+        },
+        {
+          "fn": "pBilling",
+          "line": 6132
+        }
+      ],
+      "tables": [
+        "control.event_subscriptions",
+        "billing.subscriptions"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "query_audit_log",
+      "grade": "INHERIT",
+      "group": "Audit and compliance",
+      "does": "control-plane events, receipts",
+      "absorbs": [
+        {
+          "name": "query_audit_log",
+          "file": "audit.log.query.ts"
+        },
+        {
+          "name": "get_auth_alerts",
+          "file": "plugin.settings.get_auth_alerts.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "org.data_planes",
+        "control.event_subscriptions",
+        "audit.audit_events"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "export_data",
+      "grade": "INHERIT",
+      "group": "Audit and compliance",
+      "does": "organization export",
+      "absorbs": [
+        {
+          "name": "export_data",
+          "file": "privacy.data.export.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "org.organizations",
+        "org.data_planes"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "erase_data",
+      "grade": "INHERIT",
+      "group": "Audit and compliance",
+      "does": "crypto-shred",
+      "absorbs": [
+        {
+          "name": "erase_data",
+          "file": "privacy.data.erase.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "org.data_planes"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_legal_hold",
+      "grade": "NEW",
+      "group": "Audit and compliance",
+      "does": "",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "audit.legal_holds"
+      ],
+      "milestone": "M5"
+    },
+    {
+      "tool": "list_incidents",
+      "grade": "NEW",
+      "group": "Audit and compliance",
+      "does": "tamper, probes, chain breaks, mandate exceptions",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "tools.mandates",
+        "tools.mandate_ledger"
+      ],
+      "milestone": "M2"
+    },
+    {
+      "tool": "set_event_subscription",
+      "grade": "NEW",
+      "group": "Audit and compliance",
+      "does": "event kinds, filters, delivery mode; returns the unique endpoint (§7.7)",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "control.event_subscriptions",
+        "billing.subscriptions",
+        "audit.audit_events"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_event_subscriptions",
+      "grade": "NEW",
+      "group": "Audit and compliance",
+      "does": "with delivery health and dead letters",
+      "absorbs": [],
+      "unresolved": [],
+      "screens": [
+        "Audit"
+      ],
+      "renderFns": [
+        {
+          "fn": "pAudit",
+          "line": 6515
+        }
+      ],
+      "tables": [
+        "control.event_subscriptions",
+        "billing.subscriptions",
+        "audit.audit_events"
+      ],
+      "milestone": "M0"
+    },
+    {
+      "tool": "ask_assistant",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "a turn of the in-app agent",
+      "absorbs": [
+        {
+          "name": "send_message",
+          "file": "chat.message.send.ts"
+        },
+        {
+          "name": "post_conversation_message",
+          "file": "conversation.chat.ts"
+        },
+        {
+          "name": "add_conversation_attachment",
+          "file": "conversation.attachment.add.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_conversations",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "with the actions as arguments",
+      "absorbs": [
+        {
+          "name": "list_conversations",
+          "file": "conversation.list.ts"
+        },
+        {
+          "name": "rename_conversation",
+          "file": "conversation.rename.ts"
+        },
+        {
+          "name": "archive_conversation",
+          "file": "conversation.archive.ts"
+        },
+        {
+          "name": "delete_conversation",
+          "file": "conversation.delete.ts"
+        },
+        {
+          "name": "export_conversation",
+          "file": "conversation.export.ts"
+        },
+        {
+          "name": "purge_conversations",
+          "file": "conversation.purge.ts"
+        },
+        {
+          "name": "list_conversation_files",
+          "file": "conversation.files.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "set_preferences",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "update_user_preferences",
+          "file": "user.preferences.write.ts"
+        },
+        {
+          "name": "get_user_preferences",
+          "file": "user.preferences.read.ts"
+        },
+        {
+          "name": "update_workspace_user_preferences",
+          "file": "user.workspace_preferences.write.ts"
+        },
+        {
+          "name": "get_workspace_user_preferences",
+          "file": "user.workspace_preferences.read.ts"
+        },
+        {
+          "name": "set_auth_alerts",
+          "file": "plugin.settings.set_auth_alerts.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "list_notifications",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "list_notifications",
+          "file": "notification.list.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "mark_notification",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "",
+      "absorbs": [
+        {
+          "name": "mark_notification",
+          "file": "notification.mark.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    },
+    {
+      "tool": "get_install_instructions",
+      "grade": "INHERIT",
+      "group": "Assistant and account",
+      "does": "per harness",
+      "absorbs": [
+        {
+          "name": "get_install_instructions",
+          "file": "system.install.instructions.ts"
+        }
+      ],
+      "unresolved": [],
+      "screens": [
+        "Organization"
+      ],
+      "renderFns": [
+        {
+          "fn": "pOrganization",
+          "line": 6003
+        }
+      ],
+      "tables": [],
+      "milestone": "M0"
+    }
+  ],
+  "TABLES": [
+    "auth.users",
+    "auth.sessions",
+    "auth.accounts",
+    "auth.verifications",
+    "org.organizations",
+    "org.org_users",
+    "org.data_planes",
+    "wrk.workspaces",
+    "wrk.workspace_users",
+    "wrk.repositories",
+    "iam.principals",
+    "iam.roles",
+    "iam.role_grants",
+    "iam.principal_role_assignments",
+    "iam.credentials",
+    "tools.tool_servers",
+    "tools.tool_versions",
+    "tools.connections",
+    "tools.credential_grants",
+    "tools.mandates",
+    "tools.mandate_ledger",
+    "tools.policy_versions",
+    "control.enrollments",
+    "control.commands",
+    "control.approvals",
+    "control.tool_calls",
+    "control.event_subscriptions",
+    "cost.price_entries",
+    "cost.fx_rates",
+    "cost.run_totals",
+    "cost.provider_usage",
+    "cost.reconciliations",
+    "billing.subscriptions",
+    "billing.budgets",
+    "audit.audit_events",
+    "audit.archive_segments",
+    "audit.legal_holds"
+  ],
+  "SCREENS": [
+    {
+      "screen": "Fleet",
+      "job": "Every run, live and recent, with its enforcement tier, replay grade, cost so far, and pending approvals",
+      "actions": [
+        "pause",
+        "resume",
+        "cancel",
+        "open"
+      ]
+    },
+    {
+      "screen": "Run",
+      "job": "A frame-by-frame player for one run. It shows the transcript at three zoom levels (turns, steps, everything) under a transport, the playback controls (scrub, step, play, pause, ×1 to ×4). It also shows what the agent was told, each model exchange, tool calls with their validation results, policy decisions, proof, a cost strip, and chain status",
+      "actions": [
+        "steer (with a delivery mode)",
+        "pause",
+        "cancel",
+        "approve",
+        "fork replay",
+        "bisect",
+        "export"
+      ]
+    },
+    {
+      "screen": "Agents",
+      "job": "Each agent's identity, run credential, roles, its toolbelt (the tools it may call, with schemas and per-tool decision rules), the mandates it holds, budgets, enrollment status, and tamper incidents",
+      "actions": [
+        "register",
+        "enroll",
+        "revoke",
+        "grant",
+        "set budget",
+        "request mandate"
+      ]
+    },
+    {
+      "screen": "Tools",
+      "job": "The registry (servers, tools, versions, schemas, safety classification), approval rules and auto-approval conditions, connections and their owners, credential grants, the mandates ledger, policy versions with their tests and simulation, kill switches, and the last result from the assurance suite",
+      "actions": [
+        "import server",
+        "approve observed schema",
+        "add connection",
+        "grant mandate",
+        "edit and simulate policy",
+        "flip a switch"
+      ]
+    },
+    {
+      "screen": "Ontology",
+      "job": "The workspace's model of its own business, and the page the product is known for. Tabs in order: **Model** (the live map: every class with its entity count, freshness, sources, and relations drawn, plus the consequence on hover: most cited by agents, rules that reference it, proven runs per class, drift found), **Graph** (explore instances, typed expansion, ask in plain English and see the Cypher graph query and the citations behind the answer), **Sources** (connectors, sync health, entity provenance), **Repositories** (main repo and linked repos, production branch, last indexed commit, event health, issue import, code graph, data-layer drift), **Versions** (the git history of `.oxagen/ontology/`, open proposals as pull requests with diffs, an `as_of` picker). The page also lists embedding indexes with their recall and citation rate",
+      "actions": [
+        "ask the graph",
+        "open an ontology proposal",
+        "link repo",
+        "set production branch",
+        "sync now",
+        "add source",
+        "resolve entity",
+        "upgrade an embedding index"
+      ]
+    },
+    {
+      "screen": "Steering",
+      "job": "Published records, proposals, open Context PRs, effect metrics, and retirement candidates",
+      "actions": [
+        "open Context PR",
+        "review",
+        "retire"
+      ]
+    },
+    {
+      "screen": "Spend",
+      "job": "Findings ranked by the money at stake. Cost by operator, agent, model, provider key, and task. Proven spend versus unproven spend, and the productive ratio. Cache hit rate. Reconciliation status and variance. Budgets",
+      "actions": [
+        "act on a finding",
+        "set budget",
+        "open exception",
+        "export statement"
+      ]
+    },
+    {
+      "screen": "Organization",
+      "job": "People, roles, invitations, SSO (single sign-on), workspaces, model funding and routes, the data plane, and API keys",
+      "actions": [
+        "invite",
+        "change role",
+        "create workspace",
+        "set funding",
+        "set route"
+      ]
+    },
+    {
+      "screen": "Billing",
+      "job": "Governed-action usage, the retention meter, plan, and invoices",
+      "actions": [
+        "change plan"
+      ]
+    },
+    {
+      "screen": "Audit",
+      "job": "Control-plane audit events, data plane, key rotation, legal holds, and exports",
+      "actions": [
+        "export",
+        "hold",
+        "rotate"
+      ]
+    }
+  ],
+  "MILESTONES": [
+    {
+      "id": "M0",
+      "name": "Foundations",
+      "delivers": " the repo, the kernel, tenancy, rls (row-level security) with role-based system access, org and workspace creation including a neo4j database and repo binding, iam, and the tool registry. "
+    },
+    {
+      "id": "M1",
+      "name": "Gateway",
+      "delivers": " the model proxy. the tool gateway with schema validation (each tool call is checked against the tool's declared input shape before it runs). run tokens (credentials tied to a single run). frames, chain, seal, and attestation. the fleet and run pages with render replay. the model layer with openrouter routes and funding sources. the stella engine container and the in-app agent's onboarding flow. "
+    },
+    {
+      "id": "M2",
+      "name": "Control",
+      "delivers": " bundles, commands, approvals with tokens, and budgets. the full call pipeline with taint and receipts. the credential broker with at least token exchange and restricted keys. mandates and the ledger. kill switches. cedar policy with tests and simulation. the tools page. cost records with normalized token classes, the price book, and rollups to operator level. the findings job and the spend page. "
+    },
+    {
+      "id": "M3",
+      "name": "Teach",
+      "delivers": " the records endpoint, the reflector, the promoter, context prs through the github app, steering delivery, and effect metrics. "
+    },
+    {
+      "id": "M4",
+      "name": "Ground",
+      "delivers": " the ontology engine and three connectors. github events and issue import. the code graph with webhook-driven incremental updates and manual sync. voyage embeddings with hybrid retrieval and reranking. the three graph query agent tools with the cypher parser and injector. entity provenance. oxagen as a protocol provider that passes conformance. "
+    },
+    {
+      "id": "M5",
+      "name": "Audit",
+      "delivers": " the archiver, compaction, holds, erasure, and reconciliation against a real provider invoice. "
+    },
+    {
+      "id": "M6",
+      "name": "Prove",
+      "delivers": " the witness runner. the witness author, with the test-flip and build oracles first. the airlock at `l0`. tamper exclusion, proof stamping, and proven spend in the spend page. "
+    }
+  ]
+}

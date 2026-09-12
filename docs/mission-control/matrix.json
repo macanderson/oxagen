@@ -1,0 +1,2664 @@
+[
+  {
+    "name": "create_org",
+    "group": "Organization and workspace",
+    "does": "organization, Neo4j database, keys, billing account",
+    "absorbs": [
+      "create_org"
+    ],
+    "resolved": [
+      "create_org"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "create_org",
+      "file": "org.create.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "organization",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 26,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "update_org",
+    "group": "Organization and workspace",
+    "does": "name, settings, retention policy",
+    "absorbs": [
+      "update_org_settings"
+    ],
+    "resolved": [
+      "update_org_settings"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "update_org_settings",
+      "file": "org.settings.write.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "organization",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 16,
+      "outputLines": 9
+    }
+  },
+  {
+    "name": "invite_member",
+    "group": "Organization and workspace",
+    "does": "invite to org or workspace with role",
+    "absorbs": [
+      "send_workspace_invite",
+      "add_org_member"
+    ],
+    "resolved": [
+      "send_workspace_invite",
+      "add_org_member"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "add_org_member",
+      "file": "org.member.add.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "organization",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 4,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "respond_to_invite",
+    "group": "Organization and workspace",
+    "does": "accept or decline",
+    "absorbs": [
+      "accept_member_invite",
+      "decline_member_invite"
+    ],
+    "resolved": [
+      "accept_member_invite",
+      "decline_member_invite"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "accept_member_invite",
+      "file": "org.member_invite.accept.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "allow",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "organization",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "set_member_role",
+    "group": "Organization and workspace",
+    "does": "set a role or remove (role `none`) at org or workspace",
+    "absorbs": [
+      "change_member_role",
+      "remove_org_member"
+    ],
+    "resolved": [
+      "change_member_role",
+      "remove_org_member"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "change_member_role",
+      "file": "org.member_role.change.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "organization",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 13,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "list_members",
+    "group": "Organization and workspace",
+    "does": "members with roles at either scope",
+    "absorbs": [
+      "list_workspace_members"
+    ],
+    "resolved": [
+      "list_workspace_members"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_workspace_members",
+      "file": "workspace.member.list.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": "low",
+      "category": "workspace",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 8
+    }
+  },
+  {
+    "name": "create_workspace",
+    "group": "Organization and workspace",
+    "does": "workspace plus its main repo binding and production branch",
+    "absorbs": [
+      "create_workspace",
+      "configure_repo"
+    ],
+    "resolved": [
+      "create_workspace",
+      "configure_repo"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "configure_repo",
+      "file": "repo.configure.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "ingestion",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 40,
+      "outputLines": 20
+    }
+  },
+  {
+    "name": "update_workspace",
+    "group": "Organization and workspace",
+    "does": "governance mode, retention mode, promotion thresholds, budgets, model routes",
+    "absorbs": [
+      "update_workspace_settings",
+      "update_memory_policy",
+      "update_budget_policy",
+      "set_routing_policy"
+    ],
+    "resolved": [
+      "update_workspace_settings",
+      "update_memory_policy",
+      "update_budget_policy",
+      "set_routing_policy"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "update_workspace_settings",
+      "file": "workspace.settings.write.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "workspace",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 17,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "list_workspaces",
+    "group": "Organization and workspace",
+    "does": "scoped listing",
+    "absorbs": [
+      "list_workspaces",
+      "list_orgs"
+    ],
+    "resolved": [
+      "list_workspaces",
+      "list_orgs"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_workspaces",
+      "file": "workspace.list.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "allow",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "workspace",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 10
+    }
+  },
+  {
+    "name": "get_data_plane",
+    "group": "Organization and workspace",
+    "does": "plane binding, DSN never returned",
+    "absorbs": [
+      "get_data_plane"
+    ],
+    "resolved": [
+      "get_data_plane"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_data_plane",
+      "file": "org.data_plane.get.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": "high",
+      "category": "configuration",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 1
+    }
+  },
+  {
+    "name": "set_data_plane",
+    "group": "Organization and workspace",
+    "does": "approval-gated",
+    "absorbs": [
+      "set_data_plane"
+    ],
+    "resolved": [
+      "set_data_plane"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "set_data_plane",
+      "file": "org.data_plane.set.ts",
+      "domain": "org",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": "high",
+      "category": "configuration",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 1
+    }
+  },
+  {
+    "name": "create_api_key",
+    "group": "Identity and access",
+    "does": "purpose-locked keys for humans and services",
+    "absorbs": [
+      "create_api_key"
+    ],
+    "resolved": [
+      "create_api_key"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "create_api_key",
+      "file": "api.key.create.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "organization",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 19,
+      "outputLines": 14
+    }
+  },
+  {
+    "name": "rotate_api_key",
+    "group": "Identity and access",
+    "does": "",
+    "absorbs": [
+      "rotate_api_key"
+    ],
+    "resolved": [
+      "rotate_api_key"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "rotate_api_key",
+      "file": "api.key.rotate.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "organization",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 14,
+      "outputLines": 26
+    }
+  },
+  {
+    "name": "revoke_api_key",
+    "group": "Identity and access",
+    "does": "",
+    "absorbs": [
+      "revoke_api_key"
+    ],
+    "resolved": [
+      "revoke_api_key"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "revoke_api_key",
+      "file": "api.key.revoke.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "organization",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 6,
+      "outputLines": 5
+    }
+  },
+  {
+    "name": "register_agent",
+    "group": "Identity and access",
+    "does": "opens a Context PR adding `.oxagen/agents/<slug>.toml` and the generated harness files; identity is created on merge",
+    "absorbs": [
+      "create_agent_def",
+      "suggest_agent_def",
+      "summarize_agent_def"
+    ],
+    "resolved": [
+      "create_agent_def",
+      "suggest_agent_def",
+      "summarize_agent_def"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "suggest_agent_def",
+      "file": "agent.definition.suggest.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 16,
+      "outputLines": 78
+    }
+  },
+  {
+    "name": "update_agent",
+    "group": "Identity and access",
+    "does": "a Context PR changing the definition; identity and belt update on merge",
+    "absorbs": [
+      "update_agent_def",
+      "revise_agent_def",
+      "publish_agent_def",
+      "deploy_agent"
+    ],
+    "resolved": [
+      "update_agent_def",
+      "revise_agent_def",
+      "publish_agent_def",
+      "deploy_agent"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "revise_agent_def",
+      "file": "agent.definition.revise.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "mutation",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 14,
+      "outputLines": 36
+    }
+  },
+  {
+    "name": "retire_agent",
+    "group": "Identity and access",
+    "does": "a Context PR removing the file; principal retired, never deleted",
+    "absorbs": [
+      "delete_agent_def"
+    ],
+    "resolved": [
+      "delete_agent_def"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "delete_agent_def",
+      "file": "agent.definition.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "destructive",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "mutation",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 4
+    }
+  },
+  {
+    "name": "get_agent",
+    "group": "Identity and access",
+    "does": "identity, roles, belt, mandates",
+    "absorbs": [
+      "get_agent_def",
+      "get_agent_role"
+    ],
+    "resolved": [
+      "get_agent_def",
+      "get_agent_role"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_agent_def",
+      "file": "agent.definition.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 30
+    }
+  },
+  {
+    "name": "list_agents",
+    "group": "Identity and access",
+    "does": "",
+    "absorbs": [
+      "list_agent_defs"
+    ],
+    "resolved": [
+      "list_agent_defs"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_agent_defs",
+      "file": "agent.definition.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 6,
+      "outputLines": 58
+    }
+  },
+  {
+    "name": "set_agent_role",
+    "group": "Identity and access",
+    "does": "",
+    "absorbs": [
+      "assign_agent_role",
+      "revoke_agent_role"
+    ],
+    "resolved": [
+      "assign_agent_role",
+      "revoke_agent_role"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "assign_agent_role",
+      "file": "agent.role.assign.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "mutation",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 12,
+      "outputLines": 9
+    }
+  },
+  {
+    "name": "set_role_grants",
+    "group": "Identity and access",
+    "does": "role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "enroll_host",
+    "group": "Wrapping and control",
+    "does": "device key, host agent, bundle, hooks",
+    "absorbs": [
+      "create_tacho_enrollment"
+    ],
+    "resolved": [
+      "create_tacho_enrollment"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "create_tacho_enrollment",
+      "file": "tacho.enrollment.create.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 19,
+      "outputLines": 19
+    }
+  },
+  {
+    "name": "revoke_enrollment",
+    "group": "Wrapping and control",
+    "does": "",
+    "absorbs": [
+      "revoke_tacho_enrollment"
+    ],
+    "resolved": [
+      "revoke_tacho_enrollment"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "revoke_tacho_enrollment",
+      "file": "tacho.enrollment.revoke.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 6,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "list_hosts",
+    "group": "Wrapping and control",
+    "does": "",
+    "absorbs": [
+      "list_tacho_hosts"
+    ],
+    "resolved": [
+      "list_tacho_hosts"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_tacho_hosts",
+      "file": "tacho.host.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 7,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "get_policy_bundle",
+    "group": "Wrapping and control",
+    "does": "signed bundle for a host or agent",
+    "absorbs": [
+      "get_tacho_bundle",
+      "get_registry_config"
+    ],
+    "resolved": [
+      "get_tacho_bundle",
+      "get_registry_config"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_tacho_bundle",
+      "file": "tacho.bundle.get.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 6,
+      "outputLines": 16
+    }
+  },
+  {
+    "name": "ingest_frames",
+    "group": "Wrapping and control",
+    "does": "the one evidence ingress; headless",
+    "absorbs": [
+      "ingest_tacho_events",
+      "record_execution",
+      "ingest_stella_operational_telemetry",
+      "debug_execution"
+    ],
+    "resolved": [
+      "ingest_tacho_events",
+      "record_execution",
+      "ingest_stella_operational_telemetry",
+      "debug_execution"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "ingest_tacho_events",
+      "file": "tacho.events.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": "high",
+      "category": "telemetry",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 32
+    }
+  },
+  {
+    "name": "fetch_commands",
+    "group": "Wrapping and control",
+    "does": "control channel; headless",
+    "absorbs": [
+      "fetch_tacho_commands"
+    ],
+    "resolved": [
+      "fetch_tacho_commands"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "fetch_tacho_commands",
+      "file": "tacho.command.fetch.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 29,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "dispatch_command",
+    "group": "Wrapping and control",
+    "does": "pause, resume, steer, cancel, revoke",
+    "absorbs": [
+      "dispatch_tacho_command"
+    ],
+    "resolved": [
+      "dispatch_tacho_command"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "dispatch_tacho_command",
+      "file": "tacho.command.dispatch.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 10,
+      "outputLines": 8
+    }
+  },
+  {
+    "name": "list_runs",
+    "group": "Wrapping and control",
+    "does": "by operator, agent, task, tier, verdict",
+    "absorbs": [
+      "list_executions",
+      "list_tacho_sessions"
+    ],
+    "resolved": [
+      "list_executions",
+      "list_tacho_sessions"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_executions",
+      "file": "agent.execution.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 20,
+      "outputLines": 30
+    }
+  },
+  {
+    "name": "get_run",
+    "group": "Wrapping and control",
+    "does": "run with turns, steps, frames, receipts, cost",
+    "absorbs": [
+      "get_tacho_session",
+      "get_execution_trace",
+      "get_message_execution"
+    ],
+    "resolved": [
+      "get_tacho_session",
+      "get_execution_trace",
+      "get_message_execution"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_tacho_session",
+      "file": "tacho.session.get.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 41
+    }
+  },
+  {
+    "name": "export_run",
+    "group": "Wrapping and control",
+    "does": "signed bundle with verifier",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": null
+  },
+  {
+    "name": "list_approvals",
+    "group": "Wrapping and control",
+    "does": "queue with the four-hop chain",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "resolve_approval",
+    "group": "Wrapping and control",
+    "does": "approve or deny, mints the token",
+    "absorbs": [
+      "resolve_approval",
+      "resolve_mcp_consent"
+    ],
+    "resolved": [
+      "resolve_approval",
+      "resolve_mcp_consent"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "resolve_mcp_consent",
+      "file": "agent.mcp_consent.resolve.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "approval",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 8,
+      "outputLines": 4
+    }
+  },
+  {
+    "name": "send_message",
+    "group": "Wrapping and control",
+    "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6)",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "list_messages",
+    "group": "Wrapping and control",
+    "does": "sent and received, with delivery outcome",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "register_tool_server",
+    "group": "Toolbelt",
+    "does": "MCP or HTTP server",
+    "absorbs": [
+      "register_mcp_server",
+      "set_mcp_enabled"
+    ],
+    "resolved": [
+      "register_mcp_server",
+      "set_mcp_enabled"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "register_mcp_server",
+      "file": "agent.mcp.register.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 7,
+      "outputLines": 5
+    }
+  },
+  {
+    "name": "remove_tool_server",
+    "group": "Toolbelt",
+    "does": "",
+    "absorbs": [
+      "delete_mcp_server"
+    ],
+    "resolved": [
+      "delete_mcp_server"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "delete_mcp_server",
+      "file": "agent.mcp.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 4
+    }
+  },
+  {
+    "name": "list_tool_servers",
+    "group": "Toolbelt",
+    "does": "",
+    "absorbs": [
+      "list_mcp_servers",
+      "resolve_mcp_servers",
+      "list_mcp_consents"
+    ],
+    "resolved": [
+      "list_mcp_servers",
+      "resolve_mcp_servers",
+      "list_mcp_consents"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "resolve_mcp_servers",
+      "file": "agent.mcp.resolve.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": "medium",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": false,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 20
+    }
+  },
+  {
+    "name": "import_tools",
+    "group": "Toolbelt",
+    "does": "pull `tools/list`, version, store schemas",
+    "absorbs": [
+      "list_tool_declarations",
+      "publish_tool_declaration",
+      "list_agent_tools"
+    ],
+    "resolved": [
+      "list_tool_declarations",
+      "publish_tool_declaration",
+      "list_agent_tools"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_tool_declarations",
+      "file": "tool.declaration.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"agent\", \"mcp\"]",
+      "riskLevel": "low",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 23,
+      "outputLines": 33
+    }
+  },
+  {
+    "name": "approve_tool_schema",
+    "group": "Toolbelt",
+    "does": "accept an observed output schema",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "search_tools",
+    "group": "Toolbelt",
+    "does": "belt search meta-tool; also the UI's command menu",
+    "absorbs": [
+      "search_command_menu",
+      "suggest_commands"
+    ],
+    "resolved": [
+      "search_command_menu",
+      "suggest_commands"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "search_command_menu",
+      "file": "command.menu.search.ts",
+      "domain": "command",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"agent\"] as const",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 15,
+      "outputLines": 3
+    }
+  },
+  {
+    "name": "load_tools",
+    "group": "Toolbelt",
+    "does": "belt definitions meta-tool",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "set_connection",
+    "group": "Toolbelt",
+    "does": "credential to a tool server or provider, tested before save",
+    "absorbs": [
+      "set_model_credential",
+      "verify_model_credential",
+      "upsert_secret_key",
+      "set_secret_value",
+      "set_plugin_secret",
+      "reauth_plugin_credential"
+    ],
+    "resolved": [
+      "set_model_credential",
+      "verify_model_credential",
+      "upsert_secret_key",
+      "set_secret_value",
+      "set_plugin_secret",
+      "reauth_plugin_credential"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "set_plugin_secret",
+      "file": "plugin.credential.set_secret.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "plugin",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 7,
+      "outputLines": 3
+    }
+  },
+  {
+    "name": "delete_connection",
+    "group": "Toolbelt",
+    "does": "",
+    "absorbs": [
+      "delete_connection",
+      "delete_model_credential",
+      "delete_secret_key",
+      "unset_secret_value",
+      "revoke_plugin_credential"
+    ],
+    "resolved": [
+      "delete_connection",
+      "delete_model_credential",
+      "delete_secret_key",
+      "unset_secret_value",
+      "revoke_plugin_credential"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "delete_connection",
+      "file": "connection.delete.ts",
+      "domain": "connection",
+      "mode": "async",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "destructive",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 12,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "list_connections",
+    "group": "Toolbelt",
+    "does": "never returns secrets",
+    "absorbs": [
+      "list_connections",
+      "list_secret_keys",
+      "get_model_credential"
+    ],
+    "resolved": [
+      "list_connections",
+      "list_secret_keys",
+      "get_model_credential"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_connections",
+      "file": "connection.list.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 17,
+      "outputLines": 20
+    }
+  },
+  {
+    "name": "grant_mandate",
+    "group": "Toolbelt",
+    "does": "bounded authority for a consequence tag to an agent",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "set_approval_rules",
+    "group": "Toolbelt",
+    "does": "the customer's approval and auto-approval rules, as a policy version",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "revoke_mandate",
+    "group": "Toolbelt",
+    "does": "",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "list_mandates",
+    "group": "Toolbelt",
+    "does": "ledger view",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "set_policy",
+    "group": "Toolbelt",
+    "does": "new policy version with tests",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "simulate_policy",
+    "group": "Toolbelt",
+    "does": "replay a version against history",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "set_kill_switch",
+    "group": "Toolbelt",
+    "does": "any level",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "link_repository",
+    "group": "Ontology and knowledge",
+    "does": "link, role, production branch, issue import",
+    "absorbs": [
+      "configure_repo",
+      "sync_repo"
+    ],
+    "resolved": [
+      "configure_repo",
+      "sync_repo"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "configure_repo",
+      "file": "repo.configure.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "ingestion",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 40,
+      "outputLines": 20
+    }
+  },
+  {
+    "name": "unlink_repository",
+    "group": "Ontology and knowledge",
+    "does": "",
+    "absorbs": [
+      "pause_repo",
+      "delete_integration"
+    ],
+    "resolved": [
+      "pause_repo",
+      "delete_integration"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "delete_integration",
+      "file": "integration.delete.ts",
+      "domain": "integration",
+      "mode": "async",
+      "sensitivity": "destructive",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "plugin",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 9,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "sync_repository",
+    "group": "Ontology and knowledge",
+    "does": "manual full re-index",
+    "absorbs": [
+      "sync_repo",
+      "resume_repo",
+      "sync_integration"
+    ],
+    "resolved": [
+      "sync_repo",
+      "resume_repo",
+      "sync_integration"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "sync_repo",
+      "file": "repo.sync.ts",
+      "domain": "repo",
+      "mode": "async",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "ingestion",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 13,
+      "outputLines": 8
+    }
+  },
+  {
+    "name": "add_source",
+    "group": "Ontology and knowledge",
+    "does": "connector source",
+    "absorbs": [
+      "install_plugin",
+      "configure_integration"
+    ],
+    "resolved": [
+      "install_plugin",
+      "configure_integration"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "install_plugin",
+      "file": "plugin.org.install.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "plugin",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 15,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "update_source",
+    "group": "Ontology and knowledge",
+    "does": "mappings, state",
+    "absorbs": [
+      "update_connection",
+      "set_connection_mappings",
+      "suggest_connection_mappings",
+      "pause_connection",
+      "preview_connection"
+    ],
+    "resolved": [
+      "update_connection",
+      "set_connection_mappings",
+      "suggest_connection_mappings",
+      "pause_connection",
+      "preview_connection"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "set_connection_mappings",
+      "file": "connection.mappings.set.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "write",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 60,
+      "outputLines": 5
+    }
+  },
+  {
+    "name": "remove_source",
+    "group": "Ontology and knowledge",
+    "does": "",
+    "absorbs": [
+      "delete_connection",
+      "uninstall_plugin"
+    ],
+    "resolved": [
+      "delete_connection",
+      "uninstall_plugin"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "delete_connection",
+      "file": "connection.delete.ts",
+      "domain": "connection",
+      "mode": "async",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "destructive",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 12,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "list_sources",
+    "group": "Ontology and knowledge",
+    "does": "health, cursors, counts",
+    "absorbs": [
+      "list_connections",
+      "list_integrations",
+      "list_plugins",
+      "get_integration",
+      "get_integration_metrics",
+      "get_reconcile_status"
+    ],
+    "resolved": [
+      "list_connections",
+      "list_integrations",
+      "list_plugins",
+      "get_integration",
+      "get_integration_metrics",
+      "get_reconcile_status"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_plugins",
+      "file": "plugin.org.list.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "plugin",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 11,
+      "outputLines": 28
+    }
+  },
+  {
+    "name": "propose_ontology_version",
+    "group": "Ontology and knowledge",
+    "does": "profiler plus author; opens the pull request on the main repo (merge activates, §11.8)",
+    "absorbs": [
+      "recommend_schema",
+      "setup_schema",
+      "create_schema_version",
+      "run_schema_chat",
+      "pin_schema_version",
+      "toggle_schema",
+      "dispatch_schema_reconcile"
+    ],
+    "resolved": [
+      "recommend_schema",
+      "setup_schema",
+      "create_schema_version",
+      "run_schema_chat",
+      "pin_schema_version",
+      "toggle_schema",
+      "dispatch_schema_reconcile"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "recommend_schema",
+      "file": "schema.recommend.ts",
+      "domain": "schema",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"] as const",
+      "riskLevel": "low",
+      "category": "schema",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 36
+    }
+  },
+  {
+    "name": "get_ontology",
+    "group": "Ontology and knowledge",
+    "does": "active version, classes, relations, synonyms, proposals, diffs; also served to agents as `graph` frames",
+    "absorbs": [
+      "get_schema_registry",
+      "list_schema_versions",
+      "list_schemas",
+      "diff_schema_versions",
+      "export_schema",
+      "get_node_labels"
+    ],
+    "resolved": [
+      "get_schema_registry",
+      "list_schema_versions",
+      "list_schemas",
+      "diff_schema_versions",
+      "export_schema",
+      "get_node_labels"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "diff_schema_versions",
+      "file": "schema.version.diff.ts",
+      "domain": "schema",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\"] as const",
+      "riskLevel": "low",
+      "category": "schema",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 4,
+      "outputLines": 43
+    }
+  },
+  {
+    "name": "update_ontology",
+    "group": "Ontology and knowledge",
+    "does": "edits on a proposal branch",
+    "absorbs": [
+      "upsert_schema_label",
+      "upsert_schema_property",
+      "upsert_schema_relationship",
+      "delete_schema_label",
+      "delete_schema_property",
+      "delete_schema_relationship",
+      "validate_schema_node",
+      "validate_schema_relationship"
+    ],
+    "resolved": [
+      "upsert_schema_label",
+      "upsert_schema_property",
+      "upsert_schema_relationship",
+      "delete_schema_label",
+      "delete_schema_property",
+      "delete_schema_relationship",
+      "validate_schema_node",
+      "validate_schema_relationship"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "upsert_schema_property",
+      "file": "schema.property.upsert.ts",
+      "domain": "schema",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\", \"agent\"] as const",
+      "riskLevel": "low",
+      "category": "schema",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 19,
+      "outputLines": 4
+    }
+  },
+  {
+    "name": "search_graph",
+    "group": "Ontology and knowledge",
+    "does": "hybrid semantic",
+    "absorbs": [
+      "search_graph",
+      "search_nodes",
+      "search_references",
+      "list_nodes"
+    ],
+    "resolved": [
+      "search_graph",
+      "search_nodes",
+      "search_references",
+      "list_nodes"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_nodes",
+      "file": "graph.node.list.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 19,
+      "outputLines": 16
+    }
+  },
+  {
+    "name": "expand_graph",
+    "group": "Ontology and knowledge",
+    "does": "typed traversal",
+    "absorbs": [
+      "get_ontology_neighbors",
+      "get_node"
+    ],
+    "resolved": [
+      "get_ontology_neighbors",
+      "get_node"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_ontology_neighbors",
+      "file": "ontology.neighbors.ts",
+      "domain": "ontology",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\", \"cli\"] as const",
+      "riskLevel": "low",
+      "category": "graph",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 22,
+      "outputLines": 12
+    }
+  },
+  {
+    "name": "query_graph",
+    "group": "Ontology and knowledge",
+    "does": "natural language to Cypher",
+    "absorbs": [
+      "query_ontology",
+      "get_graph_stats"
+    ],
+    "resolved": [
+      "query_ontology",
+      "get_graph_stats"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_graph_stats",
+      "file": "graph.stats.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 12,
+      "outputLines": 61
+    }
+  },
+  {
+    "name": "append_record",
+    "group": "Context and steering",
+    "does": "the protocol's append",
+    "absorbs": [
+      "write_memory",
+      "save_memory",
+      "attach_memory_evidence",
+      "cite_memory",
+      "cite_reference"
+    ],
+    "resolved": [
+      "write_memory",
+      "save_memory",
+      "attach_memory_evidence",
+      "cite_memory",
+      "cite_reference"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "save_memory",
+      "file": "agent.memory.remember.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "memory",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 41,
+      "outputLines": 16
+    }
+  },
+  {
+    "name": "get_record",
+    "group": "Context and steering",
+    "does": "",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "list_records",
+    "group": "Context and steering",
+    "does": "by kind, scope, status, lineage",
+    "absorbs": [
+      "list_context_records",
+      "list_memories",
+      "list_memory_citations",
+      "get_citation_stats"
+    ],
+    "resolved": [
+      "list_context_records",
+      "list_memories",
+      "list_memory_citations",
+      "get_citation_stats"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_citation_stats",
+      "file": "agent.memory_citation.stats.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "memory",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 16,
+      "outputLines": 58
+    }
+  },
+  {
+    "name": "retract_record",
+    "group": "Context and steering",
+    "does": "new record on the lineage",
+    "absorbs": [
+      "delete_memory",
+      "demote_memory"
+    ],
+    "resolved": [
+      "delete_memory",
+      "demote_memory"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "demote_memory",
+      "file": "agent.memory.demote.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "memory",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 26,
+      "outputLines": 1
+    }
+  },
+  {
+    "name": "recall_context",
+    "group": "Context and steering",
+    "does": "the provider's query, as a tool for agents",
+    "absorbs": [
+      "recall_memory"
+    ],
+    "resolved": [
+      "recall_memory"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "recall_memory",
+      "file": "agent.memory.recall.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "memory",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 27,
+      "outputLines": 16
+    }
+  },
+  {
+    "name": "propose_record",
+    "group": "Context and steering",
+    "does": "a proposal",
+    "absorbs": [
+      "promote_memory",
+      "promote_context_record",
+      "suggest_promotion_rationales"
+    ],
+    "resolved": [
+      "promote_memory",
+      "promote_context_record",
+      "suggest_promotion_rationales"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "promote_context_record",
+      "file": "context.record.promote.ts",
+      "domain": "context",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": "high",
+      "category": "governance",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 23,
+      "outputLines": 17
+    }
+  },
+  {
+    "name": "open_context_pr",
+    "group": "Context and steering",
+    "does": "the pull request",
+    "absorbs": [
+      "publish_context_record"
+    ],
+    "resolved": [
+      "publish_context_record"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "publish_context_record",
+      "file": "context.record.publish.ts",
+      "domain": "context",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\"]",
+      "riskLevel": "high",
+      "category": "governance",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 21,
+      "outputLines": 13
+    }
+  },
+  {
+    "name": "list_proposals",
+    "group": "Context and steering",
+    "does": "",
+    "absorbs": [
+      "list_memory_promotions"
+    ],
+    "resolved": [
+      "list_memory_promotions"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_memory_promotions",
+      "file": "agent.memory_promotion.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "memory",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 3,
+      "outputLines": 13
+    }
+  },
+  {
+    "name": "dismiss_proposal",
+    "group": "Context and steering",
+    "does": "",
+    "absorbs": [
+      "dismiss_memory_promotion"
+    ],
+    "resolved": [
+      "dismiss_memory_promotion"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "dismiss_memory_promotion",
+      "file": "agent.memory_promotion.dismiss.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "memory",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 12,
+      "outputLines": 8
+    }
+  },
+  {
+    "name": "get_spend",
+    "group": "Spend and billing",
+    "does": "rollups at any level with basis",
+    "absorbs": [
+      "get_usage_breakdown",
+      "list_routing_stats",
+      "get_repo_metrics"
+    ],
+    "resolved": [
+      "get_usage_breakdown",
+      "list_routing_stats",
+      "get_repo_metrics"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_usage_breakdown",
+      "file": "billing.usage.breakdown.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "billing",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 11,
+      "outputLines": 26
+    }
+  },
+  {
+    "name": "list_findings",
+    "group": "Spend and billing",
+    "does": "ranked optimizations",
+    "absorbs": [
+      "list_error_clusters"
+    ],
+    "resolved": [
+      "list_error_clusters"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_error_clusters",
+      "file": "telemetry.error.cluster.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "introspection",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 28,
+      "outputLines": 26
+    }
+  },
+  {
+    "name": "get_reconciliation",
+    "group": "Spend and billing",
+    "does": "matched, variance, exceptions",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "export_statement",
+    "group": "Spend and billing",
+    "does": "",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": null
+  },
+  {
+    "name": "set_budget",
+    "group": "Spend and billing",
+    "does": "any level",
+    "absorbs": [
+      "set_spend_budget",
+      "get_spend_budget",
+      "update_user_budget",
+      "get_user_budget",
+      "get_budget_policy"
+    ],
+    "resolved": [
+      "set_spend_budget",
+      "get_spend_budget",
+      "update_user_budget",
+      "get_user_budget",
+      "get_budget_policy"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "update_user_budget",
+      "file": "budget.policy.write.ts",
+      "domain": "user",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "user",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 11,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "set_model_route",
+    "group": "Spend and billing",
+    "does": "tiers and fallbacks",
+    "absorbs": [
+      "update_model_settings",
+      "get_model_settings",
+      "preview_routing_decision",
+      "get_routing_policy"
+    ],
+    "resolved": [
+      "update_model_settings",
+      "get_model_settings",
+      "preview_routing_decision",
+      "get_routing_policy"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "preview_routing_decision",
+      "file": "router.decision.preview.ts",
+      "domain": "router",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"cli\"]",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 16,
+      "outputLines": 9
+    }
+  },
+  {
+    "name": "set_funding_source",
+    "group": "Spend and billing",
+    "does": "platform or customer key",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "get_subscription",
+    "group": "Spend and billing",
+    "does": "",
+    "absorbs": [
+      "get_subscription"
+    ],
+    "resolved": [
+      "get_subscription"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_subscription",
+      "file": "billing.subscription.read.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "billing",
+      "requiresApproval": "false",
+      "hasInput": false,
+      "hasOutput": true,
+      "inputLines": 1,
+      "outputLines": 26
+    }
+  },
+  {
+    "name": "change_subscription",
+    "group": "Spend and billing",
+    "does": "",
+    "absorbs": [
+      "start_subscription_upgrade",
+      "purchase_credits"
+    ],
+    "resolved": [
+      "start_subscription_upgrade",
+      "purchase_credits"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "purchase_credits",
+      "file": "billing.credits.purchase.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "medium",
+      "category": "billing",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 18,
+      "outputLines": 10
+    }
+  },
+  {
+    "name": "query_audit_log",
+    "group": "Audit and compliance",
+    "does": "control-plane events, receipts",
+    "absorbs": [
+      "query_audit_log",
+      "get_auth_alerts"
+    ],
+    "resolved": [
+      "query_audit_log",
+      "get_auth_alerts"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "query_audit_log",
+      "file": "audit.log.query.ts",
+      "domain": "audit",
+      "mode": "sync",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\", \"cli\"] as const",
+      "riskLevel": "low",
+      "category": "read",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 43,
+      "outputLines": 7
+    }
+  },
+  {
+    "name": "export_data",
+    "group": "Audit and compliance",
+    "does": "organization export",
+    "absorbs": [
+      "export_data"
+    ],
+    "resolved": [
+      "export_data"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "export_data",
+      "file": "privacy.data.export.ts",
+      "domain": "privacy",
+      "mode": "async",
+      "sensitivity": "high",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "privacy",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 6,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "erase_data",
+    "group": "Audit and compliance",
+    "does": "crypto-shred",
+    "absorbs": [
+      "erase_data"
+    ],
+    "resolved": [
+      "erase_data"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "erase_data",
+      "file": "privacy.data.erase.ts",
+      "domain": "privacy",
+      "mode": "async",
+      "sensitivity": "destructive",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "high",
+      "category": "privacy",
+      "requiresApproval": "true",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 8,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "set_legal_hold",
+    "group": "Audit and compliance",
+    "does": "",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "list_incidents",
+    "group": "Audit and compliance",
+    "does": "tamper, probes, chain breaks, mandate exceptions",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "set_event_subscription",
+    "group": "Audit and compliance",
+    "does": "event kinds, filters, delivery mode; returns the unique endpoint (§7.7)",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "list_event_subscriptions",
+    "group": "Audit and compliance",
+    "does": "with delivery health and dead letters",
+    "absorbs": [],
+    "resolved": [],
+    "unresolved": [],
+    "isNew": true,
+    "inherit": null
+  },
+  {
+    "name": "ask_assistant",
+    "group": "Assistant and account",
+    "does": "a turn of the in-app agent",
+    "absorbs": [
+      "send_message",
+      "post_conversation_message",
+      "add_conversation_attachment"
+    ],
+    "resolved": [
+      "send_message",
+      "post_conversation_message",
+      "add_conversation_attachment"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "send_message",
+      "file": "chat.message.send.ts",
+      "domain": "chat",
+      "mode": "async",
+      "sensitivity": "medium",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 9,
+      "outputLines": 6
+    }
+  },
+  {
+    "name": "list_conversations",
+    "group": "Assistant and account",
+    "does": "with the actions as arguments",
+    "absorbs": [
+      "list_conversations",
+      "rename_conversation",
+      "archive_conversation",
+      "delete_conversation",
+      "export_conversation",
+      "purge_conversations",
+      "list_conversation_files"
+    ],
+    "resolved": [
+      "list_conversations",
+      "rename_conversation",
+      "archive_conversation",
+      "delete_conversation",
+      "export_conversation",
+      "purge_conversations",
+      "list_conversation_files"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "export_conversation",
+      "file": "conversation.export.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "conversation",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 8,
+      "outputLines": 12
+    }
+  },
+  {
+    "name": "set_preferences",
+    "group": "Assistant and account",
+    "does": "",
+    "absorbs": [
+      "update_user_preferences",
+      "get_user_preferences",
+      "update_workspace_user_preferences",
+      "get_workspace_user_preferences",
+      "set_auth_alerts"
+    ],
+    "resolved": [
+      "update_user_preferences",
+      "get_user_preferences",
+      "update_workspace_user_preferences",
+      "get_workspace_user_preferences",
+      "set_auth_alerts"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "update_user_preferences",
+      "file": "user.preferences.write.ts",
+      "domain": "user",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "false",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "user",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 15,
+      "outputLines": 10
+    }
+  },
+  {
+    "name": "list_notifications",
+    "group": "Assistant and account",
+    "does": "",
+    "absorbs": [
+      "list_notifications"
+    ],
+    "resolved": [
+      "list_notifications"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "list_notifications",
+      "file": "notification.list.ts",
+      "domain": "notification",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 4,
+      "outputLines": 16
+    }
+  },
+  {
+    "name": "mark_notification",
+    "group": "Assistant and account",
+    "does": "",
+    "absorbs": [
+      "mark_notification"
+    ],
+    "resolved": [
+      "mark_notification"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "mark_notification",
+      "file": "notification.mark.ts",
+      "domain": "notification",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": null,
+      "category": null,
+      "requiresApproval": null,
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 8,
+      "outputLines": 1
+    }
+  },
+  {
+    "name": "get_install_instructions",
+    "group": "Assistant and account",
+    "does": "per harness",
+    "absorbs": [
+      "get_install_instructions"
+    ],
+    "resolved": [
+      "get_install_instructions"
+    ],
+    "unresolved": [],
+    "isNew": false,
+    "inherit": {
+      "name": "get_install_instructions",
+      "file": "system.install.instructions.ts",
+      "domain": "system",
+      "mode": "sync",
+      "sensitivity": "low",
+      "defaultEffect": "deny",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
+      "riskLevel": "low",
+      "category": "system",
+      "requiresApproval": "false",
+      "hasInput": true,
+      "hasOutput": true,
+      "inputLines": 9,
+      "outputLines": 8
+    }
+  }
+]
