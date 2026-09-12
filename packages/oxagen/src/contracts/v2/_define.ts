@@ -26,6 +26,25 @@ export interface ToolV2<
   absorbs: readonly string[];
 
   /**
+   * Fields this tool carries under a different name, so a reader can tell a
+   * rename from a loss.
+   *
+   * These are indistinguishable from the outside: `change_member_role.newRole`
+   * becoming `role` and `change_member_role.newRole` vanishing look identical to
+   * anyone diffing the two schemas, and to `exhaustive.test.ts`, which can only
+   * see that a key stopped existing. Declaring the rename is what makes the
+   * carry checkable.
+   *
+   * Renaming is normal here: ADR-025 verb-first names change what a field's
+   * context is, and merging four contracts forces at least some renaming where
+   * two sources used one word for two things.
+   *
+   * Optional because a tool with no renames needs no ceremony; `exhaustive.test.ts`
+   * requires an entry only for a field it can see has gone missing.
+   */
+  renames?: readonly { from: string; source: string; to: string; why: string }[];
+
+  /**
    * Fields present on an absorbed contract that this tool deliberately does not
    * carry, each with the reason. Absorbing is field-level, not a union: the
    * spec's `Does` column is narrower than the sum of its sources.

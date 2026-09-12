@@ -36,20 +36,29 @@ export const createWorkspace = defineTool({
 
   absorbs: ["create_workspace", "configure_repo"],
   drops: [
+    /**
+     * The only drop here that is not an ingestion setting, and the one worth
+     * reading: it is a change of *subject identity*, not of scope.
+     */
+    {
+      field: "repoId",
+      from: "configure_repo",
+      why: "identity of the subject moved, not the capability. `configure_repo` took the id of a repository connection that already existed; this tool binds the main repo at the instant the workspace is created, and §10.1 makes that binding required at creation ('exactly one per workspace, required at creation' — a workspace without a main repo cannot exist), so there is no earlier step in which a connection could have been made and an id handed out. The repo is therefore named by provider coordinates instead — mainRepo.provider / mainRepo.owner / mainRepo.name — and resolved through the GitHub App installation, which is what mints the connection. The id is not lost, it is produced: it comes back as output.mainRepo.repoId, and every later call that needs one (sync_repository, update_source, unlink_repository) takes it from there.",
+    },
     {
       field: "pathFilters",
       from: "configure_repo",
-      why: "ingestion scope, not workspace creation — moves to Ontology → Repositories (§14)",
+      why: "not carried anywhere, and not merely relocated: §11.4 step 4 has the code-graph indexer parse the production branch whole, so excluding paths would silently make the graph lie about what the repo contains. `link_repository` drops the same field from the same source for this reason; the two must not tell different stories about one field",
     },
     {
       field: "labelFilters",
       from: "configure_repo",
-      why: "ingestion scope — moves to Ontology → Repositories",
+      why: "not carried anywhere: §11.4 step 3 backfills every issue with its labels, so a label filter would make an issue's absence indistinguishable from its deletion. Same reason `link_repository` gives for the same field",
     },
     {
       field: "recordTypes",
       from: "configure_repo",
-      why: "ingestion scope — moves to Ontology → Sources",
+      why: "not carried anywhere: §11.4 fixes what a repository contributes — events, issues, and the code graph — so which record types are ingested is no longer a per-repo choice. Same reason `link_repository` and `sync_repository` give for the same field",
     },
     {
       field: "syncCadence",

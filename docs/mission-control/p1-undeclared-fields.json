@@ -1,0 +1,384 @@
+{
+  "toolbelt-steering": {
+    "append_record": [
+      {
+        "source": "save_memory",
+        "fields": [
+          "text",
+          "source",
+          "relatedNodeIds"
+        ]
+      },
+      {
+        "source": "write_memory",
+        "fields": [
+          "lesson",
+          "source",
+          "relatedNodeIds"
+        ]
+      }
+    ],
+    "list_connections": [
+      {
+        "source": "list_connections",
+        "fields": [
+          "connectorId"
+        ]
+      }
+    ],
+    "list_records": [
+      {
+        "source": "list_memory_citations",
+        "fields": [
+          "executionId"
+        ]
+      }
+    ],
+    "propose_record": [
+      {
+        "source": "promote_context_record",
+        "fields": [
+          "policy_version"
+        ]
+      },
+      {
+        "source": "promote_memory",
+        "fields": [
+          "basedOnEvidenceIds"
+        ]
+      },
+      {
+        "source": "suggest_promotion_rationales",
+        "fields": [
+          "count"
+        ]
+      }
+    ],
+    "register_tool_server": [
+      {
+        "source": "set_mcp_enabled",
+        "fields": [
+          "mcpServerId"
+        ]
+      }
+    ],
+    "remove_tool_server": [
+      {
+        "source": "delete_mcp_server",
+        "fields": [
+          "mcpServerId"
+        ]
+      }
+    ],
+    "set_connection": [
+      {
+        "source": "set_model_credential",
+        "fields": [
+          "apiKey"
+        ]
+      },
+      {
+        "source": "set_secret_value",
+        "fields": [
+          "value"
+        ]
+      },
+      {
+        "source": "upsert_secret_key",
+        "fields": [
+          "key"
+        ]
+      },
+      {
+        "source": "verify_model_credential",
+        "fields": [
+          "apiKey"
+        ]
+      }
+    ]
+  },
+  "control-assistant": {
+    "ask_assistant": [
+      {
+        "source": "add_conversation_attachment",
+        "fields": [
+          "assetPublicId"
+        ]
+      }
+    ],
+    "dispatch_command": [
+      {
+        "source": "dispatch_tacho_command",
+        "fields": [
+          "sessionUuid"
+        ]
+      }
+    ],
+    "get_install_instructions": [
+      {
+        "source": "get_install_instructions",
+        "fields": [
+          "client"
+        ]
+      },
+      {
+        "source": "get_install_instructions",
+        "fields": [
+          "client"
+        ]
+      }
+    ],
+    "get_policy_bundle": [
+      {
+        "source": "get_registry_config",
+        "fields": [
+          "enforcementMode",
+          "conformanceFloor"
+        ]
+      },
+      {
+        "source": "get_tacho_bundle",
+        "fields": [
+          "host_enrollment_id"
+        ]
+      }
+    ],
+    "get_run": [
+      {
+        "source": "get_execution_trace",
+        "fields": [
+          "executionId"
+        ]
+      },
+      {
+        "source": "get_tacho_session",
+        "fields": [
+          "sessionUuid"
+        ]
+      }
+    ],
+    "ingest_frames": [
+      {
+        "source": "ingest_stella_operational_telemetry",
+        "fields": [
+          "schema",
+          "events"
+        ]
+      },
+      {
+        "source": "ingest_tacho_events",
+        "fields": [
+          "schema",
+          "host_enrollment_id",
+          "events",
+          "daemon"
+        ]
+      }
+    ],
+    "list_conversations": [
+      {
+        "source": "archive_conversation",
+        "fields": [
+          "conversationIds",
+          "archived"
+        ]
+      },
+      {
+        "source": "delete_conversation",
+        "fields": [
+          "conversationIds"
+        ]
+      },
+      {
+        "source": "export_conversation",
+        "fields": [
+          "conversationId",
+          "format"
+        ]
+      },
+      {
+        "source": "list_conversation_files",
+        "fields": [
+          "conversationId",
+          "kind",
+          "limit",
+          "cursor"
+        ]
+      },
+      {
+        "source": "list_conversations",
+        "fields": [
+          "filter",
+          "limit",
+          "cursor"
+        ]
+      },
+      {
+        "source": "rename_conversation",
+        "fields": [
+          "conversationId",
+          "title"
+        ]
+      }
+    ],
+    "set_preferences": [
+      {
+        "source": "update_workspace_user_preferences",
+        "fields": [
+          "defaultRepoSlug"
+        ]
+      }
+    ]
+  },
+  "org-identity": {
+    "create_workspace": [
+      {
+        "source": "configure_repo",
+        "fields": [
+          "repoId"
+        ]
+      }
+    ],
+    "set_member_role": [
+      {
+        "source": "change_member_role",
+        "fields": [
+          "newRole"
+        ]
+      }
+    ]
+  },
+  "ontology": {
+    "get_ontology": [
+      {
+        "source": "diff_schema_versions",
+        "fields": [
+          "fromVersionId"
+        ]
+      }
+    ],
+    "list_sources": [
+      {
+        "source": "get_integration_metrics",
+        "fields": [
+          "integrationId"
+        ]
+      },
+      {
+        "source": "get_integration",
+        "fields": [
+          "integrationId"
+        ]
+      }
+    ],
+    "remove_source": [
+      {
+        "source": "delete_connection",
+        "fields": [
+          "connectionId"
+        ]
+      }
+    ],
+    "update_ontology": [
+      {
+        "source": "delete_schema_label",
+        "fields": [
+          "schemaName",
+          "name"
+        ]
+      },
+      {
+        "source": "delete_schema_property",
+        "fields": [
+          "ownerKind",
+          "ownerName",
+          "key"
+        ]
+      },
+      {
+        "source": "delete_schema_relationship",
+        "fields": [
+          "schemaName",
+          "name"
+        ]
+      },
+      {
+        "source": "upsert_schema_label",
+        "fields": [
+          "schemaName",
+          "name",
+          "displayName",
+          "description",
+          "naturalKeyProps"
+        ]
+      },
+      {
+        "source": "upsert_schema_property",
+        "fields": [
+          "ownerKind",
+          "ownerName",
+          "key",
+          "dataType",
+          "required",
+          "description",
+          "enumValues",
+          "itemType",
+          "constraints",
+          "example"
+        ]
+      },
+      {
+        "source": "upsert_schema_relationship",
+        "fields": [
+          "schemaName",
+          "name",
+          "displayName",
+          "cardinality",
+          "description"
+        ]
+      }
+    ],
+    "update_source": [
+      {
+        "source": "pause_connection",
+        "fields": [
+          "connectionId"
+        ]
+      },
+      {
+        "source": "preview_connection",
+        "fields": [
+          "connectionId"
+        ]
+      },
+      {
+        "source": "set_connection_mappings",
+        "fields": [
+          "connectionId"
+        ]
+      },
+      {
+        "source": "suggest_connection_mappings",
+        "fields": [
+          "connectionId"
+        ]
+      },
+      {
+        "source": "update_connection",
+        "fields": [
+          "connectionId"
+        ]
+      }
+    ]
+  },
+  "spend-audit": {
+    "set_model_route": [
+      {
+        "source": "preview_routing_decision",
+        "fields": [
+          "prompt"
+        ]
+      }
+    ]
+  }
+}
