@@ -166,15 +166,18 @@ export function createLiveAgents(
     if (slug === null) return readError("workspace_not_found", 404);
     // A null key is a definition from before namespaces were backfilled: there
     // is nothing to link its page or its runs by.
-    if (defs.value.agents.some((d) => d.agentKey === null))
+    const keyed = defs.value.agents.flatMap((d) =>
+      d.agentKey === null ? [] : [{ key: d.agentKey, definition: d }],
+    );
+    if (keyed.length < defs.value.agents.length)
       return readError("agent_key_unbackfilled", 503);
 
     const byKey = new Map<
       string,
       { definition: DefinitionRow | null; host: HostSummary | null }
     >();
-    for (const d of defs.value.agents)
-      byKey.set(d.agentKey ?? "", { definition: d, host: null });
+    for (const { key, definition } of keyed)
+      byKey.set(key, { definition, host: null });
     for (const h of hosts.value)
       byKey.set(h.agentKey, {
         definition: byKey.get(h.agentKey)?.definition ?? null,
