@@ -203,7 +203,10 @@ export function WrapPanel(props: WrapPanelProps) {
                     {t("credentialNotBacked")}
                   </p>
                 )}
-                <pre className="max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs">
+                <pre
+                  tabIndex={0}
+                  className="max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs"
+                >
                   <code>$ {snippet.install}</code>
                 </pre>
               </>
@@ -271,7 +274,10 @@ export function WrapPanel(props: WrapPanelProps) {
                 <span className="text-xs text-muted-foreground">
                   {t("orRun")}
                 </span>
-                <pre className="max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs">
+                <pre
+                  tabIndex={0}
+                  className="max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs"
+                >
                   <code>{enrollCommand(method, installer?.token ?? null)}</code>
                 </pre>
               </>
@@ -312,6 +318,7 @@ export function WrapPanel(props: WrapPanelProps) {
               </div>
               <TabPanel idPrefix="wrap-language" value={language}>
                 <pre
+                  tabIndex={0}
                   data-testid="sdk-snippet"
                   className="max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3.5 py-3 font-mono text-xs leading-relaxed"
                 >

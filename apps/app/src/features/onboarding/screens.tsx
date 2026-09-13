@@ -252,8 +252,14 @@ export async function WelcomeScreen({
 
   const gate = readGateQuery(query);
   const links = gate ? { org: gate.org, ws: gate.ws, choice: null } : null;
-  const shell = (children: ReactNode) => (
-    <GateShell mode="gate" step={step} email={user.email} links={links}>
+  const shell = (children: ReactNode, hiddenTitle = false) => (
+    <GateShell
+      mode="gate"
+      step={step}
+      email={user.email}
+      links={links}
+      hiddenTitle={hiddenTitle}
+    >
       {children}
     </GateShell>
   );
@@ -262,6 +268,7 @@ export async function WelcomeScreen({
     const t = await getTranslations("onboarding.states");
     return shell(
       <PageState page="welcome" result={deniedRead(t("gateDenied"))} />,
+      true,
     );
   }
 
@@ -281,6 +288,7 @@ export async function WelcomeScreen({
         kind="missing"
         startHref={gateHref("organization", null)}
       />,
+      true,
     );
   const scope = await loadFlowScope(user, gate.org, gate.ws);
   if (!scope.ok)
@@ -289,6 +297,7 @@ export async function WelcomeScreen({
         kind="not-found"
         startHref={gateHref("organization", null)}
       />,
+      true,
     );
   const choice = gateAgentChoice(query);
 
@@ -333,13 +342,14 @@ export async function RegisterScreen({
 
   const fleetHref = `/${org}/${ws}`;
   const choice = readAgentChoice(query);
-  const shell = (children: ReactNode) => (
+  const shell = (children: ReactNode, hiddenTitle = false) => (
     <GateShell
       mode="register"
       step={step}
       email={user.email}
       cancelHref={fleetHref}
       links={{ org, ws, choice }}
+      hiddenTitle={hiddenTitle}
     >
       {children}
     </GateShell>
@@ -352,6 +362,7 @@ export async function RegisterScreen({
         page="register"
         result={deniedRead(t("registerDenied", { ws }))}
       />,
+      true,
     );
   }
 
@@ -388,6 +399,7 @@ export async function RegisterScreen({
           </Link>
         }
       />,
+      true,
     );
   }
 

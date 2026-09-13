@@ -149,7 +149,9 @@ test.describe("sign up", () => {
     await page.getByLabel("Work email").fill(FIXTURE_USER.email);
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL(/\/welcome$/);
+    // The first visit compiles /welcome under `next dev`, which can outlast the
+    // default 10s assertion window on a cold server.
+    await expect(page).toHaveURL(/\/welcome$/, { timeout: 30_000 });
     await expect(
       page.getByRole("heading", { level: 1, name: "Name your organization" }),
     ).toBeVisible();

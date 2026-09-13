@@ -322,8 +322,31 @@ describe("GateShell", () => {
     ).toHaveAttribute("href", "/acme/core-platform/register");
   });
 
+  it("hiddenTitle · names a heading-less state with the current step", async () => {
+    await renderServer(
+      <GateShell mode="gate" step="wrap" email={null} links={null} hiddenTitle>
+        <p>denied</p>
+      </GateShell>,
+    );
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Wrap an agent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("without hiddenTitle the shell adds no heading of its own", async () => {
+    await renderServer(
+      <GateShell mode="gate" step="wrap" email={null} links={null}>
+        <p>child</p>
+      </GateShell>,
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
   it("skeleton", async () => {
     await renderServer(<GateSkeleton />);
     expect(screen.getByTestId("page-state-loading")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Loading this step…" }),
+    ).toBeInTheDocument();
   });
 });

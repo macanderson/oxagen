@@ -154,7 +154,9 @@ describe("WelcomeScreen", () => {
     cookieJar.set("mc_state", "loading");
     expect((await welcome(undefined)).type).toBe(GateSkeleton);
     cookieJar.set("mc_state", "denied");
-    const denied = find(await welcome(undefined), PageState);
+    const deniedTree = await welcome(undefined);
+    expect(find(deniedTree, GateShell)?.props.hiddenTitle).toBe(true);
+    const denied = find(deniedTree, PageState);
     expect(denied?.props.result).toEqual({
       ok: false,
       reason: "denied",
@@ -232,6 +234,7 @@ describe("RegisterScreen", () => {
     expect(
       elements(tree).some((e) => e.props.testId === "register-choice-missing"),
     ).toBe(true);
+    expect(find(tree, GateShell)?.props.hiddenTitle).toBe(true);
   });
 
   it("denied names agent.register on the workspace; loading renders the skeleton", async () => {

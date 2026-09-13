@@ -136,7 +136,10 @@ test.describe("onboarding gate", () => {
   }) => {
     await page.goto(WRAP);
     const card = page.getByTestId("wrap-card");
+    // The step streams in behind a Suspense boundary; boundingBox() does not wait.
+    await expect(card).toBeVisible();
     const first = await card.boundingBox();
+    expect(first).not.toBeNull();
     for (const name of [/Codex CLI/, /SDK agent/, /Claude Code/]) {
       await page.getByRole("tab", { name }).click();
       await expect(page.getByRole("tab", { name })).toHaveAttribute(

@@ -17,6 +17,12 @@ export type GateShellProps = {
   /** Where Cancel goes; the gate has no cancel (the app does not open until a frame arrives). */
   cancelHref?: string;
   links: { org: string; ws: string; choice: AgentChoice | null } | null;
+  /**
+   * Set when the step's content carries no visible <h1> (a denied state, a
+   * missing scope): the shell then names the page with the current step's label
+   * for assistive technology.
+   */
+  hiddenTitle?: boolean;
   children: ReactNode;
 };
 
@@ -32,6 +38,7 @@ export async function GateShell({
   email,
   cancelHref,
   links,
+  hiddenTitle = false,
   children,
 }: GateShellProps) {
   const t = await getTranslations("onboarding");
@@ -57,6 +64,11 @@ export async function GateShell({
         </header>
       ) : null}
       <main id="main" className="flex w-full max-w-3xl min-w-0 flex-col">
+        {hiddenTitle ? (
+          <h1 className="sr-only">
+            {t(`steps.${mode}.${steps[current] ?? step}`)}
+          </h1>
+        ) : null}
         {cancelHref ? (
           <div className="flex justify-end pt-5">
             <Link
@@ -173,6 +185,7 @@ export async function GateSkeleton() {
       className="flex min-h-dvh flex-col items-center bg-background px-4 pt-24"
       data-testid="page-state-loading"
     >
+      <h1 className="sr-only">{t("loading")}</h1>
       <div
         role="status"
         aria-live="polite"

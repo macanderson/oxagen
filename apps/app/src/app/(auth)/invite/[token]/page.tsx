@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
@@ -40,6 +41,8 @@ async function Invite({
       </AuthColumn>
     );
   }
+  // Expiry is judged against the request's clock, never a prerendered one.
+  await connection();
   const decision = decideInvitation(read.value, user?.email ?? null);
   return (
     <AuthColumn wide>
