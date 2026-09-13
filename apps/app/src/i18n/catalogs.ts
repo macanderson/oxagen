@@ -9,7 +9,10 @@ export type Messages = Record<string, unknown>;
 export const DEFAULT_LOCALE = "en";
 
 /** Catalog file stems under messages/, merged in this order. */
-export const CATALOG_FILES = ["en"] as const;
+export const CATALOG_FILES = [
+  "en", // shared namespaces: app, routes, states, notFound, globalError
+  "ui", // Mission Control primitives (src/ui)
+] as const;
 
 export class DuplicateNamespaceError extends Error {
   readonly code = "i18n_duplicate_namespace";
