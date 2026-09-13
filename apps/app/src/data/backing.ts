@@ -121,10 +121,19 @@ export const BACKING = {
     assurance: gap("tools", "A4", "none", "M2", NO_GAP),
   },
   ontology: {
+    // §3.1 Ontology · model map 🟡: schema_registry + graph stats carry the rest;
+    // rulesReferencing and per-class freshAt are unrecorded, so the live read
+    // waits on those fields becoming nullable in the view model (A5 promote).
     classes: wired("ontology", "A5", "partial"),
-    sources: wired("ontology", "A5"),
-    repositories: wired("ontology", "A5"),
-    versions: wired("ontology", "A5", "partial"),
+    // §3.1 Ontology · sources 🟡 (A5 column check): list_connections + mappings.
+    sources: wired("ontology", "A5", "partial"),
+    // §3.1 Ontology · repositories: §3 said ✅; at column level repository_bindings
+    // has name and branch only. Role, indexed commit, issues, events, symbols and
+    // drift are the M4 GitHub link (spec §11.4), no gap id.
+    repositories: gap("ontology", "A5", "partial", "M4", NO_GAP),
+    // §3.1 Ontology · versions 🟡: commit, pull request and author need the
+    // ontology in git (spec §11.8, M4); schema_versions carries none of them.
+    versions: gap("ontology", "A5", "partial", "M4", NO_GAP),
     // §3.1 Ontology · embedding indexes ❌ (Voyage indexes, M4).
     embeddingIndexes: gap("ontology", "A5", "none", "M4", NO_GAP),
   },

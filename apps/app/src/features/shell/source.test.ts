@@ -1,11 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { liveShell } from "@/data/adapters/live/shell";
+// shellSource: the viewer gate first, then the one data source's shell port.
+// Which adapter dataSource() selects (and that production never selects the
+// fixture) is src/data/source.test.ts's to prove; this file proves the shell
+// reads through it and reads nothing for a refused organization.
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { FIXTURE_USER } from "@/server/fixture-session";
 
 const requireViewer = vi.fn();
 vi.mock("@/server/scope", () => ({ requireViewer }));
+const shellPort = { context: vi.fn() };
+const dataSource = vi.fn(() => Promise.resolve({ shell: shellPort }));
+vi.mock("@/data/source", () => ({ dataSource }));
+
+const { shellSource } = await import("./source");
 
 const scope = {
   orgId: FIXTURE_TENANT.orgId,
@@ -15,43 +23,23 @@ const scope = {
 beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({ userId: FIXTURE_USER.id, scope });
-});
-afterEach(() => {
-  vi.unstubAllEnvs();
+  dataSource.mockClear();
 });
 
 describe("shellSource", () => {
   it("reads through dataSource().shell for the viewer requireViewer admits", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "fixture");
-    const { shellSource } = await import("./source");
-    const { fixtureSource } = await import("@/data/adapters/fixture");
-    const source = await shellSource("acme");
-    expect(requireViewer).toHaveBeenCalledWith("acme");
-    expect(source).toEqual({
-      port: fixtureSource.shell,
+    expect(await shellSource("acme")).toEqual({
+      port: shellPort,
       scope,
       userId: FIXTURE_USER.id,
     });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
+    expect(dataSource).toHaveBeenCalledTimes(1);
   });
 
-  it("never serves fixtures in a production build, even with MC_DATA=fixture (negative)", async () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("MC_DATA", "fixture");
-    const { shellSource } = await import("./source");
-    expect((await shellSource("acme")).port).toBe(liveShell);
-  });
-
-  it("serves live reads when the live source is selected (negative)", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "live");
-    const { shellSource } = await import("./source");
-    expect((await shellSource("acme")).port).toBe(liveShell);
-  });
-
-  it("reads nothing when requireViewer refuses the organization", async () => {
+  it("reads nothing when requireViewer refuses the organization (negative)", async () => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
-    const { shellSource } = await import("./source");
     await expect(shellSource("globex")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(dataSource).not.toHaveBeenCalled();
   });
 });
