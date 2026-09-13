@@ -63,8 +63,10 @@ const gap = (
 
 export const BACKING = {
   runs: {
-    // §3.1 Fleet · runs list 🟡: tier, grade, verdict and proven spend need cost.run_totals.
-    listRuns: gap("fleet", "A1", "partial", "M2", "G3"),
+    // §3.1 Fleet · runs list 🟡 (A1): agent_runs + tacho.sessions with token_usage
+    // spend. A row whose operator or cost is unrecorded answers its own gap, and
+    // the proven filter waits on verdicts (M6, G7).
+    listRuns: wired("fleet", "A1", "partial"),
     // §3.1 Run · header 🟡: RunStore.getRunByPublicId.
     getRun: wired("run", "A1", "partial"),
     // §3.1 Run · frames 🟡: readAttemptEventsSince.
@@ -139,7 +141,11 @@ export const BACKING = {
   },
   steering: {
     records: wired("steering", "A6"),
-    proposals: wired("steering", "A6", "partial"),
+    // §3.1 Steering · proposals: §3 said 🟡; at column level
+    // agent.context_promotions is the applied lifecycle ledger (each entry
+    // already decided) with no candidate state, support, source or Context PR,
+    // so proposals arrive with the promoter (M3), no gap id.
+    proposals: gap("steering", "A6", "none", "M3", NO_GAP),
     // §3.1 Steering · effect, retirement ❌ (effect metrics, M3).
     effect: gap("steering", "A6", "none", "M3", NO_GAP),
     retirementCandidates: gap("steering", "A6", "none", "M3", NO_GAP),
