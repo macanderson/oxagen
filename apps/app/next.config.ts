@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
   partialPrefetching: true, // 16.3 Instant Navigations: shells prefetch, data streams
   typedRoutes: true,
   reactCompiler: true,
+  // `next dev` would otherwise write AGENTS.md/CLAUDE.md into apps/app. Agent
+  // instructions live in the repo-root CLAUDE.md and AGENTS.md, under review.
+  agentRules: false,
   typescript: {
     // The CI `checks` job type-checks authoritatively (`tsc --noEmit`, TS 7). A
     // second pass inside `next build` reserves another large heap and OOMs the
