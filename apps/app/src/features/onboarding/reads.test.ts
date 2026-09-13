@@ -33,6 +33,11 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({ liveTenancyLookups: lookups }));
+// requireViewer defers its clock read behind connection(), which needs a request scope.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: () => Promise.resolve(),
+}));
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({

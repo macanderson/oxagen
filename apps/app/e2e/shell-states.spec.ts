@@ -18,13 +18,35 @@ async function engineDown(page: Page, baseURL: string | undefined) {
   ]);
 }
 
-/** The computed text colour of an element, as the browser resolved it. */
+/** Wait for the flyout's translate/opacity transition to finish: axe measures contrast mid-fade otherwise. */
+async function settled(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page
+        .getByTestId("assistant-flyout")
+        .evaluate((el) => el.getAnimations().length),
+    )
+    .toBe(0);
+}
+
+/**
+ * The computed text colour of an element as sRGB `rgb(r, g, b)`. Chromium keeps
+ * lab()/oklch() inks in their own space in getComputedStyle (lab's L and a would
+ * read as r and g), so the colour is painted to a canvas and read back as bytes.
+ */
 const colorOf = (page: Page, testId: string, selector: string) =>
   page
     .getByTestId(testId)
     .locator(selector)
     .first()
-    .evaluate((el) => getComputedStyle(el).color);
+    .evaluate((el) => {
+      const ctx = document.createElement("canvas").getContext("2d");
+      if (!ctx) return getComputedStyle(el).color;
+      ctx.fillStyle = getComputedStyle(el).color;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgb(${String(r)}, ${String(g)}, ${String(b)})`;
+    });
 
 test.describe("shell · reads through the data source", () => {
   test("a stranger's organization is a 404 before the chrome reads anything", async ({
@@ -131,6 +153,7 @@ test.describe("shell · engine down reads red", () => {
 
       await page.getByTestId("assistant-launcher").click();
       await expect(page.getByTestId("assistant-engine-down")).toBeVisible();
+      await settled(page);
       await expectNoAxeViolations(page, OVERLAY_AXE);
     });
   }

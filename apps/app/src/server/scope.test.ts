@@ -19,6 +19,11 @@ const { requestHeaders, getSessionMock, resolveMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => nav);
+// requireViewer defers its clock read behind connection(), which needs a request scope.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: () => Promise.resolve(),
+}));
 vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(requestHeaders),
 }));

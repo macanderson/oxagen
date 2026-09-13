@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { notBacked } from "@/data/not-backed";
 import type { StreamFeeds } from "./stream-feeds";
@@ -210,6 +211,28 @@ describe("handleStreamRequest: streaming", () => {
     await vi.waitFor(() => {
       expect(onError).toHaveBeenCalledWith(boom);
     });
+  });
+
+  it("reads every poll in the request's async context, though the body is pulled after the handler returns", async () => {
+    // Stands in for Next's request store, which `cookies()` reads.
+    const request = new AsyncLocalStorage<string>();
+    const seen: Array<string | undefined> = [];
+    const d = deps(undefined, {
+      framesSince: (_s, _r, after: string) => {
+        seen.push(request.getStore());
+        return Promise.resolve(
+          after === "0"
+            ? { ok: true as const, value: [{ seq: "1" }] }
+            : notBacked("M1", "G6"),
+        );
+      },
+    });
+    const res = await request.run("req-1", () =>
+      handleStreamRequest(get(`${base}?run=arun_1`), params, d),
+    );
+    expect(request.getStore()).toBeUndefined();
+    await res.text();
+    expect(seen).toEqual(["req-1", "req-1"]);
   });
 
   it("rethrows an unexpected failure while resolving the cursor", async () => {

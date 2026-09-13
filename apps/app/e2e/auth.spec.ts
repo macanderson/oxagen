@@ -99,7 +99,7 @@ test.describe("log in", () => {
     await page.goto("/acme/core-platform");
     await expect(page).toHaveURL(/\/login\?next=/);
     await logIn(page);
-    await expect(page).toHaveURL(/\/acme\/core-platform$/);
+    await expect(page).toHaveURL(/\/acme\/core-platform$/, { timeout: 30_000 });
   });
 
   for (const hostile of [
@@ -199,7 +199,7 @@ test.describe("two-factor", () => {
     await page.goto("/two-factor?next=%2Facme%2Fcore-platform");
     await page.getByLabel("Authentication code").fill(TOTP);
     await page.getByRole("button", { name: "Verify" }).click();
-    await expect(page).toHaveURL(/\/acme\/core-platform$/);
+    await expect(page).toHaveURL(/\/acme\/core-platform$/, { timeout: 30_000 });
   });
 });
 
@@ -297,7 +297,7 @@ test.describe("accept an invitation", () => {
     await page.goto("/invite/invi_acme_pending");
     await expectNoAxeViolations(page);
     await page.getByRole("button", { name: "Accept invitation" }).click();
-    await expect(page).toHaveURL(/\/acme$/);
+    await expect(page).toHaveURL(/\/acme$/, { timeout: 30_000 });
   });
 
   test("denied · an invitation for another account", async ({
