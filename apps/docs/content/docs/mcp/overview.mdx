@@ -5,17 +5,51 @@ description: The Oxagen MCP server — capabilities as tools, API-key authentica
 
 The Oxagen MCP server exposes the full platform capability set as tools for any MCP-compatible client: Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, and Windsurf. Connecting an Oxagen workspace to your AI development environment gives it a governed, auditable, tenant-isolated toolchain — the same one the in-app agent uses.
 
-<IllustrationMcp />
-
 **MCP server URL:** `https://mcp.oxagen.sh/mcp`
 
 **Transport:** Streamable HTTP (the current MCP standard). SSE is not used.
 
 ## What the MCP server provides
 
-Every capability declared with `surfaces: ['mcp']` in the contract registry is available as an MCP tool. This includes agent memory recall and write, conversation management, asset upload, document and image generation, plugin management, and background task management.
+Every capability declared with `surfaces: ['mcp']` in the contract registry is available as an MCP tool. This includes agent memory recall and write, conversation management, asset upload, and plugin management.
 
-The tool list is dynamically filtered by the API key's scope and the workspace's tool policy. A tool that the connecting principal is not authorized to use does not appear in the tool list for that session.
+Authorization is enforced when a tool is called, not when the list is fetched. A tool the connecting principal is not allowed to use is refused by the `invoke()` kernel, and the refusal is recorded as a `capability.invoke_denied` event.
+
+## Connect a client
+
+The server speaks streamable HTTP, so any client that accepts a remote MCP URL and a custom header can connect. Replace the key placeholder with an API key from **Organization → Developer → Tokens**.
+
+```bash tab="Claude Code"
+claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
+  --header "Authorization: Bearer $OXAGEN_API_KEY"
+```
+
+```jsonc tab="Cursor"
+// ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "oxagen": {
+      "url": "https://mcp.oxagen.sh/mcp",
+      "headers": { "Authorization": "Bearer <your-api-key>" }
+    }
+  }
+}
+```
+
+```jsonc tab="VS Code"
+// settings.json
+{
+  "mcp": {
+    "servers": {
+      "oxagen": {
+        "type": "http",
+        "url": "https://mcp.oxagen.sh/mcp",
+        "headers": { "Authorization": "Bearer <your-api-key>" }
+      }
+    }
+  }
+}
+```
 
 ## Authentication and scoping
 
@@ -27,16 +61,28 @@ Authentication is API-key based. The key determines:
 
 There are no path-level org or workspace segments in the URL. Scope is carried entirely by the key.
 
-<Mermaid
-  chart="
-flowchart LR
-  C[MCP client] -->|API key| M[MCP server /mcp]
-  M --> S[Org + workspace scope]
-  S --> K[invoke kernel]
-  K --> T[Capabilities as tools]"
-/>
+### What happens on a tool call
 
-*The API key alone carries org and workspace scope — no URL path segments — before the same `invoke()` kernel every other surface uses.*
+<Mermaid chart={`
+sequenceDiagram
+  participant C as MCP client
+  participant M as mcp.oxagen.sh/mcp
+  participant K as invoke() kernel
+  participant DB as Audit stores
+  C->>M: tools/call + Bearer ox_…
+  M->>M: Reject if no well-formed Bearer header
+  M->>M: Resolve key → org + workspace
+  alt key invalid or expired
+    M-->>C: invalid_token / expired_token
+  end
+  M->>DB: api_key.used
+  M->>K: invoke(capability, args, surface: mcp)
+  K->>K: IAM, billing, entitlement, decision rules
+  K->>DB: capability.invoke_allowed / invoke_denied / invoke_error
+  K-->>C: Tool result or denial
+`} />
+
+*Session tokens are refused before any tool runs: only an API key carries the org and workspace a tool call runs in.*
 
 ## Audit trail
 

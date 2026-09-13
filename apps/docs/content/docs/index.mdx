@@ -3,8 +3,6 @@ title: Oxagen for the enterprise
 description: Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. One typed contract, not a log file to reconstruct after the fact.
 ---
 
-<IllustrationOverview />
-
 ## The problem your organization already has
 
 AI adoption is accelerating faster than governance can follow. Engineers connect directly to OpenAI. Sales teams paste customer data into ChatGPT. Finance analysts build automations in LLM notebooks no one approved. Every one of those interactions is invisible to your security team, unaudited, and unaccountable.
@@ -23,18 +21,18 @@ Oxagen gives every agent your company's knowledge and rules at run time, from a 
 
 Every agent gets an identity, a role, and a budget. Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary that checks it against those before the action runs, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural. See [governance and RBAC](/docs/governance/overview).
 
-<Mermaid
-  chart="
-flowchart LR
-  I[Identity] --> C[Capability contract]
-  C --> K[invoke]
-  K --> IAM[IAM check]
-  IAM --> B[Meter and bill]
-  B --> H[Handler runs]
-  H --> A[Audit record]"
-/>
+<Mermaid chart={`
+flowchart TD
+  S["REST API · MCP server · in-app agent"] --> R[Look up capability contract]
+  R --> V[Surface allowed? Input valid?]
+  V --> G["IAM → billing → budget → entitlement → decision rules"]
+  G -->|refused| D[Refused + security event]
+  G -->|allowed| H[Handler runs in tenant scope]
+  H --> O[Output validated against contract]
+  O --> A[capability.invoke_allowed + trace]
+`} />
 
-*Every action carries identity through one contract-bound chokepoint — no capability reaches a handler without IAM, metering, and an audit record.*
+*The order `invoke()` runs in. Every gate sits before the handler, so a refused call never touches data, and both outcomes leave an audit record.*
 
 ### Explain
 
@@ -56,7 +54,7 @@ The same principle extends to Neo4j (scoped session guard), ClickHouse (org-scop
 
 Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The Trust Service Criteria are architectural requirements:
 
-- **CC6 (access control):** role-based IAM — org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer) — with default-deny, org-enforced policies that workspaces can tighten but never expand, just-in-time access requests, and force-revoke on any session.
+- **CC6 (access control):** role-based IAM — org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer) — resolved per capability at the `invoke()` boundary on Enterprise organizations, recorded access requests for approval-gated capabilities, member access reviews, and force-revoke on any session.
 - **CC7 (monitoring):** two independent audit stores — a Postgres `security.security_events` table with 7-year retention and a ClickHouse `audit_events` table with chain-hash tamper evidence — covering 40 typed event kinds from every auth, billing, and capability invocation.
 - **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
 - **CC9 (risk mitigation):** no first-party agent-execution runtime for the platform itself to compromise — Oxagen governs agents, it does not run them; capabilities with high blast radius require explicit user approval before they run.
@@ -64,6 +62,16 @@ Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The Trust Service Criteri
 ### Parity across API, MCP, and in-app agent
 
 Every capability is declared once in the contract registry and exposed identically across three programmable surfaces: the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Running a compliance check, firing an automation, or writing agent memory produces the same audit record regardless of which surface the action came from. Your governance model does not have gaps.
+
+<Mermaid chart={`
+flowchart LR
+  API["REST API<br/>api.oxagen.sh/v1"] --> K
+  MCP["MCP server<br/>mcp.oxagen.sh/mcp"] --> K
+  APP["In-app agent<br/>app.oxagen.sh"] --> K
+  REG[(Contract registry)] -.-> K
+  K["invoke() kernel"] --> PG[("Postgres<br/>security.security_events")]
+  K --> CH[("ClickHouse<br/>audit_events")]
+`} />
 
 ## Where to start
 

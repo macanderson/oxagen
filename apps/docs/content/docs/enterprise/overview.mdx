@@ -3,13 +3,11 @@ title: Enterprise overview
 description: The org and workspace model, how governance scales across business units, and what enterprise tier includes.
 ---
 
-<IllustrationEnterprise />
-
 ## The organization and workspace model
 
 Oxagen structures every customer account as an **organization** with one or more **workspaces**.
 
-```
+```text title="Example structure"
 Organization (Acme Corp)
 ├── Workspace: Marketing
 ├── Workspace: Engineering
@@ -39,23 +37,24 @@ Scale tier organizations get:
 
 ## Identity federation
 
-Enterprise organizations can configure SAML 2.0 or OIDC at **Organization → Security → SSO**. After SSO is configured:
-
-- Users sign in via your IdP (Okta, Entra ID, Ping, etc.).
-- IdP group claims are mapped to Oxagen org roles.
-- Deprovisioned users are automatically suspended.
-
-SCIM 2.0 directory sync (**Organization → Security → SCIM**) keeps the roster in sync automatically — no manual invite management at scale.
+SAML 2.0 / OIDC single sign-on and SCIM 2.0 directory sync are not yet available. The SSO and SCIM settings stay hidden under **Organization → Security** until their capability contracts ship, and the security page reports SSO enforcement as not yet configurable. Until then, members sign in with email and password, Google, or GitHub, and org-wide MFA can be required for privileged roles on the MFA tab.
 
 ## Governance at scale
 
 ### Central IT sets the rails
 
-Org-level enforced policies cannot be overridden by workspace administrators. If your security team decides that `org.member_role.change` requires approval in all workspaces, set an enforced policy once at the org level and it applies everywhere — including workspaces created in the future.
+Today every access decision is made by role: a principal's role grants, then the system org Owner role, then the capability contract's default effect. The org decides who holds which role, so an org administrator controls access in every workspace, including workspaces created later.
 
-### Business units tighten within the rails
+<Mermaid chart={`
+flowchart LR
+  Q["invoke() capability"] --> RG{"Role grant<br/>for this capability?"}
+  RG -->|deny · require approval · allow| DONE["Decision"]
+  RG -->|none| OW{"System org Owner?"}
+  OW -->|yes| ALLOW["Allow"]
+  OW -->|no| DEF["Contract defaultEffect"]
+`} />
 
-Workspace administrators can restrict access further than the org baseline. A workspace handling sensitive financial data can deny capabilities that the org allows — but it cannot grant capabilities the org has denied.
+The IAM resolver also defines two stronger tiers: org-enforced policies that workspaces cannot override, and workspace grants and denies that tighten access inside those rails. Neither tier is active yet. Their tables were removed in migration 0027, so no live request is decided by them.
 
 ### Agents as accountable principals
 

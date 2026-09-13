@@ -3,8 +3,6 @@ title: Plugins overview
 description: How Oxagen plugins extend the agent toolchain — plugin types, workspace scoping, and how install, connect, and entitlements work.
 ---
 
-<IllustrationPlugins />
-
 ## What are plugins?
 
 Plugins extend what Oxagen agents can do in a workspace. They can contribute external tools (MCP servers, integrations), first-party capability packs, agent skills, or knowledge retrieval sources.
@@ -28,6 +26,30 @@ The platform supports five plugin types.
 All five types share the same install entry point: **Workspace settings → Plugins → Browse marketplace**.
 
 Plugins are enabled immediately on install. For types that require an external connection (`mcp_server`, `integration`), you also need to complete a **Connect** step to supply credentials and activate the network endpoint.
+
+What the install does, in order:
+
+<Mermaid chart={`
+flowchart TD
+  S[Install from marketplace] --> T{Plugin type}
+  T -->|agent_capability| M[Look up manifest in the Oxagen plugin registry]
+  M -->|unknown or hidden| X[Install fails]
+  M --> U[Save listing, auth: none]
+  T -->|other types| R[Resolve endpoint from the workspace's enabled registries]
+  R -->|no match| X
+  R --> A[Auth kind from registry metadata: secret or none]
+  A --> P{mcp_server or integration with auth none?}
+  P -->|yes| O[Probe endpoint: upgrade to oauth if protected]
+  P -->|no| U2[Save listing, enabled]
+  O --> U2
+  U --> E[Audit event: plugin.installed]
+  U2 --> E
+  E --> C{Auth kind}
+  C -->|none| READY[Tools available to agents]
+  C -->|oauth or secret| CONNECT[Connect step] --> READY
+`} />
+
+Registry metadata cannot declare OAuth, so Oxagen probes the live endpoint (the RFC 9728 well-known document or a `401` challenge) and marks the plugin `oauth` when it is protected. Without that probe, an OAuth-protected server would install without ever prompting you to connect. Installing the same plugin again returns the existing listing rather than creating a duplicate.
 
 See [Plugin marketplace](/docs/plugins/marketplace) for the full install guide.
 
