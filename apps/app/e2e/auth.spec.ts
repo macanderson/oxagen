@@ -2,14 +2,15 @@
 // renders, validates and is axe clean; log in keeps a same-origin ?next= and
 // refuses any other; the session gate sends a signed-out visit to /login.
 //
-// Fixture values mirror src/features/auth/fixture.ts (not imported: that module
-// resolves the app's "@/" alias, which the Playwright loader does not).
+// The fixture operator's stand-in secrets come from src/server/fixture-session.ts,
+// which resolves no "@/" alias, so the Playwright loader can import it.
 import type { Page } from "@playwright/test";
+import { FIXTURE_CREDENTIALS } from "../src/server/fixture-session";
 import { FIXTURE_USER, expect, expectNoAxeViolations, test } from "./support";
 
-const PASSWORD = "mission-control";
-const TOTP = "602914";
-const RESET_TOKEN = "rst_fixture_01";
+const PASSWORD = FIXTURE_CREDENTIALS.password;
+const TOTP = FIXTURE_CREDENTIALS.totpCode;
+const RESET_TOKEN = FIXTURE_CREDENTIALS.resetToken;
 
 async function logIn(
   page: Page,

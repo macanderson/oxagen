@@ -16,7 +16,7 @@ import {
 import { useTranslations } from "next-intl";
 import { cx } from "./cx";
 import { classifyToolName, humanizeToolName, parseToolId } from "./tool-name";
-import type { ToolCategory } from "./vocabulary";
+import type { ToolCategory } from "@/data/contracts";
 
 export const TOOL_CATEGORY_ICON = {
   read: Eye,

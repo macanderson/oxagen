@@ -4,7 +4,7 @@ import { DataTable, type DataTableColumn } from "./data-table";
 import { Money } from "./money";
 import { StatusBadge } from "./status-badge";
 import { TierBadge } from "./tier-badge";
-import type { RunStatus } from "./vocabulary";
+import type { RunStatus } from "@/data/contracts";
 
 type RunRow = {
   id: string;

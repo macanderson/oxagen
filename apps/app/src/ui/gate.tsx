@@ -2,7 +2,7 @@ import { BadgeDollarSign, Ban, Check, Power, ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Chip } from "./chip";
 import type { Tone } from "./tone";
-import type { GateDecision } from "./vocabulary";
+import type { GateDecision } from "@/data/contracts";
 
 // Dashed = a person still stands in the way.
 const GATE = {
