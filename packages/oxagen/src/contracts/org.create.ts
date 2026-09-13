@@ -84,9 +84,13 @@ const slugShape = z
  * has no Fleet page to land on. Callers that do not name one get the
  * convention every existing surface used ("Default" at `default`).
  */
+const DEFAULT_FIRST_WORKSPACE_NAME = "Default";
+const DEFAULT_FIRST_WORKSPACE_SLUG = "default";
+// Assembled from the two constants: check_manifest takes the first quoted
+// name literal in a contract file as the capability name.
 export const DEFAULT_FIRST_WORKSPACE = {
-  name: "Default",
-  slug: "default",
+  name: DEFAULT_FIRST_WORKSPACE_NAME,
+  slug: DEFAULT_FIRST_WORKSPACE_SLUG,
 } as const;
 
 // Exported so MCP and other surfaces can spread `.shape` without re-declaring
