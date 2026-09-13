@@ -55,6 +55,7 @@ import "./contracts/agent.role.revoke";
 import "./contracts/agent.tool.list";
 import "./contracts/agent.trace.get";
 import "./contracts/api.key.create";
+import "./contracts/api.key.list";
 import "./contracts/api.key.revoke";
 import "./contracts/api.key.rotate";
 import "./contracts/asset.upload";

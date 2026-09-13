@@ -49,6 +49,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .apiKeyCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_api_keys",
+    async () =>
+      (await import("./api.key.list")).apiKeyListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "revoke_api_key",
     async () =>
       (await import("./api.key.revoke"))
