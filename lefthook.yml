@@ -12,13 +12,18 @@ pre-commit:
     # NOT the one-shot repo-wide `pnpm format` sweep ADR-015 still calls for
     # before Biome is made a hard gate; it just keeps new changes formatted
     # going forward without reformatting whole files on unrelated PRs.
+    # --no-errors-on-unmatched: a commit whose only staged match is a file
+    # biome.json ignores (packages/database/storage-manifest.json, which
+    # `pnpm schema:manifest` regenerates and CI requires committed) is not a
+    # formatting failure; without the flag Biome exits 1 on "no files were
+    # processed" and the commit is refused.
     format:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts,json,jsonc}"
       exclude:
         - "docs/**"
         - ".agents/**"
         - ".claude/**"
-      run: pnpm exec biome format --write {staged_files}
+      run: pnpm exec biome format --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
     # Lint staged TS/JS, auto-fix, and re-stage the fixes.
