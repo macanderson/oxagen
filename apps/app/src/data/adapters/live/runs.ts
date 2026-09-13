@@ -118,6 +118,14 @@ const ms = (column: SQL | SQL.Aliased | typeof sessions.startedAt) =>
 
 const ledgerStartedAt = sql`coalesce(${runs.startedAt}, ${runs.createdAt})`;
 
+/**
+ * A public id compared byte-wise. The page merge breaks ties in JavaScript
+ * (code-unit order); a locale collation could order `_` differently and skip or
+ * repeat a run that shares its millisecond with the cursor.
+ */
+const byteOrder = (publicId: typeof runs.publicId | typeof sessions.publicId) =>
+  sql`${publicId} collate "C"`;
+
 /** Newest first from the cursor, ties broken on public id. */
 function beforeCursor(
   at: SQL,
@@ -128,7 +136,7 @@ function beforeCursor(
   const instant = new Date(cursor.at);
   return or(
     lt(ms(at), instant),
-    and(eq(ms(at), instant), lt(publicId, cursor.id)),
+    and(eq(ms(at), instant), sql`${byteOrder(publicId)} < ${cursor.id}`),
   );
 }
 
@@ -193,7 +201,7 @@ export function ledgerPageQuery(db: QueryDb, scope: Scope, q: PageQuery) {
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
       ),
     )
-    .orderBy(desc(ms(ledgerStartedAt)), desc(runs.publicId))
+    .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
     .limit(q.limit + 1);
 }
 
@@ -336,7 +344,7 @@ export function tachoPageQuery(db: QueryDb, scope: Scope, q: PageQuery) {
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
       ),
     )
-    .orderBy(desc(ms(sessions.startedAt)), desc(sessions.publicId))
+    .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
     .limit(q.limit + 1);
 }
 
@@ -389,38 +397,40 @@ type FleetItem =
 
 /** The reads the adapter makes. Each runs inside the caller's tenant scope. */
 export type RunQueries = {
-  ledgerPage(scope: Scope, q: PageQuery): Promise<LedgerPageRow[]>;
-  ledgerIdentity(
+  ledgerPage: (scope: Scope, q: PageQuery) => Promise<LedgerPageRow[]>;
+  ledgerIdentity: (
     scope: Scope,
     runId: string,
-  ): Promise<LedgerRunIdentity | null>;
-  ledgerRollups(
+  ) => Promise<LedgerRunIdentity | null>;
+  ledgerRollups: (
     scope: Scope,
     runIds: readonly string[],
-  ): Promise<Map<string, LedgerEventRollup>>;
-  ledgerSeals(
+  ) => Promise<Map<string, LedgerEventRollup>>;
+  ledgerSeals: (
     scope: Scope,
     runIds: readonly string[],
-  ): Promise<Map<string, Date>>;
-  tachoPage(scope: Scope, q: PageQuery): Promise<TachoRow[]>;
-  tachoSession(scope: Scope, publicId: string): Promise<TachoRow | null>;
-  tachoTouched(scope: Scope, sessionId: string): Promise<string[]>;
+  ) => Promise<Map<string, Date>>;
+  tachoPage: (scope: Scope, q: PageQuery) => Promise<TachoRow[]>;
+  tachoSession: (scope: Scope, publicId: string) => Promise<TachoRow | null>;
+  tachoTouched: (scope: Scope, sessionId: string) => Promise<string[]>;
 };
 
 export type LiveRunsDeps = {
   /** Enter the viewer's tenant scope for the whole read. */
-  inScope<T>(scope: Scope, fn: () => Promise<T>): Promise<T>;
-  store: Pick<
-    RunStore,
-    "getRunByPublicId" | "listRunAttempts" | "readAttemptEventsSince"
-  >;
+  inScope: <T>(scope: Scope, fn: () => Promise<T>) => Promise<T>;
+  /** The ledger's read side (RunStore). */
+  store: {
+    getRunByPublicId: RunStore["getRunByPublicId"];
+    listRunAttempts: RunStore["listRunAttempts"];
+    readAttemptEventsSince: RunStore["readAttemptEventsSince"];
+  };
   queries: RunQueries;
-  sumTokenUsage(args: {
+  sumTokenUsage: (args: {
     orgId: string;
     executionStepIds: readonly string[];
-  }): Promise<Map<string, TokenUsageByStepRow>>;
+  }) => Promise<Map<string, TokenUsageByStepRow>>;
   /** Where a store failure is recorded before the read answers its error. */
-  report(error: unknown, context: string): void;
+  report: (error: unknown, context: string) => void;
 };
 
 export const postgresRunQueries: RunQueries = {
