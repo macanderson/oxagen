@@ -1,11 +1,7 @@
 import type { ReactNode } from "react";
-import { HeroBackdrop } from "@/components/brand/hero-backdrop";
+import { AuthShell } from "@/ui/auth-shell";
 
+// Every sign-in screen shares the frame; each page renders its own column.
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative isolate grid min-h-dvh place-items-center overflow-hidden p-4">
-      <HeroBackdrop intensity="hero" />
-      {children}
-    </div>
-  );
+  return <AuthShell>{children}</AuthShell>;
 }

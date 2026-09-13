@@ -1,33 +1,57 @@
-import { OxagenWordmark } from "@/components/ui/brand";
+import Link from "next/link";
 
-export default function VerifyPage(_props: {
-  searchParams: Promise<{ email?: string }>;
-}) {
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import {
+  AFTER_SIGNUP,
+  VerifyPanel,
+  firstParam,
+  sanitizeNext,
+} from "@/features/auth";
+import {
+  AuthColumn,
+  AuthFooter,
+  AuthHeading,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+
+export default function VerifyPage(props: PageProps<"/verify">) {
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
+    <Suspense fallback={<AuthSkeleton />}>
+      <Verify searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
 
-      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Verify your email
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            We sent you a verification link. Open it to finish signing in.
-          </p>
-        </div>
+const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,190}$/;
 
-        <p className="text-sm text-muted-foreground">
-          Once you&rsquo;ve verified, you&rsquo;ll be redirected to your
-          workspace.
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+async function Verify({
+  searchParams,
+}: {
+  searchParams: PageProps<"/verify">["searchParams"];
+}) {
+  const params = await searchParams;
+  const raw = firstParam(params.email)?.trim() ?? "";
+  // Shown back to the person who typed it, never looked up: a malformed value is simply not echoed.
+  const email = EMAIL_SHAPE.test(raw) ? raw : null;
+  const expired = firstParam(params.error) !== undefined;
+  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const t = await getTranslations("auth");
+  return (
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("verify.eyebrow")}
+        title={t("verify.title")}
+        lead={email ? t("verify.lead", { email }) : t("verify.leadNoEmail")}
+      />
+      <VerifyPanel email={email} expired={expired} next={next} />
+      <AuthFooter>
+        {t("verify.wrongAddress")}{" "}
+        <Link href={"/signup"} className={linkText}>
+          {t("verify.startOver")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }

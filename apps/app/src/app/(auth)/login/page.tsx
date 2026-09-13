@@ -1,52 +1,59 @@
 import Link from "next/link";
-import { OxagenWordmark } from "@/components/ui/brand";
-import { LoginForm } from "@/components/auth/login-form";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
-export default function LoginPage() {
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import {
+  LoginForm,
+  OAuthButtons,
+  firstParam,
+  sanitizeNext,
+  withNext,
+} from "@/features/auth";
+import {
+  AuthColumn,
+  AuthFooter,
+  AuthHeading,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { isFixtureMode } from "@/server/fixture-session";
+
+export default function LoginPage(props: PageProps<"/login">) {
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
+    <Suspense fallback={<AuthSkeleton />}>
+      <Login searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
+
+async function Login({
+  searchParams,
+}: {
+  searchParams: PageProps<"/login">["searchParams"];
+}) {
+  const params = await searchParams;
+  // Only a same-origin relative path survives; anything else lands on "/".
+  const next = sanitizeNext(firstParam(params.next));
+  const t = await getTranslations("auth");
+  const fixture = isFixtureMode();
+  return (
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("login.eyebrow")}
+        title={t("login.title")}
+        lead={t("login.lead")}
+      />
+      <div className="flex flex-col gap-4">
+        {fixture ? null : <OAuthButtons callbackURL={next} />}
+        <LoginForm next={next} fixture={fixture} />
       </div>
-
-      <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome back
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in to your Oxagen workspace
-          </p>
-        </div>
-
-        <OAuthButtons callbackURL="/" />
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">Or</span>
-          </div>
-        </div>
-
-        <LoginForm mode="signin" />
-
-        <p className="text-center text-sm text-muted-foreground">
-          Don&rsquo;t have an account?{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-primary hover:underline"
-          >
-            Sign up
-          </Link>
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+      <AuthFooter>
+        {t("login.newHere")}{" "}
+        <Link href={withNext("/signup", next)} className={linkText}>
+          {t("login.createAccount")}
+        </Link>
+      </AuthFooter>
+      <AuthFooter>{t("login.haveInvite")}</AuthFooter>
+    </AuthColumn>
   );
 }

@@ -1,0 +1,352 @@
+{
+  "ui": {
+    "brand": {
+      "name": "Oxagen",
+      "home": "Oxagen home"
+    },
+    "money": {
+      "openBasis": "{basis}: how {amount} was measured",
+      "dialogTitle": "How this figure was measured",
+      "dialogDescription": "Every number that is money carries its basis: where the figure came from. It never reads stronger than what was recorded.",
+      "exactLabel": "Exact amount",
+      "exactValue": "{amount} ({currency})",
+      "currentBasis": "This figure"
+    },
+    "basis": {
+      "gateway_observed": {
+        "label": "gateway_observed",
+        "description": "Oxagen's gateway saw the provider's response and priced its usage against the price book."
+      },
+      "client_attested": {
+        "label": "client_attested",
+        "description": "The agent's harness reported the usage. Oxagen priced it but did not observe the call."
+      },
+      "mixed": {
+        "label": "mixed",
+        "description": "Part of this total was observed at the gateway and part was attested by a client."
+      },
+      "estimated": {
+        "label": "estimated",
+        "description": "No usage was recorded for part of this total, so it was estimated. Treat it as a lower bound."
+      },
+      "unknown": {
+        "label": "basis not recorded",
+        "description": "No basis was recorded for this figure."
+      }
+    },
+    "tier": {
+      "gateway": {
+        "label": "gateway",
+        "description": "Oxagen carried the model and tool calls and could enforce every decision."
+      },
+      "harness": {
+        "label": "harness",
+        "description": "The harness hook enforced decisions; Oxagen did not carry the credential."
+      },
+      "observe": {
+        "label": "observe",
+        "description": "Oxagen recorded the run but could not enforce anything."
+      },
+      "unknown": {
+        "label": "not recorded",
+        "description": "No enforcement tier was recorded for this run."
+      }
+    },
+    "grade": {
+      "inspect": {
+        "label": "inspect",
+        "description": "The recording has gaps: frames can be inspected, not played."
+      },
+      "view": {
+        "label": "view",
+        "description": "The run can be watched frame by frame."
+      },
+      "fork": {
+        "label": "fork",
+        "description": "The run can be forked from any frame."
+      },
+      "retry": {
+        "label": "retry",
+        "description": "The recording is complete enough to retry the run."
+      },
+      "unknown": {
+        "label": "not recorded",
+        "description": "No replay grade was recorded for this run."
+      }
+    },
+    "verdict": {
+      "flipped": {
+        "label": "flipped",
+        "description": "The witness failed on the target and passed on the change."
+      },
+      "failing": {
+        "label": "failing",
+        "description": "The witness still fails on the change."
+      },
+      "unmoved": {
+        "label": "unmoved",
+        "description": "The witness gave the same result before and after."
+      },
+      "unsatisfied": {
+        "label": "unsatisfied",
+        "description": "The oracle's conditions were not met."
+      },
+      "tampered": {
+        "label": "tampered",
+        "description": "The evidence was changed after it was recorded."
+      },
+      "unverified": {
+        "label": "unverified",
+        "description": "No witness ran, so nothing was proven."
+      },
+      "waived": {
+        "label": "waived",
+        "description": "A person waived the proof requirement."
+      },
+      "none": {
+        "label": "no verdict",
+        "description": "This run carries no verdict."
+      },
+      "flip": "fail → pass"
+    },
+    "status": {
+      "live": {
+        "label": "live",
+        "description": "The run is recording now."
+      },
+      "parked": {
+        "label": "parked for approval",
+        "description": "A call is waiting for a person to approve it."
+      },
+      "pausing": {
+        "label": "pausing · next boundary",
+        "description": "The run pauses at the next step boundary."
+      },
+      "paused": {
+        "label": "paused",
+        "description": "The run is paused."
+      },
+      "resuming": {
+        "label": "resuming",
+        "description": "The run is resuming from its pause."
+      },
+      "sealed": {
+        "label": "sealed",
+        "description": "The run ended and its recording is sealed."
+      },
+      "halted": {
+        "label": "halted",
+        "description": "The run was stopped by a person or a policy."
+      },
+      "compacted": {
+        "label": "compacted",
+        "description": "The run's frames were compacted under the retention policy."
+      },
+      "unenrolled": {
+        "label": "unenrolled",
+        "description": "The agent is registered but not enrolled."
+      },
+      "active": {
+        "label": "active",
+        "description": "The agent is enrolled and may run."
+      },
+      "suspended": {
+        "label": "suspended",
+        "description": "The agent may not start runs until it is reinstated."
+      },
+      "retired": {
+        "label": "retired",
+        "description": "The agent is retired. Its record stays."
+      }
+    },
+    "risk": {
+      "low": {
+        "label": "low",
+        "description": "risk low"
+      },
+      "medium": {
+        "label": "medium",
+        "description": "risk medium"
+      },
+      "high": {
+        "label": "high",
+        "description": "risk high"
+      },
+      "critical": {
+        "label": "critical",
+        "description": "risk critical"
+      }
+    },
+    "effect": {
+      "read": {
+        "label": "read",
+        "description": "side effect read"
+      },
+      "write": {
+        "label": "write",
+        "description": "side effect write"
+      },
+      "irreversible": {
+        "label": "irreversible",
+        "description": "side effect irreversible"
+      }
+    },
+    "gate": {
+      "allow": {
+        "label": "allowed",
+        "description": "Allowed wherever a grant reaches this version."
+      },
+      "require_approval": {
+        "label": "needs approval",
+        "description": "A person must approve each call."
+      },
+      "mandate": {
+        "label": "mandate + approval",
+        "description": "A mandate is required, and its own rule decides when a person approves."
+      },
+      "deny": {
+        "label": "denied",
+        "description": "Every call is denied."
+      },
+      "killed": {
+        "label": "kill switch",
+        "description": "A kill switch stops every call."
+      }
+    },
+    "toolCategory": {
+      "read": {
+        "label": "Read-only",
+        "description": "Observes and returns. Changes nothing anywhere."
+      },
+      "query": {
+        "label": "Data query",
+        "description": "Bulk read from a store. Read-only, but the result set is the exfiltration and the cost."
+      },
+      "record": {
+        "label": "Record write",
+        "description": "Creates or updates a record in a system of work. Reversible by another write."
+      },
+      "message": {
+        "label": "Messaging & authoring",
+        "description": "Speaks to people on the organization's behalf. A sent message cannot be unsent."
+      },
+      "file": {
+        "label": "File mutation",
+        "description": "Writes, edits, moves or deletes files in a workspace or a drive."
+      },
+      "exec": {
+        "label": "Code execution",
+        "description": "Runs a command or a program. Its effect is whatever the sandbox allows."
+      },
+      "vcs": {
+        "label": "Source control",
+        "description": "Changes code history: branches, pull requests, merges, releases, repositories."
+      },
+      "infra": {
+        "label": "Infrastructure",
+        "description": "Deploys, scales, pauses or reconfigures a running system."
+      },
+      "access": {
+        "label": "Access & identity",
+        "description": "Grants, shares, rotates or revokes access. Widens what every later call can reach."
+      },
+      "finance": {
+        "label": "Financial control",
+        "description": "Moves funds or commits spend. Never callable without a mandate."
+      }
+    },
+    "toolCell": {
+      "title": "{api} — {label} · {category}"
+    },
+    "recordKind": {
+      "rule": {
+        "label": "rule",
+        "description": "A directive that steers behaviour"
+      },
+      "constraint": {
+        "label": "constraint",
+        "description": "A hard boundary: require or forbid"
+      },
+      "procedure": {
+        "label": "procedure",
+        "description": "Steps, in order"
+      },
+      "fact": {
+        "label": "fact",
+        "description": "A checkable claim about the world"
+      },
+      "memory": {
+        "label": "memory",
+        "description": "A durable recollection"
+      },
+      "preference": {
+        "label": "preference",
+        "description": "Soft and often unfalsifiable"
+      }
+    },
+    "principalKind": {
+      "human": {
+        "label": "human",
+        "description": "A person"
+      },
+      "agent": {
+        "label": "agent",
+        "description": "A registered agent"
+      },
+      "service": {
+        "label": "service",
+        "description": "A service account or integration"
+      }
+    },
+    "pageState": {
+      "loading": "Loading",
+      "empty": {
+        "title": "Nothing here yet",
+        "body": "When there is something to show, it appears here."
+      },
+      "notBacked": {
+        "title": "Not recorded yet",
+        "body": "Oxagen does not record this yet. It arrives with milestone {milestone} (backend gap {gap}).",
+        "bodyMilestoneOnly": "Oxagen does not record this yet. It arrives with milestone {milestone}.",
+        "bodySpecDecision": "Oxagen does not record this yet. It waits on a spec decision (backend gap {gap}).",
+        "bodySpecDecisionOnly": "Oxagen does not record this yet. It waits on a spec decision.",
+        "bodyNotWired": "The store behind this exists, but Mission Control does not read it yet."
+      },
+      "denied": {
+        "title": "You do not have access",
+        "body": "Your roles do not include {permission}. An organization owner can grant it; the grant is a governed action and lands in the audit record.",
+        "needed": "Needed"
+      },
+      "error": {
+        "title": "This could not load",
+        "body": "Mission Control answered {status} {code}. Nothing was changed, and runs kept recording while this page was down.",
+        "retry": "Try again"
+      }
+    },
+    "dataTable": {
+      "search": "Search this list",
+      "facetAll": "All · {label}",
+      "filterBy": "Filter by {label}",
+      "rowsPerPage": "Rows",
+      "all": "All",
+      "noMatches": "No rows match.",
+      "range": "{from, number}–{to, number} of {total, number}",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "page": "Page {page, number}",
+      "pagination": "Pagination",
+      "sortBy": "Sort by {label}"
+    },
+    "formDialog": {
+      "cancel": "Cancel",
+      "pending": "Working…",
+      "error": "That did not finish ({code}). Check the audit record before trying again."
+    },
+    "avatar": {
+      "fallback": "?"
+    },
+    "dialog": {
+      "close": "Close"
+    }
+  }
+}

@@ -1,52 +1,74 @@
 import Link from "next/link";
-import { OxagenWordmark } from "@/components/ui/brand";
-import { LoginForm } from "@/components/auth/login-form";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
-export default function SignupPage() {
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import {
+  AFTER_SIGNUP,
+  OAuthButtons,
+  SignupForm,
+  firstParam,
+  sanitizeNext,
+  withNext,
+} from "@/features/auth";
+import {
+  AuthColumn,
+  AuthFooter,
+  AuthHeading,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { isFixtureMode } from "@/server/fixture-session";
+
+export default function SignupPage(props: PageProps<"/signup">) {
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
+    <Suspense fallback={<AuthSkeleton />}>
+      <Signup searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
+
+async function Signup({
+  searchParams,
+}: {
+  searchParams: PageProps<"/signup">["searchParams"];
+}) {
+  const params = await searchParams;
+  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const t = await getTranslations("auth");
+  const fixture = isFixtureMode();
+  return (
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("signup.eyebrow")}
+        title={t("signup.title")}
+        lead={t("signup.lead")}
+      />
+      <div className="flex flex-col gap-4">
+        {fixture ? null : <OAuthButtons callbackURL={next} />}
+        <SignupForm fixture={fixture} next={next} />
       </div>
-
-      <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Create an account
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Start your Oxagen workspace today
-          </p>
-        </div>
-
-        <OAuthButtons callbackURL="/" />
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">Or</span>
-          </div>
-        </div>
-
-        <LoginForm mode="signup" />
-
-        <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link
-            href="/login"
-            className="font-medium text-primary hover:underline"
+      <AuthFooter>
+        {t("signup.haveAccount")}{" "}
+        <Link
+          href={withNext("/login", next === AFTER_SIGNUP ? "/" : next)}
+          className={linkText}
+        >
+          {t("signup.logIn")}
+        </Link>
+      </AuthFooter>
+      <ul
+        className="flex flex-wrap justify-center gap-2"
+        aria-label={t("shell.brand")}
+      >
+        {(["free", "markup", "evidence"] as const).map((tag) => (
+          <li
+            key={tag}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
           >
-            Sign in
-          </Link>
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+            {t(`shell.tags.${tag}`)}
+          </li>
+        ))}
+      </ul>
+    </AuthColumn>
   );
 }

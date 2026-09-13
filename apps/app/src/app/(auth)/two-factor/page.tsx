@@ -1,35 +1,46 @@
-import { OxagenWordmark } from "@/components/ui/brand";
-import { TwoFactorForm } from "./two-factor-form";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { TwoFactorForm, firstParam, sanitizeNext } from "@/features/auth";
+import {
+  AuthColumn,
+  AuthFooter,
+  AuthHeading,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { isFixtureMode } from "@/server/fixture-session";
 
-/**
- * /two-factor — sign-in second factor step. Public route (the user has only the
- * short-lived 2FA cookie here, not a full session — see proxy.ts PUBLIC_PATHS).
- * A user who reaches this page with no pending 2FA challenge simply can't
- * verify; Better Auth rejects the attempt and they return to /login.
- */
-export default function TwoFactorPage() {
+// Public: after the password step the person holds only Better Auth's short-lived
+// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS).
+export default function TwoFactorPage(props: PageProps<"/two-factor">) {
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
+    <Suspense fallback={<AuthSkeleton />}>
+      <TwoFactor searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
 
-      <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Two-factor authentication
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Enter the code from your authenticator app to finish signing in.
-          </p>
-        </div>
-
-        <TwoFactorForm />
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+async function TwoFactor({
+  searchParams,
+}: {
+  searchParams: PageProps<"/two-factor">["searchParams"];
+}) {
+  const params = await searchParams;
+  const next = sanitizeNext(firstParam(params.next));
+  const t = await getTranslations("auth");
+  return (
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("twoFactor.eyebrow")}
+        title={t("twoFactor.title")}
+      />
+      <TwoFactorForm next={next} fixture={isFixtureMode()} />
+      <AuthFooter>
+        <Link href="/login" className={linkText}>
+          {t("twoFactor.back")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }

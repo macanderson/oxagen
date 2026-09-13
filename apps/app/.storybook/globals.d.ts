@@ -1,3 +1,4 @@
-// CSS side-effect imports (globals.css) carry no types; declare the module so
-// the Storybook preview typechecks cleanly.
+// Storybook's preview imports the app's global stylesheet for its side effect;
+// Next's own ambient CSS declarations live in next-env.d.ts, which this
+// config does not include.
 declare module "*.css";

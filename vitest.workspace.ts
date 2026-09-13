@@ -12,10 +12,13 @@
 // test:unit + test:coverage and has src/permissions.test.ts, but ships no
 // vitest.config.ts — so it is absent from root runs here AND exempt from the
 // coverage ratchet. Adding that config fixes both at once.
+//
+// apps/app is not listed: it runs Vitest 5 through its own `test:unit` task,
+// which this root Vitest 2.1 workspace cannot load. apps/app_deprecated is not
+// listed either: it is kept only for the parity gates until cutover.
 export default [
   "packages/*/vitest.config.ts",
   "apps/api/vitest.config.ts",
-  "apps/app/vitest.config.ts",
   "apps/cli/vitest.config.ts",
   "apps/mcp/vitest.config.ts",
   "tools/*/vitest.config.ts",

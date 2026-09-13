@@ -65,6 +65,11 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Test / E2E harness only — never present in deployed environments
   "E2E_TEST",
   "PLAYWRIGHT_BASE_URL",
+  // apps/app e2e: the port Playwright starts `next dev` on (default 3000).
+  "E2E_PORT",
+  // apps/app data source selector. "fixture" serves the typed mockup seed and
+  // enables the dev-only fixture session; both are ignored by production builds.
+  "MC_DATA",
   // Set automatically by the Vitest runner; used to keep CLI turn assembly
   // (workspace MCP fetch) hermetic in unit tests. Never a deployed var.
   "VITEST",
@@ -72,7 +77,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEO4J_URL", // alias for NEO4J_URI
   "NEO4J_USER", // alias for NEO4J_USERNAME
   // Vercel build-time: the project's production domain, read by
-  // apps/app/next.config.mjs to build the server-actions origin list
+  // apps/app/next.config.ts to build the server-actions origin list
   "VERCEL_PROJECT_PRODUCTION_URL",
   // The shell and the OS set these. A `.sh` file cannot tell an environment
   // read from a local (both are `$NAME`), so the scanner only records a name

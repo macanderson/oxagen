@@ -1,45 +1,48 @@
 import Link from "next/link";
-import { OxagenWordmark } from "@/components/ui/brand";
-import { ResetPasswordForm } from "./reset-password-form";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { ResetPasswordForm, firstParam } from "@/features/auth";
+import {
+  AuthColumn,
+  AuthFooter,
+  AuthHeading,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 
-interface ResetPasswordPageProps {
-  searchParams: Promise<{ token?: string }>;
+export default function ResetPasswordPage(props: PageProps<"/reset-password">) {
+  return (
+    <Suspense fallback={<AuthSkeleton />}>
+      <Reset searchParams={props.searchParams} />
+    </Suspense>
+  );
 }
 
-export default async function ResetPasswordPage({
+async function Reset({
   searchParams,
-}: ResetPasswordPageProps) {
+}: {
+  searchParams: PageProps<"/reset-password">["searchParams"];
+}) {
   const params = await searchParams;
-  const token = params.token ?? "";
-
+  // Better Auth lands here with ?token= on a good link and ?error= on a spent one.
+  const token =
+    firstParam(params.error) === undefined
+      ? (firstParam(params.token) ?? "")
+      : "";
+  const t = await getTranslations("auth");
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
-
-      <div className="rounded-xl border bg-card p-8 shadow-xl space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Set a new password
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your new password below
-          </p>
-        </div>
-
-        <ResetPasswordForm token={token} />
-
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/login" className="text-accent hover:underline">
-            Back to sign in
-          </Link>
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("reset.eyebrow")}
+        title={t("reset.title")}
+        lead={t("reset.lead")}
+      />
+      <ResetPasswordForm token={token} />
+      <AuthFooter>
+        <Link href="/login" className={linkText}>
+          {t("reset.back")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }

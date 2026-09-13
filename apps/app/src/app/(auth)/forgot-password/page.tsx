@@ -1,37 +1,24 @@
 import Link from "next/link";
-import { OxagenWordmark } from "@/components/ui/brand";
-import { ForgotPasswordForm } from "./forgot-password-form";
+import { getTranslations } from "next-intl/server";
+import { ForgotPasswordForm } from "@/features/auth";
+import { AuthColumn, AuthFooter, AuthHeading } from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  const t = await getTranslations("auth");
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
-
-      <div className="rounded-xl border bg-card p-8 shadow-xl space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Reset your password
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your email and we&rsquo;ll send you a link
-          </p>
-        </div>
-
-        <ForgotPasswordForm />
-
-        <p className="text-center text-sm text-muted-foreground">
-          Remembered it?{" "}
-          <Link href="/login" className="text-accent hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+    <AuthColumn>
+      <AuthHeading
+        kicker={t("forgot.eyebrow")}
+        title={t("forgot.title")}
+        lead={t("forgot.lead")}
+      />
+      <ForgotPasswordForm />
+      <AuthFooter>
+        <Link href="/login" className={linkText}>
+          {t("forgot.back")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }
