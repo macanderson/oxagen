@@ -1,19 +1,23 @@
+import path from "node:path";
 import { getRequestConfig } from "next-intl/server";
-import {
-  CATALOG_FILES,
-  DEFAULT_LOCALE,
-  type Messages,
-  mergeCatalogs,
-} from "./catalogs";
+import { DEFAULT_LOCALE, type Messages } from "./catalogs";
+import { loadCatalogs } from "./load-catalogs";
 
-async function loadCatalog(file: string): Promise<readonly [string, Messages]> {
-  const mod = (await import(`../../messages/${file}.json`)) as {
-    default: Messages;
-  };
-  return [file, mod.default];
+// messages/ sits beside package.json. `next dev`, `next start`, Vitest and
+// Playwright all run from apps/app, and the standalone server.js chdirs to its
+// own app directory, so process.cwd() resolves it in every runtime.
+const MESSAGES_DIR = path.join(process.cwd(), "messages");
+
+let cached: Messages | undefined;
+
+/** Memoised in production; re-read in development so a new catalog appears on refresh. */
+function messages(): Messages {
+  if (process.env.NODE_ENV === "development") return loadCatalogs(MESSAGES_DIR);
+  cached ??= loadCatalogs(MESSAGES_DIR);
+  return cached;
 }
 
-export default getRequestConfig(async () => ({
+export default getRequestConfig(() => ({
   locale: DEFAULT_LOCALE,
-  messages: mergeCatalogs(await Promise.all(CATALOG_FILES.map(loadCatalog))),
+  messages: messages(),
 }));
