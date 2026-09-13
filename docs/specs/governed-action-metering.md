@@ -166,15 +166,20 @@ restated:
 | `free` | $0 | 2,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 30 days |
 | `build` | $500 / mo | 20,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months |
 | `scale` | $2,500 / mo | 125,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months |
-| `enterprise` | custom, committed | negotiated (`contract_terms`) | negotiated | negotiated | negotiated | 12 months, extensible |
+| `enterprise` | custom, committed | 125,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months, extensible |
 
 The per-month figures, the per-GAU rate per tier, the block size and the
 currency are the design's provisional values (`apps/app/ARCHITECTURE.md`
 openQuestions) until the maintainer supplies the published ones; an annual
 subscriber gets the same monthly figure as a monthly subscriber, sliced on
-the cycle's anniversary day. `(rate_per_gau_micros × block_size_gau)` must be
-a whole number of cents (a CHECK on both tables), so a block prices without
-rounding: at the figures above a block is $20.00.
+the cycle's anniversary day. The `enterprise` row is the published terms of
+the `enterprise-v2` plan (`packages/billing/src/pricing.ts`), the figures
+`billing:stripe-sync` writes to its `billing.plans` row; they are the `scale`
+figures, and they apply to an enterprise organisation only while it has no
+effective `billing.contract_terms` row (§7.3). A negotiated agreement
+replaces all four figures at once. `(rate_per_gau_micros × block_size_gau)`
+must be a whole number of cents (a CHECK on both tables), so a block prices
+without rounding: at the figures above a block is $20.00.
 
 Beyond the allowance:
 
@@ -423,9 +428,16 @@ of running free.
 **Amended 2026-09-13 (ADR-055).** An enterprise allowance is
 `included_gau_per_month` on the organisation's `billing.contract_terms` row,
 with its rate, block size and currency, and the row is the whole answer.
-`plans.included_actions_annual` and the `scale` fallback are retired: an
-enterprise org with no effective negotiated row resolves to the published
-terms of the plan its subscription names, like every other org.
+`plans.included_actions_annual` and the `scale` fallback in code are retired:
+an enterprise org with no effective negotiated row resolves to the published
+terms of the plan its subscription names, like every other org. For the
+`enterprise-v2` plan those are the §4.2 `enterprise` row, which
+`billing:stripe-sync` writes to `billing.plans` with the same provisional
+figures as `scale` (125,000 GAUs a month, 20,000 micros per GAU, 1,000-GAU
+blocks, USD). The bound this section set is kept by the stored row rather
+than by a fallback branch: a mis-provisioned enterprise org meters at the
+`scale` figures, and the four columns are NOT NULL so no plan row can be
+absent.
 
 ### 7.4 Retention beyond twelve months is opt-in
 
