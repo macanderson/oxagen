@@ -161,7 +161,8 @@ const SCOPE = {
 const ORG_SCOPE = { orgId: SCOPE.orgId, workspaceId: ORG_ONLY_WORKSPACE_ID };
 const KEY = "e2eavg.defaul.e2e-mt6jsb9g";
 const HOST_KEY = "e2eavg.defaul.release-manager";
-const AGENT_ID = "a63c6620-29b1-4c3b-bcd4-1144295ebe1d";
+// list_agent_defs returns the public id as agentId.
+const AGENT_ID = "agt_gmfc7dehp2p0mrgn1dks9w";
 
 // Real rows from the local stack: list_agent_defs / get_agent_def /
 // list_agent_roles output for "Grid Proof Agent", and list_iam_roles grants
@@ -844,10 +845,10 @@ describe("liveAgentStores: tenant-scoped store reads", () => {
   it("resolves each agent's principal and operator", async () => {
     db.queue.push(
       [
-        { id: AGENT_ID, principalId: "p1" },
-        { id: "a2", principalId: null },
-        { id: "a3", principalId: "p-missing" },
-        { id: "a4", principalId: "p4" },
+        { publicId: AGENT_ID, principalId: "p1" },
+        { publicId: "a2", principalId: null },
+        { publicId: "a3", principalId: "p-missing" },
+        { publicId: "a4", principalId: "p4" },
       ],
       [
         {
@@ -886,12 +887,12 @@ describe("liveAgentStores: tenant-scoped store reads", () => {
     await expect(liveAgentStores.principals(SCOPE, [])).resolves.toEqual(
       new Map(),
     );
-    db.queue.push([{ id: AGENT_ID, principalId: null }]);
+    db.queue.push([{ publicId: AGENT_ID, principalId: null }]);
     await expect(
       liveAgentStores.principals(SCOPE, [AGENT_ID]),
     ).resolves.toEqual(new Map());
     db.queue.push(
-      [{ id: AGENT_ID, principalId: "p1" }],
+      [{ publicId: AGENT_ID, principalId: "p1" }],
       [
         {
           id: "p1",

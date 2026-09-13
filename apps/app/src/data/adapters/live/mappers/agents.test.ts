@@ -35,7 +35,7 @@ import {
 // incident follow tacho.hosts / tacho.incidents column for column; the local
 // stack has not enrolled a host yet.
 const DEFINITION: DefinitionRow = {
-  agentId: "a63c6620-29b1-4c3b-bcd4-1144295ebe1d",
+  agentId: "agt_gmfc7dehp2p0mrgn1dks9w",
   publicId: "agt_gmfc7dehp2p0mrgn1dks9w",
   slug: "e2e-mt6jsb9g",
   agentKey: "e2eavg.defaul.e2e-mt6jsb9g",

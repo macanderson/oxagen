@@ -79,10 +79,10 @@ export type AgentStores = {
   /** The registered agent tool's description, or null when none is registered. */
   describeTool(name: string): string | null;
   workspaceSlug(scope: Scope): Promise<string | null>;
-  /** Principal facts keyed by `agent.agents.id`. */
+  /** Principal facts keyed by `agent.agents.public_id` (list_agent_defs' agentId). */
   principals(
     scope: Scope,
-    agentIds: readonly string[],
+    agentPublicIds: readonly string[],
   ): Promise<Map<string, PrincipalFacts>>;
   /** The latest run's recorded tier, keyed by agent key. */
   latestTiers(
@@ -187,7 +187,7 @@ export function createLiveAgents(
     const [principals, tiers] = await Promise.all([
       stores.principals(
         scope,
-        defs.value.agents.map((d) => d.agentId),
+        defs.value.agents.map((d) => d.publicId),
       ),
       stores.latestTiers(scope, [...byKey.keys()]),
     ]);
@@ -200,7 +200,7 @@ export function createLiveAgents(
           definition,
           host,
           principal: definition
-            ? (principals.get(definition.agentId) ?? null)
+            ? (principals.get(definition.publicId) ?? null)
             : null,
           latestTier: tiers.get(key) ?? null,
         })),
@@ -375,17 +375,17 @@ export const liveAgentStores: AgentStores = {
     return rows[0]?.slug ?? null;
   },
 
-  async principals(scope, agentIds) {
+  async principals(scope, agentPublicIds) {
     const facts = new Map<string, PrincipalFacts>();
-    if (agentIds.length === 0) return facts;
+    if (agentPublicIds.length === 0) return facts;
     await inTenant(scope, async (tx) => {
       const agents = await tx
         .select({
-          id: schema.agents.id,
+          publicId: schema.agents.publicId,
           principalId: schema.agents.principalId,
         })
         .from(schema.agents)
-        .where(inArray(schema.agents.id, [...agentIds]));
+        .where(inArray(schema.agents.publicId, [...agentPublicIds]));
       const principalIds = agents.flatMap((a) =>
         a.principalId ? [a.principalId] : [],
       );
@@ -419,7 +419,7 @@ export const liveAgentStores: AgentStores = {
       for (const a of agents) {
         const p = a.principalId ? byPrincipal.get(a.principalId) : undefined;
         if (!p) continue;
-        facts.set(a.id, {
+        facts.set(a.publicId, {
           publicId: p.publicId,
           status: p.status,
           operatorPublicId: p.parentUserId

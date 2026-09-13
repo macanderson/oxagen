@@ -419,7 +419,7 @@ const PROBE_KEY = "acme.core.release-manager";
 const PROBE_AT = new Date("2026-09-11T09:14:02.000Z");
 
 const PROBE_DEFINITION: DefinitionRow = {
-  agentId: "0192d4a8-7c1e-7a00-8000-0000000a9e01",
+  agentId: "agt_probe",
   publicId: "agt_probe",
   slug: "release-manager",
   agentKey: PROBE_KEY,
