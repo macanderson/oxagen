@@ -314,7 +314,14 @@ describe("toAgentDetail", () => {
     const used = new Date("2026-09-11T14:22:04.000Z");
     const detail = toAgentDetail(
       source({ host: HOST }),
-      { ...FACTS, apiKey: { ...FACTS.apiKey!, lastUsedAt: used } },
+      {
+        ...FACTS,
+        apiKey: {
+          keyPrefix: "ox_tWtJtsloV",
+          createdAt: new Date("2026-08-24T01:34:40.560Z"),
+          lastUsedAt: used,
+        },
+      },
       [],
     );
     expect(detail.credential?.lastUsedAt).toBe("2026-09-11T14:22:04.000Z");
