@@ -1,0 +1,183 @@
+{
+  "onboarding": {
+    "shell": {
+      "gateLabel": "Onboarding",
+      "registerLabel": "Register an agent",
+      "cancel": "Cancel",
+      "signedInAs": "Signed in as {email}",
+      "gateCaption": "Mission Control opens once an agent has talked to Oxagen. That first frame is also the installer's smoke test, so there is one path, not two.",
+      "registerCaption": "Registration completes once the agent has talked to Oxagen. That first frame is also the installer's smoke test. Cancel at any time; nothing is kept until the frame arrives.",
+      "stepOf": "Step {current} of {total}",
+      "done": "Done: {label}",
+      "loading": "Loading this step…"
+    },
+    "steps": {
+      "gate": {
+        "organization": "Name the organization",
+        "wrap": "Wrap an agent",
+        "run": "Start a run"
+      },
+      "register": {
+        "name": "Name the agent",
+        "wrap": "Wrap the agent",
+        "run": "Wait for the first frame"
+      }
+    },
+    "errors": {
+      "orgNameRequired": "Enter the organization's name.",
+      "orgNameTooLong": "Use at most 120 characters.",
+      "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "slugReserved": "That address is used by an Oxagen page. Pick another.",
+      "namespaceInvalid": "Use 2–6 lowercase letters or digits.",
+      "workspaceNameRequired": "Enter a name for the first workspace.",
+      "workspaceNameTooLong": "Use at most 80 characters.",
+      "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
+      "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
+      "slugTaken": "That address belongs to another organization. Pick a different one.",
+      "namespaceTaken": "That namespace belongs to another organization. Pick a different 2–6 character namespace.",
+      "agentSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
+      "failed": "The organization could not be created. Nothing was saved; try again."
+    },
+    "organization": {
+      "title": "Name your organization",
+      "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
+      "name": "Organization name",
+      "slug": "Address",
+      "slugHint": "Mission Control lives at /{slug}. You can change the address later.",
+      "namespace": "Namespace",
+      "namespaceHint": "2–6 characters and immutable. Every agent key starts with it, as in {example}.",
+      "workspaceTitle": "First workspace",
+      "workspaceName": "Workspace name",
+      "workspaceSlug": "Workspace address",
+      "workspaceHint": "A workspace is a governance partition: one main repo, one ontology, one steering set, its own agents, tool grants and budgets.",
+      "creates": "Creates the organization {name} and its first workspace.",
+      "submit": "Continue",
+      "pending": "Creating…"
+    },
+    "name": {
+      "title": "Name the agent",
+      "lead": "The key is reserved now and never changes. The agent itself exists only after its first frame reaches Oxagen.",
+      "slug": "Slug",
+      "keyHint": "The agent key becomes {key}.",
+      "workspace": "Workspace",
+      "workspaceHint": "Its definition file lands in .oxagen/agents/ in the main repo.",
+      "harness": "Harness",
+      "harnessHint": "Picks the installer on the next step. You can change it there.",
+      "tier": "Model tier",
+      "tierHint": "Routed through the model proxy; the tier is recorded on every frame.",
+      "harnesses": {
+        "claude-code": "Claude Code",
+        "codex-cli": "Codex CLI",
+        "stella": "Stella",
+        "claude-agent-sdk": "Claude Agent SDK",
+        "custom": "Custom"
+      },
+      "tiers": {
+        "complex": "complex",
+        "light": "light"
+      },
+      "note": "Continue does not write anything. The agent's definition is proposed by the installer's smoke session once its first frame arrives.",
+      "submit": "Continue",
+      "missing": "Name the agent first.",
+      "startOver": "Go to step 1"
+    },
+    "wrap": {
+      "gateTitle": "Wrap an agent",
+      "registerTitle": "Wrap the agent",
+      "lead": "A wrapped agent routes through at least one gateway seam: the model proxy, the tool gateway, or both. The installer carries a single-use enrollment token for {key}, so nothing is copied or pasted.",
+      "methodsLabel": "How to wrap the agent",
+      "methods": {
+        "claude-code": { "name": "Claude Code", "sub": "one click · gateway" },
+        "codex-cli": { "name": "Codex CLI", "sub": "one click · gateway" },
+        "sdk": { "name": "SDK agent", "sub": "five lines · gateway" }
+      },
+      "recommended": "recommended",
+      "claudeCode": "The installer writes the hooks and ANTHROPIC_BASE_URL, installs the oxagend collector and the oxagen-hook binary, starts them at login, and enrolls this host with an Ed25519 device key.",
+      "codex": "The same installer with the Codex profile. It writes ~/.codex/config.toml: MCP servers pointed at the tool gateway, OPENAI_BASE_URL at the model proxy, the notify hook to the collector, and the approval policy routed through Oxagen.",
+      "sdk": "Five lines in your own process. oxagen.agent.wrap('{}') installs the proxy base URL, a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent's tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, Stella and any custom loop.",
+      "earnsLabel": "What each seam can enforce",
+      "earns": {
+        "modelCalls": "Model calls",
+        "mcpToolCalls": "MCP tool calls",
+        "nativeTools": "Native tools: Bash, Edit, Write",
+        "nativeShell": "Native shell and file tools",
+        "toolCalls": "Tool calls"
+      },
+      "tiers": {
+        "gateway": "gateway",
+        "harness": "harness",
+        "observe": "observe"
+      },
+      "orObserve": "or observe",
+      "tierNote": "The enforcement tier is computed per run from what was actually routed, never from what the adapter can do on paper.",
+      "download": "Download",
+      "platformsLabel": "Operating system",
+      "platforms": { "macos": "macOS", "windows": "Windows", "linux": "Linux" },
+      "downloadFor": "Download for {platform}",
+      "tokenLabel": "Single-use enrollment token embedded",
+      "tokenExpires": "expires in {minutes} min · single use",
+      "orRun": "or run",
+      "installerNotBacked": "The signed one-click installer and its embedded token are not recorded yet. Enroll this host with the CLI instead.",
+      "credentialLabel": "Agent credential",
+      "credentialIssued": "issued once to the operator",
+      "credentialNote": "Set it as OXAGEN_AGENT_TOKEN. The gateway mints short-lived run tokens from it at run start; revoking the credential ends every run token at the next call.",
+      "credentialNotBacked": "Agent credentials for SDK agents are not issued from this screen yet.",
+      "languagesLabel": "Language",
+      "languages": { "ts": "TypeScript", "py": "Python", "go": "Go" },
+      "copy": "Copy the five lines",
+      "copied": "Copied",
+      "back": "Back",
+      "alreadyInstalled": "I have already installed it — continue",
+      "noDone": "Nothing completes until a frame arrives."
+    },
+    "run": {
+      "gateTitle": "Start a run",
+      "registerTitle": "Wait for the first frame",
+      "gateLead": "Mission Control opens the moment the first frame from {key} reaches Oxagen, and lands you on Fleet looking at your own run.",
+      "registerLead": "Registration completes the moment the first frame from {key} reaches Oxagen, and lands you on Fleet looking at its run.",
+      "waiting": "Waiting for the first frame",
+      "polling": "checking every second",
+      "waitingHint": "Start {harness} in any repository on {host}. The installer already ran a one-turn smoke session; if it is still in flight this flips on its own.",
+      "waitingLine": "waiting…",
+      "connected": "connected",
+      "received": "First frame received",
+      "tier": "tier: {tier}",
+      "chain": "chain intact",
+      "tierNote": "The enforcement tier is computed from what was actually routed. Both seams answered, so this run is {tier}.",
+      "openGate": "Open Mission Control",
+      "openRegister": "Open in Fleet",
+      "autoOpen": "Opening automatically in {seconds}…",
+      "noDone": "There is no Done button: the frame is the completion.",
+      "notBacked": "Oxagen does not record the first frame from a newly wrapped agent yet, so this screen cannot wait for it. Your agent's runs appear on Fleet once they are recorded.",
+      "continueToFleet": "Continue to Fleet",
+      "errorTitle": "The collector cannot reach the model proxy",
+      "errorBody": "The host {host} enrolled, but every request to the model proxy has been refused. A proxy that cannot be reached means an unwrapped agent, so this will not complete on telemetry alone.",
+      "errorHint": "Check that outbound 443 to the proxy is allowed, then run oxagen agent status.",
+      "checkAgain": "Check again"
+    },
+    "repo": {
+      "detected": "Repository detected",
+      "reported": "reported by the installer",
+      "readFrom": "Read from the git remote of {directory}, the directory the installer ran in. Production branch {branch}.",
+      "bind": "Bind {repo} as the main repo",
+      "bindNote": "One click installs the GitHub App on {repo}: repo binding, Context PRs, checks, merge handling and the code graph.",
+      "skip": "Skip for now",
+      "skipNote": "The workspace stays provisional for {days} days. Runs record and spend counts, but steering, context records and agent definitions stay off until a main repo is bound.",
+      "bound": "bound",
+      "boundTitle": "Main repo",
+      "boundNote": "Steering, context records and agent definitions will live in {repo} under .oxagen/, published through Context PRs.",
+      "provisional": "provisional",
+      "provisionalTitle": "No main repo bound",
+      "bindNow": "Bind {repo} now",
+      "notBacked": "The repository the installer ran in is not reported yet. Bind a main repo from Ontology › Repositories after the first run."
+    },
+    "states": {
+      "gateDenied": "org.create",
+      "registerDenied": "agent.register on {ws}",
+      "scopeMissingTitle": "Start from the first step",
+      "scopeMissingBody": "This step needs an organization and workspace. Name them first.",
+      "scopeNotFoundTitle": "This workspace is not available",
+      "scopeNotFoundBody": "It does not exist, or your account is not a member of it."
+    }
+  }
+}

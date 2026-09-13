@@ -15,6 +15,9 @@ describe("i18n request config", () => {
       factory as unknown as () => Promise<{ locale: string; messages: unknown }>
     )();
     expect(config.locale).toBe("en");
-    expect(config.messages).toEqual({ ...en, ...ui, ...shell });
+    // Page lanes add their own catalogs beside these; the shared namespaces stay intact.
+    expect(config.messages).toEqual(
+      expect.objectContaining({ ...en, ...ui, ...shell }),
+    );
   });
 });
