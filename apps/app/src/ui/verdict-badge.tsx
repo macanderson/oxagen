@@ -42,7 +42,7 @@ export function VerdictBadge({ verdict, flip = false }: VerdictBadgeProps) {
       data-testid="verdict-badge"
       suffix={
         verdict === "flipped" && flip ? (
-          <span className="font-mono text-[10.5px] text-muted-foreground">
+          <span className="font-mono text-[10.5px] text-foreground">
             {t("flip")}
           </span>
         ) : null

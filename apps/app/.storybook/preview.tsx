@@ -1,4 +1,5 @@
 import type { Preview } from "@storybook/nextjs-vite";
+import { type ReactNode, useEffect } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { mergeCatalogs } from "../src/i18n/catalogs";
 import en from "../messages/en.json";
@@ -10,6 +11,23 @@ const messages = mergeCatalogs([
   ["en", en],
   ["ui", ui],
 ]);
+
+// The house tokens flip on the root element: component tokens (tabs, buttons,
+// inputs) are declared on :root as var() references and inherit as computed
+// values, so a `.dark` class on a wrapper would flip only the core tokens.
+function ThemeRoot({
+  theme,
+  children,
+}: {
+  theme: string;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.classList.toggle("light", theme !== "dark");
+  }, [theme]);
+  return <>{children}</>;
+}
 
 const preview: Preview = {
   parameters: {
@@ -37,11 +55,11 @@ const preview: Preview = {
   decorators: [
     (Story, context) => (
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <div
-          className={`${context.globals.theme === "dark" ? "dark " : ""}bg-background p-4 font-sans text-foreground`}
-        >
-          <Story />
-        </div>
+        <ThemeRoot theme={String(context.globals.theme)}>
+          <div className="bg-background p-4 font-sans text-foreground">
+            <Story />
+          </div>
+        </ThemeRoot>
       </NextIntlClientProvider>
     ),
   ],

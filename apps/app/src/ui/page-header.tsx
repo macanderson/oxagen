@@ -30,7 +30,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="min-w-0 text-2xl font-semibold leading-tight tracking-tight text-foreground">
             {title}
           </h1>

@@ -44,7 +44,7 @@ export function Money({
     });
     return (
       <span
-        className={cx("inline-flex flex-col items-start gap-1", className)}
+        className={cx("inline-flex flex-wrap items-center gap-2", className)}
         data-testid="money"
         data-basis={basis}
       >
