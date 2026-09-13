@@ -33,7 +33,9 @@ function stepsForClaudeCode(_wsSlug: string | undefined): InstallStep[] {
     },
     {
       label: "Add the Oxagen MCP server to Claude Code",
-      command: `claude mcp add oxagen --transport http --url "${mcpUrl}" --header "Authorization: Bearer $OXAGEN_API_KEY"`,
+      // The URL is positional: `claude mcp add` has no `--url` flag, and passing
+      // one makes the command fail.
+      command: `claude mcp add --transport http oxagen "${mcpUrl}" --header "Authorization: Bearer $OXAGEN_API_KEY"`,
     },
     {
       label: "Verify the server appears in the tool list",
@@ -79,17 +81,26 @@ function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
 
 function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
   const mcpUrl = `${PROD_MCP_URL}/mcp`;
-  // The entry carries a `headers` block with a placeholder bearer token: the
-  // MCP server is API-key scoped, so a snippet without somewhere to put the key
-  // is a config the user can only ever 401 with.
+  // claude_desktop_config.json only launches local stdio servers; a `url` entry
+  // is ignored. Remote servers otherwise go through Settings → Connectors, which
+  // authenticate with OAuth, and the Oxagen MCP server takes API keys only. So
+  // the entry runs the `mcp-remote` stdio bridge, which forwards to the HTTP
+  // endpoint with the bearer header. The header value comes from `env` because
+  // a space inside an `args` entry is split by some launchers.
   const configEntry = JSON.stringify(
     {
       mcpServers: {
         oxagen: {
-          url: mcpUrl,
-          transport: "http",
-          headers: {
-            Authorization: "Bearer <your-api-key>",
+          command: "npx",
+          args: [
+            "-y",
+            "mcp-remote",
+            mcpUrl,
+            "--header",
+            "Authorization:${OXAGEN_AUTH_HEADER}",
+          ],
+          env: {
+            OXAGEN_AUTH_HEADER: "Bearer <your-api-key>",
           },
         },
       },
@@ -126,20 +137,17 @@ function stepsForCodex(_wsSlug: string | undefined): InstallStep[] {
       label: "Generate an API key",
       command: API_KEY_URL,
     },
+    // Codex reads ~/.codex/config.toml (there is no codex.yaml) and has no
+    // `tools list` subcommand. `--bearer-token-env-var` keeps the key out of
+    // the config file; Codex reads the variable when it connects.
     {
-      label: "Add the Oxagen MCP server to your codex.yaml",
-      command: [
-        "mcp_servers:",
-        "  oxagen:",
-        `    url: "${mcpUrl}"`,
-        "    transport: http",
-        "    headers:",
-        '      Authorization: "Bearer <your-api-key>"',
-      ].join("\n"),
+      label:
+        "Export the key, then add the Oxagen MCP server to Codex (writes [mcp_servers.oxagen] to ~/.codex/config.toml)",
+      command: `export OXAGEN_API_KEY=<your-api-key>\ncodex mcp add oxagen --url "${mcpUrl}" --bearer-token-env-var OXAGEN_API_KEY`,
     },
     {
-      label: "Run codex to confirm the tools are registered",
-      command: "codex tools list",
+      label: "Confirm the server is registered",
+      command: "codex mcp list",
     },
   ];
 }

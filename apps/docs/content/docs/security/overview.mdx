@@ -5,8 +5,6 @@ description: How Oxagen protects your data and enforces your governance policies
 
 Oxagen is designed for organizations where AI governance is not optional. Every architectural decision — from the single capability chokepoint to the database-enforced row-level security — is made with an enterprise security review in mind.
 
-<IllustrationSecurity />
-
 ## Defense in depth
 
 Security at Oxagen is not a layer added on top of a product built for convenience. It is built into the architecture at four layers, each independently enforced:
@@ -14,9 +12,26 @@ Security at Oxagen is not a layer added on top of a product built for convenienc
 | Layer | Control | Enforcement point |
 |---|---|---|
 | Network | API key authentication; TLS in transit everywhere | Edge / Vercel Functions |
-| IAM | Role-based access control; default-deny; org-enforced policies | `invoke()` kernel boundary |
+| IAM | Role-based access control; per-capability default effect | `invoke()` kernel boundary |
 | Data | Row-level security; tenant-scoped seams for Neo4j and ClickHouse | Postgres RLS; session guards |
 | Audit | Two independent append-only stores; chain-hash tamper evidence | Every `invoke()` allow/deny |
+
+<Mermaid chart={`
+flowchart TD
+  R["Request<br/>app session · API key · MCP"] --> A{"Credential valid?"}
+  A -->|no| E401["401 Unauthorized"]
+  A -->|yes| K["invoke()"]
+  K --> I{"IAM resolver"}
+  I -->|deny| D["capability.invoke_denied<br/>written to both audit stores"]
+  D --> E403["403 capability_denied"]
+  I -->|allow| H["Handler in tenant scope"]
+  H --> PG["Postgres<br/>withTenantDb → RLS policy"]
+  H --> NJ["Neo4j<br/>scopedSession guard"]
+  H --> CH["ClickHouse<br/>chInsert / chSelect"]
+  H --> OK["capability.invoke_allowed<br/>credits metered"]
+`} />
+
+*One request through all four layers. A deny stops at IAM with an audit record; an allow reaches data only through a tenant-scoped seam. See [Tenant isolation and RLS](/docs/security/tenant-isolation-rls) for the policy SQL behind each seam.*
 
 These layers are independent. A misconfigured application-layer predicate does not create a data leak because the database enforces isolation by itself. A compromised session does not escalate beyond the roles assigned to that principal because the IAM resolver runs inside the same `invoke()` boundary that cannot be bypassed.
 
@@ -27,7 +42,7 @@ Every user action, agent action, API call, and MCP tool invocation passes throug
 At the `invoke()` boundary:
 
 1. The calling principal is identified (session, API key, or service token).
-2. The IAM resolver evaluates the grant matrix (workspace grants → org enforced grants → role-inherited grants → default-deny). The resolution chain is logged as a structured trace.
+2. The IAM resolver evaluates the principal's role grants, then the system org Owner role, then falls back to the capability contract's `defaultEffect`. The resolution chain is logged as a structured trace.
 3. If denied, a `capability.invoke_denied` security event is written to both audit stores and a structured 403 is returned.
 4. If allowed, the handler runs inside a tenant scope (`runInTenantScope`) that feeds the database seams.
 5. On completion, credits are metered, latency is recorded, and a `capability.invoke_allowed` event is written.
@@ -63,7 +78,7 @@ Five built-in roles govern what principals can do:
 - **Member** — run agents, resolve approvals, edit memories.
 - **Viewer** — read-only across the workspace.
 
-Org-level policies can lock capabilities so that workspace-level grants cannot override them. The resolution order is documented in [RBAC and roles](/docs/governance/rbac).
+The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today: its tables were removed in migration 0027, so every live decision comes from role grants, the system org Owner role, or the contract default. The resolution order is documented in [RBAC and roles](/docs/governance/rbac).
 
 ## Sub-processors
 
@@ -73,7 +88,7 @@ Oxagen relies on the following third-party processors for data handling:
 |---|---|---|
 | Vercel | Compute, edge functions, blob storage | All application data in transit and at rest |
 | Neon / AlloyDB | Postgres database | Transactional application state |
-| ClickHouse Cloud | Analytics and audit telemetry | Execution events, audit logs, token usage |
+| ClickHouse Cloud | Analytics and audit telemetry | Run and tool-call events, audit logs, token usage |
 | Neo4j AuraDB | Graph database | Ontology, agent memory, workflow lineage |
 | Stripe | Billing | Subscription and payment data |
 | Inngest | Background job orchestration | Job payloads referencing org and workspace IDs |

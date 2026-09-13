@@ -3,8 +3,6 @@ title: Agent roles
 description: How agents get permissions — the three system agent roles, the ceiling-vs-request model, and the delegation ceiling that stops an agent outgrowing the human it acts for.
 ---
 
-<IllustrationRbacSpot />
-
 People get roles. So do agents.
 
 An agent in Oxagen is a **principal** in its own right, with its own identity and its own role — not a shortcut that borrows yours. Every capability it invokes is resolved against that role, audited under `principal_kind='agent'`, and metered to your org. This page covers the three built-in agent roles, how a role combines with the agent's own configuration, and the one rule that governs the whole model.
@@ -47,7 +45,7 @@ Operator is the only role that lets an agent take a high-risk action with nobody
 
 A role does not describe what the agent *does*. It describes the **most** the agent is ever allowed to do.
 
-```
+```text
 role            = the CEILING   (what this agent may ever do)
 agent config    = the REQUEST   (what this agent asks to do — its tools,
                                  graph access, and budgets)
@@ -83,6 +81,27 @@ This closes the obvious escalation route. Without it, any member could mint an a
 
 In the builder, roles above your own access render disabled with an explanation rather than failing at save time. That is a convenience, not the enforcement — the check runs again on the server for every assignment.
 
+Every assignment runs these checks, in order, inside the same transaction that writes it:
+
+<Mermaid
+  chart={`
+flowchart TD
+  A["assign_agent_role<br/>agentId, roleName"] --> R{"Role exists in this org?"}
+  R -- no --> E1["agent_role_not_found"]
+  R -- yes --> H{"A human system role?<br/>Owner, Admin, ..."}
+  H -- yes --> E2["agent_role_not_assignable"]
+  H -- no --> C{"Custom role on a plan<br/>below Enterprise?"}
+  C -- yes --> E3["TIER_DENIED"]
+  C -- no --> L{"Enterprise org?"}
+  L -- no --> OK["Role attached and audited"]
+  L -- yes --> X{"Does the role grant anything<br/>more permissive than you hold?"}
+  X -- yes --> E4["agent_role_ceiling_exceeded<br/>lists the capabilities"]
+  X -- no --> OK
+`}
+/>
+
+Human system roles are never assignable, because the system org Owner role allows everything not explicitly denied — attaching it to an unattended automation would be escalation by construction. The per-capability comparison runs on Enterprise organizations, the only plan where a person's grants are resolved capability by capability; on other plans people are not restricted at the IAM layer, so there is nothing for an agent to exceed. When the call comes from an API key, "you" is the user who created the key.
+
 ## Choosing a role
 
 Work from the narrowest role outward:
@@ -113,5 +132,53 @@ The three system agent roles are available on every plan.
 ## Changing an agent's role
 
 Open the agent in the **Workbench → Agents** builder and change the selection on the **Access** step. Saving assigns the new role and detaches the old one, in that order — a rejected assignment leaves the previous role in place rather than stranding the agent without one.
+
+From the REST API, assigning and detaching are two separate calls: `POST /v1/{orgSlug}/{workspaceSlug}/agent/roles/assign` attaches a role, and `POST .../agent/roles/revoke` with the same body detaches one. Assign first, then revoke, to get the builder's never-without-a-role ordering. `agentId` accepts the agent's public id (`agt_…`), UUID, or slug.
+
+```bash tab="curl"
+curl -X POST "https://api.oxagen.sh/v1/$ORG_SLUG/$WORKSPACE_SLUG/agent/roles/assign" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agentId": "agt_…", "roleName": "Agent Observer"}'
+```
+
+```ts tab="TypeScript"
+const res = await fetch(
+  `https://api.oxagen.sh/v1/${orgSlug}/${workspaceSlug}/agent/roles/assign`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OXAGEN_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ agentId: "agt_…", roleName: "Agent Observer" }),
+  },
+);
+const assignment = await res.json();
+```
+
+```python tab="Python"
+import os
+import requests
+
+res = requests.post(
+    f"https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/roles/assign",
+    headers={"Authorization": f"Bearer {os.environ['OXAGEN_API_KEY']}"},
+    json={"agentId": "agt_…", "roleName": "Agent Observer"},
+)
+assignment = res.json()
+```
+
+```json tab="Response"
+{
+  "assigned": true,
+  "alreadyAssigned": false,
+  "agentId": "agt_…",
+  "roleId": "rol_…",
+  "roleName": "Agent Observer"
+}
+```
+
+Assigning a role the agent already holds is not an error: the response comes back with `alreadyAssigned: true`.
 
 Every assignment and revocation is written to the audit log with the agent as the target and the acting user recorded, viewable in **Organization → Security → Audit**.

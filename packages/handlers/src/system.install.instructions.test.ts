@@ -78,6 +78,52 @@ describe("systemInstallInstructionsHandler", () => {
     );
   });
 
+  it("passes the claude-code URL positionally — `claude mcp add` has no --url flag", async () => {
+    const result = await systemInstallInstructionsHandler(
+      { client: "claude-code" },
+      CTX,
+    );
+    const connect = result.steps.find((s) =>
+      s.command?.includes("claude mcp add"),
+    )?.command;
+    expect(connect).toMatch(
+      /^claude mcp add --transport http oxagen "https:\/\/[^"]+\/mcp" --header /,
+    );
+    expect(connect).not.toContain("--url");
+  });
+
+  it("configures codex through `codex mcp add`, never a codex.yaml", async () => {
+    const result = await systemInstallInstructionsHandler(
+      { client: "codex" },
+      CTX,
+    );
+    const text = result.steps
+      .map((s) => `${s.label}\n${s.command ?? ""}`)
+      .join("\n");
+    expect(text).toMatch(
+      /codex mcp add oxagen --url "https:\/\/[^"]+\/mcp" --bearer-token-env-var OXAGEN_API_KEY/,
+    );
+    expect(text).toContain("codex mcp list");
+    expect(text).not.toContain("codex.yaml");
+    expect(text).not.toContain("codex tools list");
+  });
+
+  it("bridges claude-desktop through mcp-remote — its config file cannot hold a remote url", async () => {
+    const result = await systemInstallInstructionsHandler(
+      { client: "claude-desktop" },
+      CTX,
+    );
+    const entryStep = result.steps.find((s) =>
+      s.command?.trimStart().startsWith("{"),
+    );
+    const server = JSON.parse(entryStep!.command!).mcpServers.oxagen;
+    expect(server.url).toBeUndefined();
+    expect(server.command).toBe("npx");
+    expect(server.args).toContain("mcp-remote");
+    expect(server.args.some((a: string) => a.endsWith("/mcp"))).toBe(true);
+    expect(server.env.OXAGEN_AUTH_HEADER).toMatch(/^Bearer /);
+  });
+
   it("points every client at the API-key page — the key carries org+workspace scope", async () => {
     for (const client of CLIENTS) {
       const result = await systemInstallInstructionsHandler({ client }, CTX);

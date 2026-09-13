@@ -5,7 +5,7 @@ description: How to connect Claude Code, Cursor, Claude Desktop, and other MCP c
 
 ## Prerequisites
 
-You need an API key with the scopes matching the tools you want to use. Create one at **Organization → Developer → Tokens**.
+You need an API key. Create one at **Organization → Developer → Tokens**. The key acts with the access of the user who created it, so create it from an account whose role covers the tools you want to use.
 
 The MCP server endpoint is:
 
@@ -23,26 +23,56 @@ The fastest path for any client is the unified install page at **Organization �
 
 ### Claude Code
 
-Add to your `~/.claude/mcp.json` (or the project-level `.claude/mcp.json`):
+Register the server from a terminal. The URL is a positional argument:
 
-```json
+```bash
+claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
+  --header "Authorization: Bearer $OXAGEN_API_KEY"
+```
+
+Add `--scope project` to write the entry to `.mcp.json` at the repository root, so everyone who clones the repo gets the server. That file looks like this:
+
+```json title=".mcp.json"
 {
   "mcpServers": {
     "oxagen": {
+      "type": "http",
       "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
-        "Authorization": "Bearer ox_…"
+        "Authorization": "Bearer ${OXAGEN_API_KEY}"
       }
     }
   }
 }
 ```
+
+Run `claude mcp list` to confirm the server connects.
 
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on Windows:
+Claude Desktop's config file only starts local (stdio) servers, and its remote connectors sign in with OAuth, which the Oxagen MCP server does not use. Bridge to the HTTP endpoint with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), which needs Node.js on your machine. Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
-```json
+```json title="claude_desktop_config.json"
+{
+  "mcpServers": {
+    "oxagen": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.oxagen.sh/mcp", "--header", "Authorization:${OXAGEN_AUTH_HEADER}"],
+      "env": {
+        "OXAGEN_AUTH_HEADER": "Bearer ox_…"
+      }
+    }
+  }
+}
+```
+
+The header value is passed through `env` because some launchers split an argument that contains a space. Restart Claude Desktop after saving.
+
+### Cursor
+
+Add to `~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project:
+
+```json title="mcp.json"
 {
   "mcpServers": {
     "oxagen": {
@@ -55,21 +85,20 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-Restart Claude Desktop after saving.
+### Codex
 
-### Cursor
+```bash
+export OXAGEN_API_KEY=ox_…
+codex mcp add oxagen --url https://mcp.oxagen.sh/mcp --bearer-token-env-var OXAGEN_API_KEY
+codex mcp list
+```
 
-Add to Cursor settings → MCP servers:
+This writes the entry to `~/.codex/config.toml`. Codex reads the key from `OXAGEN_API_KEY` when it connects, so the key never lands in the file:
 
-```json
-{
-  "oxagen": {
-    "url": "https://mcp.oxagen.sh/mcp",
-    "headers": {
-      "Authorization": "Bearer ox_…"
-    }
-  }
-}
+```toml title="~/.codex/config.toml"
+[mcp_servers.oxagen]
+url = "https://mcp.oxagen.sh/mcp"
+bearer_token_env_var = "OXAGEN_API_KEY"
 ```
 
 ### VS Code (with MCP extension)
@@ -144,8 +173,8 @@ Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `
 
 **401 Unauthorized:** The API key is missing, invalid, or has been revoked. Check the key at **Organization → Developer → Tokens**.
 
-**403 Forbidden with `capability_denied`:** The API key does not have the scope for the tool being called. Either add the scope to the key or create a new key with the required scopes.
+**Tool call refused:** On an Enterprise organization, the user who created the key lacks a role grant for that capability, or the grant requires approval. Check the key creator's role under **Governance → Policies**. Refusals are recorded as `capability.invoke_denied` events in **Organization → Security → Audit**.
 
-**Tool not in list:** The tool may be disabled at the workspace level, blocked by an org policy, or not yet contracted. Check **Workspace settings → Integrations** and **Organization → Access → Grants**.
+**Tool not in list:** The tool list is not filtered per key — authorization happens when a tool is called. A missing tool is not exposed on the MCP surface; see [MCP tools](/docs/mcp/tools).
 
 **Connection drops after 25 seconds:** Your client may be on a platform with a short serverless function timeout. The MCP server is deployed on Vercel Functions. Long-running tool calls (background task start, video generation) are designed to return immediately with a task ID — the actual work runs asynchronously via Inngest.
