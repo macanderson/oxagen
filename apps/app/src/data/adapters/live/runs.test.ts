@@ -111,8 +111,6 @@ function session(over: Partial<TachoSessionColumns> = {}): TachoSessionColumns {
     outputTokens: 400,
     cacheReadTokens: 3_000,
     cacheCreationTokens: 0,
-    enforcementTier: "observe",
-    replayGrade: null,
     modelInitial: "claude-opus-5",
     modelFinal: null,
     startedAt: new Date("2026-09-11T10:00:00.000Z"),
@@ -482,7 +480,8 @@ describe("getRun", () => {
     expect(RunDetail.parse(read.value)).toMatchObject({
       id: TACHO_ID,
       status: "live",
-      tier: "observe",
+      tier: null,
+      grade: null,
       model: "claude-opus-5",
       cacheHitRate: 0.75,
       touched: ["src/release.ts"],
@@ -562,6 +561,26 @@ describe("framesSince", () => {
     for (const frame of read.value) expect(Frame.parse(frame)).toEqual(frame);
     expect(readAttemptEventsSince).toHaveBeenCalledWith(RUN_UUID, "4", 50);
   });
+
+  it.each([
+    ["a non-decimal runSeq", { runSeq: "7a" }],
+    ["an invalid observedAt", { observedAt: new Date("not a date") }],
+  ])(
+    "answers run_record_invalid for a mapped event with %s",
+    async (_label, over) => {
+      const readAttemptEventsSince = vi.fn(() =>
+        Promise.resolve([
+          event("5", "admission.run_admitted"),
+          { ...event("7", "tool.call_completed"), ...over },
+        ]),
+      );
+      const { port, report } = fakeDeps({ store: { readAttemptEventsSince } });
+      await expect(port.framesSince(SCOPE, LEDGER_ID, "4")).resolves.toEqual(
+        err("run_record_invalid", 500),
+      );
+      expect(report).not.toHaveBeenCalled();
+    },
+  );
 
   it("reads from the start for a negative cursor", async () => {
     const readAttemptEventsSince = vi.fn(() => Promise.resolve([]));
@@ -996,7 +1015,8 @@ describe.runIf(process.env.MC_LIVE_DB_TEST === "1")(
             runtime: "claude-code",
             harness: "claude-code",
             outcome: "running",
-            enforcementTier: "harness",
+            // The ingest's unobserved claim: it must not reach the badge.
+            enforcementTier: "gateway",
             startedAt: new Date(Date.now() + 60_000),
             lastEventAt: new Date(Date.now() + 60_000),
             numTurns: 2,
@@ -1075,7 +1095,8 @@ describe.runIf(process.env.MC_LIVE_DB_TEST === "1")(
         steps: 10,
         frames: 30,
         cost: { micros: "640000", currency: "USD", basis: "client_attested" },
-        tier: "harness",
+        tier: null,
+        grade: null,
         model: "claude-opus-5",
         cacheHitRate: 0.75,
         touched: ["src/release.ts"],

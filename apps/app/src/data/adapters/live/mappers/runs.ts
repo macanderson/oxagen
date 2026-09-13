@@ -16,12 +16,7 @@ import type { TokenUsageByStepRow } from "@oxagen/telemetry";
 import type { AttemptEventReadRecord, AttemptRecord } from "@oxagen/run-ledger";
 import type { schema } from "@oxagen/database";
 import type { z } from "zod";
-import {
-  AgentKey,
-  EnforcementTier,
-  type Money,
-  ReplayGrade,
-} from "@/data/contracts/common";
+import { AgentKey, type Money } from "@/data/contracts/common";
 import {
   type Frame,
   type FrameKind,
@@ -111,16 +106,6 @@ export function microsString(micros: number | bigint): string {
       `cost micros must be a safe integer: ${String(micros)}`,
     );
   return String(micros);
-}
-
-/** A recorded enum value in spec vocabulary, or null for none or a foreign word. */
-function enumOrNull<T extends string>(
-  schema: z.ZodType<T>,
-  value: string | null,
-): T | null {
-  if (value === null) return null;
-  const parsed = schema.safeParse(value);
-  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -413,14 +398,20 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
  * events are chained through the attempt's stream-digest fold, not a per-event
  * previous-hash link, so `prevHash` is not recorded. Per-frame tier and cost
  * are not recorded by the ledger.
+ *
+ * The result is a draft: the adapter parses it through `Frame` before it
+ * reaches the SSE player, so a malformed event answers `run_record_invalid`.
  */
 export function toLedgerFrame(event: AttemptEventReadRecord): Frame | null {
   const kind = LEDGER_FRAME_KINDS[event.eventType];
   if (!kind) return null;
+  const observed = event.observedAt;
   return {
     seq: event.runSeq,
     kind,
-    ts: event.observedAt.toISOString(),
+    // An invalid Date would throw here; keep it unparseable instead, so the
+    // Frame parse names the bad record rather than a store outage.
+    ts: Number.isNaN(observed.getTime()) ? "" : observed.toISOString(),
     tier: null,
     cost: null,
     summary: ledgerFrameSummary(event),
@@ -449,8 +440,6 @@ export type TachoSessionColumns = Pick<
   | "outputTokens"
   | "cacheReadTokens"
   | "cacheCreationTokens"
-  | "enforcementTier"
-  | "replayGrade"
   | "modelInitial"
   | "modelFinal"
   | "startedAt"
@@ -530,8 +519,13 @@ function tachoRowDraft(record: TachoSessionRecord): Mapped<RunRow> {
       steps: session.numModelCalls + session.numToolCalls,
       frames: session.seqCount,
       cost,
-      tier: enumOrNull(EnforcementTier, session.enforcementTier),
-      grade: enumOrNull(ReplayGrade, session.replayGrade),
+      // G6. `tacho.sessions.enforcement_tier` is set once at session create,
+      // from the client's envelope claim or the host's configured mode, and is
+      // never lowered when hooks are bypassed; `replay_grade` is not computed
+      // from observed evidence either. Neither is a recorded observation, so
+      // neither may reach a trust badge (spec §590, §1236).
+      tier: null,
+      grade: null,
       // G7: no witness verdicts are recorded.
       verdict: null,
       taskRef: null,

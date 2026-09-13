@@ -179,8 +179,6 @@ function tachoSession(
     outputTokens: 12_000,
     cacheReadTokens: 150_000,
     cacheCreationTokens: 10_000,
-    enforcementTier: "harness",
-    replayGrade: "inspect",
     modelInitial: "claude-sonnet-5",
     modelFinal: "claude-opus-5",
     startedAt: new Date("2026-09-11T10:00:00.000Z"),
@@ -475,6 +473,13 @@ describe("toLedgerFrame", () => {
     },
   );
 
+  it("leaves an invalid observed_at unparseable rather than throwing", () => {
+    const record = mapAttemptEventReadRow(eventRow());
+    const frame = toLedgerFrame({ ...record, observedAt: new Date("nope") });
+    expect(frame?.ts).toBe("");
+    expect(Frame.safeParse(frame).success).toBe(false);
+  });
+
   it("keeps run_seq as an exact decimal past 2^53", () => {
     const frame = toLedgerFrame(
       mapAttemptEventReadRow(eventRow({ run_seq: "9007199254740993" })),
@@ -599,8 +604,8 @@ describe("toTachoRunRow", () => {
       steps: 88,
       frames: 214,
       cost: { micros: "3120450", currency: "USD", basis: "client_attested" },
-      tier: "harness",
-      grade: "inspect",
+      tier: null,
+      grade: null,
       verdict: null,
       taskRef: null,
       startedAt: "2026-09-11T10:00:00.000Z",
@@ -608,12 +613,26 @@ describe("toTachoRunRow", () => {
     });
   });
 
-  it("shows a grade outside the spec vocabulary as not recorded", () => {
-    const read = toTachoRunRow(tachoRecord({}, { replayGrade: "full" }));
-    expect(read.ok && read.value.grade).toBeNull();
-    const none = toTachoRunRow(tachoRecord({}, { replayGrade: null }));
-    expect(none.ok && none.value.grade).toBeNull();
-  });
+  it.each([
+    ["harness", "inspect"],
+    ["gateway", "retry"],
+  ])(
+    "shows no tier or grade even when the session columns say %s/%s (G6: set at create from the client's claim, never observed)",
+    (enforcementTier, replayGrade) => {
+      // The row as a select that still named the columns would return it.
+      const row = { ...tachoSession(), enforcementTier, replayGrade };
+      const read = toTachoRunRow({ ...tachoRecord(), session: row });
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      expect(read.value.tier).toBeNull();
+      expect(read.value.grade).toBeNull();
+      const detail = toTachoRunDetail({ ...tachoRecord(), session: row }, []);
+      expect(detail.ok && [detail.value.tier, detail.value.grade]).toEqual([
+        null,
+        null,
+      ]);
+    },
+  );
 
   it("is not backed (G6) without an operator: ingest does not record one", () => {
     expect(toTachoRunRow(tachoRecord({ operatorPublicId: null }))).toEqual(

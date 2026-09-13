@@ -49,7 +49,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import type { Frame, RunDetail, RunPage } from "@/data/contracts/runs";
+import { Frame, type RunDetail, type RunPage } from "@/data/contracts/runs";
 import { notBackedFor as notBackedForMethod } from "@/data/backing";
 import { notBacked, type Read, readError, readOk } from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
@@ -63,6 +63,7 @@ import {
   type LedgerRunIdentity,
   latestSealAt,
   mergeNewestFirst,
+  RUN_RECORD_INVALID,
   type RunCursor,
   type TachoSessionRecord,
   toLedgerFrame,
@@ -301,8 +302,6 @@ const tachoColumns = {
     outputTokens: sessions.outputTokens,
     cacheReadTokens: sessions.cacheReadTokens,
     cacheCreationTokens: sessions.cacheCreationTokens,
-    enforcementTier: sessions.enforcementTier,
-    replayGrade: sessions.replayGrade,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
     startedAt: sessions.startedAt,
@@ -661,8 +660,13 @@ export function createLiveRuns(deps: LiveRunsDeps): RunReadPort {
               pageSize,
             );
           for (const event of batch) {
-            const frame = toLedgerFrame(event);
-            if (frame) frames.push(frame);
+            const draft = toLedgerFrame(event);
+            if (!draft) continue;
+            // Parse = the adapter cannot hand the SSE player a shape Frame
+            // does not accept, whatever the ledger's event shape becomes.
+            const parsed = Frame.safeParse(draft);
+            if (!parsed.success) return readError(RUN_RECORD_INVALID, 500);
+            frames.push(parsed.data);
           }
           const last = batch.at(-1);
           if (frames.length > 0 || batch.length < pageSize || !last) break;
