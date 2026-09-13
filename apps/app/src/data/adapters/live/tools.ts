@@ -440,7 +440,7 @@ export const postgresToolsStore: ToolsStore = {
 };
 
 /** Report to the ClickHouse error stream; telemetry loads lazily, like the store. */
-async function reportToTelemetry(error: unknown, context: string) {
+export async function reportToTelemetry(error: unknown, context: string) {
   try {
     const { captureError } = await import("@oxagen/telemetry");
     captureError({ error, source: "app", severity: "error", context });
