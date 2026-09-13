@@ -1,4 +1,10 @@
-# @oxagen/app
+# @oxagen/app-deprecated
+
+> **Deprecated.** This is the pre-Mission-Control web app, moved here from `apps/app` on the
+> `app-rebuild` integration branch. It is no longer deployed (no `vercel.json`, no `test:e2e`)
+> and is excluded from `pnpm dev`. The UI-parity, mobile-parity and manifest gates still read it
+> through `tools/scripts/lib/app-dir.mjs` until the cutover batch flips them to the new `apps/app`.
+> Delete this directory one release after cutover.
 
 The primary Oxagen web app — **Next.js 16** (App Router, RSC, Turbopack),
 streaming AI surfaces via the Vercel AI SDK, and the **coss ui** component
