@@ -734,6 +734,16 @@ describe("harnesses and reassign", () => {
     expect((await reassign({ workspace: "edge" }, d)).ok).toBe(true);
     expect(d.requests).toEqual([]);
     expect((await reassign({ token: "tok" }, d)).ok).toBe(false);
+
+    // A harness-only change re-enrolls in place: the one way to drop Codex.
+    const dropped = await reassign(
+      { token: "tok", harnesses: ["claude-code"] },
+      d,
+    );
+    expect(dropped.ok).toBe(true);
+    expect(dropped.to?.workspace).toBe("edge");
+    expect(readHostFile(d.paths.hostFile)?.harnesses).toEqual(["claude-code"]);
+    expect(JSON.stringify(d.readCodexHooks())).not.toContain("--enrollment");
     const fresh = deps();
     expect((await reassign({ workspace: "edge" }, fresh)).ok).toBe(false);
     expect(fresh.errors[0]).toContain("Not enrolled");

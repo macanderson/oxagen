@@ -40,14 +40,24 @@ export async function reassign(
     return { ok: false, warnings };
   }
   const org = options.org ?? host.org_slug;
-  const workspace = options.workspace;
-  if (workspace === undefined) {
+  // `--harness` alone re-enrolls in place, which is how a harness is removed
+  // (`enroll` never drops one).
+  const workspace = options.workspace ?? host.workspace_slug;
+  if (options.workspace === undefined && options.harnesses === undefined) {
     deps.err(
-      "reassign needs --workspace <slug> (and --org <slug> to change org)",
+      "reassign needs --workspace <slug> (and --org <slug> to change org) or --harness <list>",
     );
     return { ok: false, warnings };
   }
-  if (org === host.org_slug && workspace === host.workspace_slug) {
+  const sameHarnesses =
+    options.harnesses === undefined ||
+    [...options.harnesses].sort().join(",") ===
+      [...host.harnesses].sort().join(",");
+  if (
+    org === host.org_slug &&
+    workspace === host.workspace_slug &&
+    sameHarnesses
+  ) {
     deps.out(
       `Already reporting to ${org}/${workspace} as ${host.agent_key}; nothing to do.`,
     );
