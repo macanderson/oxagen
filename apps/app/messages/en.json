@@ -1,0 +1,64 @@
+{
+  "app": {
+    "name": "Oxagen",
+    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run.",
+    "skipToContent": "Skip to content"
+  },
+  "routes": {
+    "placeholder": "This page is being rebuilt for Mission Control.",
+    "home": { "title": "Mission Control" },
+    "login": { "title": "Log in" },
+    "signup": { "title": "Create your account" },
+    "verify": { "title": "Verify your email" },
+    "twoFactor": { "title": "Two-factor authentication" },
+    "forgotPassword": { "title": "Reset your password" },
+    "resetPassword": { "title": "Choose a new password" },
+    "invite": { "title": "Accept your invitation" },
+    "welcome": { "title": "Welcome to Oxagen" },
+    "cliAuthorize": { "title": "Authorize the Oxagen CLI" },
+    "githubSetup": { "title": "Finish connecting GitHub" },
+    "organization": { "title": "Organization" },
+    "apiKeys": { "title": "API keys" },
+    "roles": { "title": "Roles" },
+    "billing": { "title": "Billing" },
+    "audit": { "title": "Audit" },
+    "fleet": { "title": "Fleet" },
+    "run": { "title": "Run" },
+    "agents": { "title": "Agents" },
+    "agent": { "title": "Agent" },
+    "agentSource": { "title": "Agent definition" },
+    "mandate": { "title": "Mandate" },
+    "tools": { "title": "Tools" },
+    "ontology": { "title": "Ontology" },
+    "steering": { "title": "Steering" },
+    "spend": { "title": "Spend" },
+    "register": { "title": "Register an agent" }
+  },
+  "states": {
+    "notBacked": {
+      "title": "Not recorded yet",
+      "body": "Oxagen does not record this yet. It arrives with milestone {milestone} (backend gap {gap})."
+    },
+    "denied": {
+      "title": "You do not have access",
+      "body": "This needs the {permission} permission. Ask an organization admin to grant it."
+    },
+    "error": {
+      "title": "This could not load",
+      "body": "Error {code} (HTTP {status}). Try again in a moment."
+    },
+    "empty": {
+      "title": "Nothing here yet"
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This address does not match a page you can open.",
+    "home": "Go to Mission Control"
+  },
+  "globalError": {
+    "title": "Something went wrong",
+    "body": "Mission Control hit an unexpected error. Reload the page to try again.",
+    "retry": "Try again"
+  }
+}

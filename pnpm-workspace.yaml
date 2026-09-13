@@ -13,7 +13,10 @@ confirmModulesPurge: false
 
 overrides:
   drizzle-orm: 0.45.2
-  typescript: 6.0.3
+  # Narrowed to <7 so apps/app's `@typescript/native` (npm:typescript@7.0.2,
+  # the `tsc` CLI) and its `typescript` alias (npm:@typescript/typescript6, the
+  # JS API typescript-eslint needs, plus `tsc6`) are not rewritten to 6.0.3.
+  "typescript@<7": 6.0.3
   d3-path: 3.1.0
   d3-shape: 3.2.0
 
@@ -34,6 +37,9 @@ ignoredBuiltDependencies:
   - "@swc/core"
 
 allowBuilds:
+  # @parcel/watcher (pulled in by Storybook 10 in apps/app) ships prebuilt
+  # binaries as optional deps; its node-gyp fallback script is not needed.
+  "@parcel/watcher": false
   "@swc/core": true
   blake3: true
   cpu-features: true

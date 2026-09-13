@@ -1,0 +1,8 @@
+/*
+ * Mission Control styles: Tailwind v4 and the Oxagen house tokens from
+ * @oxagen/ui (tokens, fonts, light/dark). House tokens only; no raw palette.
+ */
+@import "@oxagen/ui/styles/globals.css";
+
+/* Scan the app's own source for utility classes. */
+@source "../";
