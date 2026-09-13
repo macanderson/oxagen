@@ -12,6 +12,29 @@ import { tenancySeamRestrictedImports } from "../../eslint.tenancy-seams.mjs";
 
 const FIXTURE_MESSAGE = "Only src/data/source.ts selects an adapter.";
 
+// `no-restricted-imports` sees only static `import`/`export … from`. A dynamic
+// `import()` is an ImportExpression, which it never visits, and plan §4 has
+// source.ts select the adapter with exactly `await import("./adapters/fixture")`,
+// so a copied call is the likeliest bypass. These selectors match the literal
+// specifier, or the leading quasi of a template literal (`../fixture/${x}`).
+const importSpecifier = (regex) => [
+  `ImportExpression > Literal[value=${regex}]`,
+  `ImportExpression > TemplateLiteral[quasis.0.value.raw=${regex}]`,
+];
+// Any spelling that names the directory: `@/data/adapters/fixture`,
+// `../../data/adapters/fixture/runs`.
+const FIXTURE_DIR_REGEX = String.raw`/(^|\/)adapters\/fixture(\/|$)/`;
+// A sibling-relative spelling from inside src/data/adapters: `./fixture`,
+// `../fixture/runs`, `../../fixture` from live/mappers.
+const FIXTURE_SIBLING_REGEX = String.raw`/^(\.\.?\/)+fixture(\/|$)/`;
+const fixtureDynamicImportBan = (...regexes) => [
+  "error",
+  ...regexes.flatMap(importSpecifier).map((selector) => ({
+    selector,
+    message: FIXTURE_MESSAGE,
+  })),
+];
+
 // `no-restricted-imports` matches the import specifier as written, with
 // gitignore semantics. `@/data/adapters/fixture` alone is bypassed by any
 // relative spelling (`./adapters/fixture/runs`, `../data/adapters/fixture`), so
@@ -82,12 +105,16 @@ export default defineConfig([
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: { "no-restricted-imports": ["error", srcRestrictedImports] },
+    rules: {
+      "no-restricted-imports": ["error", srcRestrictedImports],
+      "no-restricted-syntax": fixtureDynamicImportBan(FIXTURE_DIR_REGEX),
+    },
   },
   {
-    // A live adapter sits beside the fixture adapter, so `../fixture` (and
-    // `./fixture` from src/data/adapters itself) reaches it without ever
-    // spelling `adapters/fixture`. Close that path too.
+    // A live adapter sits beside the fixture adapter, so `../fixture`,
+    // `./fixture` from src/data/adapters itself, and `../../fixture` from
+    // live/mappers reach it without ever spelling `adapters/fixture`. The `**/`
+    // forms close that path at every depth; the fixture dir is ignored below.
     files: ["src/data/adapters/**/*.{ts,tsx}"],
     ignores: ["src/data/adapters/fixture/**"],
     rules: {
@@ -98,12 +125,16 @@ export default defineConfig([
           patterns: [
             ...srcRestrictedImports.patterns,
             {
-              group: ["./fixture", "./fixture/*", "../fixture", "../fixture/*"],
+              group: ["**/fixture", "**/fixture/*"],
               message: FIXTURE_MESSAGE,
             },
           ],
         },
       ],
+      "no-restricted-syntax": fixtureDynamicImportBan(
+        FIXTURE_DIR_REGEX,
+        FIXTURE_SIBLING_REGEX,
+      ),
     },
   },
   {
@@ -120,6 +151,8 @@ export default defineConfig([
           ),
         },
       ],
+      // Its only no-restricted-syntax entries are the fixture dynamic-import ban.
+      "no-restricted-syntax": "off",
     },
   },
   {
