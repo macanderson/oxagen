@@ -1,12 +1,14 @@
-import { notBacked } from "@/data/not-backed";
-import { PageState } from "@/ui/page-state";
-import { PlaceholderPage } from "@/ui/placeholder-page";
+import { Suspense } from "react";
+import { GateSkeleton, RegisterScreen } from "@/features/onboarding";
 
-// Batch 0 skeleton; its Batch 2 page lane replaces it.
-export default function RegisterPage() {
+// Register an agent from Fleet: name → wrap → wait for the first frame, on the
+// same wrap and first-frame screens as the onboarding gate.
+export default function RegisterPage(
+  props: PageProps<"/[org]/[ws]/register/[[...step]]">,
+) {
   return (
-    <PlaceholderPage route="register">
-      <PageState page="register" result={notBacked("M1", "G15")} />
-    </PlaceholderPage>
+    <Suspense fallback={<GateSkeleton />}>
+      <RegisterScreen params={props.params} searchParams={props.searchParams} />
+    </Suspense>
   );
 }
