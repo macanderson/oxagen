@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describeQuery } from "../auth/test-query";
 
 const cookieJar = new Map<string, string>();
-const findOrg = vi.fn();
-const findMembership = vi.fn();
-const findWorkspace = vi.fn();
+const wheres: string[] = [];
+const findOrg = vi.fn<(o: unknown) => unknown>();
+const findMembership = vi.fn<(o: unknown) => unknown>();
+const findWorkspace = vi.fn<(o: unknown) => unknown>();
 
 vi.mock("next/headers", () => ({
   cookies: () =>
@@ -16,9 +18,24 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) =>
     fn({
       query: {
-        organizations: { findFirst: findOrg },
-        orgUsers: { findFirst: findMembership },
-        workspaces: { findFirst: findWorkspace },
+        organizations: {
+          findFirst: (o: Parameters<typeof describeQuery>[0]) => {
+            wheres.push(describeQuery(o).where ?? "");
+            return findOrg(o);
+          },
+        },
+        orgUsers: {
+          findFirst: (o: Parameters<typeof describeQuery>[0]) => {
+            wheres.push(describeQuery(o).where ?? "");
+            return findMembership(o);
+          },
+        },
+        workspaces: {
+          findFirst: (o: Parameters<typeof describeQuery>[0]) => {
+            wheres.push(describeQuery(o).where ?? "");
+            return findWorkspace(o);
+          },
+        },
       },
     }),
 }));
@@ -36,6 +53,7 @@ function liveMode() {
 }
 
 beforeEach(() => {
+  wheres.length = 0;
   cookieJar.clear();
   findOrg.mockReset();
   findMembership.mockReset();
@@ -94,6 +112,11 @@ describe("loadFlowScope", () => {
         operator: { name: "Priya Raman", email: "priya@acme.example" },
       },
     });
+    expect(wheres).toEqual([
+      "and(eq(col:slug,acme),ne(col:status,deleted))",
+      "and(eq(col:orgId,org-1),eq(col:userId,user-1))",
+      "and(eq(col:orgId,org-1),eq(col:slug,core-platform))",
+    ]);
   });
 
   it("reads a non-member's request as not found, without looking up the workspace", async () => {

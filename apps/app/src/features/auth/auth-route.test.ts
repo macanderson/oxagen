@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+
+const handler = vi.fn(() =>
+  Promise.resolve(new Response(null, { status: 403 })),
+);
+const emitSecurityEvent = vi.fn();
+vi.mock("@oxagen/auth/server", () => ({ auth: { handler } }));
+vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent }));
 import {
   NO_ORG_SENTINEL,
   clientAddress,
@@ -81,6 +88,21 @@ describe("handleAuthRequest", () => {
     vi.stubEnv("MC_DATA", "fixture");
     const res = await handleAuthRequest(post("/sign-in/email"));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("handleAuthRequest outside fixture mode", () => {
+  it("loads Better Auth and the security emitter itself", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("MC_DATA", "live");
+    const res = await handleAuthRequest(
+      post("/sign-in/social", { "x-real-ip": "198.51.100.7" }),
+    );
+    expect(res.status).toBe(403);
+    expect(handler).toHaveBeenCalledOnce();
+    expect(emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ ip: "198.51.100.7", userAgent: null }),
+    );
   });
 });
 
