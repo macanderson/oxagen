@@ -135,23 +135,29 @@ export function createLiveApprovals(
       if (rows.length === 0) return readOk(ApprovalList.parse([]));
       if (workspaceSlug === null) return readError("workspace_not_found", 404);
 
+      const runId = q?.runId;
       const items: ApprovalItem[] = [];
       for (const row of rows) {
-        const parsed = ApprovalItem.safeParse(
-          toApprovalCandidate(row, { workspaceSlug, now }),
-        );
+        const candidate = toApprovalCandidate(row, { workspaceSlug, now });
+        const parsed = ApprovalItem.safeParse(candidate);
         if (!parsed.success) {
           const paths = parsed.error.issues.map((i) => i.path.join("."));
           const mismatched = paths.filter((p) => !unrecorded.has(p));
           if (mismatched.length > 0)
             throw new ApprovalContractMismatch(mismatched);
-          // Open approvals exist but their chain is not recorded: say so,
-          // never an empty queue that hides a parked call.
-          return notBacked("M2", "G1");
         }
+        // A run filter cannot place an approval whose run id is not recorded.
+        // Filtering it out would report a false "nothing waiting" for the run
+        // while the call is parked, so the read is not backed. This check reads
+        // the candidate with `== null` so it holds before and after `runId`
+        // becomes nullable in the contract.
+        if (runId !== undefined && candidate.runId == null)
+          return notBacked("M2", "G1");
+        // Open approvals exist but their chain is not recorded: say so,
+        // never an empty queue that hides a parked call.
+        if (!parsed.success) return notBacked("M2", "G1");
         items.push(parsed.data);
       }
-      const runId = q?.runId;
       return readOk(
         runId === undefined ? items : items.filter((i) => i.runId === runId),
       );

@@ -151,7 +151,7 @@ beforeEach(() => {
 });
 
 /** An approval whose whole chain is recorded (the fixture's shape, spec §6.7). */
-function recordedItem(publicId: string, runId: string) {
+function recordedItem(publicId: string, runId: string | null) {
   return {
     id: publicId,
     runId,
@@ -300,6 +300,59 @@ describe("liveApprovals.pending", () => {
     ]);
     const one = await port.pending(SCOPE, { runId: "arun_two" });
     expect(one.ok && one.value.map((i) => i.id)).toEqual(["apr_second"]);
+  });
+
+  it("reports a run-filtered read as not backed when an open approval has no recorded run id, never as an empty run queue", async () => {
+    // Once the contract makes runId nullable these items parse; filtering them
+    // out would tell the Run page nothing is waiting while a call is parked.
+    recorded.candidate = (row) =>
+      recordedItem(
+        row.publicId,
+        row.publicId === "apr_first" ? "arun_one" : null,
+      );
+    const port = createLiveApprovals(
+      fakeStore({
+        workspaceSlug: "core-platform",
+        rows: [
+          approvalRow({ publicId: "apr_first" }),
+          approvalRow({ publicId: "apr_second" }),
+        ],
+      }),
+      clock,
+    );
+    const filtered = await port.pending(SCOPE, { runId: "arun_x" });
+    expect(filtered).toEqual({
+      ok: false,
+      reason: "not_backed",
+      milestone: "M2",
+      gap: "G1",
+    });
+    expect(filtered).not.toEqual({ ok: true, value: [] });
+    await expect(
+      port.pending(SCOPE, { runId: "arun_one" }),
+    ).resolves.toMatchObject({ ok: false, reason: "not_backed" });
+
+    recorded.candidate = (row) => recordedItem(row.publicId, null);
+    await expect(port.pending(SCOPE, { runId: "arun_x" })).resolves.toEqual({
+      ok: false,
+      reason: "not_backed",
+      milestone: "M2",
+      gap: "G1",
+    });
+  });
+
+  it("still throws on a recorded-path mismatch when a run filter is set", async () => {
+    recorded.candidate = (row) => ({
+      ...recordedItem(row.publicId, null),
+      risk: "catastrophic",
+    });
+    const port = createLiveApprovals(
+      fakeStore({ workspaceSlug: "core-platform", rows: [approvalRow()] }),
+      clock,
+    );
+    await expect(
+      port.pending(SCOPE, { runId: "arun_x" }),
+    ).rejects.toBeInstanceOf(ApprovalContractMismatch);
   });
 
   it("is the port the live source registers, reading through the tenant database seam", async () => {
