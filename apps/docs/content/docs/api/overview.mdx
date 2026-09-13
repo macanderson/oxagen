@@ -5,13 +5,69 @@ description: The Oxagen REST API — versioned, authenticated, capability-parity
 
 The Oxagen REST API exposes every platform capability as versioned HTTP endpoints. It is the programmatic surface for server-to-server integrations, custom tooling, and automation pipelines that do not use MCP.
 
-<IllustrationApi />
-
 **Base URL:** `https://api.oxagen.sh`
 
 **Current version:** `v1`
 
-All endpoints are under `/v1/`. The version prefix is required.
+All endpoints are under `/v1/`. The version prefix is required. Workspace-scoped endpoints take the org and workspace slugs as the next two path segments:
+
+```text
+https://api.oxagen.sh/v1/{orgSlug}/{workspaceSlug}/agent/tools
+                     └┬┘ └───┬───┘ └─────┬─────┘ └────┬────┘
+                   version  org     workspace     capability route
+```
+
+## Your first request
+
+List the capabilities the workspace exposes as agent tools. This is a read-only call that consumes no credits.
+
+```bash tab="curl"
+curl -X POST "https://api.oxagen.sh/v1/acme/main/agent/tools" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "includeExternal": false }'
+```
+
+```ts tab="TypeScript"
+const res = await fetch("https://api.oxagen.sh/v1/acme/main/agent/tools", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.OXAGEN_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ includeExternal: false }),
+});
+
+if (!res.ok) {
+  const { error, requestId } = await res.json();
+  throw new Error(`${error.code}: ${error.message} (request ${requestId})`);
+}
+
+const { tools } = await res.json();
+for (const tool of tools) {
+  console.log(tool.name, tool.riskLevel, tool.requiresApproval);
+}
+```
+
+```python tab="Python"
+import os
+import httpx
+
+res = httpx.post(
+    "https://api.oxagen.sh/v1/acme/main/agent/tools",
+    headers={"Authorization": f"Bearer {os.environ['OXAGEN_API_KEY']}"},
+    json={"includeExternal": False},
+)
+
+if res.is_error:
+    body = res.json()
+    raise RuntimeError(f"{body['error']['code']}: {body['error']['message']}")
+
+for tool in res.json()["tools"]:
+    print(tool["name"], tool["riskLevel"], tool["requiresApproval"])
+```
+
+Each entry in `tools` carries `name`, `description`, `domain`, `category`, `riskLevel` (`low`, `medium`, or `high`), `requiresApproval`, and `external`.
 
 ## Design principles
 
@@ -21,7 +77,34 @@ All endpoints are under `/v1/`. The version prefix is required.
 
 **Versioned.** All endpoints carry the `/v1/` prefix. Breaking changes will be introduced in a new version with a parallel migration window.
 
-**Scoped.** API keys carry org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies — they are inferred from the key. Each key is scoped to exactly one org and one workspace at creation time.
+**Scoped.** API keys carry org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies. Each key is scoped to exactly one org and one workspace at creation time. When a request authenticates with an API key, its scope comes from the key, not from the slugs in the path.
+
+## Request lifecycle
+
+<Mermaid chart={`
+sequenceDiagram
+  participant C as Client
+  participant A as API (/v1)
+  participant K as invoke() kernel
+  participant H as Handler
+  C->>A: POST /v1/{org}/{ws}/... + Bearer ox_…
+  A->>A: Resolve key → org + workspace
+  alt key malformed, invalid, or expired
+    A-->>C: 401 unauthorized
+  end
+  A->>K: invoke(capability, input, ctx)
+  K->>K: Surface check, input validation
+  K->>K: IAM, billing, budget, entitlement, decision rules
+  alt any gate refuses
+    K-->>C: 403 forbidden / 402 insufficient_credits
+  end
+  K->>H: Run handler in tenant scope
+  H-->>K: Output
+  K->>K: Validate output, write security event
+  K-->>C: 200 JSON
+`} />
+
+*Every route is a thin adapter over `invoke()`. The gates, metering, and audit record are the same ones the MCP server and in-app agent pass through.*
 
 ## Authentication
 
@@ -31,19 +114,19 @@ See [Authentication](/docs/api/authentication) for the full reference. In short:
 Authorization: Bearer ox_…
 ```
 
-Every request must include an `Authorization` header with a Bearer token. Requests without a valid token return `401 Unauthorized`. Requests where the token does not have the required capability for the endpoint return `403 Forbidden` with a `capability_denied` error body.
+Every request must include an `Authorization` header with a Bearer token. Requests without a valid token return `401 Unauthorized`. Requests where the principal is not allowed to invoke the capability return `403 Forbidden` with a `forbidden` error code.
 
 ## Error format
 
-All errors follow a consistent JSON structure:
+Errors share one envelope. `requestId` sits beside `error`, and the same value is returned in the `x-request-id` response header:
 
 ```json
 {
   "error": {
-    "code": "capability_denied",
-    "message": "Principal does not have permission to invoke org.member_role.change",
-    "request_id": "req_01abc…"
-  }
+    "code": "forbidden",
+    "message": "IAM denied \"list_agent_tools\" for principal: deny"
+  },
+  "requestId": "3f1c9a52-7d4e-4b8a-9c1e-2a6f0b5d8e47"
 }
 ```
 
@@ -51,13 +134,18 @@ Common error codes:
 
 | Code | HTTP status | Meaning |
 |---|---|---|
-| `unauthorized` | 401 | Missing or invalid token |
-| `capability_denied` | 403 | IAM: the principal lacks the required capability |
+| `unauthorized` | 401 | Missing, malformed, invalid, or expired token |
+| `forbidden` | 403 | IAM denied the capability, or it is not exposed on the API surface |
+| `pending_approval` | 403 | Denied now; a just-in-time access request was created (`accessRequestId` is included) |
 | `insufficient_credits` | 402 | Org has zero credit balance |
-| `not_found` | 404 | Resource does not exist or is not in the token's scope |
-| `validation_error` | 422 | Request body failed schema validation |
-| `rate_limited` | 429 | Too many requests |
-| `internal_error` | 500 | Unexpected server error; include `request_id` in support tickets |
+| `billing_suspended` | 402 | Org subscription is suspended |
+| `budget_exceeded` | 402 | A spend ceiling was reached |
+| `not_found` | 404 | Resource or capability does not exist, or is not in the token's scope |
+| `validation_error` | 400 | Request body failed schema validation (`details` lists the issues) |
+| `bad_request` | 400 | Capability input was rejected |
+| `internal_error` | 500 | Unexpected server error; include `requestId` in support tickets |
+
+A rate-limited request is the one exception to the envelope: it returns `429` with the body `{ "error": "rate_limited" }` and a `Retry-After` header in seconds.
 
 ## Capabilities and parity
 
@@ -67,7 +155,7 @@ Note: some UI-only actions (plan approval flows, billing page interactions) are 
 
 ## Rate limits
 
-The API enforces rate limits per key. When a limit is exceeded, the response is `429 Too Many Requests`. Specific per-plan limits are not yet published — contact support if you encounter sustained rate-limiting.
+The API enforces rate limits. When a limit is exceeded, the response is `429 Too Many Requests` with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. Specific per-plan limits are not yet published — contact support if you encounter sustained rate-limiting.
 
 ## Streaming
 

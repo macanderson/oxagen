@@ -46,7 +46,10 @@ function MermaidContent({ chart }: { chart: string }) {
     securityLevel: "loose",
     fontFamily: "inherit",
     themeCSS: "margin: 1.5rem auto 0;",
-    theme: resolvedTheme === "dark" ? "dark" : "default",
+    // `neutral` is Mermaid's grayscale theme, the nearest built-in to the
+    // house ink/paper palette. The house tokens themselves are oklch(), which
+    // Mermaid's colour parser rejects, so they cannot be passed as themeVariables.
+    theme: resolvedTheme === "dark" ? "dark" : "neutral",
   });
 
   const { svg, bindFunctions } = use(

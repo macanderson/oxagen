@@ -9,45 +9,44 @@ Oxagen is designed SOC 2-first. The controls described here are architectural pr
 
 ### CC6.1 — Access control policies and procedures
 
-Oxagen enforces role-based access control through a single IAM resolver that runs at the `invoke()` boundary. Every capability invocation is evaluated against:
+Oxagen enforces role-based access control through a single IAM resolver that runs at the `invoke()` boundary. On Enterprise organizations, and for every agent principal on any plan, a capability call is decided by:
 
-1. Workspace-level explicit grants (deny first, then allow).
-2. Org-enforced grants (policy-locked; workspace cannot override).
-3. Role-inherited grants.
-4. Default-deny (no grant = denied).
+1. The principal's role grants for the capability — across roles, deny wins over require-approval, which wins over allow.
+2. The system org Owner role, if no role grant decided.
+3. The capability's declared `defaultEffect` — `deny` for most capabilities.
 
-Access policies are configured under **Organization → Access → Policies**. Policies carry an `enforced` flag — enforced policies cannot be overridden by workspace administrators.
+On Free, Build, and Scale, human and API-key calls are allowed at the IAM layer and recorded with `tier_gate` as the deciding rule. The resolver also contains rules for workspace grants and org-enforced policies, but their tables were removed, so they decide nothing today; there is no policy editor. Roles and their grants are listed read-only at **Governance → Policies**. See [RBAC and roles](/docs/governance/rbac).
 
-**Auditor evidence:** `capability.invoke_denied` and `capability.invoke_allowed` events in both audit stores for every IAM decision. The resolution trace (which rule caused the decision) is stored alongside each event.
+**Auditor evidence:** `capability.invoke_allowed` and `capability.invoke_denied` events in `security.security_events`. Every IAM decision is also written to ClickHouse `audit_events` with the resolver's trace, which names the rule that decided.
 
 ### CC6.2 — New user provisioning
 
-Users are provisioned through the invite flow (**Organization → Members → Invite member**). Invites require explicit role assignment before they are issued. There is no self-service role escalation path.
+Users are provisioned through the invite flow at **Organization → Members**. An invite cannot be sent without a role (Owner, Admin, Member, or Billing). There is no self-service role escalation path: only an Owner or Admin can change a role. SSO and SCIM provisioning are not available.
 
-**Auditor evidence:** `org.member_invited` and `org.role_changed` events in both audit stores.
+**Auditor evidence:** `org.member_invited` and `org.role_changed` events in `security.security_events`.
 
 ### CC6.3 — Role assignment and modification
 
-Role changes require Owner or Admin permissions (`assertOrgMember` gate). Role assignments are immutable audit records; changes create new records rather than mutating existing ones.
+A role change (`change_member_role`) requires the acting user to hold the Owner or Admin role, checked against their role assignments. The change soft-deletes the previous assignment, stamping who removed it and when, and inserts a new one, so earlier assignments stay on record. A change that would leave the organization without an Owner is refused.
 
 **Auditor evidence:** `org.role_changed` security events.
 
 ### CC6.5 — Access revocation
 
-Force-revoke is available for any session at **Organization → Access → Sessions**. API keys can be revoked at **Organization → Developer → Tokens** (`api_key.revoke` capability). Revocation is immediate — the next request with a revoked token returns 401.
+Owners and Admins can revoke any member's session at **Organization → Access → Sessions**. API keys can be revoked at **Organization → Developer → Tokens** (`revoke_api_key` capability). Revocation is immediate — the next request with a revoked token returns 401.
 
-**Auditor evidence:** `auth.sign_out`, `api_key.revoked` events. Session revocation records carry IP, user-agent, and timestamp.
+**Auditor evidence:** `security.session_revoked` and `api_key.revoked` events. A session revocation record names the acting user, the revoked session id, and the time; it does not record an IP address or user agent.
 
 ### CC6.6 — Authentication mechanisms
 
 Supported authentication factors:
 
-- Email and password (bcrypt hashed, never logged).
+- Email and password, hashed with Better Auth's default password hasher (scrypt); passwords are never logged.
 - Google OAuth and GitHub OAuth (social sign-in).
 
 MFA enforcement, passkeys (WebAuthn), SSO via SAML 2.0/OIDC, and SCIM directory sync are not yet wired. The `org_security_policy` table has an `mfa_required` column, but no middleware enforces it yet and Better Auth's `twoFactor` plugin is not registered.
 
-**Auditor evidence:** `auth.sign_in`, `auth.sign_in_failed`, `auth.token_refreshed`, `auth.password_changed` events for every authentication action.
+**Auditor evidence:** `auth.sign_in`, `auth.sign_in_failed`, and `auth.sign_out` events. `auth.token_refreshed`, `auth.password_changed`, and `auth.email_verified` are reserved names with no emitter yet, so querying them returns nothing.
 
 ### CC6.7 — Data transmission protection
 
@@ -66,32 +65,35 @@ Oxagen is a governance plane, not an execution runtime: it holds no sandbox, no 
 Oxagen maintains two independent audit stores optimized for different query patterns:
 
 - **Postgres `security.security_events`** — relational, queryable, indexed by org and event kind. 7-year retention via monthly RANGE partitions. Used for compliance dashboards and point lookups.
-- **ClickHouse `audit_events`** — `ReplacingMergeTree`, append-only, chain-hash tamper evidence (each row includes a hash of the previous row's hash, forming a verifiable chain). 7-year TTL. Used for high-volume analytics, SIEM export, and tamper verification.
+- **ClickHouse `audit_events`** — `ReplacingMergeTree`, one row per IAM decision, 7-year TTL. Each row stores a SHA-256 chain hash over the previous row's hash (for the same org and capability), its own event id, and the capability, so a removed or inserted row breaks the chain. The hash does not cover the other fields, concurrent calls can fork the chain, and there is no built-in verifier yet.
 
-40 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Adding an event type is a one-file edit; a CI test verifies the database schema matches the source file. The taxonomy covers:
+54 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Adding an event type is a one-file edit; a test fails if the database CHECK constraint drifts from the file. Eight of the 54 are reserved names that nothing emits yet; they are marked below. The taxonomy covers:
 
-- Auth lifecycle: `auth.sign_in`, `auth.sign_in_failed`, `auth.sign_out`, `auth.token_refreshed`, `auth.password_changed`, `auth.email_verified`
+- Auth lifecycle: `auth.sign_in`, `auth.sign_in_failed`, `auth.sign_out`; reserved: `auth.token_refreshed`, `auth.password_changed`, `auth.email_verified`
 - API key lifecycle: `api_key.created`, `api_key.revoked`, `api_key.used`
-- Billing mutations: `billing.access_denied`, `billing.checkout_initiated`, `billing.credits_purchased`, `billing.plan_changed`, `billing.subscription_canceled`, and six additional billing events
+- Billing mutations: `billing.access_denied`, `billing.checkout_initiated`, `billing.credits_purchased`, `billing.plan_changed`, `billing.subscription_canceled`, `billing.budget_updated`, and six additional billing events
 - Capability authz: `capability.invoke_allowed`, `capability.invoke_denied`, `capability.invoke_error`
 - Org management: `org.member_invited`, `org.member_removed`, `org.role_changed`
 - Org lifecycle: `organization.created`, `workspace.created`
-- Plugin governance: `plugin.installed`, `plugin.uninstalled`, `plugin.enabled_changed`, `plugin.denylist_added`, `plugin.denylist_removed`
+- Plugin governance: `plugin.installed`, `plugin.uninstalled`, `plugin.enabled_changed`, `plugin.credential_set`, `plugin.credential_revoked`; reserved: `plugin.denylist_added`, `plugin.denylist_removed` (there is no plugin denylist)
+- Secrets: `secret.revealed`, `secret.exported`, `secret.value_changed`, `secret.key_deleted`
 - Security policy: `security.mfa_policy_updated`, `security.session_revoked`
+- Data planes and model credentials: `data_plane.updated`, `model_credential.set`, `model_credential.revoked`
+- Agent run integrity: `agent_run.event_sequence_conflict`; reserved: `agent_run.forged_decision_reference`, `agent_run.stale_deny_generation`, `agent_run.finalization_grant_misuse`
 - Access review: `access.review_completed`, `access.member_access_confirmed`
 - Privacy / GDPR: `privacy.export_requested`, `privacy.erasure_requested`, `privacy.org_erasure_requested`
 
-**Auditor evidence:** Query `security.security_events` or the ClickHouse `audit_events` table directly. Both stores are queryable from **Organization → Security → Audit**.
+**Auditor evidence:** **Organization → Security → Audit** shows `security.security_events` and exports it as an HMAC-signed CSV or NDJSON file (Owner or Admin, Enterprise plan). ClickHouse `audit_events` is not shown in the app; query it directly.
 
 ### CC7.2 — Security incident monitoring and response
 
-Real-time audit logs are available at **Organization → Security → Audit** filtered by event kind, principal, or time range. Incidents are documented at **Organization → Security → Incidents**. Alert subscriptions are configurable per event kind.
+Real-time audit logs are available at **Organization → Security → Audit** filtered by event kind, principal, or time range. There is no incident register in the app, and no per-event-kind alert subscriptions; the one alert setting is MCP authentication alerts, under **Governance → Policies**.
 
-SIEM export (Splunk, Datadog, S3, JSONL webhook) is not yet available. Audit events can be queried via `POST /v1/audit/log/query` and pulled into an external SIEM on a schedule.
+SIEM export (Splunk, Datadog, S3, JSONL webhook) is not yet available. Audit events can be queried via `POST /v1/{orgSlug}/{workspaceSlug}/audit/log/query` (`query_audit_log`) and pulled into an external SIEM on a schedule.
 
 ### CC7.3 — Security event analysis
 
-Every `capability.invoke_denied` event carries a resolution trace identifying which grant rule caused the denial. This makes access-control investigations deterministic — an auditor can replay any IAM decision from the stored trace.
+Every IAM decision row in ClickHouse `audit_events` carries the resolver's trace, naming the rule that decided (including `tier_gate` on plans where the resolver does not run). An access-control investigation can read why a call was allowed or denied from the stored trace rather than reconstructing it.
 
 ---
 
@@ -109,7 +111,7 @@ Code changes to the audit, IAM, and billing paths require explicit review. The S
 
 ### CC9.1 — Risk assessment
 
-High-risk capabilities (deleting an agent's IAM principal, changing a member's org role, publishing a steering context record or tool declaration) are tagged `riskLevel: high` in the contract registry. At the workspace level, high-risk tools require explicit user approval before they run — the agent pauses the stream, renders an approval card, and waits for the user to confirm or deny. Default-deny applies to high-risk tools in workspace tool policies.
+High-risk capabilities (deleting an agent definition, changing a member's org role, publishing a steering context record or tool declaration) are tagged `riskLevel: high` in the contract registry. Capabilities that declare `requiresApproval` pause the in-app agent's turn and render an approval card; the user confirms or denies, and an unanswered request expires after five minutes. Capabilities that are high-risk, destructive, or approval-required are never admitted to the agent's automatically granted tool set.
 
 ### CC9.2 — Vendor and third-party risk
 
@@ -129,4 +131,4 @@ Audit and security event writes are non-blocking relative to the primary capabil
 
 Oxagen's SOC 2 Type II report is available under NDA for enterprise customers and prospects. Contact sales@oxagen.ai to request a copy.
 
-The compliance dashboard at **Organization → Security → Compliance** provides a real-time view of control coverage and can be exported as a PDF for your own auditors.
+The compliance dashboard at **Organization → Security → Compliance** shows control coverage derived from live signals. It has no export; the exportable evidence is the signed audit log at **Organization → Security → Audit**.

@@ -3,8 +3,6 @@ title: Governance overview
 description: How Oxagen gives your organization centralized control over AI usage, model access, and plugin governance.
 ---
 
-<IllustrationGovernance />
-
 ## The shadow-AI governance problem
 
 When employees use AI without organizational oversight, you lose visibility into what data is being shared, what models are being used, and what actions are being taken on behalf of your organization. Procurement, legal, and security teams are left trying to write policies for tools they cannot see.
@@ -15,7 +13,7 @@ Oxagen solves this by providing a single governed platform. Every AI action — 
 
 Governance at Oxagen is structured around three scopes:
 
-```
+```text
 Organization → governance rails, billing, global policies
    └── Workspace → operational units where agents work
           └── Principal → human, agent, or service account
@@ -27,15 +25,42 @@ Organization → governance rails, billing, global policies
 
 **Principals** are humans, agents, and service accounts (API keys). All three are governed by the same role and grant model. An automated agent's capability grants are as visible and auditable as a human user's.
 
+## What every action passes through
+
+Every capability call — from the app, the REST API, the MCP server, or an agent run — enters the same `invoke()` kernel. The checks run in this order, and the first one that refuses ends the call before the handler runs:
+
+<Mermaid
+  chart={`
+flowchart TD
+  A["invoke(capability, input)"] --> S{"Exposed on this surface?"}
+  S -- no --> SD["surface_denied"]
+  S -- yes --> V{"Input matches contract?"}
+  V -- no --> VI["invalid_input"]
+  V -- yes --> I{"IAM decision"}
+  I -- deny --> D["authz_denied"]
+  I -- "check errored" --> D
+  I -- pending_approval --> P["Access request recorded,<br/>call refused"]
+  I -- allow --> G{"Credit, budget, entitlement<br/>and decision-rule gates"}
+  G -- refused --> R["insufficient_credits,<br/>budget_exceeded, ..."]
+  G -- pass --> H["Handler runs"]
+  H --> O{"Output matches contract?"}
+  O -- no --> IO["invalid_output"]
+  O -- yes --> AU["Security event: allow"]
+  AU --> M["Governed action metered"]
+`}
+/>
+
+Three properties of this path matter for a governance review:
+
+- **An IAM check that cannot be evaluated denies.** A database outage or resolver bug during the check fails closed with `authz_denied`; it never lets the call through.
+- **Approval is a denial with a paper trail.** A `pending_approval` outcome refuses the call now and records an access request (`arq_…`). There is no in-app screen for approving these requests yet.
+- **Every refusal is recorded.** Each denied branch writes a security event with its error code, so the audit log shows attempts, not only successful actions.
+
 ## Key governance controls
 
 ### Role-based access control
 
-Seven built-in roles — four org-scoped (Owner, Admin, Compliance, Billing) and three workspace-scoped (Owner, Member, Viewer) — cover the majority of enterprise access patterns. Custom roles are available via the role builder for finer-grained divisions. See [RBAC and roles](/docs/governance/rbac).
-
-### Org-enforced policies
-
-Any grant can be marked `enforced` at the org level. Enforced policies cannot be overridden by workspace administrators. This is the primary mechanism for "central IT sets the floor, business units tighten within it."
+Seven built-in human roles — four org-scoped (Owner, Admin, Compliance, Billing) and three workspace-scoped (Owner, Member, Viewer) — cover the majority of enterprise access patterns. Agents get three roles of their own (Agent Observer, Agent Contributor, Agent Operator); see [Agent roles](/docs/governance/agent-roles). Roles and their grants are listed read-only under **Governance → Policies**; there is no custom-role builder yet. See [RBAC and roles](/docs/governance/rbac).
 
 ### Plugin allow and deny lists
 
@@ -45,13 +70,9 @@ Every third-party plugin (MCP server, integration, content tool) must be install
 
 Model access is tiered by subscription plan. Workspace administrators can configure default model selection (text, image, and video) for their workspace. Model access can be restricted per workspace — a workspace handling sensitive data can be configured to use only approved models. See [Model governance](/docs/governance/byok-and-models).
 
-### Just-in-time access requests
+### Access reviews
 
-When a user or agent needs a capability they do not have, they can submit a JIT access request (**Organization → Access → Requests**). The request is routed to an approver based on the policy configuration, granted with a TTL, and auto-expired. Every request, grant, and expiry is recorded in the audit log.
-
-### Quarterly access reviews
-
-The grants matrix (**Organization → Access → Grants**) provides a capability × principal view of all current access. It can be filtered by scope (org-wide or per workspace), principal kind (human, agent, service), and capability domain. Export it as CSV for your quarterly access review.
+**Organization → Access → Reviews** lists every member with their role and last activity, with **Confirm** and **Revoke** actions. Each action writes an audit event, so the page doubles as evidence for a quarterly access review.
 
 ## What you cannot do from the app
 

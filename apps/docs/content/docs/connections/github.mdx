@@ -3,8 +3,6 @@ title: Connect GitHub
 description: Authorize Oxagen to ingest governed repository and delivery metadata without uploading your source-code graph.
 ---
 
-<IllustrationConnectionSpot />
-
 ## Overview
 
 The **GitHub connection** lets Oxagen ingest stable provider metadata — repositories,
@@ -48,6 +46,28 @@ imports, or uncommitted state into the workspace graph.
 5. GitHub returns you to Oxagen. You'll see the **installations** available to you.
 6. Pick an installation, then **select the repository** you want to ingest.
 7. Click **Connect**. Oxagen activates the connection and starts the initial sync.
+
+Behind those clicks, the app and the API make these calls. All `connections/*` routes are under `/v1/{orgSlug}/{workspaceSlug}/`. The callback is public: the signed `state` parameter, not a session, is what ties GitHub's redirect back to your workspace.
+
+<Mermaid chart={`
+sequenceDiagram
+  participant App as Oxagen app
+  participant API as Oxagen API
+  participant GH as GitHub
+  App->>API: GET connections/github/status
+  API-->>App: not connected + authorize URL with HMAC-signed state
+  App->>GH: Redirect: Install & Authorize
+  GH->>API: GET /oauth/github/callback with code and state
+  API->>API: Verify state signature and expiry
+  API->>GH: Exchange code for access token
+  API->>API: Encrypt token, store for org and workspace
+  API-->>App: Redirect back to Oxagen
+  App->>API: POST connections (pending_setup)
+  App->>API: GET connections/github/installations
+  App->>API: GET installations/{id}/repositories
+  App->>API: PUT connections/{id}/mappings (activate)
+  API-->>App: Connection active, initial sync queued
+`} />
 
 ## What happens during the initial sync
 
@@ -100,7 +120,7 @@ also trigger a manual **Re-sync** at any time.
 
 | Problem | What to do |
 | --- | --- |
-| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG` or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment — contact your Oxagen admin. |
+| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment — the error names the missing one. Contact your Oxagen admin. |
 | No installations appear after authorizing | Make sure you completed the **Install & Authorize** step on GitHub for the account that owns your repos. |
 | A repository is missing from the list | The Oxagen app may not have access to it. On GitHub, open the Oxagen app's configuration and add the repository, then return to Oxagen. |
 | Sync seems stuck | Large repositories take longer. If it doesn't progress, re-run the sync from the source settings or contact support. |

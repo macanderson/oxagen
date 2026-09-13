@@ -7,15 +7,15 @@ description: Six concrete scenarios where Oxagen solves the most common enterpri
 
 **The problem.** Your security team knows employees are using ChatGPT, Claude.ai, and a dozen other AI tools for work. Some are pasting customer data into public models. Some are building automations with no oversight. You can block these sites — but that just drives the behavior underground and makes your company less competitive. Banning AI is not the answer. Governing it is.
 
-**How Oxagen solves it.** Oxagen gives your employees a capable AI that works within your governance boundaries. One organization. One audit log. One IAM model. Every action — model call, tool invocation, automation — passes through the same `invoke()` boundary, gets IAM-checked against the grant matrix, and produces an immutable audit record in two independent stores.
+**How Oxagen solves it.** Oxagen gives your employees a capable AI that works within your governance boundaries. One organization. One audit log. One IAM model. Every action — model call, tool invocation, automation — passes through the same `invoke()` boundary, is checked against the caller's role grants, and writes a security event to Postgres. Each IAM decision is also written to a hash-chained ClickHouse table.
 
 When an employee uses the Oxagen agent instead of an unsanctioned tool, your security team goes from blind to fully sighted: who asked what, which model answered, what data was involved, and whether the action was authorized. They can answer "what AI actions happened this week?" with a query, not a survey.
 
 **Controls backing this:**
 - Single capability chokepoint: `invoke()` for every action, no alternate path.
-- 40 typed security event kinds in two independent audit stores.
-- Model access restricted to approved models and tiers.
-- Plugin governance: external MCP servers must be installed at org level before any workspace can use them.
+- 54 typed security event kinds in Postgres, plus a ClickHouse record of every IAM decision.
+- Model access set by subscription tier (see [Model governance](/docs/governance/byok-and-models)).
+- Plugin installs are workspace-scoped and recorded as `plugin.installed` events. There is no org-level plugin allowlist or denylist yet.
 
 ---
 
@@ -25,16 +25,16 @@ When an employee uses the Oxagen agent instead of an unsanctioned tool, your sec
 
 **How Oxagen solves it.** Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The controls your auditors need are built into the architecture:
 
-- **CC6 (access control):** Role-based IAM with default-deny, org-enforced policies, JIT access requests, and force-revoke. Every IAM decision produces a structured audit record with a resolution trace — your auditor can see exactly which rule caused a denial.
-- **CC7 (monitoring):** Two independent audit stores. Postgres `security.security_events` (7-year retention, queryable for compliance dashboards). ClickHouse `audit_events` (chain-hash tamper evidence — any deletion or mutation in the chain is detectable). 40 typed event kinds covering auth, billing, IAM, and every capability invocation.
-- **CC9 (risk mitigation):** High-risk capabilities (code execution) require explicit user approval before running. Approval requests are recorded. Sandboxed execution in Firecracker microVMs prevents code from escaping its tenant boundary.
+- **CC6 (access control):** Role-based IAM. On Enterprise, every capability call is resolved against the caller's role grants, and a principal with no matching grant gets the capability's declared default (deny for most). Owners and Admins can revoke any session at **Organization → Access → Sessions** and any API key at **Organization → Developer → Tokens**. Every IAM decision writes an audit row with the resolver's trace, so your auditor can see which rule decided. Org-enforced policies and a screen for approving access requests are not available yet.
+- **CC7 (monitoring):** Two audit stores. Postgres `security.security_events` holds 54 typed event kinds — auth, API keys, billing, capability calls, org membership, secrets, and privacy requests — in monthly partitions kept for 7 years. ClickHouse `audit_events` holds every IAM decision for 7 years; each row's hash is chained to the previous row for the same org and capability, so a removed or inserted row breaks the chain.
+- **CC9 (risk mitigation):** Capabilities that declare `requiresApproval` pause the in-app agent's turn until the user approves; the request is recorded and expires after five minutes. Oxagen governs agents but does not run their code, so there is no execution sandbox for it to hold (ADR-043).
 
-The compliance dashboard at **Organization → Security → Compliance** exports a control coverage report. Your auditor gets artifacts, not assurances.
+**Organization → Security → Compliance** shows a SOC 2 control catalog whose statuses come from live signals: whether audit events are flowing, the MFA policy, RLS enforcement, and API key age. The artifact you hand an auditor is the audit log itself: **Organization → Security → Audit** downloads it as an HMAC-signed CSV or NDJSON file (Owner or Admin, Enterprise plan).
 
 **Controls backing this:**
-- `capability.invoke_allowed` / `capability.invoke_denied` on every action.
-- Chain-hash tamper evidence in ClickHouse — verifiable programmatically.
-- SOC 2 compliance dashboard with export.
+- `capability.invoke_allowed` / `capability.invoke_denied` security events on capability calls.
+- Hash-chained IAM decisions in ClickHouse. The chain is stored; there is no built-in verifier yet.
+- Signed audit log export from **Organization → Security → Audit**.
 - An automated integration test suite proving tenant isolation at the database layer.
 
 ---
@@ -45,18 +45,18 @@ The compliance dashboard at **Organization → Security → Compliance** exports
 
 **How Oxagen solves it.** Workspaces are the unit of isolation. Each team gets its own workspace with its own member roster, knowledge graph, agent configurations, and tool policy. Workspace data is isolated at the Postgres RLS layer — a query against Finance's data will never return Marketing's rows, regardless of what code is written.
 
-The org sets the outer governance rails. Each workspace tightens within them. A workspace handling regulated data (HIPAA, PCI) can deny capabilities the org otherwise allows. It cannot expand beyond what the org permits.
+Access inside each workspace follows roles. Org roles (Owner, Admin, Compliance, Billing) apply across the organization; workspace roles (Owner, Member, Viewer) apply per workspace, so one person can be a Member in Engineering and a Viewer in Finance. Org-enforced policies that lock a capability for every workspace, and per-workspace capability overrides, are not available yet.
 
 **Setting up for multiple business units:**
-1. Create a workspace per team (**Organization → Developer → Workspaces** or the `workspace.create` API).
-2. Set org-level enforced policies that apply everywhere (high-risk tool approval, model tier restrictions, plugin denylist).
-3. Assign workspace owners for each team — they manage their workspace's grants within the org's bounds.
-4. Configure SSO and SCIM so that IdP group membership automatically populates the right workspaces.
+1. Create a workspace per team from the workspace switcher (**New workspace**), or with `create_workspace` over the API or MCP.
+2. Invite people and set their org role at **Organization → Members**. Add them to a workspace with `send_workspace_invite` over the API or MCP.
+3. Give each workspace its own spending limit at **Workspace settings → Spend Budgets**.
+4. SSO and SCIM directory sync are not available yet, so membership is managed by invitation.
 
 **Controls backing this:**
 - Postgres RLS with `FORCE ROW LEVEL SECURITY` — database-enforced, not application-enforced.
 - Neo4j and ClickHouse scoped at the session seam — fail-closed, not fail-open.
-- Org-enforced policies with workspace-level tighten-but-not-expand model.
+- Workspace-scoped role assignments and workspace-scoped plugin installs.
 - An automated integration test suite proves cross-tenant queries return zero rows.
 
 ---
@@ -65,21 +65,21 @@ The org sets the outer governance rails. Each workspace tightens within them. A 
 
 **The problem.** Different teams have signed up for different AI providers. Engineering uses Anthropic. Data science uses Azure OpenAI. Finance insists on a private endpoint. You have three separate billing relationships, three separate usage logs, and three separate governance policies. When your CISO asks "which models have access to customer data?", there is no single answer.
 
-**How Oxagen solves it.** Oxagen routes all inference through one gateway with one governance model. The Vercel AI Gateway sits between Oxagen and the model providers — your company holds no provider API keys in application code or environment variables. You can bring your own keys at the workspace level (BYOK on Scale tier) for custom endpoints or private Azure/Bedrock deployments, and they still flow through the same IAM, audit, and metering layer.
+**How Oxagen solves it.** Oxagen routes all inference through one gateway with one governance model. The Vercel AI Gateway sits between Oxagen and the model providers — your company holds no provider API keys in application code or environment variables. An org Owner or Admin can store the organization's own OpenRouter or Vercel AI Gateway key instead. The in-app agent's completions then run on that key, and every call still passes through the same IAM, audit, and metering layer.
 
 **What BYOK enables:**
-- Workspace-level API keys for Anthropic, OpenAI, Azure OpenAI, AWS Bedrock, or custom inference endpoints.
-- Keys are encrypted at rest with AES-256-GCM.
-- Model access is restricted to the key's approved models — a workspace configured for only Haiku cannot accidentally use Opus.
-- All inference, regardless of the provider key used, produces the same audit record.
+- One organization-level key, for OpenRouter or the Vercel AI Gateway. Keys for private Azure or Bedrock endpoints are not supported.
+- Keys are envelope-encrypted at rest with AES-256-GCM and are never readable back.
+- Tokens on your key are reported in full and billed at zero; governed actions are billed the same either way.
+- Storing or removing the key writes a `model_credential.set` or `model_credential.revoked` security event.
 
 **What you cannot do with BYOK:** bypass the IAM check or the audit log. The `invoke()` boundary fires regardless of which key handles the inference.
 
 **Controls backing this:**
-- `workspace.model.settings.write` capability (Admin or Owner required).
-- AES-256-GCM encryption of stored keys.
+- `set_model_credential` capability (org Owner or Admin only; no workspace role can reach it).
+- AES-256-GCM envelope encryption of stored keys.
 - Model handle resolution via `modelIdOf()` — symbolic handles, not hard-coded provider slugs.
-- Every inference call produces a ClickHouse `tool_invocations` row regardless of provider.
+- `model_credential.set` / `model_credential.revoked` events in `security.security_events`.
 
 ---
 
@@ -89,9 +89,9 @@ The org sets the outer governance rails. Each workspace tightens within them. A 
 
 **How Oxagen solves it.** The credit ledger is the single source of truth for AI spend. 1 credit = $0.01. Every model call, tool invocation, and image generation debits credits from the org's balance atomically — no double-spend, no free rides past zero balance. The credit balance enforces a hard stop: when an org's credits reach zero, subsequent agent calls return 402 before touching any model.
 
-**Usage analytics** in **Organization → Billing → Usage** breaks down credit consumption by workspace, by agent, and by capability domain (LLM input, LLM output, image generation, tool calls) over rolling 30-day windows.
+**Usage analytics** in **Organization → Billing → Usage** breaks down usage by model, by surface, and by workspace, over the last 7, 30, or 90 days or month to date.
 
-The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit trail for all balance mutations (SOC 2 requirement). `billing.credit_balances` is a real-time cached mirror enforced with a non-negative `CHECK (balance_cents >= 0)` constraint. Finance can export usage data from **Organization → Billing → Usage** for cost attribution.
+The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit trail for all balance mutations (SOC 2 requirement). `billing.credit_balances` is a real-time cached mirror enforced with a non-negative `CHECK (balance_cents >= 0)` constraint. The usage page has no export button; Finance can pull the same breakdown with `get_usage_breakdown` over the API or MCP.
 
 **Controls backing this:**
 - `billing.credit_ledger` — immutable append-only audit trail for all balance mutations.
@@ -102,27 +102,24 @@ The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit 
 
 ---
 
-## Quarterly access reviews with one click
+## Quarterly access reviews
 
 **The problem.** Your access review process is a quarterly nightmare: export the user list, cross-reference it with HR, identify people who changed roles or left, update permissions manually across every tool. The process is slow, error-prone, and always at least 90 days behind reality.
 
-**How Oxagen solves it.** The grants matrix at **Organization → Access → Grants** is a live capability × principal view of all current access. Toggle between org-wide and per-workspace scope. Filter by principal kind (human, agent, service), domain, and outcome. Export it as CSV.
+**How Oxagen solves it.** **Organization → Access → Reviews** lists every member with their role and when they were last active. Each row has **Confirm**, which records that the access was reviewed and kept, and **Revoke**, which removes the member. Both write audit events, so the review leaves its own evidence.
 
-With SCIM configured, deprovisioning a user in your IdP automatically suspends them in Oxagen — the access review becomes a spot-check, not a manual reconciliation.
+There is no capability × principal grants matrix and no SCIM deprovisioning yet. To see which capabilities each role grants, open **Governance → Policies**, or call `list_iam_roles` over the API or MCP.
 
 **Conducting a quarterly review:**
 
-1. Export the grants matrix for the quarter's review period.
-2. Cross-reference with your HR system (or query `org.member_removed` events in the audit log for the period).
-3. For any stale access: revoke grants directly in the matrix or use `org.member.remove` via the API for bulk operations.
-4. Review JIT access grants issued in the period (**Organization → Access → Requests** → filter by date range). Confirm they have all expired.
-5. Run a compliance dashboard export (**Organization → Security → Compliance**) as the artifact for your auditor.
+1. Open **Organization → Access → Reviews**.
+2. Cross-reference the member list with your HR system, or query `org.member_removed` and `org.role_changed` events for the period with `query_audit_log`.
+3. **Confirm** each member whose access is still correct. **Revoke** anyone who should no longer have access, or change their role at **Organization → Members**.
+4. Export the audit log for the period from **Organization → Security → Audit** (signed CSV or NDJSON) as the artifact for your auditor.
 
-**For automated reviews:** the grants matrix is queryable via the API. Build a script that exports grants, cross-references your HR system, and flags stale access for human review — then uses `org.member.role.change` to clean up.
+**For automated reviews:** there is no capability that lists members yet. A script can pull membership and role events with `query_audit_log`, cross-reference your HR system, and clean up with `change_member_role` or `remove_org_member` over the API or MCP.
 
 **Controls backing this:**
-- `org.member_removed`, `org.role_changed` events in both audit stores.
-- JIT access with TTL and auto-expiry.
-- SCIM provisioning — deprovisioning is automatic if configured.
-- Grants matrix: queryable and exportable via **Organization → Access → Grants** in the app.
-- Compliance dashboard at **Organization → Security → Compliance**.
+- `access.member_access_confirmed`, `access.review_completed`, `org.member_removed`, and `org.role_changed` events in `security.security_events`.
+- Last-owner guard: a role change that would leave the organization without an Owner is refused.
+- Signed audit log export at **Organization → Security → Audit**.

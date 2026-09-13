@@ -1,9 +1,7 @@
 ---
 title: Model governance
-description: Which models are available on each plan, how workspace model defaults work, and how to restrict model access per workspace.
+description: Which models are available on each plan, how workspace model defaults work, and who pays for tokens.
 ---
-
-<IllustrationByokSpot />
 
 ## Model access by plan
 
@@ -23,15 +21,23 @@ All model calls are metered in credits at the per-token rate defined in the bill
 
 ## Workspace model defaults
 
-Workspace administrators can configure default model selection for their workspace via `update_model_settings`. This sets the default text model (and tier), image model, and video model applied to all agents running in that workspace, overriding individual user preferences.
+A workspace Owner or Admin sets the workspace's default text tier and default text model with `update_model_settings`. Image and video defaults no longer exist; ADR-043 removed media generation. A user can also set their own defaults.
 
 **To configure workspace model defaults:**
 
-1. Go to **Workspace settings → Models**.
-2. Set the default text model tier and model name, image model, and video model as appropriate.
-3. Save. Agents in this workspace will use these defaults unless a playbook explicitly overrides them.
+1. Go to **Workspace settings → Agent Defaults**.
+2. Set the default text tier, the default text model, or both.
+3. Save.
 
-Different workspaces can use different model defaults — for example, a cost-sensitive workspace can be pinned to Haiku while a high-capability workspace uses Sonnet.
+Tier and model resolve on two separate chains, workspace first, then user, and a chat turn then prefers a model over a tier:
+
+```text
+model = workspace model ?? user model
+tier  = workspace tier  ?? user tier
+turn uses model if set, otherwise tier
+```
+
+So a workspace that sets only a tier does not override a user who picked a specific model. To pin a workspace to one model, set the default **model**, not only the tier.
 
 ## The assistant runs on Stella
 
@@ -55,6 +61,31 @@ An organisation can pay its model vendor directly instead of buying tokens throu
 
 Governed actions are billed the same way either way. The key only changes who pays for tokens.
 
+Oxagen decides who pays once per turn, before any model call, and the same answer picks the key the call is made on and whether the tokens are billed:
+
+<Mermaid
+  chart={`
+flowchart TD
+  T["Assistant turn starts"] --> K{"Stored key that is active<br/>and can be decrypted?"}
+  K -- "credential read fails" --> X["Turn fails before any spend"]
+  K -- "no key, disabled, or<br/>cannot be decrypted" --> PF["Oxagen's key pays"]
+  K -- yes --> OF["Your key pays"]
+  PF --> G{"Org not suspended and<br/>credit balance above zero?"}
+  OF --> G
+  G -- no --> R1["402: refused"]
+  G -- yes --> W{"Who pays?"}
+  W -- "your key" --> RUN1["Turn runs<br/>tokens billed at zero"]
+  W -- "Oxagen's key" --> S{"Month's assistant usage<br/>at or over the cap?"}
+  S -- yes --> R2["402: assistant_spend_cap"]
+  S -- no --> RUN2["Turn runs<br/>tokens billed as assistant usage"]
+`}
+/>
+
+Two branches are easy to miss:
+
+- **A stored key that cannot be used falls back to Oxagen's key.** If an operator has disabled the key, or the server cannot decrypt it, the turn runs on Oxagen's key and is billed as assistant usage rather than failing on your key. A failure to *read* the credential is the opposite case: the turn fails, so an outage never quietly moves you onto Oxagen's billed key.
+- **Your own key still needs a positive credit balance.** Tool calls and other governed actions consume credits whoever pays for tokens, so the credit check runs on every turn.
+
 **Two providers today:**
 
 - **OpenRouter.** One key reaches every model in the catalog. OpenRouter does not serve embeddings, so under an OpenRouter key embeddings stay on Oxagen's key and are billed as assistant usage.
@@ -71,28 +102,87 @@ Direct Anthropic and OpenAI keys are not supported yet.
 
 Setting a new key replaces the old one. Clearing the key returns your organisation to Oxagen's key.
 
-**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). A turn that would cross the cap is refused before it starts, and the message names the cap. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
+**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). Once the month's platform-paid usage reaches the cap, the next turn is refused before it starts, and the message names the cap. The check runs when a turn starts, so the turn that crosses the cap is allowed to finish. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
 
 **From the API.** The same settings are available at `/v1/:org/:workspace/org/model-credential`:
 
 - `PUT /v1/:org/:workspace/org/model-credential` with `{ "provider": "openrouter" | "gateway", "apiKey": "..." }` stores or replaces the key.
 - `GET` returns the redacted view. `DELETE` clears the key. `POST .../verify` tests a key before you store it, or tests the stored key when the body is `{}`.
 
+Test a key, then store it:
+
+```bash tab="curl"
+BASE="https://api.oxagen.sh/v1/$ORG_SLUG/$WORKSPACE_SLUG/org/model-credential"
+
+# Ask the vendor whether it accepts the key. Spends no tokens.
+curl -X POST "$BASE/verify" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"provider\": \"openrouter\", \"apiKey\": \"$OPENROUTER_API_KEY\"}"
+
+# Store it. Replaces any key already stored.
+curl -X PUT "$BASE" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"provider\": \"openrouter\", \"apiKey\": \"$OPENROUTER_API_KEY\"}"
+```
+
+```ts tab="TypeScript"
+const base = `https://api.oxagen.sh/v1/${orgSlug}/${workspaceSlug}/org/model-credential`;
+const headers = {
+  Authorization: `Bearer ${process.env.OXAGEN_API_KEY}`,
+  "Content-Type": "application/json",
+};
+const body = JSON.stringify({
+  provider: "openrouter",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+const check = await (
+  await fetch(`${base}/verify`, { method: "POST", headers, body })
+).json();
+if (!check.ok) throw new Error(`Vendor refused the key: ${check.error}`);
+
+const stored = await (await fetch(base, { method: "PUT", headers, body })).json();
+```
+
+```python tab="Python"
+import os
+import requests
+
+base = f"https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/org/model-credential"
+headers = {"Authorization": f"Bearer {os.environ['OXAGEN_API_KEY']}"}
+body = {"provider": "openrouter", "apiKey": os.environ["OPENROUTER_API_KEY"]}
+
+check = requests.post(f"{base}/verify", headers=headers, json=body).json()
+if not check["ok"]:
+    raise RuntimeError(f"Vendor refused the key: {check['error']}")
+
+stored = requests.put(base, headers=headers, json=body).json()
+```
+
+```json tab="Response"
+{
+  "configured": true,
+  "provider": "openrouter",
+  "status": "active",
+  "keyHint": "a1b2",
+  "lastVerifiedAt": null,
+  "rotatedAt": "2026-09-13T17:02:11.000Z"
+}
+```
+
+The verify call returns `ok`, `provider`, `latencyMs`, and `error`, where `error` is the vendor's own reason when it refuses the key. The store call returns the redacted view above. `lastVerifiedAt` is `null` on a freshly stored key: storing does not verify, so send `POST .../verify` with `{}` afterwards to verify the stored key and stamp it.
+
 Every set and clear is recorded in the audit log. The key itself never appears there.
 
 ## Restricting model access per workspace
 
-Workspace administrators can restrict which models are available to agents in their workspace, regardless of what the org subscription tier allows. This is useful for:
-
-- Preventing high-cost models from being used in cost-sensitive workspaces.
-- Restricting model access in workspaces that handle sensitive data to only pre-approved models.
-- Enforcing consistent model behavior across a team.
-
-Model restrictions are configured at **Workspace settings → Models → Allowed models**. Agents attempting to use a disallowed model receive a capability denied response, which is recorded in the audit log.
+There is no per-workspace model allowlist yet: no setting blocks a model the subscription tier allows. The closest control today is the workspace default — a workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`) — which chooses a model but does not forbid others.
 
 ## Model governance and org-enforced policies
 
-Org administrators can set enforced policies on model access at **Organization → Access → Policies**. An enforced policy cannot be overridden at the workspace level. For example, an org can enforce that `agent.definition.suggest` only runs on Haiku (lower cost, lower capability) — workspaces cannot upgrade the model used for a specific capability without an org Admin changing the policy.
+Org-enforced policies on model access are not available. The IAM resolver has no live policy tier, and there is no policy editor, so an org cannot pin a capability to a particular model or stop a workspace from choosing a different one. What an org controls today is the subscription tier, which decides the models on offer, and who pays for tokens (see [Bring your own key](#bring-your-own-key-byok)).
 
 ## Model handle stability
 

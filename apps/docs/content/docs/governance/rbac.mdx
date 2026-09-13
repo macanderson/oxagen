@@ -1,9 +1,7 @@
 ---
 title: RBAC and roles
-description: Oxagen's role-based access control model — built-in roles, the IAM resolution chain, and how org policies interact with workspace grants.
+description: Oxagen's role-based access control model — built-in roles, how the IAM resolver decides a capability call, and where to see who holds what.
 ---
-
-<IllustrationRbacSpot />
 
 ## Built-in roles
 
@@ -30,36 +28,36 @@ Workspace roles are assigned per workspace. A user can be a **Member** in one wo
 
 ## IAM resolution order
 
-When a principal invokes a capability, the IAM resolver evaluates the following chain in order:
+When a principal invokes a capability, the IAM resolver (`packages/oxagen/src/iam/resolve.ts`) decides it. This is the path a live request takes today:
 
-```
-1. Workspace deny (explicit, in this workspace)          → DENY
-2. Org enforced deny (locked; workspace cannot override) → DENY
-3. Workspace allow (explicit, in this workspace)         → ALLOW
-4. Org enforced allow (locked)                           → ALLOW
-5. Workspace require-approval                            → PENDING
-6. Org default grant + workspace silence                 → inherit org
-7. Role-inherited grant                                  → inherit role
-7.5. Org owner super-user — if the principal holds the
-     system-provisioned org Owner role (isSystemDefault=true),
-     ALLOW unconditionally. Explicit deny (rules 1, 2, 6, 7)
-     still takes precedence. User-created roles named "Owner"
-     do not inherit this.                                → ALLOW
-8. No grant found → contract defaultEffect
-   (allow / deny / pending_approval depending on the capability).
-   Most capabilities are default-deny; some are default-allow.
-```
+<Mermaid
+  chart={`
+flowchart TD
+  T{"Enterprise org?"} -- "no, human or API key" --> TG["ALLOW<br/>recorded as tier_gate"]
+  T -- "yes, or any agent principal" --> R7{"Role grants for<br/>this capability?"}
+  R7 -- "any deny" --> D7["DENY"]
+  R7 -- "else any require approval" --> P7["PENDING APPROVAL"]
+  R7 -- "else allow" --> A7["ALLOW"]
+  R7 -- none --> R75{"System org Owner role?"}
+  R75 -- yes --> A75["ALLOW"]
+  R75 -- no --> R8["Contract defaultEffect"]
+`}
+/>
 
-Two properties are non-negotiable:
+What the chart shows and leaves out:
 
-- **Workspaces can never expand what org has locked.** An org `enforced` policy is the locking primitive. A workspace admin cannot grant capabilities beyond what the org allows.
-- **Workspaces can tighten.** If the org allows a workspace graph-search capability, a workspace handling sensitive data can still override that capability to `deny` or `require-approval`.
+- **The resolver runs for Enterprise organizations.** On Free, Build, and Scale, a human or API-key call is allowed at the IAM layer without consulting grants, and the audit record names `tier_gate` as the deciding rule. Surfaces that must stay Owner- or Admin-only on those tiers carry their own checks (see [Gate functions](#gate-functions)). Agent principals skip the tier gate and are resolved on every plan.
+- **An API key acts as the user who created it.** If that user cannot be resolved in the org, the call is denied outright rather than falling through to the contract default.
+- **Across roles, deny wins.** A principal in several roles with conflicting grants for one capability gets deny over require-approval over allow. A role grant is decided on its effect alone; conditions such as time windows or IP ranges are not evaluated.
+- **Owner is a floor, not an override.** The Owner rule applies only to the system-provisioned org Owner role (`isSystemDefault=true`), and only when no role grant decided. An explicit deny on one of the principal's roles still binds an Owner; a user-created role named "Owner" gets nothing from this rule.
+- **The last step is per capability.** Most contracts declare `defaultEffect: "deny"`; some declare `allow` or `require_approval`.
+- **Direct grants and org policies are not live.** The resolver still contains rules for workspace grants, org-enforced policies and org grants (rules 1–6), but the tables behind them were removed, so they decide nothing on a live request. The one exception is internal: when the IAM tables are missing or an API key's creator cannot be resolved, the resolver is handed a synthetic org-enforced deny so the call fails closed.
 
 The resolver returns a structured trace alongside the decision. The trace is stored in the audit record and is viewable in **Organization → Security → Audit** for every `capability.invoke_denied` event.
 
 ## Capability domains
 
-Capabilities are organized into domains. The grants matrix at **Organization → Access → Grants** groups rows by domain:
+Capabilities are organized into domains. Role grants are listed by domain:
 
 | Domain | Example capabilities |
 |---|---|
@@ -73,38 +71,38 @@ Capabilities are organized into domains. The grants matrix at **Organization →
 
 ## Agents as principals
 
-Every agent configuration is also a principal with its own grant matrix. When an agent runs a triggered or scheduled job, it uses its own grants — it cannot access capabilities its principal has not been granted, regardless of which human defined the agent.
+Every agent configuration is also a principal with its own grant matrix. An agent run is resolved against two principals at once — the agent's own, and the authenticated human who started the run — and the more restrictive outcome wins:
 
-When a human is actively in chat, the agent runs in delegated context: it borrows the human's effective grants for the session. Both the human and agent principals are recorded in the audit event.
+<Mermaid
+  chart={`
+flowchart LR
+  C["Agent calls a capability"] --> AG["Resolve the agent principal<br/>(rules 1–8)"]
+  C --> HU["Resolve the initiating human<br/>(rules 1–8)"]
+  AG --> M{"Merge: deny beats<br/>pending approval beats allow"}
+  HU --> M
+  M --> OUT["Effective outcome"]
+`}
+/>
+
+The human side is the user who started this run, never the agent's creator — otherwise anyone able to trigger an agent would borrow its creator's access. A run with no initiating user resolves the human side as a principal with no roles and no grants, which can only narrow the result. A subagent is further narrowed by its parent run's scope. Both principals are recorded in the audit event.
 
 Agents get their own roles, separate from the human ones above — three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
 
 This is what makes AI automation auditable: every action is attributable to either a human chain of custody or a configured service identity.
 
-## Configuring grants
+## Seeing and changing access
 
-### Grants matrix
+### Roles and grants
 
-**Organization → Access → Grants** presents a capability × principal matrix. Toggle the scope (Org-wide or Per workspace) to manage different layers.
+**Governance → Policies** lists every role in the org and the capability grants each one carries. The list is read-only: there is no in-app editor for roles, custom roles, or grants yet, and changes are made by provisioning. A member's org role is changed from **Organization → Members**.
 
-Cell states:
-- **Granted** — explicit allow at this scope.
-- **Inherited** — no override at this scope; inheriting from org or role.
-- **Denied** — explicit deny at this scope.
-- **Require approval** — action will pause for human approval.
-- **Locked** — org-enforced policy; workspace cannot change.
+### Approval requests
 
-### Custom roles
+When the resolver returns `require approval`, the call is refused with `pending_approval` and the kernel records an access request (`arq_…`) naming the principal and capability. There is no in-app screen for approving these requests yet.
 
-**Organization → Access → Roles** allows you to define custom roles with specific capability grants. Custom roles can be used as the starting point for any principal (human, agent, or service account).
+### Access reviews
 
-### Policies
-
-**Organization → Access → Policies** allows you to define conditional grants with time windows, IP allowlists, and attribute predicates. Set the `enforced` flag to lock a policy so workspaces cannot override it.
-
-### Just-in-time access
-
-Principals can request access to capabilities they do not currently have via **Organization → Access → Requests**. Requests are routed to approvers defined in the policy configuration. Approved requests are time-limited (TTL configurable per policy) and auto-expire.
+**Organization → Access → Reviews** lists every member with their role and last activity. **Confirm** records `access.member_access_confirmed`; **Revoke** removes the member and records `org.member_removed` and `access.review_completed`. Use it as the evidence for a quarterly access review.
 
 ## Gate functions
 
