@@ -36,14 +36,20 @@ export function AssistantLauncher({
       </span>
       <span className="min-w-0 flex-1">
         <b className="block text-[13px] font-semibold">{t("launcher")}</b>
-        <span
-          className={`block truncate font-mono text-[11px] ${
-            view.state === "up" ? "text-sidebar-nav-label-fg" : "text-error"
-          }`}
-        >
-          {view.state === "up"
-            ? t("ready", { model: view.model })
-            : t("engineDown")}
+        {/* The status words stay in the label ink; the red is carried by the dot.
+            The kit's --error is 4.4:1 on the panel, under the 4.5:1 floor for 11px text. */}
+        <span className="flex items-center gap-1.5 truncate font-mono text-[11px] text-sidebar-nav-label-fg">
+          {view.state === "up" ? null : (
+            <span
+              aria-hidden="true"
+              className="size-1.5 flex-none rounded-full bg-error"
+            />
+          )}
+          <span className="truncate">
+            {view.state === "up"
+              ? t("ready", { model: view.model })
+              : t("engineDown")}
+          </span>
         </span>
       </span>
       <ChevronRight

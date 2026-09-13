@@ -1,9 +1,21 @@
 // The assistant flyout (spec §19 "Assistant panel": collapsed, open, engine
 // down, phone; plan W9: the down state is read from the port).
+import type { Page } from "@playwright/test";
 import { expect, expectNoAxeViolations, test } from "./support";
 
 const OVERLAY_AXE = { exclude: ["[data-base-ui-focus-guard]"] };
 const FLEET = "/acme/core-platform";
+
+/** Wait for the flyout's translate/opacity transition to finish before measuring colours. */
+async function settled(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page
+        .getByTestId("assistant-flyout")
+        .evaluate((el) => el.getAnimations().length),
+    )
+    .toBe(0);
+}
 
 test.describe("assistant flyout", () => {
   test("collapsed: the host is mounted but inert and out of view", async ({
@@ -31,16 +43,16 @@ test.describe("assistant flyout", () => {
     await expect(launcher).toHaveAttribute("aria-expanded", "true");
     await expect(flyout.getByTestId("assistant-ready")).toBeVisible();
     // It flies out beside the rail, over the page, without moving the page.
+    // The box is read once the 300ms fly-out has landed.
     const rail = await page
       .getByRole("complementary", { name: "Sidebar" })
       .boundingBox();
-    const panel = await flyout.boundingBox();
     expect(rail).not.toBeNull();
-    expect(panel).not.toBeNull();
-    if (rail && panel)
-      expect(Math.round(panel.x)).toBeGreaterThanOrEqual(
-        Math.round(rail.x + rail.width) - 1,
-      );
+    const railEdge = Math.round((rail?.x ?? 0) + (rail?.width ?? 0)) - 1;
+    await expect
+      .poll(async () => Math.round((await flyout.boundingBox())?.x ?? -1))
+      .toBeGreaterThanOrEqual(railEdge);
+    await settled(page);
     await expect(
       flyout.getByRole("button", { name: "Close the assistant" }),
     ).toBeFocused();
@@ -87,6 +99,7 @@ test.describe("assistant flyout", () => {
     await page.getByTestId("assistant-launcher").click();
     const down = page.getByTestId("assistant-engine-down");
     await expect(down).toBeVisible();
+    await settled(page);
     await expect(down).toContainText("The Stella engine is not answering");
     await expect(down).toContainText("stella serve returned 503");
     await expect(
@@ -120,6 +133,7 @@ test.describe("assistant flyout", () => {
       .click();
     const flyout = page.getByRole("complementary", { name: "Assistant" });
     await expect(flyout).toBeVisible();
+    await settled(page);
     const box = await flyout.boundingBox();
     expect(box?.width).toBeGreaterThanOrEqual(399);
     await expectNoAxeViolations(page, OVERLAY_AXE);

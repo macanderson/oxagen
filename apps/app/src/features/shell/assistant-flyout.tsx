@@ -40,10 +40,12 @@ export function AssistantFlyout({ engine }: { engine: Read<AssistantEngine> }) {
       onKeyDown={(e) => {
         if (e.key === "Escape") setAssistantOpen(false);
       }}
-      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-panel-bg pb-[env(safe-area-inset-bottom)] text-app-panel-fg shadow-2xl transition-[translate,opacity,visibility] duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(430px,calc(100vw-var(--sidebar-width)-56px))] ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-panel-bg pb-[env(safe-area-inset-bottom)] text-app-panel-fg shadow-2xl duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(430px,calc(100vw-var(--sidebar-width)-56px))] ${
         assistantOpen
-          ? "visible translate-x-0 opacity-100"
-          : "invisible -translate-x-full opacity-0"
+          ? // Visible at once, so the close button can take focus on open…
+            "visible translate-x-0 opacity-100 transition-[translate,opacity]"
+          : // …and hidden only once the fly-back has finished.
+            "invisible -translate-x-full opacity-0 transition-[translate,opacity,visibility]"
       }`}
     >
       <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-3">
@@ -58,10 +60,11 @@ export function AssistantFlyout({ engine }: { engine: Read<AssistantEngine> }) {
             {t("badge")}
           </span>
         ) : (
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded border border-current px-1.5 py-0.5 text-[11px] text-error">
+          // Red border and dot, label-ink words: --error is 4.4:1 on the panel at 11px.
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded border border-error px-1.5 py-0.5 text-[11px] text-foreground">
             <span
               aria-hidden="true"
-              className="size-1.5 rounded-full bg-current"
+              className="size-1.5 rounded-full bg-error"
             />
             {t("engineDown")}
           </span>

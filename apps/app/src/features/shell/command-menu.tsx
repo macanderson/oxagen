@@ -23,14 +23,15 @@ export function CommandMenu({ data }: { data: ShellData }) {
     <Dialog.Root open={commandOpen} onOpenChange={setCommandOpen}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim" />
-        {commandOpen ? (
-          <CommandPalette
-            data={data}
-            onClose={() => {
-              setCommandOpen(false);
-            }}
-          />
-        ) : null}
+        {/* Always rendered inside the portal: Base UI unmounts the portal once the
+            popup has closed, which resets the query. Unmounting the popup itself
+            on close leaves the backdrop stuck in its ending style, over the page. */}
+        <CommandPalette
+          data={data}
+          onClose={() => {
+            setCommandOpen(false);
+          }}
+        />
       </Dialog.Portal>
     </Dialog.Root>
   );

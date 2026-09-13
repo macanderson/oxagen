@@ -172,7 +172,9 @@ test.describe("shell · command menu", () => {
     await page.goto(`/${ORG}`);
     await page.getByRole("button", { name: "Search or run an action" }).click();
     const menu = page.getByTestId("command-menu");
-    await expect(menu.getByRole("group", { name: "Runs" })).toBeVisible();
+    await expect(
+      menu.getByRole("group", { name: "Runs", exact: true }),
+    ).toBeVisible();
     await expect(
       menu.getByRole("option", { name: /Register an agent/ }),
     ).toBeVisible();
