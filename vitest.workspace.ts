@@ -17,6 +17,7 @@ export default [
   "apps/api/vitest.config.ts",
   "apps/app/vitest.config.ts",
   "apps/cli/vitest.config.ts",
+  "apps/desktop/vitest.config.ts",
   "apps/mcp/vitest.config.ts",
   "tools/*/vitest.config.ts",
 ];

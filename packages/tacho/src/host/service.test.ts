@@ -8,6 +8,7 @@ import {
   type ExecResult,
   renderLaunchdPlist,
   renderSystemdUnit,
+  renderWindowsLauncher,
   SERVICE_LABEL,
   serviceManagerFor,
   type ServiceSpec,
@@ -155,7 +156,7 @@ describe("service managers", () => {
 
   it("refuses to install on an unsupported platform", () => {
     const manager = serviceManagerFor({
-      platform: "win32",
+      platform: "freebsd",
       home: "/",
       exec: fakeExec().exec,
     });
@@ -163,5 +164,79 @@ describe("service managers", () => {
     expect(() => manager.install(SPEC)).toThrow(/no user service manager/);
     expect(manager.status().running).toBe(false);
     manager.uninstall();
+  });
+
+  it("renders a Windows launcher that sets the env and appends to the log", () => {
+    const launcher = renderWindowsLauncher({
+      ...SPEC,
+      command: ["C:\\Program Files\\Oxagen\\tachod.exe"],
+      logPath: "C:\\Users\\dev\\.config\\oxagen\\tacho\\tachod.log",
+      workingDirectory: "C:\\Users\\dev\\.config\\oxagen\\tacho",
+    });
+    expect(launcher.startsWith("@echo off\r\n")).toBe(true);
+    expect(launcher).toContain(
+      'set "TACHO_HOME=/home/dev/.config/oxagen/tacho"',
+    );
+    expect(launcher).toContain(
+      '"C:\\Program Files\\Oxagen\\tachod.exe" >> "C:\\Users\\dev\\.config\\oxagen\\tacho\\tachod.log" 2>&1',
+    );
+    expect(launcher).toContain(
+      'cd /d "C:\\Users\\dev\\.config\\oxagen\\tacho"',
+    );
+  });
+
+  it("installs a per-user Task Scheduler task on Windows", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-win-"));
+    const launcher = join(home, "tacho", "tachod.cmd");
+    const fake = fakeExec({
+      "schtasks /Query": {
+        status: 0,
+        stdout: "TaskName: \\OxagenTachod\r\nStatus: Running\r\n",
+        stderr: "",
+      },
+    });
+    const manager = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fake.exec,
+      launcherPath: launcher,
+    });
+    expect(manager.kind).toBe("schtasks");
+    manager.install(SPEC);
+    expect(existsSync(launcher)).toBe(true);
+    expect(readFileSync(launcher, "utf8")).toContain("@echo off");
+    expect(fake.calls).toContainEqual(
+      expect.stringMatching(
+        /^schtasks \/Create \/TN OxagenTachod \/SC ONLOGON \/RL LIMITED \/F \/TR cmd \/c start \/min "" "/,
+      ),
+    );
+    expect(fake.calls).toContain("schtasks /Run /TN OxagenTachod");
+    expect(manager.status()).toEqual({
+      installed: true,
+      running: true,
+      detail: "Running",
+    });
+    manager.uninstall();
+    expect(existsSync(launcher)).toBe(false);
+    expect(fake.calls).toContain("schtasks /Delete /TN OxagenTachod /F");
+
+    const failing = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fakeExec({
+        "schtasks /Create": { status: 1, stdout: "", stderr: "ERROR: Access" },
+      }).exec,
+      launcherPath: launcher,
+    });
+    expect(() => failing.install(SPEC)).toThrow(/Create failed.*Access/);
+    const absent = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fakeExec({
+        "schtasks /Query": { status: 1, stdout: "", stderr: "not found" },
+      }).exec,
+      launcherPath: launcher,
+    });
+    expect(absent.status().installed).toBe(false);
   });
 });

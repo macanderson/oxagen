@@ -369,4 +369,56 @@ describe("handleHookEvent over the recorded session", () => {
         .success,
     ).toBe(true);
   });
+
+  it("labels a Codex session by its harness, across a restart, and accepts a null transcript", async () => {
+    const { deps, registry, now } = harness();
+    const start = {
+      session_id: "codex-1",
+      hook_event_name: "SessionStart",
+      cwd: "/repo",
+      transcript_path: null,
+      permission_mode: "default",
+    };
+    const outcome = await handleHookEvent(start, {}, deps, undefined, "codex");
+    const agent = outcome.events[0]?.agent as {
+      harness: string;
+      runtime: string;
+    };
+    expect(agent).toMatchObject({ harness: "codex", runtime: "custom" });
+    expect(registry.get("codex-1")?.harness).toBe("codex");
+    expect(registry.get("codex-1")?.transcriptPath).toBeUndefined();
+
+    // A Claude Code session in the same daemon keeps its own label.
+    const claude = await handleHookEvent(
+      { ...start, session_id: "claude-1", transcript_path: "/t.jsonl" },
+      {},
+      deps,
+    );
+    expect((claude.events[0]?.agent as { harness: string }).harness).toBe(
+      "claude-code",
+    );
+
+    // The label survives daemon.json persistence.
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now,
+    });
+    restored.restore(registry.state());
+    expect(restored.get("codex-1")?.harness).toBe("codex");
+    const later = await handleHookEvent(
+      {
+        session_id: "codex-1",
+        hook_event_name: "UserPromptSubmit",
+        prompt: "hi",
+      },
+      {},
+      { ...deps, registry: restored },
+      undefined,
+      "codex",
+    );
+    expect((later.events[0]?.agent as { harness: string }).harness).toBe(
+      "codex",
+    );
+  });
 });

@@ -130,6 +130,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // telemetry — so a value here configures that tool, not an Oxagen service.
   "CLAUDE_CONFIG_DIR",
   "CLAUDE_CODE_ENABLE_TELEMETRY",
+  // Codex CLI's equivalent of CLAUDE_CONFIG_DIR: where it keeps hooks.json
+  // (packages/tacho/src/host/paths.ts). That tool's contract, not ours.
+  "CODEX_HOME",
   "CLAUDE_CODE_BRIDGE_SESSION_ID",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_EFFORT",
@@ -225,6 +228,14 @@ const SKIP_DIRS = new Set<string>([
   "out",
   "build",
   ".vercel",
+  // Cargo's build output under apps/desktop/src-tauri: Tauri drops its own
+  // packaging scripts (bundle_dmg.sh) there, which read shell-colour vars.
+  "target",
+  // Compiled single-binary staging (tools/sea): copies of already-checked
+  // bundles, not source.
+  "dist-standalone",
+  "dist-bin",
+  "binaries",
 ]);
 
 /**

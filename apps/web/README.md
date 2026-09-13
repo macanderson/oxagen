@@ -179,15 +179,16 @@ are the YAML.**
 
 - **Images are generated, not stored.** For every post and pillar the build
   draws a banner (1600×900), a thumbnail (800×450) and a share card
-  (1200×630), each in a dark and a light rendering, into `dist/blog/<slug>/`.
-  The page offers the light one through `<picture>` to a viewer whose system
-  prefers light and shows the dark one otherwise; `og:image` points at the
-  dark card, since a crawler has no preference to consult. The art is the
-  house honeycomb (`oxagen-house-brand`'s cell, one cell in gold) beside one
-  of seven hairline drawings — a knowledge graph, an ontology, an agent's
-  loop, a tool call, a policy gate, an audit ledger, a meter — chosen by the
-  post's slug and fixed per pillar with `treatment:`. Everything is a pure
-  function of slug, text and theme (`scripts/lib/images.mjs`), so a rebuild
+  (1200×630) into `dist/blog/<slug>/`. Every image is on ink, whatever the
+  viewer's system prefers: the site is ink, and an ink image reads on a
+  paper ground where a paper image on paper would wash out. The art is the
+  site's own construction — the house honeycomb (`oxagen-house-brand`'s
+  cell) tiled faintly across the ink the way the hero's `.tex-hex` is, and
+  one raised panel with the terminal's title bar (two dim dots, one gold)
+  holding one of seven line drawings — a knowledge graph, an ontology, an
+  agent's loop, a tool call, a policy gate, an audit ledger, a meter — chosen
+  by the post's slug and fixed per pillar with `treatment:`. Everything is a
+  pure function of slug and text (`scripts/lib/images.mjs`), so a rebuild
   reproduces every pixel and nothing binary is committed. The share card
   carries the title, the description, the wordmark and the post's date and
   reading time, set in Space Grotesk as outlines, so the build needs no

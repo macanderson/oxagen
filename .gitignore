@@ -196,3 +196,12 @@ Icon?
 # ultraudit harness scratch (audit run state, findings dumps, and a Linear API
 # key) — transient per-run artifacts, one of which holds live credentials
 .ultraudit-*
+
+# Compiled single-binary sidecars (tools/sea/compile.mjs)
+**/dist-bin/
+apps/desktop/src-tauri/binaries/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/schemas/
+apps/desktop/dist/
+# The Icon? rule above (macOS Finder files) also matches this directory on a case-insensitive checkout.
+!apps/desktop/src-tauri/icons/

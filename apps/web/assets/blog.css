@@ -60,6 +60,9 @@
 }
 .pillar-card img {
   width: 100%;
+  /* the height attribute is a presentational hint that would pin the box to
+     360px and defeat the ratio; auto lets aspect-ratio set it */
+  height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-bottom: 1px solid var(--line);
@@ -160,6 +163,7 @@
 }
 .post-card-shot img {
   width: 100%;
+  height: auto; /* see .pillar-card img */
   aspect-ratio: 16 / 9;
   object-fit: cover;
   filter: saturate(0.8);
@@ -297,6 +301,7 @@
 }
 .post-hero img {
   width: 100%;
+  height: auto; /* see .pillar-card img */
   aspect-ratio: 21 / 9;
   object-fit: cover;
   filter: saturate(0.8);
@@ -420,7 +425,8 @@
   color: var(--ink-2);
 }
 .prose code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.86em;
   background: var(--panel);
   border: 1px solid var(--line);
