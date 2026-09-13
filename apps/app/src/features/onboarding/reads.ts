@@ -10,7 +10,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { type Read, notBacked, readError, readOk } from "@/data/not-backed";
 import { isFixtureMode } from "@/server/fixture-session";
-import type { AuthUser } from "../auth/session";
+import { resolveViewer, type Viewer } from "@/server/scope";
 import {
   FIXTURE_INSTALLER,
   FIXTURE_REPOSITORY,
@@ -39,55 +39,65 @@ export async function fixturePageState(): Promise<FixturePageState> {
 }
 
 /**
- * The org and workspace a flow runs in, resolved from slugs against the user's own
- * memberships: a slug the user is not a member of reads as not found, never as a hint.
+ * The org and workspace a flow runs in, for a viewer `requireViewer` already
+ * admitted: signed in, a member of the organization AND of the workspace, MFA
+ * satisfied, on the canonical slugs. This read adds only the namespaces agent
+ * keys use, looked up by the ids that check resolved, never by slug.
+ */
+export async function loadViewerFlowScope(
+  viewer: Viewer,
+): Promise<Read<FlowScope>> {
+  const { ws } = viewer;
+  if (!ws) return readError(SCOPE_NOT_FOUND, 404);
+  const operator = { name: viewer.user.name ?? "", email: viewer.user.email };
+  if (isFixtureMode()) {
+    return viewer.org.slug === FIXTURE_SCOPE.org.slug &&
+      ws.slug === FIXTURE_SCOPE.ws.slug
+      ? readOk({ ...FIXTURE_SCOPE, operator })
+      : readError(SCOPE_NOT_FOUND, 404);
+  }
+  const { orgId, workspaceId } = viewer.scope;
+  const { withSystemDb } = await import("@oxagen/database");
+  // tenancy: unscoped seam (namespace columns only, by the org and workspace ids requireViewer admitted this user to)
+  const namespaces = await withSystemDb(async (tx) => {
+    const org = await tx.query.organizations.findFirst({
+      where: (o, { and, eq, ne }) =>
+        and(eq(o.id, orgId), ne(o.status, "deleted")),
+      columns: { namespace: true },
+    });
+    if (!org) return null;
+    const workspace = await tx.query.workspaces.findFirst({
+      where: (w, { and, eq }) => and(eq(w.orgId, orgId), eq(w.id, workspaceId)),
+      columns: { namespace: true },
+    });
+    return workspace ? { org: org.namespace, ws: workspace.namespace } : null;
+  });
+  if (!namespaces) return readError(SCOPE_NOT_FOUND, 404);
+  return readOk({
+    org: {
+      slug: viewer.org.slug,
+      name: viewer.org.name,
+      namespace: namespaces.org,
+    },
+    ws: { slug: ws.slug, name: ws.name, namespace: namespaces.ws },
+    operator,
+  });
+}
+
+/**
+ * The gate's wrap and run steps name their scope in the query string, so they
+ * resolve it without a navigation interrupt: any result `requireViewer` would
+ * refuse (signed out, not a member of the org or the workspace, MFA overdue, a
+ * historical slug) reads as not found, and the screen offers step 1 again.
  */
 export async function loadFlowScope(
-  user: AuthUser,
   orgSlug: string,
   wsSlug: string,
 ): Promise<Read<FlowScope>> {
-  if (isFixtureMode()) {
-    return orgSlug === FIXTURE_SCOPE.org.slug &&
-      wsSlug === FIXTURE_SCOPE.ws.slug
-      ? readOk(FIXTURE_SCOPE)
-      : readError(SCOPE_NOT_FOUND, 404);
-  }
-  const { withSystemDb } = await import("@oxagen/database");
-  // tenancy: unscoped seam (slug → id before a tenant scope exists; gated on the user's memberships)
-  const scope = await withSystemDb(async (tx) => {
-    const org = await tx.query.organizations.findFirst({
-      where: (o, { and, eq, ne }) =>
-        and(eq(o.slug, orgSlug), ne(o.status, "deleted")),
-      columns: { id: true, slug: true, name: true, namespace: true },
-    });
-    if (!org) return null;
-    const membership = await tx.query.orgUsers.findFirst({
-      where: (ou, { and, eq }) =>
-        and(eq(ou.orgId, org.id), eq(ou.userId, user.id)),
-      columns: { orgId: true },
-    });
-    if (!membership) return null;
-    const ws = await tx.query.workspaces.findFirst({
-      where: (w, { and, eq }) => and(eq(w.orgId, org.id), eq(w.slug, wsSlug)),
-      columns: { slug: true, name: true, namespace: true },
-    });
-    return ws ? { org, ws } : null;
-  });
-  if (!scope) return readError(SCOPE_NOT_FOUND, 404);
-  return readOk({
-    org: {
-      slug: scope.org.slug,
-      name: scope.org.name,
-      namespace: scope.org.namespace,
-    },
-    ws: {
-      slug: scope.ws.slug,
-      name: scope.ws.name,
-      namespace: scope.ws.namespace,
-    },
-    operator: { name: user.name, email: user.email },
-  });
+  const result = await resolveViewer(orgSlug, wsSlug);
+  return result.kind === "ok"
+    ? loadViewerFlowScope(result.viewer)
+    : readError(SCOPE_NOT_FOUND, 404);
 }
 
 export function loadInstallerOffer(): Read<InstallerOffer> {

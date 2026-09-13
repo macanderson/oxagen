@@ -14,6 +14,7 @@ const redirect = vi.fn((to: string) => {
 vi.mock("next/navigation", () => ({
   notFound,
   redirect,
+  permanentRedirect: redirect,
   useRouter: () => ({}),
 }));
 vi.mock("next-intl/server", () => ({
@@ -22,6 +23,15 @@ vi.mock("next-intl/server", () => ({
 
 const getAuthUser = vi.fn();
 vi.mock("../auth/session", () => ({ getAuthUser }));
+// requireViewer/resolveViewer run for real. The session is the fixture operator,
+// and the "live" lookups are the fixture seed's, so both modes admit Marcus to
+// acme/core-platform and refuse acme/finops (an org member, not a workspace member).
+const getSession = vi.fn();
+vi.mock("@/server/session", () => ({ getSession }));
+vi.mock("@/server/tenancy-lookups", async () => ({
+  liveTenancyLookups: (await import("@/server/fixture-tenancy"))
+    .fixtureTenancyLookups,
+}));
 
 const cookieJar = new Map<string, string>();
 vi.mock("next/headers", () => ({
@@ -30,6 +40,7 @@ vi.mock("next/headers", () => ({
       get: (n: string) =>
         cookieJar.has(n) ? { value: cookieJar.get(n) } : undefined,
     }),
+  headers: () => Promise.resolve(new Headers()),
 }));
 const liveTx = {
   query: {
@@ -42,7 +53,6 @@ const liveTx = {
           namespace: "acme",
         }),
     },
-    orgUsers: { findFirst: () => Promise.resolve({ orgId: "o1" }) },
     workspaces: {
       findFirst: () =>
         Promise.resolve({
@@ -124,6 +134,11 @@ beforeEach(() => {
   cookieJar.clear();
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue(user);
+  getSession.mockReset();
+  getSession.mockResolvedValue({
+    source: "fixture",
+    user: { ...user, image: null },
+  });
   fixtureMode();
 });
 
@@ -171,6 +186,15 @@ describe("WelcomeScreen", () => {
       await welcome(["wrap"], { org: "globex", ws: "labs" }),
     );
     expect(unknown.some((e) => e.props.kind === "not-found")).toBe(true);
+    const notMember = elements(
+      await welcome(["run"], { org: "acme", ws: "finops" }),
+    );
+    expect(notMember.some((e) => e.props.kind === "not-found")).toBe(true);
+    vi.stubEnv("MC_DATA", "live");
+    const liveNotMember = elements(
+      await welcome(["wrap"], { org: "acme", ws: "finops" }),
+    );
+    expect(liveNotMember.some((e) => e.props.kind === "not-found")).toBe(true);
   });
 
   it("wrap and run read the fixture scope; run shows the first frame and the repository", async () => {
@@ -219,6 +243,20 @@ describe("RegisterScreen", () => {
     await expect(register(["organization"])).rejects.toThrow("NEXT_NOT_FOUND");
     await expect(register(undefined, {}, "globex", "labs")).rejects.toThrow(
       "NEXT_NOT_FOUND",
+    );
+    // A member of the organization who is not a member of the workspace.
+    await expect(register(undefined, {}, "acme", "finops")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    vi.stubEnv("MC_DATA", "live");
+    await expect(register(["wrap"], {}, "acme", "finops")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+  });
+
+  it("a historical workspace slug redirects to the canonical register URL", async () => {
+    await expect(register(undefined, {}, "acme", "platform")).rejects.toThrow(
+      "NEXT_REDIRECT /acme/core-platform",
     );
   });
 

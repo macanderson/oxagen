@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { denied as deniedRead } from "@/data/not-backed";
+import { requireViewer } from "@/server/scope";
 import { PageState } from "@/ui/page-state";
 import { withNext } from "../auth/safe-next";
 import { getAuthUser } from "../auth/session";
@@ -27,6 +28,7 @@ import {
   loadFirstFrameScript,
   loadFlowScope,
   loadInstallerOffer,
+  loadViewerFlowScope,
 } from "./reads";
 import {
   type FlowMode,
@@ -290,7 +292,7 @@ export async function WelcomeScreen({
       />,
       true,
     );
-  const scope = await loadFlowScope(user, gate.org, gate.ws);
+  const scope = await loadFlowScope(gate.org, gate.ws);
   if (!scope.ok)
     return shell(
       <ScopeProblem
@@ -334,7 +336,10 @@ export async function RegisterScreen({
   if (!step) notFound();
   const user = await getAuthUser();
   if (!user) redirect(withNext("/login", registerHref(org, ws, "name", null)));
-  const scope = await loadFlowScope(user, org, ws);
+  // The same gate every [org]/[ws] page runs: a non-member of the workspace is
+  // not found, MFA and historical slugs are enforced before anything renders.
+  const viewer = await requireViewer(org, ws);
+  const scope = await loadViewerFlowScope(viewer);
   if (!scope.ok) notFound();
 
   const state = await fixturePageState();

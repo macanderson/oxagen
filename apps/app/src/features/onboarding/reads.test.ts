@@ -4,15 +4,41 @@ import { describeQuery } from "../auth/test-query";
 const cookieJar = new Map<string, string>();
 const wheres: string[] = [];
 const findOrg = vi.fn<(o: unknown) => unknown>();
-const findMembership = vi.fn<(o: unknown) => unknown>();
 const findWorkspace = vi.fn<(o: unknown) => unknown>();
+const getSession = vi.fn();
+// The live lookups requireViewer/resolveViewer run: stubbed per test so the real
+// resolution (org → role → workspace → workspace membership → MFA → slug) decides.
+const lookups = {
+  orgBySlug: vi.fn(),
+  orgBySlugHistory: vi.fn(),
+  workspaceBySlug: vi.fn(),
+  workspaceBySlugHistory: vi.fn(),
+  orgRole: vi.fn(),
+  isWorkspaceMember: vi.fn(),
+  mfaPolicy: vi.fn(),
+  twoFactorEnabled: vi.fn(),
+};
 
+vi.mock("next/navigation", () => ({
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+  redirect: () => {
+    throw new Error("NEXT_REDIRECT");
+  },
+  permanentRedirect: () => {
+    throw new Error("NEXT_PERMANENT_REDIRECT");
+  },
+}));
+vi.mock("@/server/session", () => ({ getSession }));
+vi.mock("@/server/tenancy-lookups", () => ({ liveTenancyLookups: lookups }));
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({
       get: (name: string) =>
         cookieJar.has(name) ? { value: cookieJar.get(name) } : undefined,
     }),
+  headers: () => Promise.resolve(new Headers()),
 }));
 vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) =>
@@ -22,12 +48,6 @@ vi.mock("@oxagen/database", () => ({
           findFirst: (o: Parameters<typeof describeQuery>[0]) => {
             wheres.push(describeQuery(o).where ?? "");
             return findOrg(o);
-          },
-        },
-        orgUsers: {
-          findFirst: (o: Parameters<typeof describeQuery>[0]) => {
-            wheres.push(describeQuery(o).where ?? "");
-            return findMembership(o);
           },
         },
         workspaces: {
@@ -41,7 +61,39 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 const reads = await import("./reads");
-const user = { id: "user-1", email: "priya@acme.example", name: "Priya Raman" };
+const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
+const WS_ID = "7a000000-0000-4000-8000-0000000000b1";
+const sessionUser = {
+  id: "user-1",
+  email: "priya@acme.example",
+  name: "Priya Raman",
+  image: null,
+};
+
+/** Priya: a member of Acme, and of core-platform unless a test says otherwise. */
+function stubLiveTenancy() {
+  getSession.mockResolvedValue({ source: "better-auth", user: sessionUser });
+  lookups.orgBySlug.mockImplementation((slug: string) =>
+    Promise.resolve(
+      slug === "acme"
+        ? { id: ORG_ID, publicId: "org_a", slug, name: "Acme Robotics" }
+        : null,
+    ),
+  );
+  lookups.orgBySlugHistory.mockResolvedValue(null);
+  lookups.workspaceBySlug.mockImplementation((orgId: string, slug: string) =>
+    Promise.resolve(
+      slug === "core-platform"
+        ? { id: WS_ID, publicId: "wks_c", orgId, slug, name: "Core platform" }
+        : null,
+    ),
+  );
+  lookups.workspaceBySlugHistory.mockResolvedValue(null);
+  lookups.orgRole.mockResolvedValue("member");
+  lookups.isWorkspaceMember.mockResolvedValue(true);
+  lookups.mfaPolicy.mockResolvedValue(null);
+  lookups.twoFactorEnabled.mockResolvedValue(false);
+}
 
 function fixtureMode() {
   vi.stubEnv("NODE_ENV", "development");
@@ -56,8 +108,9 @@ beforeEach(() => {
   wheres.length = 0;
   cookieJar.clear();
   findOrg.mockReset();
-  findMembership.mockReset();
   findWorkspace.mockReset();
+  getSession.mockReset();
+  for (const fn of Object.values(lookups)) fn.mockReset();
 });
 
 describe("fixturePageState", () => {
@@ -76,34 +129,41 @@ describe("fixturePageState", () => {
   });
 });
 
+const NOT_FOUND = {
+  ok: false,
+  reason: "error",
+  code: "workspace_not_found",
+  status: 404,
+};
+
 describe("loadFlowScope", () => {
-  it("serves the fixture org and workspace, and nothing else, in fixture mode", async () => {
+  it("serves the fixture org and workspace to the fixture operator, and nothing else, in fixture mode", async () => {
     fixtureMode();
-    const hit = await reads.loadFlowScope(user, "acme", "core-platform");
-    expect(hit.ok && hit.value.org.namespace).toBe("acme");
-    expect(await reads.loadFlowScope(user, "globex", "core-platform")).toEqual({
-      ok: false,
-      reason: "error",
-      code: "workspace_not_found",
-      status: 404,
+    getSession.mockResolvedValue({
+      source: "fixture",
+      user: {
+        id: "usr_marcusbell",
+        email: "marcus.bell@acme.example",
+        name: "Marcus Bell",
+        image: null,
+      },
     });
+    const hit = await reads.loadFlowScope("acme", "core-platform");
+    expect(hit.ok && hit.value.org.namespace).toBe("acme");
+    expect(hit.ok && hit.value.operator.name).toBe("Marcus Bell");
+    expect(await reads.loadFlowScope("globex", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+    // Marcus is an Acme member but not a finops member.
+    expect(await reads.loadFlowScope("acme", "finops")).toEqual(NOT_FOUND);
   });
 
-  it("resolves a workspace of an org the user is a member of", async () => {
+  it("resolves a workspace the user is a member of, reading namespaces by the admitted ids", async () => {
     liveMode();
-    findOrg.mockResolvedValue({
-      id: "org-1",
-      slug: "acme",
-      name: "Acme Robotics",
-      namespace: "acme",
-    });
-    findMembership.mockResolvedValue({ orgId: "org-1" });
-    findWorkspace.mockResolvedValue({
-      slug: "core-platform",
-      name: "Core platform",
-      namespace: "core",
-    });
-    const read = await reads.loadFlowScope(user, "acme", "core-platform");
+    stubLiveTenancy();
+    findOrg.mockResolvedValue({ namespace: "acme" });
+    findWorkspace.mockResolvedValue({ namespace: "core" });
+    const read = await reads.loadFlowScope("acme", "core-platform");
     expect(read).toEqual({
       ok: true,
       value: {
@@ -112,25 +172,92 @@ describe("loadFlowScope", () => {
         operator: { name: "Priya Raman", email: "priya@acme.example" },
       },
     });
+    expect(lookups.isWorkspaceMember).toHaveBeenCalledWith(WS_ID, "user-1");
     expect(wheres).toEqual([
-      "and(eq(col:slug,acme),ne(col:status,deleted))",
-      "and(eq(col:orgId,org-1),eq(col:userId,user-1))",
-      "and(eq(col:orgId,org-1),eq(col:slug,core-platform))",
+      `and(eq(col:id,${ORG_ID}),ne(col:status,deleted))`,
+      `and(eq(col:orgId,${ORG_ID}),eq(col:id,${WS_ID}))`,
     ]);
   });
 
-  it("reads a non-member's request as not found, without looking up the workspace", async () => {
+  it("an org member with no workspace_users row is not found, and no namespace is read", async () => {
     liveMode();
-    findOrg.mockResolvedValue({
-      id: "org-1",
-      slug: "acme",
-      name: "Acme Robotics",
-      namespace: "acme",
-    });
-    findMembership.mockResolvedValue(undefined);
-    const read = await reads.loadFlowScope(user, "acme", "core-platform");
-    expect(read.ok).toBe(false);
+    stubLiveTenancy();
+    lookups.isWorkspaceMember.mockResolvedValue(false);
+    expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+    expect(findOrg).not.toHaveBeenCalled();
     expect(findWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("a non-member of the org is not found before the workspace is looked up", async () => {
+    liveMode();
+    stubLiveTenancy();
+    lookups.orgRole.mockResolvedValue(null);
+    expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+    expect(lookups.workspaceBySlug).not.toHaveBeenCalled();
+    expect(findOrg).not.toHaveBeenCalled();
+  });
+
+  it("signed out, MFA overdue, or a historical slug all read as not found, never as a throw", async () => {
+    liveMode();
+    stubLiveTenancy();
+    getSession.mockResolvedValue(null);
+    expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+
+    stubLiveTenancy();
+    lookups.orgRole.mockResolvedValue("owner");
+    lookups.mfaPolicy.mockResolvedValue({
+      mfaRequired: true,
+      mfaGraceHours: 0,
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+
+    stubLiveTenancy();
+    lookups.workspaceBySlug.mockResolvedValue(null);
+    lookups.workspaceBySlugHistory.mockResolvedValue({
+      id: WS_ID,
+      publicId: "wks_c",
+      orgId: ORG_ID,
+      slug: "core-platform",
+      name: "Core platform",
+    });
+    expect(await reads.loadFlowScope("acme", "platform")).toEqual(NOT_FOUND);
+    expect(findOrg).not.toHaveBeenCalled();
+  });
+
+  it("a workspace whose organization was deleted since is not found", async () => {
+    liveMode();
+    stubLiveTenancy();
+    findOrg.mockResolvedValue(undefined);
+    expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
+      NOT_FOUND,
+    );
+    expect(findWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("an organization-level viewer has no workspace to register into", async () => {
+    liveMode();
+    const read = await reads.loadViewerFlowScope({
+      userId: "user-1",
+      user: sessionUser,
+      orgRole: "member",
+      scope: {
+        orgId: ORG_ID,
+        workspaceId: "00000000-0000-0000-0000-000000000000",
+      },
+      org: { id: ORG_ID, slug: "acme", name: "Acme Robotics" },
+      ws: null,
+    });
+    expect(read).toEqual(NOT_FOUND);
+    expect(findOrg).not.toHaveBeenCalled();
   });
 });
 

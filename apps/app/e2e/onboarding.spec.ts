@@ -194,6 +194,17 @@ test.describe("onboarding gate", () => {
     await expectNoAxeViolations(page);
   });
 
+  test("wrap · a workspace the operator is not a member of reads as not found", async ({
+    signedInPage: page,
+  }) => {
+    await page.goto("/welcome/wrap?org=acme&ws=finops");
+    await expect(page.getByTestId("onboarding-scope-not-found")).toBeVisible();
+    await expect(page.getByText("acme.finops", { exact: false })).toHaveCount(
+      0,
+    );
+    await expectNoAxeViolations(page);
+  });
+
   test("an unknown step is not found", async ({ signedInPage: page }) => {
     // The step is validated inside the streamed Suspense boundary, so assert the
     // not-found screen rather than the status line that was already sent.
@@ -318,13 +329,24 @@ test.describe("register an agent", () => {
     await expectNoAxeViolations(page);
   });
 
-  test("a workspace the operator is not a member of is not found", async ({
+  test("an unknown organization is not found", async ({
     signedInPage: page,
   }) => {
     await page.goto("/globex/labs/register");
     await expect(
       page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
+  });
+
+  test("a workspace of the operator's organization they are not a member of is not found", async ({
+    signedInPage: page,
+  }) => {
+    // Marcus is an Acme member but has no finops membership (src/server/fixture-tenancy.ts).
+    await page.goto("/acme/finops/register");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Slug")).toHaveCount(0);
   });
 
   test("denied", async ({ signedInPage: page, context, baseURL }) => {
