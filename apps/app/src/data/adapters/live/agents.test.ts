@@ -112,12 +112,17 @@ vi.mock("@oxagen/agent/register", () => {
 vi.mock("@/server/session", () => ({ getSession: kernel.getSession }));
 
 // A drizzle transaction stand-in: every builder call chains, awaiting the chain
-// pops the next scripted result, and `from` records the table read.
+// pops the next scripted result, and `from` records the table read. Each
+// statement (a chain started on `tx`, subqueries and UNION arms included) also
+// records the tables it reads (`from`, `innerJoin`) and its `where` arguments,
+// so a test can check the tenant predicates each read keeps.
 const db = vi.hoisted(() => {
+  type Statement = { tables: unknown[]; wheres: unknown[] };
   const queue: unknown[][] = [];
   const tables: unknown[] = [];
   const scopes: unknown[] = [];
-  const chain = (): unknown =>
+  const statements: Statement[] = [];
+  const chain = (statement: Statement | null): unknown =>
     new Proxy(() => undefined, {
       get(_target, prop) {
         if (prop === "then")
@@ -126,12 +131,22 @@ const db = vi.hoisted(() => {
             reject: (e: unknown) => unknown,
           ) => Promise.resolve(queue.shift() ?? []).then(resolve, reject);
         return (...args: unknown[]) => {
-          if (prop === "from") tables.push(args[0]);
-          return chain();
+          let current = statement;
+          if (!current) {
+            current = { tables: [], wheres: [] };
+            statements.push(current);
+          }
+          if (prop === "from") {
+            tables.push(args[0]);
+            current.tables.push(args[0]);
+          }
+          if (prop === "innerJoin") current.tables.push(args[0]);
+          if (prop === "where") current.wheres.push(args[0]);
+          return chain(current);
         };
       },
     });
-  return { queue, tables, scopes, tx: chain() };
+  return { queue, tables, scopes, statements, tx: chain(null) };
 });
 
 vi.mock("@oxagen/database", async () => {
@@ -146,6 +161,18 @@ vi.mock("@oxagen/database", async () => {
 });
 
 import * as schema from "@oxagen/database/schema";
+import {
+  and,
+  Column,
+  eq,
+  getTableColumns,
+  getTableName,
+  is,
+  Param,
+  SQL,
+  StringChunk,
+  type Table,
+} from "drizzle-orm";
 import {
   type AgentStores,
   createLiveAgents,
@@ -341,6 +368,7 @@ beforeEach(() => {
   db.queue.length = 0;
   db.tables.length = 0;
   db.scopes.length = 0;
+  db.statements.length = 0;
 });
 
 describe("LIVE_READINESS", () => {
@@ -1090,6 +1118,139 @@ describe("liveAgentStores: tenant-scoped store reads", () => {
       1,
     );
     expect(db.tables.filter((t) => t === schema.principals)).toEqual([]);
+  });
+});
+
+/** Every `column = value` equality anywhere in a drizzle where clause. */
+function equalities(where: unknown): Array<[Column, unknown]> {
+  const found: Array<[Column, unknown]> = [];
+  const walk = (node: unknown): void => {
+    if (!is(node, SQL)) return;
+    node.queryChunks.forEach((chunk, i) => {
+      const op = node.queryChunks[i + 1];
+      const value = node.queryChunks[i + 2];
+      if (
+        is(chunk, Column) &&
+        is(op, StringChunk) &&
+        op.value.join("") === " = " &&
+        is(value, Param)
+      )
+        found.push([chunk, value.value]);
+      walk(chunk);
+    });
+  };
+  walk(where);
+  return found;
+}
+
+/**
+ * The tenant columns a statement reads without pinning to SCOPE: every table's
+ * org_id, and its workspace_id where every row has one.
+ */
+function unpinned(statement: { tables: unknown[]; wheres: unknown[] }) {
+  const pinned = statement.wheres.flatMap(equalities);
+  const pins = (column: Column, value: string) =>
+    pinned.some(([c, v]) => c === column && v === value);
+  return statement.tables.flatMap((table) => {
+    const columns: Record<string, Column> = getTableColumns(table as Table);
+    const name = getTableName(table as Table);
+    const missing: string[] = [];
+    const org = columns.orgId;
+    const workspace = columns.workspaceId;
+    if (org && !pins(org, SCOPE.orgId)) missing.push(`${name}.org_id`);
+    if (workspace?.notNull && !pins(workspace, SCOPE.workspaceId))
+      missing.push(`${name}.workspace_id`);
+    return missing;
+  });
+}
+
+describe("liveAgentStores: every tenant table keeps its own tenant predicate", () => {
+  // RLS passes everything through wherever enforcement is off, and agent keys
+  // are caller-supplied: a read keyed only by agent key or row id would show
+  // another tenant's hosts, credentials and incidents.
+  const incidentRow = {
+    ...INCIDENT,
+    hostId: "h1",
+    sessionId: "s1",
+    resolvedBy: "p1",
+  };
+  it.each([
+    {
+      read: "workspaceSlug",
+      script: [[{ slug: "default" }]],
+      run: () => liveAgentStores.workspaceSlug(SCOPE),
+      statements: 1,
+    },
+    {
+      read: "principals",
+      script: [
+        [{ publicId: AGENT_ID, principalId: "p1" }],
+        [{ id: "p1", publicId: "prn_1", status: "active", parentUserId: "u1" }],
+        [{ id: "u1", publicId: "usr_1" }],
+      ],
+      run: () => liveAgentStores.principals(SCOPE, [AGENT_ID]),
+      statements: 3,
+    },
+    {
+      read: "latestTiers",
+      script: [[{ agentKey: KEY, tier: "gateway" }]],
+      run: () => liveAgentStores.latestTiers(SCOPE, [KEY]),
+      statements: 1,
+    },
+    {
+      read: "openIncidents (both UNION arms and their joins)",
+      script: [[{ agentKey: KEY, id: "i1" }]],
+      run: () => liveAgentStores.openIncidents(SCOPE, [KEY]),
+      statements: 2,
+    },
+    {
+      read: "hostFacts (host, credential, first session)",
+      script: [
+        [{ deviceKeyFingerprint: "fp", apiKeyId: "k1" }],
+        [{ keyPrefix: "ox_1", createdAt: new Date(0), lastUsedAt: null }],
+        [{ at: new Date(0) }],
+      ],
+      run: () => liveAgentStores.hostFacts(SCOPE, KEY),
+      statements: 3,
+    },
+    {
+      read: "incidents (both subqueries and every lookup)",
+      script: [
+        [incidentRow],
+        [{ id: "h1", hostname: "host" }],
+        [{ id: "s1", publicId: "tse_1" }],
+        [{ id: "p1", publicId: "prn_1" }],
+      ],
+      run: () => liveAgentStores.incidents(SCOPE, KEY),
+      statements: 6,
+    },
+  ])("$read", async ({ script, run, statements }) => {
+    db.queue.push(...script);
+    await run();
+    expect(db.statements).toHaveLength(statements);
+    expect(db.statements.map(unpinned)).toEqual(db.statements.map(() => []));
+  });
+
+  it("notices a read keyed only by agent key, or pinned to another tenant", () => {
+    expect(
+      unpinned({
+        tables: [schema.tachoHosts],
+        wheres: [eq(schema.tachoHosts.agentKey, KEY)],
+      }),
+    ).toEqual(["hosts.org_id", "hosts.workspace_id"]);
+    expect(
+      unpinned({
+        tables: [schema.tachoIncidents, schema.tachoHosts],
+        wheres: [
+          and(
+            eq(schema.tachoIncidents.orgId, SCOPE.orgId),
+            eq(schema.tachoIncidents.workspaceId, SCOPE.workspaceId),
+            eq(schema.tachoHosts.orgId, "another-org"),
+            eq(schema.tachoHosts.workspaceId, SCOPE.workspaceId),
+          ),
+        ],
+      }),
+    ).toEqual(["hosts.org_id"]);
   });
 });
 

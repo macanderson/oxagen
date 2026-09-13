@@ -6,8 +6,12 @@
 // list_tacho_hosts), so IAM decides and audits them exactly as on the API. The
 // stores no agent tool exposes (iam.principals, tacho.hosts device and
 // credential facts, tacho.sessions tiers, tacho.incidents) are read with
-// withTenantDb inside runInTenantScope, so RLS scopes them, and only after the
-// agent tools above have let the person see the agent. Every result is
+// withTenantDb inside runInTenantScope, and only after the agent tools above
+// have let the person see the agent. RLS is not relied on: it passes everything
+// through wherever TENANT_RLS_ENFORCEMENT_ENABLED is off (packages/tenancy
+// README), and tacho.hosts.agent_key is caller-supplied at enrollment, so
+// another tenant can hold the same key. Every tenant table in every such read
+// keeps its own org (and workspace) predicate. Every result is
 // parsed through its view-model schema before it leaves.
 //
 // A method whose view model cannot carry what the stores record (a field with
@@ -35,7 +39,8 @@ import {
 } from "@oxagen/oxagen/contracts/iam.role.list";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq, inArray, isNull, min, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, min, or, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { notBackedFor } from "@/data/backing";
 import {
@@ -328,6 +333,17 @@ function inTenant<T>(scope: Scope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return runInTenantScope(scope, () => withTenantDb(fn));
 }
 
+/** A workspace-scoped table's rows in this tenant's workspace only. */
+function inWorkspace(
+  table: { orgId: PgColumn; workspaceId: PgColumn },
+  scope: Scope,
+): SQL | undefined {
+  return and(
+    eq(table.orgId, scope.orgId),
+    eq(table.workspaceId, scope.workspaceId),
+  );
+}
+
 /** Kernel codes that mean "this person may not read it", not "it failed". */
 const DENIED_CODES: ReadonlySet<string> = new Set([
   "authz_denied",
@@ -386,7 +402,12 @@ export const liveAgentStores: AgentStores = {
       tx
         .select({ slug: schema.workspaces.slug })
         .from(schema.workspaces)
-        .where(eq(schema.workspaces.id, scope.workspaceId))
+        .where(
+          and(
+            eq(schema.workspaces.orgId, scope.orgId),
+            eq(schema.workspaces.id, scope.workspaceId),
+          ),
+        )
         .limit(1),
     );
     return rows[0]?.slug ?? null;
@@ -402,7 +423,12 @@ export const liveAgentStores: AgentStores = {
           principalId: schema.agents.principalId,
         })
         .from(schema.agents)
-        .where(inArray(schema.agents.publicId, [...agentPublicIds]));
+        .where(
+          and(
+            inWorkspace(schema.agents, scope),
+            inArray(schema.agents.publicId, [...agentPublicIds]),
+          ),
+        );
       const principalIds = agents.flatMap((a) =>
         a.principalId ? [a.principalId] : [],
       );
@@ -417,6 +443,8 @@ export const liveAgentStores: AgentStores = {
         .from(schema.principals)
         .where(
           and(
+            // An agent principal may be org-level: workspace_id is nullable.
+            eq(schema.principals.orgId, scope.orgId),
             inArray(schema.principals.id, principalIds),
             eq(schema.principals.kind, "agent"),
           ),
@@ -458,7 +486,12 @@ export const liveAgentStores: AgentStores = {
           tier: schema.tachoSessions.enforcementTier,
         })
         .from(schema.tachoSessions)
-        .where(inArray(schema.tachoSessions.agentKey, [...keys]))
+        .where(
+          and(
+            inWorkspace(schema.tachoSessions, scope),
+            inArray(schema.tachoSessions.agentKey, [...keys]),
+          ),
+        )
         .orderBy(
           schema.tachoSessions.agentKey,
           desc(schema.tachoSessions.startedAt),
@@ -484,14 +517,26 @@ export const liveAgentStores: AgentStores = {
         .select({ agentKey: hosts.agentKey, id: t.id })
         .from(t)
         .innerJoin(hosts, eq(t.hostId, hosts.id))
-        .where(and(isNull(t.resolvedAt), inArray(hosts.agentKey, [...keys])))
+        .where(
+          and(
+            inWorkspace(t, scope),
+            inWorkspace(hosts, scope),
+            isNull(t.resolvedAt),
+            inArray(hosts.agentKey, [...keys]),
+          ),
+        )
         .union(
           tx
             .select({ agentKey: sessions.agentKey, id: t.id })
             .from(t)
             .innerJoin(sessions, eq(t.sessionId, sessions.id))
             .where(
-              and(isNull(t.resolvedAt), inArray(sessions.agentKey, [...keys])),
+              and(
+                inWorkspace(t, scope),
+                inWorkspace(sessions, scope),
+                isNull(t.resolvedAt),
+                inArray(sessions.agentKey, [...keys]),
+              ),
             ),
         ),
     );
@@ -508,7 +553,12 @@ export const liveAgentStores: AgentStores = {
           apiKeyId: schema.tachoHosts.apiKeyId,
         })
         .from(schema.tachoHosts)
-        .where(eq(schema.tachoHosts.agentKey, key))
+        .where(
+          and(
+            inWorkspace(schema.tachoHosts, scope),
+            eq(schema.tachoHosts.agentKey, key),
+          ),
+        )
         .limit(1);
       if (!host) return null;
       const [apiKey] = await tx
@@ -518,12 +568,22 @@ export const liveAgentStores: AgentStores = {
           lastUsedAt: schema.apiKeys.lastUsedAt,
         })
         .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.id, host.apiKeyId))
+        .where(
+          and(
+            inWorkspace(schema.apiKeys, scope),
+            eq(schema.apiKeys.id, host.apiKeyId),
+          ),
+        )
         .limit(1);
       const [first] = await tx
         .select({ at: min(schema.tachoSessions.startedAt) })
         .from(schema.tachoSessions)
-        .where(eq(schema.tachoSessions.agentKey, key));
+        .where(
+          and(
+            inWorkspace(schema.tachoSessions, scope),
+            eq(schema.tachoSessions.agentKey, key),
+          ),
+        );
       return {
         deviceKeyFingerprint: host.deviceKeyFingerprint,
         apiKey: apiKey ?? null,
@@ -550,20 +610,33 @@ export const liveAgentStores: AgentStores = {
         })
         .from(t)
         .where(
-          or(
-            inArray(
-              t.hostId,
-              tx
-                .select({ id: schema.tachoHosts.id })
-                .from(schema.tachoHosts)
-                .where(eq(schema.tachoHosts.agentKey, key)),
-            ),
-            inArray(
-              t.sessionId,
-              tx
-                .select({ id: schema.tachoSessions.id })
-                .from(schema.tachoSessions)
-                .where(eq(schema.tachoSessions.agentKey, key)),
+          and(
+            inWorkspace(t, scope),
+            or(
+              inArray(
+                t.hostId,
+                tx
+                  .select({ id: schema.tachoHosts.id })
+                  .from(schema.tachoHosts)
+                  .where(
+                    and(
+                      inWorkspace(schema.tachoHosts, scope),
+                      eq(schema.tachoHosts.agentKey, key),
+                    ),
+                  ),
+              ),
+              inArray(
+                t.sessionId,
+                tx
+                  .select({ id: schema.tachoSessions.id })
+                  .from(schema.tachoSessions)
+                  .where(
+                    and(
+                      inWorkspace(schema.tachoSessions, scope),
+                      eq(schema.tachoSessions.agentKey, key),
+                    ),
+                  ),
+              ),
             ),
           ),
         )
@@ -590,7 +663,12 @@ export const liveAgentStores: AgentStores = {
                 hostname: schema.tachoHosts.hostname,
               })
               .from(schema.tachoHosts)
-              .where(inArray(schema.tachoHosts.id, hostIds));
+              .where(
+                and(
+                  inWorkspace(schema.tachoHosts, scope),
+                  inArray(schema.tachoHosts.id, hostIds),
+                ),
+              );
       const sessions =
         sessionIds.length === 0
           ? []
@@ -600,7 +678,12 @@ export const liveAgentStores: AgentStores = {
                 publicId: schema.tachoSessions.publicId,
               })
               .from(schema.tachoSessions)
-              .where(inArray(schema.tachoSessions.id, sessionIds));
+              .where(
+                and(
+                  inWorkspace(schema.tachoSessions, scope),
+                  inArray(schema.tachoSessions.id, sessionIds),
+                ),
+              );
       const resolvers =
         resolverIds.length === 0
           ? []
@@ -610,7 +693,12 @@ export const liveAgentStores: AgentStores = {
                 publicId: schema.principals.publicId,
               })
               .from(schema.principals)
-              .where(inArray(schema.principals.id, resolverIds));
+              .where(
+                and(
+                  eq(schema.principals.orgId, scope.orgId),
+                  inArray(schema.principals.id, resolverIds),
+                ),
+              );
       const hostname = new Map(hosts.map((h) => [h.id, h.hostname]));
       const sessionPublicId = new Map(sessions.map((s) => [s.id, s.publicId]));
       const resolverPublicId = new Map(
