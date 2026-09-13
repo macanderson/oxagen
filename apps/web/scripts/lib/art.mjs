@@ -1,9 +1,9 @@
 // The drawings a generated image is made of.
 //
 // Two layers. The honeycomb is the brand's own cell (the cluster in
-// oxagen-house-brand/build/marks.py, the .tex-hex texture in oxagen.css)
-// scattered as a field of rings and flat blocks with exactly one cell in
-// gold. Over or beside it sits one of seven hairline drawings of the things
+// oxagen-house-brand/build/marks.py, the constellation --tex-hex draws behind
+// the hero in oxagen.css) scattered as a field of rings and flat blocks with
+// exactly one cell in gold. Over or beside it sits one of seven hairline drawings of the things
 // the writing is about: a knowledge graph, an ontology, an agent's loop, a
 // tool call, a policy gate, an audit ledger, a meter. Hairlines in the
 // theme's quiet tones, so a drawing reads as a watermark rather than a

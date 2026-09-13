@@ -17,7 +17,12 @@ committed.
 - `assets/oxagen.css` — the shared shell: the Stella colour tokens, the nav,
   buttons, cards, terminal chrome, forms and footer. Every page under
   `index.html` and `products/` links it. Each page adds its own small
-  `<style>` block for the parts only that page has (its hero, mostly).
+  `<style>` block for the parts only that page has (its hero, mostly). The
+  treatment — the corner scale (`--r`, `--r-lg`, `--r-xl`), the ember sheen on
+  a headline's accent word and the primary button, the lattice, the hex
+  constellation and the glow behind a hero — follows docs.oxagen.sh
+  (`apps/docs`, on `@oxagen/ui`), so the two sites read as one; change it
+  there first, then here.
 - `assets/oxagen.js` — the shared behaviour for those same pages: nav state,
   the products dropdown, the mobile drawer, reveal-on-scroll, the typewriters
   and terminal replay, the `[data-count]` counters, the `[data-tabs]` deck,
