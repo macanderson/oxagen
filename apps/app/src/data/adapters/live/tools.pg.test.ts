@@ -1,6 +1,8 @@
 // Contract test against a real Postgres: seeds one row per table the live tools
 // adapter reads, in a throwaway organization and workspace, reads it back
-// through the port, and removes it. Opt-in, because unit runs have no database:
+// through the port (the real kernel and handlers decide each read; no IAM
+// runtime is bootstrapped here, so the kernel allows), and removes it. Opt-in,
+// because unit runs have no database:
 //
 //   MC_LIVE_PG=1 DATABASE_URL=postgres://oxagen:…@localhost:5433/oxagen \
 //     pnpm --filter @oxagen/app exec vitest run src/data/adapters/live/tools.pg.test.ts
@@ -22,7 +24,7 @@ const enabled = process.env.MC_LIVE_PG === "1";
 describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
   const { schema, withSystemDb } = await import("@oxagen/database");
   const { and, eq } = await import("drizzle-orm");
-  const { createLiveTools, liveTools, postgresToolsStore } = await import(
+  const { createLiveTools, liveToolsDeps, postgresToolsStore } = await import(
     "./tools"
   );
 
@@ -69,6 +71,17 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
     }),
     KillSwitch,
   } as unknown as NonNullable<Parameters<typeof createLiveTools>[0]["views"]>;
+
+  /** The production deps, signed in as the seeded owner (no request session here). */
+  const portFor = (
+    overrides: Partial<Parameters<typeof createLiveTools>[0]> = {},
+  ) =>
+    createLiveTools({
+      ...liveToolsDeps,
+      principal: () => Promise.resolve(owner?.id ?? crypto.randomUUID()),
+      report,
+      ...overrides,
+    });
 
   beforeAll(async () => {
     console.info(
@@ -203,7 +216,7 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
   });
 
   it("killSwitches parses the seeded deny through the KillSwitch view model", async () => {
-    await expect(liveTools.killSwitches(scope)).resolves.toEqual({
+    await expect(portFor().killSwitches(scope)).resolves.toEqual({
       ok: true,
       value: [
         expect.objectContaining({
@@ -221,7 +234,7 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
   it.each(["servers", "toolVersions", "connections"] as const)(
     "%s is not backed under today's contract",
     async (method) => {
-      await expect(liveTools[method](scope)).resolves.toMatchObject({
+      await expect(portFor()[method](scope)).resolves.toMatchObject({
         ok: false,
         reason: "not_backed",
       });
@@ -229,7 +242,7 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
   );
 
   it("servers, toolVersions and connections parse the seeded rows once the contract widens", async () => {
-    const port = createLiveTools({ store: postgresToolsStore, report, views });
+    const port = portFor({ views });
     const servers = await port.servers(scope);
     expect(servers).toMatchObject({
       ok: true,
@@ -278,5 +291,21 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
       ["oauth", "GitHub", "active", [serverId], owner?.publicId ?? null],
     ]);
     expect(report).not.toHaveBeenCalled();
+  });
+
+  it("the store reads nothing outside the grant the capabilities returned", async () => {
+    const empty = {
+      serverPublicIds: [],
+      toolPublicIds: [],
+      connectionPublicIds: [],
+    };
+    await expect(postgresToolsStore.servers(scope, empty)).resolves.toEqual([]);
+    await expect(
+      postgresToolsStore.toolVersions(scope, empty),
+    ).resolves.toEqual({ declared: [], imported: [] });
+    const connections = await postgresToolsStore.connections(scope, empty);
+    expect(connections.sources).toEqual([]);
+    // The credential stays (list_mcp_servers allowed it) but no server is attached.
+    expect(connections.credentials.map((c) => c.server)).toEqual([null]);
   });
 });
