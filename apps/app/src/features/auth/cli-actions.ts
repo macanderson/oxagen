@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { isFixtureMode } from "@/server/fixture-session";
 import { authorizeParamErrors, loadCliScopes } from "./cli-authorize";
-import { ORG_ONLY_WORKSPACE } from "./kernel";
+import { ORG_ONLY_WS } from "@/server/tenant-scope";
 import { getAuthUser } from "./session";
 
 export type CliErrorKey =
@@ -59,7 +59,7 @@ export async function approveCliAuth(
         import("@oxagen/auth/cli-auth"),
       ]);
     const canManage = await runInTenantScope(
-      { orgId: org.id, workspaceId: ORG_ONLY_WORKSPACE },
+      { orgId: org.id, workspaceId: ORG_ONLY_WS },
       () => actorCanManageApiKeys(org.id, user.id),
     );
     if (!canManage) return { error: "notPermitted" };

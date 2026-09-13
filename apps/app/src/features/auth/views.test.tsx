@@ -291,7 +291,7 @@ describe("GateShell", () => {
     expect(screen.queryByRole("link", { name: "Cancel" })).toBeNull();
   });
 
-  it("register · a labelled region, not a second main, with cancel", async () => {
+  it("register · inside the org shell: one main, no second brand bar, cancel beside the stepper", async () => {
     await renderServer(
       <GateShell
         mode="register"
@@ -307,9 +307,11 @@ describe("GateShell", () => {
         <p>child</p>
       </GateShell>,
     );
-    expect(screen.queryByRole("main")).toBeNull();
+    expect(screen.getByRole("main")).toBeInTheDocument();
+    expect(screen.queryByRole("banner")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Oxagen home" })).toBeNull();
     expect(
-      screen.getByRole("region", { name: "Register an agent" }),
+      screen.getByRole("navigation", { name: "Register an agent" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute(
       "href",

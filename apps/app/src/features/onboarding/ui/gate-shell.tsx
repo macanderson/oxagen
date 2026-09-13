@@ -20,9 +20,11 @@ export type GateShellProps = {
   children: ReactNode;
 };
 
-// The gate owns the whole page, so it renders the main landmark. Register an
-// agent renders inside the workspace layout (lane L3), which owns <main>; a
-// second main would be a landmark violation, so it is a labelled region there.
+// The gate owns the whole page: its own top bar with the brand and who is signed
+// in. Register an agent renders inside the organization shell (lane L3), whose
+// top bar already carries the brand and the account, so it drops the header (a
+// second banner landmark) and puts Cancel beside the stepper. Both render the
+// page's <main id="main">, which the shell's skip link targets.
 
 export async function GateShell({
   mode,
@@ -37,33 +39,34 @@ export async function GateShell({
     mode === "gate" ? GATE_STEPS : REGISTER_STEPS;
   const current = Math.max(0, steps.indexOf(step));
   return (
-    <div className="relative isolate flex min-h-dvh flex-col items-center bg-background px-4 pb-16 sm:px-5">
+    <div
+      className={`relative isolate flex flex-col items-center bg-background px-4 pb-16 sm:px-5 ${mode === "gate" ? "min-h-dvh" : ""}`}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(900px_460px_at_50%_-10%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_72%)]"
       />
-      <header className="flex w-full max-w-3xl items-center gap-3 pt-5">
-        <Brandmark />
-        {email ? (
-          <span className="ml-auto hidden min-w-0 truncate font-mono text-xs text-muted-foreground sm:block">
-            {t("shell.signedInAs", { email })}
-          </span>
-        ) : null}
+      {mode === "gate" ? (
+        <header className="flex w-full max-w-3xl items-center gap-3 pt-5">
+          <Brandmark />
+          {email ? (
+            <span className="ml-auto hidden min-w-0 truncate font-mono text-xs text-muted-foreground sm:block">
+              {t("shell.signedInAs", { email })}
+            </span>
+          ) : null}
+        </header>
+      ) : null}
+      <main id="main" className="flex w-full max-w-3xl min-w-0 flex-col">
         {cancelHref ? (
-          <Link
-            href={cancelHref}
-            className={`${buttonSecondary} min-h-8 px-3 py-1 text-xs ${email ? "sm:ml-0 ml-auto" : "ml-auto"}`}
-          >
-            {t("shell.cancel")}
-          </Link>
+          <div className="flex justify-end pt-5">
+            <Link
+              href={cancelHref}
+              className={`${buttonSecondary} min-h-8 px-3 py-1 text-xs`}
+            >
+              {t("shell.cancel")}
+            </Link>
+          </div>
         ) : null}
-      </header>
-      <Landmark
-        mode={mode}
-        label={
-          mode === "gate" ? t("shell.gateLabel") : t("shell.registerLabel")
-        }
-      >
         <nav
           aria-label={
             mode === "gate" ? t("shell.gateLabel") : t("shell.registerLabel")
@@ -124,29 +127,8 @@ export async function GateShell({
             ? t("shell.gateCaption")
             : t("shell.registerCaption")}
         </p>
-      </Landmark>
+      </main>
     </div>
-  );
-}
-
-function Landmark({
-  mode,
-  label,
-  children,
-}: {
-  mode: FlowMode;
-  label: string;
-  children: ReactNode;
-}) {
-  const className = "flex w-full max-w-3xl min-w-0 flex-col";
-  return mode === "gate" ? (
-    <main id="main" className={className}>
-      {children}
-    </main>
-  ) : (
-    <section aria-label={label} className={className}>
-      {children}
-    </section>
   );
 }
 

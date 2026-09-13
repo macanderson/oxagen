@@ -6,9 +6,11 @@
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { isFixtureMode } from "@/server/fixture-session";
+import { invokeTool } from "@/server/invoke";
+import type { Viewer } from "@/server/scope";
+import { ORG_ONLY_WS } from "@/server/tenant-scope";
 import { decideInvitation } from "./invitation";
 import { loadInvitation } from "./invitations";
-import { ORG_ONLY_WORKSPACE, invokeAsUser } from "./kernel";
 import { getAuthUser } from "./session";
 
 export type InviteActionResult =
@@ -60,11 +62,26 @@ async function decide(
       return row?.orgId ?? null;
     });
     if (!orgId) return { ok: false, reason: "not_found" };
-    const scope = { orgId, workspaceId: ORG_ONLY_WORKSPACE };
+    // The invitee is not a member yet, so requireViewer has no Viewer to give.
+    // This one names the invitation's organization and the signed-in person;
+    // IAM and the handler decide (the handler matches the invited address).
+    const viewer: Viewer = {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name || null,
+        image: null,
+      },
+      orgRole: "invitee",
+      scope: { orgId, workspaceId: ORG_ONLY_WS },
+      org: { id: orgId, slug: read.value.orgSlug, name: read.value.orgName },
+      ws: null,
+    };
     const input = { invitationPublicId: token };
     if (decision === "accept")
-      await invokeAsUser(orgMemberInviteAccept, input, scope, user.id);
-    else await invokeAsUser(orgMemberInviteDecline, input, scope, user.id);
+      await invokeTool(viewer, orgMemberInviteAccept, input);
+    else await invokeTool(viewer, orgMemberInviteDecline, input);
     return decision === "accept"
       ? { ok: true, to: `/${read.value.orgSlug}` }
       : { ok: true, to: "/" };

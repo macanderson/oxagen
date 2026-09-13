@@ -21,7 +21,8 @@ export const FIXTURE_ORG = {
 } as const;
 export const FIXTURE_WORKSPACE = {
   slug: "core-platform",
-  name: "core-platform",
+  // Matches src/server/fixture-tenancy.ts (lane L4) so both seams name it alike.
+  name: "Core platform",
   namespace: "core",
 } as const;
 

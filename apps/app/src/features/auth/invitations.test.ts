@@ -28,11 +28,8 @@ vi.mock("@oxagen/database", () => ({
 
 const getAuthUser = vi.fn();
 vi.mock("./session", () => ({ getAuthUser }));
-const invokeAsUser = vi.fn();
-vi.mock("./kernel", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./kernel")>()),
-  invokeAsUser,
-}));
+const invokeTool = vi.fn();
+vi.mock("@/server/invoke", () => ({ invokeTool }));
 const warn = vi.fn();
 vi.mock("@oxagen/handlers/logger", () => ({ logger: { warn } }));
 vi.mock("@oxagen/oxagen/contracts/org.member_invite.accept", () => ({
@@ -71,7 +68,7 @@ beforeEach(() => {
   filters.length = 0;
   for (const table of Object.values(query)) table.findFirst.mockReset();
   getAuthUser.mockReset();
-  invokeAsUser.mockReset();
+  invokeTool.mockReset();
   warn.mockReset();
 });
 
@@ -168,7 +165,7 @@ describe("accept and decline", () => {
       ok: true,
       to: "/",
     });
-    expect(invokeAsUser).not.toHaveBeenCalled();
+    expect(invokeTool).not.toHaveBeenCalled();
   });
 
   it("re-runs the page's decision: unknown, closed, signed out and wrong account are refused", async () => {
@@ -210,26 +207,29 @@ describe("accept and decline", () => {
       slug: "acme",
     });
     query.users.findFirst.mockResolvedValue({ displayName: "Marcus Bell" });
-    invokeAsUser.mockResolvedValue({});
+    invokeTool.mockResolvedValue({});
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: true,
       to: "/acme",
     });
-    expect(invokeAsUser).toHaveBeenCalledWith(
+    expect(invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u-priya",
+        scope: {
+          orgId: liveRow.orgId,
+          workspaceId: "00000000-0000-0000-0000-000000000000",
+        },
+        org: { id: liveRow.orgId, slug: "acme", name: "Acme Robotics" },
+        ws: null,
+      }),
       { name: "accept_member_invite" },
       { invitationPublicId: "invi_live" },
-      {
-        orgId: liveRow.orgId,
-        workspaceId: "00000000-0000-0000-0000-000000000000",
-      },
-      "u-priya",
     );
     expect(await declineInvitation("invi_live")).toEqual({ ok: true, to: "/" });
-    expect(invokeAsUser).toHaveBeenLastCalledWith(
+    expect(invokeTool).toHaveBeenLastCalledWith(
+      expect.objectContaining({ userId: "u-priya" }),
       { name: "decline_member_invite" },
-      expect.anything(),
-      expect.anything(),
-      "u-priya",
+      { invitationPublicId: "invi_live" },
     );
   });
 
@@ -246,7 +246,7 @@ describe("accept and decline", () => {
       slug: "acme",
     });
     query.users.findFirst.mockResolvedValue(undefined);
-    invokeAsUser.mockRejectedValue(new Error("iam denied"));
+    invokeTool.mockRejectedValue(new Error("iam denied"));
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "failed",
@@ -273,6 +273,6 @@ describe("accept and decline", () => {
       ok: false,
       reason: "not_found",
     });
-    expect(invokeAsUser).not.toHaveBeenCalled();
+    expect(invokeTool).not.toHaveBeenCalled();
   });
 });
