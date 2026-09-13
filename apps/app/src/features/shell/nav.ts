@@ -6,7 +6,7 @@
 //
 // The mockup's "Scenarios" item is demo chrome, not one of the ten pages
 // (spec App. F), so it is not here.
-import type { NavCounts } from "./contracts";
+import type { NavCounts } from "@/data/contracts/shell";
 
 export type WorkspaceNavKey =
   | "fleet"

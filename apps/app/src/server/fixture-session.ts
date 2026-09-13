@@ -23,6 +23,18 @@ export const FIXTURE_USER = {
   name: "Marcus Bell",
 } as const;
 
+/**
+ * The fixture operator's stand-in secrets for the fixture-mode sign-in actions
+ * (password, authenticator code, password-reset token). They sit with the
+ * session they open, not in the demo seed: they are not mockup data, and live
+ * sign-in never reads them (Better Auth owns credentials).
+ */
+export const FIXTURE_CREDENTIALS = {
+  password: "mission-control",
+  totpCode: "602914",
+  resetToken: "rst_fixture_01",
+} as const;
+
 export type FixtureSession = { user: typeof FIXTURE_USER };
 
 export function isFixtureMode(): boolean {
@@ -37,4 +49,16 @@ export function readFixtureSession(
   if (!isFixtureMode()) return null;
   if (cookieValue !== FIXTURE_SESSION_VALUE) return null;
   return { user: FIXTURE_USER };
+}
+
+/** True when the fixture credentials match. Always false outside fixture mode. */
+export function fixtureCredentialsMatch(
+  email: string,
+  password: string,
+): boolean {
+  if (!isFixtureMode()) return false;
+  return (
+    email.trim().toLowerCase() === FIXTURE_USER.email &&
+    password === FIXTURE_CREDENTIALS.password
+  );
 }

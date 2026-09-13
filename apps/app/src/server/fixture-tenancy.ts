@@ -23,14 +23,17 @@ export const FIXTURE_ORG: OrgRecord = {
   name: "Acme Robotics",
 };
 
+/** The workspace the fixture operator belongs to, and where fixture flows land. */
+export const FIXTURE_HOME_WORKSPACE: WorkspaceRecord = {
+  id: "6f1d2c3a-5b4e-4d10-8a01-00000000c001",
+  publicId: "wks_coreplatform",
+  orgId: FIXTURE_ORG.id,
+  slug: "core-platform",
+  name: "Core platform",
+};
+
 export const FIXTURE_WORKSPACES: readonly WorkspaceRecord[] = [
-  {
-    id: "6f1d2c3a-5b4e-4d10-8a01-00000000c001",
-    publicId: "wks_coreplatform",
-    orgId: FIXTURE_ORG.id,
-    slug: "core-platform",
-    name: "Core platform",
-  },
+  FIXTURE_HOME_WORKSPACE,
   {
     id: "6f1d2c3a-5b4e-4d10-8a01-00000000f002",
     publicId: "wks_finops",

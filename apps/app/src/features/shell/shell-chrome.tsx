@@ -1,7 +1,8 @@
 // The server half of the shell. Each piece awaits the route params inside the
 // <Suspense> the layout gives it (Cache Components: params of an unlisted slug
 // are request data, so awaiting them at the layout's top would block the static
-// shell), reads through the port, and hands plain data to the client shell.
+// shell), resolves the viewer (a stranger is a 404 before anything is read),
+// reads through the port, and hands plain data to the client shell.
 import "server-only";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -11,8 +12,8 @@ import { shellSource } from "./source";
 
 /** One load per request, shared by the organization layout and the workspace guard. */
 const loadForOrg = cache(async (org: string) => {
-  const { port, userId } = await shellSource();
-  return loadShellData(port, { org, userId: userId ?? "" });
+  const { port, scope, userId } = await shellSource(org);
+  return loadShellData(port, { org, scope, userId });
 });
 
 export async function ShellChrome({

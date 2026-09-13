@@ -4,7 +4,8 @@
 import Link from "next/link";
 
 import { getFormatter, getTranslations } from "next-intl/server";
-import type { InvitationDecision, InvitationView } from "./invitation";
+import type { InvitationView } from "@/data/contracts/invitations";
+import type { InvitationDecision } from "./invitation";
 import { InviteDecision } from "./invite-decision";
 import { withNext } from "./safe-next";
 import { OutcomePanel } from "@/ui/form-feedback";

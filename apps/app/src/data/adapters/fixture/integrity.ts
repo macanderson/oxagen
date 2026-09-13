@@ -338,5 +338,46 @@ export function findDanglingReferences(seed: Seed): DanglingReference[] {
       expect(`notifications[${n.id}].ref`, "switches", ref);
   }
 
+  // ---- onboarding ----
+  const { onboarding } = seed;
+  const { namespaces } = onboarding;
+  for (const slug of Object.keys(namespaces.workspaces))
+    expect(`onboarding.namespaces.workspaces[${slug}]`, "workspaces", slug);
+  for (const a of seed.agents) {
+    const ws = namespaces.workspaces[a.workspaceSlug];
+    const prefix = `${namespaces.org}.${ws ?? "?"}.`;
+    if (ws === undefined || !a.key.startsWith(prefix))
+      dangling.push({
+        at: `agents[${a.key}].key`,
+        expected: `a key minted in ${prefix}`,
+        ref: a.key,
+      });
+  }
+  const personNames = new Set(seed.people.map((p) => p.name));
+  for (const inv of onboarding.invitations) {
+    const at = `onboarding.invitations[${inv.token}]`;
+    if (
+      inv.orgSlug !== seed.organization.slug ||
+      inv.orgName !== seed.organization.name
+    )
+      dangling.push({
+        at: `${at}.orgSlug`,
+        expected: "organization",
+        ref: inv.orgSlug,
+      });
+    if (inv.inviterName !== null && !personNames.has(inv.inviterName))
+      dangling.push({
+        at: `${at}.inviterName`,
+        expected: "people",
+        ref: inv.inviterName,
+      });
+  }
+  if (onboarding.firstFrame.host !== onboarding.installer.host)
+    dangling.push({
+      at: "onboarding.firstFrame.host",
+      expected: "the installer's host",
+      ref: onboarding.firstFrame.host,
+    });
+
   return dangling;
 }

@@ -3,31 +3,38 @@
 // organization does not exist for this viewer, and the caller renders not-found
 // (never a hint that it exists). Every other failure stays a `Read` failure the
 // client renders honestly.
-import type { ShellQuery, ShellReadPort } from "./port";
+import type { ShellReadPort } from "@/data/ports";
+import type { Scope } from "@/data/scope";
 import type { ShellData } from "./shell-data";
 
 export type ShellLoad = { kind: "ok"; data: ShellData } | { kind: "not_found" };
 
+export type ShellLoadQuery = {
+  /** The organization slug from the URL. */
+  org: string;
+  scope: Scope;
+  userId: string;
+};
+
 export async function loadShellData(
   port: ShellReadPort,
-  query: Omit<ShellQuery, "ws">,
+  { org, scope, userId }: ShellLoadQuery,
 ): Promise<ShellLoad> {
-  const q: ShellQuery = { ...query, ws: null };
   const [context, counts, notifications, engine, runs, account] =
     await Promise.all([
-      port.context(q),
-      port.navCounts(q),
-      port.notifications(q),
-      port.assistantEngine(q),
-      port.recentRuns(q),
-      port.account(q),
+      port.context(scope, userId),
+      port.navCounts(scope),
+      port.notifications(scope, userId),
+      port.assistantEngine(scope),
+      port.recentRuns(scope),
+      port.account(scope, userId),
     ]);
   if (!context.ok && context.reason === "error" && context.status === 404)
     return { kind: "not_found" };
   return {
     kind: "ok",
     data: {
-      org: query.org,
+      org,
       context,
       counts,
       notifications,

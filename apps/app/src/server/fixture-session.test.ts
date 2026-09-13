@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  FIXTURE_CREDENTIALS,
   FIXTURE_SESSION_VALUE,
   FIXTURE_USER,
+  fixtureCredentialsMatch,
   isFixtureMode,
   readFixtureSession,
 } from "./fixture-session";
@@ -40,5 +42,43 @@ describe("readFixtureSession", () => {
     vi.stubEnv("MC_DATA", "fixture");
     expect(readFixtureSession(undefined)).toBeNull();
     expect(readFixtureSession("admin")).toBeNull();
+  });
+});
+
+describe("fixtureCredentialsMatch", () => {
+  it("matches the fixture operator's credentials in fixture mode, ignoring email case and spacing", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("MC_DATA", "fixture");
+    expect(
+      fixtureCredentialsMatch(
+        ` ${FIXTURE_USER.email.toUpperCase()} `,
+        FIXTURE_CREDENTIALS.password,
+      ),
+    ).toBe(true);
+    expect(fixtureCredentialsMatch(FIXTURE_USER.email, "wrong-password")).toBe(
+      false,
+    );
+    expect(
+      fixtureCredentialsMatch(
+        "someone@acme.example",
+        FIXTURE_CREDENTIALS.password,
+      ),
+    ).toBe(false);
+  });
+
+  it("never matches in a production build, even with MC_DATA=fixture (negative)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MC_DATA", "fixture");
+    expect(
+      fixtureCredentialsMatch(FIXTURE_USER.email, FIXTURE_CREDENTIALS.password),
+    ).toBe(false);
+  });
+
+  it("never matches outside fixture mode (negative)", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("MC_DATA", "live");
+    expect(
+      fixtureCredentialsMatch(FIXTURE_USER.email, FIXTURE_CREDENTIALS.password),
+    ).toBe(false);
   });
 });

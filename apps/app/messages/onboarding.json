@@ -163,7 +163,7 @@
       "notBacked": "Oxagen does not record the first frame from a newly wrapped agent yet, so this screen cannot wait for it. Your agent's runs appear on Fleet once they are recorded.",
       "continueToFleet": "Continue to Fleet",
       "errorTitle": "The collector cannot reach the model proxy",
-      "errorBody": "The host {host} enrolled, but every request to the model proxy has been refused. A proxy that cannot be reached means an unwrapped agent, so this will not complete on telemetry alone.",
+      "errorBody": "The host enrolled, but every request to the model proxy has been refused. A proxy that cannot be reached means an unwrapped agent, so this will not complete on telemetry alone.",
       "errorHint": "Check that outbound 443 to the proxy is allowed, then run oxagen agent status.",
       "checkAgain": "Check again"
     },

@@ -11,7 +11,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
-import type { DetectedRepository } from "../model";
+import type { DetectedRepository } from "@/data/contracts/onboarding";
 
 type Choice = "open" | "bound" | "skipped";
 

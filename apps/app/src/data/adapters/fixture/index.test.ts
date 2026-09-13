@@ -7,6 +7,7 @@ import type { Read } from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
 import type { DataSource, PortName } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
+import { FIXTURE_USER } from "@/server/fixture-session";
 import { type FixtureOptions, createFixtureSource } from "./index";
 import { seed } from "./seed";
 
@@ -55,7 +56,41 @@ const ARGS: Record<string, unknown[]> = {
   "spend.findingEvidence": ["fnd_01K5RTEG"],
   "spend.findingFix": ["fnd_01K5RT6C"],
   "audit.getReceipt": ["rcp_01K4X8M2E"],
+  "shell.context": [FIXTURE_USER.id],
+  "shell.notifications": [FIXTURE_USER.id],
+  "shell.account": [FIXTURE_USER.id],
+  "onboarding.installerOffer": ["gate"],
+  "onboarding.firstFrameScript": [
+    {
+      flow: "gate",
+      agentKey: "acme.core.perf-watch",
+      harness: "claude-code",
+      operator: "Marcus Bell",
+    },
+  ],
 };
+
+/** Methods whose arguments are not scope-first. */
+const CALL: Record<
+  string,
+  (source: DataSource, scope: Scope) => Promise<Read<unknown>>
+> = {
+  "onboarding.invitation": (source) =>
+    source.onboarding.invitation("invi_acme_pending"),
+  "onboarding.gate": (source, scope) => source.onboarding.gate("gate", scope),
+};
+
+/**
+ * Tenancy-grade lookups the state switch never applies to (like the fixture
+ * tenancy in src/server): a page's error or denied state still renders inside
+ * a resolved flow.
+ */
+const STATE_EXEMPT = new Set([
+  "onboarding.namespaces",
+  "onboarding.invitation",
+]);
+/** Unscoped: the invitation token is the capability, so there is no organization to refuse. */
+const FENCE_EXEMPT = new Set(["onboarding.invitation"]);
 
 /** Methods whose seeded row lives outside core-platform, with the scope that sees it. */
 const SCOPE: Record<string, Scope> = {
@@ -135,9 +170,19 @@ const RESULT: Record<string, z.ZodType> = {
   "audit.erasure": list(C.ErasureRequest),
   "audit.retention": list(C.RetentionTier),
   "audit.assuranceHistory": list(C.AssuranceHistoryRow),
-  "shell.notifications": list(C.Notification),
+  "shell.context": C.ShellContext,
+  "shell.navCounts": z.record(z.string(), C.NavCounts),
+  "shell.notifications": C.NotificationFeed,
   "shell.people": list(C.Person),
-  "shell.assistantEngine": C.AssistantEngineHealth,
+  "shell.assistantEngine": C.AssistantEngine,
+  "shell.recentRuns": list(C.CommandRun),
+  "shell.account": C.AccountView,
+  "onboarding.namespaces": C.FlowNamespaces,
+  "onboarding.invitation": C.InvitationView,
+  "onboarding.gate": C.OnboardingGate,
+  "onboarding.installerOffer": C.InstallerOffer,
+  "onboarding.firstFrameScript": C.FirstFrameScript,
+  "onboarding.detectedRepository": C.DetectedRepository,
 };
 
 type Invoke = (
@@ -152,6 +197,8 @@ const invoke: Invoke = (
   method,
   scope = SCOPE[`${port}.${method}`] ?? CORE,
 ) => {
+  const call = CALL[`${port}.${method}`];
+  if (call) return call(source, scope);
   const target = source[port] as unknown as Record<
     string,
     (...args: unknown[]) => Promise<Read<unknown>>
@@ -211,8 +258,10 @@ describe("fixture source · loaded", () => {
   );
 });
 
+const switched = methods.filter((m) => !STATE_EXEMPT.has(m.name));
+
 describe("fixture source · mc_state", () => {
-  it.each(methods)(
+  it.each(switched)(
     "$name fails with its page's §2.1 error code",
     async ({ port, method, page }) => {
       const cookie = page === "shell" ? "shell:error" : "error";
@@ -225,7 +274,7 @@ describe("fixture source · mc_state", () => {
     },
   );
 
-  it.each(methods)(
+  it.each(switched)(
     "$name is denied on its page's permission",
     async ({ port, method, page }) => {
       expect(await invoke(source(`${page}:denied`), port, method)).toEqual({
@@ -236,7 +285,7 @@ describe("fixture source · mc_state", () => {
     },
   );
 
-  it.each(methods)(
+  it.each(switched)(
     "$name reports the milestone and gap it waits on",
     async ({ port, method }) => {
       const table = BACKING[port] as Record<
@@ -302,7 +351,65 @@ describe("fixture source · mc_state", () => {
   });
 
   it("keeps the shell loaded under a global error", async () => {
-    expect((await source("error").shell.notifications(CORE)).ok).toBe(true);
+    expect(
+      (await source("error").shell.notifications(CORE, FIXTURE_USER.id)).ok,
+    ).toBe(true);
+  });
+
+  it("never switches the tenancy-grade onboarding lookups", async () => {
+    const s = source("error,welcome:denied");
+    expect(ok(await s.onboarding.namespaces(CORE))).toEqual({
+      org: "acme",
+      ws: "core",
+    });
+    expect(ok(await s.onboarding.namespaces(FINOPS)).ws).toBe("finops");
+    expect(ok(await s.onboarding.invitation("invi_acme_pending")).status).toBe(
+      "pending",
+    );
+  });
+
+  it("reads the gate's states per flow: the gate is the welcome page, Register its own", async () => {
+    const s = source("welcome:denied");
+    expect(await s.onboarding.gate("gate", null)).toEqual({
+      ok: false,
+      reason: "denied",
+      permission: "org.create",
+    });
+    expect((await s.onboarding.gate("register", CORE)).ok).toBe(true);
+    expect(
+      await source("register:denied").onboarding.gate("register", CORE),
+    ).toMatchObject({ reason: "denied", permission: "agent.register" });
+  });
+
+  it("finds no invitation, namespace or foreign gate that is not there (negative)", async () => {
+    const s = source();
+    for (const token of ["invi_missing", "toString", "__proto__"])
+      expect(await s.onboarding.invitation(token)).toMatchObject({
+        code: "invitation_not_found",
+        status: 404,
+      });
+    expect(await s.onboarding.namespaces(UNKNOWN_WS)).toMatchObject({
+      code: "workspace_not_found",
+      status: 404,
+    });
+    expect(await s.onboarding.namespaces(ORG)).toMatchObject({ status: 404 });
+    expect(await s.onboarding.gate("gate", FOREIGN_ORG)).toMatchObject({
+      code: "organization_not_found",
+    });
+  });
+
+  it("fills the first frame in for the agent being wrapped", async () => {
+    const script = ok(
+      await source().onboarding.firstFrameScript(CORE, {
+        flow: "register",
+        agentKey: "acme.core.perf-watch",
+        harness: "codex-cli",
+        operator: "Marcus Bell",
+      }),
+    );
+    expect(script.frames.map((f) => f.body).join(" ")).not.toMatch(/\{\w+\}/);
+    expect(script.frames[0]?.body).toContain("harness=codex-cli");
+    expect(script.frames[1]?.body).toContain("agent=acme.core.perf-watch");
   });
 
   it("reports the assistant engine down on assistant:down (W9)", async () => {
@@ -518,7 +625,7 @@ describe("fixture source · reads", () => {
     ).toMatchObject({ ok: false, code: "organization_not_found" });
   });
 
-  it.each(methods)(
+  it.each(methods.filter((m) => !FENCE_EXEMPT.has(m.name)))(
     "$name refuses a scope from another organization (negative)",
     async ({ port, method }) => {
       for (const cookie of [undefined, "empty,shell:empty"]) {

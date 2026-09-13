@@ -7,7 +7,7 @@ import en from "../../../messages/en.json";
 import shell from "../../../messages/shell.json";
 import { catalogStems, mergeCatalogs } from "@/i18n/catalogs";
 import { ACTIONS, ASK_QUESTIONS, COMMAND_GROUPS } from "./commands";
-import { NotificationSeverity } from "./contracts";
+import { NotificationSeverity } from "@/data/contracts/shell";
 import { ORG_NAV, WORKSPACE_NAV } from "./nav";
 import { ACCOUNT_TABS } from "./shell-state";
 import { THEMES } from "./theme";

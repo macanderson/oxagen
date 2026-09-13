@@ -8,7 +8,7 @@ import type {
   NavCounts,
   NotificationFeed,
   ShellContext,
-} from "./contracts";
+} from "@/data/contracts/shell";
 
 export type ShellData = {
   /** The organization slug from the URL; the fallback name when the context read failed. */

@@ -2,7 +2,7 @@
 // being unreachable from where the operator sits, so it renders as "down" with
 // the failure named: the assistant never pretends to be ready (plan W9).
 import type { Read } from "@/data/not-backed";
-import type { AssistantEngine } from "./contracts";
+import type { AssistantEngine } from "@/data/contracts/shell";
 
 export type EngineView =
   | { state: "up"; model: string; version: string }

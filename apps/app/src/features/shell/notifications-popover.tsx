@@ -13,12 +13,12 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import type { Read } from "@/data/not-backed";
+import { NO_GAP, type Read } from "@/data/not-backed";
 import type {
   NotificationFeed,
-  NotificationItem,
+  Notification,
   NotificationSeverity,
-} from "./contracts";
+} from "@/data/contracts/shell";
 import {
   SEVERITY_TONE,
   formatTimestamp,
@@ -38,7 +38,7 @@ function Item({
   item,
   runHref,
 }: {
-  item: NotificationItem;
+  item: Notification;
   runHref: string | null;
 }) {
   const t = useTranslations("shell.notifications");
@@ -101,7 +101,17 @@ function Body({ read }: { read: Read<NotificationFeed> }) {
             ]
           : [
               t("notBacked.title"),
-              t("notBacked.body", { milestone: read.milestone, gap: read.gap }),
+              // G0 is "no numbered gap": never shown as "gap G0".
+              read.milestone === "M0"
+                ? t("notBacked.bodyNotWired")
+                : read.gap === NO_GAP
+                  ? t("notBacked.bodyMilestoneOnly", {
+                      milestone: read.milestone,
+                    })
+                  : t("notBacked.body", {
+                      milestone: read.milestone,
+                      gap: read.gap,
+                    }),
             ];
     return (
       <div data-testid={`notifications-${read.reason}`} className="px-4 py-6">

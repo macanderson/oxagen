@@ -3,7 +3,7 @@
 import { ChevronRight, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/not-backed";
-import type { AssistantEngine } from "./contracts";
+import type { AssistantEngine } from "@/data/contracts/shell";
 import { engineView } from "./engine";
 import { useShellState } from "./shell-state";
 

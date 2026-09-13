@@ -8,6 +8,14 @@ const SCOPE = {
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
 
+/**
+ * Live methods already wired to their store. Each is tested where its read
+ * path is exercised end to end with the database mocked:
+ *   onboarding.namespaces → src/features/onboarding/reads.test.ts
+ *   onboarding.invitation → src/features/auth/invitations.test.ts
+ */
+const WIRED = new Set(["onboarding.namespaces", "onboarding.invitation"]);
+
 describe("live source before Batch 3", () => {
   it("implements every port method in the backing table, and no other", () => {
     const implemented = Object.entries(liveSource).flatMap(([port, methods]) =>
@@ -20,7 +28,7 @@ describe("live source before Batch 3", () => {
     );
   });
 
-  it.each(allMethods())(
+  it.each(allMethods().filter((m) => !WIRED.has(`${m.port}.${m.method}`)))(
     "$port.$method returns its milestone and gap, never a value",
     async ({ port, method, backing }) => {
       const target = liveSource[port] as unknown as Record<

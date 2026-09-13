@@ -11,7 +11,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useTransition } from "react";
 import type { Read } from "@/data/not-backed";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import type { AssistantEngine } from "./contracts";
+import type { AssistantEngine } from "@/data/contracts/shell";
 import { engineView } from "./engine";
 import { formatTimestamp } from "./format";
 import { useShellState } from "./shell-state";

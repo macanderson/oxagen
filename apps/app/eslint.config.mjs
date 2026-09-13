@@ -140,15 +140,10 @@ export default defineConfig([
   {
     // Where the fixture ban is lifted. Every other restriction stays.
     // - src/data/source.ts: the one file that selects the data-layer adapter.
-    // - src/features/shell/source.ts: PROMOTE. Lane L3's shell selects its
-    //   feature-local adapter the same way until it folds into
-    //   `dataSource().shell` (see the PROMOTE note in that file); drop the entry
-    //   then.
     // - Unit tests and stories drive components with fixture data and never
     //   ship in a production bundle (next build compiles neither).
     files: [
       "src/data/source.ts",
-      "src/features/shell/source.ts",
       "src/**/*.test.{ts,tsx}",
       "src/**/*.stories.tsx",
     ],

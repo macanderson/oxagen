@@ -14,22 +14,28 @@ import {
   vi,
 } from "vitest";
 import shellMessages from "../../../messages/shell.json";
+import { testFixtureShell } from "@/data/adapters/fixture/testing";
+import { liveShell } from "@/data/adapters/live/shell";
+import { FIXTURE_TENANT } from "@/data/fixture-tenant";
+import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { FIXTURE_USER } from "@/server/fixture-session";
-import { fixtureShell } from "./adapters/fixture";
-import { liveShell } from "./adapters/live";
-import { DEFAULT_SWITCHES } from "./fixture-switches";
 import type { ShellSource } from "./source";
 
 const source = vi.hoisted(() => ({ current: null as ShellSource | null }));
 
 vi.mock("./source", () => ({
-  shellSource: () => {
+  // requireViewer runs inside shellSource: an organization the viewer is not a
+  // member of never reaches the port.
+  shellSource: (org: string) => {
     if (source.current === null) throw new Error("no source set");
+    if (org !== "acme") return Promise.reject(new NotFound("NEXT_NOT_FOUND"));
     return Promise.resolve(source.current);
   },
 }));
 
-class NotFound extends Error {}
+const { NotFound } = vi.hoisted(() => ({
+  NotFound: class NotFound extends Error {},
+}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new NotFound("NEXT_NOT_FOUND");
@@ -51,8 +57,13 @@ vi.mock("next-intl/server", () => ({
     }),
 }));
 
+const ORG_SCOPE = {
+  orgId: FIXTURE_TENANT.orgId,
+  workspaceId: ORG_ONLY_WORKSPACE_ID,
+};
 const fixtureSource = (): ShellSource => ({
-  port: fixtureShell(DEFAULT_SWITCHES),
+  port: testFixtureShell(),
+  scope: ORG_SCOPE,
   userId: FIXTURE_USER.id,
 });
 
@@ -90,8 +101,12 @@ describe("ShellChrome", () => {
     ).rejects.toBeInstanceOf(NotFound);
   });
 
-  it("is not found without a session in fixture mode", async () => {
-    source.current = { port: fixtureShell(DEFAULT_SWITCHES), userId: null };
+  it("is not found when the organization read is a 404 for this viewer", async () => {
+    source.current = {
+      port: testFixtureShell(),
+      scope: ORG_SCOPE,
+      userId: "usr_someoneelse",
+    };
     const { ShellChrome } = await import("./shell-chrome");
     await expect(
       ShellChrome({ params: Promise.resolve({ org: "acme" }) }),
@@ -122,7 +137,7 @@ describe("WorkspaceGuard", () => {
   });
 
   it("does not 404 when the workspace list could not be read; the page decides", async () => {
-    source.current = { port: liveShell, userId: null };
+    source.current = { port: liveShell, scope: ORG_SCOPE, userId: "" };
     const { WorkspaceGuard } = await import("./shell-chrome");
     expect(
       await WorkspaceGuard({

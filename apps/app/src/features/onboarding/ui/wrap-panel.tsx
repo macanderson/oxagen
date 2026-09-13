@@ -22,7 +22,7 @@ import {
   panel,
 } from "@/ui/control-styles";
 import { enrollCommand, sdkSnippet } from "../agent-key";
-import type { InstallerOffer } from "../model";
+import type { InstallerOffer } from "@/data/contracts/onboarding";
 import {
   type Harness,
   type Platform,

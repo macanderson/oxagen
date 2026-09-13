@@ -9,7 +9,6 @@ export {
   readAuthorizeParams,
 } from "./cli-authorize";
 export { CliConsentForm } from "./cli-consent-form";
-export { FIXTURE_ORG, FIXTURE_RESET_TOKEN, FIXTURE_WORKSPACE } from "./fixture";
 export { githubSetupQueries } from "./github-setup-queries";
 export { parseInstallationId, resolveGithubSetupTarget } from "./github-setup";
 export { decideInvitation } from "./invitation";

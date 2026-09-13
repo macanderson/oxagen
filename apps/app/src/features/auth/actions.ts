@@ -9,17 +9,14 @@
 // action refuses outside fixture mode; every input is re-validated here.
 import { cookies } from "next/headers";
 import {
+  FIXTURE_CREDENTIALS,
   FIXTURE_SESSION_COOKIE,
   FIXTURE_SESSION_VALUE,
+  fixtureCredentialsMatch,
   isFixtureMode,
 } from "@/server/fixture-session";
 import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
 import { AFTER_SIGNUP } from "./routes";
-import {
-  FIXTURE_RESET_TOKEN,
-  FIXTURE_TOTP_CODE,
-  fixtureCredentialsMatch,
-} from "./fixture";
 import { sanitizeNext } from "./safe-next";
 import {
   type FieldErrors,
@@ -84,7 +81,10 @@ export async function verifyTwoFactorFixture(input: {
   if (!isFixtureMode()) return REFUSED;
   const parsed = TwoFactorSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fields: fieldErrors(parsed.error) };
-  if (parsed.data.method !== "totp" || parsed.data.code !== FIXTURE_TOTP_CODE) {
+  if (
+    parsed.data.method !== "totp" ||
+    parsed.data.code !== FIXTURE_CREDENTIALS.totpCode
+  ) {
     return { ok: false, outcome: "codeWrong" };
   }
   await setFixtureSession();
@@ -127,7 +127,7 @@ export async function resetPassword(input: {
       : { ok: false, fields };
   }
   if (isFixtureMode()) {
-    return parsed.data.token === FIXTURE_RESET_TOKEN
+    return parsed.data.token === FIXTURE_CREDENTIALS.resetToken
       ? { ok: true, to: "/login" }
       : { ok: false, outcome: "linkExpired" };
   }

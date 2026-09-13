@@ -5,7 +5,10 @@
 // an org they are not a member of.
 import "server-only";
 import { isFixtureMode } from "@/server/fixture-session";
-import { FIXTURE_ORG, FIXTURE_WORKSPACE } from "./fixture";
+import {
+  FIXTURE_HOME_WORKSPACE as FIXTURE_WORKSPACE,
+  FIXTURE_ORG,
+} from "@/server/fixture-tenancy";
 import type { GithubSetupQueries, GithubSetupTargetRow } from "./github-setup";
 
 const fixtureQueries: GithubSetupQueries = {

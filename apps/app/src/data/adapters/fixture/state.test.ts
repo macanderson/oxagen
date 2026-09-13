@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_SHELL_SWITCHES,
   NO_STATE_SWITCH,
+  parseShellSwitches,
   isStateSwitchHonoured,
   parseStateSwitch,
   readStateCookie,
@@ -99,5 +101,26 @@ describe("readStateCookie", () => {
 
   it("is undefined outside a request", async () => {
     await expect(readStateCookie()).resolves.toBeUndefined();
+  });
+});
+
+describe("parseShellSwitches", () => {
+  it("reads known values", () => {
+    expect(
+      parseShellSwitches({ engine: "down", notifications: "empty" }),
+    ).toEqual({ engine: "down", notifications: "empty" });
+    expect(parseShellSwitches({ notifications: "error" }).notifications).toBe(
+      "error",
+    );
+    expect(
+      parseShellSwitches({ notifications: "not_backed" }).notifications,
+    ).toBe("not_backed");
+  });
+
+  it("falls back to the defaults for missing or unknown values (negative)", () => {
+    expect(parseShellSwitches({})).toEqual(DEFAULT_SHELL_SWITCHES);
+    expect(
+      parseShellSwitches({ engine: "DOWN", notifications: "denied" }),
+    ).toEqual(DEFAULT_SHELL_SWITCHES);
   });
 });

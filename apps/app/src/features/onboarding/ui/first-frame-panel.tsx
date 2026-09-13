@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { buttonPrimary, mono, panel } from "@/ui/control-styles";
-import type { FirstFrameScript } from "../model";
+import type { FirstFrameScript } from "@/data/contracts/onboarding";
 import type { FlowMode } from "../steps";
 import { TierBadge } from "@/ui/tier-badge";
 
