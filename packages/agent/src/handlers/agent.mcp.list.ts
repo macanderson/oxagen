@@ -8,6 +8,8 @@ import type {
 
 export type { AgentMcpListInput, AgentMcpListOutput };
 
+type ServerRow = AgentMcpListOutput["servers"][number];
+
 export async function agentMcpListHandler(
   _input: AgentMcpListInput,
   ctx: CapabilityContext,
@@ -37,9 +39,11 @@ export async function agentMcpListHandler(
     servers: rows.map((r) => ({
       publicId: r.publicId,
       name: r.name,
-      transportType: r.transportType as "streamable-http" | "stdio",
+      // The columns are CHECK-constrained text; the contract enums carry the
+      // same value sets, and the kernel validates the output against them.
+      transportType: r.transportType as ServerRow["transportType"],
       endpointUrl: r.endpointUrl,
-      healthStatus: r.healthStatus as "healthy" | "degraded" | "unreachable",
+      healthStatus: r.healthStatus as ServerRow["healthStatus"],
       lastHealthcheckAt: r.lastHealthcheckAt
         ? r.lastHealthcheckAt.toISOString()
         : null,

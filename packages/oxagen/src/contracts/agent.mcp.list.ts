@@ -28,9 +28,13 @@ export const agentMcpList = registerCapability({
       z.object({
         publicId: z.string(),
         name: z.string(),
-        transportType: z.enum(["streamable-http", "stdio"]),
+        // Both value sets mirror the CHECK constraints on mcp.mcp_servers
+        // (packages/database/src/schema/mcp.ts). Plugin-installed servers
+        // are written with transport 'sse' and health 'unknown', so the
+        // list output has to admit every value the table can hold.
+        transportType: z.enum(["streamable-http", "sse", "stdio"]),
         endpointUrl: z.string(),
-        healthStatus: z.enum(["healthy", "degraded", "unreachable"]),
+        healthStatus: z.enum(["healthy", "degraded", "unreachable", "unknown"]),
         lastHealthcheckAt: z.string().nullable(),
         toolCount: z.number().int().nonnegative(),
       }),

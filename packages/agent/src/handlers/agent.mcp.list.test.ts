@@ -25,6 +25,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { agentMcpListHandler } from "./agent.mcp.list";
+import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
@@ -63,6 +64,27 @@ describe("agent.mcp.list handler", () => {
     expect(s.healthStatus).toBe("healthy");
     expect(s.lastHealthcheckAt).toBe("2026-01-01T00:00:00.000Z");
     expect(s.toolCount).toBe(2);
+  });
+
+  it("returns a plugin-installed row (sse, unknown) that the contract output accepts", async () => {
+    // plugin.set_enabled.ts inserts freshly enabled servers with transport
+    // 'sse' and health 'unknown'. The kernel parses handler output against
+    // the contract, so a row like this must survive that parse.
+    mocks.selectResult.mockReturnValueOnce([
+      {
+        publicId: "mcp_3",
+        name: "plugin-server",
+        transportType: "sse",
+        endpointUrl: "https://mcp.example.com/sse",
+        healthStatus: "unknown",
+        lastHealthcheckAt: null,
+        discoveredTools: [],
+      },
+    ]);
+    const result = await agentMcpListHandler({}, CTX);
+    const parsed = agentMcpList.output.parse(result);
+    expect(parsed.servers[0]!.transportType).toBe("sse");
+    expect(parsed.servers[0]!.healthStatus).toBe("unknown");
   });
 
   it("sets toolCount to 0 when discoveredTools is not an array", async () => {
