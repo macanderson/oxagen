@@ -148,6 +148,10 @@ describe("get_run", () => {
       encodeRunCursor({ at: "2026-09-11T10:00:00.000Z", id: LEDGER_ID }),
       Buffer.from("f:-1").toString("base64url"),
       Buffer.from("f:").toString("base64url"),
+      // Past int8 max: the ledger's bigint column never held it, so the
+      // handler never wrote it.
+      Buffer.from("f:9223372036854775808").toString("base64url"),
+      Buffer.from(`f:${"9".repeat(30)}`).toString("base64url"),
     ]) {
       const attempt = get(input({ framesAfter }), ctx());
       await expect(attempt).rejects.toBeInstanceOf(CapabilityError);
@@ -311,13 +315,23 @@ describe("frameSummary", () => {
 
 describe("frame cursor", () => {
   it("round-trips a run_seq and refuses anything else", () => {
-    expect(decodeFrameCursor(encodeFrameCursor("18446744073709551615"))).toBe(
-      "18446744073709551615",
+    expect(decodeFrameCursor(encodeFrameCursor("9223372036854775807"))).toBe(
+      "9223372036854775807",
     );
     expect(decodeFrameCursor(encodeFrameCursor("0"))).toBe("0");
     expect(decodeFrameCursor("not-a-cursor")).toBeNull();
     expect(
       decodeFrameCursor(Buffer.from("f:1.5").toString("base64url")),
     ).toBeNull();
+  });
+
+  it("refuses a run_seq past int8 max, which the ledger's bigint column never held (negative)", () => {
+    expect(
+      decodeFrameCursor(encodeFrameCursor("9223372036854775808")),
+    ).toBeNull();
+    expect(
+      decodeFrameCursor(encodeFrameCursor("18446744073709551615")),
+    ).toBeNull();
+    expect(decodeFrameCursor(encodeFrameCursor("9".repeat(30)))).toBeNull();
   });
 });

@@ -44,6 +44,9 @@ export const POLL_INTERVAL_MS = 500;
 
 const DECIMAL = /^\d+$/;
 
+/** The largest `run_seq` the ledger can hold: `run_seq` is a Postgres bigint. */
+const RUN_SEQ_MAX = 9223372036854775807n;
+
 // ---- Frame cursor ---------------------------------------------------------------------
 
 /** The cursor for an event: its `run_seq`, wrapped so the shape stays ours. */
@@ -51,12 +54,19 @@ export function encodeFrameCursor(runSeq: string): string {
   return Buffer.from(`f:${runSeq}`, "utf8").toString("base64url");
 }
 
-/** The `run_seq` a cursor names, or null for a cursor this handler did not write. */
+/**
+ * The `run_seq` a cursor names, or null for a cursor this handler did not
+ * write. The handler only mints cursors for `run_seq` values the bigint column
+ * holds, so a decimal past int8 max is refused here; passed through, the
+ * store's `::bigint` cast would raise and surface as a 500.
+ */
 export function decodeFrameCursor(raw: string): string | null {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   if (!text.startsWith("f:")) return null;
   const seq = text.slice(2);
-  return DECIMAL.test(seq) ? seq : null;
+  if (!DECIMAL.test(seq)) return null;
+  if (seq.length > 19 || BigInt(seq) > RUN_SEQ_MAX) return null;
+  return seq;
 }
 
 // ---- Frames ---------------------------------------------------------------------------
