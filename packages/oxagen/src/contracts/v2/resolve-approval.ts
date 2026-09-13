@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
 import { agentApprovalResolve } from "../agent.approval.resolve";
-import { agentMcpConsentResolve } from "../agent.mcp_consent.resolve";
 
 /**
  * Appendix E: `resolve_approval` — "approve or deny, mints the token". Absorbs

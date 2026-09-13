@@ -38,11 +38,31 @@ const contractFile = new Map<string, string>(
       ),
     ) as { rows: { absorbs: { name: string; file: string | null }[] }[] }
   ).rows.flatMap((r) =>
-    r.absorbs.filter((a) => a.file).map((a) => [a.name, a.file as string] as const),
+    r.absorbs
+      .filter((a) => a.file)
+      .map((a) => [a.name, a.file as string] as const),
   ),
 );
 
 const kebab = (n: string) => n.replace(/_/g, "-");
+
+/**
+ * The parts of a Zod schema's runtime structure this walk reads. Zod's public
+ * types do not expose `_def.schema` / `_def.innerType` / `_def.options` across
+ * wrapper kinds, so the walk narrows an `unknown` to just these optional keys
+ * instead of treating the schema as `any`.
+ */
+type ZodNode = {
+  shape?: Record<string, unknown>;
+  element?: unknown;
+  _def?: { schema?: unknown; innerType?: unknown; options?: unknown };
+};
+
+const asNode = (v: unknown): ZodNode | null =>
+  typeof v === "object" && v !== null ? (v as ZodNode) : null;
+
+/** A registered v1 contract declaration, as far as this test needs to read it. */
+type ContractDecl = { name: string; input: unknown };
 
 /**
  * Reach the object shape out of a Zod schema. A contract whose input carries a
@@ -50,8 +70,8 @@ const kebab = (n: string) => n.replace(/_/g, "-");
  * one level down. Returns null for a schema with no object shape at all (a
  * union, a bare array), which the caller reports rather than silently skips.
  */
-// biome-ignore lint/suspicious/noExplicitAny: walking Zod internals by design
-function shapeOf(schema: any): Record<string, unknown> | null {
+function shapeOf(value: unknown): Record<string, unknown> | null {
+  const schema = asNode(value);
   if (!schema) return null;
   if (schema.shape) return schema.shape;
   const inner = schema._def?.schema ?? schema._def?.innerType;
@@ -70,10 +90,11 @@ function shapeOf(schema: any): Record<string, unknown> | null {
  * that `allKeys` would otherwise report as silent drops, and that could then
  * only be "accounted for" by declaring drops that are not true.
  */
-// biome-ignore lint/suspicious/noExplicitAny: walking Zod internals by design
-function unionOptionsOf(schema: any): any[] | null {
+function unionOptionsOf(value: unknown): unknown[] | null {
+  const schema = asNode(value);
   if (!schema) return null;
-  if (Array.isArray(schema._def?.options)) return schema._def.options;
+  const options = schema._def?.options;
+  if (Array.isArray(options)) return options;
   const inner = schema._def?.schema ?? schema._def?.innerType;
   if (inner) return unionOptionsOf(inner);
   if (schema.element) return unionOptionsOf(schema.element);
@@ -89,8 +110,11 @@ function unionOptionsOf(schema: any): any[] | null {
  * force two of them to be renamed, breaking the by-import carry. Comparing only
  * top-level keys would report every such field as a silent drop.
  */
-// biome-ignore lint/suspicious/noExplicitAny: walking Zod internals by design
-function allKeys(schema: any, depth = 0, acc = new Set<string>()): Set<string> {
+function allKeys(
+  schema: unknown,
+  depth = 0,
+  acc = new Set<string>(),
+): Set<string> {
   if (depth > 4) return acc;
   // A union member's fields are carried, so walk every branch. Depth is not
   // spent here: the branches sit at the same level, not one below it.
@@ -150,18 +174,23 @@ describe("v2 carry is exhaustive", () => {
         }
         const srcMod = await import(`../${file.replace(/\.ts$/, "")}`);
         const src = Object.values(srcMod).find(
-          // biome-ignore lint/suspicious/noExplicitAny: registry declarations are untyped here
-          (v: any) => v && typeof v === "object" && v.name === sourceName,
-          // biome-ignore lint/suspicious/noExplicitAny: as above
-        ) as any;
+          (v): v is ContractDecl =>
+            typeof v === "object" &&
+            v !== null &&
+            (v as { name?: unknown }).name === sourceName,
+        );
         if (!src) {
-          unreadable.push(`${row.name}: could not find "${sourceName}" in ${file}`);
+          unreadable.push(
+            `${row.name}: could not find "${sourceName}" in ${file}`,
+          );
           continue;
         }
 
         const srcShape = shapeOf(src.input);
         if (!srcShape) {
-          unreadable.push(`${row.name}: "${sourceName}" input has no object shape`);
+          unreadable.push(
+            `${row.name}: "${sourceName}" input has no object shape`,
+          );
           continue;
         }
 
