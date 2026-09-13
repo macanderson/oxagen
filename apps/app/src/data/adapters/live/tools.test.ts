@@ -123,6 +123,7 @@ const {
 } = await import("./tools");
 type LiveToolsDeps = import("./tools").LiveToolsDeps;
 type InvokeRead = import("./tools").InvokeRead;
+type ToolsStore = import("./tools").ToolsStore;
 
 const dialect = new PgDialect();
 /** Every bound parameter and SQL fragment of the queries run against `table`. */
@@ -244,10 +245,18 @@ function withStore(overrides: Partial<typeof postgresToolsStore> = {}) {
 /** A store whose every method is a spy over the fake-transaction store. */
 function spiedStore() {
   return {
-    servers: vi.fn(postgresToolsStore.servers),
-    toolVersions: vi.fn(postgresToolsStore.toolVersions),
-    connections: vi.fn(postgresToolsStore.connections),
-    killSwitches: vi.fn(postgresToolsStore.killSwitches),
+    servers: vi.fn<ToolsStore["servers"]>((scope, grant) =>
+      postgresToolsStore.servers(scope, grant),
+    ),
+    toolVersions: vi.fn<ToolsStore["toolVersions"]>((scope, grant) =>
+      postgresToolsStore.toolVersions(scope, grant),
+    ),
+    connections: vi.fn<ToolsStore["connections"]>((scope, grant) =>
+      postgresToolsStore.connections(scope, grant),
+    ),
+    killSwitches: vi.fn<ToolsStore["killSwitches"]>((scope) =>
+      postgresToolsStore.killSwitches(scope),
+    ),
   };
 }
 
@@ -256,7 +265,7 @@ type KernelScript = {
   tools?: string[];
   connections?: string[];
   /** Capability name → the error its call rejects with. */
-  fail?: Partial<Record<string, unknown>>;
+  fail?: Partial<Record<string, Error>>;
 };
 
 type Call = { contract: string; input: unknown; userId: string };
@@ -300,8 +309,8 @@ function fakeKernel(script: KernelScript = {}) {
   }) => {
     const name = call.contract.name;
     calls.push({ contract: name, input: call.input, userId: call.userId });
-    if (script.fail && name in script.fail)
-      return Promise.reject(script.fail[name]);
+    const failure = script.fail?.[name];
+    if (failure !== undefined) return Promise.reject(failure);
     return Promise.resolve(answer(name, call.input) as O);
   };
   return { invoke, calls };
@@ -567,7 +576,7 @@ describe("live tools port", () => {
 
     it("toolVersions pages through every declaration and passes the servers too", async () => {
       const store = spiedStore();
-      const tools = Array.from({ length: 201 }, (_, i) => `tol_${i}`);
+      const tools = Array.from({ length: 201 }, (_, i) => `tol_${String(i)}`);
       const { invoke, calls } = fakeKernel({ tools });
       await port({ store, invoke }).toolVersions(SCOPE);
       expect(
