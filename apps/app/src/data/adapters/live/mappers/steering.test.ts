@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SteeringRecord } from "@/data/contracts/steering";
 import {
   type ContextRecordRow,
+  MAX_TOML_NESTING,
   RECORD_BODY_INVALID,
   TomlSubsetError,
   commitFromProvenance,
@@ -235,6 +236,79 @@ describe("parseRecordToml", () => {
     ["a table under an array of scalars", 'a = ["x"]\n[a.b]'],
   ])("rejects %s", (_label, source) => {
     expect(() => parseRecordToml(source)).toThrow(TomlSubsetError);
+  });
+
+  describe("prototype pollution (negative, security)", () => {
+    const polluted = () =>
+      (({}) as Record<string, unknown>).polluted ??
+      ({} as Record<string, unknown>).viaDotted;
+
+    it.each([
+      ["a [__proto__] header", '[__proto__]\npolluted = "yes"\n'],
+      ["a [[__proto__]] header", '[[__proto__]]\npolluted = "yes"\n'],
+      ["a dotted __proto__ key", 'a.__proto__.viaDotted = "yes"\n'],
+      ["a bare __proto__ key", '__proto__ = { polluted = "yes" }\n'],
+      [
+        "an inline-table __proto__ key",
+        'a = { __proto__ = { polluted = "yes" } }\n',
+      ],
+      ["a quoted __proto__ key", '"__proto__".polluted = "yes"\n'],
+      [
+        "a [constructor.prototype] header",
+        '[constructor.prototype]\npolluted = "yes"\n',
+      ],
+      ["a prototype key in a sub-table", '[a]\nprototype = "yes"\n'],
+      [
+        "a __proto__ segment after [[record]]",
+        '[[record]]\n[record.__proto__]\npolluted = "yes"\n',
+      ],
+    ])(
+      "refuses %s as a reserved key and leaves Object.prototype alone",
+      (_label, source) => {
+        expect(() => parseRecordToml(source)).toThrow(/reserved key/);
+        expect(polluted()).toBeUndefined();
+      },
+    );
+
+    it("builds tables with no prototype, so inherited names read as absent", () => {
+      const file = parseRecordToml('[t]\na = "x"\n');
+      expect(Object.getPrototypeOf(file)).toBeNull();
+      expect(Object.getPrototypeOf(file.t)).toBeNull();
+      expect("toString" in file).toBe(false);
+    });
+
+    it("keeps a table with a key named scalar a table", () => {
+      const file = parseRecordToml('[t]\nscalar = "x"\n[t.sub]\nb = "y"\n');
+      expect(file.t).toEqual({ scalar: "x", sub: { b: "y" } });
+    });
+
+    it("maps a row whose body tries to pollute as invalid, not as a record", () => {
+      const body = `${BODY}\n[record.__proto__]\npolluted = "yes"\n`;
+      expect(toSteeringRecord(row({ body }))).toMatchObject({
+        ok: false,
+        gap: "invalid",
+        field: "body",
+      });
+      expect(polluted()).toBeUndefined();
+    });
+
+    it("refuses a status that names an inherited property", () => {
+      expect(toSteeringRecord(row({ status: "toString" }))).toMatchObject({
+        ok: false,
+        gap: "invalid",
+        field: "status",
+      });
+    });
+  });
+
+  it("refuses nesting deeper than the cap instead of exhausting the stack (negative)", () => {
+    const deep = `a = ${"[".repeat(MAX_TOML_NESTING + 1)}${"]".repeat(MAX_TOML_NESTING + 1)}`;
+    expect(() => parseRecordToml(deep)).toThrow(/nesting too deep/);
+    const ok = `a = ${"[".repeat(MAX_TOML_NESTING)}${"]".repeat(MAX_TOML_NESTING)}`;
+    expect(() => parseRecordToml(ok)).not.toThrow();
+    expect(() => parseRecordToml(`a = ${"[".repeat(100_000)}`)).toThrow(
+      TomlSubsetError,
+    );
   });
 
   it("names the offset where reading stopped", () => {

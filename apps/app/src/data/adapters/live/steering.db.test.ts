@@ -1,6 +1,8 @@
-// The steering adapter against a real Postgres: seeds one published record
-// (record, version, promotion ledger entry) in a throwaway org and workspace,
-// reads it back through liveSteering.records, and removes what it wrote.
+// The steering supplement read against a real Postgres: seeds one published
+// record (record, version, promotion ledger entry) in two throwaway workspaces,
+// reads the active-version columns back through selectRecordSupplements (the
+// SQL half of liveSteering.records; the list_context_records half is the
+// kernel's and is faked here), and removes what it wrote.
 //
 // Opt-in, local only: MC_LIVE_DB=1 with DATABASE_URL pointing at the local
 // stack (localhost:5433, `pnpm dev`). The unit suite and CI skip it; the mocked
@@ -15,6 +17,7 @@ describe.runIf(enabled)(
     const orgId = crypto.randomUUID();
     const workspaceId = crypto.randomUUID();
     const otherWorkspaceId = crypto.randomUUID();
+    const publicIds = new Map<string, string>();
     const lineage = `ctx.mc-live-db.steering.t${Date.now().toString(36)}`;
     const body = `schema = "context-record/v0.1"
 set_id = "mc-live-db"
@@ -49,8 +52,12 @@ statement = "The release manager opens the release pull request. A person merges
               slug: lineage,
               title: "Merge rule",
             })
-            .returning({ id: schema.contextRecords.id });
+            .returning({
+              id: schema.contextRecords.id,
+              publicId: schema.contextRecords.publicId,
+            });
           if (!record) throw new Error("record insert returned no row");
+          publicIds.set(ws, record.publicId);
           const [version] = await tx
             .insert(schema.contextRecordVersions)
             .values({
@@ -106,10 +113,35 @@ statement = "The release manager opens the release pull request. A person merges
     });
 
     it("maps the seeded row, dated by its promotion, and only this workspace's", async () => {
-      const { liveSteering } = await import("./steering");
+      const { createLiveSteering, selectRecordSupplements } = await import(
+        "./steering"
+      );
+      const own = publicIds.get(workspaceId) ?? "";
+      const other = publicIds.get(otherWorkspaceId) ?? "";
+      // Asking for the other workspace's id from this scope returns nothing.
       await expect(
-        liveSteering.records({ orgId, workspaceId }),
-      ).resolves.toEqual({
+        selectRecordSupplements({ orgId, workspaceId }, [other]),
+      ).resolves.toEqual([]);
+      const steering = createLiveSteering({
+        principal: () => Promise.resolve("mc-live-db"),
+        invoke: (() =>
+          Promise.resolve({
+            records: [
+              {
+                id: own,
+                recordId: lineage,
+                title: "Merge rule",
+                status: "active",
+                version: 1,
+                checksum: "c".repeat(64),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+            total: 1,
+          })) as never,
+        recordSupplements: selectRecordSupplements,
+      });
+      await expect(steering.records({ orgId, workspaceId })).resolves.toEqual({
         ok: true,
         value: [
           {

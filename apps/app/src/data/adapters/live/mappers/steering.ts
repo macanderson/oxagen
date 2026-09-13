@@ -42,6 +42,13 @@ import {
 // multi-line), arrays, inline tables, and bare scalars. Strings are decoded;
 // numbers, booleans and dates are kept as raw scalars, because no steering field
 // reads one. Anything else is a TomlSubsetError, never a guess.
+//
+// The body is tenant-authored (publish_context_record) and read in the shared
+// server process, so the reader is hardened against prototype pollution: every
+// table is a null-prototype object, existing keys are looked up as own
+// properties only, and `__proto__`, `constructor` and `prototype` are refused as
+// keys anywhere (headers, dotted keys, inline tables). Nesting is capped so a
+// hostile body cannot exhaust the stack.
 
 export class TomlSubsetError extends Error {
   readonly code = "toml_subset_invalid";
@@ -59,6 +66,14 @@ export type TomlValue = string | TomlScalar | TomlValue[] | TomlTable;
 export type TomlTable = { [key: string]: TomlValue };
 
 const BARE_KEY = /[A-Za-z0-9_-]/;
+/** Keys that would reach Object.prototype through a plain property write. */
+const RESERVED_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+/** Deepest array / inline-table nesting a record file may use. */
+export const MAX_TOML_NESTING = 32;
 const ESCAPES: Record<string, string> = {
   b: "\b",
   t: "\t",
@@ -69,15 +84,30 @@ const ESCAPES: Record<string, string> = {
   "\\": "\\",
 };
 
-const isTable = (v: TomlValue | undefined): v is TomlTable =>
-  typeof v === "object" && !Array.isArray(v) && !("scalar" in v);
+/** A fresh table: no prototype, so no key can reach Object.prototype. */
+const newTable = (): TomlTable => Object.create(null) as TomlTable;
+
+/**
+ * Tables are the only null-prototype values the reader makes; a scalar is a
+ * plain object. A table that happens to have a `scalar` key stays a table.
+ */
+const isTable = (v: unknown): v is TomlTable =>
+  typeof v === "object" &&
+  v !== null &&
+  !Array.isArray(v) &&
+  Object.getPrototypeOf(v) === null;
+
+/** An own key of a table, never an inherited one. */
+const own = (table: TomlTable, key: string): TomlValue | undefined =>
+  Object.hasOwn(table, key) ? table[key] : undefined;
 
 class TomlReader {
   private i = 0;
+  private depth = 0;
   constructor(private readonly src: string) {}
 
   read(): TomlTable {
-    const root: TomlTable = {};
+    const root = newTable();
     let current = root;
     for (;;) {
       this.skipBlank();
@@ -134,9 +164,9 @@ class TomlReader {
     let table = root;
     path.forEach((segment, index) => {
       const last = index === path.length - 1;
-      const existing = table[segment];
+      const existing = own(table, segment);
       if (last && isArray) {
-        const next: TomlTable = {};
+        const next = newTable();
         if (existing === undefined) table[segment] = [next];
         else if (Array.isArray(existing)) existing.push(next);
         else this.fail(`key "${segment}" is not an array of tables`);
@@ -144,7 +174,7 @@ class TomlReader {
         return;
       }
       if (existing === undefined) {
-        const next: TomlTable = {};
+        const next = newTable();
         table[segment] = next;
         table = next;
       } else if (Array.isArray(existing)) {
@@ -173,13 +203,22 @@ class TomlReader {
   }
 
   private key(): string {
-    const c = this.src[this.i];
-    if (c === '"' || c === "'") return this.string();
     const start = this.i;
-    while (this.i < this.src.length && BARE_KEY.test(this.src[this.i] ?? ""))
-      this.i++;
-    if (this.i === start) this.fail("expected a key");
-    return this.src.slice(start, this.i);
+    const c = this.src[this.i];
+    let key: string;
+    if (c === '"' || c === "'") {
+      key = this.string();
+    } else {
+      while (this.i < this.src.length && BARE_KEY.test(this.src[this.i] ?? ""))
+        this.i++;
+      if (this.i === start) this.fail("expected a key");
+      key = this.src.slice(start, this.i);
+    }
+    if (RESERVED_KEYS.has(key)) {
+      this.i = start;
+      this.fail("reserved key");
+    }
+    return key;
   }
 
   private keyValue(table: TomlTable): void {
@@ -191,9 +230,9 @@ class TomlReader {
     const value = this.value();
     let target = table;
     for (const segment of path.slice(0, -1)) {
-      const existing = target[segment];
+      const existing = own(target, segment);
       if (existing === undefined) {
-        const next: TomlTable = {};
+        const next = newTable();
         target[segment] = next;
         target = next;
       } else if (isTable(existing)) {
@@ -210,8 +249,13 @@ class TomlReader {
   private value(): TomlValue {
     const c = this.src[this.i];
     if (c === '"' || c === "'") return this.string();
-    if (c === "[") return this.array();
-    if (c === "{") return this.inlineTable();
+    if (c === "[" || c === "{") {
+      if (this.depth >= MAX_TOML_NESTING) this.fail("nesting too deep");
+      this.depth++;
+      const nested = c === "[" ? this.array() : this.inlineTable();
+      this.depth--;
+      return nested;
+    }
     const start = this.i;
     while (
       this.i < this.src.length &&
@@ -240,7 +284,7 @@ class TomlReader {
 
   private inlineTable(): TomlTable {
     this.i++;
-    const table: TomlTable = {};
+    const table = newTable();
     this.skipInline();
     if (this.src[this.i] === "}") {
       this.i++;
@@ -387,14 +431,14 @@ function toDay(value: Date | string | null): string | null {
 }
 
 const str = (table: TomlTable | undefined, key: string): string | undefined => {
-  const v = table?.[key];
+  const v = table ? own(table, key) : undefined;
   return typeof v === "string" ? v : undefined;
 };
 const sub = (
   table: TomlTable | undefined,
   key: string,
 ): TomlTable | undefined => {
-  const v = table?.[key];
+  const v = table ? own(table, key) : undefined;
   return isTable(v) ? v : undefined;
 };
 
@@ -414,14 +458,17 @@ export function toSteeringRecord(row: ContextRecordRow): RecordMapping {
     if (err instanceof TomlSubsetError) return fail("invalid", "body");
     throw err;
   }
-  if (file.schema !== RECORD_SCHEMA) return fail("invalid", "schema");
+  if (own(file, "schema") !== RECORD_SCHEMA) return fail("invalid", "schema");
 
-  const records = Array.isArray(file.record) ? file.record.filter(isTable) : [];
-  const record = records.find((r) => r.lineage_id === row.slug);
+  const listed = own(file, "record");
+  const records = Array.isArray(listed) ? listed.filter(isTable) : [];
+  const record = records.find((r) => own(r, "lineage_id") === row.slug);
   if (!record) return fail("invalid", "lineage_id");
 
   const defaults = sub(file, "defaults");
-  const rawScope = record.sharing_scope ?? defaults?.sharing_scope ?? undefined;
+  const rawScope =
+    own(record, "sharing_scope") ??
+    (defaults ? own(defaults, "sharing_scope") : undefined);
   if (rawScope === undefined) return fail("unrepresentable", "sharing_scope");
   const scope = SharingScope.safeParse(rawScope);
   if (!scope.success) return fail("invalid", "sharing_scope");
@@ -431,7 +478,9 @@ export function toSteeringRecord(row: ContextRecordRow): RecordMapping {
   const force = str(sub(record, "steering"), "force");
   if (force === undefined) return fail("unrepresentable", "force");
 
-  const status = STATUS[row.status];
+  const status = Object.hasOwn(STATUS, row.status)
+    ? STATUS[row.status]
+    : undefined;
   if (!status) return fail("invalid", "status");
 
   const commitSha = commitFromProvenance(row.provenance);
@@ -442,7 +491,7 @@ export function toSteeringRecord(row: ContextRecordRow): RecordMapping {
     return fail("unrepresentable", "publishedOn");
 
   const parsed = SteeringRecord.safeParse({
-    lineage: record.lineage_id,
+    lineage: own(record, "lineage_id"),
     kind: str(record, "kind"),
     force,
     enforcement: null,
