@@ -19,6 +19,7 @@
 //                         support, no source and no Context PR, so a ledger
 //                         entry shown as a proposal would claim a review that
 //                         never happened. Proposals arrive with the promoter (M3).
+//                         The milestone is read from src/data/backing.ts.
 //   effect, retirement    not backed (M3 effect metrics, src/data/backing.ts).
 import "server-only";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -35,7 +36,7 @@ import {
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray, isNull, max } from "drizzle-orm";
 import { notBackedFor } from "@/data/backing";
-import { NO_GAP, denied, notBacked, readError } from "@/data/not-backed";
+import { denied, readError } from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
 import type { SteeringReadPort } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
@@ -164,7 +165,7 @@ export function createLiveSteering(deps: SteeringLiveDeps): SteeringReadPort {
       }
       return readSteeringRecords(rows);
     },
-    proposals: () => Promise.resolve(notBacked("M3", NO_GAP)),
+    proposals: () => Promise.resolve(notBackedFor("steering", "proposals")),
     effect: () => Promise.resolve(notBackedFor("steering", "effect")),
     retirementCandidates: () =>
       Promise.resolve(notBackedFor("steering", "retirementCandidates")),

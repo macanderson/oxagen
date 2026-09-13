@@ -139,7 +139,11 @@ export const BACKING = {
   },
   steering: {
     records: wired("steering", "A6"),
-    proposals: wired("steering", "A6", "partial"),
+    // §3.1 Steering · proposals: §3 said 🟡; at column level
+    // agent.context_promotions is the applied lifecycle ledger (each entry
+    // already decided) with no candidate state, support, source or Context PR,
+    // so proposals arrive with the promoter (M3), no gap id.
+    proposals: gap("steering", "A6", "none", "M3", NO_GAP),
     // §3.1 Steering · effect, retirement ❌ (effect metrics, M3).
     effect: gap("steering", "A6", "none", "M3", NO_GAP),
     retirementCandidates: gap("steering", "A6", "none", "M3", NO_GAP),

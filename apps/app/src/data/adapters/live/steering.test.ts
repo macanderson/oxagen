@@ -2,6 +2,7 @@ import type { ContextRecordListOutput } from "@oxagen/oxagen/contracts/context.r
 import { getScope } from "@oxagen/tenancy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { backingOf } from "@/data/backing";
 import { NO_GAP } from "@/data/not-backed";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { ContractOutputMismatch, ToolNotRegistered } from "@/server/errors";
@@ -414,6 +415,18 @@ describe("liveSteering methods with no store", () => {
       });
       expect(mocks.withTenantDb).not.toHaveBeenCalled();
       expect(mocks.invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["proposals", "effect", "retirementCandidates"] as const)(
+    "%s reads its milestone from the backing table the fixture shares",
+    async (method) => {
+      const { milestone, gap } = backingOf("steering", method);
+      expect(backingOf("steering", method).store).toBe("none");
+      await expect(liveSteering[method](SCOPE)).resolves.toMatchObject({
+        milestone,
+        gap,
+      });
     },
   );
 });
