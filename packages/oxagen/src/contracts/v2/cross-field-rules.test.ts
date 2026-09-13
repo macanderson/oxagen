@@ -6,6 +6,7 @@ import { changeSubscription } from "./change-subscription";
 import { eraseData } from "./erase-data";
 import { getSpend } from "./get-spend";
 import { setBudget } from "./set-budget";
+import { setConnection } from "./set-connection";
 
 /**
  * The cross-field rules on v2 inputs.
@@ -122,6 +123,71 @@ describe("erase_data input", () => {
   it("still requires the literal confirmation", () => {
     expect(
       eraseData.input.safeParse({ scope: "user", confirm: false }).success,
+    ).toBe(false);
+  });
+});
+
+describe("set_connection input", () => {
+  const base = {
+    name: "openrouter production",
+    kind: "model_provider" as const,
+    provider: "openrouter",
+  };
+
+  it("accepts a create that carries the candidate secret", () => {
+    expect(
+      setConnection.input.safeParse({ ...base, secret: "sk-or-v1-abcdefgh" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("accepts an oauth create that carries tokens instead of a secret", () => {
+    expect(
+      setConnection.input.safeParse({
+        ...base,
+        kind: "oauth",
+        provider: "github",
+        accessToken: "gho_abcdefgh",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a re-test that names the stored connection and no secret", () => {
+    expect(
+      setConnection.input.safeParse({ ...base, connectionId: "conn_123" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("refuses a call carrying neither secret material nor a connectionId", () => {
+    expect(messagesAt(setConnection.input, base, "secret")).toEqual([
+      "secret and connectionId must not both be omitted — supply secret material to test a candidate credential, or connectionId alone to test the stored one",
+    ]);
+  });
+
+  /**
+   * The half of `verify_model_credential`'s rule that this tool did not have to
+   * refine: verify made `provider` optional and had to reject a key without
+   * one, and here `provider` is required, so the object rejects it before any
+   * refinement runs. Asserted so a later loosening of `provider` cannot silently
+   * reopen the case the source contract was written to close.
+   */
+  it("still cannot be given secret material with no provider", () => {
+    const { provider: _dropped, ...noProvider } = base;
+    expect(
+      setConnection.input.safeParse({ ...noProvider, secret: "sk-or-v1-abcd" })
+        .success,
+    ).toBe(false);
+  });
+
+  /**
+   * The rename is what makes the carry legible, so it is checked rather than
+   * assumed: `verify_model_credential`'s `apiKey` is this tool's `secret`, and
+   * the 8–512 bound travels with the imported schema.
+   */
+  it("keeps the absorbed key schema's lower bound under the new name", () => {
+    expect(
+      setConnection.input.safeParse({ ...base, secret: "short" }).success,
     ).toBe(false);
   });
 });

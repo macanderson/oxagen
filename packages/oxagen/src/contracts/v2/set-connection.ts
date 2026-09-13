@@ -14,6 +14,110 @@ import { pluginCredentialSetSecret } from "../plugin.credential.set_secret";
 import { pluginCredentialReauth } from "../plugin.credential.reauth";
 
 /**
+ * The BASE object of the input, kept separate because the declared `input`
+ * carries a `.superRefine` and a ZodEffects has no `.shape`. The MCP parameter
+ * builder reads this object; `invoke()` re-parses the refined schema, so the
+ * rule below applies on every surface. `verify_model_credential` split its own
+ * input the same way and for the same reason.
+ */
+export const setConnectionInputObject = z.object({
+  /**
+   * Omit to create; supply to update. Supplying it with no secret material is
+   * the re-test path absorbed from `verify_model_credential`'s no-argument
+   * mode, and the re-auth path absorbed from `reauth_plugin_credential`.
+   */
+  connectionId: z.string().min(1).optional(),
+
+  /**
+   * Appendix A `tools.connections.name`. `upsert_secret_key`'s `key` is
+   * carried here (see renames) and is the only one of the six sources that
+   * named its credential — every other one was implicitly the only
+   * credential of its type, so it needed no name. A workspace with three
+   * api_key connections needs to tell them apart, and a vault key's name is
+   * exactly the workspace-unique label that does it.
+   */
+  name: z.string().min(1).max(120),
+
+  /** Appendix A `tools.connections.kind`. Replaces three source-specific
+   * discriminators: plugin `authKind`, the model-credential provider enum,
+   * and the vault key's `sensitive` flag. */
+  kind: z.enum([
+    "oauth",
+    "api_key",
+    "cloud_role",
+    "github_app",
+    "model_provider",
+  ]),
+
+  /**
+   * Appendix A `tools.connections.provider` is free text because a connection
+   * can point at any vendor. The closed `modelCredentialProviderSchema`
+   * (`openrouter`, `gateway`) still governs which values are legal when
+   * `kind` is `model_provider` — enforced in the handler rather than as a
+   * refinement here, so `.shape` stays reachable for the MCP parameter
+   * builder (the same reason `verify_model_credential` exported its base
+   * object separately).
+   */
+  provider: z.string().min(1).max(120),
+
+  /**
+   * The secret for an `api_key`, `cloud_role` or `model_provider`
+   * connection. Carried by reference from the model-credential schema, whose
+   * 8–512 bound is the learned part: the lower bound rejects an empty paste
+   * before anything is encrypted, the upper keeps a hostile value from
+   * inflating a log line or a ciphertext. `set_secret_value` accepted a bare
+   * `z.string()`, so this is a tightening — the stricter of two sources wins.
+   */
+  secret: modelCredentialApiKeySchema.optional(),
+
+  // Carried from `set_plugin_secret` for `kind: "oauth"`. The refresh token
+  // is stored and never read back — `list_connections` cannot return it and
+  // neither can this call's own output.
+  accessToken: pluginCredentialSetSecret.input.shape.accessToken,
+  refreshToken: pluginCredentialSetSecret.input.shape.refreshToken,
+
+  /**
+   * Appendix A `tools.tool_servers.connection_id` seen from the other end:
+   * binding at set time is what lets `register_tool_server` stay
+   * credential-free. Optional because a model-provider connection backs no
+   * server.
+   */
+  toolServerId: z.string().min(1).optional(),
+});
+
+/**
+ * The pairing rule carried from `verify_model_credential`, whose input refused
+ * a `provider` without an `apiKey` — "a provider with no key would silently
+ * verify the stored key under a possibly different provider and report the
+ * wrong thing".
+ *
+ * It could not be carried verbatim, and the two halves went different ways.
+ * The half that rejected a key with no provider is now structurally
+ * impossible: `provider` is required here, so no input can omit it. The half
+ * that rejected a provider with no key is this refinement. Verify's two modes
+ * survive the collapse as the two ways to satisfy it — secret material tests a
+ * candidate, a bare `connectionId` re-tests what is stored — so the message
+ * keeps the source's shape ("... to test a candidate ..., or ... the stored
+ * one") with the renamed fields in it.
+ *
+ * `accessToken` counts as secret material because an `oauth` connection is
+ * created from tokens rather than from `secret`; `set_plugin_secret` carried
+ * both and named neither as required.
+ */
+const setConnectionInput = setConnectionInputObject.superRefine(
+  (value, ctx) => {
+    const hasSecret =
+      value.secret !== undefined || value.accessToken !== undefined;
+    if (hasSecret || value.connectionId !== undefined) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["secret"],
+      message:
+        "secret and connectionId must not both be omitted — supply secret material to test a candidate credential, or connectionId alone to test the stored one",
+    });
+  },
+);
+/**
  * Appendix E: `set_connection` — "credential to a tool server or provider,
  * tested before save". Absorbs `set_model_credential`,
  * `verify_model_credential`, `upsert_secret_key`, `set_secret_value`,
@@ -151,70 +255,7 @@ export const setConnection = defineTool({
   // Writes tools.connections (ciphertext + digest) and stamps the test result.
   mutates: true,
 
-  input: z.object({
-    /**
-     * Omit to create; supply to update. Supplying it with no secret material is
-     * the re-test path absorbed from `verify_model_credential`'s no-argument
-     * mode, and the re-auth path absorbed from `reauth_plugin_credential`.
-     */
-    connectionId: z.string().min(1).optional(),
-
-    /**
-     * Appendix A `tools.connections.name`. `upsert_secret_key`'s `key` is
-     * carried here (see renames) and is the only one of the six sources that
-     * named its credential — every other one was implicitly the only
-     * credential of its type, so it needed no name. A workspace with three
-     * api_key connections needs to tell them apart, and a vault key's name is
-     * exactly the workspace-unique label that does it.
-     */
-    name: z.string().min(1).max(120),
-
-    /** Appendix A `tools.connections.kind`. Replaces three source-specific
-     * discriminators: plugin `authKind`, the model-credential provider enum,
-     * and the vault key's `sensitive` flag. */
-    kind: z.enum([
-      "oauth",
-      "api_key",
-      "cloud_role",
-      "github_app",
-      "model_provider",
-    ]),
-
-    /**
-     * Appendix A `tools.connections.provider` is free text because a connection
-     * can point at any vendor. The closed `modelCredentialProviderSchema`
-     * (`openrouter`, `gateway`) still governs which values are legal when
-     * `kind` is `model_provider` — enforced in the handler rather than as a
-     * refinement here, so `.shape` stays reachable for the MCP parameter
-     * builder (the same reason `verify_model_credential` exported its base
-     * object separately).
-     */
-    provider: z.string().min(1).max(120),
-
-    /**
-     * The secret for an `api_key`, `cloud_role` or `model_provider`
-     * connection. Carried by reference from the model-credential schema, whose
-     * 8–512 bound is the learned part: the lower bound rejects an empty paste
-     * before anything is encrypted, the upper keeps a hostile value from
-     * inflating a log line or a ciphertext. `set_secret_value` accepted a bare
-     * `z.string()`, so this is a tightening — the stricter of two sources wins.
-     */
-    secret: modelCredentialApiKeySchema.optional(),
-
-    // Carried from `set_plugin_secret` for `kind: "oauth"`. The refresh token
-    // is stored and never read back — `list_connections` cannot return it and
-    // neither can this call's own output.
-    accessToken: pluginCredentialSetSecret.input.shape.accessToken,
-    refreshToken: pluginCredentialSetSecret.input.shape.refreshToken,
-
-    /**
-     * Appendix A `tools.tool_servers.connection_id` seen from the other end:
-     * binding at set time is what lets `register_tool_server` stay
-     * credential-free. Optional because a model-provider connection backs no
-     * server.
-     */
-    toolServerId: z.string().min(1).optional(),
-  }),
+  input: setConnectionInput,
 
   output: z.object({
     connectionId: z.string(),
