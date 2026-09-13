@@ -1,8 +1,6 @@
 {
   "ui": {
-    "notRecorded": "not recorded",
     "money": {
-      "basisNotRecorded": "basis not recorded",
       "openBasis": "How {amount} was measured",
       "dialogTitle": "How this figure was measured",
       "dialogDescription": "Every number that is money carries its basis: where the figure came from. It never reads stronger than what was recorded.",
