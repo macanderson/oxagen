@@ -137,7 +137,7 @@ import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
 import { conversationChat } from "./conversation.chat";
-import { workspaceMemberList } from "./workspace.member.list";
+import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
@@ -501,7 +501,7 @@ export {
   capabilityRegistryGet,
   iamRoleList,
   conversationChat,
-  workspaceMemberList,
+  listMembers,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
@@ -746,7 +746,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryGet,
   iamRoleList,
   conversationChat,
-  workspaceMemberList,
+  listMembers,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
