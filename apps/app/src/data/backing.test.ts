@@ -35,7 +35,13 @@ describe("the backing table (plan §3 as data)", () => {
   });
 
   it("carries the §3.4 gaps the plan names for them", () => {
-    expect(BACKING.runs.listRuns).toMatchObject({ milestone: "M2", gap: "G3" });
+    // Fleet's list is wired by A1; each unrecorded row answers G3 or G6 itself.
+    expect(BACKING.runs.listRuns).toMatchObject({
+      lane: "A1",
+      store: "partial",
+      milestone: "M0",
+    });
+    expect(BACKING.spend.summary).toMatchObject({ milestone: "M2", gap: "G3" });
     expect(BACKING.agents.getMandate).toMatchObject({
       milestone: "M2",
       gap: "G1",
