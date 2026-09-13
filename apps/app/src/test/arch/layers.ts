@@ -22,7 +22,7 @@ export type Importer = {
   readonly directive: Directive;
 };
 
-export type LayerName =
+type LayerName =
   | "app"
   | "features"
   | "ui"
@@ -54,7 +54,7 @@ const isVocabulary = (target: string): boolean =>
   target === "data/unrecorded";
 
 /** Which §2 row a production module falls under; null for a file the matrix does not place. */
-export function layerOf(file: string): LayerName | null {
+function layerOf(file: string): LayerName | null {
   if (under(file, "app")) return "app";
   if (under(file, "features")) return "features";
   if (under(file, "ui")) return "ui";
@@ -102,13 +102,19 @@ const ALLOWED: Record<
     if (target === "server/sse") return from.file === "features/run/stream";
     return false;
   },
-  ui: (_from, target) =>
-    under(target, "ui") || isVocabulary(target) || under(target, "shared"),
+  // The "(types)" qualifiers of §2 are read literally: a value import of a
+  // zod schema from `@/data/contracts/*` or of `@/data/read` is a layer violation
+  // from `ui`, as is a value import of `@/server/viewer` from `ports`.
+  ui: (_from, target, edge) =>
+    under(target, "ui") ||
+    target === "data/unrecorded" ||
+    (isVocabulary(target) && edge.typeOnly) ||
+    under(target, "shared"),
   vocabulary: (_from, target) => isVocabulary(target),
-  ports: (_from, target) =>
+  ports: (_from, target, edge) =>
     target === "data/read" ||
     under(target, "data/contracts") ||
-    target === "server/viewer",
+    (target === "server/viewer" && edge.typeOnly),
   source: (_from, target) => under(target, "data/live"),
   live: (_from, target) =>
     isVocabulary(target) ||
@@ -173,7 +179,7 @@ const matches = (pattern: string, specifier: string): boolean => {
 };
 
 /** Rows keyed by file relative to APP_DIR (the module rows of the §2 table). */
-export const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
+const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   "src/server/kernel.ts": [
     "@oxagen/oxagen",
     "@oxagen/oxagen/kernel",

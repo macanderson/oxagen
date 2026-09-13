@@ -48,7 +48,7 @@ export function listFiles(dir: string): string[] {
 }
 
 /** Test-only modules: never in a production bundle, exempt as importers (§4 preamble, INV-22). */
-export function isTestOnly(file: string): boolean {
+function isTestOnly(file: string): boolean {
   return (
     file.startsWith("src/test/") ||
     /\.(test|type-test|builders|stories)\.tsx?$/.test(file) ||
@@ -278,19 +278,36 @@ const BASELINE_FILE = fileURLToPath(
   new URL("./baseline.json", import.meta.url),
 );
 
-export function readBaseline(): string[] {
-  const parsed: unknown = JSON.parse(readFileSync(BASELINE_FILE, "utf8"));
+/** Every rule an arch test owns; an entry under any other prefix would never be compared and never go stale. */
+const KNOWN_RULES: ReadonlySet<string> = new Set([
+  "layer",
+  "platform",
+  "client",
+  "route-guard",
+]);
+
+/** The entries of a baseline.json text; throws on a shape or rule prefix no test owns. */
+export function parseBaseline(text: string): string[] {
+  const parsed: unknown = JSON.parse(text);
   if (
     !Array.isArray(parsed) ||
     !parsed.every((entry): entry is string => typeof entry === "string")
   ) {
     throw new Error("baseline.json must be an array of strings");
   }
+  const unknown = parsed.filter((entry) => !KNOWN_RULES.has(ruleOf(entry)));
+  if (unknown.length > 0) {
+    throw new Error(
+      `baseline.json entries under no rule: ${unknown.join(", ")}`,
+    );
+  }
   return parsed;
 }
 
 export function baselineEntries(rules: readonly string[]): string[] {
-  return readBaseline().filter((entry) => rules.includes(ruleOf(entry)));
+  return parseBaseline(readFileSync(BASELINE_FILE, "utf8")).filter((entry) =>
+    rules.includes(ruleOf(entry)),
+  );
 }
 
 /** Multiset comparison, so two identical entries (one line, two identical `import()` calls) both stay accounted for. */

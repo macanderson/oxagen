@@ -20,7 +20,7 @@ const RULE = "route-guard";
 const VIEWER_RESOLVERS = ["requireViewer", "resolveViewer"] as const;
 
 /** The route modules INV-01 covers. */
-export function guardedRoutes(files: readonly string[]): string[] {
+function guardedRoutes(files: readonly string[]): string[] {
   return files.filter(
     (file) =>
       file.startsWith("src/app/") &&
@@ -47,7 +47,7 @@ const toAbs = (file: string): string => path.join(APP_DIR, file);
 const toRel = (abs: string): string =>
   path.relative(APP_DIR, abs).split(path.sep).join("/");
 
-export function createProgram(roots: readonly string[]): ts.Program {
+function createProgram(roots: readonly string[]): ts.Program {
   const options: ts.CompilerOptions = {
     noEmit: true,
     noLib: true,
@@ -254,7 +254,7 @@ function delegationReasons(
 }
 
 /** Baseline entries for one route module read from `file`, judged as if at `at`. */
-export function routeGuardViolations(
+function routeGuardViolations(
   program: ts.Program,
   file: string,
   at: string = file,

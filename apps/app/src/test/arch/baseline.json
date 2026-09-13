@@ -233,6 +233,7 @@
   "layer src/server/stream-feeds.ts:15 @/data/source",
   "layer src/ui/hooks/stream-merge.ts:6 @/server/stream-seq",
   "layer src/ui/hooks/use-event-stream.ts:15 @/data/not-backed",
+  "layer src/ui/money-basis-dialog.tsx:5 @/data/contracts/common",
   "layer src/ui/not-recorded-yet.tsx:3 @/data/not-backed",
   "layer src/ui/page-state.tsx:7 @/data/not-backed",
   "layer src/ui/page-state.tsx:8 @/data/page-states",

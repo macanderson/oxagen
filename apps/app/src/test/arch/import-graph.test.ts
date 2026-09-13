@@ -18,6 +18,7 @@ import {
   importEdges,
   listFiles,
   parse,
+  parseBaseline,
   productionFiles,
   readSource,
   resolveInternal,
@@ -30,7 +31,7 @@ type Rule = "layer" | "platform" | "client";
 const RULES: readonly Rule[] = ["layer", "platform", "client"];
 
 /** Every violation of one production module, as baseline entries. */
-export function violationsOf(source: SourceText): string[] {
+function violationsOf(source: SourceText): string[] {
   const sf = parse(source);
   const directive = directiveOf(sf);
   const from = {
@@ -107,6 +108,14 @@ describe("import graph", () => {
     });
   });
 
+  it("refuses a baseline entry under a rule no test owns", () => {
+    const entry = "layerr src/ui/x.ts:1 @/server/kernel";
+    expect(() => parseBaseline(JSON.stringify([entry]))).toThrow(entry);
+    expect(parseBaseline(JSON.stringify(["layer x", "route-guard y"]))).toEqual(
+      ["layer x", "route-guard y"],
+    );
+  });
+
   it("fails on a violation the baseline does not carry", () => {
     const entries = violationsOf({
       file: "src/ui/probe.ts",
@@ -130,6 +139,14 @@ const PROBE_DIR = "src/test/arch/probes/import-graph";
 const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   // The three named in the WL-01 acceptance.
   "ui-imports-kernel.ts": [{ at: "src/ui/probe.ts", expect: "layer" }],
+  "ui-imports-contract-value.tsx": [
+    { at: "src/ui/probe.tsx", expect: "layer" },
+  ],
+  "ui-imports-contract-type.tsx": [{ at: "src/ui/probe.tsx", expect: null }],
+  "ports-imports-viewer-value.ts": [
+    { at: "src/data/ports.ts", expect: "layer" },
+  ],
+  "ports-imports-viewer-type.ts": [{ at: "src/data/ports.ts", expect: null }],
   "oxagen-kernel-invoke.ts": [
     { at: "src/features/fleet/actions.ts", expect: "platform" },
     { at: "src/server/kernel.ts", expect: null },
