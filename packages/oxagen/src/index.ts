@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./registry";
 export * from "./kernel";
+export * from "./handler-error";
 export * from "./plugins";
 export * from "./agent-schema";
 export * from "./trigger-conditions";

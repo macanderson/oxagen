@@ -809,6 +809,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoCommandFetchHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_runs",
+    async () =>
+      (await import("./run.list")).runListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run",
+    async () =>
+      (await import("./run.get")).runGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_tacho_hosts",
     async () =>
       (await import("./tacho.host.list"))
