@@ -290,6 +290,7 @@ describe("organization.create handler", () => {
       slug: "acme-corp",
       type: "business",
       createdAt: "2026-01-01T00:00:00.000Z",
+      workspace: { publicId: "ws_new", slug: "core" },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -301,6 +302,7 @@ describe("organization.create handler", () => {
       website: undefined,
       industry: undefined,
       employeeSize: undefined,
+      workspace: { name: "Core", slug: "core" },
     };
     await handler_organizationCreate(args);
 

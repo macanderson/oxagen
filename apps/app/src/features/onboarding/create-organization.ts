@@ -12,7 +12,10 @@
 // withSystemDb is deliberate: no tenant exists yet, so no scope can be entered;
 // this call is what creates the first tenant identity.
 import "server-only";
-import { RESERVED_ORG_SLUGS, RESERVED_WORKSPACE_SLUGS } from "./agent-key";
+import {
+  RESERVED_ORG_SLUGS,
+  RESERVED_WORKSPACE_SLUGS,
+} from "@oxagen/oxagen/contracts/org.create";
 import type { OrganizationFormValue } from "./org-form";
 
 export type CreateOrganizationResult =
@@ -33,8 +36,8 @@ export async function createOrganization(
   form: OrganizationFormValue,
 ): Promise<CreateOrganizationResult> {
   // Re-checked here, not only in OrganizationForm: a route segment taken as an
-  // org or workspace slug makes that tenant unreachable, and the create_org
-  // contract does not know the app's routes yet.
+  // org or workspace slug makes that tenant unreachable. The sets live on the
+  // create_org contract, which refuses them on every surface.
   if (RESERVED_ORG_SLUGS.has(form.slug.trim()))
     return { ok: false, error: "slugReserved" };
   if (RESERVED_WORKSPACE_SLUGS.has(form.workspaceSlug.trim()))

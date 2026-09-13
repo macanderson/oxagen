@@ -62,7 +62,11 @@ vi.mock("@oxagen/handlers/workspace-registry-seed", () => ({
 vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
   seedWorkspaceDefaultEnvironmentSystem: seedEnvironment,
 }));
-vi.mock("@oxagen/oxagen/contracts/org.create", () => ({
+// The reserved-slug sets are the contract's own; only the parse is faked.
+vi.mock("@oxagen/oxagen/contracts/org.create", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@oxagen/oxagen/contracts/org.create")
+  >()),
   organizationCreate: {
     input: {
       safeParse: (v: { name: string; slug: string; type: string }) =>
