@@ -5,7 +5,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   buildCommands,
   type Command,
@@ -50,6 +50,7 @@ function CommandPalette({
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const optionId = (c: Command) =>
     `${listId}-${c.id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
 
@@ -78,13 +79,14 @@ function CommandPalette({
   return (
     <Dialog.Popup
       data-testid="command-menu"
+      initialFocus={inputRef}
       className="fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl"
     >
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
         <Search aria-hidden="true" className="size-4 text-muted-foreground" />
         <input
-          // Base UI moves focus into the popup; the input is the first control.
+          ref={inputRef}
           role="combobox"
           aria-expanded={groups.length > 0}
           aria-controls={groups.length > 0 ? listId : undefined}

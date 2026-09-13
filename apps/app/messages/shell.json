@@ -130,7 +130,6 @@
     "assistant": {
       "label": "Assistant",
       "launcher": "Assistant",
-      "open": "Open the assistant",
       "close": "Close the assistant",
       "ready": "{model} · ready",
       "engineDown": "engine down",
@@ -142,7 +141,6 @@
       "composer": {
         "label": "Message the assistant",
         "placeholder": "Ask about a run, or change something",
-        "send": "Send",
         "pending": "Sending a turn arrives with the engine connection (stella serve, ADR-053). Until then the assistant only reports its health here."
       },
       "down": {
@@ -172,7 +170,7 @@
         "security": "Security",
         "privacy": "Privacy"
       },
-      "footer": "Changes here run as set_preferences, a governed action audited like any other.",
+      "footer": "Profile and preference changes run as set_preferences, a governed action audited like any other, once that write is wired. Today only the theme changes here, and it is stored on this device.",
       "unavailable": {
         "title": "Your account could not load",
         "body": "Error {code} (HTTP {status}). Theme still works, because it is stored on this device."
