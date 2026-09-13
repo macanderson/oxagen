@@ -4,6 +4,7 @@
  */
 import { existsSync } from "node:fs";
 import { verifyBundle } from "../host/bundle";
+import { codexHookPresence, mergeCodexHooks } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
@@ -19,7 +20,11 @@ import {
   renderManagedSettings,
 } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
-import { enrollmentResponseSchema } from "../wire";
+import {
+  enrollmentResponseSchema,
+  type TachoHarness,
+  tachoHarnessSchema,
+} from "../wire";
 import {
   type CliDeps,
   type CredentialOptions,
@@ -35,6 +40,19 @@ export interface EnrollOptions extends CredentialOptions {
   validityDays?: number;
   /** Re-enroll even when a live enrollment exists. */
   force?: boolean;
+  /** Harnesses to hook (default: `["claude-code"]`). */
+  harnesses?: TachoHarness[];
+}
+
+/** Parse a `--harness` flag (`claude-code`, `codex`, or a comma list). */
+export function parseHarnesses(value: string | undefined): TachoHarness[] {
+  if (value === undefined || value.trim().length === 0) return ["claude-code"];
+  const names = value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  const parsed = names.map((name) => tachoHarnessSchema.parse(name));
+  return [...new Set(parsed)];
 }
 
 export interface EnrollResult {
@@ -103,6 +121,7 @@ export async function enroll(
 
   const existing = readHostFile(deps.paths.hostFile);
   let host: HostFile;
+  let harnesses: TachoHarness[] = options.harnesses ?? ["claude-code"];
   if (
     existing !== undefined &&
     existing.revoked_at === null &&
@@ -111,7 +130,19 @@ export async function enroll(
     deps.out(
       `Already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}); re-applying settings and service. Pass --force to enroll again.`,
     );
-    host = existing;
+    // Re-applying may add a harness (`--harness claude-code,codex` on an
+    // enrolled host) but never silently drops one the host already hooks.
+    harnesses = [
+      ...new Set([
+        ...(existing.harnesses as TachoHarness[]),
+        ...(options.harnesses ?? []),
+      ]),
+    ];
+    host =
+      harnesses.length === existing.harnesses.length
+        ? existing
+        : { ...existing, harnesses };
+    if (host !== existing) writeHostFile(deps.paths.hostFile, host);
   } else {
     step(1, "Authenticating with Oxagen");
     const resolved = resolveCredentials(options, deps.env, deps.home);
@@ -131,9 +162,10 @@ export async function enroll(
     );
 
     const claude = deps.claude();
+    const codex = harnesses.includes("codex") ? deps.codex() : {};
     step(
       3,
-      `Enrolling ${deps.hostname} in ${credentials.org}/${credentials.workspace}`,
+      `Enrolling ${deps.hostname} in ${credentials.org}/${credentials.workspace} for ${harnesses.join(", ")}`,
     );
     let response: Awaited<ReturnType<typeof callEnrollment>>;
     try {
@@ -144,7 +176,7 @@ export async function enroll(
         osVersion: deps.osVersion,
         arch: deps.arch,
         devicePublicKey: key.publicKey,
-        harnesses: ["claude-code"],
+        harnesses,
         ...(claude.version !== undefined
           ? { claudeVersion: claude.version }
           : {}),
@@ -216,10 +248,16 @@ export async function enroll(
       hostname: deps.hostname,
       os_user: deps.osUser,
       platform: deps.platform as HostFile["platform"],
-      harnesses: ["claude-code"],
+      harnesses,
       managed: options.managed === true || options.printManaged === true,
       claude_version: claude.version ?? null,
       claude_execpath: claude.path ?? null,
+      ...(harnesses.includes("codex")
+        ? {
+            codex_version: codex.version ?? null,
+            codex_execpath: codex.path ?? null,
+          }
+        : {}),
       wrapper_version: deps.wrapperVersion,
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
@@ -285,26 +323,41 @@ export async function enroll(
     managedSettings = renderManagedSettings(hookConfig);
     deps.out(JSON.stringify(managedSettings, null, 2));
   } else {
-    step(5, `Writing Claude Code hooks into ${deps.paths.claudeSettings}`);
-    const current = deps.readSettings();
-    const merged = mergeTachoSettings(current, hookConfig);
-    if (merged.changed) {
-      deps.writeSettings(merged.settings);
-      if (Object.keys(merged.displaced).length > 0) {
-        host = {
-          ...host,
-          displaced_env: { ...host.displaced_env, ...merged.displaced },
-        };
-        writeHostFile(deps.paths.hostFile, host);
-        warnings.push(
-          `replaced existing env values (${Object.keys(merged.displaced).join(", ")}); unenroll restores them`,
+    step(5, `Writing hooks for ${harnesses.join(", ")}`);
+    if (harnesses.includes("claude-code")) {
+      deps.out(`      Claude Code: ${deps.paths.claudeSettings}`);
+      const current = deps.readSettings();
+      const merged = mergeTachoSettings(current, hookConfig);
+      if (merged.changed) {
+        deps.writeSettings(merged.settings);
+        if (Object.keys(merged.displaced).length > 0) {
+          host = {
+            ...host,
+            displaced_env: { ...host.displaced_env, ...merged.displaced },
+          };
+          writeHostFile(deps.paths.hostFile, host);
+          warnings.push(
+            `replaced existing env values (${Object.keys(merged.displaced).join(", ")}); unenroll restores them`,
+          );
+        }
+        deps.out(
+          `      hooks written for ${Object.keys(merged.settings.hooks ?? {}).length} events; env block set`,
         );
+      } else {
+        deps.out("      already present; nothing to change");
       }
-      deps.out(
-        `      hooks written for ${Object.keys(merged.settings.hooks ?? {}).length} events; env block set`,
-      );
-    } else {
-      deps.out("      already present; nothing to change");
+    }
+    if (harnesses.includes("codex")) {
+      deps.out(`      Codex: ${deps.paths.codexHooks}`);
+      const merged = mergeCodexHooks(deps.readCodexHooks(), hookConfig);
+      if (merged.changed) {
+        deps.writeCodexHooks(merged.settings);
+        deps.out(
+          `      hooks written for ${codexHookPresence(merged.settings, host.host_enrollment_id).present.length} events (command hooks; Codex has no OTel export)`,
+        );
+      } else {
+        deps.out("      already present; nothing to change");
+      }
     }
     if (options.managed === true) {
       managedSettings = renderManagedSettings(hookConfig);
@@ -331,6 +384,14 @@ export async function enroll(
   } else {
     deps.out(`      claude ${claude.version ?? "?"} at ${claude.path}`);
   }
+  if (harnesses.includes("codex")) {
+    const codex = deps.codex();
+    if (codex.path === undefined)
+      warnings.push(
+        "`codex` is not on PATH; hooks will apply once it is installed",
+      );
+    else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
+  }
   if (options.service !== false) {
     let healthy = false;
     for (let attempt = 0; attempt < 20 && !healthy; attempt += 1) {
@@ -342,7 +403,9 @@ export async function enroll(
     }
     if (healthy)
       deps.out(
-        `      tachod healthy on 127.0.0.1:${host.port} and ${deps.paths.socket}`,
+        deps.platform === "win32"
+          ? `      tachod healthy on 127.0.0.1:${host.port}`
+          : `      tachod healthy on 127.0.0.1:${host.port} and ${deps.paths.socket}`,
       );
     else
       warnings.push(
@@ -353,7 +416,7 @@ export async function enroll(
     warnings.push("device key missing after enrollment");
   for (const warning of warnings) deps.err(`warning: ${warning}`);
   deps.out(
-    `Done. This machine reports to Oxagen as ${host.agent_key}; every Claude Code session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
+    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${harnesses.map((h) => (h === "codex" ? "Codex" : "Claude Code")).join(" and ")} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
   );
   return {
     ok: true,

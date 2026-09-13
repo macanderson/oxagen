@@ -5,9 +5,10 @@
  */
 import { Command } from "commander";
 import { startDaemon } from "../collector/daemon";
-import { defaultCliDeps } from "./deps";
-import { enroll } from "./enroll";
+import { defaultCliDeps, isNativeBuild } from "./deps";
+import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
+import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
 import { verify } from "./verify";
@@ -40,6 +41,11 @@ export function buildTachoProgram(): Command {
     )
     .option("--validity-days <n>", "Enrollment validity", (v) => Number(v))
     .option("--force", "Enroll again even if already enrolled")
+    .option(
+      "--harness <list>",
+      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+      "claude-code",
+    )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(async (opts: Record<string, unknown>) => {
       const result = await enroll(
@@ -54,6 +60,7 @@ export function buildTachoProgram(): Command {
           printManaged: opts["printManaged"] as boolean | undefined,
           validityDays: opts["validityDays"] as number | undefined,
           force: opts["force"] as boolean | undefined,
+          harnesses: parseHarnesses(opts["harness"] as string | undefined),
         },
         deps,
       );
@@ -102,6 +109,38 @@ export function buildTachoProgram(): Command {
           workspace: opts["workspace"] as string | undefined,
           purge: opts["purge"] as boolean | undefined,
           reason: opts["reason"] as string | undefined,
+        },
+        deps,
+      );
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  program
+    .command("reassign")
+    .description(
+      "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
+    )
+    .option("--workspace <slug>", "Workspace slug to report to")
+    .option("--org <slug>", "Organization slug (default: the current one)")
+    .option("--token <apiKey>", "Oxagen API token (or run `oxagen login`)")
+    .option("--api-url <url>", "Oxagen API base URL")
+    .option(
+      "--harness <list>",
+      "Replace the harness list (default: keep the current one)",
+    )
+    .option("--reason <text>", "Reason recorded with the revoke")
+    .action(async (opts: Record<string, unknown>) => {
+      const harness = opts["harness"] as string | undefined;
+      const result = await reassign(
+        {
+          token: opts["token"] as string | undefined,
+          org: opts["org"] as string | undefined,
+          workspace: opts["workspace"] as string | undefined,
+          apiUrl: opts["apiUrl"] as string | undefined,
+          reason: opts["reason"] as string | undefined,
+          ...(harness !== undefined
+            ? { harnesses: parseHarnesses(harness) }
+            : {}),
         },
         deps,
       );
@@ -160,7 +199,10 @@ export async function main(argv: string[] = process.argv): Promise<void> {
   await buildTachoProgram().parseAsync(argv);
 }
 
+// The native (SEA) build has its own entry that calls `main()`; this guard is
+// for `bin/tacho.mjs` and `tsx src/cli/main.ts`.
 if (
+  !isNativeBuild() &&
   process.argv[1] !== undefined &&
   /tacho(\.mjs|\/main\.ts)?$/.test(process.argv[1])
 ) {

@@ -22,15 +22,18 @@ import {
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
 import type { EnrollmentResponse } from "../wire";
+import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
 import {
   type CliDeps,
   claudeFacts,
+  harnessFacts,
   resolveCredentials,
   runtimeCommands,
   shellQuote,
 } from "./deps";
-import { enroll } from "./enroll";
+import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
+import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
 import { verify } from "./verify";
@@ -64,13 +67,18 @@ function fakeService(): ServiceManager & {
   return manager;
 }
 
+/** A second workspace's enrollment, so `reassign` is observable. */
+const OTHER_ENROLLMENT = "tch_zyxwvutsrqpnmkjhgfedcb";
+
 function enrollmentResponse(
   signer: ReturnType<typeof bundleSigner>,
+  workspace = "core",
 ): EnrollmentResponse {
   const bundle = signer.sign(unsignedBundle({ mode: "observe" }));
+  const id = workspace === "core" ? TEST_ENROLLMENT : OTHER_ENROLLMENT;
   return {
-    hostEnrollmentId: TEST_ENROLLMENT,
-    agentKey: "acme.core.cc-laptop",
+    hostEnrollmentId: id,
+    agentKey: `acme.${workspace}.cc-laptop`,
     apiKeyPublicId: "key_1",
     apiKey: "oxk_host_secret",
     enrollment: {
@@ -78,10 +86,10 @@ function enrollmentResponse(
         schema: "oxagen.tacho.host-enrollment.v1",
         issuer: "oxagen",
         audience: "tacho-host",
-        host_enrollment_id: TEST_ENROLLMENT,
+        host_enrollment_id: id,
         organization_id: "org_1",
-        workspace_id: "wrk_1",
-        agent_key: "acme.core.cc-laptop",
+        workspace_id: workspace === "core" ? "wrk_1" : "wrk_2",
+        agent_key: `acme.${workspace}.cc-laptop`,
         ingest_endpoint: "https://api.test/v1/tacho/events",
         bundle_endpoint: "https://api.test/v1/tacho/bundle",
         commands_endpoint: "https://api.test/v1/tacho/commands",
@@ -116,10 +124,12 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
   const fetch: FetchLike = async (url, init) => {
     requests.push({ url, body: JSON.parse(init.body ?? "{}") });
     if (url.endsWith("/tacho/enrollments")) {
+      const workspace =
+        /\/v1\/[^/]+\/([^/]+)\/tacho\/enrollments$/.exec(url)?.[1] ?? "core";
       return {
         ok: true,
         status: 200,
-        text: async () => JSON.stringify(enrollmentResponse(signer)),
+        text: async () => JSON.stringify(enrollmentResponse(signer, workspace)),
       };
     }
     if (url.endsWith("/tacho/enrollments/revoke")) {
@@ -171,7 +181,15 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         JSON.stringify(document, null, 2),
         0o644,
       ),
+    readCodexHooks: () => readJsonFileIfExists(paths.codexHooks),
+    writeCodexHooks: (document) =>
+      writeSensitiveFileAtomic(
+        paths.codexHooks,
+        JSON.stringify(document, null, 2),
+        0o644,
+      ),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
+    codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
     runtime: {
       hookCommand: "node /opt/tacho/tacho-hook.mjs",
       daemonCommand: ["node", "/opt/tacho/tachod.mjs"],
@@ -571,6 +589,196 @@ describe("enroll → status → unenroll", () => {
     expect(
       (await unenroll({ token: "t" }, failing)).warnings.join("\n"),
     ).toContain("service removal failed");
+  });
+});
+
+describe("harnesses and reassign", () => {
+  it("parses --harness lists and rejects unknown names", () => {
+    expect(parseHarnesses(undefined)).toEqual(["claude-code"]);
+    expect(parseHarnesses("codex")).toEqual(["codex"]);
+    expect(parseHarnesses(" claude-code, codex ,codex")).toEqual([
+      "claude-code",
+      "codex",
+    ]);
+    expect(() => parseHarnesses("cursor")).toThrow();
+  });
+
+  it("enrolls Codex next to Claude Code, and unenroll strips both", async () => {
+    const d = deps();
+    d.writeCodexHooks({
+      hooks: {
+        PreToolUse: [{ hooks: [{ type: "command", command: "mine.sh" }] }],
+      },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(d.requests[0]?.body).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+    });
+    const host = readHostFile(d.paths.hostFile);
+    expect(host).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+      codex_version: "0.104.0",
+      codex_execpath: "/usr/local/bin/codex",
+    });
+    const codex = d.readCodexHooks() as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    // Foreign group kept, Tacho's appended with the harness tag.
+    expect(codex.hooks["PreToolUse"]?.map((g) => g.hooks[0]?.command)).toEqual([
+      "mine.sh",
+      `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness codex`,
+    ]);
+    expect(Object.keys(codex.hooks).sort()).toEqual(
+      [...CODEX_HOOK_EVENTS].sort(),
+    );
+    expect(codex).not.toHaveProperty("env");
+    expect(codexHookPresence(codex, TEST_ENROLLMENT).complete).toBe(true);
+
+    const report = await status({ json: true }, d);
+    expect(report.host?.harnesses).toEqual(["claude-code", "codex"]);
+    expect(report.codexHooks?.complete).toBe(true);
+    expect(d.lines.join("\n")).toContain("Codex");
+
+    // Re-applying without --harness keeps Codex; it never drops a harness.
+    const again = await enroll({ token: "tok" }, d);
+    expect(again.ok).toBe(true);
+    expect(readHostFile(d.paths.hostFile)?.harnesses).toEqual([
+      "claude-code",
+      "codex",
+    ]);
+
+    await unenroll({ token: "tok" }, d);
+    const stripped = d.readCodexHooks() as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(
+      stripped.hooks["PreToolUse"]?.map((g) => g.hooks[0]?.command),
+    ).toEqual(["mine.sh"]);
+    expect(Object.keys(stripped.hooks)).toEqual(["PreToolUse"]);
+    expect(d.lines.join("\n")).toContain("removed from");
+  });
+
+  it("reassigns to another workspace keeping the device key and port", async () => {
+    const d = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    const before = readHostFile(d.paths.hostFile);
+    const keyBefore = readFileSync(d.paths.deviceKey, "utf8");
+    d.requests.length = 0;
+
+    const result = await reassign({ token: "tok", workspace: "edge" }, d);
+    expect(result.ok).toBe(true);
+    expect(result.from).toEqual({
+      org: "acme",
+      workspace: "core",
+      enrollmentId: TEST_ENROLLMENT,
+    });
+    expect(result.to).toEqual({
+      org: "acme",
+      workspace: "edge",
+      enrollmentId: OTHER_ENROLLMENT,
+    });
+    // Revoke of the old, then a create in the new workspace.
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/core/tacho/enrollments/revoke",
+      "https://api.test/v1/acme/edge/tacho/enrollments",
+    ]);
+    expect(d.requests[0]?.body).toMatchObject({
+      hostEnrollmentId: TEST_ENROLLMENT,
+      reason: "tacho reassign to acme/edge",
+    });
+    expect(d.requests[1]?.body).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+    });
+    const after = readHostFile(d.paths.hostFile);
+    expect(after).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      workspace_slug: "edge",
+      workspace_id: "wrk_2",
+      port: before?.port,
+      local_token: before?.local_token,
+      device_key_fingerprint: before?.device_key_fingerprint,
+      harnesses: ["claude-code", "codex"],
+      revoked_at: null,
+    });
+    expect(readFileSync(d.paths.deviceKey, "utf8")).toBe(keyBefore);
+    // Hooks now carry only the new enrollment id, in both harnesses.
+    const settings = JSON.stringify(d.readSettings());
+    expect(settings).not.toContain(TEST_ENROLLMENT);
+    expect(settings).toContain(OTHER_ENROLLMENT);
+    const codex = JSON.stringify(d.readCodexHooks());
+    expect(codex).not.toContain(TEST_ENROLLMENT);
+    expect(codex).toContain(OTHER_ENROLLMENT);
+
+    // Same target is a no-op; not enrolled and no --workspace are errors.
+    d.requests.length = 0;
+    expect((await reassign({ workspace: "edge" }, d)).ok).toBe(true);
+    expect(d.requests).toEqual([]);
+    expect((await reassign({ token: "tok" }, d)).ok).toBe(false);
+    const fresh = deps();
+    expect((await reassign({ workspace: "edge" }, fresh)).ok).toBe(false);
+    expect(fresh.errors[0]).toContain("Not enrolled");
+  });
+
+  it("prefers native sibling executables and quotes for cmd.exe on Windows", () => {
+    const native = runtimeCommands(
+      undefined,
+      {},
+      "/Applications/Oxagen.app/Contents/MacOS/tacho",
+      "darwin",
+      true,
+    );
+    expect(native.binDir).toBe("/Applications/Oxagen.app/Contents/MacOS");
+    expect(native.hookCommand).toBe(
+      "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+    );
+    expect(native.daemonCommand).toEqual([
+      "/Applications/Oxagen.app/Contents/MacOS/tachod",
+    ]);
+    const win = runtimeCommands(
+      undefined,
+      {},
+      "C:\\Program Files\\Oxagen\\tacho.exe",
+      "win32",
+      true,
+    );
+    expect(win.hookCommand).toBe('"C:\\Program Files\\Oxagen\\tacho-hook.exe"');
+    expect(win.daemonCommand).toEqual([
+      "C:\\Program Files\\Oxagen\\tachod.exe",
+    ]);
+    expect(shellQuote("C:\\a b\\x.exe", "win32")).toBe('"C:\\a b\\x.exe"');
+    expect(
+      harnessFacts(
+        (command, args) =>
+          command === "where"
+            ? {
+                status: 0,
+                stdout: "C:\\npm\\codex.cmd\r\nC:\\other\\codex.cmd\r\n",
+                stderr: "",
+              }
+            : { status: 0, stdout: `codex-cli 0.104.0\n`, stderr: "" },
+        "codex",
+        "win32",
+      ),
+    ).toEqual({ path: "C:\\npm\\codex.cmd", version: "0.104.0" });
   });
 });
 

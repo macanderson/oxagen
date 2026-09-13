@@ -1,9 +1,11 @@
 /**
- * `tacho-hook` entry: the command hook Claude Code runs for enforcement
- * events. Reads stdin, answers on stdout, exits 0 with a JSON decision.
+ * `tacho-hook` entry: the command hook Claude Code and Codex run for
+ * enforcement events. Reads stdin, answers on stdout, exits 0 with a JSON
+ * decision. `--harness codex` on the command line (written by the Codex
+ * settings writer) tells the daemon which harness produced the event.
  */
 import { tachoPaths } from "../host/paths";
-import { runTachoHook } from "./hook-client";
+import { harnessFromArgv, runTachoHook } from "./hook-client";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -17,6 +19,8 @@ export async function main(): Promise<void> {
     paths: tachoPaths(process.env),
     env: process.env,
     stdin,
+    harness: harnessFromArgv(process.argv),
+    platform: process.platform,
   });
   if (result.stderr.length > 0) process.stderr.write(result.stderr);
   process.stdout.write(result.stdout);

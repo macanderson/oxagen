@@ -1,14 +1,17 @@
 /**
  * Installing `tachod` as a user service (spec section 5.1 step 4): a launchd
- * agent on macOS, a systemd user unit on Linux. The unit files are rendered
- * by pure functions; the service manager calls are behind an `Exec` port so
- * tests run against a fake.
+ * agent on macOS, a systemd user unit on Linux, a per-user Task Scheduler
+ * task on Windows. The unit files are rendered by pure functions; the
+ * service manager calls are behind an `Exec` port so tests run against a
+ * fake.
  */
 import { join } from "node:path";
 import { ensureDir, writeSensitiveFileAtomic } from "./fs";
 import { existsSync, unlinkSync } from "node:fs";
 
 export const SERVICE_LABEL = "sh.oxagen.tachod";
+/** Task Scheduler names cannot carry dots; this is the Windows label. */
+export const SCHTASKS_NAME = "OxagenTachod";
 
 export interface ExecResult {
   status: number | null;
@@ -35,7 +38,7 @@ export interface ServiceStatus {
 }
 
 export interface ServiceManager {
-  readonly kind: "launchd" | "systemd" | "none";
+  readonly kind: "launchd" | "systemd" | "schtasks" | "none";
   readonly unitPath: string;
   install: (spec: ServiceSpec) => void;
   uninstall: () => void;
@@ -123,6 +126,8 @@ export interface ServiceManagerOptions {
   exec: Exec;
   /** The user's uid, for `launchctl bootstrap gui/<uid>`. */
   uid?: number;
+  /** Where the Windows launcher `.cmd` is written (`TachoPaths.daemonLauncher`). */
+  launcherPath?: string;
 }
 
 function launchdManager(options: ServiceManagerOptions): ServiceManager {
@@ -212,6 +217,93 @@ function systemdManager(options: ServiceManagerOptions): ServiceManager {
   };
 }
 
+/**
+ * The launcher the Windows task runs: a `.cmd` that sets the daemon's env
+ * (Task Scheduler cannot carry environment variables) and starts `tachod`
+ * with stdout and stderr appended to the log. Rendered as a pure function.
+ */
+export function renderWindowsLauncher(spec: ServiceSpec): string {
+  const cmdQuote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const env = Object.entries(spec.env)
+    .map(([key, value]) => `set "${key}=${value.replace(/"/g, "")}"`)
+    .join("\r\n");
+  const command = spec.command.map(cmdQuote).join(" ");
+  return [
+    "@echo off",
+    "rem Oxagen Tacho collector launcher; written by `tacho enroll`.",
+    env,
+    `cd /d ${cmdQuote(spec.workingDirectory)}`,
+    `${command} >> ${cmdQuote(spec.logPath)} 2>&1`,
+    "",
+  ].join("\r\n");
+}
+
+/**
+ * Task Scheduler is the per-user equivalent of a launchd agent: `/SC ONLOGON`
+ * starts it at sign-in, `/RL LIMITED` keeps it unelevated, and `/Run` starts
+ * it right away. The task is hidden from the foreground with `cmd /c start
+ * /min` so the collector does not own a console window.
+ */
+function schtasksManager(options: ServiceManagerOptions): ServiceManager {
+  const launcher = options.launcherPath ?? join(options.home, "tachod.cmd");
+  return {
+    kind: "schtasks",
+    unitPath: launcher,
+    install: (spec) => {
+      ensureDir(join(launcher, ".."), 0o755);
+      writeSensitiveFileAtomic(launcher, renderWindowsLauncher(spec), 0o600);
+      options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
+      const create = options.exec("schtasks", [
+        "/Create",
+        "/TN",
+        SCHTASKS_NAME,
+        "/SC",
+        "ONLOGON",
+        "/RL",
+        "LIMITED",
+        "/F",
+        "/TR",
+        `cmd /c start /min "" "${launcher}"`,
+      ]);
+      if (create.status !== 0) {
+        throw new Error(
+          `schtasks /Create failed (${create.status ?? "signal"}): ${create.stderr.trim() || create.stdout.trim()}`,
+        );
+      }
+      const run = options.exec("schtasks", ["/Run", "/TN", SCHTASKS_NAME]);
+      if (run.status !== 0) {
+        throw new Error(
+          `schtasks /Run failed (${run.status ?? "signal"}): ${run.stderr.trim() || run.stdout.trim()}`,
+        );
+      }
+    },
+    uninstall: () => {
+      options.exec("schtasks", ["/End", "/TN", SCHTASKS_NAME]);
+      options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
+      options.exec("taskkill", ["/IM", "tachod.exe", "/F"]);
+      if (existsSync(launcher)) unlinkSync(launcher);
+    },
+    status: () => {
+      const result = options.exec("schtasks", [
+        "/Query",
+        "/TN",
+        SCHTASKS_NAME,
+        "/FO",
+        "LIST",
+      ]);
+      const installed = result.status === 0;
+      const running = installed && /Status:\s+Running/i.test(result.stdout);
+      return {
+        installed,
+        running,
+        detail: installed
+          ? (/Status:\s+(\S+)/i.exec(result.stdout)?.[1] ?? "")
+          : "not installed",
+      };
+    },
+  };
+}
+
 function noneManager(): ServiceManager {
   return {
     kind: "none",
@@ -235,5 +327,6 @@ export function serviceManagerFor(
 ): ServiceManager {
   if (options.platform === "darwin") return launchdManager(options);
   if (options.platform === "linux") return systemdManager(options);
+  if (options.platform === "win32") return schtasksManager(options);
   return noneManager();
 }

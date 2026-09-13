@@ -58,6 +58,9 @@ export const hostFileSchema = z
     managed: z.boolean(),
     claude_version: z.string().nullable(),
     claude_execpath: z.string().nullable(),
+    /** Present once a host enrolls with `--harness codex`. */
+    codex_version: z.string().nullable().optional(),
+    codex_execpath: z.string().nullable().optional(),
     wrapper_version: z.string(),
     /** The command lines the settings and the service unit were written with. */
     hook_command: z.string().min(1),

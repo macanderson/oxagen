@@ -12,7 +12,7 @@ import {
   renameSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 export function ensureDir(path: string, mode = 0o700): void {
   mkdirSync(path, { recursive: true, mode });
@@ -26,7 +26,7 @@ export function writeSensitiveFileAtomic(
   ensureDir(dirname(path));
   const tmp = join(
     dirname(path),
-    `.${path.split("/").pop() ?? "file"}.${process.pid}.${Date.now()}.tmp`,
+    `.${basename(path) || "file"}.${process.pid}.${Date.now()}.tmp`,
   );
   const fd = openSync(tmp, "w", mode);
   try {

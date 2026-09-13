@@ -55,15 +55,6 @@ export const ALL_HOOK_EVENTS = [
 
 export type HookEventName = (typeof ALL_HOOK_EVENTS)[number];
 
-const COMMAND_TIMEOUTS_S: Record<(typeof COMMAND_HOOK_EVENTS)[number], number> =
-  {
-    SessionStart: 10,
-    UserPromptSubmit: 10,
-    PreToolUse: 15,
-    PermissionRequest: 600,
-    Stop: 10,
-  };
-
 const HTTP_TIMEOUT_S = 5;
 
 export const TACHO_LOCAL_TOKEN_ENV = "TACHO_LOCAL_TOKEN";
@@ -80,6 +71,35 @@ export interface HookInstallConfig {
   /** Path to `TACHO_HOME` when it is not the default, exported to hooks. */
   tachoHome?: string;
 }
+
+/**
+ * Hook and env entries are Claude Code's. Codex CLI's `hooks.json` shares
+ * the group shape but supports only command hooks and reads no env block,
+ * so its writer (`codex-writer.ts`) composes these helpers differently.
+ */
+export function commandHookEntry(
+  config: HookInstallConfig,
+  timeoutS: number,
+  harness: "claude-code" | "codex" = "claude-code",
+): HookEntry {
+  const tag = harness === "claude-code" ? "" : ` --harness ${harness}`;
+  return {
+    type: "command",
+    command: `${config.hookCommand} ${hookMarker(config.enrollmentId)}${tag}`,
+    timeout: timeoutS,
+  };
+}
+
+export const COMMAND_HOOK_TIMEOUTS_S: Record<
+  (typeof COMMAND_HOOK_EVENTS)[number],
+  number
+> = {
+  SessionStart: 10,
+  UserPromptSubmit: 10,
+  PreToolUse: 15,
+  PermissionRequest: 600,
+  Stop: 10,
+};
 
 export interface HookEntry {
   type: "command" | "http";
@@ -121,7 +141,7 @@ function isTachoEntry(entry: HookEntry, enrollmentId?: string): boolean {
   return false;
 }
 
-function isTachoGroup(group: HookGroup, enrollmentId?: string): boolean {
+export function isTachoGroup(group: HookGroup, enrollmentId?: string): boolean {
   return (
     Array.isArray(group.hooks) &&
     group.hooks.length > 0 &&
@@ -136,15 +156,7 @@ export function tachoHookEntries(
   const out = {} as Record<HookEventName, HookGroup[]>;
   for (const event of COMMAND_HOOK_EVENTS) {
     out[event] = [
-      {
-        hooks: [
-          {
-            type: "command",
-            command: `${config.hookCommand} ${hookMarker(config.enrollmentId)}`,
-            timeout: COMMAND_TIMEOUTS_S[event],
-          },
-        ],
-      },
+      { hooks: [commandHookEntry(config, COMMAND_HOOK_TIMEOUTS_S[event])] },
     ];
   }
   for (const event of HTTP_HOOK_EVENTS) {
