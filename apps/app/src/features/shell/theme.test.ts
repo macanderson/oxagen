@@ -80,8 +80,11 @@ describe("applyTheme", () => {
 
 describe("THEME_SCRIPT", () => {
   const run = () => {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- executes the exact pre-paint string under test
-    new Function(THEME_SCRIPT)();
+    // Executes the exact pre-paint string under test, as the browser would.
+    const script = document.createElement("script");
+    script.textContent = THEME_SCRIPT;
+    // jsdom does not run inserted scripts; indirect eval runs it in global scope.
+    (0, eval)(script.textContent);
   };
 
   it("applies the stored theme before paint, like applyTheme", () => {
