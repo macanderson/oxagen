@@ -14,7 +14,7 @@ All three data stores share a single identity seam (`@oxagen/tenancy`). The seam
 flowchart TD
   R[Request] --> CC[CapabilityContext: orgId, workspaceId]
   CC --> K[kernel.invoke]
-  K --> ALS[AsyncLocalStorage TenantScope]
+  K --> ALS[AsyncLocalStorage TenantScope]:::accent
   ALS --> PG[withTenantDb - Postgres]
   ALS --> N4[scopedSession - Neo4j]
   ALS --> CH[chInsert / chSelect - ClickHouse]"

@@ -18,12 +18,12 @@ Security at Oxagen is not a layer added on top of a product built for convenienc
 
 <Mermaid chart={`
 flowchart TD
-  R["Request<br/>app session · API key · MCP"] --> A{"Credential valid?"}
+  R["Request<br/>app session · API key · MCP"] --> A{{"Credential valid?"}}
   A -->|no| E401["401 Unauthorized"]
   A -->|yes| K["invoke()"]
-  K --> I{"IAM resolver"}
+  K --> I{{"IAM resolver"}}:::accent
   I -->|deny| D["capability.invoke_denied<br/>written to both audit stores"]
-  D --> E403["403 capability_denied"]
+  D --> E403["403 forbidden"]
   I -->|allow| H["Handler in tenant scope"]
   H --> PG["Postgres<br/>withTenantDb → RLS policy"]
   H --> NJ["Neo4j<br/>scopedSession guard"]

@@ -31,20 +31,20 @@ What the install does, in order:
 
 <Mermaid chart={`
 flowchart TD
-  S[Install from marketplace] --> T{Plugin type}
+  S[Install from marketplace] --> T{{Plugin type}}
   T -->|agent_capability| M[Look up manifest in the Oxagen plugin registry]
   M -->|unknown or hidden| X[Install fails]
   M --> U[Save listing, auth: none]
   T -->|other types| R[Resolve endpoint from the workspace's enabled registries]
   R -->|no match| X
   R --> A[Auth kind from registry metadata: secret or none]
-  A --> P{mcp_server or integration with auth none?}
-  P -->|yes| O[Probe endpoint: upgrade to oauth if protected]
+  A --> P{{mcp_server or integration with auth none?}}
+  P -->|yes| O[Probe endpoint: upgrade to oauth if protected]:::accent
   P -->|no| U2[Save listing, enabled]
   O --> U2
   U --> E[Audit event: plugin.installed]
   U2 --> E
-  E --> C{Auth kind}
+  E --> C{{Auth kind}}
   C -->|none| READY[Tools available to agents]
   C -->|oauth or secret| CONNECT[Connect step] --> READY
 `} />

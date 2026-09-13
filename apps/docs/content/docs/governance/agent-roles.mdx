@@ -86,15 +86,15 @@ Every assignment runs these checks, in order, inside the same transaction that w
 <Mermaid
   chart={`
 flowchart TD
-  A["assign_agent_role<br/>agentId, roleName"] --> R{"Role exists in this org?"}
+  A["assign_agent_role<br/>agentId, roleName"] --> R{{"Role exists in this org?"}}
   R -- no --> E1["agent_role_not_found"]
-  R -- yes --> H{"A human system role?<br/>Owner, Admin, ..."}
+  R -- yes --> H{{"A human system role?<br/>Owner, Admin, ..."}}
   H -- yes --> E2["agent_role_not_assignable"]
-  H -- no --> C{"Custom role on a plan<br/>below Enterprise?"}
+  H -- no --> C{{"Custom role on a plan<br/>below Enterprise?"}}
   C -- yes --> E3["TIER_DENIED"]
-  C -- no --> L{"Enterprise org?"}
+  C -- no --> L{{"Enterprise org?"}}
   L -- no --> OK["Role attached and audited"]
-  L -- yes --> X{"Does the role grant anything<br/>more permissive than you hold?"}
+  L -- yes --> X{{"Does the role grant anything<br/>more permissive than you hold?"}}:::accent
   X -- yes --> E4["agent_role_ceiling_exceeded<br/>lists the capabilities"]
   X -- no --> OK
 `}

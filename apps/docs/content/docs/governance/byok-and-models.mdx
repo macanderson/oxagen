@@ -66,16 +66,16 @@ Oxagen decides who pays once per turn, before any model call, and the same answe
 <Mermaid
   chart={`
 flowchart TD
-  T["Assistant turn starts"] --> K{"Stored key that is active<br/>and can be decrypted?"}
+  T["Assistant turn starts"] --> K{{"Stored key that is active<br/>and can be decrypted?"}}
   K -- "credential read fails" --> X["Turn fails before any spend"]
   K -- "no key, disabled, or<br/>cannot be decrypted" --> PF["Oxagen's key pays"]
-  K -- yes --> OF["Your key pays"]
-  PF --> G{"Org not suspended and<br/>credit balance above zero?"}
+  K -- yes --> OF["Your key pays"]:::accent
+  PF --> G{{"Org not suspended and<br/>credit balance above zero?"}}
   OF --> G
   G -- no --> R1["402: refused"]
-  G -- yes --> W{"Who pays?"}
+  G -- yes --> W{{"Who pays?"}}
   W -- "your key" --> RUN1["Turn runs<br/>tokens billed at zero"]
-  W -- "Oxagen's key" --> S{"Month's assistant usage<br/>at or over the cap?"}
+  W -- "Oxagen's key" --> S{{"Month's assistant usage<br/>at or over the cap?"}}
   S -- yes --> R2["402: assistant_spend_cap"]
   S -- no --> RUN2["Turn runs<br/>tokens billed as assistant usage"]
 `}
