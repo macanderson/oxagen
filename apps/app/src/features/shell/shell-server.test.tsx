@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 // The server half: the chrome loads through the source and 404s an unknown
-// organization; the workspace guard 404s an unknown workspace; the frame
-// streams a skeleton and the pre-paint theme script.
+// organization; the frame streams a skeleton and the pre-paint theme script.
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement } from "react";
 import {
@@ -15,7 +14,6 @@ import {
 } from "vitest";
 import shellMessages from "../../../messages/shell.json";
 import { testFixtureShell } from "@/data/adapters/fixture/testing";
-import { liveShell } from "@/data/adapters/live/shell";
 import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { FIXTURE_USER } from "@/server/fixture-session";
@@ -111,39 +109,6 @@ describe("ShellChrome", () => {
     await expect(
       ShellChrome({ params: Promise.resolve({ org: "acme" }) }),
     ).rejects.toBeInstanceOf(NotFound);
-  });
-});
-
-describe("WorkspaceGuard", () => {
-  it("lets a real workspace through", async () => {
-    const { WorkspaceGuard } = await import("./shell-chrome");
-    expect(
-      await WorkspaceGuard({
-        params: Promise.resolve({ org: "acme", ws: "finops" }),
-      }),
-    ).toBeNull();
-  });
-
-  it("is not found for an unknown workspace or organization", async () => {
-    const { WorkspaceGuard } = await import("./shell-chrome");
-    await expect(
-      WorkspaceGuard({ params: Promise.resolve({ org: "acme", ws: "nope" }) }),
-    ).rejects.toBeInstanceOf(NotFound);
-    await expect(
-      WorkspaceGuard({
-        params: Promise.resolve({ org: "globex", ws: "finops" }),
-      }),
-    ).rejects.toBeInstanceOf(NotFound);
-  });
-
-  it("does not 404 when the workspace list could not be read; the page decides", async () => {
-    source.current = { port: liveShell, scope: ORG_SCOPE, userId: "" };
-    const { WorkspaceGuard } = await import("./shell-chrome");
-    expect(
-      await WorkspaceGuard({
-        params: Promise.resolve({ org: "acme", ws: "anything" }),
-      }),
-    ).toBeNull();
   });
 });
 

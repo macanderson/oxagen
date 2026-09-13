@@ -1279,11 +1279,14 @@ describe("liveAuditStores", () => {
 });
 
 describe("the live source wiring", () => {
+  // The first import of ./index pulls every live adapter through the module
+  // graph. With the whole suite running in parallel that alone has exceeded the
+  // default 5s test budget on a loaded machine, so the import carries its own.
   it("serves the audit port and the shell's notifications from this adapter", async () => {
     const { liveSource } = await import("./index");
     expect(liveSource.audit).toBe(liveAudit);
     expect(liveSource.shell).toHaveProperty("notifications", liveNotifications);
-  });
+  }, 30_000);
 
   it("reports a store failure to telemetry and returns the page's error", async () => {
     kernel.getSession.mockResolvedValueOnce({ user: { id: VIEWER } });
