@@ -52,7 +52,7 @@ export function Chip({
         className={cx("size-3 shrink-0", ICON_TONE[tone])}
       />
       <span className="truncate">{label}</span>
-      {suffix}
+      {suffix ? <> {suffix}</> : null}
     </span>
   );
 }
