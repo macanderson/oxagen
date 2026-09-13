@@ -10,6 +10,8 @@ overrides:
   d3-path: 3.1.0
   d3-shape: 3.2.0
 
+packageExtensionsChecksum: sha256-rLHN3zzE72PMCrO8b1/4MOgQrvIibkiNSnVN0jccwJY=
+
 importers:
 
   .:
@@ -432,7 +434,7 @@ importers:
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
       lucide-react:
         specifier: 0.469.0
-        version: 0.469.0(react@19.2.6)
+        version: 0.469.0(@types/react@19.2.15)(react@19.2.6)
       motion:
         specifier: 12.40.0
         version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -1833,7 +1835,7 @@ importers:
         version: 2.1.1
       lucide-react:
         specifier: 0.469.0
-        version: 0.469.0(react@19.2.6)
+        version: 0.469.0(@types/react@19.2.15)(react@19.2.6)
       motion:
         specifier: 12.40.0
         version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -10254,7 +10256,11 @@ packages:
   lucide-react@0.469.0:
     resolution: {integrity: sha512-28vvUnnKQ/dBwiCQtwJw7QauYnE7yd2Cyp4tTTJpvglX4EMpbflcdBgrgToX2j71B3YvugK/NH3BGUk+E/p/Fw==}
     peerDependencies:
+      '@types/react': '*'
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   lucide-react@1.17.0:
     resolution: {integrity: sha512-9FA9evdox/JQL5PT57fdA1x/yg8T7knJ98+zjTL3UfKza6pflQUUh3XtaQIHKvnsJw1lmsEyHVlt5jchYxOQ5w==}
@@ -21893,9 +21899,11 @@ snapshots:
 
   lru-cache@7.18.3: {}
 
-  lucide-react@0.469.0(react@19.2.6):
+  lucide-react@0.469.0(@types/react@19.2.15)(react@19.2.6):
     dependencies:
       react: 19.2.6
+    optionalDependencies:
+      '@types/react': 19.2.15
 
   lucide-react@1.17.0(react@19.2.6):
     dependencies:

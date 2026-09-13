@@ -20,6 +20,20 @@ overrides:
   d3-path: 3.1.0
   d3-shape: 3.2.0
 
+# lucide-react 0.469 (the @oxagen/ui kit's pin) imports "react" types without
+# declaring @types/react as a peer, so pnpm resolves them through the hidden
+# hoist, which holds the highest @types/react in the tree. Once apps/app moved
+# to @types/react 19.3, every 19.2 consumer of lucide saw two unrelated
+# React type trees (TS2322 "Two different types with this name exist"). The
+# optional peer makes each lucide instance use its consumer's @types/react.
+packageExtensions:
+  lucide-react@0.469.0:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+
 onlyBuiltDependencies:
   - "@swc/core"
   - blake3
