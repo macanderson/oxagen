@@ -8,7 +8,11 @@ import {
   mapAttemptRow,
   type RunSummary,
 } from "@oxagen/run-ledger";
-import type { TokenUsageByStepRow } from "@oxagen/telemetry";
+import {
+  sumTokenUsageByExecutionStep,
+  type TokenUsageByStepRow,
+} from "@oxagen/telemetry";
+import { requireScope, TenantScopeError } from "@oxagen/tenancy";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq, inArray, isNotNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -31,6 +35,7 @@ import {
   type LiveRunsDeps,
   MAX_FRAMES_PER_READ,
   MAX_SKIPPED_EVENT_PAGES,
+  postgresRunQueries,
   RUN_PAGE_SIZE,
   type RunQueries,
   runIdKind,
@@ -701,6 +706,95 @@ describe("queries name the tenant", () => {
     expect(tacho.params).toEqual(
       expect.arrayContaining(["running", LEDGER_ID, 11]),
     );
+  });
+});
+
+// ---- Default dependencies ------------------------------------------------------------------
+
+describe("defaultLiveRunsDeps", () => {
+  const deps = defaultLiveRunsDeps();
+
+  it("enters the viewer's tenant scope for the read", async () => {
+    await expect(
+      deps.inScope(SCOPE, () => {
+        const { orgId, workspaceId } = requireScope();
+        return Promise.resolve({ orgId, workspaceId });
+      }),
+    ).resolves.toEqual(SCOPE);
+  });
+
+  it("refuses a malformed tenant id before any read (negative)", () => {
+    expect(() =>
+      deps.inScope({ orgId: "acme", workspaceId: "core" }, () =>
+        Promise.resolve(1),
+      ),
+    ).toThrow(TenantScopeError);
+  });
+
+  it.each([
+    ["getRunByPublicId", () => deps.store.getRunByPublicId(LEDGER_ID)],
+    ["listRunAttempts", () => deps.store.listRunAttempts(RUN_UUID)],
+    [
+      "readAttemptEventsSince",
+      () => deps.store.readAttemptEventsSince(RUN_UUID, "0", 10),
+    ],
+    [
+      "queries.ledgerPage",
+      () =>
+        postgresRunQueries.ledgerPage(SCOPE, {
+          live: false,
+          cursor: null,
+          limit: 1,
+        }),
+    ],
+    [
+      "queries.ledgerIdentity",
+      () => postgresRunQueries.ledgerIdentity(SCOPE, RUN_UUID),
+    ],
+    [
+      "queries.ledgerRollups",
+      () => postgresRunQueries.ledgerRollups(SCOPE, [RUN_UUID]),
+    ],
+    [
+      "queries.ledgerSeals",
+      () => postgresRunQueries.ledgerSeals(SCOPE, [RUN_UUID]),
+    ],
+    [
+      "queries.tachoPage",
+      () =>
+        postgresRunQueries.tachoPage(SCOPE, {
+          live: false,
+          cursor: null,
+          limit: 1,
+        }),
+    ],
+    [
+      "queries.tachoSession",
+      () => postgresRunQueries.tachoSession(SCOPE, TACHO_ID),
+    ],
+    [
+      "queries.tachoTouched",
+      () => postgresRunQueries.tachoTouched(SCOPE, RUN_UUID),
+    ],
+  ] as const)(
+    "%s fails closed outside a tenant scope (negative)",
+    async (_name, read) => {
+      await expect(read()).rejects.toBeInstanceOf(TenantScopeError);
+    },
+  );
+
+  it("answers an empty id list without a query", async () => {
+    await expect(postgresRunQueries.ledgerRollups(SCOPE, [])).resolves.toEqual(
+      new Map(),
+    );
+    await expect(postgresRunQueries.ledgerSeals(SCOPE, [])).resolves.toEqual(
+      new Map(),
+    );
+  });
+
+  it("costs runs with sumTokenUsageByExecutionStep over the Postgres queries", () => {
+    expect(deps.sumTokenUsage).toBe(sumTokenUsageByExecutionStep);
+    expect(deps.queries).toBe(postgresRunQueries);
   });
 });
 

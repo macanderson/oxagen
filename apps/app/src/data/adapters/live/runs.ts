@@ -446,19 +446,7 @@ export const postgresRunQueries: RunQueries = {
     const rows = await withTenantDb((tx) =>
       ledgerRollupQuery(tx, scope, runIds),
     );
-    return new Map(
-      rows.map((r) => [
-        r.runId,
-        {
-          frames: r.frames,
-          modelCalls: r.modelCalls,
-          toolCalls: r.toolCalls,
-          turnIndexes: r.turnIndexes,
-          opaqueModelCalls: r.opaqueModelCalls,
-          lastModel: r.lastModel,
-        },
-      ]),
-    );
+    return new Map(rows.map(({ runId, ...rollup }) => [runId, rollup]));
   },
   ledgerSeals: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();
@@ -480,9 +468,10 @@ export const postgresRunQueries: RunQueries = {
   },
 };
 
-let ledgerStore: RunStore | null = null;
-
 export function defaultLiveRunsDeps(): LiveRunsDeps {
+  // Construction is pure (closures over withTenantDb); nothing connects until
+  // a read runs inside a tenant scope.
+  const ledger = createPostgresRunStore();
   return {
     inScope: (scope, fn) =>
       runInTenantScope(
@@ -490,16 +479,10 @@ export function defaultLiveRunsDeps(): LiveRunsDeps {
         fn,
       ),
     store: {
-      getRunByPublicId: (id) =>
-        (ledgerStore ??= createPostgresRunStore()).getRunByPublicId(id),
-      listRunAttempts: (id) =>
-        (ledgerStore ??= createPostgresRunStore()).listRunAttempts(id),
+      getRunByPublicId: (id) => ledger.getRunByPublicId(id),
+      listRunAttempts: (id) => ledger.listRunAttempts(id),
       readAttemptEventsSince: (id, after, limit) =>
-        (ledgerStore ??= createPostgresRunStore()).readAttemptEventsSince(
-          id,
-          after,
-          limit,
-        ),
+        ledger.readAttemptEventsSince(id, after, limit),
     },
     queries: postgresRunQueries,
     sumTokenUsage: sumTokenUsageByExecutionStep,
