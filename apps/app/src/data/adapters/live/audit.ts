@@ -262,8 +262,10 @@ export function createLiveAudit({
               ? (users.get(event.actorUserId) ?? null)
               : null,
             decision:
-              byInvocation.get(`${event.requestId}:${event.capability}`) ??
-              null,
+              event.requestId && event.capability
+                ? (byInvocation.get(`${event.requestId}:${event.capability}`) ??
+                  null)
+                : null,
           }),
         );
         return settle(
@@ -474,9 +476,11 @@ async function resolvePrincipals(
       resolved.set(r.id, {
         kind: r.kind,
         displayName: r.displayName,
-        userPublicId: r.parentUserId
-          ? (userPublicId.get(r.parentUserId) ?? null)
-          : null,
+        // An agent's parent user is its operator, not who acted.
+        userPublicId:
+          r.kind === "human" && r.parentUserId
+            ? (userPublicId.get(r.parentUserId) ?? null)
+            : null,
         agentKey: agentKey.get(r.id) ?? null,
       });
     }
@@ -484,7 +488,11 @@ async function resolvePrincipals(
   return resolved;
 }
 
-/** ClickHouse returns UUIDs as strings; the Enum8 comes back as its label. */
+/**
+ * The JSON format returns UUIDs as strings and an Enum8 as its label. No
+ * `toString(x) AS x` in the query: ClickHouse resolves an alias inside WHERE,
+ * so a String alias of request_id would never match the Array(UUID) filter.
+ */
 type DecisionWire = {
   request_id: string;
   capability: string;
@@ -538,10 +546,10 @@ export const liveAuditStores: AuditStores = {
       chSelect<DecisionWire>({
         query: `
           SELECT
-            toString(request_id) AS request_id,
+            request_id,
             capability,
-            toString(acting_principal_id) AS acting_principal_id,
-            toString(acting_principal_kind) AS acting_principal_kind,
+            acting_principal_id,
+            acting_principal_kind,
             target_kind,
             target_id
           FROM audit_events FINAL
@@ -568,7 +576,8 @@ export const liveAuditStores: AuditStores = {
       (r): DecisionRow => ({
         requestId: r.request_id,
         capability: r.capability,
-        actingPrincipalKind: r.acting_principal_kind,
+        actingPrincipalKind:
+          r.acting_principal_id === NIL_UUID ? null : r.acting_principal_kind,
         targetKind: r.target_kind,
         targetId: r.target_id,
         principal: principals.get(r.acting_principal_id) ?? null,

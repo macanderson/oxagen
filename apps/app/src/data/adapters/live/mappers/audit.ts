@@ -16,7 +16,8 @@
 //     at        ✅ occurred_at
 //     kind      ✅ event_type (`auth.sign_in`, `capability.invoke_allowed`, …)
 //     actor     ✅ audit_events.acting_principal_kind/id → an agent key or a
-//                 service principal's name; else actor_user_id → auth.users.public_id;
+//                 service principal's name; else actor_user_id → auth.users.public_id
+//                 (also when IAM resolved no principal and wrote `service` + nil id);
 //                 ∅ when neither resolves (a failed sign-in with an unknown email)
 //     summary   ∅ no prose is recorded; the page words the kind from its catalog
 //     severity  ∅ security_events has no severity column (spec A.9 adds one)
@@ -98,7 +99,11 @@ export type SecurityEventRow = AuditLogQueryOutput["events"][number];
 export type DecisionRow = {
   requestId: string;
   capability: string;
-  actingPrincipalKind: "human" | "agent" | "service";
+  /**
+   * `acting_principal_kind`, or null when IAM resolved no principal: emitAudit
+   * then writes `service` with the nil id, which is not a service acting.
+   */
+  actingPrincipalKind: "human" | "agent" | "service" | null;
   targetKind: string | null;
   targetId: string | null;
   /** The acting principal, when `iam.principals` has it under this scope. */
@@ -335,10 +340,10 @@ export function toRetentionTiers(
       retention:
         posture.effectiveRetentionDays === null
           ? null
-          : `P${posture.effectiveRetentionDays}D`,
+          : `P${String(posture.effectiveRetentionDays)}D`,
       volume:
         posture.storedGbMeasured && posture.storedGbBeyondIncluded !== null
-          ? `${posture.storedGbBeyondIncluded} GB`
+          ? `${String(posture.storedGbBeyondIncluded)} GB`
           : null,
     },
   ];
