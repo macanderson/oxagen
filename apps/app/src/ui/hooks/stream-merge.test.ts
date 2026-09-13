@@ -91,7 +91,7 @@ describe("fleet patches (idempotent apply)", () => {
   ];
 
   it("returns the initial rows untouched with no patches", () => {
-    expect(selectFleetRows(initial, emptyFleetLive<Row>())).toBe(initial);
+    expect(selectFleetRows(initial, emptyFleetLive<Row>(), "0")).toBe(initial);
   });
 
   it("replaces a patched row in place, drops a removed row, prepends a new row newest first", () => {
@@ -103,7 +103,7 @@ describe("fleet patches (idempotent apply)", () => {
       upsert("4", "arun_d", "live"),
     ])
       live = applyFleetPatch(live, p);
-    expect(selectFleetRows(initial, live)).toEqual([
+    expect(selectFleetRows(initial, live, "0")).toEqual([
       { id: "arun_d", status: "live" },
       { id: "arun_c", status: "live" },
       { id: "arun_a", status: "paused" },
@@ -117,10 +117,40 @@ describe("fleet patches (idempotent apply)", () => {
     );
     expect(applyFleetPatch(once, upsert("5", "arun_a", "sealed"))).toBe(once);
     expect(applyFleetPatch(once, upsert("4", "arun_a", "live"))).toBe(once);
-    expect(selectFleetRows(initial, once)[0]).toEqual({
+    expect(selectFleetRows(initial, once, "0")[0]).toEqual({
       id: "arun_a",
       status: "sealed",
     });
+  });
+
+  it("starts the cursor at the rendered seq, so an older patch is ignored", () => {
+    const live = emptyFleetLive<Row>("10");
+    expect(live.lastSeq).toBe("10");
+    expect(applyFleetPatch(live, upsert("10", "arun_a", "sealed"))).toBe(live);
+    expect(applyFleetPatch(live, upsert("9", "arun_a", "sealed"))).toBe(live);
+  });
+
+  it("lets fresher server rows win over a patch at or below the rendered seq", () => {
+    let live = emptyFleetLive<Row>();
+    for (const p of [
+      upsert("5", "arun_a", "running"),
+      remove("6", "arun_b"),
+      upsert("7", "arun_x", "live"),
+      upsert("12", "arun_y", "live"),
+    ])
+      live = applyFleetPatch(live, p);
+    const fresh: Row[] = [
+      { id: "arun_a", status: "done" },
+      { id: "arun_b", status: "live" },
+    ];
+    // Rendered at 10: patches 5, 6 and 7 are already reflected in `fresh`.
+    expect(selectFleetRows(fresh, live, "10")).toEqual([
+      { id: "arun_y", status: "live" },
+      { id: "arun_a", status: "done" },
+      { id: "arun_b", status: "live" },
+    ]);
+    // Rendered at 12: every patch is stale, the server list comes back as-is.
+    expect(selectFleetRows(fresh, live, "12")).toBe(fresh);
   });
 
   it("a row created then removed never appears", () => {
@@ -129,7 +159,7 @@ describe("fleet patches (idempotent apply)", () => {
       upsert("1", "arun_x", "live"),
     );
     live = applyFleetPatch(live, remove("2", "arun_x"));
-    expect(selectFleetRows(initial, live).map((r) => r.id)).toEqual([
+    expect(selectFleetRows(initial, live, "0").map((r) => r.id)).toEqual([
       "arun_a",
       "arun_b",
     ]);

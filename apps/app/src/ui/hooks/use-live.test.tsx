@@ -356,6 +356,60 @@ describe("useFleetLive", () => {
     ]);
   });
 
+  it("lets fresher server rows win when the page re-renders at a newer cursor", () => {
+    const { result, rerender } = renderHook(
+      (props: { initial: Row[]; after: string }) =>
+        useFleetLive({
+          org: "acme",
+          ws: "core-platform",
+          initial: props.initial,
+          after: props.after,
+          parse: parsePatch,
+        }),
+      { initialProps: { initial, after: "40" } },
+    );
+    const first = FakeEventSource.latest();
+    act(() => {
+      first.emit("patch", {
+        seq: "41",
+        op: "upsert",
+        row: { id: "arun_a", status: "running" },
+      });
+      first.emit("patch", { seq: "42", op: "remove", id: "arun_b" });
+    });
+    flush();
+    expect(result.current.rows).toEqual([{ id: "arun_a", status: "running" }]);
+
+    // updateTag / router.refresh: new props, same component instance.
+    const fresh: Row[] = [
+      { id: "arun_a", status: "done" },
+      { id: "arun_b", status: "live" },
+    ];
+    rerender({ initial: fresh, after: "50" });
+    expect(result.current.rows).toBe(fresh);
+    const resumed = FakeEventSource.latest();
+    expect(resumed.url).toBe("/api/mc/acme/core-platform/stream?after=50");
+
+    // A replay at or below the new cursor changes nothing; a newer patch lands.
+    act(() => {
+      resumed.emit("patch", {
+        seq: "41",
+        op: "upsert",
+        row: { id: "arun_a", status: "running" },
+      });
+      resumed.emit("patch", {
+        seq: "51",
+        op: "upsert",
+        row: { id: "arun_b", status: "paused" },
+      });
+    });
+    flush();
+    expect(result.current.rows).toEqual([
+      { id: "arun_a", status: "done" },
+      { id: "arun_b", status: "paused" },
+    ]);
+  });
+
   it("closes on a patch that fails its schema", () => {
     const { result } = render();
     act(() => {

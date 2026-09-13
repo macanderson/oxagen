@@ -54,10 +54,14 @@ export type FleetLiveState<Row extends { readonly id: string }> = {
   readonly rows: ReadonlyMap<string, { seq: Seq; row: Row | null }>;
 };
 
-export function emptyFleetLive<
-  Row extends { readonly id: string },
->(): FleetLiveState<Row> {
-  return { lastSeq: "0", rows: new Map() };
+/**
+ * Patch state with no patches, whose cursor starts at `after`: the seq the
+ * server rendered at. A patch at or below it is already in the rendered rows.
+ */
+export function emptyFleetLive<Row extends { readonly id: string }>(
+  after: Seq = "0",
+): FleetLiveState<Row> {
+  return { lastSeq: after, rows: new Map() };
 }
 
 /**
@@ -82,21 +86,31 @@ export function applyFleetPatch<Row extends { readonly id: string }>(
  * The rows to render: the server-rendered list with live patches applied.
  * A patched row replaces its original in place; a removed row is dropped; a
  * row the server list did not have is prepended, newest patch first.
+ *
+ * `after` is the seq the server rendered `initial` at. A patch at or below it
+ * is older than (or already in) the server rows and is skipped, so a server
+ * re-render with fresher rows (router.refresh, updateTag) wins over a patch
+ * the stream delivered earlier.
  */
 export function selectFleetRows<Row extends { readonly id: string }>(
   initial: readonly Row[],
   live: FleetLiveState<Row>,
+  after: Seq,
 ): readonly Row[] {
   if (live.rows.size === 0) return initial;
+  const current = (entry: { seq: Seq } | undefined) =>
+    entry !== undefined && compareSeq(entry.seq, after) > 0;
   const known = new Set(initial.map((r) => r.id));
   const added = [...live.rows.entries()]
-    .filter(([id, entry]) => !known.has(id) && entry.row !== null)
+    .filter(([id, entry]) => !known.has(id) && current(entry))
     .sort(([, a], [, b]) => compareSeq(b.seq, a.seq))
     .flatMap(([, entry]) => (entry.row ? [entry.row] : []));
+  let patched = added.length > 0;
   const kept = initial.flatMap((row) => {
     const entry = live.rows.get(row.id);
-    if (!entry) return [row];
+    if (!entry || !current(entry)) return [row];
+    patched = true;
     return entry.row ? [entry.row] : [];
   });
-  return [...added, ...kept];
+  return patched ? [...added, ...kept] : initial;
 }
