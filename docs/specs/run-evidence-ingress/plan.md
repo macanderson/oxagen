@@ -17,7 +17,7 @@
 ## Global Constraints
 
 - Every hosted capability invocation, including evidence finalization, goes through `kernel.invoke()`.
-- The initiating human and deployed agent are an intersection, not alternative authorities.
+- Effective authority is the intersection of the initiating human and the deployed agent.
 - A run pins a grant ceiling. Later grants cannot widen it; live deny-generation changes can narrow it before the next context/model/tool operation.
 - The worker creates a distinct immutable attempt before any model or tool work. Lease reclaim never reuses an attempt.
 - Event append and checkpoint advancement are one fenced transaction. Same sequence plus a different digest is an integrity error.
@@ -48,7 +48,7 @@
 | 5A | Stella evidence-producing sidecar | `stella` | `06-stella-parity-plan.md` | Full code-mode port set emits the agreed versioned event stream |
 | 5B | Stella client and shadow parity | `oxagen-platform` | `06-stella-parity-plan.md` | Shadow evidence conformance passes before any production engine flag is allowed |
 
-PR 3 must not contain PR 4's canonical default-ref projector. PR 4 must not add standalone client ingress. PR 5 must not change the evidence manifest schema merely to accommodate Stella.
+PR 3 must not contain PR 4's canonical default-ref projector. PR 4 must not add standalone client ingress. PR 5 must not change the evidence manifest schema to accommodate Stella.
 
 ## Merge and Rollout Order
 

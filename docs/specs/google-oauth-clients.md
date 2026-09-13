@@ -23,7 +23,7 @@ Google explicitly supports bundling scopes from many APIs (Gmail, Calendar, Driv
 - The seven bundled Google connector schemas (`packages/ingestion/src/connectors/google-*/schema.yaml`) each declare their own `scopes:` array under the same `oauth2_authorization_code` auth-scheme `id: oauth2` — the schema format was built for one shared client differentiated by scope, not by client identity per connector.
 - GitHub's working connector callback is explicitly commented as "the (single, global) callback" (`apps/api/src/routes/v1/github-oauth.ts:263`), with connector/org/workspace identity carried in an HMAC-signed `state` param — not via a dedicated redirect URI per connector.
 
-**The one real constraint is narrower:** Google's *single-purpose policy* applies to **restricted** scopes specifically (Gmail and Drive are restricted; see scope table below). If a verification reviewer judges the restricted-scope purposes as unrelated, they can require splitting *those specific scopes* into a separate OAuth client/listing. This is a case-by-case verification outcome, not a blanket "one client per app" technical requirement, and it does not extend to non-restricted scopes (Calendar, Tasks, Contacts, BigQuery, Meet).
+Google's *single-purpose policy* applies to **restricted** scopes specifically (Gmail and Drive are restricted; see scope table below). If a verification reviewer judges the restricted-scope purposes as unrelated, they can require splitting *those specific scopes* into a separate OAuth client/listing. This is a case-by-case verification outcome, not a blanket "one client per app" technical requirement, and it does not extend to non-restricted scopes (Calendar, Tasks, Contacts, BigQuery, Meet).
 
 **Fallback plan if verification pushes back:** split only the restricted-tier scopes (Gmail, Drive) into their own client(s) at that point. Do not pre-split all thirteen products speculatively — that multiplies redirect-URI registrations, consent-screen submissions, and annual re-verification burden for products (Calendar, Tasks, BigQuery, …) that were never going to be flagged.
 
@@ -33,7 +33,7 @@ Sources: [OAuth 2.0 Policies](https://developers.google.com/identity/protocols/o
 
 ## Client A — Login (`GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRET`)
 
-Already built. Documented here for completeness and as the pattern precedent for redirect-URI minimization.
+Already built. Documented here as the pattern precedent for redirect-URI minimization.
 
 - **Client type:** Web application
 - **Scopes:** `openid`, `profile`, `email` only — explicitly minimal (comment at `packages/auth/src/auth.ts:389-391`: "prevents Google Cloud Console pre-authorized scopes from silently expanding the consent screen"). Non-sensitive tier; no Google verification required.
@@ -96,6 +96,6 @@ Four URIs total across two clients — versus the 26 URIs across one client impl
 
 ## Open follow-ups
 
-- Confirm `apps/api` preview-deployment topology (does each PR preview get its own `api-*.oxagen.sh`-style host?) before finalizing whether Client B needs an OAuth-Proxy-style relay like Client A, or whether local + prod is genuinely sufficient.
+- Confirm `apps/api` preview-deployment topology (does each PR preview get its own `api-*.oxagen.sh`-style host?) before finalizing whether Client B needs an OAuth-Proxy-style relay like Client A, or whether local + prod is sufficient.
 - Author `schema.yaml` for the six not-yet-built connectors via `docs/guides/connector-authoring.md` before requesting their scopes on the live OAuth consent screen — don't pre-request scopes for connectors that don't exist yet, since every added scope re-triggers verification review.
 - Implement `/oauth/google/callback` in `apps/api`, modeled on `github-oauth.ts`'s state-signing + token-exchange structure, once this spec is approved.

@@ -14,9 +14,8 @@ Tacho records every agent action as evidence (design:
 2. What makes the record trustworthy to a third party (an insurer) who trusts
    neither Oxagen nor the enterprise?
 
-CGP is deliberately a context *retrieval* protocol — the site's own docs draw
-the boundary explicitly: tool invocation and action are out of scope (that
-side belongs to MCP and to the runtimes). An action recorder emitting CGP
+CGP is a context *retrieval* protocol. The site's docs put tool invocation and
+action out of scope (that side belongs to MCP and to the runtimes). An action recorder emitting CGP
 frames at the source would stretch the protocol across its own boundary and
 couple Tacho's hot path to a wire format designed for query/response, not
 append-only streaming.
@@ -39,22 +38,22 @@ Merkle-anchored, with a defined export mapping to CGP and to OpenTelemetry.**
   and namespaced `tacho.*` relations — served by a standard CGP provider
   declaring `DataFlow { egress_scopes: ["local-only"] }` by default. Agents
   query their own operational history through the protocol they already use
-  for context; CGP's scope stays clean.
+  for context; CGP's scope is unchanged.
 
 ## Why durable
 
-The boundary respects both protocols' reasons to exist. CGP's guarantees
+CGP's guarantees
 (provenance, budget honesty, verifiable digests) are retrieval guarantees;
 tamper-evidence for an append-only action stream is a different property with
-a different mechanism (chaining + anchoring). Fusing them would make each
-protocol hostage to the other's evolution. Kept separate, either side can
-version independently and the export mapping is the only contract — a table
-in a document, cheap to revise, impossible to be trapped by.
+a different mechanism (chaining + anchoring). Fusing them would tie each
+protocol's versioning to the other's. Kept separate, either side can version
+independently and the export mapping, a table in a document, is the only
+contract.
 
 Anchored hash chains are also the only option here that needs no trusted
-party: an insurer verifies inclusion proofs against a published root. Any
-scheme resting on "trust Oxagen's database" fails the product's own premise
-and would have to be replaced the day a serious underwriter did diligence.
+party: an insurer verifies inclusion proofs against a published root. A
+scheme that relies on trusting Oxagen's database contradicts the product's
+premise and would have to be replaced once an underwriter did diligence.
 
 ## Consequences
 

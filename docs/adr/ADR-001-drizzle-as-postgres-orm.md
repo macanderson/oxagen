@@ -26,8 +26,8 @@ that we hand-edit; the schema source of truth is TypeScript via
 - **Kysely.** Query builder only, no schema layer; we'd be hand-writing
   every CREATE TABLE alongside hand-writing every query. Strong DX for
   the query side but doubles the schema-management surface.
-- **Hand-rolled SQL + a thin client.** Honest but slow. Loses the typed
-  insert/select surface that materially helps in capability handlers.
+- **Hand-rolled SQL + a thin client.** Slow to write. Loses the typed
+  insert/select surface that capability handlers use.
 
 ## Consequences
 

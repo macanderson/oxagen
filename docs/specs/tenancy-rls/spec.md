@@ -91,7 +91,7 @@ have to think about tenant/workspace filters** for correctness, and this must
               = HARD wall       = seam wall      + optional ROW POLICY)
 ```
 
-Two layers, by design:
+Two layers:
 
 1. **Propagation (one seam):** `@oxagen/tenancy` owns a single
    `AsyncLocalStorage<TenantScope>`. `runInTenantScope` is entered **once** inside
@@ -112,7 +112,7 @@ Two layers, by design:
      from ALS. Optional ClickHouse `ROW POLICY` as belt-and-suspenders (phase 4).
 
 The manual `eq(orgId)` predicates already in handlers **stay** during rollout as
-redundant defense-in-depth and as planner hints; they become non-load-bearing
+redundant defense-in-depth and as planner hints; they stop being the only enforcement
 once RLS is forced (§8 contract phase).
 
 ## 5. The one package — `@oxagen/tenancy`
@@ -158,7 +158,7 @@ surfaces map it to a 403 and the audit emitter records it.
 calls (those take no ctx today). Threading ctx into every data accessor signature
 is the change we are trying to avoid. ALS lets the accessor read scope without a
 signature change — the callsite becomes `withTenantDb(tx => …)` with no ids. This
-is the minimum-surface way to hit G3.
+meets G3 with the smallest signature change.
 
 ## 6. Postgres — the hard wall (the centerpiece)
 
@@ -166,18 +166,19 @@ is the minimum-surface way to hit G3.
 
 - Keep the single `oxagen` role. The app role **owns** the tables, and table
   owners bypass RLS — so we use **`FORCE ROW LEVEL SECURITY`**, which subjects the
-  owner to policies too. This is what removes the need for a separate restricted
+  owner to policies too. `FORCE` removes the need for a separate restricted
   role (N1).
 - Per-request the app sets two transaction-local GUCs and runs queries in that
   transaction; the policy reads them with `current_setting(..., true)`.
 - `SET LOCAL` requires a transaction, and Neon/AlloyDB poolers run in transaction
   pooling — so the wrapper opens **one transaction**, sets the GUCs, runs the
-  callback's queries on that `tx`, commits. Lowest-common-denominator, portable.
+  callback's queries on that `tx`, commits. This works under transaction pooling
+  on Neon, AlloyDB, and a local container.
 
 ### 6.1a Enforcement flag (decided — mirrors `IAM_ENFORCEMENT_ENABLED`)
 
 RLS ships **enabled at the DB but bypassable via a server-set GUC**, so the
-hard cutover is an **env var flip**, not a migration — and it is reversible
+hard cutover is an **env var flip** and is reversible
 without a migration (the IAM-flag pattern, zero lockout risk).
 
 - Env var: **`TENANT_RLS_ENFORCEMENT_ENABLED`** (default `false` during seeding).
@@ -188,7 +189,7 @@ without a migration (the IAM-flag pattern, zero lockout risk).
   `USING ( current_setting('app.rls_bypass', true) = 'on' OR <scope predicate> )`.
 - During the seeding window (flag off) isolation is still enforced by the manual
   `eq(orgId)` predicates that we keep permanently (§8). Exposure is therefore
-  never worse than today; flipping the flag makes RLS load-bearing too. Flip is
+  no worse than today; flipping the flag makes RLS enforce as well. Flip is
   reversible by redeploying with the flag off — no migration needed.
 
 ### 6.2 The wrapper (the only new Postgres call style)
@@ -332,7 +333,7 @@ export function scopedSession() {
 - A unit test asserts the guard throws on un-scoped Cypher and that
   `MERGE`/vector-recall queries keep `orgId` in the MERGE key.
 - **Fix the drift bug in the same PR:** rename `schema.cypher` indexes from
-  `(n.tenantId)` → `(n.orgId)` so the scoped reads are actually indexed.
+  `(n.tenantId)` → `(n.orgId)` so the scoped reads are indexed.
 - **Raw-`session()` ban:** an ESLint `no-restricted-imports` rule (or a grep
   guard test) forbids importing `session` outside `packages/ontology` and the
   scoped wrapper, so new graph code can't bypass the seam.
@@ -376,8 +377,8 @@ downstream inherits via ALS.
    ```
    `runInTenantScope` throws on empty ids → **the MCP `orgId: ""` path now fails
    closed** with `no_tenant_scope`, surfaced through the existing
-   `emitSecurityEvent` deny path. This is the single highest-leverage line in the
-   change: ~all capability traffic is covered here.
+   `emitSecurityEvent` deny path. This one line covers
+   ~all capability traffic.
 2. **Next.js server actions** (`apps/app/.../actions.ts`) that call `db()` outside
    a capability: wrap their body in `runInTenantScope(scope, …)` using the
    already-resolved `resolveOrg()/resolveWorkspace()` values.
@@ -388,8 +389,6 @@ downstream inherits via ALS.
    a store, so it needs no scope (and ALS isn't edge-safe anyway).
 
 ## 9. Testing strategy — how we avoid "unit-test hell"
-
-This is a first-class design constraint, not an afterthought.
 
 ### 9.1 Unit tests do not change shape
 
@@ -405,17 +404,17 @@ This is a first-class design constraint, not an afterthought.
   mock's `withTenantDb` is a **pass-through** — `(fn) => fn(fakeTx)` — so existing
   mock-based tests keep asserting "the right ids/params flow into the query" with
   zero new ceremony. No transaction, no real DB, no GUC. The mock lives in the
-  package's mock module so every suite gets it for free.
+  package's mock module so every suite gets it without extra setup.
 - Same for `scopedSession` / `chInsert` mocks: pass-through that records the
   cypher/rows. Existing assertions ("query contains `orgId`") keep working.
 
-Net: the ~124 existing test files need **no structural change**; at most they wrap
+The ~124 existing test files need **no structural change**; at most they wrap
 a handler call in `withTestScope` when the handler now requires a scope.
 
 ### 9.2 Isolation is proven ONCE (solve once → test once)
 
 One new integration suite — `packages/database/integration/rls.test.ts` — is the
-single source of truth that RLS actually isolates. It runs against the **real CI
+single source of truth that RLS isolates. It runs against the **real CI
 Postgres container** (already present in `ci.yml`) under a new gated job
 `test:integration`:
 
@@ -428,9 +427,8 @@ Postgres container** (already present in `ci.yml`) under a new gated job
   - Workspace-nullable / org-only variants honor their relaxed predicate.
 - ~one parametrized test over the policy manifest, not one-per-table by hand.
 
-This is the "solve all RLS problems in one place" promise extended to tests: the
-guarantee is asserted in a single suite, so the other 124 suites never re-litigate
-isolation and stay pure/fast.
+The guarantee is asserted in this single suite, so the other 124 suites do not
+re-test isolation and stay pure/fast.
 
 ### 9.3 Seam guards (cheap unit tests, no DB)
 
@@ -549,7 +547,7 @@ design intent (one seam, three enforcers, fail-closed):
    `oxagen_app`); migrations run as the owner. `assertRlsConnectionSafe()` is
    called at `api`/`app`/`mcp` startup and refuses to boot when enforcing while
    the role can bypass RLS. The integration suite drops to a non-superuser role
-   via `SET LOCAL ROLE` so policies are actually exercised in CI.
+   via `SET LOCAL ROLE` so policies are exercised in CI.
 
 4. **Manifest schema corrections.** IAM tables live in the **`org`** Postgres
    schema (not `iam.*`). Added `content.generated_assets`, `billing.org_billing_*`,

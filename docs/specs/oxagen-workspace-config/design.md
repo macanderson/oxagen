@@ -9,8 +9,7 @@ configuration that the CLI agent, the web agent, and humans all read and write. 
 the agent grepping `package.json` for the test command or inferring conventions from prose, it
 reads *reliable points of reference*: the exact commands, the branch/commit/PR conventions, the
 per-language rules, the project's vision, the tooling it has available. The same config powers
-the web app because it is keyed to the Oxagen workspace identity — **it works everywhere Oxagen
-works.**
+the web app because it is keyed to the Oxagen workspace identity.
 
 Non-goals: replacing `settings.json` (machine/tool settings — model, permissions, hooks — stay
 separate); replacing the code graph (this is a *config + tooling* index, complementary to the

@@ -17,9 +17,9 @@ Linear: [OXA-2063](https://linear.app/oxagen/issue/OXA-2063/a2a-agent-identity-l
 
 PR #572 shipped a working A2A (Agent2Agent) v1.0 JSON-RPC transport
 (`.well-known/agent-card.json` discovery + `POST /a2a`), but it is a single
-anonymous endpoint bolted onto the generic chat execution path. An audit run
-2026-07-04 found four concrete gaps that block A2A from being a real
-per-agent interop surface:
+anonymous endpoint on the generic chat execution path. An audit run
+2026-07-04 found four gaps that block A2A from serving as a per-agent interop
+surface:
 
 1. **No per-agent addressing.** The discovery card enumerates each
    workspace's distinct `agents` rows as A2A "skills" (`packages/agent/src/
@@ -40,12 +40,12 @@ per-agent interop surface:
    `packages/database/src/schema/agent.ts:272-277`) has no relationship to
    an A2A task — an agent leased into a fan-out has no way to know it is
    also fulfilling (or was spawned by) an A2A conversation.
-4. **No live subscription.** `tasks/resubscribe` — the A2A method whose
-   entire purpose is reattaching to an in-flight task's event stream — is
+4. **No live subscription.** `tasks/resubscribe` — the A2A method for
+   reattaching to an in-flight task's event stream — is
    implemented as one status snapshot followed by `controller.close()`
    (`apps/api/src/routes/a2a/rpc.ts:220-258`). Internal fan-out
    (`agent.subagent.aggregate`) is poll-only. Nothing in Oxagen lets one
-   agent genuinely subscribe to another's ongoing work.
+   agent subscribe to another's ongoing work.
 5. **No agent awareness.** No skill file and neither live system-prompt
    builder (`packages/ai/src/prompts/registry.ts` for chat/A2A,
    `packages/agent-engine/src/prompt/system-prompt.ts` for the CLI loop)
@@ -56,8 +56,8 @@ This epic closes all five gaps. Out of scope: a marketplace/UI for
 configuring per-agent A2A visibility (existing `agent.definition.*` CRUD
 already controls `status`/`deploymentStatus`, which gates card visibility —
 no new UI); cross-instance/durable pub-sub for resubscribe (see §3.4 — this
-ships an honest, documented same-instance implementation and files the
-durable follow-up separately rather than silently gap-filling).
+ships a documented same-instance implementation and files the durable
+follow-up separately).
 
 ## 2. Goals and Acceptance Criteria
 
@@ -68,16 +68,15 @@ The epic is complete when **all** of the following are true:
    `message/stream`. The task executes with that agent's `instructions`
    (from its active `agent_versions.config`) layered over the chat
    baseline, not the generic prompt. Omitting `skillId` (or naming an
-   inactive/undeployed agent) falls back to the existing generic behavior
-   — this is additive, not breaking.
+   inactive/undeployed agent) falls back to the existing generic behavior.
 2. Every A2A task produces exactly one `agent_executions` row
    (`originType: 'a2a'`, `originId: a2aTasks.id`, `agentId` set when a
    skill was addressed, null otherwise) with `startedAt`/`completedAt`/
    `status` kept in sync with the task's own lifecycle.
 3. When an incoming `message.referenceTaskIds` names a prior task, the new
    execution's `parentExecutionId` is set to that prior task's execution
-   row, so `agent.trace.get` renders full A2A conversation chains exactly
-   like it renders subagent fan-out chains today.
+   row, so `agent.trace.get` renders full A2A conversation chains the same
+   way it renders subagent fan-out chains today.
 4. `a2a_tasks` gains a nullable `agentId` (routing input — which agent this
    task is addressed to) and a nullable `fanoutRunId` (set when the task
    was created from inside a `subagent_runs` execution, so a leased
@@ -129,8 +128,8 @@ const baseline = agent
 ```
 
 `resolveAgentForA2A` lives in `packages/agent/src/handlers/_agent-definition.ts`
-next to the existing `resolveAgent` helper — same workspace-scoping
-guarantee, reused rather than duplicated.
+next to the existing `resolveAgent` helper, with the same workspace-scoping
+guarantee.
 
 ### 3.2 Lineage
 
@@ -151,7 +150,7 @@ carries the current `subagent_runs.id` in that case via the existing
 fan-out dispatch context. When absent (the normal external-caller path),
 the column stays null. This gives a leased subagent run a way to see "I
 also opened/received this A2A task" without inventing a second lease
-concept — the lease itself stays exactly where it is today
+concept — the lease itself stays where it is today
 (`subagent_runs.claimedBy`/`leaseExpiresAt`).
 
 ### 3.4 Live resubscribe
@@ -225,7 +224,7 @@ Unit (Vitest, colocated per domain):
    published after the resubscribe call; on a terminal task receives
    exactly one event then the stream closes.
 4. `stream-registry.test.ts` — publish before any subscriber is a no-op
-   (no throw); unregister on `finally` actually removes the listener
+   (no throw); unregister on `finally` removes the listener
    (assert `Map` no longer holds an empty `Set` after close, avoiding a
    slow leak across many short-lived tasks).
 

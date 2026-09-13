@@ -4,11 +4,11 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 
 > **Status: Not started** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> The PostHog Product Analytics spec is a well-drafted 378-line requirements document (June 2026, marked "Draft for review") that defines a comprehensive analytics system with identity modeling, event taxonomy, dashboards, GDPR integration, and feature flags. No implementation has shipped: no @oxagen/analytics package exists, no PostHog SDKs are imported anywhere, no event capture code is present, proxy.ts lacks a reverse proxy, the GDPR erasure flow does not attempt PostHog deletion (marked "pending" in the SOP), and git history shows zero analytics-related work.
+> The PostHog Product Analytics spec is a 378-line requirements document (June 2026, marked "Draft for review") that defines an analytics system with identity modeling, event taxonomy, dashboards, GDPR integration, and feature flags. No implementation has shipped: no @oxagen/analytics package exists, no PostHog SDKs are imported anywhere, no event capture code is present, proxy.ts lacks a reverse proxy, the GDPR erasure flow does not attempt PostHog deletion (marked "pending" in the SOP), and git history shows zero analytics-related work.
 
 **Implementation evidence**
 
-- docs/specs/analytics/posthog-product-analytics-requirements.md — comprehensive 378-line spec with detailed requirements across 13 sections; status marked Draft for review
+- docs/specs/analytics/posthog-product-analytics-requirements.md — 378-line spec with detailed requirements across 13 sections; status marked Draft for review
 - docs/specs/gdpr/sop-data-erasure.md — PostHog person-delete listed as pending in downstream systems table; privacy/erasure.execute Inngest function contains no PostHog integration
 - apps/app/src/proxy.ts — reverse proxy exists but handles only auth redirects and URL rewrites; no PostHog /ingest/ rewrite to us.i.posthog.com
 - packages/handlers/src/privacy.data.erase.ts — handler dispatches erasure Inngest job with no PostHog deletion call
@@ -157,13 +157,11 @@ Requirements:
 | **Surveys** | In-product NPS / PMF / churn / feedback | `posthog-js` |
 | **Exceptions** | Client + server error tracking (`captureException`) | both |
 
-**Autocapture + manual is the industry norm:** autocapture gives you breadth (you can answer questions you didn't pre-instrument), manual events give you the reliable, well-named "spine" funnels and revenue depend on. Define both.
+Define both autocapture and manual events. Autocapture covers questions nobody pre-instrumented; manual events are the named "spine" that funnels and revenue depend on.
 
 ---
 
 ### 5. Event taxonomy & naming standard
-
-A governed naming convention is what separates a maintainable analytics implementation from an unusable swamp of `Button Clicked 2 (final)`.
 
 #### 5.1 Naming convention
 
@@ -187,7 +185,7 @@ A governed naming convention is what separates a maintainable analytics implemen
 
 ### 6. Event catalog (the spine)
 
-Organized by lifecycle (AARRR + friction). This is the **minimum industry-par set**; ✦ marks **key/activation/conversion events** that anchor funnels and must be server-side and reliable. Properties listed are event-specific; every event also carries the standard properties in §7.
+Organized by lifecycle (AARRR + friction). This is the **minimum set**; ✦ marks **key/activation/conversion events** that anchor funnels and must be server-side and reliable. Properties listed are event-specific; every event also carries the standard properties in §7.
 
 #### 6.1 Acquisition & auth
 
@@ -225,7 +223,7 @@ Define onboarding as a **PostHog funnel** (`started → user_info_completed → 
 
 #### 6.3 Activation — the "aha" moment
 
-Activation is the single most important thing to measure for a PLG SaaS. Define the **activation event** explicitly and instrument the path to it.
+Define the **activation event** explicitly and instrument the path to it.
 
 - **Proposed activation definition (org-level):** an org reaches activation when it has *both* (a) connected ≥1 data source **and** (b) completed ≥1 successful agent run that returned a result. Validate/adjust against retention correlation once data lands.
 
@@ -296,7 +294,7 @@ Use PostHog's **revenue / group properties** (`mrr`, `is_paying`, `plan` on the 
 | `$exception` (client) / `error.server` | Unhandled error captured | `error_type`, `message`, `fingerprint` | both |
 | `friction.upgrade_blocked` ✦ | Action blocked by plan/entitlement (`capability_not_installed`, quota) | `capability`, `required_plan` | server |
 
-`friction.upgrade_blocked` is a high-value PLG signal — it tells you exactly which paywalled capability someone wanted. Feed it into upgrade funnels.
+`friction.upgrade_blocked` records which paywalled capability someone wanted. Feed it into upgrade funnels.
 
 ---
 
@@ -321,12 +319,12 @@ Rule: anything used to **slice every dashboard** (plan, tenancy, surface, intern
 - Use PostHog **feature flags** for gradual rollouts, kill switches, and entitlement-adjacent gating (distinct from billing entitlements, which remain server-authoritative).
 - Evaluate flags **server-side** for gating that affects security/billing; client-side for UI variants. **Bootstrap** client flags on first load to avoid flash and ensure first-event exposure is captured.
 - Use **Experiments** for conversion-affecting changes (onboarding variants, pricing-page copy, paywall placement). Each experiment declares a primary metric (a key event from §6) and a guardrail metric. Capture **`$feature_flag_called`** exposure so experiment analysis is valid.
-- Flag keys follow `domain_purpose` snake_case; document owner + cleanup date. Stale flags are tech debt — track removal.
+- Flag keys follow `domain_purpose` snake_case; document owner + cleanup date. Track stale flags for removal.
 
 #### 8.2 Session replay
 
 - Enable replay for `apps/app`, sampled (e.g., 100% of sessions with errors/rage-clicks, lower % otherwise) to control cost.
-- **Mask all input by default** (`maskAllInputs: true`), mask text where it may contain customer data, and **block** elements rendering PII or secrets (`.ph-no-capture` / block selectors). Never record passwords, tokens, billing card fields, API keys, or agent message content that may contain customer data. This is a compliance requirement, not a preference (§9).
+- **Mask all input by default** (`maskAllInputs: true`), mask text where it may contain customer data, and **block** elements rendering PII or secrets (`.ph-no-capture` / block selectors). Never record passwords, tokens, billing card fields, API keys, or agent message content that may contain customer data. §9 makes this a compliance requirement.
 
 #### 8.3 Surveys
 
@@ -336,7 +334,7 @@ Rule: anything used to **slice every dashboard** (plan, tenancy, surface, intern
 
 ### 9. Privacy, consent & compliance (mandatory — SOC 2 / GDPR)
 
-This is gating, not optional polish.
+These requirements gate release.
 
 - **Consent gating.** Do not initialize analytics or replay until consent is resolved per the user's region/policy. Honor a cookie/consent banner; default to **opt-out** capture for replay/PII in regulated regions. Respect `Do Not Track` as configured.
 - **PII minimization.** Do not send raw secrets, tokens, full agent message bodies, customer file contents, or card data to PostHog. Email is sent only if policy allows; otherwise use a hashed identifier. Maintain an explicit allowlist of person/group properties.
@@ -395,7 +393,7 @@ A PostHog implementation is "done / on par" only when **all** of the following h
 
 ### 12. Rollout plan
 
-- **Phase 1 — Foundation:** `@oxagen/analytics` package, identity + groups, reverse proxy, consent gate, server-side key events (auth/onboarding/activation), onboarding + activation funnels. *Ship value fast; these answer the original "what do customers use / what converts" questions.*
+- **Phase 1 — Foundation:** `@oxagen/analytics` package, identity + groups, reverse proxy, consent gate, server-side key events (auth/onboarding/activation), onboarding + activation funnels. *These answer the original "what do customers use / what converts" questions.*
 - **Phase 2 — Breadth:** feature-adoption events, friction/error tracking, autocapture + pageviews, session replay (masked), engagement + retention dashboards.
 - **Phase 3 — Revenue & experimentation:** Stripe revenue reconciliation, conversion dashboards + alerts, feature flags + first experiment, surveys (NPS/PMF/churn), GDPR person-delete wired and SOP updated.
 

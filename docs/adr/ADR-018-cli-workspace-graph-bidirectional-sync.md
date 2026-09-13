@@ -52,7 +52,7 @@ The local code graph stays in memory for live editing; only the **downloaded wor
   - Code nodes keyed by `repo + path` (+ `contentHash`); symbols by `repo + path + symbol + signatureHash`.
   - Lineage nodes keyed by `sessionId / turnId / toolEventId` (already unique in the trace).
   - Deletes are **tombstones** (a delete event for a key), never "diff the whole graph."
-- **No full-graph diffing, ever.** Code deltas come from **git** (`git diff <lastSyncedSHA>..HEAD`), re-extracting only changed files. This is the cheapest correct delta and is **git-native = vendor-neutral**: works with GitHub, GitLab, Gitea, or no remote at all. We deliberately do **not** depend on the GitHub connector for CLI-driven sync (it remains available for background full ingestion when a repo is connected — see ADR-012).
+- **No full-graph diffing, ever.** Code deltas come from **git** (`git diff <lastSyncedSHA>..HEAD`), re-extracting only changed files. This is the cheapest correct delta. It is git-native and therefore vendor-neutral: it works with GitHub, GitLab, Gitea, or no remote at all. We deliberately do **not** depend on the GitHub connector for CLI-driven sync (it remains available for background full ingestion when a repo is connected — see ADR-012).
 
 ### Why git-native deltas over the GitHub connector
 

@@ -22,11 +22,11 @@ genesis event and into the token via a third-party block.
 - Verification is by the Mint's published Ed25519 root public key — no
   callback, no shared secret in the agent process. Macaroons require a
   verifier-side shared secret, which would put minting-equivalent material
-  inside every wrapped process: disqualified outright.
+  inside every wrapped process, so macaroons are rejected.
 - Caveats are first-class datalog checks carried inside the token: scope
   binding, expiry, session binding, use limits, resource patterns. JWT has no
   caveat model; it would need a bespoke claims convention plus DPoP bolted on
-  for proof-of-possession, all of it convention rather than mechanism.
+  for proof-of-possession.
 - Attenuation is offline: an enterprise gateway can narrow a token's scope
   (never widen it) without contacting the Mint — useful for layered
   enterprise controls and impossible to express in JWT without re-signing.
@@ -42,8 +42,7 @@ proof, offline attenuation — are structural properties of the format, not
 library features. Biscuit is the only candidate with all four as mechanism.
 A decade from now the token library may change; the shape of the requirement
 (capability tokens verifiable at the edge without shared secrets) will not,
-and any successor format satisfying it is a drop-in for this decision's
-rationale rather than a reversal of it.
+and a successor format that satisfies it keeps this decision's rationale.
 
 ## Consequences
 

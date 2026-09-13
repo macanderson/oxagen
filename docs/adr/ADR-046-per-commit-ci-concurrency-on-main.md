@@ -29,8 +29,8 @@ terminated. The last finished run on `main` was `40585e52` at 19:23 UTC. Eight
 commits merged after it were never deployed, because `deploy-web` and
 `deploy-node` run only after the check passes and no check ever concluded.
 
-**Nothing went red.** An evicted run's conclusion is `cancelled`, which reads as
-ordinary supersession. The failure mode is silence.
+No run failed. An evicted run's conclusion is `cancelled`, which reads as
+ordinary supersession, so the outage raised no failure signal.
 
 ## Decision
 
@@ -46,9 +46,8 @@ group: >-
   }}
 ```
 
-A run that cannot share a group cannot be evicted, which is what makes "every
-commit on `main` gets a finished check" true rather than usually true — and what
-makes a skipped deploy impossible rather than unlikely.
+A run that cannot share a group cannot be evicted, so every commit on `main`
+gets a finished check and eviction cannot skip a deploy.
 
 `cancel-in-progress` is unchanged: still `github.event_name == 'pull_request'`,
 so a new push to a PR still cancels the run it supersedes.
@@ -56,25 +55,23 @@ so a new push to a PR still cancels the run it supersedes.
 ## What it costs
 
 **Concurrent runners during a burst.** Ten merges in an hour now start ten runs
-instead of evicting eight of them. That is the trade, and it is accepted because
-the thing being bought is not speed but knowing: the alternative was a tree that
-silently stopped deploying and reported nothing.
+instead of evicting eight of them. The cost is accepted because the alternative
+was a tree that stopped deploying and reported nothing.
 
-It is bounded by merge rate rather than unbounded, and a burst is exactly when
-having every commit checked matters most — a bisect over run history now finds
+The runner count is bounded by merge rate. A bisect over run history now finds
 one run per commit instead of gaps that are not failures.
 
 ## Why not the alternatives
 
-**A merge queue** solves it properly by serialising merges, and is the better
+**A merge queue** solves it by serialising merges, and is the better
 long-term answer. It also changes how every contributor merges, needs branch
 protection reconfigured across the repository, and could not have been shipped
 as a response to an active incident. This does not preclude it.
 
 **Splitting deploys into their own workflow** was the issue's other suggestion.
 It decouples deploy from check eviction, but leaves the check itself still
-evicted — so `main` would deploy while remaining unverified, which trades a
-visible gap for a quieter one.
+evicted, so `main` would deploy while unverified and the gap would be less
+visible.
 
 ## Consequences
 

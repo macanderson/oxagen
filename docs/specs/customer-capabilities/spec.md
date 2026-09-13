@@ -92,10 +92,10 @@ Adding one capability costs **~7–10 files**, of which the REST wrapper, the
 `app.ts` lines, and the MCP tool file are purely mechanical projections of the
 contract. Parity is maintained by after-the-fact gates
 (`check:manifest`, `check:ui-parity`, `route-contract-parity.test.ts`,
-`tool-registry.test.ts`) — excellent regression alarms, but they verify
-hand-work instead of eliminating it.
+`tool-registry.test.ts`) — they catch regressions, but they verify hand-work
+instead of eliminating it.
 
-For customers the situation is binary: **they cannot add a capability at all.**
+**Customers cannot add a capability at all.**
 Contracts register at compile time via import side effects
 (`packages/oxagen/src/registry.ts:48`); handlers bind in
 `packages/handlers/src/register.ts`; there is no dynamic path. ADR-013 shipped
@@ -155,7 +155,7 @@ Five pillars, each specified below:
    bindings from configuration; **install & lifecycle** (§11) and
    **security** (§12) wrap around all of it.
 
-Design invariant, stated once: **the kernel remains the single dispatch and
+Design invariant: **the kernel remains the single dispatch and
 enforcement path.** This design adds a second *source of capability
 declarations* and a second *place handlers execute* — never a second way to
 call one.
@@ -179,7 +179,7 @@ e.g.  acme_returns_process_refund
   rejected if its first token is in the ADR-025 action vocabulary. Since every
   platform capability name **starts** with an action verb and every installed
   name **starts** with a namespace that *cannot* be an action verb, static and
-  installed names can never collide — by construction, not by lookup.
+  installed names cannot collide.
 - The full name is what flows everywhere a capability name flows today:
   `role_grants.capability_id` (a text column, not an FK —
   `packages/database/src/schema/iam.ts:118` — so **no migration is needed**
@@ -287,8 +287,8 @@ Field-for-field, a manifest capability entry is the serializable projection of
 `surfaces`, `layers`-implied artifacts, `agent`, `sensitivity`,
 `defaultEffect`, `defaultRoles`, `audit`, `render`, `produces`/`consumes` —
 plus the three package-only blocks: `handler` (entry point), `permissions`,
-and `limits`. This is deliberate: **the manifest is the contract**, exactly as
-the in-repo declaration is, so the registry overlay (§8) can materialize a
+and `limits`. **The manifest is the contract**, as the in-repo declaration
+is, so the registry overlay (§8) can materialize a
 real `CapabilityDeclaration` from it and everything downstream (kernel, IAM
 seeding, `capability.registry.*`, materializeTools, binders) treats installed
 and first-party capabilities uniformly.
@@ -390,13 +390,13 @@ export const processRefundHandler = defineHandler(processRefund, async (input, c
 });
 ```
 
-Handlers are typed against the contract exactly like
+Handlers are typed against the contract like
 `CapabilityHandler<typeof svgGenerate>` is today
 (`packages/oxagen/src/types.ts:250`) — `(input, ctx) => Promise<output>` with
 inference from the Zod schemas. The **difference** from first-party handlers
 is the `ctx`: first-party handlers import platform packages directly and rely
 on ambient tenant scope; customer handlers get **only** the brokered host API
-(§9.3). There is no ambient anything.
+(§9.3).
 
 ### 6.2 The toolchain
 
@@ -417,8 +417,8 @@ only.
 
 ### 6.3 Local dev, debugging, and errors
 
-The dev loop is make-or-break for adoption, so it is **beta-blocking**
-(plan Phase 2), not post-GA polish:
+Adoption depends on the dev loop, so it is **beta-blocking**
+(plan Phase 2):
 
 - **`oxagen cap dev`** runs the bundle in the local runner image (docker
   driver) behind a local surface emulator — REST on localhost, an MCP
@@ -437,8 +437,8 @@ The dev loop is make-or-break for adoption, so it is **beta-blocking**
   *internal* error: callers get a generic failure plus `runId`; the full
   stack and the `ctx.log` stream appear only in the run detail view.
   Timeouts, OOM kills, and permission denials surface as distinct typed
-  runner errors, never generic 500s — an author can tell "my bug" from "my
-  limits" from "my manifest" at a glance.
+  runner errors, never generic 500s, so an author can tell "my bug" from "my
+  limits" from "my manifest".
 - **Publisher observability:** every invocation is a `capability_runs` row
   (§9.5) with retained logs; the package detail page rolls up per-version
   error rate, p50/p95 latency, and top error classes across the org's
@@ -450,7 +450,7 @@ The dev loop is make-or-break for adoption, so it is **beta-blocking**
 
 ## 7. Typed contracts across the trust boundary
 
-The strict rule stands: every capability has a typed contract validated by the
+Every capability has a typed contract validated by the
 kernel on both edges (`cap.input.safeParse` at `kernel.ts:597`,
 `cap.output.safeParse` at `kernel.ts:946`). Customer packages must not weaken
 this, and the kernel must not execute customer code to validate (a Zod schema
@@ -547,8 +547,8 @@ setDynamicCapabilityResolver(async (name, { orgId, workspaceId }) => {
 ```
 
 Resolution order in `_invokeCore`: static → dynamic → `unknown_capability`.
-Namespace rules (§4) guarantee the two sets are disjoint, so order is a
-formality, not a security control. Everything after resolution — surface
+Namespace rules (§4) guarantee the two sets are disjoint, so resolution
+order is not a security control. Everything after resolution — surface
 allowlist, input parse, IAM, billing, entitlement, output parse, audit,
 tracing — runs **unchanged** on the materialized declaration. The entitlement
 service (`packages/plugins/src/entitlements/entitlement-service.ts`) extends
@@ -641,12 +641,12 @@ platform deploys.
 `permissions` is **default-deny and closed**: an empty block means the handler
 can compute on its input and return — no capability calls, no secrets, no
 egress, no AI. Install-time consent (§11.3) renders the block as the
-human-readable grant screen (the OAuth-scopes moment). Enforcement is
+human-readable grant screen (comparable to an OAuth scopes screen). Enforcement is
 layered: sandbox network policy (egress), broker allow-lists (capabilities,
 secrets, AI tiers), kernel IAM (the inner call), vault audit (reads). A
 permission the manifest did not declare cannot be granted at install time —
-widening requires publishing a new version, which is what makes the grant
-screen trustworthy.
+widening requires publishing a new version, so the grant screen lists
+everything the installed version can do.
 
 ### 9.5 Sync and async modes
 
@@ -684,9 +684,8 @@ Two-gate discipline, extended (per `packages/billing`):
   from first-party usage; (b) **runner compute** is metered per invocation
   (wall-ms × memory class) with new rate-card entries in
   `packages/billing/src/pricing.ts` following the bias-high rule ("unknown
-  cost must never be silently free"); (c) per-invocation platform fee is a
-  pricing decision, not an architecture one — the meter hook exists either
-  way. Cost lands on `capability_runs.cost_usd_micros` and the standard
+  cost must never be silently free"); (c) whether to charge a per-invocation
+  platform fee is a pricing decision; the meter hook exists either way. Cost lands on `capability_runs.cost_usd_micros` and the standard
   usage breakdowns (`billing.usage.breakdown` already slices by capability
   name; usage attribution already keys on capability slices).
 
@@ -694,10 +693,10 @@ Two-gate discipline, extended (per `packages/billing`):
 
 ## 10. The surface parity engine
 
-The binder principle, once: every surface derives its bindings from
+Binder principle: every surface derives its bindings from
 `capabilitiesForSurfaceInWorkspace(surface, scope)` and the declaration
-fields — the way `materializeTools` already does. **Surface parity stops
-being a checklist and becomes a property of construction**; the existing
+fields — the way `materializeTools` already does. **Surface parity follows
+from how bindings are built**; the existing
 parity gates stay on as regression alarms and are re-pointed at the binders
 (they assert the binder covers the registry, not that N files exist).
 
@@ -707,7 +706,7 @@ parity gates stay on as regression alarms and are re-pointed at the binders
   `POST /v1/:org/:workspace/cap/:name` → resolve → `invoke(name, body, ctx,
   { surface: "api" })`. This single route serves **every** installed
   capability the moment it is enabled — no mount step, no deploy.
-- **One path shape, deliberately.** Installed capabilities are served only
+- **One path shape.** Installed capabilities are served only
   at the uniform dispatch route — no per-capability "pretty path" aliases.
   (Considered and deferred: aliases would add per-workspace collision
   rules, install-cache invalidation, and OpenAPI complexity for cosmetic
@@ -744,7 +743,7 @@ This is the surface Acme's non-Oxagen agent runner connects to, so it must be
   `invoke(name, args, ctx, { surface: "mcp" })` → output-validated result.
   Install/enable/disable emits `list_changed`. The 330 static tool files are
   deleted in §13; their per-field `.describe()` overlays move into the
-  contracts (where they already belong and survive schema compilation, §7).
+  contracts (where they survive schema compilation, §7).
   If xmcp cannot host a dynamic provider cleanly, the server drops to the
   official MCP SDK behind the same auth middleware — the auth model
   (`buildContext`, API-key → org/workspace scope) is unchanged either way.
@@ -786,19 +785,18 @@ Three layers, all riding existing render plumbing:
    customers whose outputs fit standard shapes get rich rendering with zero
    UI code.
 3. **Custom components — STUB; deferred to a dedicated spec.** Custom UI
-   exists for user-experience reasons only: some customer capabilities want
-   a **human in the loop**, and a schema form is the wrong instrument for
-   the moment of judgment — an airline's `assign_seat` capability wants a
-   seating-chart picker, not fourteen text inputs. That need is real, it is
-   **app-surface-only** (REST/MCP/agent/CLI parity is unaffected by its
-   absence), and it is explicitly **not v1**. What v1 fixes now so the lane
-   exists later: the `ui/` package directory and the manifest `ui` block
+   exists for user-experience reasons only: some customer capabilities need
+   a **human in the loop** where a schema form does not fit — an airline's
+   `assign_seat` capability needs a seating-chart picker rather than
+   fourteen text inputs. The need is **app-surface-only** (REST/MCP/agent/CLI
+   parity is unaffected by its absence), and it is **not v1**. v1 reserves
+   the space for it: the `ui/` package directory and the manifest `ui` block
    are **reserved** — validation warns and ignores them, and rendering
    falls back to layers 1–2 (auto-form + curated components), so a package
    shipping UI early degrades gracefully instead of breaking. The future
    spec (`docs/specs/customer-capabilities-ui/`) owns the hard parts —
    embedding isolation (the platform's stored-SVG XSS discipline is the
-   floor, not the ceiling), a typed props/actions bridge, publisher trust
+   minimum), a typed props/actions bridge, publisher trust
    tiers — and must clear a dedicated security review before any customer
    component renders.
 
@@ -808,8 +806,8 @@ capability catalog, the sidebar's Installed section, and the command menu
 
 ### 10.5 CLI (`apps/cli`) — and how "a CLI custom to a workspace" works
 
-The requirement: Acme's operators get a refund command that exists **only**
-in workspaces where the package is installed. Three ways to get there:
+Acme's operators need a refund command that exists **only** in workspaces
+where the package is installed. Three options:
 
 | Option | How | Verdict |
 |---|---|---|
@@ -825,7 +823,7 @@ and calls REST (`apps/cli/src/lib/api.ts`); it gains:
   `.oxagen/capabilities.json` (TTL + `--refresh`; also refreshed on auth and
   workspace switch). Everything below works offline-after-sync; invocation
   requires network anyway.
-- **One form, deliberately:** `oxagen cap run <name> [--json | flags]` —
+- **One form:** `oxagen cap run <name> [--json | flags]` —
   flags derived from the schema (kebab-cased fields, enums validated,
   booleans as toggles, nested via dotted flags), output pretty-printed or
   `--json`; async mode prints the runId and polls `read_capability_run`
@@ -845,8 +843,8 @@ and calls REST (`apps/cli/src/lib/api.ts`); it gains:
 
 This keeps **one** distributed binary (`@oxagen/cli` on npm), no per-workspace
 builds, and the workspace-specific behavior lives where the rest of this
-design puts it: in the synced, signed capability index. What is genuinely
-per-workspace is a cache file, not a compilation.
+design puts it: in the synced, signed capability index. The only per-workspace
+artifact is a cache file.
 
 ### 10.6 Docs surface
 
@@ -886,8 +884,8 @@ a structured report (the same report `cap doctor` prints locally).
    Inngest job → validation pipeline → version appears in the org registry
    with full Git provenance. Build logs stream to the Studio via the run
    view. This is the "process in the existing app to compile/package" — same
-   validation funnel as local, so Studio vs laptop is a convenience choice,
-   not a trust choice.
+   validation funnel as local, so Studio and local builds are trusted
+   equally.
 3. **Direct `.cap` upload** (app or `POST /v1/:org/:workspace/cap-packages`):
    for air-gapped or vendor-delivered packages; identical funnel.
 
@@ -930,7 +928,8 @@ TTL, no deploy.
 ### 11.5 Upgrade blast radius on callers
 
 Activating a version changes the contract *for everyone already calling
-it*; the installer's diff screen (§11.4) is necessary but not sufficient:
+it*; the installer's diff screen (§11.4) does not by itself protect existing
+callers:
 
 - **Agent conversations** re-materialize tools each turn, so a running
   conversation picks up the new schema on its next step; a tool call
@@ -963,8 +962,8 @@ fail-closed):
 1. **Hostile handler code** → never in-process (§9.1); Firecracker/Docker
    isolation; policy-clamped CPU/memory/time; read-only bundle; no ambient
    credentials in the session (vault values are fetched per-call through the
-   broker, not injected into env, unlike agent sandboxes' `setupEnv` — a
-   deliberate tightening for code that runs unattended).
+   broker, not injected into env, unlike agent sandboxes' `setupEnv`, because
+   this code runs unattended).
 2. **Data exfiltration** → default-deny egress; `permissions.network`
    allow-list enforced by the sandbox network policy; the only always-open
    host is the platform broker endpoint.
@@ -986,12 +985,11 @@ fail-closed):
 6. **Supply chain** → immutable versions keyed by sha256 digests
    (`integrity.json` + `package_digest`); Git provenance recorded; runner
    images digest-pinned; Studio builds run network-restricted; revocation +
-   kill switch (§11.4); vestigial-pattern note: this is the `skills-lock.json`
-   idea done properly — hashes live in the platform registry, not a repo
-   lockfile.
+   kill switch (§11.4); this replaces the `skills-lock.json` pattern:
+   hashes live in the platform registry, not a repo lockfile.
 7. **Tenancy** → runner dispatch carries explicit `{orgId, workspaceId}`;
    all broker reads/writes run inside `runInTenantScope` + RLS
-   (`withTenantDb`) exactly as first-party handlers do; packages are
+   (`withTenantDb`) as first-party handlers do; packages are
    workspace-installed, org-owned, and never cross-tenant.
 8. **Abuse/runaway** → per-org runner concurrency (Inngest org-keyed
    limits, the `agent.video-render` precedent), invocation rate limits at
@@ -1002,12 +1000,12 @@ fail-closed):
 
 ## 13. Migration & dogfooding: svg / image / video first
 
-The media-generation capabilities are the starting line (they are already
+The media-generation capabilities migrate first (they are already
 "capability packs" in name — `oxagen/media-svg`, `oxagen/media-image`,
 `oxagen/media-video` seeded per workspace by
-`packages/handlers/src/workspace-capability-seed.ts` — but their packaging is
-notional: manifests claiming compile-time contracts). They become real in two
-steps:
+`packages/handlers/src/workspace-capability-seed.ts` — but their manifests only
+describe compile-time contracts and nothing is packaged). They become packages
+in two steps:
 
 **Step 1 — bind through the generic binders (no package format needed):**
 mount `generate_svg`/`generate_image`/`generate_video` REST routes from the
@@ -1036,8 +1034,8 @@ with gates).
 ## 14. Open questions
 
 1. **Runner driver and pool keying for v1 GA** — Modal durable sessions
-   (shipped) vs Vercel sandbox sessions is the smaller half of the
-   question; the real fork is **pool granularity**. Per
+   (shipped) vs Vercel sandbox sessions is the smaller decision; the
+   larger one is **pool granularity**. Per
    (workspace × package version) pools give hard publisher isolation but
    idle N sandboxes for N installed packages; one per-workspace session
    hosting multiple bundles cuts the bill but puts different publishers'
@@ -1059,7 +1057,7 @@ with gates).
    meters land either way (§9.6).
 6. **CLI offline invocation** — is offline-after-sync enough, or do
    air-gapped fleets justify Option B (npm plugin emission) sooner?
-7. **Org-level install** — Acme's refunds package is really an org
+7. **Org-level install** — Acme's refunds package is an org
    capability; installing workspace-by-workspace is toil at 40 workspaces.
    `plugin.org.install_bulk` is precedent for the mechanic; the open design
    questions are defaulting (auto-install into newly created workspaces?)

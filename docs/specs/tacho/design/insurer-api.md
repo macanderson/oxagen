@@ -6,8 +6,8 @@
 - Date: 2026-08-31
 - Parent: [overview.md](overview.md)
 
-Underwriters get **aggregates and proofs, never raw traces**. The pitch is
-telematics: a verifiable operational history for an enterprise's agent fleet,
+Underwriters get **aggregates and proofs, never raw traces**. The product is
+telematics for agents: a verifiable operational history for an enterprise's agent fleet,
 priced into the premium the way a clean tachograph log or dashcam record is.
 
 ## 1. Fleet Attestation Report
@@ -27,7 +27,7 @@ A signed document per fleet per period (monthly default), containing:
 | `merkle_root`, `inclusion_proofs` | The published anchor root for the period and inclusion proofs for every checkpoint the aggregates were computed over. |
 | `signature` | Oxagen control-plane signature over the whole report. |
 
-The Merkle material is the point: **any figure is verifiable against the
+With the Merkle material, **any figure is verifiable against the
 anchored public log without trusting Oxagen or the enterprise** (R7). A
 carrier's actuary can recompute an aggregate from checkpoint commitments and
 confirm inclusion.
@@ -70,11 +70,11 @@ consent for that fleet is active.
 
 ## 5. Commercial logic (context for design choices)
 
-- The dashcam alone is replaceable; the **permission authority** is not —
-  once standing grants and elevation run through Tacho, removing it means
-  re-answering "who may do what" from scratch. That is why enforcement
-  (Phase 2) precedes underwriting (Phase 3).
+- The dashcam alone is replaceable. Once standing grants and elevation run
+  through Tacho, removing the **permission authority** means re-answering
+  "who may do what" from scratch. Enforcement (Phase 2) therefore precedes
+  underwriting (Phase 3).
 - Disclosing attestation/corroboration/gap coverage in the report makes data
   quality itself priceable: an enterprise that games its telemetry produces a
-  visibly low-quality report and forfeits the discount — the incentive aligns
-  without policing.
+  visibly low-quality report and forfeits the discount, so the incentive needs
+  no policing.

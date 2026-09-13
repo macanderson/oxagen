@@ -328,7 +328,7 @@ When a user manually triggers a sync or the system schedules a poll, the system 
 <!-- entities: SourceConnection -->
 <!-- enforced: integration.metrics.ts.integrationMetricsHandler() -->
 
-When a user queries integration health/metrics, the system SHALL return the current connection state: status (mapped from DB enum to contract enum), entity count, last sync timestamp, and last error. No per-type breakdown or duration metrics are available (honest null/empty, not fabricated).
+When a user queries integration health/metrics, the system SHALL return the current connection state: status (mapped from DB enum to contract enum), entity count, last sync timestamp, and last error. No per-type breakdown or duration metrics are available; those fields return null or empty.
 
 #### Scenario: User checks metrics for an active integration
 - **WHEN** user calls `integration.metrics` with `integrationId`

@@ -43,8 +43,8 @@ either/or:
 > version. Until that gate passes, evidence labels the context source as the
 > legacy adapter rather than `context-graph-protocol`.
 
-This ADR resolves that either/or **for the oxagen-platform (TypeScript) side**.
-It does not restate the spec; it records the decision the spec left open.
+This ADR resolves that either/or **for the oxagen-platform (TypeScript) side**,
+which the spec left open.
 
 ## Decision
 
@@ -52,8 +52,6 @@ It does not restate the spec; it records the decision the spec left open.
 normative conformance fixtures byte-for-byte, and proving the TypeScript
 contract core conformant against those golden vectors — not by taking a Rust
 crate dependency and not by vendoring an `ocp-*` copy.**
-
-Concretely:
 
 1. **Pinned canonical fixtures.** `packages/run-evidence/fixtures/contextgraph/`
    holds CGP's golden conformance vectors copied verbatim from the canonical
@@ -63,7 +61,7 @@ Concretely:
    `manifest.json`. These are the same files CGP itself generates via
    `cargo test -p contextgraph-conformance --test golden_fixtures`. Byte parity
    with upstream is verified (see below), so the "vendored copy" is a pinned
-   mirror, not a fork.
+   mirror.
 
 2. **Conformant TS reimplementation.** The contract core in
    `packages/run-evidence/src/` is a from-scratch TypeScript implementation of
@@ -82,7 +80,7 @@ Concretely:
    be byte-identical to upstream. This ADR wires that check into `pnpm gate` and
    the lefthook `pre-push` hook so drift from the pin fails the gate.
 
-We explicitly do **not**:
+We do not:
 
 - take a git-tag or crates.io **Rust** dependency here — canonical CGP is
   Rust-only, publishes no TypeScript artifact, and the crates.io path
@@ -104,9 +102,8 @@ Per #1082's acceptance ("any local delta documented"):
   the host/transport crates (`contextgraph-host`) — those have no consumer in
   this repo.
 - **Hardening (additive).** `contextgraph.ts` captures pristine intrinsics and
-  guards against prototype-pollution at module load. This is defense-in-depth in
-  the TS runtime, not a wire-format change; it does not diverge from the
-  protocol.
+  guards against prototype-pollution at module load. This is TS-runtime
+  hardening; it does not change the wire format or diverge from the protocol.
 - **Fixture content.** Zero. The vendored fixtures are byte-identical to
   `context-graph-protocol@36a64488` (verified by the parity check).
 
@@ -117,7 +114,7 @@ Per #1082's acceptance ("any local delta documented"):
   `EXPECTED_*` digests and `upstream_commit` in
   `check-contextgraph-fixtures.ts`, and re-verify parity. The gate blocks silent
   drift between oxagen's mirror and canonical.
-- **Enforcement is honest about this repo's reality.** GitHub Actions is
+- **Enforcement runs locally.** GitHub Actions is
   currently non-functional on oxagen-platform, so the live enforcement paths are
   the lefthook `pre-push` hook and the local `pnpm gate` (gated by the PR-review
   checklist). The offline drift check is fast, deterministic, and dependency-free
@@ -126,8 +123,7 @@ Per #1082's acceptance ("any local delta documented"):
   that has the upstream repo cloned.
 - **`@oxagen/run-evidence` is not yet imported by an app or worker.** It is the
   in-progress ingress slice. When it is wired in, it consumes canonical CGP
-  through this pinned surface with no additional divergence risk — the decision
-  is forward-compatible with the ingress build-out.
+  through this pinned surface.
 
 ## Out of scope — the Stella (Rust) side
 
@@ -146,12 +142,11 @@ the Stella crate swap is a call for the issue owner.
   vendored crate copy remains on oxagen-platform after #1069.
 - **Git-tag / crates.io Rust dependency (the issue's stated preference).** Not
   applicable to a TypeScript monorepo with no Rust build. Reserved for Stella,
-  where a real crate dependency is the right mechanism.
-- **Re-fork the CGP Rust crates into a napi-rs binding for TS.** Over-engineered
-  for the narrow validation/normalization surface run-evidence needs; it would
-  add a native build to the web/worker toolchain to reproduce logic the pinned
+  which has a Rust build and can take a crate dependency.
+- **Re-fork the CGP Rust crates into a napi-rs binding for TS.** It would add
+  a native build to the web/worker toolchain to reproduce logic the pinned
   golden-fixture conformance already guarantees. Rejected.
-- **Consume canonical fixtures without a drift gate.** The pin is only
-  trustworthy if something enforces it; an unenforced mirror silently diverges —
-  exactly the failure mode #1082 describes. Rejected in favor of wiring the
+- **Consume canonical fixtures without a drift gate.** An unenforced mirror can
+  diverge from the pin without notice, which is the failure mode #1082 describes.
+  Rejected in favor of wiring the
   check into the gate.

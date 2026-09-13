@@ -32,8 +32,8 @@ whoever compromises a host, and a network attacker. The insurer is a
   score and are flagged in reports.
 - **Tampering:** the agent process can tamper with its own wrapper (same
   address space — accepted limitation). Defense is detection, not
-  prevention: corroboration, chain gaps, attestation. Stated honestly in the
-  docs; this is why the proxy exists.
+  prevention: corroboration, chain gaps, attestation. Stated in the
+  docs; the proxy exists to provide that detection.
 - **Repudiation:** every action chained with dense `seq`; gaps are events.
 - **Information disclosure:** wrapper buffers may hold payloads briefly —
   bounded ring buffer, memory-only, redaction downstream.

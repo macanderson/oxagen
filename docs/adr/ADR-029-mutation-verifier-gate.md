@@ -9,10 +9,10 @@
 
 ## Context
 
-The most embarrassing failure class in agentic coding is the **confidently
-shipped no-op fix**: the agent edits source, writes (or tweaks) a test, runs
-it, sees green, and declares victory — but the test would have passed without
-the fix. The green witnessed nothing. Judges (LLM completeness checkers)
+The failure class this gate targets is the **no-op fix**: the agent edits
+source, writes (or tweaks) a test, runs it, sees green, and reports success,
+but the test would have passed without the fix, so the green pass witnessed
+nothing. Judges (LLM completeness checkers)
 routinely miss this because the executed evidence *looks* decisive: tests ran,
 tests passed.
 
@@ -41,10 +41,10 @@ inside `runTurn` (`pipeline/index.ts`), ON by default:
 4. Re-run the agent's own passing test-like commands (flip first, capped at
    3, bounded by a per-command timeout) and **demand a failure**.
 5. Restore the snapshots — always, in a `finally`; a failed restore throws
-   loudly rather than leaving a silently corrupted tree.
+   rather than leaving a corrupted tree.
 6. Verdicts:
    - **witnessed** — at least one witness run failed without the fix. The
-     green is real; the verdict stands.
+     verdict stands.
    - **vacuous** — everything still passed. `applyGateToVerdict` overrides the
      judge's `complete` and the EXISTING revise loop sends the agent back with
      an explicit instruction to produce a test that fails without the fix.
@@ -70,7 +70,7 @@ via `judge` stage events. Kill switches: `OXAGEN_MUTATION_VERIFY=0` (env) or
   tests witness its fix — one more verified link in the accountability chain
   (identity → scope → action → **verified outcome** → audit record).
 - Cost: one extra run of an already-run test command per green coding turn
-  (layer 1); layer 2 costs one run per mutant, which is why it is opt-in.
+  (layer 1); layer 2 costs one run per mutant, so it is opt-in.
 - The gate is deterministic and model-free, per ADR-021: never spend a model
   where executed evidence settles the question.
 - Known V1 limits (deliberate): unsupported diff shapes skip rather than

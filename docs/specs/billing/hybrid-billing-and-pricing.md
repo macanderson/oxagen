@@ -68,7 +68,7 @@ Provider cost to back 1 credit at 65% margin: `$0.01 * (1 - 0.65) = $0.0035`.
 
 All three tiers hit exactly 65% because `includedCredits = monthlyPriceUsd / $0.01 × (1 - 0.65)` is applied consistently.
 
-**Important note on markup pinning:** The v3 product mix includes volume-bonus credit packs (credits > face value). With the recommended product-mix weights, `derivePricing()` returns a blended markup of approximately **2.9086**, not 2.857. When running `pnpm billing:stripe-sync --apply`, pin the solved value: `OXAGEN_METER_MARKUP=2.9086`. Do not hardcode 2.857 in env — it will produce an auditable 0.18% discrepancy against the solve.
+**Markup pinning:** The v3 product mix includes volume-bonus credit packs (credits > face value). With the recommended product-mix weights, `derivePricing()` returns a blended markup of approximately **2.9086**, not 2.857. When running `pnpm billing:stripe-sync --apply`, pin the solved value: `OXAGEN_METER_MARKUP=2.9086`. Do not hardcode 2.857 in env — it will produce an auditable 0.18% discrepancy against the solve.
 
 ---
 
@@ -711,7 +711,7 @@ Ordered by dependency. Steps 1-4 are independent and can be built in parallel by
 
 ### Step 4 — Pre-turn admission gate + double-spend fix
 
-**Why:** Without the gate, zero-balance orgs get free turns. Double-spend race is a real billing integrity issue.
+**Why:** Without the gate, zero-balance orgs get free turns. The double-spend race lets two concurrent streams spend the same balance.
 
 **Files to create/modify:**
 

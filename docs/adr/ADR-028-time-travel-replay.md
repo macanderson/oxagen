@@ -14,12 +14,11 @@ at all**, model message history is not persisted, and filesystem state is
 reduced to changed-file *names*. A failed run can be re-read, but not
 re-examined: you cannot see what a tool actually returned, what the model
 actually saw entering turn 3, or what the working tree looked like before the
-turn that broke it. Debugging agent failures today is vibes and anecdotes.
+turn that broke it.
 
 Separately, Evals v1 (`eval.dataset.*` / `eval.run.*`) can score datasets, and
 `create_trace_dataset` can sample recent metered traces — but nothing routes
-*failures* into datasets. Every production failure evaporates instead of
-becoming a regression case.
+*failures* into datasets. Production failures do not become regression cases.
 
 ## Decision
 
@@ -65,11 +64,11 @@ and automatic failure→eval distillation.**
    - `fleet replay <sid>` — reconstruct the full run from the record with
      integrity verification (every ref resolves and hashes clean, turns
      contiguous, cross-checked against the envelope log). Inspect any turn's
-     full tool I/O and diff — the debugger view the 2 KB envelope can't give.
+     full tool I/O and diff, which the 2 KB envelope does not carry.
    - `fleet bisect <sid> --cmd <shell>` — `git bisect` for agent runs: binary
      search over turns, restoring the tree at each probe into a scratch
      worktree and running the predicate command; reports the first bad turn
-     ("which turn doomed this run?") with its prompt and tool summary.
+     with its prompt and tool summary.
    - `fleet resume <sid> --turn <k> [--model m] [--prompt p]` — fork a new
      session from the state after turn *k−1*: restored tree + reconstructed
      history, with a different model, prompt, or CLI version. The fork records
@@ -87,7 +86,7 @@ and automatic failure→eval distillation.**
    through the **existing governed capabilities** (`eval.dataset.create` /
    `eval.dataset_item.add`) via `fleet distill <sid> --push` — metered,
    IAM-gated, tenant-scoped, no new contract surface. A future nightly
-   optimizer trains against the exact failures users hit.
+   optimizer trains against the failures users hit.
 
 ## Alternatives considered
 

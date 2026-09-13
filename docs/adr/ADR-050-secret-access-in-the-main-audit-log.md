@@ -15,8 +15,8 @@ Revealing or exporting a workspace secret wrote a row to
 `environments.secret_access_log`, a table inside `@oxagen/plugins`. Setting,
 unsetting, upserting or deleting one wrote nothing anywhere. Storing or deleting
 a plugin's OAuth token or secret wrote nothing either, and both of those
-handlers carried an `audit-exempt` comment saying no fitting event type existed
-— which was a correct reading of the taxonomy.
+handlers carried an `audit-exempt` comment saying no fitting event type existed;
+the taxonomy had none.
 
 So the most privileged actions in the product were invisible to the main audit
 log query, the audit-log UI, and `SECURITY_EVENT_TYPES`. Somebody asking "who
@@ -32,13 +32,13 @@ audit-log UI.
 **Both records exist. The main audit log is where the question is asked.**
 
 Every privileged secret and plugin-credential action now emits a
-`security_events` row. `secret_access_log` stays exactly as it is.
+`security_events` row. `secret_access_log` is unchanged.
 
-They are not duplicates of each other. `secret_access_log` is a per-secret
-record — which key, which environment, resolved from where — and it is the right
-place to answer "what happened to *this* secret". `security_events` is the
-cross-domain trail an auditor reads end to end, and a control that only appears
-in a domain-specific table is a control nobody finds. Keeping one and dropping
+`secret_access_log` is a per-secret
+record — which key, which environment, resolved from where — and it answers
+"what happened to *this* secret". `security_events` is the cross-domain trail an
+auditor reads end to end, and that auditor does not find a control recorded only
+in a domain-specific table. Keeping one and dropping
 the other would lose either the detail or the discoverability.
 
 The surfacing option was rejected on the same ground. Putting
@@ -51,7 +51,7 @@ query half: `SECURITY_EVENT_TYPES` would still not name secret access, and a
 `plugin.credential_set` / `plugin.credential_revoked`, and `secret.revealed` /
 `secret.exported` / `secret.value_changed` / `secret.key_deleted`.
 
-**Reveal and export are reads, and they are in this list anyway.** Reading a
+**Reveal and export are reads and are in this list.** Reading a
 secret in the clear is the privileged act the trail exists to catch; the write
 is often the less interesting half.
 
@@ -77,8 +77,8 @@ credential write that throws emits nothing, so a row means the thing happened.
 
 - The `security_events` CHECK constraint grows by six values. The migration is
   additive and replayable; no row is rewritten.
-- Two audit surfaces record overlapping facts about the same reveal. That is the
-  cost of this decision, and it is deliberate: the detail lives in one, the
+- Two audit surfaces record overlapping facts about the same reveal. The overlap
+  is deliberate: the detail lives in one, the
   discoverability in the other.
 - A high-traffic export path now writes one audit row per call. These are
-  Owner/Admin operations measured in tens per day, not per second.
+  Owner/Admin operations measured in tens per day.

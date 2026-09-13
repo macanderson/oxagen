@@ -15,7 +15,7 @@ CLAUDE.md infrastructure boundaries say "never write to two places" — but that
 
 ## Decision
 
-**Approve dual-write for connectors.** Use Postgres for operational durability, Neo4j for query indexing. They serve fundamentally different purposes and do not duplicate data.
+**Approve dual-write for connectors.** Use Postgres for operational durability, Neo4j for query indexing. They serve different purposes and do not duplicate data.
 
 ### Write pattern
 
@@ -47,7 +47,7 @@ Postgres as the operational record gives us atomic cursor updates and instant re
 ## Alternatives considered
 
 - **ClickHouse as single source of truth for all ingestion state.** Simpler conceptually, but event replay for cursor recovery is slow and error-prone. Violates the principle that Postgres is the operational lock.
-- **Only write to Neo4j; derive cursor from entity timestamps.** Cursor becomes implicit and hard to recover precisely (off-by-one risks). Not suitable for production.
+- **Only write to Neo4j; derive cursor from entity timestamps.** Cursor becomes implicit and hard to recover precisely (off-by-one risks).
 
 ## Consequences
 

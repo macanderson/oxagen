@@ -12,8 +12,8 @@ settings, org settings, account settings, the knowledge page, the automations pa
 the activity page. There is no place to build an agent, no place to see a fleet, and no
 place to approve what an agent wants to do.
 
-Our third brand pillar is literally *"Same power in the API, the MCP server, the web app,
-and the CLI."* Today the app breaks that promise. This spec fixes it.
+Our third brand pillar is *"Same power in the API, the MCP server, the web app,
+and the CLI."* The app does not meet that pillar today.
 
 ## What this spec delivers
 
@@ -39,7 +39,7 @@ The user story that does not work today, and works after this overhaul:
 
 Every noun in that sentence becomes a first-class object with a home in the app. Every one
 of them already has a typed contract behind it. Two of them (Commands, Prompt Templates)
-need a thin new persistence layer; the rest just need a face.
+need a thin new persistence layer; the rest need only a UI.
 
 ## Grounding: what already exists (so we build a face, not a backend)
 
@@ -64,8 +64,8 @@ need a thin new persistence layer; the rest just need a face.
 checks for an app UI layer.** So app parity is unmeasured and drifts silently. This spec
 proposes adding an **`app` layer** to the manifest checker: every capability that should be
 user-operable declares an `appRoute` (or a registered command-menu action), and CI flags
-any capability that has an MCP tool but no app surface. That turns "true parity" from a
-one-time cleanup into self-defending law. Details in `02` and `04`.
+any capability that has an MCP tool but no app surface. CI then keeps parity enforced after
+the initial cleanup. Details in `02` and `04`.
 
 ## Read order
 

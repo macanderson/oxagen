@@ -11,7 +11,7 @@ Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> The GitHub App Setup feature is fully shipped and operational. All core deliverables are implemented: OAuth authentication flow (auth-url and callback routes), webhook receiver for live sync, Inngest-based initial file sync, database schema for storing connections and OAuth accounts, environment variable configuration, and customer-facing setup UI. The implementation spans API routes, database migrations, Inngest functions, app landing pages, and comprehensive documentation.
+> The GitHub App Setup feature is shipped. Implemented deliverables: OAuth authentication flow (auth-url and callback routes), webhook receiver for live sync, Inngest-based initial file sync, database schema for storing connections and OAuth accounts, environment variable configuration, and customer-facing setup UI. The implementation spans API routes, database migrations, Inngest functions, app landing pages, and documentation.
 
 **Implementation evidence**
 
@@ -108,7 +108,7 @@ stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's OAuth 
 > **Note on `scope`.** The authorize URL passes `scope=repo,read:org`, but **GitHub Apps ignore the
 > `scope` parameter** — a user-to-server token's access is governed entirely by the App's configured
 > **permissions** and which installations/repos the user can reach. Set the permissions below
-> correctly; the `scope` value is a harmless vestige.
+> correctly; the `scope` value has no effect.
 
 > **Note on tokens.** Ingestion runs on the **user's** OAuth token, not an installation access
 > token (the App private key/App ID are never read). This is simpler but means sync is tied to the
@@ -136,8 +136,8 @@ Reasons:
 3. **Blast-radius separation.** Re-generating the dev App's secret or rotating its private key must
    not disrupt production ingestion.
 
-GitHub Apps *do* allow up to 10 callback URLs, so callbacks alone could be shared — but the
-single webhook URL and secret-isolation reasons make two apps the correct choice.
+GitHub Apps allow up to 10 callback URLs, so callbacks alone could be shared; the
+single webhook URL and secret isolation still require two apps.
 
 ---
 
@@ -182,7 +182,7 @@ from the OAuth Callback URL**.
 | **Setup URL** | `http://localhost:3000/github/setup` | `https://app.oxagen.sh/github/setup` |
 | **Redirect on update** | ✅ on | ✅ on |
 
-**Recommendation: set a Setup URL and enable "Redirect on update".** The exact path matters — set it
+**Recommendation: set a Setup URL and enable "Redirect on update".** Set it
 to **`/github/setup`** (the implemented landing route, `apps/app/src/app/github/setup/page.tsx`), not
 `/connections/github/setup` (which does not exist and would 404).
 
@@ -201,7 +201,7 @@ to **`/github/setup`** (the implemented landing route, `apps/app/src/app/github/
 
 #### Permissions
 
-These are what actually grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
+These grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
 
 **Repository permissions:**
 
@@ -253,7 +253,7 @@ How it works:
    `issue` from `payload.issue`; a `push` fans out to one `commit` per commit, reshaped for
    `normalizeRecord`).
 5. **Fan out** one `ingestion/entity.received` per (connection × record). The 6-step pipeline then
-   maps/dedups/embeds — exactly as the initial sync does.
+   maps/dedups/embeds, as the initial sync does.
 
 > **Mapping still governs ingestion.** A webhook record is only persisted if the connection has an
 > `entity_type_mappings` row for that record type (created via `connection.mappings.set`). Unmapped
@@ -297,7 +297,7 @@ All GitHub connector variables live in the **`api`** service (read in `apps/api`
 
 > ⚠️ **Local dev: put these in `apps/api/.env.local`, not the repo-root `.env.local`.** `apps/api`
 > loads its env via `tsx --env-file`, which is CWD-relative — `GITHUB_APP_*` placed only in the root
-> `.env.local` silently no-op and the connector returns 503. (This exact gap bit the connector once.)
+> `.env.local` silently no-op and the connector returns 503. (This misconfiguration has broken the connector before.)
 
 | Variable | Secret | Required where | Dev value (`apps/api/.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
 | --- | --- | --- | --- | --- |

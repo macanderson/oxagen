@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-Give organizations a first-class, Claude-`/mcp`-grade experience for discovering,
+Give organizations a Claude-`/mcp`-grade experience for discovering,
 installing, governing, authenticating, and using third-party **plugins** across all
 Oxagen agentic workflows — including the interactive question-answering agent.
 
@@ -23,9 +23,8 @@ toolchain. Three concrete types ship behind one shared spine:
 | **Content tool** | A document/productivity app (Google Drive, Google Workspace, Microsoft Excel, …) | File/doc operation tool(s) | Spine full; file runtime = Linear epic |
 
 The three types **share** a marketplace, org-admin governance, authentication/credential
-concepts, and toolchain registration. They **differ** only in functionality. The
-abstraction is explicitly designed so a type can be deepened later **without reworking
-the spine**.
+concepts, and toolchain registration. They **differ** only in functionality. A type
+can be deepened later **without reworking the spine**.
 
 ### Success criteria ("you're done when…")
 
@@ -45,7 +44,7 @@ the spine**.
   failure generate an **in-app notification + email to org Owners/Admins** with a deep
   link to a **re-authentication page**.
 - Every agent (interactive Q&A included) can **use installed+enabled MCP servers** in its
-  responses, exactly like Claude Code.
+  responses, like Claude Code.
 - Only **properly credentialed** users can manage plugins.
 - Full **unit + E2E browser test** coverage of the flows enumerated in §11.
 - Marketplace and in-app install screens are **documented**.
@@ -418,8 +417,8 @@ server actions. Negative-tested in §11.
 3. Names sanitized via existing `toModelToolName()`; reverse `nameMap` preserved.
 4. External-capability IAM via `authorizeExternalCapability()` unchanged.
 
-Result: the interactive Q&A agent and every other agent surface use installed+enabled
-plugins exactly like Claude Code uses MCP tools.
+The interactive Q&A agent and every other agent surface use installed+enabled
+plugins the way Claude Code uses MCP tools.
 
 ---
 

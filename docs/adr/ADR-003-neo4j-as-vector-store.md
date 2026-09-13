@@ -7,7 +7,7 @@
 ## Context
 
 Spec §8 requires semantic retrieval over documents, agent memories, and
-chat messages. Two viable options: `pgvector` inside Postgres, or
+chat messages. The candidates are `pgvector` inside Postgres and
 Neo4j's native vector index (5.13+).
 
 ## Decision
@@ -20,10 +20,9 @@ Neo4j's native vector index (`cosine`, 1536 dims to match
 ## Alternatives considered
 
 - **pgvector inside Postgres (Neon).** Operationally simpler, one fewer
-  store. But it strips us of the *graph* dimension — recall queries
-  that also traverse `REFERENCES`/`REMEMBERS`/`SIMILAR_TO` edges become
-  cross-DB joins. CLAUDE.md positions Neo4j as the semantic-retrieval
-  store; honoring that boundary keeps it ergonomic.
+  store. Recall queries that also traverse
+  `REFERENCES`/`REMEMBERS`/`SIMILAR_TO` edges would become cross-DB
+  joins. CLAUDE.md positions Neo4j as the semantic-retrieval store.
 - **Dedicated vector DB (Pinecone, Weaviate, Qdrant).** Adds a third
   retrieval store. No graph traversal. Vendor lock-in.
 

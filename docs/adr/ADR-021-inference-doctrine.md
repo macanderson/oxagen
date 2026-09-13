@@ -7,7 +7,7 @@
 
 Oxagen's coding agent runs on four surfaces — CLI, web app, API, MCP — through one shared engine (ADR-019). The mission is to consistently outperform every other agentic coding tool on **wall-clock time, output quality, token burn, context retrieval, and multi-hour mission planning**, while remaining the governed, grounded, metered backbone (the Stripe-for-agents wedge: every observed token flows through metering into billing).
 
-Performance in an agentic system is not primarily a model problem; it is an **inference-engineering** problem. The dominant costs are: (1) model calls that a function could have made, (2) KV-cache misses caused by unstable prompt prefixes, (3) raw tool output (logs, diffs, test runs) flooding the context, and (4) fleet coordination overhead (dispatcher models, duplicated context, lock contention). This ADR fixes the doctrine that every engine, surface, and tool change is judged against.
+Performance in an agentic system is mainly an **inference-engineering** problem. The dominant costs are: (1) model calls that a function could have made, (2) KV-cache misses caused by unstable prompt prefixes, (3) raw tool output (logs, diffs, test runs) flooding the context, and (4) fleet coordination overhead (dispatcher models, duplicated context, lock contention). This ADR fixes the doctrine that every engine, surface, and tool change is judged against.
 
 ## Decision
 
@@ -21,7 +21,7 @@ Never call a model where a function suffices. Every duty is implemented at the *
 4. **Small model** (single narrow judgment, structured output, heuristic fallback mandatory)
 5. **Frontier model** (open-ended synthesis only)
 
-Every model call site in `@oxagen/agent-engine` and its adapters must carry a one-line justification comment naming why the rungs below are insufficient. A model call without one is a defect. Existing deterministic assets (the tier model-router, heuristic evaluator/judge fallbacks) are the norm, not the exception.
+Every model call site in `@oxagen/agent-engine` and its adapters must carry a one-line justification comment naming why the rungs below are insufficient. A model call without one is a defect. Existing deterministic assets (the tier model-router, heuristic evaluator/judge fallbacks) are the norm.
 
 ### 2. KV-cache discipline
 
@@ -30,15 +30,15 @@ The prompt is an append-only, prefix-stable data structure:
 - **Immutable per session:** system prompt, tool definitions (deterministically ordered), doctrine/skill text. Nothing per-turn may be interpolated into this block.
 - **Per-turn content** (memory recall, plans, repo state, budget status) enters as user-turn or tool-result messages **after** the stable prefix.
 - History is append-only within a mission; compaction replaces a contiguous prefix with a summary block exactly once per compaction event, never rewrites interior messages.
-- Cache hit rate is a metered, dashboarded metric per surface. A surface whose cache read ratio degrades has a correctness bug, not a cost quirk.
+- Cache hit rate is a metered, dashboarded metric per surface. A surface whose cache read ratio degrades has a correctness bug.
 
 ### 3. Structured tools over generic execution
 
-A generic `bash` tool is the floor, not the pattern. Any diagnostic or mechanical duty the agent performs more than rarely becomes a **contract-backed tool with typed output** (capability parity: contract → API → MCP → CLI), e.g. `debug_with_trace` returning a structured failure frame (failing step, error class, top stack frames, related trace spans, suspect files ranked by the code graph) instead of 10k lines of logs. Rules:
+A generic `bash` tool is the fallback. Any diagnostic or mechanical duty the agent performs more than rarely becomes a **contract-backed tool with typed output** (capability parity: contract → API → MCP → CLI), e.g. `debug_with_trace` returning a structured failure frame (failing step, error class, top stack frames, related trace spans, suspect files ranked by the code graph) instead of 10k lines of logs. Rules:
 
 - **Raw output never enters context.** Every tool result passes a deterministic compressor (truncate, parse, rank, summarize-by-rule) before the model sees it. LLM summarization of tool output is a last resort (ladder rung 4–5).
-- Tool descriptions are written for **routing precision**: one sentence of what it does, one of when to prefer it over neighbors, explicit anti-triggers. Overlapping tools with vague descriptions are how a model "uses the wrong tool" — that is a tool-registry defect, not a model defect.
-- Tool sets are identical across surfaces except where the environment genuinely differs (local FS vs sandbox); each divergence is declared in the engine's surface manifest, not implicit.
+- Tool descriptions are written for **routing precision**: one sentence of what it does, one of when to prefer it over neighbors, explicit anti-triggers. Overlapping tools with vague descriptions are how a model "uses the wrong tool"; the defect is in the tool registry.
+- Tool sets are identical across surfaces except where the environment differs (local FS vs sandbox); each divergence is declared in the engine's surface manifest.
 
 ### 4. Dispatcherless, token-optimized fleets
 
@@ -58,7 +58,7 @@ Local-only CLI fleets (no platform round-trip on the critical path) back the sam
 
 ### 6. Metering is a first-class output
 
-Every inference emits usage to ClickHouse with surface, capability, model, cache-read split, and mission/trace lineage — this is the product (metering → billing), not telemetry overhead. A code path that calls a model without metering is a P0. Wall-clock, token burn, and cache hit rate are benchmarked per release against the SWE-bench harness in `packages/bench`.
+Every inference emits usage to ClickHouse with surface, capability, model, cache-read split, and mission/trace lineage; that usage feeds metering → billing. A code path that calls a model without metering is a P0. Wall-clock, token burn, and cache hit rate are benchmarked per release against the SWE-bench harness in `packages/bench`.
 
 ### 7. Surface parity is an invariant, not an aspiration
 

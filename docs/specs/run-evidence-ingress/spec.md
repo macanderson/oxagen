@@ -35,13 +35,13 @@ The first vertical slice moves one sandbox-backed `edit_repo_file` attempt throu
 
 The manifest is the evidence bridge defined by the workspace-graph boundary. It is not a CGP type. CGP continues to own the portable `ContextFrame`; Stella owns context compilation, its local checkout/code graph, and its `AgentEvent` vocabulary; Oxagen owns identity, authorization, durable ordering, retention, lineage projection, and replay access.
 
-This slice deliberately does **not** add a public Stella upload endpoint. Hosted execution produces `runner_observed` evidence inside Oxagen. A later standalone-client contract may submit the same envelope shape, but Oxagen will assign it `client_attested` authority and will derive all identity fields from authentication rather than trusting the body.
+This slice does not add a public Stella upload endpoint. Hosted execution produces `runner_observed` evidence inside Oxagen. A later standalone-client contract may submit the same envelope shape, but Oxagen will assign it `client_attested` authority and will derive all identity fields from authentication rather than trusting the body.
 
 The hosted finalizer invokes one Oxagen-owned capability, `ingest_run_evidence`, through `kernel.invoke()`. Its launch exposure is an internal API transport callable only by the durable-worker service principal: scoped, high-sensitivity, default-deny, excluded from agent/MCP/CLI discovery, and not blocked by a second billing gate. This preserves IAM, validation, audit, metering, and lineage enforcement without creating a user-addressable upload endpoint.
 
 ## Why this must precede the Stella engine swap
 
-The current seams are useful but insufficient for the enterprise claim:
+The current seams and the corrections the enterprise claim requires:
 
 | Current state | Consequence | Required correction |
 |---|---|---|
@@ -53,7 +53,7 @@ The current seams are useful but insufficient for the enterprise claim:
 | Stella's current `ContextRecall` event carries frame id, citation, source, and token cost | It cannot prove the exact authorized bytes framed into a model call | Capture frame and rendered-content digests at the `ContextRecallPort`/compiler boundary |
 | ADR-028 `record-v1` is a local session sidecar containing cwd, prompts, tool I/O, and filesystem layers | It is not tenant-scoped, IAM-bound, retention-aware cloud evidence | Reuse its content-addressing and integrity patterns, not its envelope as the platform contract |
 
-Importing Stella before these corrections would put a first-class engine behind an ambiguous run and context record. The evidence seam makes the later engine change transport-only: TS and Stella engines must emit the same platform receipts.
+Importing Stella before these corrections would put Stella behind an ambiguous run and context record. The evidence seam makes the later engine change transport-only: TS and Stella engines must emit the same platform receipts.
 
 ## First success case
 
@@ -176,7 +176,7 @@ Internal UUIDs remain storage identifiers. Wire contracts and replay APIs use `a
 
 ### Attempt identity
 
-Every successful worker claim creates one immutable `RunAttempt` with an `arat_…` public ID and the resolved engine name, engine version, and build/image digest before model or tool execution. Every attempt seal atomically fences its lease and creates a one-shot finalization grant plus durable obligation scoped to that attempt, its event count, final accepted event digest when one exists, and stream digest; a truly zero-event abandoned attempt uses a nullable final-event digest plus the canonical empty stream digest and does not invent a terminal event. This closes the crash window after normal completion as well as failure/cancellation. The immutable grant public ID is also the stable `submission_id` used by every retry of that obligation. Operational finalization grants do not expire: their attempt/seal/digest binding and one successful consumption are the limiting authority, so a KMS or storage outage cannot strand an obligation. A lease reclaim seals the expired attempt as `abandoned` under the same rule. It creates a successor only while the pinned `max_attempts` permits; exhausted runs become failed after the last abandoned attempt is sealed and remain evidence-finalizable. A successor may restore a checkpoint from the earlier attempt, but keeps its own attempt ID and records `resumed_from_attempt_public_id` plus an algorithm-qualified `restored_checkpoint_digest`.
+Every successful worker claim creates one immutable `RunAttempt` with an `arat_…` public ID and the resolved engine name, engine version, and build/image digest before model or tool execution. Every attempt seal atomically fences its lease and creates a one-shot finalization grant plus durable obligation scoped to that attempt, its event count, final accepted event digest when one exists, and stream digest; a zero-event abandoned attempt uses a nullable final-event digest plus the canonical empty stream digest and does not invent a terminal event. This closes the crash window after normal completion as well as failure/cancellation. The immutable grant public ID is also the stable `submission_id` used by every retry of that obligation. Operational finalization grants do not expire: their attempt/seal/digest binding and one successful consumption are the limiting authority, so a KMS or storage outage cannot strand an obligation. A lease reclaim seals the expired attempt as `abandoned` under the same rule. It creates a successor only while the pinned `max_attempts` permits; exhausted runs become failed after the last abandoned attempt is sealed and remain evidence-finalizable. A successor may restore a checkpoint from the earlier attempt, but keeps its own attempt ID and records `resumed_from_attempt_public_id` plus an algorithm-qualified `restored_checkpoint_digest`.
 
 Every durable event has:
 
@@ -269,7 +269,7 @@ Stage-owned summary objects follow the same rule. `checkout` and `context` are r
 
 ### Context frame-use receipt
 
-The array order is the order used by the compiler. One receipt records both the protocol object and what actually reached the model:
+The array order is the order used by the compiler. One receipt records both the protocol object and what reached the model:
 
 ```text
 FrameUseReceiptV1

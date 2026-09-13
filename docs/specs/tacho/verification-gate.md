@@ -6,13 +6,12 @@ status: living
 
 # The verification gate — how CI says whether a change helps or hurts the agent
 
-Experiments on the agent loop fail in a specific, ugly way: the change ships,
-every unit test stays green, and three weeks later a benchmark run shows the
-agent quietly got worse — or more expensive, which is the same thing arriving on
-a different invoice. This document names the layers CI uses to catch that early,
-what each one can honestly claim, and what none of them can.
+An agent-loop change can ship with every unit test green, and a benchmark run
+three weeks later shows the agent got worse or more expensive. This document
+names the layers CI uses to catch that early, what each one can claim, and what
+none of them can.
 
-> **Read this first: two of the three layers no longer exist.** Layers 1 and 2
+> **Two of the three layers no longer exist.** Layers 1 and 2
 > were tests inside `crates/stella-pipeline`, deleted from the workspace in
 > #3865. One piece of Layer 1 has been rebuilt: **the spend gate** below pins
 > what a turn buys over the raw step loop, so a per-PR check fails again when
@@ -21,8 +20,7 @@ what each one can honestly claim, and what none of them can.
 > verification plugin's. Only the wire-contract half of Layer 2 survives.
 > Layers 1 and 2 are described below in the past tense because they are the
 > shape a verification plugin is asked to port (`doc:pipeline-as-plugins` §8)
-> and because the hole they left is the thing a reader most needs to know
-> about. Tracked in #3901 alongside the rest of the sweep.
+> and because the gap they left is still open. Tracked in #3901 alongside the rest of the sweep.
 
 ## Layer 1 — the degradation gate (**gone**; was blocking, per-PR)
 
@@ -46,13 +44,13 @@ What it proved: **the decision policy and its price did not drift.** What it
 could not prove: that the policy was *good* — both sides of every assertion were
 this codebase's own logic.
 
-Its operating rule is the part worth porting. When it failed on your PR, one of
+A port should keep its operating rule. When it failed on your PR, one of
 two things was true: either you broke something — fix it — or you *intended* the
 new behavior, in which case the scenario's expectation was updated **in the same
 PR**, where the reviewer sees "this change makes flaky flips escalate" stated as
 a diff line instead of discovering it in production. Never widen an expectation
-to "whatever it now does"; the gate's entire value is that intent has to be
-written down.
+to "whatever it now does"; the gate exists so that intent has to be written
+down.
 
 **A verification plugin owns this now.** Its oracle and its declared verdict rule
 are its decision policy, and pinning them against scripted doubles is work on the
@@ -80,8 +78,7 @@ stops it buying more. The parked-wait total reads its bound off `plan_park`
 and the wait ceiling rather than a literal, so a change to either moves the
 pin. A failure names the scenario, the pinned numbers and the new ones.
 
-It needs no verification machinery, which is why it could be rebuilt here at
-all. The engine does no I/O, so scripted ports are the whole harness
+It needs no verification machinery, so it could be rebuilt in `stella-core`. The engine does no I/O, so scripted ports are the whole harness
 (architecture rule 2 in AGENTS.md), and `cargo test -p stella-core` runs it in
 the required check with every other test.
 
@@ -117,11 +114,11 @@ So the wire *contract* is still gated. The event *trajectory* is not.
 
 Terminal-Bench runs under `bench/` measure the thing the other layers cannot:
 **capability on real tasks**. They cost real money and hours, so they are not
-per-PR. What keeps them honest is protocol, not frequency:
+per-PR. Protocol keeps them honest:
 
 - **Preregistration.** The comparison, task set, SUT commit, and scoring are
-  filed as an issue *before* the run (e.g. #1002, #1013). No moving the
-  goalposts after seeing the number.
+  filed as an issue *before* the run (e.g. #1002, #1013). None of these
+  change after the number is seen.
 - **The witness arm.** A frozen control adapter (digest-pinned) runs beside the
   candidate, so "the harness changed" and "the agent changed" cannot be
   confused.
@@ -129,7 +126,7 @@ per-PR. What keeps them honest is protocol, not frequency:
   from "plausibly fine"; it does not rank models or prove a 3% improvement.
   Claims must match the N.
 
-This is the only layer still standing at full strength. A change to the loop,
+Layer 3 is the only layer that still runs in full. A change to the loop,
 prompts, routing or a wrapper plugin has one cheap per-PR observation between
 it and a benchmark run — the spend gate, which reads price and nothing else.
 
@@ -141,13 +138,12 @@ it and a benchmark run — the spend gate, which reads price and nothing else.
   in the same pull request and say in the PR why the new price is right.
 - Green but you touched the loop, prompts, routing, or a verification plugin:
   what the agent *decides* is still unobserved. The spend gate reads price over
-  scripted turns; nothing per-PR reads decision quality, so "the tests pass"
-  carries less than this document was first written to describe.
+  scripted turns; nothing per-PR reads decision quality, so a green run says
+  nothing about it.
 - If a change claims to make the agent better, it earns a preregistered Layer 3
   run before that claim appears anywhere.
 
 None of this measures model quality drift, provider-side changes, or tasks
 outside the bench set. When an experiment targets something no layer observes,
-the first commit should extend the observation — a gate that never grows is a
-gate experiments learn to route around, and a gate that shrinks without anyone
-saying so is worse.
+the first commit should extend the observation: experiments learn to route around a
+gate that never grows. When a gate shrinks, say so.

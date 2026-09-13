@@ -17,9 +17,8 @@
 
 **Tacho**, from *tachograph* — the tamper-evident recorder mandated in
 commercial trucks, whose sealed logs are admissible evidence and set insurance
-premiums. "Dashcam for AI agents" is the elevator pitch; *tachograph* is the
-honest product: not just a recording of what happened, but a sealed,
-regulator-and-insurer-grade record plus an enforced duty cycle.
+premiums. "Dashcam for AI agents" is the elevator pitch. The product is a sealed,
+regulator-and-insurer-grade record of what happened plus an enforced duty cycle.
 
 > **The tachograph for AI agents — record everything, authorize anything,
 > insure the fleet.**
@@ -115,15 +114,15 @@ Four tiers, strictly layered. Nothing in a lower tier trusts anything above it.
 
 ### Performance stance (R3)
 
-Interception adds exactly two costs to the agent process:
+Interception adds two costs to the agent process:
 
 - a content hash plus an enqueue onto a bounded lock-free queue
   (drop-oldest under backpressure, never block);
 - on enforcement paths only, one in-process Ed25519 signature verification
   (~50 µs) against cached mint public keys.
 
-The network is never on the hot path except for elevation, which is by
-definition a slow path (something unusual is being asked for).
+The network is never on the hot path except for elevation, a slow path
+(something unusual is being asked for).
 
 ## 4. Wrapper integration contract (R1, R2)
 
@@ -181,11 +180,11 @@ corroboration of the SDK's self-reported egress (see
 
 - **Phase 1 — Dashcam (observe-only MVP).** Wrapper SDKs (TypeScript, Python,
   Stella-native), collector, hash-chained trace store, OTLP export, basic
-  dashboard. No enforcement — zero-risk adoption; drops into existing
-  Datadog/Grafana pipelines via OpenTelemetry.
+  dashboard. No enforcement; drops into existing Datadog/Grafana pipelines via
+  OpenTelemetry.
 - **Phase 2 — Authority.** Cedar PDP, Biscuit mint, human-in-loop queue,
-  standing-grant bundles, fail-closed enforcement, CGP export provider.
-  Stickiness begins here.
+  standing-grant bundles, fail-closed enforcement, CGP export provider. This
+  phase adds the permission-authority role from §1.
 - **Phase 3 — Telematics.** Trust scoring GA, tiered auto-approval,
   attestation API, first underwriter design partner.
 

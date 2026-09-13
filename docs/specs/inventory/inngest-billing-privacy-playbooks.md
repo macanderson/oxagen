@@ -125,7 +125,7 @@ GDPR Article 17 right-to-erasure implementation. When a privacy erasure request 
 <!-- enforced: privacy.export.process.ts(24-90) -->
 <!-- depends_on: -->
 
-GDPR Article 20 data portability export. When a privacy export request is triggered, an Inngest function is dispatched to assemble a ZIP archive containing user profile, conversations, api-key metadata, audit log, and generated-asset metadata, upload it to Vercel Blob, and return a signed download URL. Until OXA-1722 ships (ZIP assembly + upload), the function refuses to return a download link marked 'ready' — it throws `NonRetriableError` to fail the request. This keeps the data subject honest: they never receive a broken/fake export link. On failure, the `onFailure` handler marks the request 'failed' with the error message for operator review. Concurrency is capped at 5 per `userId`.
+GDPR Article 20 data portability export. When a privacy export request is triggered, an Inngest function is dispatched to assemble a ZIP archive containing user profile, conversations, api-key metadata, audit log, and generated-asset metadata, upload it to Vercel Blob, and return a signed download URL. Until OXA-1722 ships (ZIP assembly + upload), the function refuses to return a download link marked 'ready' — it throws `NonRetriableError` to fail the request. The data subject never receives a broken/fake export link. On failure, the `onFailure` handler marks the request 'failed' with the error message for operator review. Concurrency is capped at 5 per `userId`.
 
 #### Scenario: Export processing starts but assembly is not implemented
 - **WHEN** `privacy/export.process` event arrives

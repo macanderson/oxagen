@@ -398,7 +398,7 @@ The MessageComposer is disabled whenever `hasPendingApproval || hasBlockingConse
 <!-- entities: CHAT_COMPONENTS, UnknownComponentCard -->
 <!-- enforced: chat-component-registry.logUnknownComponent(), chat-shell-client.renderEntry() -->
 
-When a component event arrives with a componentId that is not in CHAT_COMPONENTS, logUnknownComponent is called (emitting a console.warn for observability), and UnknownComponentCard (a visible div with message and code) is rendered in its place. The user sees a clear signal instead of a silent empty gap. This is true for both live events (in renderEntry) and persisted blocks (in message-bubble.renderBlock).
+When a component event arrives with a componentId that is not in CHAT_COMPONENTS, logUnknownComponent is called (emitting a console.warn for observability), and UnknownComponentCard (a visible div with message and code) is rendered in its place. This is true for both live events (in renderEntry) and persisted blocks (in message-bubble.renderBlock).
 
 > Last verified: 2026-06-20 (commit 2f628504)
 

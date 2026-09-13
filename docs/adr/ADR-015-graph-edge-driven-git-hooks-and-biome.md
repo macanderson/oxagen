@@ -50,7 +50,7 @@ Pre-commit additionally shells out to whole-repo `pnpm typecheck` (glob-gated) a
 ### Reality check on "the knowledge graph"
 The repo **does** have a Neo4j knowledge graph (`packages/ontology`, `packages/agent/src/runtime/knowledge-graph.ts`, `packages/handlers/src/graph.cypher.ts`) — but it models **organization & agent knowledge/memory** (entities, embeddings, lineage), **not source files**. There is no file↔file relatedness graph today, and building one in Neo4j just to gate hooks would be over-engineering.
 
-However, a file-relatedness graph with exactly the edges described **already exists implicitly**: the **module import graph**. `A imports B` is an edge; the set of tests "related" to a changed file is the set of test modules whose import chain reaches it. **Vitest traverses this graph natively**:
+However, a file-relatedness graph with the edges described **already exists implicitly**: the **module import graph**. `A imports B` is an edge; the set of tests "related" to a changed file is the set of test modules whose import chain reaches it. **Vitest traverses this graph natively**:
 
 - `vitest related <files…>` — run only tests that (transitively) import the given files.
 - `vitest --changed [ref]` — derive the changed file set from a git diff, then do the same.
@@ -65,11 +65,11 @@ However, a file-relatedness graph with exactly the edges described **already exi
    pnpm vitest related --run --changed origin/main
    ```
 
-   Only test files whose import edges reach a changed file execute. This is the literal "run the nodes the graph relates to the change" behavior, backed by the module graph rather than the coarse package-dependency closure.
+   Only test files whose import edges reach a changed file execute. The selection comes from the module import graph instead of the package-dependency closure.
 
 2. **Formatting → Biome v2 replaces Prettier.** Pre-commit runs `biome format --write` (and `biome check --write` for the lint rules Biome owns) on **staged files only**, then re-stages. Biome is the GA, widely-adopted, Rust-based single tool — ~25× faster than Prettier and far faster than a Node ESLint pass.
 
-3. **Keep a _lean_ ESLint for architectural rules Biome can't express.** The repo's custom `no-restricted-imports` rules — the `@oxagen/ui/components/*` re-export boundary (`eslint.next.mjs`), the tenancy-seam raw-`db()` ban (`eslint.tenancy-seams.mjs`), and the `@oxagen/ai`-only LLM-import rule — stay in ESLint, run on staged files only. **Biome owns formatting + common correctness; ESLint owns the bespoke boundaries.** This is the one place Biome is _not_ a drop-in, and pretending otherwise would silently drop enforcement of those boundaries.
+3. **Keep a _lean_ ESLint for architectural rules Biome can't express.** The repo's custom `no-restricted-imports` rules — the `@oxagen/ui/components/*` re-export boundary (`eslint.next.mjs`), the tenancy-seam raw-`db()` ban (`eslint.tenancy-seams.mjs`), and the `@oxagen/ai`-only LLM-import rule — stay in ESLint, run on staged files only. **Biome owns formatting + common correctness; ESLint owns the bespoke boundaries.** Biome has no equivalent for these rules; removing them from ESLint would drop enforcement of those boundaries.
 
 4. **Edge representation (Phase 3, optional).** To satisfy "see a representation of the graph edges," add a `pnpm graph:edges` script using `dependency-cruiser` that emits a file-node / import-edge graph (SVG + JSON) to a gitignored `docs/CODEMAPS/import-graph/` path. This is documentation/visualization, decoupled from the hook hot path.
 
@@ -86,7 +86,7 @@ change: stream-event-types.ts
         → everything else is NOT run locally (CI still runs the full set)
 ```
 
-`vitest --changed origin/main` computes exactly this reverse-reachability set per push.
+`vitest --changed origin/main` computes this reverse-reachability set per push.
 
 ## Proposed `lefthook.yml`
 
@@ -157,9 +157,9 @@ pre-push:
 
 ## Alternatives considered
 
-- **Keep `...[origin/main]`, cap concurrency (`turbo --concurrency=2`).** Reduces peak load but still runs irrelevant suites and gives slower feedback. Treats the symptom, not the over-selection.
+- **Keep `...[origin/main]`, cap concurrency (`turbo --concurrency=2`).** Reduces peak load but still runs irrelevant suites and gives slower feedback. The over-selection stays.
 - **Build a real file-relationship graph in Neo4j.** Over-engineering — the module import graph already is that graph, and Vitest queries it for free. The Neo4j graph stays scoped to org/agent knowledge (its infra-boundary per `CLAUDE.md`).
-- **Oxc (`oxlint` + `oxfmt`) instead of Biome.** Newer and more viral, but the `oxfmt` formatter is still maturing; not yet safe for a monorepo-wide format authority. Revisit when GA.
+- **Oxc (`oxlint` + `oxfmt`) instead of Biome.** Newer, but the `oxfmt` formatter is still maturing; not yet safe for a monorepo-wide format authority. Revisit when GA.
 
 ## Consequences
 

@@ -14,13 +14,13 @@ existing **capability registry** (`packages/oxagen`). Tools were
 "things the agent invokes mid-conversation"; capabilities were
 "things humans and apps invoke."
 
-In practice the separation was defensive, not load-bearing. The same
-business logic would have to be wrapped twice. Approval and risk are
-just metadata.
+The separation carried no behaviour the capability registry lacked. The
+same business logic would have to be wrapped twice. Approval and risk are
+metadata.
 
 ## Decision
 
-**Unify.** Tools ARE capabilities. A capability declaration gains two
+**Unify.** Tools are capabilities. A capability declaration gains two
 optional fields:
 
 - `surfaces: ('api' | 'mcp' | 'agent')[]` — where the capability is
@@ -47,6 +47,6 @@ declared. A capability with `surfaces: ['agent']` skips `api`/`mcp`/
   agent-surfaced capability directly via the AI SDK tool dispatch.
 - `check_manifest.mjs` reads `surfaces` and emits them per
   capability.
-- One registry, one ceremony, one source of truth.
+- Tools and capabilities share one registry and one set of manifest layers.
 - Tradeoff: the `CapabilityDeclaration` shape grows two optional
-  fields. Worth it for the eliminated concept.
+  fields, and the separate tool concept is removed.

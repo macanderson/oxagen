@@ -102,7 +102,7 @@ Per-session tamper evidence, then global anchoring:
 3. **Anchoring.** Checkpoint hashes are leaves in a public Merkle log; the
    root is published daily (and on demand for attestation reports). Rewriting
    history therefore requires forging the device key *and* the control-plane
-   key *and* the already-published root — dashcam-grade evidence.
+   key *and* the already-published root.
 4. **Gaps are chained.** A `telemetry_gap` event occupies a `seq` slot like
    any other, so dropped data is visible and bounded, never silent.
 
@@ -122,8 +122,8 @@ Redaction must not break the chain and must remain auditable:
 
 ## 4. OpenTelemetry mapping
 
-Tacho ships an OTLP exporter from day one so the dashcam drops into existing
-Datadog/Grafana/Honeycomb pipelines with zero ceremony.
+Tacho ships an OTLP exporter from day one so its events flow into existing
+Datadog/Grafana/Honeycomb pipelines.
 
 | Tacho | OpenTelemetry |
 | --- | --- |
@@ -141,10 +141,9 @@ the evidentiary record. Only the latter is chain-verifiable.
 
 The CGP Export Provider is a standard CGP provider (revision
 `contextgraph/1.0-draft`, NDJSON envelopes, handshake/query/frames/verify) that
-serves Tacho history as frames. This keeps the strategic tie-in without
-stretching CGP into an action protocol: an agent can ask, through the same
-protocol it uses for code context, *"have I done this before, and was it
-approved?"*
+serves Tacho history as frames. CGP stays a retrieval protocol; through the
+same protocol it uses for code context, an agent can look up whether it has
+taken an action before and whether that action was approved.
 
 ### Frame mapping
 

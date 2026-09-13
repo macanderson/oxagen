@@ -7,12 +7,13 @@ user's explicit, direct go. #711 stays a DRAFT until then.**
 > its capability set and grant remap are regenerated. It still contains names for
 > retired graph mutation, code-map, graph-sync, lineage, and inference surfaces.
 
-**Why this exists.** ADR-025 renamed every capability to verb-first snake_case and
+ADR-025 renamed every capability to verb-first snake_case and
 **removed the alias shim**. IAM authorizes on an exact match of
 `iam.role_grants.capability_id` = the capability's canonical name. In prod those
-rows are still keyed by the OLD dotted names (`org.create`, …), so the moment the
+rows are still keyed by the OLD dotted names (`org.create`, …), so once the
 snake-named build serves traffic IAM finds no matching grant and **denies every
-capability** — a second outage, different cause. This runbook makes the cutover clean.
+capability**, causing a second outage with a different cause. This runbook re-keys
+those grants before the snake-named build deploys.
 
 ## Two classes of grant, two different fixes
 

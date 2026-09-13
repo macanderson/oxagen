@@ -13,7 +13,7 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 
 > **Status: Not started** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> The spec is a comprehensive design document (Status: Design / requirements) specifying how GitHub webhook events should map to knowledge-graph nodes and edges across 50+ event types. All 6 implementation checklist items remain unchecked. The GitHub connector's parseWebhookEvent currently handles only 8 events and explicitly excludes all Tier 2-3 events. No new node labels, relationship types, inferred-edge jobs, or capability documentation have been implemented.
+> The spec is a design document (Status: Design / requirements) specifying how GitHub webhook events should map to knowledge-graph nodes and edges across 50+ event types. All 6 implementation checklist items remain unchecked. The GitHub connector's parseWebhookEvent currently handles only 8 events and explicitly excludes all Tier 2-3 events. No new node labels, relationship types, inferred-edge jobs, or capability documentation have been implemented.
 
 **Implementation evidence**
 
@@ -47,9 +47,9 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 
 ### Purpose
 
-This document defines, **per GitHub webhook event**, how the Oxagen knowledge graph should react. The north star: **every event should leave an agent knowing more about the code, the people, the process state, and the risk surface than it did before — and able to act on that knowledge with fewer round-trips.** A webhook is not a notification; it is a fact about the world that belongs in the graph.
+This document defines, **per GitHub webhook event**, how the Oxagen knowledge graph should react. Each event should leave an agent knowing more about the code, the people, the process state, and the risk surface than it did before, and able to act on that knowledge with fewer round-trips. Each webhook event is recorded in the graph as a fact.
 
-We design for the agent first. For each event we ask: *what could an agent now answer that it couldn't a second ago?* If the answer is "nothing useful," we don't subscribe.
+Each mapping names what an agent can answer after the event arrives. Events that add nothing an agent can use are not subscribed.
 
 ---
 
@@ -120,7 +120,7 @@ Carried on every ingested node, per the dual-write pipeline:
 
 ### Subscription tiers (which events to actually enable)
 
-Don't "send me everything" — noise costs ingestion budget and dilutes the graph. Subscribe in tiers:
+Unneeded events cost ingestion budget and dilute the graph, so subscriptions are tiered:
 
 - **Tier 1 — Code & collaboration spine (always on):** Pushes, Pull requests, Pull request reviews, Pull request review comments, Issues, Issue comments, Branch/tag creation & deletion, Releases, Repositories.
 - **Tier 2 — Process & quality signal (on for any repo with CI):** Check runs, Check suites, Statuses, Workflow runs, Workflow jobs, Deployments, Deployment statuses, Labels, Milestones, Sub-issues, Issue dependencies.
@@ -247,15 +247,15 @@ Don't "send me everything" — noise costs ingestion budget and dilutes the grap
 
 ### Derived / inferred edges (the real leverage)
 
-The raw events above are the substrate. The agent-multiplying value comes from **second-order edges** the ingestion pipeline infers once the primitives exist:
+The ingestion pipeline infers **second-order edges** from the raw events above once the primitive nodes and edges exist:
 
 1. **Intent → code:** `(:Issue)<-[:CLOSES]-(:PullRequest)-[:PART_OF]-(:Commit)-[:MODIFIES]->(:SourceFile)` lets an agent walk from "the bug" to "the exact lines that fixed it."
 2. **Ownership inference:** frequent `AUTHORED_BY`/`APPROVED_BY` over files under a path → a derived `(:Person)-[:OWNS]->(:SourceFile dir)` so an agent knows who to ask / who to tag.
 3. **Risk → fix readiness:** `(:SecurityAlert)-[:AFFECTS]->(:SourceFile)<-[:MODIFIES]-(:Commit)` tells an agent whether an alert's file has been touched since.
-4. **Deploy provenance:** `(:Deployment)-[:DEPLOYED]->(:Commit)-[:PART_OF]->(:PullRequest)-[:CLOSES]->(:Issue)` answers "is the fix for issue N actually in prod."
+4. **Deploy provenance:** `(:Deployment)-[:DEPLOYED]->(:Commit)-[:PART_OF]->(:PullRequest)-[:CLOSES]->(:Issue)` answers "is the fix for issue N in prod."
 5. **Flakiness:** repeated `:WorkflowRun {runAttempt>1, conclusion:"success"}` on the same commit → mark the failing `:CheckRun` flaky.
 
-These are computed in the ingestion functions, not pushed by GitHub — but every one depends on the primitive nodes/edges being modeled correctly above. **That is why we subscribe broadly within Tiers 1–3 and model first-class labels rather than dumping everything into `:EntityNode`.**
+These are computed in the ingestion functions, not pushed by GitHub — but every one depends on the primitive nodes/edges being modeled correctly above. Tiers 1–3 are subscribed broadly and modeled as first-class labels, not stored as `:EntityNode`, for that reason.
 
 ---
 

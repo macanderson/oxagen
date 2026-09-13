@@ -13,8 +13,8 @@ networks) will not let their agents' traces, ontology, or memory leave a
 network they control. Today every store is a process-wide singleton bound
 to one connection string: `DATABASE_URL`, `NEO4J_URI`, `CLICKHOUSE_URL`. The
 tenant boundary is enforced *inside* one Postgres (RLS GUCs), one Neo4j
-(scoped sessions), one ClickHouse (`org_id` guard) — good isolation, wrong
-topology for a customer whose firewall is the boundary.
+(scoped sessions), one ClickHouse (`org_id` guard). A customer whose firewall
+is the boundary needs the stores inside that firewall.
 
 Oxagen calls tenants *organisations*. The binding therefore belongs on the
 organisation, never on the workspace and never on the request.
@@ -32,7 +32,7 @@ organisation, never on the workspace and never on the request.
    clients (`@oxagen/database`, `@oxagen/ontology`, `@oxagen/telemetry`)
    gain a `resolveDataPlane(orgId, kind)` seam consulted by
    `withTenantDb`, `scopedSession`, and `chInsert`/`chSelect`. Callers
-   never pass a connection; they run inside `runInTenantScope` exactly as
+   never pass a connection; they run inside `runInTenantScope` as
    today. Dedicated planes are pooled per organisation and evicted on
    rotation. `withSystemDb` and platform-level tables (billing, IAM, auth,
    org, plugin catalog) always live on the shared plane — a dedicated plane
@@ -43,7 +43,7 @@ organisation, never on the workspace and never on the request.
    ClickHouse and Neo4j schema runners iterate planes the same way. A
    plane whose schema version lags the platform is marked `degraded` and
    its organisation's scoped writes fail closed with a typed error.
-4. **The binding is governed like everything else.** `get_data_plane` /
+4. **The binding is changed only through governed capabilities.** `get_data_plane` /
    `set_data_plane` are capabilities (org Owner/Admin, `sensitivity: high`,
    `requiresApproval: true`), audited as security events; the raw DSN is
    never returned by any read capability.
@@ -56,7 +56,7 @@ organisation, never on the workspace and never on the request.
   runners follow as their own bodies of work, in this order, because the
   resolver is the seam every later piece plugs into.
 - Cross-organisation Postgres queries become impossible by construction on
-  dedicated planes, which is the desired property; anything that still
+  dedicated planes; anything that still
   wants one (platform analytics) must read the shared plane's mirrors.
 - The `oxagen-tenancy` skill and `eslint.tenancy-seams.mjs` are extended so
   the resolver is the only place a connection string is ever read.
@@ -67,6 +67,6 @@ organisation, never on the workspace and never on the request.
   organisation property; workspaces are a product-level partition inside
   it. Workspace-level binding would multiply pools and complicate
   organisation-wide audit.
-- **Self-hosting the whole platform per customer instead.** Compatible but
-  not sufficient: a hosted control plane with a customer-controlled data
-  plane is what most enterprise buyers ask for first.
+- **Self-hosting the whole platform per customer instead.** Compatible with
+  this decision, but most enterprise buyers ask first for a hosted control
+  plane with a customer-controlled data plane.

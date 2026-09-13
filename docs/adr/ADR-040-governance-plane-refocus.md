@@ -12,7 +12,7 @@
 
 ## Context
 
-Oxagen's vision has always been the governed control plane — the enforced
+Oxagen's vision is the governed control plane — the enforced
 accountability chain of identity → knowledge scope → permitted action →
 commercial terms → verified outcome → audit record. But the monorepo also
 carries a full first-party agent *runtime*: `agent-engine` (the coding loop),
@@ -34,9 +34,9 @@ engine transport), the Stella telemetry ingress, A2A, and
 
 **Oxagen is a governance plane for any agent, not an agent platform.**
 
-1. **The kernel is the product.** `invoke()` with IAM → billing admission →
+1. **The kernel is the product.** It is `invoke()` with IAM → billing admission →
    entitlement → approval gates, metering→Stripe, ClickHouse audit, graph
-   grounding, and run-evidence attestation are the load-bearing assets.
+   grounding, and run-evidence attestation.
 2. **The in-process agent runtime is extracted or deleted**, per the review's
    keep/extract/delete disposition: `agent-engine`, `agent-worker`,
    `sandbox`, `skills`, `code-graph` extract to the engine product;
@@ -50,7 +50,7 @@ engine transport), the Stella telemetry ingress, A2A, and
    `packages/agent/src/runtime/` and `authorizeExternalCapability()`) are the
    wrapper that makes any agent observable, permission-requesting, and
    CGP-conformant.
-4. **Governance-plane strength claims are honest.** Gateway-enforced controls
+4. **Governance-plane claims name enforcement and attestation separately.** Gateway-enforced controls
    (tool calls through the kernel) are enforcement; `client_attested`
    evidence is attestation, not enforcement, and is always labeled as such.
 

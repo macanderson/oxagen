@@ -8,7 +8,7 @@
 > `automation.create`/`automation.enable` and `video.generate`; the
 > `automation-inline.action.ts` and video-generate action files this spec
 > documented no longer exist in `apps/app/src`. Their Requirement sections
-> have been removed rather than kept as dead prose.
+> have been removed.
 
 **Description:** Next.js "use server" Server Actions that create a tenancy and authorization boundary between the frontend and the Oxagen capability handlers. Each action validates authentication (session + org/workspace membership), resolves real IDs from URL slugs (preventing IDOR), validates input against capability contracts, and routes through `invoke()` to emit metering, IAM, and audit signals.
 
@@ -158,7 +158,7 @@ For capabilities that are org-scoped (e.g., `api.key.create`) and do not belong 
 <!-- depends_on: Validate capability input against contract schema before invoking -->
 <!-- enforced: createWorkspaceInlineAction() -->
 
-Some actions transform the user-facing input into the shape expected by the capability contract. For `createWorkspaceInlineAction()`, the action constructs a `FormData` object from the validated input fields (`name` and `slug`), then passes it to the downstream `createWorkspaceAction()` function. This transformation is transparent to the caller but allows flexible input shaping at the action boundary.
+Some actions transform the user-facing input into the shape expected by the capability contract. For `createWorkspaceInlineAction()`, the action constructs a `FormData` object from the validated input fields (`name` and `slug`), then passes it to the downstream `createWorkspaceAction()` function. The caller does not see this transformation.
 
 #### Scenario: Workspace inline action transforms input to FormData
 <!-- test: createWorkspaceInlineAction.calls createWorkspaceAction with correct orgSlug and FormData containing name+slug -->
@@ -261,7 +261,7 @@ For actions that throw errors rather than returning `{ ok: false, error }`, any 
 <!-- entities: User, Session -->
 <!-- enforced: getSessionOrRedirect() -->
 
-Every server action (without exception) SHALL call `getSessionOrRedirect()` at the start. If the session does not exist or is invalid, `getSessionOrRedirect()` throws (redirecting the browser to `/login`), and the action returns an error or throws. No authenticated action runs without a valid session.
+Every server action SHALL call `getSessionOrRedirect()` at the start. If the session does not exist or is invalid, `getSessionOrRedirect()` throws (redirecting the browser to `/login`), and the action returns an error or throws. No authenticated action runs without a valid session.
 
 > Last verified: 2026-06-20 (commit 2f62850)
 
