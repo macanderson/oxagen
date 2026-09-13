@@ -227,7 +227,7 @@ export function toImportedToolVersions(
     (a, b) => a.firstCapturedAt.getTime() - b.firstCapturedAt.getTime(),
   );
   for (const src of ordered) {
-    const key = `${src.serverPublicId} ${src.toolName}`;
+    const key = JSON.stringify([src.serverPublicId, src.toolName]);
     const versions = byTool.get(key) ?? new Map<string, ImportedToolSource>();
     const digest = descriptorDigest(src.schemaJson);
     if (!versions.has(digest)) versions.set(digest, src);
