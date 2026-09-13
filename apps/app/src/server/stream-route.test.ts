@@ -13,6 +13,13 @@ import type { Viewer, ViewerResolution } from "./viewer-resolution";
 
 const { captureErrorMock } = vi.hoisted(() => ({ captureErrorMock: vi.fn() }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: captureErrorMock }));
+// The live source is only a delegation target here: loading the real one pulls
+// every live adapter (and their @oxagen/database/@oxagen/telemetry exports) into
+// a test that exercises none of them.
+const { liveFramesSince } = vi.hoisted(() => ({ liveFramesSince: vi.fn() }));
+vi.mock("@/data/adapters/live", () => ({
+  liveSource: { runs: { framesSince: liveFramesSince } },
+}));
 
 const viewer: Viewer = {
   userId: "u1",
@@ -296,16 +303,18 @@ describe("stream feeds", () => {
   it("delegate frames to the live source's run port outside fixture mode", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("MC_DATA", "fixture");
-    const { liveSource } = await import("@/data/adapters/live");
     const answer = notBacked("M1", "G6");
-    const spy = vi
-      .spyOn(liveSource.runs, "framesSince")
-      .mockResolvedValue(answer);
+    liveFramesSince.mockReset().mockResolvedValue(answer);
     const feeds = await streamFeeds();
     await expect(
       feeds.framesSince(viewer.scope, "arun_1", "0", 10),
     ).resolves.toEqual(answer);
-    expect(spy).toHaveBeenCalledWith(viewer.scope, "arun_1", "0", 10);
+    expect(liveFramesSince).toHaveBeenCalledWith(
+      viewer.scope,
+      "arun_1",
+      "0",
+      10,
+    );
   });
 
   it("answer the fleet feed's honest gap (G3) until a port reads patches by cursor", async () => {
