@@ -10,7 +10,11 @@ description: Test conventions in the Oxagen monorepo — co-located *.test.ts fi
 Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite as a mid-task check. Run **only** the specific test(s) obviously implicated by the files you changed — map each changed file to its nearest test and run just that file or that one package's `test:unit`:
 
 ```bash
-pnpm --filter @oxagen/billing test:unit -- grants.test.ts
+pnpm --filter @oxagen/billing test:unit grants.test.ts
+
+# NOT `test:unit -- grants.test.ts` — the `--` makes vitest ignore the
+# filter and run the whole package. `exec vitest run src/grants.test.ts`
+# is the unambiguous alternative.
 ```
 
 The full gate runs in CI on every push and PR — that is the authoritative gate, not a local laptop run. `pnpm gate` (lint + typecheck + coverage + tests + builds + migrations) is a **pre-merge** check run once, by the session that owns the branch, when a body of work is finished — not a per-commit habit.

@@ -250,6 +250,30 @@ export interface CapabilityDeclaration<
     workspace: Partial<Record<SystemWorkspaceRole, GrantEffect>>;
   };
   /**
+   * How many governed actions one invocation of this capability represents
+   * (ADR-052 §3, spec §7.2). Absent means exactly one, which is every
+   * capability except the ones that write in bulk.
+   *
+   * The exception exists because a connector pull is a single `invoke()` that
+   * may write a million graph nodes. Pricing that as one action under-prices it
+   * by orders of magnitude; giving ingestion its own meter would put a second
+   * unit on the invoice. So a contract declares its own conversion instead, and
+   * the unit on the invoice stays "governed action".
+   *
+   * Read from the VALIDATED OUTPUT, so a handler cannot move a charge with a
+   * field its contract does not declare. Serializable — no functions.
+   */
+  meter?: {
+    /**
+     * Output field carrying the count of sub-units this invocation covered,
+     * e.g. "recordsIngested". A non-numeric, negative or absent value charges
+     * the default one action.
+     */
+    unitsFrom: string;
+    /** Sub-units that make one governed action. Must be >= 1. */
+    unitsPerAction: number;
+  };
+  /**
    * Declarative audit-target extraction (accountability chain). When set,
    * the kernel reads `input[targetIdField]` (string values only) from the
    * validated input and threads `{ kind: targetKind, id: value }` into the

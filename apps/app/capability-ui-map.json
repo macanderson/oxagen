@@ -549,6 +549,42 @@
       "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_action_usage": {
+      "route": "/[orgSlug]/billing/governed-actions",
+      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
+      "entry": "Governed actions tab → 'This entitlement year' panel; page load invokes get_action_usage via loadActionUsage (data.ts). ?breakdown=1 requests the per-capability rows.",
+      "testid": "model-tokens-zero-row",
+      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
+      "verifiedAt": "2026-09-11",
+      "verifiedBy": "session-51ff1c81-governed-action-meter"
+    },
+    "get_rate_card": {
+      "route": "/[orgSlug]/billing/governed-actions",
+      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
+      "entry": "Governed actions tab → 'Rate card' panel (volume bands, per-tier allowances, retention price, the zero model-token row); page load invokes get_rate_card via loadRateCard (data.ts).",
+      "testid": "rate-card-model-tokens",
+      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
+      "verifiedAt": "2026-09-11",
+      "verifiedBy": "session-51ff1c81-governed-action-meter"
+    },
+    "preview_action_cost": {
+      "route": "/[orgSlug]/billing/governed-actions",
+      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
+      "entry": "Governed actions tab → 'Estimate your cost' form; Calculate submits previewActionCostAction (actions.ts) → preview_action_cost and renders the assumptions with the quote.",
+      "testid": "calc-submit",
+      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
+      "verifiedAt": "2026-09-11",
+      "verifiedBy": "session-51ff1c81-governed-action-meter"
+    },
+    "get_evidence_retention": {
+      "route": "/[orgSlug]/billing/governed-actions",
+      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
+      "entry": "Governed actions tab → 'Evidence retention' panel (included window, opt-in state, per-GB-month price, retention charged); page load invokes get_evidence_retention via loadEvidenceRetention (data.ts).",
+      "testid": "retention-opt-in-off",
+      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
+      "verifiedAt": "2026-09-11",
+      "verifiedBy": "session-51ff1c81-governed-action-meter"
     }
   }
 }

@@ -167,7 +167,7 @@ ${list}
 Rules (from CLAUDE.md and your agent definition):
 - Fix the root cause in place plus every co-located instance.
 - Add at least one regression test per defect that fails on the old code and passes on the new (Vitest; this package's conventions). Add an apps/app/e2e test ONLY if the defect is on a critical user path.
-- Run ONLY the narrow test tied to each change (pnpm --filter <pkg> test:unit -- <file>). NEVER run the whole suite, pnpm test, or turbo run test. Check pgrep -fl vitest and wait rather than stack.
+- Run ONLY the narrow test tied to each change (pnpm --filter <pkg> test:unit <file>). NEVER run the whole suite, pnpm test, or turbo run test. Check pgrep -fl vitest and wait rather than stack.
 - Group all these ${pkg} fixes onto ONE branch and COMMIT them (regression test in the same commit). Do NOT push — leave the branch committed for Mac to push/PR.
 - Write a timestamped report to docs/audits/eval-swarm/<timestamp>-${pkg.replace(/[^a-z0-9]+/gi, '-')}.md and record any worthwhile memory under .oxagen/memories/ (update _index.md if important).
 

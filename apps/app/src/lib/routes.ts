@@ -76,6 +76,10 @@ export const org = {
     subscription: (ctx: ScopeContext): string =>
       `/${ctx.orgSlug}/billing/subscription`,
     usage: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/usage`,
+    // ADR-052: the governed action is the billable unit. Rate card, this
+    // year's usage, the runs → actions calculator and the retention meter.
+    governedActions: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/billing/governed-actions`,
     invoices: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/invoices`,
   },
 

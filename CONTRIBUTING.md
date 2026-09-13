@@ -126,7 +126,7 @@ Register in `packages/ingestion/src/connectors/types.ts`. Connectors dual-write:
 - **E2E tests** for any new user-facing flow in `apps/app/e2e/`. Use Playwright fixtures from `e2e/helpers/`.
 - **Screenshots required** for UI changes: e2e tests must capture key success states.
 - Threshold headroom rule: bump only when `floor(new_coverage - 2.5) > current_threshold`.
-- Run the **narrowest** command that proves your change (`pnpm --filter <pkg> test:unit -- <file>`), not a whole-repo suite — the full gate runs in CI.
+- Run the **narrowest** command that proves your change (`pnpm --filter <pkg> test:unit <file>`), not a whole-repo suite — the full gate runs in CI.
 
 ## Coding Standards
 

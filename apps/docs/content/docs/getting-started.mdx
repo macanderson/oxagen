@@ -3,8 +3,6 @@ title: Getting started
 description: Sign up, create your organization and workspace, have your first agent conversation, and connect via API or MCP.
 ---
 
-<IllustrationGettingStarted />
-
 ## Sign up
 
 Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**. Enter your name, email address, and a password.
@@ -23,6 +21,18 @@ After signup you land on the **New organization** screen. Every user must belong
 2. Click **Create organization**.
 
 Creating an organization also creates a default workspace within it. You are automatically assigned the **Owner** role in both.
+
+<Mermaid chart={`
+flowchart TD
+  O["Organization<br/>billing · IAM policies · audit logs"] --> W1[Default workspace]
+  O --> W2[More workspaces]
+  O --> M[Org members + org roles]
+  W1 --> WM[Workspace members + roles]
+  W1 --> K["API keys<br/>one org + one workspace each"]
+  W1 --> C[Conversations]
+`} />
+
+*Access to a workspace is granted separately from the organization, and every API key is pinned to exactly one workspace.*
 
 ## Explore the app shell
 
@@ -56,39 +66,56 @@ Every capability available in the app is also reachable via the versioned REST A
 **Create an API key:**
 
 1. Go to **Organization → Developer → Tokens**.
-2. Click **Create API key**. Give it a name and select the scopes it needs.
+2. Click **Create API key** and give it a name.
 3. Copy the key — it is shown only once.
 
-API keys carry org and workspace scope. Pass the key as a Bearer token:
+API keys carry org and workspace scope, and act with the access of the user who created them. Pass the key as a Bearer token:
 
 ```http
 Authorization: Bearer ox_…
 ```
 
-See [API authentication](/docs/api/authentication) for the full reference.
+**Check that the key works.** Replace `acme/main` with your org and workspace slugs. A JSON body with a `tools` array means the key is valid; a `401` means it is not.
+
+```console title="Terminal"
+$ export OXAGEN_API_KEY="ox_…"
+$ curl -X POST "https://api.oxagen.sh/v1/acme/main/agent/tools" \
+    -H "Authorization: Bearer $OXAGEN_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{}'
+```
+
+See [API authentication](/docs/api/authentication) for the full reference, and the [API overview](/docs/api/overview) for the same request in TypeScript and Python.
 
 ## Connect via MCP
 
 Oxagen exposes all capabilities as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. Org and workspace scope are determined by the API key — no path segment is required.
 
-**Connect from Claude Desktop:**
+```bash tab="Claude Code"
+claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
+  --header "Authorization: Bearer $OXAGEN_API_KEY"
+```
 
-```json
+```jsonc tab="Claude Desktop"
+// claude_desktop_config.json — bridges to the HTTP endpoint via mcp-remote
 {
   "mcpServers": {
     "oxagen": {
-      "url": "https://mcp.oxagen.sh/mcp",
-      "headers": {
-        "Authorization": "Bearer ox_…"
-      }
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.oxagen.sh/mcp", "--header", "Authorization:${OXAGEN_AUTH_HEADER}"],
+      "env": { "OXAGEN_AUTH_HEADER": "Bearer ox_…" }
     }
   }
 }
 ```
 
+```bash tab="Codex"
+codex mcp add oxagen --url https://mcp.oxagen.sh/mcp --bearer-token-env-var OXAGEN_API_KEY
+```
+
 **Connect from the unified install page:**
 
-Go to **Organization → Developer → MCP** for one-click install instructions tailored to Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, and Windsurf.
+Go to **Organization → Developer → MCP** for copy-ready snippets for Claude Code, Claude Desktop, and Cursor, pre-filled with your API key. [Connecting to the MCP server](/docs/mcp/connecting) covers Codex and VS Code.
 
 See [MCP overview](/docs/mcp/overview) and [Connecting to the MCP server](/docs/mcp/connecting) for details.
 

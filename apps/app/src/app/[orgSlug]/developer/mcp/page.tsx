@@ -15,55 +15,10 @@ import { getSession } from "@/lib/session";
 import { Panel } from "@/components/ui/panel";
 import { McpInstallTabs } from "./mcp-install-tabs";
 import type { McpTabEntry } from "./mcp-install-tabs";
+import { MCP_URL, buildSnippets } from "./mcp-install-snippets";
 
 // Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-const MCP_URL = "https://mcp.oxagen.sh/mcp";
-
-/** Build the install snippets with a real (or placeholder) API key. */
-function buildSnippets(apiKey: string): Omit<McpTabEntry, "highlightedHtml">[] {
-  return [
-    {
-      key: "claude_code",
-      client: "Claude Code",
-      raw: `claude mcp add oxagen \\\n  --transport http \\\n  --url ${MCP_URL} \\\n  --header "Authorization: Bearer ${apiKey}"`,
-    },
-    {
-      key: "claude_desktop",
-      client: "Claude Desktop",
-      raw: `{
-  "mcpServers": {
-    "oxagen": {
-      "command": "npx",
-      "args": ["-y", "@oxagen/mcp-client"],
-      "env": {
-        "OXAGEN_API_KEY": "${apiKey}"
-      }
-    }
-  }
-}`,
-    },
-    {
-      key: "cursor",
-      client: "Cursor",
-      raw: `{
-  "mcp": {
-    "servers": [
-      {
-        "name": "oxagen",
-        "transport": "http",
-        "url": "${MCP_URL}",
-        "headers": {
-          "Authorization": "Bearer ${apiKey}"
-        }
-      }
-    ]
-  }
-}`,
-    },
-  ];
-}
 
 /**
  * Shiki is an optional enhancement — fall back to plain text on failure.

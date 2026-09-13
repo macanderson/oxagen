@@ -1,7 +1,7 @@
 # Governed-action metering — the meter, the rate card, and the move off cost-derived credits
 
-- **Status:** Proposed
-- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Date:** 2026-09-08 (open questions answered 2026-09-10)
 - **Author:** platform
 - **Related:** [ADR-052](../adr/ADR-052-governed-action-as-the-billable-unit.md)
   (the decision), [ADR-042](../adr/ADR-042-tenant-data-planes.md)
@@ -169,10 +169,18 @@ continues to flow to ClickHouse for the §4.4 report, and raises no credit debit
 
 ### 5.3 `metering.ts` splits
 
-`meterCreditsForUsage` and `creditsForCostUsd` move behind a reporting namespace.
-A new `creditsForActions(count, band)` becomes the charging path. `resolveMeterMarkup`
-loses its charging caller and is deleted rather than left dangling — under BYOK
-there is no cost to mark up.
+`meterCreditsForUsage` and `creditsForCostUsd` become reporting functions —
+they still price a call, and nothing debits from them. A new
+`creditsForActions(count, band)` in `action-metering.ts` is the charging path.
+
+**`resolveMeterMarkup` survives, narrowed.** This paragraph originally deleted
+it, on the reasoning that under BYOK there is no cost to mark up. ADR-053 §3,
+accepted the following day, amends ADR-052 for exactly one case: tokens the
+in-app agent spent on the **platform** key are a cost Oxagen did bear, and are
+billed back "at the rate card's vendor cost plus a published markup" under
+`consume_assistant_tokens`. Deleting the markup would delete the rate ADR-053
+requires. It keeps its name and its env resolution, and its only remaining
+charging caller is the platform-funded assistant path.
 
 ### 5.4 Ledger reasons
 
@@ -217,17 +225,104 @@ the rates change before the cut-over, not after.
 
 ---
 
-## 7. Open questions
+## 7. Open questions — answered
 
-1. **Does an async capability bill on dispatch or on completion?** A `mode: "async"`
-   capability returns immediately and finishes later. Billing on dispatch is simpler
-   and bills work that may fail; billing on completion is correct and needs the
-   recorder to survive an Inngest boundary. Leaning completion.
-2. **Does an ingestion sync bill per record or per sync?** A connector pull is one
-   `invoke()` that may write a million graph nodes. Per-sync under-prices it badly.
-   Ingestion may need its own unit, which would make three meters, not two.
-3. **What is the floor on `enterprise`?** §4.2 says "negotiated"; a published floor
-   would be more honest and harder to discount away.
-4. **Retention beyond twelve months — opt-in or default?** Silently accruing
-   storage charges on evidence a customer forgot they were keeping is the kind of
-   surprise this whole design is trying to avoid.
+Answered 2026-09-10 under [SCR-002](../scr/SCR-002-durability-first-architecture.md)
+(choose the durable option and record it, rather than hold the work). Each answer
+names what would have to change to revisit it.
+
+### 7.1 An async capability bills on dispatch
+
+A `mode: "async"` capability returns immediately and finishes later. §7 originally
+leaned toward billing on completion. **Dispatch is the answer**, because ADR-043
+decides it: Oxagen governs agents and does not run them. The governed action is
+the gate decision plus the durable record, and both happen at dispatch — the gates
+ran there, the audit row was written there, and that is the entire thing being
+sold. Billing on completion would make Oxagen's meter depend on execution it
+explicitly disclaims owning, and would need the recorder to survive an Inngest
+boundary where a dropped event silently means a free action.
+
+The failure case is handled where failures belong. A dispatched job that never
+completes is a reliability defect, refunded through the `adjustment` ledger reason
+that already exists — not silently absorbed by the meter.
+
+**Revisit if** Oxagen ever executes the deferred work itself, which would make ADR-043 the
+thing to change first.
+
+### 7.2 Ingestion bills per batch of records, through one meter
+
+A connector pull is one `invoke()` that may write a million graph nodes.
+Per-sync under-prices it by orders of magnitude. §7 raised a third meter; the
+answer is **no third meter and no second unit** — a contract may declare how many
+governed actions one invocation represents:
+
+```ts
+meter: {
+  unitsFrom: "recordsIngested",  // output field carrying the sub-unit count
+  unitsPerAction: 100,           // sub-units that make one governed action
+}
+```
+
+Actions charged = `max(1, ceil(units / unitsPerAction))`, and a contract without a
+`meter` block bills exactly one, which is every contract today. The unit stays
+"governed action", the invoice stays one number, and the exception is declared on
+the contract where a reader can see it rather than living in the biller.
+
+`unitsFrom` reads the **validated output**, so a handler cannot inflate or deflate a
+charge with a field the contract does not declare.
+
+**Revisit if** a sub-unit appears whose cost genuinely differs in kind rather than
+in count, which is what would justify a third meter.
+
+### 7.3 The enterprise floor stays negotiated, and becomes recorded
+
+§4.2 said "negotiated", which in code meant absent — and an absent allowance is
+indistinguishable from an unlimited one. A published floor would be more honest
+but it is a commercial number, not an architectural one.
+
+The answer is to fix the half that is architectural: an enterprise allowance is a
+**required, stored value** on the subscription's plan row, and the meter refuses
+to treat a missing one as unlimited. It falls back to the `scale` allowance and
+logs, so a mis-provisioned enterprise org under-bills by a bounded amount instead
+of running free. "Negotiated" now means "recorded", not "unknown".
+
+**Revisit if** a published enterprise floor is set; only the constant moves.
+
+### 7.4 Retention beyond twelve months is opt-in
+
+Silently accruing storage charges on evidence a customer forgot they were keeping
+is the precise surprise this design exists to avoid. Extended retention is
+**off by default**: past twelve months, evidence ages out under the organisation's
+retention policy and no charge accrues. An organisation that opts in is charged
+§4.3 on stored volume, and sees the figure in-product before the first bill.
+
+### 7.5 Shadow-then-compare ordering is confirmed, with one change
+
+The §6 ordering stands and the comparison is a gate on the rates. One change:
+the comparison does **not** need a period in which both meters charge, only a
+period in which both are *computed*. Token cost keeps being priced in full under
+§4.4 and reported at zero, and the action count is recorded from the moment the
+recorder lands, so the §6 step-2 comparison is computable over any window either
+side of the cut-over.
+
+`OXAGEN_ACTION_METER_MODE=shadow` records actions and raises no debit, for a
+staged rollout. It defaults to `charge`, because the interval between
+`@oxagen/ai` giving up the markup and the action meter taking over is an interval
+in which the platform bills nothing at all, and that is worse than either end
+state.
+
+---
+
+## 8. Traceability
+
+| Decision | Implementation |
+|---|---|
+| §3.1 top-level only | `packages/oxagen/src/kernel.ts` — `_governedActionScope` AsyncLocalStorage |
+| §3.2 exclusions | same file — `noBillingGate`, denial (recorder is past the throw), failed handler, invalid output |
+| §3.3 attribution | `GovernedActionRecord` |
+| §4.1 bands | `packages/billing/src/action-metering.ts` — `ACTION_RATE_BANDS` |
+| §4.2 allowances | same — `TIER_ACTION_ALLOWANCES` |
+| §4.3 retention | same — `RETENTION_USD_PER_GB_MONTH`, `CREDIT_REASONS.CONSUME_RETENTION` |
+| §4.4 reported at zero | `packages/ai/src/*` charge sites, gated on `fundedBy === "platform"` (ADR-053 §3) |
+| §7.2 multi-unit | contract `meter` block, read in the kernel from validated output |
+| §7.5 shadow | `OXAGEN_ACTION_METER_MODE` |

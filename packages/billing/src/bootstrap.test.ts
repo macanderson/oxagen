@@ -32,15 +32,53 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // suite times out at 5s rather than running.
 const setBillingAdmissionGateMock = vi.fn();
 const setBudgetAdmissionGateMock = vi.fn();
+const setUsageRecorderMock = vi.fn();
 vi.mock(
   "@oxagen/oxagen/kernel",
   () =>
     ({
       setBillingAdmissionGate: setBillingAdmissionGateMock,
       setBudgetAdmissionGate: setBudgetAdmissionGateMock,
+      setUsageRecorder: setUsageRecorderMock,
     }) satisfies Pick<
       typeof import("@oxagen/oxagen/kernel"),
-      "setBillingAdmissionGate" | "setBudgetAdmissionGate"
+      | "setBillingAdmissionGate"
+      | "setBudgetAdmissionGate"
+      | "setUsageRecorder"
+    >,
+);
+
+// ADR-052 accrual. Both are mocked because the real ones open a tenant scope
+// and a system-db connection, which a bootstrap test has no business needing:
+// the question here is only whether bootstrap wires the recorder to them.
+const recordGovernedActionMock = vi.fn().mockResolvedValue({
+  periodActions: 1,
+  billableActions: 0,
+  band: { id: "first-1m", minAnnualActions: 0, maxAnnualActions: 1_000_000, usdPer1000: 20 },
+  creditsCharged: 0n,
+  shortfallCredits: 0n,
+  mode: "charge" as const,
+});
+vi.mock(
+  "./action-metering",
+  () =>
+    ({ recordGovernedAction: recordGovernedActionMock }) satisfies Pick<
+      typeof import("./action-metering"),
+      "recordGovernedAction"
+    >,
+);
+
+const resolveOrgActionEntitlementMock = vi
+  .fn()
+  .mockResolvedValue({ tier: "scale" as const, includedActionsAnnual: 1_500_000 });
+vi.mock(
+  "./plan-allowance",
+  () =>
+    ({
+      resolveOrgActionEntitlement: resolveOrgActionEntitlementMock,
+    }) satisfies Pick<
+      typeof import("./plan-allowance"),
+      "resolveOrgActionEntitlement"
     >,
 );
 
@@ -102,5 +140,50 @@ describe("bootstrapBillingRuntime", () => {
     expect(gateFn).toBeDefined();
     await gateFn!("org-test");
     expect(assertCanStartTurnMock).toHaveBeenCalledWith("org-test");
+  });
+
+  // ── ADR-052: accrual is wired, and wired separately from admission ────────
+  it("registers the governed-action usage recorder", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
+    bootstrapBillingRuntime();
+    expect(setUsageRecorderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("the registered recorder resolves the org's entitlement and records the action against it", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
+    bootstrapBillingRuntime();
+    const recorder = setUsageRecorderMock.mock.calls[0]?.[0] as
+      | ((record: Record<string, unknown>) => Promise<void>)
+      | undefined;
+    expect(recorder).toBeDefined();
+
+    const occurredAt = new Date("2026-03-04T05:06:07.000Z");
+    await recorder!({
+      orgId: "org-test",
+      workspaceId: "ws-test",
+      capability: "query_ontology",
+      surface: "api",
+      principalId: null,
+      principalKind: null,
+      userId: null,
+      runId: "run-test",
+      requestId: "req-test",
+      actions: 3,
+      durationMs: 12,
+      occurredAt,
+    });
+
+    expect(resolveOrgActionEntitlementMock).toHaveBeenCalledWith("org-test");
+    // The tier and allowance come from the entitlement read, not from the
+    // record — a caller cannot talk itself onto a cheaper band by claiming one.
+    expect(recordGovernedActionMock).toHaveBeenCalledWith({
+      orgId: "org-test",
+      actions: 3,
+      capability: "query_ontology",
+      tier: "scale",
+      planIncludedActions: 1_500_000,
+      runId: "run-test",
+      now: occurredAt,
+    });
   });
 });

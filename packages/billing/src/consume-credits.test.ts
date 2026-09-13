@@ -197,7 +197,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 20n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(20n);
     expect(r.shortfallCents).toBe(0n);
@@ -215,7 +215,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 20n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(5n);
     expect(r.shortfallCents).toBe(15n);
@@ -228,7 +228,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 20n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(20n);
@@ -240,7 +240,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 0n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(0n);
@@ -252,7 +252,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 7n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(7n);
@@ -272,7 +272,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 15n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(15n);
     expect(r.shortfallCents).toBe(0n);
@@ -290,7 +290,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 30n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(30n);
     // Only lot-A was touched (remaining was broken before iterating lot-B).
@@ -309,7 +309,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 50n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(50n);
     expect(r.balanceCents).toBe(50n); // only the live lot's balance
@@ -320,7 +320,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 100n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(100n);
@@ -343,7 +343,7 @@ describe("consumeCredits — lots model", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 25n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(25n);
     // lot-soon (10) + lot-later (10) + 5 from lot-free = 25
@@ -399,7 +399,7 @@ describe("consumeCredits — sub-credit carry", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedMicroCents: EMBEDDING_MICRO,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
 
     // 0.0014 of a credit. Rounding it up charged 739x the call's cost.
@@ -420,7 +420,7 @@ describe("consumeCredits — sub-credit carry", () => {
       const r = await consumeCredits({
         orgId: "org-1",
         requestedMicroCents: EMBEDDING_MICRO,
-        reason: "consume_token_overage",
+        reason: "consume_execution",
       });
       charged += r.chargedCents;
     }
@@ -442,7 +442,7 @@ describe("consumeCredits — sub-credit carry", () => {
       const r = await consumeCredits({
         orgId: "org-1",
         requestedMicroCents: EMBEDDING_MICRO,
-        reason: "consume_token_overage",
+        reason: "consume_execution",
       });
       charged += r.chargedCents;
     }
@@ -456,7 +456,7 @@ describe("consumeCredits — sub-credit carry", () => {
     const r = await consumeCredits({
       orgId: "org-1",
       requestedCents: 20n,
-      reason: "consume_token_overage",
+      reason: "consume_execution",
     });
     expect(r.chargedCents).toBe(20n);
     // A whole-credit caller does not carry.

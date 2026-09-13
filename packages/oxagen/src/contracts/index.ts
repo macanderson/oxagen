@@ -71,7 +71,11 @@ import { agentMemoryDemote } from "./agent.memory.demote";
 import { agentMemoryPromotionDismiss } from "./agent.memory_promotion.dismiss";
 import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationales";
 import { agentToolList } from "./agent.tool.list";
+import { billingActionEstimate } from "./billing.action_estimate";
+import { billingActionRateCard } from "./billing.action_rate_card";
+import { billingActionUsage } from "./billing.action_usage";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
+import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -429,7 +433,11 @@ export {
   tachoSessionList,
   tachoSessionGet,
   agentToolList,
+  billingActionEstimate,
+  billingActionRateCard,
+  billingActionUsage,
   billingCreditsPurchase,
+  billingEvidenceRetention,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -668,7 +676,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoSessionList,
   tachoSessionGet,
   agentToolList,
+  billingActionEstimate,
+  billingActionRateCard,
+  billingActionUsage,
   billingCreditsPurchase,
+  billingEvidenceRetention,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,

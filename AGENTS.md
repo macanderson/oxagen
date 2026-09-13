@@ -144,7 +144,18 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
 | `pnpm test:e2e` | Run Playwright e2e tests (`apps/app`) |
 
-**Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit -- <file>.test.ts`
+**Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
+
+**No `--` before the filename.** `pnpm --filter <pkg> test:unit -- <file>` does NOT
+narrow the run — it runs every test file in the package. pnpm forwards the
+arguments to the script, so vitest receives `vitest run -- <file>`, and vitest's
+CLI parser puts everything after `--` into a passthrough bucket rather than
+treating it as a positional filter. Vitest then sees no filter and runs the lot.
+Measured on `@oxagen/config`: with the `--`, 4 files; without it, 1. This form was
+documented across this file, CLAUDE.md and every agent definition for months, so
+agents obeying the never-run-all-tests rule were violating it and reading a green
+result as compliance. `pnpm --filter <pkg> exec vitest run <path>` also works and
+is unambiguous.
 
 **Gate gotcha**: `pnpm gate` runs turbo with `--filter=...[origin/main]`, so it only executes against packages changed since `origin/main`. If `HEAD == origin/main` (e.g. verifying a clean tree), turbo finds zero affected packages and the gate appears to pass without running anything. To force a full run, use `turbo run lint typecheck test:unit test:coverage build` directly.
 

@@ -4,6 +4,7 @@
 // how they link) are testable without touching the filesystem.
 
 import { parse as parseYaml } from "yaml";
+import { TREATMENTS } from "./art.mjs";
 
 export class ContentError extends Error {
   /** @param {string} message @param {string} [file] */
@@ -53,33 +54,12 @@ export function loadPillars(yamlText, file = "content/pillars.yaml") {
     if (typeof raw.order !== "number" || !Number.isInteger(raw.order)) {
       throw new ContentError(`${where}: \`order\` must be an integer`, file);
     }
-    const image = raw.image;
-    if (!image || !isNonEmptyString(image.src) || !image.src.startsWith("/")) {
+    const treatment = raw.treatment ?? null;
+    if (treatment !== null && !TREATMENTS.includes(treatment)) {
       throw new ContentError(
-        `${where}: \`image.src\` must be a site-absolute path`,
+        `${where}: \`treatment\` must be one of ${TREATMENTS.join(", ")}`,
         file,
       );
-    }
-    if (!isNonEmptyString(image.alt)) {
-      throw new ContentError(
-        `${where}: \`image.alt\` is required (accessibility)`,
-        file,
-      );
-    }
-    const credit = image.credit ?? {};
-    for (const key of [
-      "author",
-      "authorUrl",
-      "source",
-      "sourceUrl",
-      "license",
-    ]) {
-      if (!isNonEmptyString(credit[key])) {
-        throw new ContentError(
-          `${where}: \`image.credit.${key}\` is required (the licence asks us to keep it)`,
-          file,
-        );
-      }
     }
     return {
       slug: raw.slug,
@@ -87,17 +67,7 @@ export function loadPillars(yamlText, file = "content/pillars.yaml") {
       tagline: raw.tagline.trim(),
       description: raw.description.trim(),
       order: raw.order,
-      image: {
-        src: image.src,
-        alt: image.alt.trim(),
-        credit: {
-          author: credit.author.trim(),
-          authorUrl: credit.authorUrl.trim(),
-          source: credit.source.trim(),
-          sourceUrl: credit.sourceUrl.trim(),
-          license: credit.license.trim(),
-        },
-      },
+      treatment,
     };
   });
   return pillars.sort(

@@ -57,22 +57,27 @@ committed.
   in Space Grotesk, ONE colour, adaptive to the tab's colour scheme. It is
   never the wordmark and never a lockup, and it never carries the gold — the
   metal belongs to the `x` of the word.
-- `og.png` / `research-assets/book-og.png` — social share cards referenced by
-  the Open Graph tags on `index.html` and `read/index.html` respectively.
+- `og/<page>-{dark,light}.png` (in `dist/` only) — a share card for every
+  hand-authored page, drawn by the build from the page's own `<title>` and
+  description; the copy in `dist/` has its `og:image` / `twitter:image`
+  pointed at it, the source page is left alone. `og.png` and
+  `research-assets/book-og.png` remain for anything that links them directly.
 - `content/` — the blog's source of truth. See **The blog** below.
-- `scripts/build.mjs` — the build: copies the site, compiles the blog, writes
-  the feed and sitemap. `scripts/lib/` holds the pure pieces (`content.mjs`
-  for loading and validation, `mdx.mjs` for MDX → HTML, `html.mjs` for the
-  page templates), each with a co-located vitest suite gated at 90% coverage.
+- `scripts/build.mjs` — the build: copies the site, compiles the blog, draws
+  every image, writes the feed and sitemap. `scripts/lib/` holds the pure
+  pieces (`content.mjs` for loading and validation, `mdx.mjs` for MDX → HTML,
+  `html.mjs` for the page templates, `images.mjs` / `art.mjs` / `text.mjs` /
+  `raster.mjs` for the generated images, `pages.mjs` for the hand-authored
+  pages' cards), each with a co-located vitest suite gated at 90% coverage.
   `scripts/check-links.mjs` fetches every URL cited in the posts and fails on
   any that does not resolve (`pnpm --filter @oxagen/web-v2 check:links`); it
   is network-bound, so it is a separate command rather than part of `build`.
 - `assets/blog.css` — the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- `assets/blog/pillars/*.jpg` — one stock hero per pillar, 1600px wide, with
-  the photographer credit kept in `content/pillars.yaml` (the Unsplash
-  License asks for it and the pages print it).
+- `scripts/fonts/` — Space Grotesk, the variable file the house kit ships
+  (OFL), used only at build time to set the text on generated images as
+  outlines. Not published.
 - `overview-video.html` — a standalone Stella overview page. Nothing on the
   site links to it and it is not in `sitemap.xml`; it is reachable only if you
   already know the URL.
@@ -145,10 +150,10 @@ are the YAML.**
 
 - `content/pillars.yaml` — the pillar list. Each pillar has a `slug` (its URL
   under `/blog/pillars/`), `name`, `tagline`, `description`, display `order`,
-  and an `image` with `src`, `alt`, and a full `credit` (author, author URL,
-  source, source URL, licence). Every field is required; the build refuses a
-  pillar without them, and a post naming a pillar not in this file fails the
-  build with the offending file and slug.
+  and optionally a `treatment` naming which of the seven drawings its images
+  carry. Every other field is required; the build refuses a pillar without
+  them, and a post naming a pillar not in this file fails the build with the
+  offending file and slug.
 - `content/posts/<slug>/index.mdx` — one folder per post, the folder name is
   the URL (`/blog/<slug>`). Anything else in the folder is copied alongside
   the page, so a post can carry its own images at `/blog/<slug>/<file>`.
@@ -162,10 +167,26 @@ are the YAML.**
   authors: [Oxagen Research]
   pillars: [ontologies, ai-agents]   # first entry is the primary pillar
   tags: [knowledge-graphs]           # kebab-case
-  image: /blog/<slug>/hero.jpg       # optional; defaults to the primary pillar's
+  image: /blog/<slug>/hero.jpg       # optional; replaces the generated banner and thumbnail
   draft: false                       # drafts build only with BLOG_DRAFTS=1
   ---
   ```
+
+- **Images are generated, not stored.** For every post and pillar the build
+  draws a banner (1600×900), a thumbnail (800×450) and a share card
+  (1200×630), each in a dark and a light rendering, into `dist/blog/<slug>/`.
+  The page offers the light one through `<picture>` to a viewer whose system
+  prefers light and shows the dark one otherwise; `og:image` points at the
+  dark card, since a crawler has no preference to consult. The art is the
+  house honeycomb (`oxagen-house-brand`'s cell, one cell in gold) beside one
+  of seven hairline drawings — a knowledge graph, an ontology, an agent's
+  loop, a tool call, a policy gate, an audit ledger, a meter — chosen by the
+  post's slug and fixed per pillar with `treatment:`. Everything is a pure
+  function of slug, text and theme (`scripts/lib/images.mjs`), so a rebuild
+  reproduces every pixel and nothing binary is committed. The share card
+  carries the title, the description, the wordmark and the post's date and
+  reading time, set in Space Grotesk as outlines, so the build needs no
+  fonts or tools installed beyond `pnpm install`.
 
 - The body is Markdown with GFM (tables, footnotes) and two components:
   `<Callout kind="note|warn" title="…">` and `<Figure src alt caption />`.

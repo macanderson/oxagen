@@ -74,7 +74,15 @@ export interface ResolvedConnectionAuth {
 interface OAuthRow {
   access_token_enc: Envelope | null;
   refresh_token_enc: Envelope | null;
-  expires_at: string | null;
+  /**
+   * A `timestamptz`. The driver decodes it to a Date and an Inngest step
+   * boundary JSON-serialises it to an ISO string, so both shapes genuinely
+   * occur — the declared type says so rather than picking one and hoping.
+   * `new Date()` accepts either, which is the only reason this has not bitten;
+   * a `typeof x === "string"` check on it would silently drop every value, as
+   * it did in tools/scripts/count-unenforced-iam-orgs.ts.
+   */
+  expires_at: Date | string | null;
   provider: string;
 }
 

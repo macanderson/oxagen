@@ -188,3 +188,69 @@ describe("provisionWebhookSubscription — form to DB", () => {
     expect(result.reason).toBe("connection_not_found");
   });
 });
+
+// ── The two shapes a timestamptz actually arrives in ────────────────────────
+//
+// The fixture above queues `expires_at` as a string, which is what the author
+// pictured rather than what the driver returns. postgres decodes a timestamptz
+// to a Date, and an Inngest step boundary JSON-serialises that Date back to an
+// ISO string, so the same column genuinely arrives as two different types
+// depending on the path. `ProvisionResult.expiresAt` is declared `string`, so
+// the Date case has to be normalised or the declared type is a lie — and the
+// caller who eventually writes `.slice(0, 10)` on it finds out in production.
+//
+// This is the same defect class as tools/scripts/count-unenforced-iam-orgs.ts,
+// where a `typeof x === "string"` filter silently dropped every date because
+// the fixtures handed in strings and the driver handed in Dates.
+
+describe("provisionWebhookSubscription — expiry normalisation", () => {
+  const connectionRow = {
+    id: "conn-uuid",
+    public_id: "con_pub",
+    connector_id: "microsoft",
+    delivery_config: { tenantId: "t", services: ["outlook"] },
+    status: "connected",
+  };
+
+  it("renders a Date from the driver as an ISO string", async () => {
+    makeDb([
+      [connectionRow],
+      [{ id: "whs-uuid", expires_at: new Date("2026-08-01T00:00:00.000Z") }],
+    ]);
+
+    const result = await provisionWebhookSubscription("conn-uuid", "org-uuid");
+
+    expect(result.expiresAt).toBe("2026-08-01T00:00:00.000Z");
+    expect(typeof result.expiresAt).toBe("string");
+  });
+
+  it("passes an ISO string through unchanged", async () => {
+    makeDb([
+      [connectionRow],
+      [{ id: "whs-uuid", expires_at: "2026-08-01T00:00:00.000Z" }],
+    ]);
+
+    const result = await provisionWebhookSubscription("conn-uuid", "org-uuid");
+
+    expect(result.expiresAt).toBe("2026-08-01T00:00:00.000Z");
+  });
+
+  it("reports a null expiry as null, not as an empty string", async () => {
+    makeDb([[connectionRow], [{ id: "whs-uuid", expires_at: null }]]);
+
+    const result = await provisionWebhookSubscription("conn-uuid", "org-uuid");
+
+    expect(result.expiresAt).toBeNull();
+  });
+
+  it("reports an unparseable date as null rather than \"Invalid Date\"", async () => {
+    makeDb([
+      [connectionRow],
+      [{ id: "whs-uuid", expires_at: new Date("not a date") }],
+    ]);
+
+    const result = await provisionWebhookSubscription("conn-uuid", "org-uuid");
+
+    expect(result.expiresAt).toBeNull();
+  });
+});

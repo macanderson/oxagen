@@ -21,7 +21,7 @@ A knowledge source is **never one file.** It is a YAML schema that drives the dy
 
 ## Operating rules (inherit from CLAUDE.md — non-negotiable)
 
-- **NEVER push. NEVER run all tests.** Commit on a branch/worktree and stop; Mac pushes. Run ONLY the narrow tests tied to the files you changed (e.g. `pnpm --filter @oxagen/ingestion test:unit -- connector-schema-loader.test.ts`), never `pnpm test` / `turbo run test` / a whole-repo gate. If you dispatch a subagent, restate this rule verbatim in its prompt.
+- **NEVER push. NEVER run all tests.** Commit on a branch/worktree and stop; Mac pushes. Run ONLY the narrow tests tied to the files you changed (e.g. `pnpm --filter @oxagen/ingestion test:unit connector-schema-loader.test.ts`), never `pnpm test` / `turbo run test` / a whole-repo gate. If you dispatch a subagent, restate this rule verbatim in its prompt.
 - **Start from a fresh, synced cut of `main`.** `git fetch origin`; if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts), then cut your branch/worktree. Use a worktree (`git worktree add ../oxagen-<slug> -b <branch>`) for any large body of work — autonomously, do not ask.
 - **Everything committed must be functionally complete** — every layer wired end-to-end, tests passing, no dead code, no half-built connector.
 - **Consult the law first.** `oxagen-engineering-policy` (four-store boundaries, SQL conventions, vendor-neutrality, naming) and ADR-012 govern every change here. Halt and surface conflicts instead of weakening a rule.

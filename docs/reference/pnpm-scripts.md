@@ -22,7 +22,7 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `format` | Formats the whole repo with Biome (`biome format --write .`). | One-shot formatting sweep; not yet run automatically in CI (see ADR-015). |
 | `format:check` | Checks formatting without writing (`biome format .`). | CI-style formatting check. |
 | `typecheck` | Runs `tsc` across every package (`turbo run typecheck`). | Part of `pnpm gate`. |
-| `test` | **Do not run directly** — runs `turbo run test:unit` across every package. Use `pnpm --filter <pkg> test:unit -- <file>` instead. | Never invoke whole-repo; CI runs it. |
+| `test` | **Do not run directly** — runs `turbo run test:unit` across every package. Use `pnpm --filter <pkg> test:unit <file>` instead. | Never invoke whole-repo; CI runs it. |
 | `test:coverage` | **Do not run directly** — runs `turbo run test:coverage` across every package. | CI only; use a single package's `test:coverage` locally. |
 | `test:e2e` | Runs the Playwright e2e suite for `@oxagen/app`. | Full e2e run; prefer a single spec file locally. |
 | `db:migrate` | Applies pending Postgres migrations (Atlas), then runs the ClickHouse/Neo4j migrator and the platform seed. | Bringing local/preview/prod schema up to date. |
@@ -62,7 +62,7 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 ## Notes
 
 - **Never run whole-repo test scripts locally** (`test`, `test:coverage`, `gate`'s
-  test steps) — they exist for CI. Use `pnpm --filter <pkg> test:unit -- <file>`
+  test steps) — they exist for CI. Use `pnpm --filter <pkg> test:unit <file>`
   for a single file, or `turbo run test:unit --filter=<pkg>` for one package.
 - Scripts prefixed `db:backfill-*` and `db:seed-skills` are one-time or
   deprecated migrations — read the script's own header comment

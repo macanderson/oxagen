@@ -15,7 +15,9 @@
   },
   "devDependencies": {
     "@mdx-js/mdx": "3.1.1",
+    "@resvg/resvg-js": "2.6.2",
     "@vitest/coverage-v8": "2.1.9",
+    "fontkit": "2.0.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "remark-gfm": "4.0.1",
