@@ -40,6 +40,81 @@ beforeEach(() => {
   mocks.headers.mockReturnValue({ authorization: "Bearer test_key" });
 });
 
+// ── agent.approval.list ───────────────────────────────────────────────────────
+
+import handler_agentApprovalList, {
+  schema as agentApprovalListSchema,
+  metadata as agentApprovalListMetadata,
+} from "./agent.approval.list";
+
+describe("agent.approval.list handler", () => {
+  const validOutput = {
+    items: [
+      {
+        id: "apr_0123456789abcdefghjkmn",
+        runId: null,
+        tool: "create_workspace",
+        requester: "usr_0123456789abcdefghjkmn",
+        createdAt: "2026-09-13T10:00:00.000Z",
+        expiresAt: "2026-09-13T10:05:00.000Z",
+        chain: { agentKey: null, rule: null },
+      },
+    ],
+    nextCursor: null,
+  };
+
+  it("exports the contract's schema and read-only metadata", () => {
+    expect(Object.keys(agentApprovalListSchema).sort()).toEqual([
+      "cursor",
+      "limit",
+      "runId",
+    ]);
+    expect(agentApprovalListMetadata.name).toBe("list_approvals");
+    expect(agentApprovalListMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("calls buildContext then invoke with 'list_approvals', the args and surface 'mcp'", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
+    const args = { runId: undefined, limit: 20, cursor: undefined };
+    const result = await handler_agentApprovalList(args);
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith("list_approvals", args, fakeCtx, {
+      surface: "mcp",
+    });
+    expect(result).toEqual(validOutput);
+  });
+
+  it("refuses an output that carries a row uuid instead of a public id", async () => {
+    mocks.invoke.mockResolvedValue({
+      items: [
+        {
+          ...validOutput.items[0],
+          id: "0195b7c8-1e6e-7c3a-9f0e-0a1b2c3d4e5f",
+        },
+      ],
+      nextCursor: null,
+    });
+    await expect(
+      handler_agentApprovalList({
+        runId: undefined,
+        limit: 50,
+        cursor: undefined,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("invoke failed"));
+    await expect(
+      handler_agentApprovalList({
+        runId: undefined,
+        limit: 50,
+        cursor: undefined,
+      }),
+    ).rejects.toThrow("invoke failed");
+  });
+});
+
 // ── agent.approval.resolve ────────────────────────────────────────────────────
 
 import handler_agentApprovalResolve, {
