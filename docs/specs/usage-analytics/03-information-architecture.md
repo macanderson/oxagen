@@ -1,6 +1,6 @@
 # 03 — Information architecture
 
-Where things live, how nav is wired, and — the make-or-break part — which filter applies to
+Where things live, how nav is wired, and which filter applies to
 which tile.
 
 ## 1. Nav is data-driven from two files (single source of truth)
@@ -22,8 +22,7 @@ Adding a nav destination = edit `routes.ts` (URL) + `sidebar.ts` (item + `enumer
 1. **`routes.ts`** — add to the `org` object:
    `dashboard: (ctx) => ` `/${ctx.orgSlug}/dashboard` `` (and sub-tabs if we use a tabbed
    layout, e.g. `org.dashboard.usage`).
-2. **`sidebar.ts` → `ORG_SCOPE_ROUTES`** — **add `"dashboard"` to the Set.** ⚠ **This is the
-   landmine:** `resolveSidebarMode()` treats any `/{org}/{seg}` whose `seg` is *not* in this Set
+2. **`sidebar.ts` → `ORG_SCOPE_ROUTES`** — **add `"dashboard"` to the Set.** ⚠ `resolveSidebarMode()` treats any `/{org}/{seg}` whose `seg` is *not* in this Set
    as a **workspace** slug. Miss this and `/{org}/dashboard` renders in workspace mode against a
    non-existent workspace "dashboard" → broken shell.
 3. **`sidebar.ts` → `orgConfig`** — add a `{ id: "dashboard", label: "Dashboard", icon:
@@ -62,7 +61,7 @@ Prefer a **tabbed section** mirroring `billing/layout.tsx` (`PageTabs` +
 ```
 
 `layout.tsx` declares `tabs = [{label:"Overview", href: org.dashboard(ctx)}, {label:"Usage",
-href: org.dashboard.usage(ctx)}]`. The Overview tab is the sexy at-a-glance strip; the Usage tab
+href: org.dashboard.usage(ctx)}]`. The Overview tab is the at-a-glance strip; the Usage tab
 is the power-user drill-down (reusing `billing/usage/*` components — `usage-charts.tsx`,
 `usage-breakdown-view.tsx`, `usage-range-picker.tsx`). Default org scope: **all workspaces, this
 month**, org timezone.
@@ -81,7 +80,7 @@ The existing profile page (`apps/app/src/app/account/profile/page.tsx`) gains a 
 *me this month across all my orgs* (fed by `get_my_usage`, §02 §2.2): Executions · Chat turns ·
 Tokens · Cost(if visible) · a couple of activity counts. It is **summary-only** — every card and
 a "View full usage →" affordance deep-links to `/account/usage` with the filter pre-seeded.
-Placement: above the profile form, as a new `_overview`-style tile. This is the literal "stat box
+Placement: above the profile form, as a new `_overview`-style tile. This placement is the user's "stat box
 on a user's profile."
 
 ### 3b. Usage tab (deep drill-down) — `/account/usage`
@@ -158,7 +157,7 @@ population count does not.
 renders a small muted note ("Not filterable by *model*") beside its title and does **not** apply
 that predicate. When *every* active filter is `➖`/`⬚` for a tile (the user has filtered to a
 dimension the tile can't honor at all), dim the tile to ~40% opacity with a single "Filtered out
-by current slice" overlay — present, explained, not silently wrong.
+by current slice" overlay.
 
 ## 7. Interaction & feedback patterns (ux-architect concerns)
 

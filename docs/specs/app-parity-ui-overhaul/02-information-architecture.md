@@ -2,7 +2,7 @@
 
 The IA does three jobs at once: it lays out the navigation, it fixes the vocabulary we use
 everywhere (product, docs, sales), and it maps every operable capability to a home so parity
-can be enforced. Start with the vocabulary, because the words are the structure.
+can be enforced. Part A defines the vocabulary; the navigation in Part B is built from it.
 
 ---
 
@@ -59,7 +59,7 @@ Two activities cut across all four planes:
 - **Operate** — Ask, Fleets, Runs, Approvals. The daily surface.
 - **Extend** — Marketplace, Plugins, MCP servers, Registries. Where the tool set grows.
 
-The brand pillars land on the planes exactly: *your AI bill under control* → Meter; *quality
+The brand pillars map onto the planes: *your AI bill under control* → Meter; *quality
 you can ship* → Ground; *enterprise-safe by default* → Govern; *we do the heavy lifting* →
 Build (the studio does the wiring for you).
 
@@ -108,7 +108,7 @@ current three-mode shell (`sidebar.ts` → `resolveSidebarMode`) stays; we re-po
  └──────────────────────────────┘
 ```
 
-Studio is one nav group with five children; it is the hero of the refresh. Knowledge keeps
+Studio is one nav group with five children. Knowledge keeps
 its tabbed layout, renamed to plain nouns (Graph / Ontology / Memory / Connections). Runs,
 Fleets, and Approvals are the operational triad; Approvals carries a live count badge.
 
@@ -137,11 +137,11 @@ Fleets, and Approvals are the operational triad; Approvals carries a live count 
  └──────────────────────────────┘
 ```
 
-Two moves matter here. **Members and Access merge into "Members & Roles"** — one place for
+**Members and Access merge into "Members & Roles"** — one place for
 people, their roles, the capability-grant matrix, JIT access requests, sessions, and reviews.
-**Billing keeps Usage front and centre** — the meter-to-revenue loop is the wedge; it deserves a
+**Billing keeps Usage front and centre** — the meter-to-revenue loop is the wedge, so it gets a
 named home where a customer configures how they bill *their* customers for observed agent
-usage. That is the single most on-vision new surface in the whole spec.
+usage.
 
 ### Account menu — unchanged in shape
 
@@ -227,7 +227,7 @@ for UI parity, and it drifts silently. Fix:
 
 2. **Classify every contract** into Operable / Observed / Internal (Part D is the seed). The
    gate only requires an app surface for Operable contracts. Internal contracts must carry an
-   explicit `appExempt` reason, so exemptions are visible and reviewed, not silent.
+   explicit `appExempt` reason, so exemptions are visible and reviewed.
 
 3. **CI verdict, advisory first.** Like the Vision Gate, start advisory: the check posts
    "N operable capabilities lack an app surface" on each PR. Ratchet to blocking once the
@@ -236,8 +236,8 @@ for UI parity, and it drifts silently. Fix:
 4. **`pnpm check:parity --json`** emits the operable-without-app list so the build plan in
    `04` can burn it down and so the number is always known.
 
-This is the mechanism that makes "the app does everything the platform can" true and keeps it
-true. Without it, this overhaul is a snapshot that rots. With it, parity is law.
+The gate keeps "the app does everything the platform can" true after this overhaul lands;
+without it, parity drifts again as new capabilities ship.
 
 > Vision note: the parity gate is itself a governance surface. It is on-wedge (governed,
 > typed contracts with parity across all four surfaces) and it is cheap. Build it early in

@@ -12,7 +12,8 @@
 
 ## Context
 
-The platform runs two divergent agent implementations and ships the weaker one:
+The platform runs two divergent agent implementations, and production traffic
+uses the one without judging, revision, routing or a mutation gate:
 
 1. The pipeline (`packages/agent-engine/src/pipeline/index.ts` — evaluate →
    enhance → route → execute → judge → revise, 1,968 lines) runs **only** on the
@@ -27,7 +28,7 @@ The platform runs two divergent agent implementations and ships the weaker one:
 3. There is **no hook/event bus**. `packages/agent/src/hooks/runtime.ts` is
    three hardcoded log-only functions; blocking policy exists only as the fixed
    kernel gate order. Plugins cannot register policy.
-4. Tool-call parallelism is inherited, not designed: the AI SDK fires every
+4. Tool-call parallelism comes from the AI SDK default: it fires every
    tool call in a step without awaiting (`run-tools-transformation.ts`,
    "we don't await the tool execution here"), with **no concurrency cap and no
    mutating-call barrier** — parallel `write_file` + `bash` can interleave.
@@ -58,7 +59,7 @@ ports:
 
 - `Provider` ← `@oxagen/ai` (`streamAgentReply` — metering and gateway intact)
 - `ToolExecutor` ← `materializeTools()` output (every tool call still re-enters
-  `kernel.invoke()`; **the engine is the brain, the kernel remains the law**)
+  `kernel.invoke()`, so the kernel's gates still apply)
 - `ProviderResolver` ← the market/model router (verified-outcome router slots
   in here unchanged)
 - `ContextRecallPort` ← engram's context compiler
@@ -94,7 +95,7 @@ phases: `docs/specs/agent-engine-v2/`.
   long-lived worker pool (the request path no longer hosts the loop).
 - Upstream work lands in Stella (step-scoped `run_step` API for external
   checkpointing, host-emitted bus lifecycle events, cancellation token); Mac
-  owns both repos, so this is coordination-cheap.
+  owns both repos.
 
 ## Alternatives considered
 

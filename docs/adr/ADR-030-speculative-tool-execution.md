@@ -11,17 +11,17 @@
 
 Reads dominate agent turns: the majority of tool calls are `read_file`,
 `grep`, `glob`, and `list_dir`, and each one costs a full model round-trip of
-latency — the agent asks, waits for the filesystem, then thinks again. Yet the
-NEXT read is often knowable the moment the current one returns:
+latency — the agent asks, waits for the filesystem, then thinks again. The
+next read is often predictable from the current result:
 
-- An over-cap `read_file` result literally embeds the follow-up call in its
+- An over-cap `read_file` result embeds the follow-up call in its
   truncation marker ("call read_file with offset:N, limit:M").
 - A `grep` hit list is, with high probability, followed by reads of the top
   matching files.
 - A `glob` listing is followed by reads of its first entries.
 
-Speculative decoding exploits exactly this shape at the token level; nothing
-exploited it at the tool level. The engine pays sequential latency for
+Speculative decoding exploits this pattern at the token level; the engine did
+not exploit it at the tool level. The engine pays sequential latency for
 predictable I/O.
 
 ## Decision
@@ -47,13 +47,13 @@ option wins):
    promise keyed by canonical input JSON. A real call that matches awaits the
    SAME promise — hit or still-in-flight, the filesystem work is never done
    twice. Tool results are strings by contract (errors included), so caching
-   the resolved value is uniform and a speculated failure serves exactly what
-   a live call would have returned.
+   the resolved value is uniform and a speculated failure serves what a live
+   call would have returned.
 4. **Placement: inside `wrapTools`, outside the workspace.** The layer wraps
    the already-backstopped workspace tools BEFORE `extraTools` merge and the
-   caller's `wrapTools` (permission gate). This is sound because the allowlist
-   is read-only: workspace-level permission brokering only guards mutations,
-   which the layer never issues. Served cache hits still flow through the
+   caller's `wrapTools` (permission gate). The allowlist is read-only, and
+   workspace-level permission brokering only guards mutations, which the layer
+   never issues. Served cache hits still flow through the
    caller's outer wrappers on the real call.
 
 ## Consequences
@@ -61,11 +61,11 @@ option wins):
 - Predictable follow-up reads return instantly; the read-heavy middle of a
   turn loses most of its filesystem latency. Wasted speculative reads cost
   only local I/O that an OS page cache absorbs.
-- Correctness risk is confined by design: read-only allowlist, whole-cache
-  invalidation on any mutation, per-turn lifetime (the cache dies with the
+- Correctness risk is confined by the read-only allowlist, whole-cache
+  invalidation on any mutation, and per-turn lifetime (the cache dies with the
   ToolSet).
 - Stats (`predicted/hits/misses/wasted/invalidations`) are exposed via an
   injectable callback for future trace/eval wiring; no new event-envelope
   variant is introduced (the CLI/app envelope copies stay untouched).
 - The predictor port is the seam where Phase 2's "tiny local draft model"
-  lands later; swapping it is a one-line injection, not a redesign.
+  lands later; swapping it is a one-line injection.

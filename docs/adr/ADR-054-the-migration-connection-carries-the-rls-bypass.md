@@ -63,16 +63,15 @@ refused by a security group before it gets this far).
 replays in version order. The seed at `20260614000000` runs against the schema
 as it stood at `20260612210000`. A policy corrected by a migration written today
 is corrected long after the insert that needed it, so a rebuild from empty
-fails in exactly the same place. The policy fix does not fix the reported
+fails in the same place. The policy fix does not fix the reported
 failure — it only makes the *current* policy symmetric.
 
 **The historical file cannot be edited.** Its hash is in `atlas.sum` and in
 every deployed `atlas_schema_revisions`. Changing it breaks checksum validation
-on every existing database. #1368 rules this out explicitly and this ADR agrees.
+on every existing database. #1368 rules this out explicitly.
 
-**The security question, answered.** #1368 asked whether a role should be able
-to write a globally-readable row, and said the answer is the decision rather
-than a detail. The answer is **no**, and the schema has already said so:
+#1368 asked whether a role should be able to write a globally-readable row.
+It should not, and the schema already records that:
 `20260617120000_marketplace_workspace_scope.sql` re-created the policy with the
 `org_id IS NULL` arm removed from `USING` as well, and made registries strictly
 org- plus workspace-scoped. Adding an `IS NULL` arm to `WITH CHECK` today would
@@ -86,7 +85,7 @@ widening of a tenant boundary in service of a statement that already ran.
 `app.rls_bypass` is a custom GUC that the policies themselves read, not a
 Postgres permission. Setting it costs the role nothing: it stays `NOSUPERUSER
 NOBYPASSRLS`, so `rds-compatibility` still catches the class of migration that
-genuinely needs a superuser — the two that #1333 found (`ALTER ROLE …
+needs a superuser — the two that #1333 found (`ALTER ROLE …
 NOBYPASSRLS`, `CREATE FUNCTION … SET <guc>`) still fail there.
 
 It is also the same GUC the application's own `withSystemDb` path sets for
@@ -106,8 +105,8 @@ definition the application already uses.
 ## Alternatives rejected
 
 **Both fixes.** The policy half buys nothing the deploy half does not already
-buy, and costs a widened tenant boundary. Doing it "for tidiness" would be a
-security change with no defect behind it.
+buy, and costs a widened tenant boundary. It would be a security change with no
+defect behind it.
 
 **Squash the migration history so the seed runs under the current policy.**
 Rebasing the directory invalidates every deployed revision table and is a far

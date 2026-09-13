@@ -19,8 +19,8 @@ Every model call an organisation makes is paid for by one of two keys. The
 organisation's own key, if it has stored one, or Oxagen's platform key. One
 resolver answers which, once per turn, and two things follow from the answer:
 which key the provider client is built on, and whether the tokens are charged.
-The rule both halves implement is one sentence: **a token is billed only when
-Oxagen paid for it.**
+Both halves implement one rule: **a token is billed only when Oxagen paid for
+it.**
 
 ## 2. The answer, and where it is used
 
@@ -36,8 +36,8 @@ logs why, because a turn failing on a customer's own key reads to the customer
 as their key being broken, and the platform key is the state every
 organisation starts in. A failed database read is different: it propagates and
 the turn fails. Guessing "platform" during an outage would move an
-organisation that has its own key onto Oxagen's billed key, and that is the
-one direction this seam must never err in. The chat routes do not catch it.
+organisation that has its own key onto Oxagen's billed key and charge it for
+those tokens. The chat routes do not catch it.
 
 The answer is threaded through three places, and they have to agree:
 
@@ -69,8 +69,8 @@ a column and refuses when the encryption key is unset. A read returns the
 hint, the provider, and the timestamps, and never the key.
 
 Providers today are `openrouter` and `gateway` (a Vercel AI Gateway key).
-Both reach every model in the catalog through one key, which is what makes
-them the first two. OpenRouter serves no embeddings, so under an OpenRouter
+Both reach every model in the catalog through one key, so they were supported
+first. OpenRouter serves no embeddings, so under an OpenRouter
 credential embeddings stay on the platform key and are billed. A direct
 vendor key is a new provider value, a provider client in `models.ts`, and a
 probe in `credential-probe.ts`.

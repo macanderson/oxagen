@@ -19,7 +19,7 @@ dependency — because at the time the only upstream artifact was Rust crates:
 > A published TypeScript artifact for CGP does not exist, so "just depend on
 > upstream" was not on the table for this codebase.
 
-One day later that premise expired. `context-graph-protocol#43` shipped
+One day later, `context-graph-protocol#43` shipped
 official provider SDKs (TypeScript, Python, Go); the TypeScript SDK is
 published as `@contextgraphprotocol/typescript-sdk` — a zero-dependency
 package carrying the canonical wire types (`ContextFrame`, `ContextQuery`,
@@ -48,7 +48,7 @@ Concretely:
 2. **The Zod validator stays.** The SDK ships plain interfaces and no runtime
    validation; run-evidence's job is validation at a trust boundary. The
    from-scratch normalization/digest/intrinsic-integrity apparatus of ADR-035
-   is unchanged — what changes is that its *shape* can no longer silently
+   is unchanged; its *shape* can no longer silently
    drift from upstream.
 3. **Fixture pin bumped `36a64488` → `9fb559a`.** The golden fixture payloads
    are byte-identical between the two commits (verified per-blob and by

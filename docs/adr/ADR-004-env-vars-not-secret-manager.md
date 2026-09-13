@@ -32,7 +32,7 @@ malformed.
 
 The `tools/env-manager` catalog previously resolved several values (Neon DATABASE_URL,
 ClickHouse, Neo4j, Stripe keys) from **Google Secret Manager** via `gcloud secrets
-versions access` — directly contradicting this ADR's "no GCP footprint" decision.
+versions access`, which contradicted this ADR's "no GCP footprint" decision.
 That path has been removed. All value sources are now `static` (literals in the
 registry), `generate` (random, minted at deploy time), or `manual` (operator pastes
 the value into the UI, which fans it out to every dependent Vercel project in one

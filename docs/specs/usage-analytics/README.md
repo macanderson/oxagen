@@ -24,7 +24,7 @@ Oxagen already draws a hard architectural line (see
 
 Everything in this spec is **metering data** — executions, tokens, cache, cost, capability
 counts — so it reads from **ClickHouse** (and the Postgres/Neo4j domain tables), never
-PostHog. That keeps billing-grade numbers on the billing-grade store and directly advances
+PostHog. That keeps billing-grade numbers on the billing-grade store and advances
 the vision's third pillar (*monetization: a ClickHouse→Stripe loop that turns observed usage
 into billing*).
 
@@ -48,7 +48,7 @@ metering foundation:
   (`StackedBarChart`, `BarList`, `LineChart`, `RadialGauge`) always via `dynamic({ ssr: false })`.
 
 So the org "Usage" page is largely the existing `billing/usage` dashboard **promoted** to a
-top-level org dashboard and **widened** with more group-bys — one aggregation transport, not two.
+top-level org dashboard and **widened** with more group-bys, on the same aggregation transport.
 
 ## What this spec delivers
 
@@ -61,7 +61,7 @@ top-level org dashboard and **widened** with more group-bys — one aggregation 
    366-day cap, and the honest cache-hit-rate definition.
 3. [`03-information-architecture.md`](./03-information-architecture.md) — routing edits
    (the `ORG_SCOPE_ROUTES` landmine, the `/{org}` redirect, the empty-org case, nav configs,
-   the `/account/usage` tab), the **global filter model**, and the load-bearing
+   the `/account/usage` tab), the **global filter model**, and the
    **filter-applicability matrix** (which filter applies to which tile).
 4. [`04-wireframes.md`](./04-wireframes.md) — the canonical **UsageStatCard**, the org
    dashboard, the user Usage tab, and the workspace-overview enhancements.
@@ -69,7 +69,7 @@ top-level org dashboard and **widened** with more group-bys — one aggregation 
    **Phase-0 MVP cut** that ships the org page fast, contract→route→MCP→UI parity per phase,
    tests, `capability-ui-map.json` bindings, and a Linear ticket breakdown.
 6. `mockup.html` — a rendered, self-contained visual of the org dashboard + stat card
-   (published as an Artifact) so "sexy" is *shown*, not asserted.
+   (published as an Artifact).
 
 ## The golden path this unlocks
 

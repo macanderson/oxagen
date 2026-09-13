@@ -107,5 +107,5 @@ out of v1.
   attempt; the MCP-SDK fallback is pre-approved in the spec so the phase
   cannot stall on a framework limitation.
 - **Untrusted-code incidents in beta** — beta is allow-listed orgs;
-  revocation drill is a 2.C2 exit criterion, not an afterthought; kill switch
+  revocation drill is a 2.C2 exit criterion; kill switch
   is env-registry-registered from day one.

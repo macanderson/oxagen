@@ -7,8 +7,8 @@
 ## 0. Principles
 
 1. **Nothing observable is dropped.** Every scalar we can see gets a typed column. Nested or open-ended data gets a typed JSON column with a documented shape, never an untyped blob. The long tail of OpenTelemetry attributes we have not modelled yet lands in `attrs` (a string map) so a new upstream attribute is captured the day it appears and promoted to a column later without loss.
-2. **Bodies are digested, content is governed.** Prompts, tool inputs, tool outputs, and model responses are always digested and size-counted. Their bytes are stored only under a workspace retention policy (`content_exact`), and then in tenant-encrypted blobs referenced by `bytes_ref`, never in ClickHouse or Neo4j. `tool_target` (a path, URL host, or the first 512 bytes of a command) is the one content-bearing column kept always, because an audit without it is useless.
-3. **Secrets never land.** The collector denylists environment names matching `KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL` before recording `env_snapshot`; the probe showed `ANTHROPIC_API_KEY` in the hook environment, which is exactly what this rule exists for.
+2. **Bodies are digested, content is governed.** Prompts, tool inputs, tool outputs, and model responses are always digested and size-counted. Their bytes are stored only under a workspace retention policy (`content_exact`), and then in tenant-encrypted blobs referenced by `bytes_ref`, never in ClickHouse or Neo4j. `tool_target` (a path, URL host, or the first 512 bytes of a command) is the one content-bearing column kept always, because an audit needs it to show what a tool acted on.
+3. **Secrets never land.** The collector denylists environment names matching `KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL` before recording `env_snapshot`; the probe showed `ANTHROPIC_API_KEY` in the hook environment, and this rule keeps it out of `env_snapshot`.
 4. **Tenant identity is stamped, never read.** `org_id` / `workspace_id` come from the API key scope on ingest. Anthropic-side identifiers that Claude Code reports (`user.account_uuid`, `organization.id`, `user.email`, the hashed `user.id`) are recorded as *observations* in their own columns and never used for scoping.
 5. **Three planes, one identity.** ClickHouse holds every event. Postgres holds the session, host, model, file, command, incident, and checkpoint records that need RLS, joins, and indefinite retention. Every row in both carries `session_uuid`.
 
@@ -283,7 +283,7 @@ Identity: `session_uuid` (unique), `harness_session_id`, `host_enrollment_id`, `
 
 ## 4. Envelope kinds and their typed bodies
 
-The `tacho/1.0` envelope is unchanged (`spec.md` §6.1). Each `kind` has a zod body in `packages/tacho/src/envelope.ts`; the ClickHouse columns in §2 are exactly the flattening of those bodies plus the envelope scalars, so a body member and a column never disagree by construction (a test flattens every fixture body and asserts the column set).
+The `tacho/1.0` envelope is unchanged (`spec.md` §6.1). Each `kind` has a zod body in `packages/tacho/src/envelope.ts`; the ClickHouse columns in §2 are the flattening of those bodies plus the envelope scalars, so a body member and a column never disagree by construction (a test flattens every fixture body and asserts the column set).
 
 ## 5. What is deliberately not a column
 

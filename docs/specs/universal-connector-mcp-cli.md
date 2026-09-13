@@ -4,7 +4,7 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 
 > **Status: Not started** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> The Universal Connector Framework spec is a complete, comprehensive design (pre-implementation status declared in document line 4) proposing customer-definable connectors backing MCP servers, CLIs, and direct databases. None of the 11 major builds (B1-B11) have been implemented. The dependency feature (Vault and Environments) shipped; the connector framework itself has not been started.
+> The Universal Connector Framework spec is a complete design (pre-implementation status declared in document line 4) proposing customer-definable connectors backing MCP servers, CLIs, and direct databases. None of the 11 major builds (B1-B11) have been implemented. The dependency feature (Vault and Environments) shipped; the connector framework itself has not been started.
 
 **Implementation evidence**
 
@@ -46,7 +46,7 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 Let a customer **build their own connector** in the product — no code, no per-server manifest authoring — by:
 
 1. **Picking an MCP server already installed in their workspace** (auth, transport, and the tool catalog are already handled by the install), **or** pointing at a **CLI** the system runs in a sandbox.
-2. **Designing the data's schema** in the shipped schema registry (labels, typed properties, relationships, and — critically — the **natural key**).
+2. **Designing the data's schema** in the shipped schema registry (labels, typed properties, relationships, and the **natural key**).
 3. **Writing a custom prompt** that instructs an LLM worker how to drive the source's search/fetch tools and shape results into `NormalizedRecord`s.
 
 The system then runs that connector **on a schedule** (and on demand), feeding results through the **existing ingestion pipeline** into the knowledge graph — **idempotently**, so repeated runs update nodes instead of duplicating them.
@@ -96,9 +96,9 @@ A **connector** = *a definition* (the "what/how") + *a connection instance* (aut
 
 **Execution substrates** are abstracted by a single `SourceTool` interface (§6). A connector definition lists, per record type, which `SourceTool` to call. The worker (§7) is identical regardless of substrate.
 
-> **Why SQL is the best-fitting substrate for idempotency:** a result set is typed and has a stable primary key, so the PK column *is* the natural key (§5.3) and `WHERE updated_at > :cursor` *is* the native watermark (§7.1) — exactly what MCP search tools struggle with. SQL needs no LLM in the fetch loop (cheapest, deterministic). Its cost is **reachability + security** (a DB connection string is more dangerous than an API token, and the DB often lives in a private network) — both answered by the vault + sandbox-template network model (§8.5).
+> **Why SQL is the best-fitting substrate for idempotency:** a result set is typed and has a stable primary key, so the PK column *is* the natural key (§5.3) and `WHERE updated_at > :cursor` *is* the native watermark (§7.1); MCP search tools often provide neither. SQL needs no LLM in the fetch loop (cheapest, deterministic). Its cost is **reachability + security** (a DB connection string is more dangerous than an API token, and the DB often lives in a private network) — both answered by the vault + sandbox-template network model (§8.5).
 
-> **Why CLI matters (the user's insight):** MCP tool schemas and JSON results are verbose and balloon the LLM context window; CLIs return compact text and agents already know CLI idioms. For agentic workers this is a direct token-cost and latency win. So when a source has a capable CLI, prefer Tier 3; fall back to Tier 2 (MCP) otherwise.
+> **Why CLI matters (the user's insight):** MCP tool schemas and JSON results are verbose and balloon the LLM context window; CLIs return compact text and agents already know CLI idioms. For agentic workers this lowers token cost and latency. So when a source has a capable CLI, prefer Tier 3; fall back to Tier 2 (MCP) otherwise.
 
 ---
 
@@ -226,7 +226,7 @@ interface SourceTool {
 Three implementations:
 
 #### 6.1 `McpSourceTool` — calls an installed MCP server
-- Resolves the server by `mcp_org_listing_id` and reuses the **exact** runtime path that `contributeMcpTools` uses: `DbOAuthClientProvider` (OAuth) or `getWorkspaceSecret` (secret) → `connectMcp` → `callTool`.
+- Resolves the server by `mcp_org_listing_id` and reuses the same runtime path that `contributeMcpTools` uses: `DbOAuthClientProvider` (OAuth) or `getWorkspaceSecret` (secret) → `connectMcp` → `callTool`.
 - Tool catalog + param schemas come from `mcp.tool_snapshots` (no live probe needed to *build* the connector).
 
 #### 6.2 `CliSourceTool` — runs a command in the sandbox
@@ -270,7 +270,7 @@ The third substrate: a customer points at their database (Postgres, ClickHouse, 
 - **Safety enforced by the tool, not the customer:** SELECT-only (parse-reject DDL/DML), wrapped in a **read-only transaction** (`SET TRANSACTION READ ONLY` / `default_transaction_read_only`), statement timeout, row cap, keyset pagination. Values are bound parameters (`:cursor`, `:limit`) — never string-interpolated.
 - **Rows → graph:** PK columns → `externalId`/natural key; `columnMappings` → typed properties; `edges[]` declares FK→relationship so the graph isn't just disconnected nodes. The same pipeline (dedup/embed/infer/MERGE) consumes the emitted records — identical to MCP/CLI.
 - **ClickHouse gets different defaults:** CH is append-only/high-volume and often lacks a stable per-row PK, so naive row materialization explodes the graph. CH connectors default to **aggregate/rollup queries** (`GROUP BY … ` producing keyed summary rows) or **live-fetch** rather than row-by-row; the builder warns and steers accordingly. **Postgres ships first** (clean PK + `updated_at` story); ClickHouse second with aggregate defaults.
-- **`cdc` upgrade (Phase 4):** for high-value DB sources, logical replication / Debezium-style CDC gives near-real-time + true incremental without polling load — the DB analog of "webhooks beat polling." `sql_descriptor.mode='cdc'` is the future path over scheduled SELECTs.
+- **`cdc` upgrade (Phase 4):** for high-value DB sources, logical replication / Debezium-style CDC gives near-real-time + true incremental without polling load. `sql_descriptor.mode='cdc'` is the future path over scheduled SELECTs.
 
 ---
 
@@ -303,7 +303,7 @@ connectorIngest(connectionId, trigger):
   update source_connection.{lastSyncAt, entityCount, status, healthStatus}
 ```
 
-From `ingestion/entity.received` onward it is the **existing pipeline** — map (identity, worker already mapped), dedup (`resolveEntity` on the generalized naturalKey), content-hash gate (§5.4), embed, infer, graph MERGE. **No second ingestion path.**
+From `ingestion/entity.received` onward it is the **existing pipeline** — map (identity, worker already mapped), dedup (`resolveEntity` on the generalized naturalKey), content-hash gate (§5.4), embed, infer, graph MERGE. There is no second ingestion path.
 
 #### 7.1 Why the LLM worker is safe to repeat (idempotency answer)
 1. **Stable natural key is mandatory.** `RecordSchema` makes `externalId` required and derives it from `naturalKeyProps`. Even if the model rephrases `displayName`, `MERGE {naturalKey, orgId}` updates the same node.
@@ -315,7 +315,7 @@ From `ingestion/entity.received` onward it is the **existing pipeline** — map 
 #### 7.2 Execution-model lifecycle (cost optimization)
 - Customer connectors start **`agentic`** (the customer wrote a prompt, not bindings).
 - On the first successful agentic run, **record the tool-call recipe** (which tools, which params, which output paths) the model converged on, into `record_bindings`.
-- Subsequent runs run **`deterministic`** from the recorded recipe (no LLM in the fetch loop) — cheap, fast, reproducible — and re-enter agentic only on schema drift / parse failure / explicit "re-learn". This is "**learn once, replay cheaply**," and it directly answers the token-cost concern.
+- Subsequent runs run **`deterministic`** from the recorded recipe (no LLM in the fetch loop) — cheap, fast, reproducible — and re-enter agentic only on schema drift / parse failure / explicit "re-learn". Replaying the recorded recipe removes the LLM token cost from routine runs.
 
 #### 7.3 Scheduling
 - **Build the missing cron executor.** One Inngest cron (`{ cron: "* * * * *" }`, pattern = `ingestion.oauth-refresh`) scans `connector_definitions` + `agent_triggers` (`triggerType='schedule', enabled=true`) for due crons and emits `ingestion/connector.run`. Per-org concurrency cap (`{ limit: 5, key: orgId }`), per-connector call budget + backoff (§11.5).
@@ -325,16 +325,16 @@ From `ingestion/entity.received` onward it is the **existing pipeline** — map 
 ### 8. Authentication & authorization
 
 #### 8.1 MCP-backed connectors
-- Reuse the install + credential model verbatim. The connector references `mcp_org_listing_id`; the worker resolves auth via `DbOAuthClientProvider` (OAuth 2.1 DCR, auto-refresh) or `getWorkspaceSecret` (secret), KMS AES-256-GCM, exactly as the agent runtime does today.
+- Reuse the install + credential model verbatim. The connector references `mcp_org_listing_id`; the worker resolves auth via `DbOAuthClientProvider` (OAuth 2.1 DCR, auto-refresh) or `getWorkspaceSecret` (secret), KMS AES-256-GCM, as the agent runtime does today.
 - The LLM worker **never sees the token** — auth is injected at the transport layer by `connectMcp`.
 
 #### 8.2 CLI-backed connectors — credentials come from the Vault
 - The connector's CLI secret (`GH_TOKEN`, `LINEAR_API_KEY`, an `sf` auth file, …) is a **Vault key** (`environments.secret_keys`), with a default value and optional per-environment overrides (dependency spec §7). No connector-specific credential store.
-- At run time the provisioner injects the resolved value as a **trusted vault env var** into the sandbox (e.g. `$GH_TOKEN`) via the trusted channel (dependency spec §11) — it **bypasses the model-facing denylist** because it's a deliberately-configured customer secret, while the denylist still protects Oxagen's own infra vars from prompt-injected `env`. The model writes `gh …`; `gh` reads the env var; **the secret value never enters the prompt or model output**.
-- Adapter mode is stronger still: the runtime materializes the full command including credential; the model supplies only typed params.
+- At run time the provisioner injects the resolved value as a **trusted vault env var** into the sandbox (e.g. `$GH_TOKEN`) via the trusted channel (dependency spec §11) — it **bypasses the model-facing denylist** because it is a customer-configured secret, while the denylist still protects Oxagen's own infra vars from prompt-injected `env`. The model writes `gh …`; `gh` reads the env var; **the secret value never enters the prompt or model output**.
+- In adapter mode the runtime materializes the full command including credential; the model supplies only typed params.
 
 #### 8.3 Background-worker consent (no interactive user)
-The per-user interactive consent gate (`mcp.consents`, OXA-816) blocks on an SSE card — wrong for a headless schedule. Bridge:
+The per-user interactive consent gate (`mcp.consents`, OXA-816) blocks on an SSE card, and a headless schedule has no user to answer it. Bridge:
 - **At connector creation**, the creating admin establishes a **workspace pre-grant**: a `mcp.consents` row with `tool_name='*'`, `status='granted'`, `expiresAt=NULL` for the connector's service principal (a synthetic per-connector `userId`, or a workspace-service identity).
 - The worker runs under that service identity; `checkConsent` finds the wildcard grant; tools run inline. Revoking the pre-grant (or disabling the server) immediately halts ingestion.
 - IAM: connector create/edit/run gated to **Owner/Admin** (matches `agent.mcp.register` strictness). Per "apps/app does not bootstrap IAM," any app-side call site adds explicit `assertBillingManager`/`assertOrgMember`-style gates.
@@ -347,7 +347,7 @@ The sandbox the worker runs in — isolation, resource caps, network mode, and w
 - Generic-shell (Tier-3) connectors are the riskiest surface and must run on `vercel`/`modal` drivers in prod (never `docker`).
 
 #### 8.5 Direct DB connections — reachability is the whole problem
-A SQL connector's connection string is a **Vault secret** (`sql_descriptor.dsnSecretKey`), resolved per environment (a `production` env can point at the prod read-replica; `development` at a staging DB — same connector, different value). The query runs **inside the sandbox** (§6.3), so reaching the DB is exactly the sandbox template's **network mode**:
+A SQL connector's connection string is a **Vault secret** (`sql_descriptor.dsnSecretKey`), resolved per environment (a `production` env can point at the prod read-replica; `development` at a staging DB — same connector, different value). The query runs **inside the sandbox** (§6.3), so the sandbox template's **network mode** determines how the DB is reached:
 - **Public cloud DB** → `public` (no allowlist) or `static_egress` (allowlist Oxagen's egress IP in the DB's security group / authorized networks).
 - **AWS VPC** → `static_egress` (RDS + SG) or `aws_privatelink` (private).
 - **GCP VPC** → `static_egress` (Cloud SQL authorized networks) or `gcp_psc` (private).
@@ -402,7 +402,7 @@ Per-label `fetchMode ∈ {materialized, live, hybrid}` (stored in the schema lab
 7. **Credential lifetime.** OAuth auto-refresh exists; on `needs_reauth` the connection goes `error` and surfaces a reconnect action; the schedule pauses rather than looping on 401s.
 8. **DB blast radius (SQL substrate).** A connection string is more dangerous than an API token — arbitrary SQL could mutate the source, and the DSN host could be coerced toward an internal target. Mitigated by §8.5: read-only creds + read-replica steering, SELECT-only + read-only-transaction + statement-timeout enforcement in `SqlSourceTool`, DSN host-allowlist (SSRF guard), and per-DB row/time caps. Heavy scheduled queries against a primary DB are an operational risk → recommend replicas + off-peak scheduling.
 9. **ClickHouse shape.** Append-only, high-volume, often no stable per-row PK → naive row materialization explodes the graph. Default CH connectors to aggregate/rollup or live-fetch (§6.3); Postgres ships first.
-10. **Private-network reachability is real infra.** `reverse_tunnel`/PrivateLink/PSC are net-new (dependency spec); until they ship, SQL/CLI sources are limited to `public`/`static_egress`-reachable DBs. A `reverse_tunnel` whose Network Agent is offline must fail fast, not hang.
+10. **Private-network reachability needs new infra.** `reverse_tunnel`/PrivateLink/PSC are net-new (dependency spec); until they ship, SQL/CLI sources are limited to `public`/`static_egress`-reachable DBs. A `reverse_tunnel` whose Network Agent is offline must fail fast, not hang.
 
 ---
 
@@ -429,7 +429,7 @@ Per-label `fetchMode ∈ {materialized, live, hybrid}` (stored in the schema lab
 ### 13. Testing
 
 - **Unit:** naturalKey generalization (schema-declared vs legacy), content-hash skip, in-run dedup, param-template escaping (adapter), cursor advance, conformance enforce/reject.
-- **Idempotency (the headline test):** run the worker **twice** over the same fixture and a **perturbed** fixture (reordered, rephrased `displayName`, duplicate item) → assert node count stable, `MERGE` updates only, no duplicate `:EntityNode`/`ALIAS_OF`/`INFERRED_FROM`.
+- **Idempotency:** run the worker **twice** over the same fixture and a **perturbed** fixture (reordered, rephrased `displayName`, duplicate item) → assert node count stable, `MERGE` updates only, no duplicate `:EntityNode`/`ALIAS_OF`/`INFERRED_FROM`.
 - **Integration:** `McpSourceTool` against a stub MCP server (consent pre-grant path); `CliSourceTool` adapter against a fixture binary in the sandbox; `SqlSourceTool` against a fixture Postgres (PK→naturalKey, `updated_at` cursor, FK→edge); secret/DSN never appears in model-visible payloads (assert).
 - **SQL safety:** DDL/DML rejected (SELECT-only parse), read-only transaction set, statement timeout fires, DSN host-allowlist rejects private/metadata targets; ClickHouse aggregate-default path.
 - **Security:** Oxagen infra vars (`NEO4J_*`/`DATABASE_*`) unreachable from model-supplied env while the trusted vault `DATABASE_URL`/DSN *is* injected; generic-shell connector blocked on `docker` driver in prod config; egress isolation.
@@ -460,5 +460,5 @@ Per-label `fetchMode ∈ {materialized, live, hybrid}` (stored in the schema lab
 
 ### 16. Net recommendation
 
-Build the net-new pieces on top of the existing pipeline, schema registry, MCP install/auth/consent, sandbox, and the **Vault + Environments + Sandbox-Templates dependency**. Treat an **installed MCP server, a CLI, or a direct DB as the substrate**, and a **customer connector as data** (schema + prompt + tool/query bindings) — not a per-server productized manifest. Unify all three behind one `SourceTool` interface so the worker is substrate-agnostic and can prefer the cheaper CLI/SQL paths; SQL is deterministic and the cleanest idempotency fit (PK→naturalKey, `updated_at`→cursor). Make **idempotency a property of the schema-declared natural key**, enforced at the existing `MERGE` sink, so even a non-deterministic LLM worker is safe to run on a schedule. Source credentials — API tokens *and* DB connection strings — live in the **Vault** with per-environment values, injected into the worker's sandbox through a trusted channel; **private databases inside a VPC or behind a firewall are reached via the sandbox template's network mode** (`static_egress` / PrivateLink / PSC / reverse-tunnel). This delivers "I can add my own connector to anything my business uses — an installed MCP server, a CLI, or my own database wherever it lives — designing my own schema and guiding the workers with a prompt" — with no million-integration sprawl and no duplicate-node drift.
+Build the net-new pieces on top of the existing pipeline, schema registry, MCP install/auth/consent, sandbox, and the **Vault + Environments + Sandbox-Templates dependency**. Treat an **installed MCP server, a CLI, or a direct DB as the substrate**, and a **customer connector as data** (schema + prompt + tool/query bindings) — not a per-server productized manifest. Unify all three behind one `SourceTool` interface so the worker is substrate-agnostic and can prefer the cheaper CLI/SQL paths; SQL is deterministic and the cleanest idempotency fit (PK→naturalKey, `updated_at`→cursor). Make **idempotency a property of the schema-declared natural key**, enforced at the existing `MERGE` sink, so even a non-deterministic LLM worker is safe to run on a schedule. Source credentials — API tokens *and* DB connection strings — live in the **Vault** with per-environment values, injected into the worker's sandbox through a trusted channel; **private databases inside a VPC or behind a firewall are reached via the sandbox template's network mode** (`static_egress` / PrivateLink / PSC / reverse-tunnel). This delivers "I can add my own connector to anything my business uses — an installed MCP server, a CLI, or my own database wherever it lives — designing my own schema and guiding the workers with a prompt" without a per-integration build and without duplicate nodes.
 

@@ -5,7 +5,7 @@
 
 ## Context
 
-Oxagen exposes ~286 capabilities, each a single contract that fans out to an API route, an MCP tool, a CLI command, and (for agent-surface capabilities) a model-facing tool (ADR-009). A capability's **name** is not cosmetic: it is a load-bearing string key. It joins the contract registry, the kernel's handler-loader map, the IAM `role_grants.capability_id` column, the ClickHouse `tool_invocations.capability_name` analytics column, the MCP tool name a model sees, and — by filename convention — the contract/route/tool/test/docs files on disk.
+Oxagen exposes ~286 capabilities, each a single contract that fans out to an API route, an MCP tool, a CLI command, and (for agent-surface capabilities) a model-facing tool (ADR-009). A capability's **name** is a string key. It joins the contract registry, the kernel's handler-loader map, the IAM `role_grants.capability_id` column, the ClickHouse `tool_invocations.capability_name` analytics column, the MCP tool name a model sees, and — by filename convention — the contract/route/tool/test/docs files on disk.
 
 Names had drifted. Some ran to four segments (`agent.file.lock.acquire`, `agent.task.background.start`), some used inconsistent domains (`organization.create` vs the `org.*` family, `documents.*` vs `document.*`), some pluralised segments (`graph.node.labels.get`), and one used kebab-case (`eval-schema`). Without a written standard and a lint, drift is the steady state, and drift makes the model pick the wrong tool (ADR-021 §3: overlapping/vaguely-named tools are a tool-registry defect), makes capabilities hard to discover, and makes the manifest an unreliable index.
 
@@ -21,7 +21,7 @@ Every capability's canonical name is **exactly three segments**, `domain.subject
 
 Segments are **lowercase** `[a-z0-9]` words. A compound concept is written **snake_case inside a single segment**, never as an extra dotted segment: `agent.file_lock.acquire`, not `agent.file.lock.acquire`; `workspace.model_settings.read`, not `workspace.model.settings.read`. Kebab-case is illegal everywhere.
 
-Subject and domain segments are **singular nouns** (`node_label`, not `node_labels`) — a capability that returns many rows still names its subject in the singular, exactly as `connection.list` lists connections. A short allowlist covers genuinely-plural entities; forced, awkward singularisations are not required.
+Subject and domain segments are **singular nouns** (`node_label`, not `node_labels`) — a capability that returns many rows still names its subject in the singular, as `connection.list` lists connections. A short allowlist covers plural-only entities; forced, awkward singularisations are not required.
 
 ### 2. The subject-elision rule (legal 2-segment names)
 
@@ -39,7 +39,7 @@ The MCP/Anthropic tool-name charset excludes `.`. The **model-facing** tool name
 
 ### 4. Closed action vocabulary
 
-The final segment of every 3-segment name comes from one closed, verb-only set, maintained in `tools/scripts/check-naming.mjs` (`ACTIONS`). It was seeded by auditing every terminal verb in use and keeping the clear, distinct ones — read/list (`list`, `get`, `read`, `query`, `search`, …), create/write (`create`, `update`, `upsert`, `write`, `add`, `generate`, …), delete/lifecycle (`delete`, `remove`, `start`, `stop`, `run`, `cancel`, `acquire`, `release`, …), config/auth (`set`, `enable`, `disable`, `rotate`, `revoke`, `sync`, `approve`, …). snake_case **compound actions** (`set_enabled`, `import_env`, `from_traces`) count as single verbs. The set is deliberately minimal: add a verb only when a real capability needs one no existing verb covers — a near-synonym (`change` vs `update`) is a smell, not a new entry.
+The final segment of every 3-segment name comes from one closed, verb-only set, maintained in `tools/scripts/check-naming.mjs` (`ACTIONS`). It was seeded by auditing every terminal verb in use and keeping the clear, distinct ones — read/list (`list`, `get`, `read`, `query`, `search`, …), create/write (`create`, `update`, `upsert`, `write`, `add`, `generate`, …), delete/lifecycle (`delete`, `remove`, `start`, `stop`, `run`, `cancel`, `acquire`, `release`, …), config/auth (`set`, `enable`, `disable`, `rotate`, `revoke`, `sync`, `approve`, …). snake_case **compound actions** (`set_enabled`, `import_env`, `from_traces`) count as single verbs. The set is deliberately minimal: add a verb only when a real capability needs one no existing verb covers — a near-synonym (`change` vs `update`) does not get a new entry.
 
 ### 5. Standard argument shapes (new tools only)
 

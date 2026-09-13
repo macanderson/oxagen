@@ -104,7 +104,7 @@ Provider cost to back 1 credit at 65% margin: `$0.01 * (1 - 0.65) = $0.0035`.
 
 All three tiers hit exactly 65% because `includedCredits = monthlyPriceUsd / $0.01 × (1 - 0.65)` is applied consistently.
 
-**Important note on markup pinning:** The v3 product mix includes volume-bonus credit packs (credits > face value). With the recommended product-mix weights, `derivePricing()` returns a blended markup of approximately **2.9086**, not 2.857. When running `pnpm billing:stripe-sync --apply`, pin the solved value: `OXAGEN_METER_MARKUP=2.9086`. Do not hardcode 2.857 in env — it will produce an auditable 0.18% discrepancy against the solve.
+**Markup pinning:** The v3 product mix includes volume-bonus credit packs (credits > face value). With the recommended product-mix weights, `derivePricing()` returns a blended markup of approximately **2.9086**, not 2.857. When running `pnpm billing:stripe-sync --apply`, pin the solved value: `OXAGEN_METER_MARKUP=2.9086`. Do not hardcode 2.857 in env — it will produce an auditable 0.18% discrepancy against the solve.
 
 ---
 
@@ -715,7 +715,7 @@ Ordered by dependency. Steps 1-4 are independent and can be built in parallel by
 
 #### Step 2 — Organization signup credit grant
 
-**Why:** New orgs land with zero credits and cannot send a single message.
+**Why:** New orgs land with zero credits and cannot send a message.
 
 **Files to create/modify:**
 
@@ -747,7 +747,7 @@ Ordered by dependency. Steps 1-4 are independent and can be built in parallel by
 
 #### Step 4 — Pre-turn admission gate + double-spend fix
 
-**Why:** Without the gate, zero-balance orgs get free turns. Double-spend race is a real billing integrity issue.
+**Why:** Without the gate, zero-balance orgs get free turns. Two concurrent charges can read the same stale balance and double-spend it.
 
 **Files to create/modify:**
 
@@ -891,10 +891,10 @@ subscriptions sell credits **below** face value (the discount incentive), which
 drags their margin under target. So we **solve** the markup over the whole
 product mix instead — see §4.
 
-> **Consequence (important):** changing the target margin moves the **meter
+> **Consequence:** changing the target margin moves the **meter
 > markup** and the **realised margins**, *not* the dollar sticker prices. The
 > $/credit a customer pays is a stable anchor; how fast a call burns credits is
-> the margin control. This is intentional, not a limitation. The advertised
+> the margin control. The advertised
 > dollar prices change only when you change a plan's **allotment** or
 > **discount** (the incentive design) — see the SOP.
 
@@ -902,7 +902,7 @@ product mix instead — see §4.
 
 ### 3. The cost meter (provider rate card)
 
-The meter's inputs are exactly what providers invoice us on: **tokens in / out
+The meter's inputs are what providers invoice us on: **tokens in / out
 (and cached-input) by model**. The rate card lives in
 [`packages/billing/src/pricing.ts`](../../../packages/billing/src/pricing.ts)
 (`PROVIDER_RATE_CARD`) as USD per 1,000,000 tokens. Keep it in sync with your
@@ -986,7 +986,7 @@ fail the user's turn.
 `credit_balances` has a DB CHECK `balance_cents >= 0`. `chargeUsageCredits`
 **clamps** the debit to the available balance and reports a `shortfallCredits`
 when the org outruns its credits mid-turn. A zero-cost call inserts **no** ledger
-row (the ledger CHECK forbids a zero delta). The real admission control —
+row (the ledger CHECK forbids a zero delta). Admission control —
 refusing a turn when the balance is empty — is the caller's pre-turn guard,
 `hasCreditBalance(orgId)`.
 
@@ -1054,7 +1054,7 @@ code); pinning it decouples runtime from a config edit until the next sync.
 
 - `token_usage.cost_usd_micros` was hard-coded to `0` in the gate and embeddings
   → now priced via the rate card.
-- `providerFromModelId` returned `""` for the bare model ids the gate actually
+- `providerFromModelId` returned `""` for the bare model ids the gate
   uses (`claude-sonnet-5`) → now infers the provider from the family.
 - Credits were **never** charged on LLM calls and **never** granted on
   purchase/renewal → both halves of the loop are now wired.

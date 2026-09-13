@@ -32,11 +32,11 @@ Archived spec & plan — status: not started (audited 2026-07-03).
 
 ### 1. Verdict
 
-**Feasible, and ~80% of the primitives already exist in production.** The elegant general design is **not** "build a million integrations" and **not** "throw away connectors for MCP." It is:
+**Feasible, and ~80% of the primitives already exist in production.** The design is:
 
 > **One connector framework, three delivery tiers, with MCP as the long-tail unlock — and the connector manifest as the single source of truth that feeds the production schema registry.**
 
-The three net-new builds are small and well-bounded:
+There are three net-new builds:
 
 1. **`mcp_tool` delivery method** — a generic, manifest-driven poller that calls a registered MCP server's `list_*`/`search_*`/`get_*` tools and feeds outputs into the *existing* ingestion pipeline.
 2. **Manifest → schema-registry bridge** — let a connector manifest ship a *suggested* schema (labels/reltypes/typed properties) that registers into the shipped schema registry as `source='connector'`, **born disabled**, adopted by the customer via the existing `schema.toggle`.
@@ -48,7 +48,7 @@ Everything else — auth, consent, tool discovery + JSON-Schema snapshots, the 6
 
 ### 2. The core architectural insight
 
-Two production subsystems sit on either side of this idea and just need a bridge:
+Two production subsystems sit on either side of this idea and need a bridge:
 
 | Subsystem | What it is | Built for | Key code |
 |---|---|---|---|
@@ -57,28 +57,28 @@ Two production subsystems sit on either side of this idea and just need a bridge
 
 The connector framework already abstracts **`DeliveryMethod`** (`webhook | rest_polling | graphql_polling | sql_query | … | cdc`). **MCP becomes one more delivery method.** Instead of a webhook handler or a hand-written REST poller, the "poller" for an MCP source is *"call these declared tools with these param templates on this schedule, page the results, and emit `NormalizedRecord`s into the same pipeline GitHub uses."*
 
-That is the whole trick. Once a record enters the pipeline as a `NormalizedRecord`, it flows through **identical** dedup → embed → infer → graph machinery regardless of whether it came from a GitHub webhook or a Linear MCP `list_issues` call.
+Once a record enters the pipeline as a `NormalizedRecord`, it flows through **identical** dedup → embed → infer → graph machinery regardless of whether it came from a GitHub webhook or a Linear MCP `list_issues` call.
 
 ---
 
 ### 3. Why a *delivery method*, not a parallel system
 
-Strong recommendation: build MCP ingestion **inside** the connector framework as a new `DeliveryMethod`, **not** as a separate "MCP data source" subsystem. This is the YAGNI-correct, no-drift answer.
+Recommendation: build MCP ingestion **inside** the connector framework as a new `DeliveryMethod`, **not** as a separate "MCP data source" subsystem.
 
-Reusing the framework gives us, for free:
+Reusing the framework provides, with no new code:
 - `ingestion.source_connections` (status, cursor, health, entity count) — the operational record.
 - `ingestion.entity_type_mappings` — source-record-type → oxagen-entity-type + property mappings.
 - The whole pipeline: normalization filters, dedup via natural key + embedding similarity, embeddings on `:EntityNode`, semantic inference, provenance edges (`SOURCED_FROM`, `ALIAS_OF`, `INFERRED_FROM`).
 - The schema registry, conformance enforcement (strict/lenient/off), and conformance telemetry.
 - The dynamic config form (`plugin.schema.get`) and validation (`plugin.schema.validate`).
 
-The **only** genuinely new surface is *how records are fetched*. Everything downstream is shared. This matches the standing principles: *solve once / no dead code*, *no drift across surfaces*, *connector dual-write* (Postgres operational record + Neo4j graph index).
+The **only** new surface is *how records are fetched*. Everything downstream is shared. This matches the standing principles: *solve once / no dead code*, *no drift across surfaces*, *connector dual-write* (Postgres operational record + Neo4j graph index).
 
 ---
 
 ### 4. The three delivery tiers (answering "million integrations vs. one elegant thing")
 
-It is a **spectrum**, chosen per source by ROI — not an either/or:
+The tier is chosen per source by ROI:
 
 | Tier | What | Fidelity | Real-time? | Authoring cost | Use for |
 |---|---|---|---|---|---|
@@ -86,9 +86,9 @@ It is a **spectrum**, chosen per source by ROI — not an either/or:
 | **2 — MCP-backed manifest connector** *(new)* | Zero-code; manifest declares which MCP tools = which record types, param/pagination/cursor strategy, field mappings | Good (bounded by what the MCP server exposes) | ❌ poll-only + live-fetch | **Low (YAML only)** | The long tail: Jira, Salesforce, Notion, anything with an MCP server |
 | **3 — Generic REST/GraphQL manifest connector** | Manifest declares HTTP endpoints + pagination instead of MCP tools (the existing `custom-*` connectors point this way) | Good | ❌ poll-only | Low–medium | Sources with an API but no MCP server |
 
-**MCP is the Tier-2 unlock that makes "connect to anything" real.** You write native code only where it earns its keep; everything else is a manifest.
+Tier 2 (MCP) covers any source that has an MCP server. Native code is written only where real-time and deep mapping pay for it; everything else is a manifest.
 
-**Jira & Salesforce specifically:** both already have MCP servers (Atlassian's official MCP; Salesforce official/community MCP), so both can be **Tier 2 on day one** — and promoted to Tier 1 later only if depth/real-time demands it. (Linear, too — this very session has `list_issues`, `get_issue`, `list_projects`, … available, which is exactly the shape Tier 2 consumes.)
+**Jira & Salesforce specifically:** both already have MCP servers (Atlassian's official MCP; Salesforce official/community MCP), so both can be **Tier 2 on day one** — and promoted to Tier 1 later only if depth/real-time demands it. (Linear, too: the session that wrote this memo had `list_issues`, `get_issue`, `list_projects`, … available, which is the shape Tier 2 consumes.)
 
 ---
 
@@ -96,12 +96,12 @@ It is a **spectrum**, chosen per source by ROI — not an either/or:
 
 **Requirement (verbatim intent):** *"Suggested schemas ship inside the connector manifest but are compatible with the schema registry — customers choose to adopt the schemas or not, and what they want ingested."*
 
-The shipped schema registry (PR #150, `packages/database/src/schema/schema-registry.ts`) already has **exactly** the right primitives:
+The shipped schema registry (PR #150, `packages/database/src/schema/schema-registry.ts`) already has the primitives this needs:
 
 - **`schema_registry.schemas`** has `source ∈ {user, connector, recommended}` and `connectorId` — *purpose-built for connector-contributed schemas.*
 - **Typed structure:** `node_labels` (with `naturalKeyProps`), `relationship_types` (`startLabel`/`endLabel`/`cardinality`), `properties` (typed `dataType` + `constraints`, XOR-owned by a label or reltype).
 - **Versioned + immutable:** `schema_versions` (draft → published, `parentVersionId` lineage); workspace pins one version.
-- **Adoption is already a first-class concept:** `schema_registry.schema_activations` keys on a *stable* `schemaName` with an `enabled` boolean; `schema.toggle` flips it (auto-publishes + auto-pins). Toggling does **not** fork the schema — it just flips the bit.
+- **Adoption is already a first-class concept:** `schema_registry.schema_activations` keys on a *stable* `schemaName` with an `enabled` boolean; `schema.toggle` flips it (auto-publishes + auto-pins). Toggling does **not** fork the schema; it flips the bit.
 - **Suggestion already exists:** `schema.recommend` proposes schemas transiently from sampled graph data.
 - **Enforcement already exists:** pinned-schema validation at `upsert-entity.ts` with `strict | lenient | off` modes + conformance telemetry to ClickHouse.
 
@@ -120,7 +120,7 @@ This makes the manifest the **single source of truth** feeding three consumers:
 2. the **suggested schema** in the registry (new bridge, born-disabled),
 3. the ingestion field mappings (`defaultFieldMappings` → `entity_type_mappings` — already wired).
 
-**"What they want ingested"** maps cleanly onto existing mechanics: the customer enables specific schemas (`schema.toggle`) and selects which record types to sync (manifest `recordTypes.defaultEnabled` + the connection's mapping selection). Nothing the customer didn't opt into gets written; with `enforcementMode='strict'` on the pinned version, non-conformant payloads are rejected and recorded as conformance events.
+**"What they want ingested"** maps onto existing mechanics: the customer enables specific schemas (`schema.toggle`) and selects which record types to sync (manifest `recordTypes.defaultEnabled` + the connection's mapping selection). Nothing the customer didn't opt into gets written; with `enforcementMode='strict'` on the pinned version, non-conformant payloads are rejected and recorded as conformance events.
 
 > **Note / minor inconsistency to resolve in design:** connector-sourced schemas currently default `enabled=true`. The opt-in requirement means manifest-imported schemas should be **born disabled** (or imported as `source='recommended'`, which is already born-disabled). Pick one explicitly in the design phase.
 
@@ -133,7 +133,7 @@ Both modes call the **same MCP tools via the same client + consent gate**; they 
 - **Materialize (scheduled, persisted).** An Inngest-scheduled job runs the `mcp_tool` poller: for each enabled record type, call the bound `list_*`/`search_*` tool, page through results (manifest-declared pagination), `normalizeRecord()` each item via the manifest field mappings, and emit into `ingestion/entity.received`. From there the existing pipeline materializes typed `:EntityNode`s, embeddings, and inferred edges. This powers NL graph search (`graph.node.search`), offline coverage, and relationship inference.
 - **Live fallback (query-time, optional cache).** New `graph.node.enrich` (Build #3): on cache-miss / detail-fetch / explicit "refresh," call the bound `get_*` tool through `mcp-client.ts` (`connectMcp` → `callTool`) behind the existing `agent.mcp.consent` gate, validate the returned properties against the pinned schema, return enriched properties, and optionally write a short-TTL cache row. This gives freshness on demand without webhooks.
 
-**Why both is the right call here:** materialization is what makes the data *searchable, related, and offline*; live fetch is what keeps *hot/volatile fields fresh* and fills *long-tail records you never bulk-ingested*. A per-label `fetchMode ∈ {materialized, live, hybrid}` hint in the schema metadata lets each entity type choose its strategy.
+**Why both:** materialization makes the data *searchable, related, and offline*; live fetch keeps *hot/volatile fields fresh* and fills *long-tail records you never bulk-ingested*. A per-label `fetchMode ∈ {materialized, live, hybrid}` hint in the schema metadata lets each entity type choose its strategy.
 
 ---
 
@@ -158,9 +158,9 @@ Both modes call the **same MCP tools via the same client + consent gate**; they 
 
 ### 8. The honest feasibility risks (the part that determines real success)
 
-MCP tools were designed for **interactive** agent use, not **bulk** ingestion. The risks below are why this is a *delivery method with declared strategies*, not a magic "point at any MCP server" button.
+MCP tools were designed for **interactive** agent use, not **bulk** ingestion. Because of the risks below, the delivery method requires each source to declare its fetch strategies in the manifest.
 
-1. **Enumeration vs. search.** Ingesting "everything" needs a `list_*`/paginate affordance, not just `search(query)`. Well-built servers have it (Linear MCP exposes `list_issues`, `list_projects`, `list_cycles`, …). Thin servers expose only search → fall back to **query-scoped periodic refresh** ("watch these saved queries"), which is great for monitoring but **not** a full historical backfill. *The manifest must declare, per record type, whether an enumeration tool exists.*
+1. **Enumeration vs. search.** Ingesting "everything" needs a `list_*`/paginate affordance, not just `search(query)`. Well-built servers have it (Linear MCP exposes `list_issues`, `list_projects`, `list_cycles`, …). Thin servers expose only search → fall back to **query-scoped periodic refresh** ("watch these saved queries"), which supports monitoring but is **not** a full historical backfill. *The manifest must declare, per record type, whether an enumeration tool exists.*
 2. **No incremental signal.** If a tool can't filter by `updatedAt`/`since`, every sync re-reads the whole bounded set. Fine for small/bounded sources; expensive for large ones. Manifest declares the incremental strategy; cap with Inngest concurrency + interval + per-source budget.
 3. **No inbound webhooks → poll-only.** Freshness is bounded by the poll interval. The live-fetch path (Build #3) mitigates for on-demand freshness on hot records.
 4. **Loosely-typed outputs / schema drift.** Tool outputs are JSON/text and may drift from the declared JSON-Schema snapshot. The captured snapshot enables auto-mapping, but production needs the conformance telemetry (already shipped) to catch drift, plus LLM-assisted re-mapping.
@@ -169,14 +169,14 @@ MCP tools were designed for **interactive** agent use, not **bulk** ingestion. T
 7. **Identity / idempotency.** Non-deterministic ordering is fine (dedup keys on natural key), but cursor checkpointing must be resilient to partial failures and re-runs.
 8. **Auth lifetime.** MCP server tokens (the customer's Linear/Jira token) expire; reuse `mcp.credentials` + the OAuth refresh path. A dead token must surface as `source_connections.status='error'`, not a silent empty sync.
 
-**Bottom line on risk:** for MCP servers that expose proper `list_*` + `updated-since` + pagination, Tier-2 ingestion is robust. For thin search-only servers, set expectations: it's a *query-watcher*, not a *warehouse loader*. The manifest makes this explicit per source rather than failing silently.
+For MCP servers that expose `list_*` + `updated-since` + pagination, Tier-2 ingestion is robust. For search-only servers, Tier-2 ingestion watches saved queries and does not load full history. The manifest declares this per source, so the limitation does not fail silently.
 
 ---
 
 ### 9. Recommended phasing (smallest path to proving feasibility)
 
 - **Phase 0 — Proof (1 source, 1 server).** Add `mcp_tool` DeliveryMethod + a minimal manifest tool-binding for **Linear's MCP** (`list_issues` → `issue` record type, `get_issue` for detail). Scheduled poll → existing pipeline → graph. Manually create/enable the schema via the existing `schema.toggle`. *Proves the bridge end-to-end with real data.*
-- **Phase 1 — Schema bridge.** Manifest suggested-schema block + `schema.import.fromConnector` (born-disabled, opt-in). Closes the "compatible with the schema registry" loop.
+- **Phase 1 — Schema bridge.** Manifest suggested-schema block + `schema.import.fromConnector` (born-disabled, opt-in). Meets the "compatible with the schema registry" requirement.
 - **Phase 2 — Live fetch.** `graph.node.enrich` (cache-miss + detail-fetch + refresh), short-TTL cache, behind consent.
 - **Phase 3 — Generalize.** LLM-assisted auto-mapping from JSON-Schema snapshot + samples (reuse `connection.mappings.suggest`); multiple pagination/cursor strategies; onboard Jira + Salesforce MCP; document the manifest authoring path (pairs with the `knowledge-source-author` agent).
 
@@ -211,5 +211,5 @@ MCP tools were designed for **interactive** agent use, not **bulk** ingestion. T
 
 ### 11. Net recommendation
 
-Build the three bounded pieces (mcp_tool delivery method, manifest→registry bridge, live enrich) on top of the existing framework. Treat MCP as **Tier 2** of a three-tier connector spectrum, reserve native code for the few sources that earn it, and make every source's ingestion strategy **explicit in its manifest** so the search-only-vs-enumerable limitation is a declared capability, not a silent failure. This delivers "connect to anything a business uses" without a million bespoke integrations, and it plugs directly into the schema registry you already shipped — customers adopt suggested schemas and choose what to ingest using mechanics that are already live.
+Build the three bounded pieces (mcp_tool delivery method, manifest→registry bridge, live enrich) on top of the existing framework. Treat MCP as **Tier 2** of a three-tier connector spectrum, reserve native code for the few sources that earn it, and make every source's ingestion strategy **explicit in its manifest** so the search-only-vs-enumerable limitation is a declared capability, not a silent failure. This delivers "connect to anything a business uses" without a bespoke integration per source, and it uses the schema registry already shipped: customers adopt suggested schemas and choose what to ingest using mechanics that are already live.
 

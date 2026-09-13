@@ -21,8 +21,7 @@ is how: the routes and frames the client speaks, what the answerer does with
 each reverse request, and the gap between the client that was deleted on
 2026-09-08 and the server as it stands at Stella 0.9.411.
 
-The one-line finding that shapes the plan: **the old client cannot be
-restored, it has to be rewritten.** It pinned Stella 0.6.2, hand-wrote its
+**The old client cannot be restored; it has to be rewritten.** It pinned Stella 0.6.2, hand-wrote its
 wire types because no codegen existed, and modelled four of the server's
 seven frame tags. The server has since grown server-owned sessions,
 resumable streams, streamed model deltas, steering, and a provider-routing
@@ -72,22 +71,20 @@ typecheck rather than a production turn.
 
 The binary ships a container image (`packaging/docker/Dockerfile.serve`,
 port 8080, health check built in). `STELLA_SERVE_TOOLS` accepts only
-`remote`, so a local tool surface is not a configuration mistake anyone can
-make.
+`remote`, so a local tool surface cannot be configured.
 
 ---
 
 ## 3. The answerer
 
-Two decisions taken while building it, each reversing a line in the plan
-below and stated here so the plan is read against them.
+Two decisions taken while building it reverse lines in the plan in §5.
 
 **Stateless turns, not server-owned sessions.** The plan called sessions
 "the prompt-cache win". That is true when the engine calls the vendor and
 false here: Oxagen makes every completion, and the engine hands the whole
 transcript back inside each `provider_request`, so the vendor sees the same
 prefix either way. A session would add a per-conversation id to store, a
-reclaim to recover from, and nothing the cache can feel. Each turn is
+reclaim to recover from, and no cache benefit. Each turn is
 `POST /v1/turns` with the transcript the route already assembles; `?after=`
 resume works on a stateless turn exactly as on a session turn.
 
@@ -113,10 +110,9 @@ the step loop. In its place:
    `ToolContract`s, and the acting user as `principal`. A bare tool schema
    is coerced to untrusted and high-risk at the engine's gate, and an absent
    principal attributes every call to an anonymous host, so both fields are
-   required here, not optional.
-3. **Answer each `tool_request` through `kernel.invoke()`.** That is the
-   whole governance argument: IAM, entitlement, approval, and the billing
-   gate all run, an audit row is written, and under ADR-052 the call is a
+   required here.
+3. **Answer each `tool_request` through `kernel.invoke()`.** IAM,
+   entitlement, approval, and the billing gate all run, an audit row is written, and under ADR-052 the call is a
    governed action. The engine receives the result and never a credential.
    A gate that says no returns `{error: {message, class: "refused"}}`, and
    the engine reports it as a refusal rather than a failure.
@@ -174,8 +170,7 @@ Oxagen tree at the commit ADR-043 names.
 
 ## 5. Build plan
 
-Four slices, each landable alone and each leaving the tree better than it
-found it.
+Four slices, each landable alone.
 
 1. **`packages/stella-engine-client`, rewritten.** Types copied from
    Stella's generated wire declarations at a pinned tag, a fetch-only client

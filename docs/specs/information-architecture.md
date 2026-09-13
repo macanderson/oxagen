@@ -4,7 +4,7 @@ Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> The Information Architecture specification describes a comprehensive v2 app structure with workspace zones (Ask, Knowledge, Automation, Activity, Settings, Tools/Studio) and org zones (Members, Access, Security, Billing, Developer). The spec is marked "proposed" and implementation was attempted then rolled back. Core infrastructure (contract system with 490+ contracts, IAM resolver, account zone, basic org routes) is in place, but Automation and Activity workspace zones that were added June 15 were removed June 30, 2026. The sidebar exposes only Ask, Knowledge, Marketplace, and Settings. Access control matrices and many org security pages remain as mocks or partially wired stubs.
+> The Information Architecture specification describes a v2 app structure with workspace zones (Ask, Knowledge, Automation, Activity, Settings, Tools/Studio) and org zones (Members, Access, Security, Billing, Developer). The spec is marked "proposed" and implementation was attempted then rolled back. Core infrastructure (contract system with 490+ contracts, IAM resolver, account zone, basic org routes) is in place, but Automation and Activity workspace zones that were added June 15 were removed June 30, 2026. The sidebar exposes only Ask, Knowledge, Marketplace, and Settings. Access control matrices and many org security pages remain as mocks or partially wired stubs.
 
 **Implementation evidence**
 
@@ -230,7 +230,7 @@ Schedules are not a separate tab. Schedule is a `cause.kind` on a Trigger. See �
 | **Model Keys**   | BYOK at workspace scope                                                      |
 | **Integrations** | Workspace-level webhook destinations                                         |
 
-Workspace **Members** is a real ACL surface, not just a roster — it shows the grants matrix filtered to this workspace, with org-locked cells indicated. See §9 (Resolution order) and §13 (UI for inherited-with-override).
+Workspace **Members** is an ACL surface as well as a roster: it shows the grants matrix filtered to this workspace, with org-locked cells indicated. See §9 (Resolution order) and §13 (UI for inherited-with-override).
 
 #### Tools (de-emphasized group)
 
@@ -250,7 +250,7 @@ People roster. Per-row: name, email, role assignments, status (active / pending 
 
 #### Access — capability ACL
 
-The spine of the IAM model. Tabs:
+Tabs:
 
 | Tab            | Purpose                                                                                                                                                                                                                                                                                                           |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -340,8 +340,6 @@ GDPR export + delete are also exposed as capabilities (`privacy.export.create`, 
 
 ### 8. AI-driven affordances
 
-The IA above describes the _structure_. AI changes how users _traverse_ it.
-
 | Affordance                      | Behavior                                                                                                                                                                                                                                                |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Ask bar (topbar)**            | Universal entry. Routes questions to chat, actions to execution, nav requests to push. Carries current page context implicitly.                                                                                                                         |
@@ -356,7 +354,7 @@ The IA above describes the _structure_. AI changes how users _traverse_ it.
 
 #### Principal
 
-Unifies humans, agents, services. One audit event format. One grant model. One UI matrix.
+Humans, agents, and services share one audit event format, one grant model, and one UI matrix.
 
 ```ts
 Principal {
@@ -497,7 +495,7 @@ All default roles use **single-word labels**, mirroring the conventions in Googl
 | **Member** | Run agents, approve, edit playbooks, edit memories, configure triggers                  |
 | **Viewer** | Read-only across the workspace                                                          |
 
-Workspace roles use exactly these three labels — **Owner**, **Member**, **Viewer**. No "Operator", "Analyst", "Editor" or other taxonomy. Custom roles remain available via the role builder for customers who need finer divisions.
+Workspace roles use these three labels — **Owner**, **Member**, **Viewer**. No "Operator", "Analyst", "Editor" or other taxonomy. Custom roles remain available via the role builder for customers who need finer divisions.
 
 ---
 
@@ -516,10 +514,10 @@ When `contract.invoke(rawCtx, input)` evaluates a request (via the pure `resolve
 8. no grant                                                         → DENY (default-deny)
 ```
 
-Two load-bearing properties:
+The order guarantees two properties:
 
 - **Workspace can never _expand_ what org has locked.** The `enforced` flag on an org policy is the locking primitive.
-- **Workspace CAN tighten.** If org defaults to allowing `knowledge.export`, a sensitive workspace can override to `deny` or `require-approval`. Defense-in-depth flows downward.
+- **Workspace CAN tighten.** If org defaults to allowing `knowledge.export`, a sensitive workspace can override to `deny` or `require-approval`.
 
 The resolver returns a structured trace alongside the decision; the trace is what powers "why was this denied?" inspections in the audit UI.
 
@@ -536,7 +534,7 @@ The resolver returns a structured trace alongside the decision; the trace is wha
    deny          ─               ─                 → inherited from org
 ```
 
-**Workspace `Settings/Members`** renders the same matrix filtered to that workspace, with locked cells indicated. Workspace Owners see exactly what they can and cannot change. Same React component, different scope filter.
+**Workspace `Settings/Members`** renders the same matrix filtered to that workspace, with locked cells indicated. Workspace Owners see what they can and cannot change. Same React component, different scope filter.
 
 **Policies (`/:org/access/policies`)** gains the `enforced` flag as a primary control. The default for a new policy is `enforced` (safer); admins must explicitly opt in to letting workspaces override.
 
@@ -552,18 +550,18 @@ auditEvent.acting_principal: who made the change
 auditEvent.target_grant: { principal, capability, before, after }
 ```
 
-Workspace-scoped grant changes appear in **both** `/:org/security/audit` (full org view) and `/:org/:ws/activity/audit` (workspace slice). Same record, two lenses.
+Workspace-scoped grant changes appear in **both** `/:org/security/audit` (full org view) and `/:org/:ws/activity/audit` (workspace slice). Both views read the same record.
 
 ---
 
 ### 15. Agents as principals
 
-This is the subtle one. An agent is both an actor (it invokes capabilities) and a delegate (it acts on behalf of a user). v2's identity model supports both:
+An agent is both an actor (it invokes capabilities) and a delegate (it acts on behalf of a user). v2's identity model supports both:
 
 - **Standalone agent identity** — scheduled and triggered agents have their own principal with their own grants. An agent CAN'T do something its principal isn't allowed to do, regardless of which user defined the playbook.
 - **Delegated context** — when a user is in chat, the agent borrows the user's effective grants for the session. Audit records both: `human=alice, agent=research-bot-v3, capability=knowledge.graph.read`.
 
-This is what makes "agents that automate businesses" defensible to a CISO. Every action is attributable to a human chain of custody OR a configured service identity, never to "the AI did it."
+Every action is attributable to a human chain of custody OR a configured service identity.
 
 ---
 
@@ -599,7 +597,7 @@ This is what makes "agents that automate businesses" defensible to a CISO. Every
 
 ### 17. Implementation order
 
-1. **Contract-check boundary** in `@oxagen/oxagen` (load-bearing — nothing ships without it).
+1. **Contract-check boundary** in `@oxagen/oxagen` (every later item depends on it).
 2. **Sidebar shell** with the new tree; existing stub pages relocated to their new tabbed homes.
 3. **Knowledge zone** (Sources + Graph + Memories) — primary differentiator.
 4. **Access zone** (Grants matrix → Roles → Policies) — required for any enterprise sale.
@@ -609,7 +607,7 @@ This is what makes "agents that automate businesses" defensible to a CISO. Every
 8. **Account zone** (Profile + Security + Cases + Notifications + Privacy) — GDPR + SOC2 prerequisite.
 9. **Developer + Studio** — last.
 
-Items 4 + 5 + 8 are the IAM ship. They have to land together or the enterprise pitch isn't credible.
+Items 4 + 5 + 8 are the IAM ship. They land together, because an enterprise sale needs all three.
 
 ---
 

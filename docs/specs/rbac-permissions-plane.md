@@ -9,16 +9,16 @@
 
 ## 1. Summary & motivation
 
-Oxagen's wedge is being **the metered, governed, graph-grounded control plane for teams that build and resell AI agents** (`docs/VISION.md`). "Governed" is a load-bearing word: every capability is a typed contract with IAM + entitlement enforcement so that a downstream agent tool is *inherently* governed and un-poisonable. Contract governance is one of the three pillars of the moat.
+Oxagen's wedge is being **the metered, governed, graph-grounded control plane for teams that build and resell AI agents** (`docs/VISION.md`). Every capability is a typed contract with IAM + entitlement enforcement, so a downstream agent tool is governed and un-poisonable by construction. Contract governance is one of the three pillars of the moat.
 
-Today that governance is **real and strong at exactly one of the four enforcement levels** — capability contracts — and **partial, parallel, or absent at the other three**:
+Today that governance is **enforced at one of the four enforcement levels** — capability contracts — and **partial, parallel, or absent at the other three**:
 
 1. **Skills** — no per-skill permissions exist. A skill's accessibility is a side effect of the `defaultRoles` on the `skill.*` / `agent.skill.load` capability contracts, which are the same for *every* skill. There is no way to say "only the Compliance role may load the `pii-redaction` skill" or "agents may not edit the `deploy` skill."
 2. **Capability contracts** — fully governed by the 8-rule resolver, but with two serious defects (a tier bypass and a schema regression, §2) that mean the fine-grained matrix is effectively off for 90%+ of orgs and direct/policy grants are dead in prod.
 3. **MCP server** — per-request scope is derived from an API key, and external tools are policy-checked, but *first-party* tools are neither scoped per key nor hidden from `tools/list` when unauthorized. An unauthorized tool is fully listed and only fails on call.
 4. **Plugins / tools** — governed by a **separate** entitlement service (install/enable state), not by the IAM grant model. There is no per-plugin role grant — if a pack is installed in a workspace, every principal who can invoke its capabilities may do so.
 
-The consequence: a customer reselling agents cannot express, in one coherent model, *"this principal may use this resource."* They configure capability role-grants in one place, plugin installs in another, MCP key scoping nowhere, and skill access not at all. This proposal defines a **single resource-grant model** that all four levels resolve through, reusing the existing `GrantEffect` vocabulary, the existing 8-rule resolver, and the existing `org`-schema IAM tables rather than inventing a parallel system.
+A customer reselling agents cannot express, in one coherent model, *"this principal may use this resource."* They configure capability role-grants in one place, plugin installs in another, MCP key scoping nowhere, and skill access not at all. This proposal defines a **single resource-grant model** that all four levels resolve through, reusing the existing `GrantEffect` vocabulary, the existing 8-rule resolver, and the existing `org`-schema IAM tables rather than inventing a parallel system.
 
 ---
 
@@ -75,16 +75,16 @@ defaultRoles: {
 }
 ```
 
-So "who may load a skill" is a property of the *verb*, not the *skill*. A workspace cannot restrict a sensitive skill to a subset of principals, gate skill editing away from agents, or grant a partner-authored skill to one team only.
+"Who may load a skill" is set on the capability contract (the verb) and is the same for every skill. A workspace cannot restrict a sensitive skill to a subset of principals, gate skill editing away from agents, or grant a partner-authored skill to one team only.
 
 ### 2.2 Capability contracts — governed, but two defects blunt it
 
-Enforcement is real (§2.0), but two issues mean the fine-grained matrix rarely fires:
+Enforcement runs through the kernel (§2.0), but two issues mean the fine-grained matrix rarely fires:
 
-- **Tier bypass (P0).** `checkIAM` (`packages/iam/src/check-iam.ts:74`) reads the org's plan tier and, for any non-enterprise org, returns an unconditional `allow` before the resolver runs — `canAccessACL(tier)` is `tier === "enterprise"`. For every non-enterprise org, the only access control is *role membership plus each contract's `defaultEffect`*; explicit deny grants, `require_approval`, conditions, and the entire matrix are inert. This is confirmed in `docs/audit/silent-failure-findings.md` and surfaced (as intended paid-tier behaviour) on the public site, but it means the governance story is tier-gated rather than universal.
+- **Tier bypass (P0).** `checkIAM` (`packages/iam/src/check-iam.ts:74`) reads the org's plan tier and, for any non-enterprise org, returns an unconditional `allow` before the resolver runs — `canAccessACL(tier)` is `tier === "enterprise"`. For every non-enterprise org, the only access control is *role membership plus each contract's `defaultEffect`*; explicit deny grants, `require_approval`, conditions, and the entire matrix are inert. This is confirmed in `docs/audit/silent-failure-findings.md` and surfaced (as intended paid-tier behaviour) on the public site, so governance enforcement is tier-gated.
 - **Direct grants + policies are dead in prod.** The resolver's rules 1–6 operate on `Grant` and `Policy` rows, but those **tables were dropped in migration 0027**. `fetchAuthz` (`packages/iam/src/fetch-authz.ts:243`) now returns empty `grants` and `policies` arrays, so in production only rule 7 (role grants via `role_grants` + `principal_role_assignments`), rule 7.5 (Owner), and rule 8 (default) can fire. The per-principal and per-workspace grant machinery the resolver was built for has no storage backing it.
 
-The live IAM tables are (`packages/database/src/schema/iam.ts`, all in the `iam`/`org` schema): `principals`, `roles`, `role_grants`, `access_requests`, `principal_role_assignments`. JIT access is real — a `pending_approval` resolution creates an `access_requests` row via `createAccessRequest` (`packages/iam/src/access-request.ts`).
+The live IAM tables are (`packages/database/src/schema/iam.ts`, all in the `iam`/`org` schema): `principals`, `roles`, `role_grants`, `access_requests`, `principal_role_assignments`. JIT access is implemented: a `pending_approval` resolution creates an `access_requests` row via `createAccessRequest` (`packages/iam/src/access-request.ts`).
 
 ### 2.3 MCP server — scope yes, tool-level authz partial
 
@@ -93,7 +93,7 @@ The live IAM tables are (`packages/database/src/schema/iam.ts`, all in the `iam`
 Two gaps:
 
 - **No per-key tool narrowing.** An API key carries org+workspace scope but no allowlist of *which tools* it may call. Every enabled capability is reachable by every key in the workspace.
-- **Unauthorized tools are listed, not hidden.** The xmcp `tools/list` surface enumerates every registered tool; authorization is only checked on invocation. A least-privilege posture wants unauthorized tools **absent** from discovery, not merely erroring on call.
+- **Unauthorized tools are listed, not hidden.** The xmcp `tools/list` surface enumerates every registered tool; authorization is only checked on invocation. Least privilege requires unauthorized tools to be **absent** from discovery; today they are listed and fail only on call.
 
 External (proxied) MCP tools *are* policy-checked: the agent runtime dispatches `mcp.<server>.<tool>` synthetic ids through `authorizeExternalCapability` (`packages/oxagen/src/kernel.ts`), which runs the same IAM gate without needing a registered contract.
 
@@ -157,20 +157,20 @@ expires_at    timestamptz         -- JIT / time-bounded grants
 
 Notes:
 
-- `principal_type='role'` collapses today's `role_grants` into the same table (a role-scoped grant), so we have **one** grant surface, not two. `role_grants` can be migrated in or kept as a compatibility view.
+- `principal_type='role'` collapses today's `role_grants` into the same table (a role-scoped grant), so there is **one** grant surface. `role_grants` can be migrated in or kept as a compatibility view.
 - `action='*'` means "all actions on this resource," letting a single row express "the Compliance role may do anything to the `pii-redaction` skill."
-- `conditions` and `expires_at` come for free — the resolver already evaluates them.
+- `conditions` and `expires_at` need no new resolver logic; the resolver already evaluates them.
 
 ### 3.4 Resolution order — compose with the 8 rules, don't replace them
 
-Resource grants fold into the existing precedence. The key composition principle is **specificity + deny-bias**:
+Resource grants fold into the existing precedence. The composition principle is **specificity + deny-bias**:
 
 1. **`deny` > `require_approval` > `allow`** at equal specificity (already how rules 1–7 are ordered).
 2. **Resource-specific beats capability-default.** A grant on `(skill, skl_x, load)` is more specific than the `agent.skill.load` contract's `defaultRoles`, so it wins.
 3. **Principal-specific beats role-inherited beats default.** A direct user/agent grant outranks a role grant, which outranks `defaultEffect`.
 4. **Workspace beats org for allows; org-enforced beats everything for denies** — unchanged from rules 1–4.
 
-Concretely, `fetchAuthz` widens to also load matching `resource_grants` rows and maps them into the resolver's existing `Grant[]` (with `capabilityId` generalized to a `resourceKey = ${resource_type}:${resource_id}:${action}`). The resolver's rules 1, 3, 5, 6 already handle workspace/org allow/deny/approval on those `Grant` rows — **reviving the direct-grant path that migration 0027 left dead** (§2.2), now generalized to any resource. No new rules; the ordering that already exists is exactly the composition we want.
+Concretely, `fetchAuthz` widens to also load matching `resource_grants` rows and maps them into the resolver's existing `Grant[]` (with `capabilityId` generalized to a `resourceKey = ${resource_type}:${resource_id}:${action}`). The resolver's rules 1, 3, 5, 6 already handle workspace/org allow/deny/approval on those `Grant` rows — **reviving the direct-grant path that migration 0027 left dead** (§2.2), now generalized to any resource. No new rules are added; the existing ordering provides this composition.
 
 ### 3.5 Enforcement points
 
@@ -182,14 +182,14 @@ Concretely, `fetchAuthz` widens to also load matching `resource_grants` rows and
 | **MCP** | `buildContext` + `tools/list` | (a) attach the key's grant set to the context; (b) **filter `tools/list`** to the authorized set so unauthorized tools are *hidden*, not just erroring; (c) per-key tool allowlists become `resource_grants` on the key's service principal. |
 | **apps/app** | `resolveStudioScope` | Replace the hand-rolled `canManage` boolean with a shared `assertCapability(ctx, name, action)` helper backed by the resolver, and **bootstrap the IAM runtime in apps/app** so `invoke()` from server actions is gated identically to API/MCP. |
 
-The MCP `tools/list` filtering is the highest-leverage least-privilege win: discovery becomes a function of authorization, so an agent that shouldn't see a tool literally cannot enumerate it.
+The MCP `tools/list` filtering is the largest least-privilege change in this plan: discovery becomes a function of authorization, so an agent not authorized for a tool cannot enumerate it.
 
 ---
 
 ## 4. Rollout plan (each phase independently shippable)
 
 **Phase 0 — Fix the two capability defects (unblocks everything).**
-- Decide the tier-bypass policy: either make the resolver run for all tiers with a cheap role-only fast path (recommended — governance is the wedge, not a paid add-on), or make the bypass explicit and documented. At minimum, stop equating "non-enterprise" with "no IAM."
+- Decide the tier-bypass policy: either make the resolver run for all tiers with a cheap role-only fast path (recommended: governance is the product wedge, so enforcement should not depend on tier), or make the bypass explicit and documented. At minimum, stop equating "non-enterprise" with "no IAM."
 - Reland grant storage as `resource_grants` (§3.3) so rules 1–6 have backing tables again. Migration in `packages/database/atlas/migrations/`; verify with a post-migrate `SELECT`.
 
 **Phase 1 — Generalize the fetch + resolver mapping.**
@@ -213,9 +213,9 @@ Migration safety throughout: every phase's default grants reproduce current beha
 
 ## 5. Risks & alternatives considered
 
-- **ReBAC (OpenFGA / Zanzibar).** A relationship-graph authz service is the "correct" long-horizon answer for arbitrary resource hierarchies. Rejected *for now*: it adds a vendor/service dependency (against the vendor-neutrality moat), a second source of truth beside Postgres, and network latency on the hot `invoke()` path. Our resource set is small and flat (four types, fixed actions); the pure in-process resolver already handles it in zero I/O once data is pre-fetched. Revisit if resources gain deep hierarchy (folders, nested workspaces).
-- **Policy-as-code (Cedar / OPA).** Expressive, but moves policy into a DSL the customer must learn and we must sandbox-evaluate. Our differentiator is *typed contracts*, not a policy language; a jsonb condition bag (`conditions.ts`) already covers time/IP, the only conditions in demand. Rejected as premature.
-- **Extending the in-house model wins because** it reuses the resolver, the `GrantEffect` vocabulary, the condition evaluator, the audit pipeline, and the `iam` schema — the composition we need already exists in `resolve.ts`; we are mostly *feeding it data it was designed for* and widening the fetch. It also revives the dead direct-grant path (0027) as a side effect.
+- **ReBAC (OpenFGA / Zanzibar).** A relationship-graph authz service is the standard long-horizon design for arbitrary resource hierarchies. Rejected *for now*: it adds a vendor/service dependency (against the vendor-neutrality moat), a second source of truth beside Postgres, and network latency on the hot `invoke()` path. Our resource set is small and flat (four types, fixed actions); the pure in-process resolver already handles it in zero I/O once data is pre-fetched. Revisit if resources gain deep hierarchy (folders, nested workspaces).
+- **Policy-as-code (Cedar / OPA).** Expressive, but moves policy into a DSL the customer must learn and we must sandbox-evaluate. Oxagen differentiates on *typed contracts*; a jsonb condition bag (`conditions.ts`) already covers time/IP, the only conditions in demand. Rejected as premature.
+- **Extending the in-house model is chosen because** it reuses the resolver, the `GrantEffect` vocabulary, the condition evaluator, the audit pipeline, and the `iam` schema — the composition we need already exists in `resolve.ts`; we are mostly *feeding it data it was designed for* and widening the fetch. It also revives the dead direct-grant path (0027) as a side effect.
 - **Risk: performance on the hot path.** `resource_grants` is read on every scoped invocation. Mitigate with the same batching `fetchAuthz` already does (parallel queries) and a short TTL cache keyed by `(principal, workspace)`, mirroring the entitlement service's 30s cache.
 - **Risk: default-grant drift.** If Phase-N default grants don't exactly reproduce current behaviour, a rollout silently locks users out. Mitigate with a seed migration whose grants are asserted in tests against each contract's `defaultRoles`, and enforcement-off shadow logging (the kernel already supports would-deny logging) before flipping any phase to enforce.
 
@@ -223,8 +223,8 @@ Migration safety throughout: every phase's default grants reproduce current beha
 
 ## 6. Open questions
 
-1. **Tier policy.** Should fine-grained resource grants remain an enterprise-tier feature (matching today's `canAccessACL`), or should *deny*/least-privilege be universal while the *matrix-authoring UI* is the paid surface? The vision argues governance is the wedge, not an upsell — leaning universal-enforcement, paid-authoring.
-2. **API-key principals.** Do we finally cut over from creator-inheritance to a dedicated service principal per key (needed for per-key MCP allowlists to be meaningful)? This is a prerequisite for Phase 4.
+1. **Tier policy.** Should fine-grained resource grants remain an enterprise-tier feature (matching today's `canAccessACL`), or should *deny*/least-privilege be universal while the *matrix-authoring UI* is the paid surface? The vision positions governance as the wedge and not an upsell; the current lean is universal enforcement, paid authoring.
+2. **API-key principals.** Do we cut over from creator-inheritance to a dedicated service principal per key (needed for per-key MCP allowlists to be meaningful)? This is a prerequisite for Phase 4.
 3. **Action vocabulary.** Is a closed enum per resource type (`load|edit|activate` for skills) sufficient, or do we need free-form actions? Closed enums keep the UI and seed tractable; free-form invites drift.
 4. **Grant authoring surface.** One unified "Access" admin UI across all four resource types, or per-surface (skills grants in Studio, key allowlists in Developer settings)? A unified surface best expresses the "Stripe-for-agents" governance story.
 5. **`role_grants` migration.** Fold into `resource_grants` (`principal_type='role'`) outright, or keep as a compatibility view indefinitely? Folding is cleaner but touches the seed/provision path (`iam-provision.ts`).

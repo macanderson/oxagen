@@ -15,8 +15,7 @@ deliberately declined.
 > implements on its own side of the wrapper socket — see
 > `doc:pipeline-as-plugins` §8 for the porting plan and `doc:wrapper-socket` for
 > the contract it implements against. The adoption *decision* below is unchanged
-> by the move: which ideas Stella takes and which it declines is a judgement
-> about the ideas, not about which crate hosts them. Citations into
+> by the move, because it does not depend on which crate hosts the ideas. Citations into
 > `stella-pipeline` are historical (#3901).
 
 ## Purpose
@@ -25,26 +24,24 @@ The Witness Protocol v0.1 draft specifies a pipeline in which autonomous agents
 ship production software with "done" certified by machinery rather than by
 anyone's confidence. It names Stella directly in its adoption path.
 
-This document is not that specification. It is the *adoption decision*: which
-of its ideas Stella takes, which it declines, and why. It exists so the
-declined half is not re-litigated every time someone reads the draft, and so
-the adopted half is anchored to defects that are real in this codebase rather
-than to vocabulary borrowed from a different kind of system.
+This document is the *adoption decision* for that draft: which of its ideas
+Stella takes, which it declines, and why. It exists so the declined half is not
+re-litigated every time someone reads the draft, and so the adopted half is
+anchored to defects in this codebase.
 
-The short version: Stella already has the draft's hardest-won mechanism — a
-deterministic oracle that cannot be talked out of a failure. What it lacks is a
-**disciplined feedback channel**, and that is what this document adds.
+Stella already has the draft's central mechanism: a deterministic oracle whose
+failure verdict cannot be overridden. It lacks a **disciplined feedback
+channel**, which this document adds.
 
 ## 1. What Stella already has, and keeps
 
-The L-E11 ladder is not replaced. Three of its properties are the reason the
-draft's machinery has something to attach to at all:
+The L-E11 ladder is not replaced. The draft's machinery attaches to three of its
+properties:
 
 - **The flip oracle.** Only a fail→pass flip of the same normalized command
   counts, and `Flipped` is reachable only through `Failing` of that same
   command. The draft's "family" concept is a generator plus *an oracle*; this
-  is the oracle. Replacing it would be discarding the strongest asset in the
-  crate to install new vocabulary.
+  is the oracle.
 - **Tamper exclusion.** The witness artifact's full filesystem identity is
   pinned and re-checked at verify time, and a mismatch aborts the candidate
   before the ladder runs. The draft calls this an authority boundary; Stella
@@ -52,10 +49,10 @@ draft's machinery has something to attach to at all:
 - **Deterministic-first laddering.** A red test is conclusive on its own, and
   nothing overrides a deterministic failure.
 
-Anything below that would weaken these is out of scope by construction.
+Anything below that would weaken these is out of scope.
 
 <a id="model-free-note"></a>
-**Update (#2584): the ladder took the principle to its end.** This document was
+**Update (#2584): the ladder no longer escalates to a model.** This document was
 written when the ladder's inconclusive arm escalated to a model verifier, and
 several sections below reason about *when that call is bought*. It is no longer
 bought at any rung — `ladder_decision` is terminal at every arm of
@@ -116,9 +113,9 @@ From the draft, three principles carry over intact:
 
 - **P3 — Metered disclosure.** Every bit crossing from the verification side to
   the worker is deliberate, graded, and logged. The feedback channel is a
-  security boundary, not plumbing. (Fixes D1.)
-- **P6 — Replayable evidence.** A verdict that cannot be reproduced from what
-  it carries is an anecdote. (Fixes D3, D4.)
+  security boundary. (Fixes D1.)
+- **P6 — Replayable evidence.** A verdict must be reproducible from what it
+  carries. (Fixes D3, D4.)
 - **P1 — Separation of authorship.** Whatever writes the code does not author
   what grades it. Stella already routes the witness author and verifier through
   `Router::resolve_cross_family`'s cross-family preference; this document does
@@ -126,11 +123,11 @@ From the draft, three principles carry over intact:
 
 ## 4. The Feedback Airlock
 
-The one new mechanism. The principle: **leak the defect, never the detector.**
+This is the one new mechanism. Its rule: **leak the defect, never the detector.**
 
 ### 4.1 The disclosure ladder
 
-A failure brief is emitted at a grain, and the grain is a control surface:
+A failure brief is emitted at one of four grains:
 
 | Grain | Brief contains |
 |-------|----------------|
@@ -141,9 +138,8 @@ A failure brief is emitted at a grain, and the grain is a control surface:
 
 Default grain is `L3`, because convergence comes from iterating against a real
 failure and velocity matters. The grain drops when the same failure fingerprint
-(§4.2) repeats, on the reasoning that a worker which has seen the same brief
-twice and still fails is not being helped by a third copy of it — it is being
-given more surface to fit.
+(§4.2) repeats, because a third copy of the same brief gives a worker that has
+seen it twice and still fails more surface to fit.
 
 ### 4.2 Failure fingerprints
 
@@ -155,7 +151,7 @@ differently do not.
 What it is used for today: the disclosure grain, and — since #2929 — one
 grain-independent caveat. Repetition of the *same* fingerprint is what
 tightens the ladder, so a worker thrashing against one failure stops being
-handed more surface to fit, while a worker making genuine progress — new
+handed more surface to fit, while a worker making progress — new
 failure each round — keeps full disclosure. Separately, when a round's
 fingerprint already matches the witness's *authored* baseline observation —
 the run against the pristine, untouched tree the witness was proven to fail on
@@ -164,7 +160,7 @@ check may not be observing the change at all, whatever grain the ladder has
 settled on. This is not gated on the `revisions > 0` guard that
 `LadderInputs::witness_unmoved_by_revision` (§4.1's terminal rung) uses: that
 guard protects `WitnessUnsatisfiable` from a false positive on a worker that
-simply hasn't finished, but the caveat feeds only the worker's own brief, so
+hasn't finished, but the caveat feeds only the worker's own brief, so
 nothing needs protecting from a true positive arriving one round earlier — the
 round a worker on `video-processing` instead deleted a correct deliverable to
 chase a witness checking the wrong path.
@@ -176,21 +172,20 @@ legitimate sequence that ordinary iteration produces constantly — a test fails
 on an assertion, the worker's next edit fails to compile, the edit after that
 passes. Under strict fingerprint matching that flip goes uncredited. The
 oracle's existing command-identity rule stays until there is evidence that
-false flips from *changed* failure modes are a real source of bad verdicts,
-rather than a hypothesis with a cheap-looking fix.
+false flips from *changed* failure modes are a real source of bad verdicts.
 
 ### 4.3 The scrubber is the required part
 
-A symptom class is prose, and prose describing a failure will happily quote the
+A symptom class is prose, and prose describing a failure can quote the
 assertion that produced it. So the redactor does not trust the description: a
 brief is scrubbed against the sealed material it was derived from, and a brief
 that still contains the test's identifier, its literal expected/actual values,
 or the witness path **degrades one grain rather than being emitted with a hole
-in it**. Failing closed is the whole point; a redactor that emits on a
-best-effort basis is a leak with a ceremony attached.
+in it**. The redactor fails closed; a redactor that emits on a best-effort
+basis leaks.
 
 Every brief is recorded alongside the material it was redacted from, so
-disclosure is auditable after the fact rather than merely asserted.
+disclosure is auditable after the fact.
 
 ## 5. What is declined, and why
 
@@ -199,7 +194,7 @@ Recorded so it is not re-proposed.
 **Two trust domains on separate credentials and infrastructure.** Stella is a
 single local BYOK process. Workspace separation and type separation are
 achievable and worth having; separate infrastructure, separate credentials, and
-non-shared provider caches are not, in-process. Claiming them would be exactly
+non-shared provider caches are not, in-process. Claiming them would be
 the ceremony the draft says it exists to replace.
 
 **The shadow sandbox, synthetic twin data, contract doubles, shadow traffic,
@@ -220,24 +215,23 @@ version of the same idea, and it already ships.
 **Replacing the single witness with generated exam families.** The draft's P5
 targets multi-attempt overfitting. Stella's revision budget is small and its
 witness dies with the candidate workspace, so the exposure is bounded — and the
-mechanism that actually detects overfitting here is the fingerprint (§4.2), at
+mechanism that detects overfitting here is the fingerprint (§4.2), at
 a fraction of the cost. If escape data later shows workers fitting the witness,
 this is the first thing to revisit.
 
-**Criteria ratification with a frozen `AC_HASH`.** Not declined on merit —
-declined as *already spoken for*. `stella-core::context_record::contract`
+**Criteria ratification with a frozen `AC_HASH`.** Declined because the
+workspace already has an acceptance model. `stella-core::context_record::contract`
 already carries a typed acceptance model (`ArtifactContract`, `Requirement`,
 `RequirementKind::{COMMAND, SEMANTIC_VERIFIER}`, `ContractValidation`,
 `contract_hash`) implementing the Context Graph Protocol's lifecycle §8.12–8.14.
 It is unwired today, and its own module docs say an executor interprets it in a
 later phase. Introducing a second, parallel criteria model beside it would
-leave the workspace with two acceptance vocabularies that disagree. When
-criteria land, they land there.
+leave the workspace with two acceptance vocabularies that disagree. Criteria
+will land in that model.
 
 ## 6. What would change this decision
 
-The declined half is declined against today's evidence, not forever. The
-signals that should reopen it:
+The declined half is declined on today's evidence. These signals reopen it:
 
 - A worker observed passing a witness it special-cased — reopens exam families.
 - Escapes concentrated in "the criteria never asked for it" — reopens
@@ -245,23 +239,22 @@ signals that should reopen it:
 - Stella growing a deployment surface — reopens everything in §5's second
   paragraph.
 
-Until one of those is observed, building for them is speculation with a
-maintenance cost.
+Until one of those is observed, building for them adds maintenance cost without
+evidence of need.
 
 ## 7. Proportionate verification: escalate on evidence
 
-Everything above is about the *heavy* path. This section is about not taking it
-when it isn't warranted.
+Everything above is about the *heavy* path. This section covers when it is
+skipped.
 
-Stella's contributor rule has always been nuanced — ship a witness test, **or a
+Stella's contributor rule is: ship a witness test, **or a
 stated reason there isn't one**; pure refactors, docs, and CI changes don't need
 one. The pipeline held itself to a stricter rule than it held people to.
 
 ### 7.1 Predict-then-commit is the bug
 
 The pipeline decided how much ceremony to buy by **predicting** difficulty once,
-up front, from the prompt — the single worst moment to verifier, because no work
-has happened yet. Two consequences:
+up front, from the prompt, before any work had happened. Two consequences:
 
 - **Triage was a paid model call on every prompt, including `hi`.** The
   deterministic greeting table existed and was exact-match safe, but it was
@@ -269,16 +262,15 @@ has happened yet. Two consequences:
   classification round-trip that could not change its own answer, plus up to
   `triage_latency_ceiling` of dead air on a wedged provider.
 - **The one escape hatch guessed from wording.** `triage::resolve_witness`
-  keyword-matches removal verbs to skip witness authoring. Its reasoning is
-  right — a removal's proof is its diff — but it has to be extremely narrow,
+  keyword-matches removal verbs to skip witness authoring. A removal's proof is
+  its diff, but the match has to be extremely narrow,
   because a false positive ships a real behavior change unproven and the only
   evidence available at that moment is the phrasing of a request.
 
 ### 7.2 Escalate on evidence instead
 
-The same principle the evidence ladder already applies to *verification* —
-spend only when the evidence is genuinely inconclusive — applied to the
-pipeline itself.
+The pipeline applies to itself the rule the evidence ladder applies to
+*verification*: spend only when the evidence is inconclusive.
 
 **Deterministic answers come before paid ones.** Anything resolvable without a
 model is resolved without a model, and *then* the call is made. A route the
@@ -309,7 +301,7 @@ waives the witness only when nothing changed *and nothing tried*. The ladder
 carries the same rule one rung further: dispatched mutating calls plus a
 readable, empty diff and no other observation resolves to `Unverifiable`, an
 abstention, never a pass. It is not a failure — the work may be
-entirely correct and merely uncollected, and no revision can make an
+correct but uncollected, and no revision can make an
 un-snapshot-able workspace observable.
 
 **No test needed is not the same as nothing left to check.** A removal's proof
@@ -322,19 +314,19 @@ Prose, comments, and manifests carry no behavior to reason about, so they answer
 Since #2584 that predicate no longer decides whether a reviewer *call* is
 bought — it decides whether the ladder may record the turn as `Waived` at all.
 A `DocsOnly` change completes with a stated reason; a `PureRemoval` that nothing
-else settled falls through to `Unverified`, which is the honest answer for a
-change whose only remaining check was a reader Stella no longer employs.
+else settled falls through to `Unverified`, because that change's only remaining
+check was a reader, which Stella no longer employs.
 
 **Say why.** When no test is warranted, the reason is recorded on the verdict —
 the pipeline's half of the contract contributors are already held to. The run
-scores `Unverified`, never `DeterministicPass`: it is honestly complete, and a
+scores `Unverified`, never `DeterministicPass`: it is complete, and a
 change with nothing to prove must not outrank a flip-verified sibling in
 best-of-N.
 
 ### 7.3 Authoring is demand-driven
 
 The warrant reads a diff, so it can only answer after execution. While
-authoring ran *before* execute, that left the saving half-collected: the
+authoring ran *before* execute, the saving was partial: the
 warrant spared the verifier call but not the author call that had already been
 paid. A docs edit still bought a test for prose.
 
@@ -345,29 +337,30 @@ answered from the diff rather than from the prompt.
 **The hazard this creates.** After execution an implementation exists, and an
 author allowed to read it writes a test that restates it. Such a test fails on
 the old code and passes on the new, so the flip oracle confirms it — while
-proving only that the code equals itself. Reordering naively would have kept
-the ceremony and hollowed out the evidence.
+proving only that the code equals itself. A naive reorder would have kept the
+authoring cost and produced tests that prove nothing.
 
 **Two trees, not one.** The author works in a *second*
 `CandidateWorkspacePort::create` snapshot, taken when the warrant asks for a
 witness. Because a candidate's edits never leave its own workspace until
 adoption, that snapshot sees the pre-execution tree — so the author's input is
 byte-identical to what it was when this stage ran first: the goal, the recalled
-frames, and the unmodified code. The reorder buys cost, never leverage.
+frames, and the unmodified code. The reorder saves cost and gives the author no
+extra information.
 
 That snapshot is also where the artifact must FAIL. The accepted file is then
 grafted into the candidate that executed — create-only, following no link on
 either side, one file — and re-fingerprinted there, so tamper exclusion pins
-the bytes that will actually run. The pass is observed in the candidate. Fail
-in the pre-execution tree, pass in the post-execution one: a flip across two
-code states rather than one tree observed twice.
+the bytes that will actually run. The pass is observed in the candidate. The
+flip spans two code states: fail in the pre-execution tree, pass in the
+post-execution one.
 
 **What the reorder costs.** A witnessed candidate now takes two snapshots
 instead of one. A snapshot is a `git worktree add` and a patch apply; an author
 turn is a model call. So the trade is a cheap local operation *only when a
 witness is warranted*, against a model call *whenever it is not* — and prose,
-comments, config, and no-op turns are common enough on real work to make that
-lopsided in the right direction.
+comments, config, and no-op turns are common enough on real work that the trade
+saves cost overall.
 
 **What it changes about failure.** Because the work already exists when the
 author is asked, a witness that cannot be *produced* no longer discards it. A

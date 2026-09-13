@@ -8,10 +8,9 @@
 
 ## 1. Model: Beta-Bernoulli posterior over risk-weighted incident rate
 
-One model, chosen for durability: the score *is* a credibility-weighted loss
-frequency — the quantity underwriters already price — rather than an opaque
-point system. It also handles low-volume agents naturally: little evidence →
-wide posterior → conservative score.
+The model is chosen for durability: the score is a credibility-weighted loss
+frequency, the quantity underwriters already price. For low-volume agents,
+little evidence → wide posterior → conservative score.
 
 ### Exposure and incidents
 
@@ -48,7 +47,7 @@ Using the 95th-percentile upper confidence bound (not the mean) means:
   accumulates** — tenure and volume are rewarded automatically, no separate
   "age bonus";
 - a single severe incident both shifts and widens the posterior, so the score
-  **drops immediately**, then recovers along the decay curve — exactly the
+  **drops immediately**, then recovers along the decay curve, matching the
   telematics dynamic ("two hard brakes cost you; six clean months earn it
   back");
 - an idle fleet cannot farm score: no risk taken → little exposure → the
@@ -82,8 +81,8 @@ attribute (`context.trust_tier`), so enterprises can override per policy.
 
 ## 3. Anti-gaming — the self-reported-telemetry problem
 
-The dashcam is inside the car; the driver could unplug it. Mitigations, in
-combination:
+Telemetry is self-reported, so the scored party controls the recorder and
+could disable it. Mitigations, in combination:
 
 1. **Wrapper attestation.** The score is computed only over sessions whose
    genesis event carries a signed wrapper build hash (and, where the platform

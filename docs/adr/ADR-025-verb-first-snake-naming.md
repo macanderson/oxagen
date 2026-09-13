@@ -14,11 +14,11 @@ exactly one name per capability, the verb-first snake_case one; no shim, no fall
 
 ADR-022 made capability names dotted three-part strings (`domain.subject.action`,
 e.g. `org.create`, `connection.list`, `agent.subagent.dispatch`). A capability name
-is a load-bearing key: it joins the contract registry, the kernel handler-loader,
+is a key that joins the contract registry, the kernel handler-loader,
 the IAM `role_grants.capability_id` column, the ClickHouse
 `tool_invocations.capability_name` analytics column, and the model-facing tool name.
 
-The dotted form has one decisive weakness: it is **not** the shape a model reads
+The dotted form is **not** the shape a model reads
 best. The repo's own core engine tools — the primitives the coding agent uses every
 turn — are already verb-first snake_case: `read_file`, `write_file`, `edit_file`,
 `run_command`, `search`, `list_files`, `todo_write`. A model that has learned those
@@ -30,7 +30,7 @@ call the tool, and buries the verb — the one token that says what the tool *do
 in the last position.
 
 The user's decision: converge the **entire** capability surface onto the engine-tool
-shape. One grammar, verb-first, for everything the agent can call.
+shape, one verb-first grammar for everything the agent can call.
 
 ## Decision
 
@@ -45,7 +45,7 @@ disambiguating word:
 - `install_plugin`, `uninstall_plugin`, `list_sandbox_files`, `read_sandbox_file`
 - `run_workflow`, `list_workflows`, `get_workflow_status`
 
-**2–3 words.** A 4th word is allowed **only** where global uniqueness truly demands
+**2–3 words.** A 4th word is allowed **only** where global uniqueness demands
 it (rare) and is flagged by the lint. The wave initially produced two four-word,
 scope-disambiguated names (`set_org_plugin_enabled`, `set_workspace_plugin_enabled`);
 these have since been collapsed into the single `set_plugin_enabled` with a `scope`
@@ -78,8 +78,8 @@ name — and nothing else.
 This is safe because the rename is an atomic, in-repo cutover: every contract, route,
 MCP tool, CLI command, handler, test, and import site is renamed together on this
 branch, so no in-repo caller ever references an old name. The prior alias shim existed
-only to bridge a staged rollout; a single-commit-wave rename does not need it, and the
-dead machinery would be pure bloat.
+only to bridge a staged rollout; a single-commit-wave rename does not need it, so the
+machinery is deleted.
 
 - The **registry** resolves `getCapability(name)` by canonical name only.
 - The **kernel** dispatches, gates (IAM / billing / entitlement), and **meters** every

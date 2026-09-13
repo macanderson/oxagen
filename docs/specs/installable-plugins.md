@@ -61,7 +61,7 @@ Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 ### 1. Purpose
 
-Give organizations a first-class, Claude-`/mcp`-grade experience for discovering,
+Give organizations a Claude-`/mcp`-grade experience for discovering,
 installing, governing, authenticating, and using third-party **plugins** across all
 Oxagen agentic workflows — including the interactive question-answering agent.
 
@@ -76,7 +76,7 @@ toolchain. Three concrete types ship behind one shared spine:
 
 The three types **share** a marketplace, org-admin governance, authentication/credential
 concepts, and toolchain registration. They **differ** only in functionality. The
-abstraction is explicitly designed so a type can be deepened later **without reworking
+abstraction is designed so a type can be deepened later **without reworking
 the spine**.
 
 #### Success criteria ("you're done when…")
@@ -3442,7 +3442,7 @@ Run a one-off `tsx` script (or a temporary test) calling `syncRegistry(<seedRegi
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make installed MCP servers actually usable by agents — the org allow-list/denylist governance capabilities, the per-workspace install + credential storage, the polymorphic `PluginType` spine, and the governance-gated `materializeTools` extension that injects enabled servers' tools into every agent.
+**Goal:** Make installed MCP servers usable by agents — the org allow-list/denylist governance capabilities, the per-workspace install + credential storage, the polymorphic `PluginType` spine, and the governance-gated `materializeTools` extension that injects enabled servers' tools into every agent.
 
 **Architecture:** A `PluginType` interface (one `contributeTools(ctx)` method) registered per type; MCP is the only fully-implemented type (Integration/Content tools register placeholders that return no tools yet — the extensibility seam). Governance capabilities write `plugin.org_listings` (allow-list, disabled-by-default), `plugin.org_denylist`, and `agent.mcp_servers` (workspace install, now carrying `org_listing_id`). Credentials persist envelope-encrypted in `mcp.credentials`. `materializeTools` joins the allow-list (`enabled`), excludes the denylist, decrypts the credential, and injects tools — so the interactive Q&A agent uses installed servers exactly like Claude Code.
 
@@ -8389,7 +8389,7 @@ Using the chrome-devtools MCP (`mcp__plugin_chrome-devtools-mcp_chrome-devtools_
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close out the installable-plugins epic with comprehensive Playwright E2E coverage of all nine enumerated flows, offline fixture servers, a plugin-seed DB helper, and user-facing docs for the marketplace and workspace install surfaces.
+**Goal:** Close out the installable-plugins epic with Playwright E2E coverage of all nine enumerated flows, offline fixture servers, a plugin-seed DB helper, and user-facing docs for the marketplace and workspace install surfaces.
 
 **Architecture:** Two in-process fixture HTTP servers (mock MCP + mock OAuth) are started by `playwright.config.ts` via `globalSetup`; each spec seeds its own tenant via a lightweight `seedPlugin` DB helper that mirrors the existing `setupAgentRuntimeFixture` pattern; the fixture servers write to a shared port file so specs can read their URLs. All specs are deterministic and offline — no real Stripe, Anthropic, or registry calls are made.
 
@@ -10040,5 +10040,5 @@ pnpm --filter @oxagen/app lint
 
 > **This completes the installable-plugins epic (Plans 1–7).**
 >
-> Plans 1–6 built the schema, credential service, catalog sync, spine capabilities, OAuth auth subsystem, notifications, and UI. Plan 7 closes the loop with deterministic offline E2E coverage of every enumerated flow and user-facing documentation for the marketplace and workspace install surfaces.
+> Plans 1–6 built the schema, credential service, catalog sync, spine capabilities, OAuth auth subsystem, notifications, and UI. Plan 7 adds deterministic offline E2E coverage of every enumerated flow and user-facing documentation for the marketplace and workspace install surfaces.
 

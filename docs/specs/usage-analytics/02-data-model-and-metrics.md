@@ -1,7 +1,6 @@
 # 02 — Data model, metrics & contracts
 
-This is the honest backbone. Every stat traces to a real column in a real store, or it is
-flagged as *not yet emitted*. Nothing is promised that the data can't back.
+Every stat traces to a real column in a real store, or it is flagged as *not yet emitted*.
 
 ## 1. The four sinks (know the grain)
 
@@ -55,7 +54,7 @@ input only *narrows within* the caller's org.
 
 The user Usage tab (`/account/usage`) is **global**: it must aggregate a user's activity
 **across every org they belong to**. `get_usage_breakdown` cannot do this — it is locked to a
-single `ctx.orgId`. So we add a *deliberately* cross-tenant contract with a hard, narrow guard.
+single `ctx.orgId`. So we add a cross-tenant contract whose only guard is the self-scope clause below.
 
 **Security invariant (must be implemented exactly, and stated in the contract doc):**
 
@@ -112,7 +111,7 @@ The user was explicit: *"do not take the names … as verbatim; derive them from
 org workspaces — see the distinct list of capabilities used and drive counts from those."*
 
 - **The list:** `SELECT DISTINCT capability_name FROM token_usage WHERE org_id = :org AND
-  created_at ∈ window` (and/or `tool_invocations` for the all-agent-tool grain). This is exactly
+  created_at ∈ window` (and/or `tool_invocations` for the all-agent-tool grain). This is
   the `byCapability[]` breakdown `readUsageBreakdown` already returns — it is dynamic by
   construction.
 - **The counts:** `GROUP BY capability_name`. For the *capability-pack* framing (image / video /
@@ -141,7 +140,7 @@ contract/handler that reaches into three stores — that violates the infrastruc
   (degrade to a skeleton/zero with a hint, never fail the whole page) — the exact pattern the
   workspace overview already uses (`apps/app/.../[workspaceSlug]/page.tsx`).
 - A ClickHouse outage greys the token tiles but leaves the Postgres-backed tiles live, and
-  vice-versa. This is a resilience feature, not just tidiness.
+  vice-versa.
 
 ## 5. The tricky definitions (get these right or the numbers mislead)
 
@@ -151,8 +150,8 @@ contract/handler that reaches into three stores — that violates the infrastruc
 - **Cache misses** — `token_usage.cache_misses` column exists but has **zero writers (always 0)**.
 - **Cache writes/creation** — **no tenant column** (only the non-tenant `agent_executions`
   Claude-Code table has `cache_tokens_created`).
-- **Therefore the only honest hit-rate today is `cached_tokens / input_tokens`** — the
-  *cache-read share of input tokens*. The UI labels it exactly that ("Cache-read share"), with a
+- **The only hit-rate the data backs today is `cached_tokens / input_tokens`** — the
+  *cache-read share of input tokens*. The UI labels it "Cache-read share", with a
   tooltip. A true read/write/miss ratio is a **Phase-3** emit (populate `cache_misses` + add a
   `cache_creation_tokens` column at the insert path). Do **not** ship a "hit rate" that divides
   by a column that's always zero.

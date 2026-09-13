@@ -12,16 +12,15 @@ dated 2026-08-17, landed the same day, #3479). This is the design A3 of
 points; §9.1 of the same document decided they cannot live in `stella-core`.
 This document decides everything else: where the trait lives, where the wire
 types live, what each point may say, and what `judge` is now that it is not a
-plugin's code. **What "implemented" covers and what it does not, stated
-plainly because §6 below is an acceptance test and it has not been run:** §2's
-table — the trait in `stella-runtime`, the wire types in `stella-plugin`,
-`judge`/`again` as free functions — is real code, proven end-to-end against
-one real subprocess plugin by `stella-runtime`'s own test suite
+plugin's code. **"Implemented" covers §2; §6's acceptance test has not been
+run.** §2's table — the trait in `stella-runtime`, the wire types in `stella-plugin`,
+`judge`/`again` as free functions — is implemented, proven end-to-end against
+one subprocess plugin by `stella-runtime`'s own test suite
 (`tests/wrapper_socket.rs`). §6's acceptance test — the same plugin, unchanged,
 driven by `stella-cli`, `stella-serve`, and an embedded `stella-engine` host —
 has not been attempted: none of the three drivers calls this socket yet, and
 there is no host-sequence type in `stella-runtime` for a driver to call
-through. Track B (`doc:pipeline-as-plugins` §7) is where a first real caller,
+through. Track B (`doc:pipeline-as-plugins` §7) is where a first caller,
 and with it a candidate for that sequence, is expected to appear.
 
 Everything below about today's tree was read out of it; where a claim is an
@@ -35,7 +34,7 @@ inference it says so.
 on its behalf** — and the two async calls are defined as serialized
 request/response first, with the Rust trait as a typed view of the same shapes.
 
-That asymmetry is the whole design, and §3 argues it rather than assuming it.
+§3 gives the reasoning for that asymmetry.
 
 ---
 
@@ -52,19 +51,17 @@ acyclic (`stella-plugin`'s only workspace dependency is `stella-protocol`) and
 it is the edge that ends "`stella-plugin` has zero consumers".
 
 **`stella-core` gains nothing and loses `goal.rs`'s round loop.** The engine
-never learns plugins exist. That is not a style preference: it is what lets
-`stella-serve` and an embedded host linking `stella-engine` drive the same
-wrapper the CLI does, which §6 makes an acceptance test rather than an
-aspiration.
+never learns plugins exist. That lets `stella-serve` and an embedded host
+linking `stella-engine` drive the same wrapper the CLI does; §6 makes this an
+acceptance test.
 
 ---
 
 ## 3. Why the wire contract is primary and the trait is the view
 
 `doc:pipeline-as-plugins` §5 gives the adoption argument — a Rust-only
-extension surface is a library with extra steps. There is a second argument
-that arrives at the same place from the host side, and it is the one that
-makes this non-negotiable:
+extension surface is a library with extra steps. The host side gives a second
+argument:
 
 **A loop driven over HTTP and a plugin spoken to over a pipe need the identical
 thing** — the loop's participation points expressed as data rather than as Rust
@@ -72,22 +69,21 @@ borrows. `stella-serve` already remotes every model and tool call to its host.
 If the wrapper socket is authored as a Rust trait over borrowed types and
 serialized afterwards, the serialization is a translation of a shape that was
 never designed to cross a process, and the second design — the one for hosts —
-gets built separately. Building the wire contract twice is the failure to
-avoid.
+gets built separately.
 
-So the ordering rule is mechanical: **a point that cannot be expressed as
+The ordering rule: **a point that cannot be expressed as
 serialized request/response is not a point.** If that is discovered while the
 trait is still editable, the trait changes. If it is discovered after, the wire
-contract inherits a defect it did not choose.
+contract inherits the defect.
 
-Easy to erode, so written down here:
+Two rules keep the wire contract primary:
 
 1. **The Rust reference plugin uses the wire path in CI.** It may
    *additionally* have an in-process fast path. If only Rust can reach a
-   capability, the wire contract is second-class and will rot.
+   capability, the wire contract is second-class.
 2. **`protocol_version` rides on every message**, and the contract is
    additive-only. `docs/wire/` is generated and gate-checked
-   (`scripts/check-wire-schema.sh`) precisely so that a renamed field or a
+   (`scripts/check-wire-schema.sh`) so that a renamed field or a
    re-tagged variant lands on the author's screen instead of in a consumer's
    parser; the wrapper wire contract joins it on the same terms.
 
@@ -100,9 +96,8 @@ property of the signature: `judge` is synchronous and I/O-free over owned data,
 so the compiler enforces the rule instead of a reviewer. An out-of-process
 `judge` is I/O by construction and destroys that property.
 
-`doc:pipeline-as-plugins` §6 resolves it and this document does not re-argue it
-— **plugins declare the verdict rule as data; the host evaluates it.** What
-this document adds is the shape that resolution implies for the socket:
+`doc:pipeline-as-plugins` §6 resolves it: **plugins declare the verdict rule as
+data; the host evaluates it.** For the socket, that resolution implies:
 
 > `judge` and `again?` are **not trait methods**. They are host functions over
 > the plugin's declared rule and the evidence its `after_turn` returned.
@@ -119,23 +114,20 @@ again(verdict: &Verdict, round: &RoundState, grant: &LoopGrant) -> Continuation
 ```
 
 Both synchronous, both total, both over owned data. A plugin cannot implement
-either one, in Rust or in Python, which is why "a verification plugin quietly
-calls a model to decide done" stays impossible by construction rather than by
-policy.
+either one, in Rust or in Python, so a verification plugin cannot call a model
+to decide done; the signatures prevent it without a policy.
 
 `VerdictRule` is assembled from what the manifest already declares:
 `[requirements]`, the `[oracle]` flip and tamper policy, and the closed
 condition grammar over published signals
-(`crates/stella-plugin/src/wrapper.rs`). Data has no programming language, so a
-Python author and a Rust author write the identical artifact.
+(`crates/stella-plugin/src/wrapper.rs`). The rule is data, so a Python author
+and a Rust author write the same artifact.
 
-The honest cost, stated plainly: a plugin author cannot write a verdict as a
-loop. The variation that remains open is what counts as **evidence** and what
-**done** means — and both of those are where the interesting variation actually
-lives. Where the grammar turns out too narrow to say something real, the answer
-is to widen the closed grammar with a named predicate, never to open it into an
-expression language: a Turing-complete condition in a manifest is a second
-program with no gate on it.
+A plugin author cannot write a verdict as a loop. Plugins still define what
+counts as **evidence** and what **done** means. Where the grammar is too narrow,
+widen the closed grammar with a named predicate; do not open it into an
+expression language, because a Turing-complete condition in a manifest is a
+second program with no gate on it.
 
 ---
 
@@ -152,23 +144,21 @@ for later stages to read.
 **May not:** run the loop itself, or reach for ambient authority. Every
 capability arrives in the request.
 
-**The AGENTS.md #7 constraint, and it is required.** Contributed context
-rides as a *volatile* message **after** the byte-stable system-prompt prefix,
-never inside it. Prompt-cache hits are a feature, and a wrapper that could
-inject into the stable prefix would make every installed plugin a cost
-regression for every turn. This is the same discipline
+Contributed context rides as a *volatile* message **after** the byte-stable
+system-prompt prefix, never inside it (AGENTS.md #7). Prompt-cache hits are a
+feature, and a wrapper that could inject into the stable prefix would make every
+installed plugin a cost regression for every turn. This is the same discipline
 `crates/stella-cli/src/agent.rs::build_system_prompt` and
 `crates/stella-cli/src/memory.rs` already hold for recalled context.
 
-**A stage gated on a triage signal is a stage that never runs, on every host
-that ships today** (#3547). `Signal::Conversational`, `Questions`, `Plans`,
+**A stage gated on a triage signal never runs on any host that ships today**
+(#3547). `Signal::Conversational`, `Questions`, `Plans`,
 `Verifies`, `WantsWitness` and `WantsVerifier` are triage's assessment, and no
 shipping host performs one: `crates/stella-cli/src/wrapper_plugin.rs::pre_turn_signals`
-publishes them all false or zero, honestly, because nothing has assessed
-anything. `Wrapper::resolve` reads those values and drops the stage, so a
-manifest writing `if = "questions > 0"` declares a stage the host will never
-ask it to contribute at — and the plugin is installed, selected, dispatched,
-and silently useless. Both first-party plugins shipped that way until #3547
+publishes them all false or zero because nothing has assessed anything.
+`Wrapper::resolve` reads those values and drops the stage, so a manifest writing `if = "questions > 0"` declares a stage the host will never
+ask it to contribute at — and the plugin is installed, selected and dispatched
+but contributes nothing. Both first-party plugins shipped that way until #3547
 took the conditions off; `plugins/stella-plan` was inert end to end, because
 the gated stage was the only one it answered at.
 
@@ -179,31 +169,29 @@ these signals and `open_round` already carries `published` forward, so a
 manifest's condition starts working the moment something publishes a value,
 with no change here.
 
-**A stage receives typed signals, never free text — and the one place that
-bites is research questions** (#3539). `published` is a `Vec<PublishedSignal>`
-typed by the closed `Signal` vocabulary, whose whole defence is that a stage
-cannot invent a fact for a later stage to read. `Signal::Questions` is
+**A stage receives typed signals, never free text, and research questions are
+the one case this limits** (#3539). `published` is a `Vec<PublishedSignal>`
+typed by the closed `Signal` vocabulary, so a stage cannot invent a fact for a
+later stage to read. `Signal::Questions` is
 therefore a *count*: a research stage learns that two questions were named and
 never what they were, so `plugins/stella-research` re-derives search terms from
 the goal string, which is strictly weaker than questions produced by a model
 call that already read the goal *and* the task class.
 
-That gap is real and it is not closed yet, because **nothing
-produces the questions**. The built-in triage stage that named them
-(`stella-pipeline`'s `parse_research_questions`) went with that crate in #3865,
+That gap is open because **nothing produces the questions**. The built-in
+triage stage that named them (`stella-pipeline`'s `parse_research_questions`) went with that crate in #3865,
 and the shipping door publishes `questions: 0` unconditionally
 (`crates/stella-cli/src/wrapper_plugin.rs::pre_turn_signals`). A
 `questions: Vec<String>` field on `BeforeTurnRequest` today would be a field
 the wire carries, every reference plugin's `BEFORE_TURN_REQUEST_FIELDS` set has
-to admit, and the schema publishes — always empty. A wire field that has never
-carried a value is a claim about a capability that does not exist.
+to admit, and the schema publishes — always empty. Such a field would advertise
+a capability that does not exist.
 
-The shape when a producer arrives is settled, so the next author does not
-re-open it: a first-class optional field on `BeforeTurnRequest`
-(`#[serde(default, skip_serializing_if = "Vec::is_empty")]`, `PROTOCOL_VERSION`
+The shape when a producer arrives is settled: a first-class optional field on
+`BeforeTurnRequest` (`#[serde(default, skip_serializing_if = "Vec::is_empty")]`, `PROTOCOL_VERSION`
 unchanged), populated by `WrapperDispatch::open_round` from whatever published
-the count — **not** a general "stage input" bag, which would reopen exactly
-what the closed vocabulary closed. `HostStage::Triage.publishes()` already
+the count — **not** a general "stage input" bag, which would reopen what the
+closed vocabulary closed. `HostStage::Triage.publishes()` already
 includes `Signal::Questions` and `open_round` already carries `published`
 forward into each later stage's request, so a composed triage plugin is the
 producer this is waiting on.
@@ -216,9 +204,9 @@ Runs once the turn's `Complete` lands.
 declared model role's call and return the parsed assessment as evidence.
 
 **May not:** change the turn that just ran. It receives the outcome; it does
-not hold a channel into it. This is #3379's one-directional connection stated
-as a socket rule: the pipeline no longer edits the engine's stream, and no
-plugin ever gets to.
+not hold a channel into it. This is #3379's one-directional connection as a
+socket rule: the pipeline no longer edits the engine's stream, and no plugin
+can.
 
 **The model call belongs here, never to `judge`** (`doc:turn-loop-wrappers`
 §9.2). A goal-mode wrapper spends its verifier call in `after_turn` and returns
@@ -229,9 +217,8 @@ declared role instead of being described as a `judge`.
 
 Evidence in, verdict out. §4. No arm escalates to a model — the same property
 `ladder_decision` had (`crates/stella-pipeline/src/verify.rs`, deleted in
-#3865), which is why porting it is a re-home rather than a rewrite. The property
-is the thing being ported; the code is no longer here to copy, so a plugin
-implements it from this contract.
+#3865), so porting it keeps its behaviour. The code is no longer here to copy,
+so a plugin implements the property from this contract.
 
 ### `again?` — synchronous, host-run, total
 
@@ -251,11 +238,9 @@ dropped, and never an unbounded loop because a manifest asked for one.
 
 ## 6. The acceptance test: no host assumed
 
-`doc:pipeline-as-plugins` §0 makes this an acceptance criterion rather than an
-aspiration, and it is the criterion most likely to be quietly failed, because
-failing it feels like success: every plugin works, and the socket has grown a
-dependency on the CLI's process model, so the loop is excellent and embeddable
-in exactly one thing.
+`doc:pipeline-as-plugins` §0 makes this an acceptance criterion. It can fail
+while every plugin still works: the socket grows a dependency on the CLI's
+process model, and the loop is then embeddable only in the CLI.
 
 **The test:** one wrapper plugin, unchanged, runs when driven by
 
@@ -263,8 +248,7 @@ in exactly one thing.
 2. `stella-serve` over HTTP,
 3. a minimal embedded host linking `stella-engine`.
 
-Proven by a test that exercises all three, not by an argument that it should
-work.
+The criterion is met by a test that exercises all three.
 
 The design rules that make it passable:
 
@@ -281,8 +265,7 @@ The design rules that make it passable:
   Tamper snapshotting stays host-side, which `TamperPolicy::ArtifactIdentity`
   already assumes.
 - **No terminal, no git, no cwd in any signature.** A wrapper that only works
-  when a TTY or a git workspace is present is not a socket, it is a CLI
-  feature.
+  when a TTY or a git workspace is present works only in the CLI.
 
 ---
 
@@ -291,10 +274,10 @@ The design rules that make it passable:
 **Added 2026-08-17, correcting a design error in the original socket (#3540).**
 
 §5 defines four points, and every one of them is the *host* asking and the
-*plugin* answering. That is one exchange in one direction, and it forecloses an
-entire class of plugin: **one that needs something only the host has.**
+*plugin* answering. That is one exchange in one direction, which excludes any
+plugin **that needs something only the host has.**
 
-The gap is not hypothetical and it is not narrow:
+Where the gap shows:
 
 - `stella-research` is defined by `doc:pipeline-as-plugins` §3 as replacing
   "research sub-agents, **recall**". Recall is
@@ -302,20 +285,18 @@ The gap is not hypothetical and it is not narrow:
   the CGP host over `context.db` and `codegraph.db`. A plugin gets none of it.
 - `stella-plan` reads the same frames — `build_planner_prompt` takes them — so
   the second extraction is blocked by the identical gap.
-- `doc:turn-loop-wrappers` §9.3 already anticipated the shape and nobody built
-  it: *"a wrapper is handed a `ChildTurn` port… it names a role intent; the host
+- `doc:turn-loop-wrappers` §9.3 described the shape, and it was not
+  built: *"a wrapper is handed a `ChildTurn` port… it names a role intent; the host
   resolves it, carves the budget, runs the turn and settles once."* That is a
   plugin asking the host to do something, mid-point.
 
-**How the error was made, recorded so it is not repeated.** #3498 offered
-exactly this as its option 2 — "a real callback channel… which makes the
+#3498 offered this as its option 2 — "a real callback channel… which makes the
 transport bidirectional" — and it was declined in favour of the smaller option 1
 on the grounds that a callback channel reopened the measured transport decision
-in `doc:plugin-transport-spike`. For `run_test` alone that was right. As a
-general judgement it was wrong: three separate capabilities need the same shape,
-so the question was never "does `run_test` deserve a channel", it was "is the
-socket one-directional", and that is an architecture question that was answered
-by accident.
+in `doc:plugin-transport-spike`. For `run_test` alone, option 1 sufficed. Three
+separate capabilities need the same shape, so the decision was whether the
+socket is one-directional, and #3498 settled that architecture question while
+deciding `run_test`.
 
 ### The rule
 
@@ -337,17 +318,17 @@ plugin→ { "point": "before_turn", "body": { "context": [ … ] } }     ← end
 
 - **No ambient authority.** The plugin does not retrieve; it *asks*, and the
   host performs the retrieval, applies the gate, and returns only what the
-  plugin's declared grant permits. This is §0.3 of the plan intact — a wrapper
-  is handed its capabilities and never reaches for them. An `ask` is the
-  handing, made explicit.
+  plugin's declared grant permits. This keeps §0.3 of the plan: a wrapper is
+  handed its capabilities and never reaches for them. An `ask` makes the
+  handing explicit.
 - **`judge` and `again` stay host functions.** A host call is available during
   `before_turn` and `after_turn` only. The two pure functions gain nothing and
-  remain synchronous, I/O-free and total, so "a plugin cannot grade its own
-  work with a model" survives untouched.
+  remain synchronous, I/O-free and total, so a plugin still cannot grade its
+  own work with a model.
 - **The transport decision stands.** `doc:plugin-transport-spike` chose the
   subprocess path on measurement; a framed conversation over the same stdio
-  pipes is that path used more than once, not a different one. Nothing about
-  the spike's three axes changes.
+  pipes uses that path more than once. None of the spike's three axes
+  changes.
 - **The capability set is closed and declared.** `HostCall` is a closed enum,
   not an RPC surface: a plugin may only make calls its manifest declared, and
   an undeclared call is refused the way an undeclared hook is
@@ -357,16 +338,16 @@ plugin→ { "point": "before_turn", "body": { "context": [ … ] } }     ← end
 ### What it must be bounded by
 
 A conversation can hang where a single exchange could not, so the bounds are
-part of the contract rather than an implementation detail:
+part of the contract:
 
 - the existing per-point timeout covers the **whole** conversation, not each
-  turn of it — a plugin cannot buy time by talking;
+  turn of it — more host calls do not extend the timeout;
 - a **maximum number of host calls per point**, declared and host-clamped, on
-  the `max_holds` precedent — the plugin's number is an ask, never an authority;
+  the `max_holds` precedent;
 - a call whose capability the manifest did not declare is refused with a typed
   error, and the refusal is **reported**, never silent;
 - the response to a refused or failed call is delivered to the plugin so it can
-  degrade honestly, rather than killing it — the fail-open direction the Stop
+  degrade, rather than killing it — the fail-open direction the Stop
   gate already argues for (`user_hooks.rs:55-59`).
 
 ### The first three calls
@@ -387,23 +368,23 @@ the turn on it, and reads nothing into it. Where the spend is booked, and
 whether it may be spent there, come from `SeatGrant` — the manifest a person
 read at install. Every plugin's call is booked at `ModelCallRole::Plugin`, and
 its own word for the job rides beside it on the child's `sub_agent` bracket. It
-**refuses outright any seat the session's own turns use** — a plugin may not
+**refuses any seat the session's own turns use** — a plugin may not
 spend the model whose work it is judging, which is the independence
-`Roster::independence_losses` merely *reports* for an operator's own
+`Roster::independence_losses` *reports* for an operator's own
 configuration. A seat that decides whether the work is done needs a manifest
 declaring an `[oracle]`. `run_test` is still `unsupported` from every host in
 the tree.
 
 **`child_turn` is bounded by its own manifest key, `[loop] max_child_turns`,
-clamped against `DEFAULT_HOST_MAX_CHILD_TURNS` (4).** Not `[loop] max_calls`,
-which bounds the *point conversation* and is fresh on every dispatch: what this
-one bounds is how much of the user's money a plugin may spend, and a bound that
-resets per point is no bound at all across N rounds. The two diverge for an
+clamped against `DEFAULT_HOST_MAX_CHILD_TURNS` (4).** It is not `[loop] max_calls`,
+which bounds the *point conversation* and resets on every dispatch.
+`max_child_turns` bounds how much of the user's money a plugin may spend, and a
+bound that resets per point does not limit spend across N rounds. The two diverge for an
 arbiter that holds rounds open and asks once in each — `plugins/stella-goal` is
-that shape, and while the two shared a key its honest `max_calls = 1` capped its
+that shape, and while the two shared a key its `max_calls = 1` capped its
 second round's verifier turn at `AllowanceSpent` (#3839). A manifest declaring
 only `max_calls` still gets that number: the host clamps an ask down and never
-widens one nobody made.
+raises it.
 
 ### The fourth and fifth: `candidate_fanout` and `adopt_candidate`
 
@@ -412,19 +393,18 @@ full worker turn**, and returns per-candidate evidence; `adopt_candidate` lands
 one of them and discards the rest. They are one plane
 (`stella_runtime::wrapper::CandidateFanouts`, over a `CandidateWorkspaces`
 substrate) because the second is fenced against the handle table the first
-mints, and a host that could install the fence without the table would be
-installing nothing.
+mints, and the fence does nothing without the table.
 
 They exist because `plugins/stella-candidates` (§3 of
-`doc:pipeline-as-plugins`, item 4 of its extraction order) could not be written
-at all: every earlier capability is read-only or single-tracked, so the
+`doc:pipeline-as-plugins`, item 4 of its extraction order) could not be written:
+every earlier capability is read-only or single-tracked, so the
 strongest plugin this socket permitted was *bounded retry with correction over
 the shared tree* — each attempt mutating the one real work tree in place, no
-isolation, no rollback of a loser. Real, and not best-of-N (#3844).
+isolation, no rollback of a loser. That is not best-of-N (#3844).
 
-A caller needs to know, not discover, the following:
+Rules a caller relies on:
 
-- **The seat rule is `child_turn`'s, inverted, and it is not a relaxation.** A
+- **The seat rule is `child_turn`'s, inverted.** A
   child turn may not resolve to the worker's seat, because a plugin must not
   grade work with the model that did it. A candidate **is** the work, so it
   must resolve to the worker's seat and nothing else — booking a writing turn
@@ -432,7 +412,7 @@ A caller needs to know, not discover, the following:
   wrote nothing. Both compare the **resolved seat, never the spelling**.
 - **The width has its own manifest key and its own ceiling.** `[loop]
   max_fanout_width`, clamped against `DEFAULT_HOST_MAX_FANOUT_WIDTH` (3), and
-  deliberately *not* `[loop] max_calls`: that key bounds how chatty a plugin may
+  not `[loop] max_calls`: that key bounds how chatty a plugin may
   be inside one point, and its unit is a cheap read. This one multiplies model
   spend by N. A second ceiling, `DEFAULT_HOST_MAX_FANOUTS` (2), bounds fan-outs
   for the whole run rather than per point, so the product is what a fan-out
@@ -444,8 +424,8 @@ A caller needs to know, not discover, the following:
   by the *clamped* width before each candidate asks for its share, so each one
   is a slice of a budget the host agreed to rather than of the plugin's ask.
 - **Adoption takes a handle, never a path,** resolved against the table the
-  host minted — which is what keeps `HOST_TREE_HANDLE` un-adoptable for free,
-  since it names no entry in any table and never has. Adopting empties the
+  host minted, so `HOST_TREE_HANDLE` cannot be adopted: it names no entry in
+  any table and never has. Adopting empties the
   table, so a second adoption in one run is refused rather than layering a
   second diff over the first. A refused *or failed* adoption discards nothing:
   the losers are the only copies of work that might still be wanted.
@@ -465,11 +445,10 @@ the real tree (#3892). A plugin author should know:
   applies changes nothing at all and is reported as a failed adoption. There
   is no conflict-resolution path: resolving one is a judgement, and a host
   making it silently would be editing the user's tree on its own authority.
-- **`stella goal` installs no fan-out plane**, exactly as it installs no
+- **`stella goal` installs no fan-out plane**, as it installs no
   `child_turn` plane, and for the same reason: that loop's own even/odd
   worker/verifier receipt slots (#3833) own the low `turn_instance` values
-  across a run, so a plugin's fixed slot would collide there rather than
-  merely crowd.
+  across a run, so a plugin's fixed slot would collide there.
 - **A candidate turn runs behind the operator's `tools.<name>` switches** and
   the session authorization gate. It is the one dispatched child in the tree
   that does; `delegate`'s children run against the bare registry and always
@@ -498,7 +477,7 @@ not create.
   wrapper names a role *intent*; the host resolves it against the user's BYOK
   providers, carves the budget, attaches gate/steering/hooks, runs the turn and
   settles once. For an out-of-process wrapper that is a JSON request on stdio
-  and **every model call is made by the host** — AGENTS.md #3, intact.
+  and **every model call is made by the host**, as AGENTS.md #3 requires.
 - **It does not admit a second granularity.** Self-driving is an outer loop
   over whole runs, not a turn participant, and it becomes a *host* rather than
   a wrapper (`doc:pipeline-as-plugins` §10). Widening this socket to a second
@@ -517,4 +496,4 @@ not create.
   model verdict.
 - A manifest that names a signal the host does not publish still fails at
   **load**, with a reason — the property `crates/stella-plugin` already
-  enforces, now enforced against a socket that actually dispatches.
+  enforces, now enforced against a socket that dispatches.

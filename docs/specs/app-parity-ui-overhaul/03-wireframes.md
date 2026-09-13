@@ -90,7 +90,7 @@ Legend: `◇` nav item · `[ Button ]` · `( ) / (•)` radio · `[x] / [ ]` che
 
 ## 3. Studio → Agent Builder  ★ the centerpiece
 
-The whole point of the overhaul. One screen, a left step-rail, a live preview on the right.
+One screen, a left step-rail, a live preview on the right.
 Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Auditor" agent.
 
 ```
@@ -422,8 +422,7 @@ Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Audit
 
 ## 14. The golden path, screen by screen
 
-The end-to-end story, showing how the surfaces connect. This is the demo script and the
-e2e test spine.
+This is the demo script and the e2e test spine.
 
 ```
  1. Studio → Skills → New skill
@@ -465,5 +464,5 @@ e2e test spine.
                               ▼
 ```
 
-Nine screens, one story, every noun a first-class object, every step a governed, metered,
-grounded, typed contract. That is capability parity, and that is the wedge, on screen.
+Across these nine screens every noun is a first-class object and every step is a governed,
+metered, grounded, typed contract; that is capability parity.

@@ -24,7 +24,7 @@ reason:
 - **§6, the agent-assisted fallback, and §8, the join report.** Phases 2 and
   3, tracked in #5091. Until the judge exists, a window no rule settles is
   written `direction = 'neutral'`, `direction_source = 'deterministic'`,
-  `direction_reason = 'unclassified_floor'`, exactly as phase 1 requires, so
+  `direction_reason = 'unclassified_floor'`, as phase 1 requires, so
   the residue stays visible in the data.
 - **§5 rule 3 is implemented against a substitute** for "the trial's final
   accepted patch", which this store does not hold: a line counts as convergent
@@ -57,7 +57,7 @@ stage vocabulary steps are graded against.
 `bench/telemetry_store` answers "did the trial pass, and what did it cost" —
 one row per trial, aggregated. It cannot answer "of the 40 steps this agent
 took, how many were pointed at the goal", because nothing today reduces a
-step to a direction. That question matters for three reasons:
+step to a direction. The answer is needed for three uses:
 
 - **Comparing agents at equal outcome.** Two trials can both pass with
   identical `cost_usd_norm` while one agent took a direct path and the other
@@ -324,7 +324,7 @@ backfilling a guess — the same absence-over-invention posture as
 `(trial_id, grader_version)` pair is `INSERT OR REPLACE`, keyed on the
 identity indexes in §3. Grading with a *new* `grader_version` adds rows
 beside the old ones rather than overwriting — a report can compare
-`v3` against `v4` on the same trial to see exactly which steps a ruleset
+`v3` against `v4` on the same trial to see which steps a ruleset
 change reclassified.
 
 ## 5. Deterministic scoring: rule-based classifiers
@@ -373,10 +373,9 @@ network calls, no model tokens spent.
 5. **No-op rule.** A window with zero `file_change`, zero non-read-only
    `tool_start`, and a `Stage` unchanged from the window before it (restating
    a plan, a lookup that informs nothing measurable downstream) →
-   `neutral` (`no_measurable_effect`). This is a floor, not a default: it
-   only fires when the four rules above all declined to match, so a window
-   is `neutral` because nothing detectable happened, never because grading
-   gave up.
+   `neutral` (`no_measurable_effect`). It fires only when the four rules
+   above all declined to match, so a window this rule marks `neutral` is one
+   in which nothing detectable happened.
 
 A window matching none of the above (no test signal, no diff, no verifier
 movement, no explicit failure, but *not* a clean no-op either — e.g. a
@@ -410,7 +409,7 @@ parse as this shape is a hard error for that window, not a silent `neutral`.
 only when `confidence` clears a configured floor (default 0.6) *and* it does
 not contradict a strong deterministic signal on an adjacent window (e.g. the
 window right before a `verifier_delta:+N` claiming `unproductive` is a
-contradiction worth flagging, not trusting). Anything else — low confidence,
+contradiction, flagged rather than trusted). Anything else — low confidence,
 or an adjacent-window contradiction — is written with
 `direction_source = 'escalated_human'`, `direction` set to the judge's best
 guess, `confidence` preserved, and surfaced in the join report (§7) as
@@ -428,7 +427,7 @@ excluded, since excluding it would let a grader inflate the ratio just by
 labeling more steps neutral).
 
 - **Step level.** `step_grades` has no ratio column of its own — a single
-  step's "ratio" is just its `direction`, which is the input the other two
+  step's "ratio" is its `direction`, which is the input the other two
   levels aggregate. (A report may still show it as 1.0/0.0/— per step for
   display; nothing is stored redundantly.)
 - **Turn level.**
@@ -446,7 +445,7 @@ labeling more steps neutral).
   from the other silently.
 - **Cross-trial and cross-run rollups** (by model, by arm, by task) are
   queries over `execution_grades`, not a fourth table: `run_id` is already
-  denormalized onto every row for exactly this, e.g.
+  denormalized onto every row for this, e.g.
   `SELECT run_id, AVG(agent_productive_step_ratio) FROM execution_grades
   WHERE grader_version = 'vN' GROUP BY run_id`.
 
@@ -480,8 +479,8 @@ that line falls in — not a new transcript renderer. Concretely, for a given
    whether the ratio's story agreed with the outcome.
 
 Anything written `escalated_human` (§6) is marked distinctly in the report
-(not folded into either color) so a reviewer's eye lands on exactly the
-windows nothing — rule or model — settled with confidence, and a reviewer's
+(not folded into either color) so a reviewer can find the windows that
+neither a rule nor the model settled with confidence, and a reviewer's
 override writes back as a new `grader_version` row rather than mutating the
 `agent_judge` row it replaces, preserving the same before/after history
 `step_grades`'s versioning already guarantees.

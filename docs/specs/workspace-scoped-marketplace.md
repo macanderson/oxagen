@@ -75,7 +75,7 @@ servers from the seeded registry, fetched live. No sync. No org pre-approval. No
 - `registry-client.ts` **appends** `/v0.1/servers`, so the correct stored value has **no** suffix; the seed.ts constant is wrong.
 - `ensureOfficialMcpRegistry()` guards its insert by matching on `base_url` → never matches the migration's row →
   **inserts a second NULL-org default-seed row** with a different URL. Migration `20260615…workspace_plugin_scope.sql`
-  bolts on an after-the-fact `UPDATE … SET base_url=… WHERE base_url LIKE '%/v0.1/servers%'` cleanup. **This is the bug.**
+  bolts on an after-the-fact `UPDATE … SET base_url=… WHERE base_url LIKE '%/v0.1/servers%'` cleanup.
 
 #### 2.3 Sync machinery (to delete)
 `mcp.catalog_servers` ← `packages/plugins/src/registry/sync-service.ts` ← `plugin.registry.sync`
@@ -87,13 +87,13 @@ trigger (`eventClient.send("plugin/registry.sync")`) ← a 6-hour cron. Browse r
 `oxagen/media-video`, `oxagen/media-image`, `oxagen/media-svg`, `oxagen/documents` — each claims a contract
 (`svg.generate`, etc.), `tier`, `visibility`, `category:"media"`. The **kernel entitlement gate**
 (`packages/plugins/src/entitlements/entitlement-service.ts`) blocks claimed contracts until installed+enabled in
-`plugin.org_listings`. These are exactly the user's **`agent_capability`** plugins (seeded **uninstalled**).
+`plugin.org_listings`. These are the user's **`agent_capability`** plugins (seeded **uninstalled**).
 
 #### 2.5 The broken tabs
 `apps/app/src/components/plugins/marketplace-modal.tsx` wires Base UI Tabs correctly (`value`/`onValueChange`,
 `TabsTab value=`, `TabsPanel value=`). The bug is in `packages/ui/src/components/tabs.tsx`: selected-state classes use
 **`data-[selected]:`** but Base UI in this repo emits **`data-active`** (per memory `ui-base-ui-stock-shadcn`). State
-flips on click but no class responds → no highlight, no panel change, no indicator move. **One-component fix, repo-wide benefit.**
+flips on click but no class responds → no highlight, no panel change, no indicator move. The fix is in one component and applies repo-wide.
 
 #### 2.6 Surface inventory (parity must move in lockstep)
 17 org-scoped + 1 workspace-scoped contract/route/MCP-tool/CLI quads under `plugin.*`. Latent IDOR found:
@@ -102,7 +102,7 @@ flips on click but no class responds → no highlight, no panel change, no indic
 #### 2.7 Partially-started migration (important)
 Route folders **both** exist: `[orgSlug]/settings/plugins/` (org-plugins-panel) and
 `[orgSlug]/[workspaceSlug]/settings/plugins/` (workspace-plugins-panel). `org_listings.workspace_id` already added
-(nullable). So this is a **half-done migration to finish + correct**, not greenfield.
+(nullable). This work finishes and corrects a **half-done migration**.
 
 ---
 

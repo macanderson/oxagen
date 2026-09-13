@@ -24,10 +24,10 @@ Auth's required tables) under the same `auth` schema.
   Loses control over the data model.
 - **Auth.js / NextAuth.** Solid, but the Drizzle adapter story is
   weaker than Better Auth's, and the framework-specific bindings
-  (`next-auth/react`) tie auth to Next.js. Not ideal for `apps/api`
-  and `apps/mcp` which also need session validation.
+  (`next-auth/react`) tie auth to Next.js, while `apps/api` and
+  `apps/mcp` also need session validation.
 - **Roll our own.** Auth is the most security-sensitive surface in the
-  stack; "roll our own" is the wrong default.
+  stack, so we do not build it in-house.
 
 ## Consequences
 

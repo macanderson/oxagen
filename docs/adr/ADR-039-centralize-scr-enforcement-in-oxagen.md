@@ -19,13 +19,12 @@ in terms of all five repos:
 
 Read literally, each is "add this workflow to five repositories". Doing that
 would put five independently-editable copies of every enforcement mechanism
-into the org — including five copies of the check whose entire purpose is
+into the org — including five copies of the check whose purpose is
 detecting that five copies have drifted apart. A bug fixed in one would have
-to be re-fixed four times, and the copies would drift exactly the way the
+to be re-fixed four times, and the copies would drift the way the
 corpus can drift, but with no check watching *them*.
 
-Replication was the right call for the corpus and is the wrong call here, and
-the difference is worth naming. The corpus is **content that must be readable
+The corpus is **content that must be readable
 where it is used**: an agent working in stella needs SCR-001 on disk in
 stella, and a shared steering repo would mean an agent whose context depends
 on a second checkout. Enforcement is **behavior**, and behavior does not have
@@ -63,30 +62,28 @@ adding or removing a check does.
 
 ## Why durable
 
-The failure this avoids is specific and observed: a rule enforced by five
+This avoids an observed failure: a rule enforced by five
 copies of a script decays into five slightly different rules, and the decay
-is invisible because each repo's CI is green against its own copy. One
-implementation cannot disagree with itself. The reader in 2036 asking "what
-does the DoD check actually do?" has exactly one file to read and one test
-suite to trust.
+is invisible because each repo's CI is green against its own copy. With one
+implementation, what the DoD check does is defined by one file and one test
+suite.
 
-The mechanisms chosen are all boring and native to the platform — scheduled
+The mechanisms chosen are all native to the platform: scheduled
 workflows, `workflow_call`, `actions/github-script`, ES modules with no
 dependencies. Nothing here needs a bespoke runner, a shared package registry,
 or a service to stay alive. If the reusable-workflow mechanism is ever
 withdrawn, each consumer stub degrades into an obvious place to inline the
 check; if a repo leaves the org, deleting its stub is the whole migration.
 
-Keeping the logic dependency-free is deliberate rather than minimalist: it
-means the health of the *process* checks does not ride on the health of the
-*product's* dependency tree. A broken lockfile in oxagen must not be able to
+The logic is dependency-free so that the health of the *process* checks does
+not ride on the health of the *product's* dependency tree. A broken lockfile in oxagen must not be able to
 stop the org from noticing that its steering corpus has drifted.
 
 ## Consequences
 
-- oxagen becomes a load-bearing dependency of the other four repos' CI. This
-  is already true of the corpus (oxagen is the drift reference), so the
-  coupling is acknowledged rather than new. A consumer repo whose stub cannot
+- oxagen becomes a dependency of the other four repos' CI. This is already
+  true of the corpus (oxagen is the drift reference), so the coupling is not
+  new. A consumer repo whose stub cannot
   resolve fails loudly.
 - Checks pinned to `@main` pick up changes immediately, with no per-repo
   rollout. The tradeoff is that a bad change to a reusable workflow can break
@@ -106,6 +103,6 @@ stop the org from noticing that its steering corpus has drifted.
   workflow-defaults mechanism is scoped to organizations; these repos are
   owned by a user account, so the feature is not available. Revisit if the
   repos ever move under an org.
-- **Publish the shared logic as an npm package.** Rejected as heavier than
-  the problem: it adds a release cycle and a registry dependency between
+- **Publish the shared logic as an npm package.** Rejected: it adds a release
+  cycle and a registry dependency between
   "fix the check" and "the check is fixed", to avoid a sparse checkout.

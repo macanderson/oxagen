@@ -4,7 +4,7 @@ Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> Tenancy & RLS feature is fully shipped. The @oxagen/tenancy identity seam (AsyncLocalStorage) is wired into the kernel and all three data stores (Postgres via FORCE ROW LEVEL SECURITY + GUCs, Neo4j via scopedSession wrapper, ClickHouse via chInsert/chSelect). All handlers and integrations use the scoped wrappers, and comprehensive RLS isolation is proven via integration tests. The TENANT_RLS_ENFORCEMENT_ENABLED flag controls enforcement with safe defaults.
+> Tenancy & RLS feature is fully shipped. The @oxagen/tenancy identity seam (AsyncLocalStorage) is wired into the kernel and all three data stores (Postgres via FORCE ROW LEVEL SECURITY + GUCs, Neo4j via scopedSession wrapper, ClickHouse via chInsert/chSelect). All handlers and integrations use the scoped wrappers, and RLS isolation is proven via integration tests. The TENANT_RLS_ENFORCEMENT_ENABLED flag controls enforcement and defaults to false.
 
 **Implementation evidence**
 
@@ -120,7 +120,7 @@ have to think about tenant/workspace filters** for correctness, and this must
               = HARD wall       = seam wall      + optional ROW POLICY)
 ```
 
-Two layers, by design:
+Two layers:
 
 1. **Propagation (one seam):** `@oxagen/tenancy` owns a single
    `AsyncLocalStorage<TenantScope>`. `runInTenantScope` is entered **once** inside
@@ -186,8 +186,8 @@ surfaces map it to a 403 and the audit emitter records it.
 `ctx` is already threaded to handlers, but **not** down into `db()` / `session()`
 calls (those take no ctx today). Threading ctx into every data accessor signature
 is the change we are trying to avoid. ALS lets the accessor read scope without a
-signature change — the callsite becomes `withTenantDb(tx => …)` with no ids. This
-is the minimum-surface way to hit G3.
+signature change — the callsite becomes `withTenantDb(tx => …)` with no ids. ALS
+meets G3 with the smallest change surface.
 
 ### 6. Postgres — the hard wall (the centerpiece)
 
@@ -195,13 +195,14 @@ is the minimum-surface way to hit G3.
 
 - Keep the single `oxagen` role. The app role **owns** the tables, and table
   owners bypass RLS — so we use **`FORCE ROW LEVEL SECURITY`**, which subjects the
-  owner to policies too. This is what removes the need for a separate restricted
+  owner to policies too. `FORCE` removes the need for a separate restricted
   role (N1).
 - Per-request the app sets two transaction-local GUCs and runs queries in that
   transaction; the policy reads them with `current_setting(..., true)`.
 - `SET LOCAL` requires a transaction, and Neon/AlloyDB poolers run in transaction
   pooling — so the wrapper opens **one transaction**, sets the GUCs, runs the
-  callback's queries on that `tx`, commits. Lowest-common-denominator, portable.
+  callback's queries on that `tx`, commits. This runs identically on Neon, AlloyDB,
+  and a local container.
 
 #### 6.1a Enforcement flag (decided — mirrors `IAM_ENFORCEMENT_ENABLED`)
 
@@ -405,8 +406,7 @@ downstream inherits via ALS.
    ```
    `runInTenantScope` throws on empty ids → **the MCP `orgId: ""` path now fails
    closed** with `no_tenant_scope`, surfaced through the existing
-   `emitSecurityEvent` deny path. This is the single highest-leverage line in the
-   change: ~all capability traffic is covered here.
+   `emitSecurityEvent` deny path. This line covers ~all capability traffic.
 2. **Next.js server actions** (`apps/app/.../actions.ts`) that call `db()` outside
    a capability: wrap their body in `runInTenantScope(scope, …)` using the
    already-resolved `resolveOrg()/resolveWorkspace()` values.
@@ -417,8 +417,6 @@ downstream inherits via ALS.
    a store, so it needs no scope (and ALS isn't edge-safe anyway).
 
 ### 9. Testing strategy — how we avoid "unit-test hell"
-
-This is a first-class design constraint, not an afterthought.
 
 #### 9.1 Unit tests do not change shape
 
@@ -457,9 +455,8 @@ Postgres container** (already present in `ci.yml`) under a new gated job
   - Workspace-nullable / org-only variants honor their relaxed predicate.
 - ~one parametrized test over the policy manifest, not one-per-table by hand.
 
-This is the "solve all RLS problems in one place" promise extended to tests: the
-guarantee is asserted in a single suite, so the other 124 suites never re-litigate
-isolation and stay pure/fast.
+The guarantee is asserted in a single suite, so the other 124 suites do not
+re-assert isolation and stay pure/fast.
 
 #### 9.3 Seam guards (cheap unit tests, no DB)
 
@@ -2296,7 +2293,7 @@ Expected: `gate` + `rls-integration` both green on the PR.
 
 #### Task 16: Enable enforcement per environment
 
-Not a code change — an env-var operation, gated on telemetry. No migration.
+An env-var operation gated on telemetry. No code change and no migration.
 
 - [ ] **Step 1: Verify seeding-window coverage**
 
@@ -2315,7 +2312,7 @@ Per repo policy, file an URGENT Linear ticket tracking the prod env-var flip wit
 ### Self-Review
 
 **Spec coverage:**
-- §5 tenancy seam → Tasks 1–2. §6 Postgres RLS + flag → Tasks 4, 5, 12, 13, 14. §6.1a flag → Tasks 4, 5, 16. §7.1 Neo4j → Tasks 8, 9. §7.2 ClickHouse → Tasks 10, 11. §8 kernel/actions/inngest propagation → Tasks 3, 7. §9 testing strategy → mocks (Tasks 5, 7), single proof (Task 14), seam guards (Tasks 8, 10), CI (Task 15). §11 file list → all tasks. §12 rollout phases → Phase headings. Decisions (§15): flag (Tasks 4/5/16), no CH row policy (none added — correct), keep predicates (Task 7 Step 2 keeps them).
+- §5 tenancy seam → Tasks 1–2. §6 Postgres RLS + flag → Tasks 4, 5, 12, 13, 14. §6.1a flag → Tasks 4, 5, 16. §7.1 Neo4j → Tasks 8, 9. §7.2 ClickHouse → Tasks 10, 11. §8 kernel/actions/inngest propagation → Tasks 3, 7. §9 testing strategy → mocks (Tasks 5, 7), single proof (Task 14), seam guards (Tasks 8, 10), CI (Task 15). §11 file list → all tasks. §12 rollout phases → Phase headings. Decisions (§15): flag (Tasks 4/5/16), no CH row policy (none added), keep predicates (Task 7 Step 2 keeps them).
 - Known-gap fixes: MCP `orgId:""` → Task 3 Step 4; Neo4j `tenantId` drift → Task 9 Step 1.
 
 **Placeholder scan:** every code step has concrete code; "adjust to real schema" notes point at named files to read, not vague TODOs. No `NotImplemented`/`TBD`.

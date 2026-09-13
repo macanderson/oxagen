@@ -4,7 +4,7 @@ Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
-> All three IAM phases have shipped. Phase 1 (tenant-to-org schema rename) completed with full migrations and route updates. Phase 2 (IAM data layer) delivered Postgres and ClickHouse schemas with idempotent seeding. Phase 3 (pure resolver, audit emission, kernel integration) is complete with comprehensive testing and CI guards.
+> All three IAM phases have shipped. Phase 1 (tenant-to-org schema rename) completed with full migrations and route updates. Phase 2 (IAM data layer) delivered Postgres and ClickHouse schemas with idempotent seeding. Phase 3 (pure resolver, audit emission, kernel integration) is complete with testing and CI guards.
 
 **Implementation evidence**
 
@@ -12,7 +12,7 @@ Archived spec & plan — status: shipped (audited 2026-07-03).
 - packages/database/src/schema/iam.ts — 5 IAM tables (principals, roles, roleGrants, accessRequests, principalRoleAssignments) with OXA-1389 comment
 - packages/telemetry/src/migrations/0003_iam_audit.sql — ClickHouse audit_events table for Phase 2
 - packages/oxagen/src/iam/resolve.ts — pure resolver with 8-rule decision order (OXA-1390 Phase 3)
-- packages/oxagen/src/iam/resolve.test.ts — 575 lines comprehensive unit test suite covering all resolver branches
+- packages/oxagen/src/iam/resolve.test.ts — 575-line unit test suite covering all resolver branches
 - packages/iam/src/check-iam.ts — IAM check orchestrator (fetchAuthz + resolve + emitAudit)
 - packages/iam/src/emit-audit.ts — fire-and-forget audit emission with hash-chain integrity
 - packages/iam/src/bootstrap.ts — wires checkIAM into kernel.invoke via setKernelIAMRuntime (OXA-1498)
@@ -29,7 +29,7 @@ Archived spec & plan — status: shipped (audited 2026-07-03).
 
 ## IAM — Implementation Plan (Wave 1: The Spine)
 
-Sequenced delivery plan for the load-bearing foundation that every operational surface in v2 depends on. Built from [`../information-architecture/spec.md`](../information-architecture/spec.md) §§ 9, 12, 15.
+Sequenced delivery plan for the foundation that every operational surface in v2 depends on. Built from [`../information-architecture/spec.md`](../information-architecture/spec.md) §§ 9, 12, 15.
 
 Status: **ready to execute** — Wave 1 only. Waves 5 + 6 (Access surface UI, SSO/SCIM, Compliance dashboards) will appear in this file as separate phases when their predecessors land.
 
@@ -270,7 +270,7 @@ Drop the IAM tables in reverse FK order. ClickHouse table drop. Seed reverses cl
 
 **Ticket:** OXA-XXX
 
-**Deliverable:** Single PR that introduces the `defineContract()` helper as the single load-bearing capability boundary, the pure resolver function, the audit event emitter, and migrates every existing contract handler through `defineContract`.
+**Deliverable:** Single PR that introduces the `defineContract()` helper as the single capability boundary, the pure resolver function, the audit event emitter, and migrates every existing contract handler through `defineContract`.
 
 #### Scope
 
@@ -342,7 +342,7 @@ Implements the documented order (see IA spec §12):
 7. Role-inherited grant → inherit role
 8. Default-deny
 
-Pure function: takes pre-fetched data, returns a decision + trace. No I/O. `defineContract`'s `invoke` is the only caller. Easy to unit-test exhaustively. Note: the `capabilityRegistry` parameter from the original design is removed — capability metadata is carried on each contract object and does not need to be passed into the resolver.
+Pure function: takes pre-fetched data, returns a decision + trace. No I/O. `defineContract`'s `invoke` is the only caller. Note: the `capabilityRegistry` parameter from the original design is removed — capability metadata is carried on each contract object and does not need to be passed into the resolver.
 
 **Audit emitter (`packages/oxagen/src/iam/emit-audit.ts`)**
 
@@ -376,7 +376,7 @@ The `contracts` array is the canonical registry. No database table mirrors it. A
 
 **CI guard (`tools/scripts/check-contracts.mjs`)**
 
-Structurally there is no bypass to guard against — the capability check lives inside `defineContract` and the handler never escapes. The lighter check that remains: verify that the package-level `contracts` array contains every `defineContract` call found in that package's `contracts/` directory. This is a ~20-line glob + grep script. It catches forgotten exports (contract file exists but was not added to the array), not bypasses. Added to the root `gate` script.
+The capability check lives inside `defineContract` and the handler never escapes, so there is no bypass to guard against. The remaining check verifies that the package-level `contracts` array contains every `defineContract` call found in that package's `contracts/` directory. This is a ~20-line glob + grep script. It catches forgotten exports (contract file exists but was not added to the array), not bypasses. Added to the root `gate` script.
 
 **Handler sweep**
 
@@ -425,7 +425,7 @@ Aim for >95% line coverage on `resolve.ts`.
 
 - **ClickHouse write latency** on hot paths. Mitigation: fire-and-forget with a bounded retry queue in-process. If ClickHouse is unavailable, queue locally up to 1000 events, then circuit-break and log. Audit writes never block user actions.
 - **Hash chain race conditions** if two contract invocations for the same `(org_id, capability)` happen concurrently. Mitigation: chain hash is best-effort linkage, not a strict-ordering guarantee. Tamper-detection is at the *range* level (any reorder is detectable), not at the per-event level. Document this clearly.
-- **Forgotten export.** Mitigation: the CI `contracts` array check catches any contract file not added to the package array. Structurally there is no bypass to miss.
+- **Forgotten export.** Mitigation: the CI `contracts` array check catches any contract file not added to the package array.
 
 #### Rollback
 
@@ -435,16 +435,16 @@ Aim for >95% line coverage on `resolve.ts`.
 
 ### After Wave 1
 
-Wave 1 lands. The platform now has:
+After Wave 1 the platform has:
 
 - A clean schema with no tenant terminology.
 - A unified principal/grant/role/policy data model (6 Postgres tables).
 - A pure, tested resolver that decides every capability invocation.
-- A `defineContract()` boundary that is structurally impossible to bypass — the capability check, audit emission, and handler invocation are collapsed into one call.
+- A `defineContract()` boundary that cannot be bypassed: the capability check, audit emission, and handler invocation are one call.
 - A per-package `contracts` array that is the canonical capability registry, discoverable without a database table.
 - A lightweight CI guard that ensures every contract file is exported in its package array.
 
-The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) becomes a "walk the contracts arrays, read the data model, and render it" problem, which is exactly what we want for a stable IAM ship.
+The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) walks the contracts arrays, reads the data model, and renders it.
 
 ---
 

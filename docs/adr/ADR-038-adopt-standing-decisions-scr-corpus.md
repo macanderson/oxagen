@@ -26,8 +26,8 @@ Two placement questions had to be settled for this repository:
 ## Decision
 
 - The standing-decisions block is canonical in `AGENTS.md`; `CLAUDE.md`
-  imports it with `@AGENTS.md` (option 1b). One source, two consumers, zero
-  drift between them — the pattern the stella repo already proved.
+  imports it with `@AGENTS.md` (option 1b). One source serves both consumers,
+  so they cannot drift; the stella repo already uses this pattern.
 - The five seed SCRs (SCR-001…SCR-005) are replicated identically in
   `docs/scr/` across the five org repos: oxagen, context-graph-protocol,
   cgp-website, arenabench, stella (option 2b). The rollout was scoped to
@@ -48,5 +48,4 @@ corpus of plain-markdown records with explicit frontmatter (`status`,
 `autonomy`, `enforcement`) is boring technology that any future agent — or
 human — can read, diff, and supersede. SCRs are never deleted, only marked
 superseded, so the 10-year reader can trace why the process looks the way
-it does. Enforcement lives in the harness (hooks, templates, Actions), not
-in anyone's memory.
+it does. Enforcement lives in the harness (hooks, templates, Actions).

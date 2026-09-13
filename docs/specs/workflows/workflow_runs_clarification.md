@@ -32,7 +32,7 @@ triggered the agent. An execution always has one parent origin; a workflow_run
 may spawn many executions.
 
 Using `workflow_runs` for cost tracking or `agent_executions` for plan state would
-violate the four-store model — each table has exactly one job.
+violate the four-store model — each table has one job.
 
 ---
 

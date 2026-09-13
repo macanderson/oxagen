@@ -112,7 +112,7 @@ sells.
   and rebuild.** Rejected. That commit predates the billing→Stripe loop,
   the SOC2 security-event taxonomy, IAM principals and authorization
   snapshots, the evidence ledger, KMS-enveloped credentials, reseller
-  rebilling and the knowledge/ontology surfaces — exactly the assets the
+  rebilling and the knowledge/ontology surfaces, which are the assets the
   governance product is made of. The runtime is separable by deletion;
   the governance core is not separable by rollback.
 - **Extract the runtime to a new repository first.** Rejected: Stella is

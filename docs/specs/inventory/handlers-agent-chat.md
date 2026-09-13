@@ -7,7 +7,7 @@
 > **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.compose` (plan/execute/summarize a capability chain) and
 > `agent.subagent.logs` entirely; their Requirement/Invariant sections have
-> been removed from this file rather than kept as dead prose.
+> been removed from this file.
 
 ---
 

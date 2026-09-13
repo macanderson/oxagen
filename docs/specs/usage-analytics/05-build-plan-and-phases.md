@@ -72,7 +72,7 @@ auth-sensitive, our rules require Opus + explicit gates); Sonnet for the UI wiri
 
 ## Phase 3 — metering enrichment (unlock agent/repo/env + real cache)
 
-**Goal:** the slices that have **no backing column today**. This is real insert-path work; it's
+**Goal:** the slices that have **no backing column today**. This is insert-path work; it's
 last because everything above ships without it, and until it lands those filters are rendered
 **disabled with "coming soon."**
 
@@ -83,8 +83,8 @@ last because everything above ships without it, and until it lands those filters
 2. **Populate at the insert boundary** — extend `currentPrincipalStamp()` /
    `getPrincipalAttribution()` (`@oxagen/tenancy`) so the ambient scope carries agent/repo/env the
    same way it already carries `user_id`/`capability_name`; set `cache_creation_tokens` from AI SDK
-   `inputTokenDetails.cacheCreationTokens` in `packages/ai/src/stream.ts`. **This is the
-   chokepoint work** — do it once at `insertTokenUsage`, not per caller.
+   `inputTokenDetails.cacheCreationTokens` in `packages/ai/src/stream.ts`. Do it once at
+   the `insertTokenUsage` chokepoint, not per caller.
 3. **Extend `readUsageBreakdown`** with `byAgent[]`/`byRepo[]`/`byEnvironment[]` + the enrichment
    filters; flip the disabled UI filters live.
 4. **Graph "updated" metric** (the single hardest gap): emit a shared telemetry event from

@@ -26,7 +26,7 @@ Related: `docs/specs/iam/plan.md`, `docs/adr/ADR-009` (unified capability/tool m
 
 Concretely: an **agent role** is an `iam.roles` row (scopeKind `workspace`) whose grants carry (a) the existing capability→effect map and (b) a new typed **resource-scope condition** for graph labels, relationship types, MCP server:tool globs, and skill slugs. Agents get roles via `iam.principal_role_assignments`. At run time the agent's effective permissions are **the intersection of its own grants and the invoking human's grants** — an agent can never exceed the human it acts for (the delegation ceiling), and a subagent can only narrow, never widen, its parent's scope.
 
-This is wedge work, not plumbing: it completes the accountability chain — identity (principal) → knowledge scope (graph grants) → permitted action (capability grants) → commercial terms (billing meters already in `invoke()`) → verified outcome → audit record (ClickHouse IAM audit already emits from `checkIAM`).
+It completes the accountability chain — identity (principal) → knowledge scope (graph grants) → permitted action (capability grants) → commercial terms (billing meters already in `invoke()`) → verified outcome → audit record (ClickHouse IAM audit already emits from `checkIAM`).
 
 ## 1. Scope
 
@@ -95,7 +95,7 @@ resourceScope: {
 }
 ```
 
-**Relationship between role scope and per-agent config:** the role is the _ceiling_, the agent definition (`graphAccess`, `agentTools`) is the _request_. Effective scope = intersection. This keeps `agent-schema.ts` untouched and preserves the existing builder UX — the role becomes a governance layer over it, exactly like the schema comment already promises for subagents ("inherits and may narrow, never widen").
+**Relationship between role scope and per-agent config:** the role is the _ceiling_, the agent definition (`graphAccess`, `agentTools`) is the _request_. Effective scope = intersection. This keeps `agent-schema.ts` untouched and preserves the existing builder UX — the role becomes a governance layer over it, as the schema comment already specifies for subagents ("inherits and may narrow, never widen").
 
 ### 3.4 Enforcement runs at every tier — this is not enterprise ACL
 
@@ -103,7 +103,7 @@ resourceScope: {
 
 ### 3.5 Deny wins, and the two-layer gate stays
 
-Materialize-tools filtering is UX (the model never sees a tool it can't call); `invoke()` kernel resolution is the real gate (defense against prompt-injected direct capability names, exactly the "un-poisonable" property from `docs/VISION.md`). Both layers read one resolution, computed once per run and cached on the run context — not two divergent policies.
+Materialize-tools filtering is UX (the model never sees a tool it can't call); `invoke()` kernel resolution is the enforcing gate (defense against prompt-injected direct capability names, the "un-poisonable" property from `docs/VISION.md`). Both layers read one resolution, computed once per run and cached on the run context — not two divergent policies.
 
 ### 3.6 Graph enforcement lives in `scopedSession`
 
@@ -111,7 +111,7 @@ Materialize-tools filtering is UX (the model never sees a tool it can't call); `
 
 - Traversal capabilities (`ontology.neighbors`, `ontology.query`, `semantic.*`) get scope predicates injected as Cypher `WHERE` clauses / APOC label filters and budget clamps (LIMIT, hop caps) — enforced server-side, not by prompt.
 - Same seam-bypass guard style as tenancy: a query from an agent-scoped session that doesn't carry the scope markers throws, so a new query path cannot silently skip the filter.
-- `mode=read` scope rejects write clauses (reuse the existing read/extend distinction at the capability layer: `graph_write`-category capabilities simply resolve to deny).
+- `mode=read` scope rejects write clauses (reuse the existing read/extend distinction at the capability layer: `graph_write`-category capabilities resolve to deny).
 
 ### 3.7 MCP reuses the glob engine
 
@@ -135,7 +135,7 @@ Risks: latency — one resolution per run, cached; fast-path change is `principa
 
 ### Phase 3 — Graph scope enforcement
 
-Scope: `GraphScope` support in `scopedSession` + predicate/budget injection in `ontology.*` / `semantic.*` query builders; effective scope = role ceiling ∩ `graphAccess` declaration (finally enforcing `scopeToTypes` and `budget`); subagent narrowing on dispatch.
+Scope: `GraphScope` support in `scopedSession` + predicate/budget injection in `ontology.*` / `semantic.*` query builders; effective scope = role ceiling ∩ `graphAccess` declaration (enforcing `scopeToTypes` and `budget`, which are declared but unenforced today); subagent narrowing on dispatch.
 Acceptance: integration test against live Neo4j proving out-of-scope labels/rel-types never return; budget clamps observable; `Agent Legacy` + humans unaffected.
 Risks: Cypher predicate injection must not break existing query plans — measure; label filters interact with vector-index entry points (filter post-ANN with oversampling, per the known ANN pattern). Rollback: scope param optional; flag off restores pass-through.
 

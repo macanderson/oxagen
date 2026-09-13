@@ -12,7 +12,7 @@ Every Oxagen capability is a typed contract (`registerCapability()` in
 `packages/oxagen/src/contracts/`) dispatched through one kernel
 (`packages/oxagen/src/kernel.ts` `invoke()`) that enforces surface allowlists,
 Zod input/output validation, IAM, billing admission, entitlements, audit, and
-tracing. This model is strict and correct — but it is **compile-time only**:
+tracing. This model is **compile-time only**:
 
 1. Contracts and handlers register via import side effects into a
    `globalThis`-anchored in-process map. A customer cannot add one without a
@@ -24,7 +24,7 @@ tracing. This model is strict and correct — but it is **compile-time only**:
    Parity is enforced after the fact by gates (`check:manifest`,
    `check:ui-parity`, route/tool parity tests) rather than produced by
    construction.
-3. The agent surface already proves the alternative: `materializeTools`
+3. The agent surface already uses the alternative: `materializeTools`
    (`packages/agent/src/runtime/materialize-tools.ts`) binds **every**
    agent-surfaced capability generically by iterating the registry — zero
    per-capability files.
@@ -99,8 +99,8 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
 ## Consequences
 
 - Customers design the contract and write the handler; Oxagen does everything
-  else. Surfacing a capability on API + MCP + app + CLI becomes a
-  business-process decision (flags in the manifest), not an engineering task.
+  else. Surfacing a capability on API + MCP + app + CLI is set by flags in
+  the manifest, with no engineering work.
 - The kernel remains the single enforcement point. Nothing in this design adds
   a second dispatch path; it adds a second *source of declarations*.
 - First-party capability authoring cost drops from ~7–10 files to
@@ -120,7 +120,7 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
 ## Alternatives considered
 
 - **Config-driven capabilities in the database** (no-code builder): rejected —
-  the user requirement is explicitly code in SCM; DB-only configuration cannot
+  the user requirement is code in SCM; DB-only configuration cannot
   express real handler logic, cannot be reviewed/versioned in Git, and drifts.
 - **In-process execution of customer bundles** (`vm`/worker threads): rejected —
   Node has no safe in-process isolation; a hostile bundle could reach ambient
@@ -129,5 +129,5 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
   and update churn for marginal benefit; the CLI instead materializes commands
   dynamically from the synced workspace capability index (see spec §10.5).
 - **MCP-only exposure of customer capabilities** (skip REST/app/CLI): rejected —
-  parity is the product's law and the customer requirement ("effort concerning
+  surface parity is a product requirement and a customer requirement ("effort concerning
   business processes, not technology").
