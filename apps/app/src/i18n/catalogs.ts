@@ -12,6 +12,7 @@ export const DEFAULT_LOCALE = "en";
 export const CATALOG_FILES = [
   "en", // shared namespaces: app, routes, states, notFound, globalError
   "ui", // Mission Control primitives (src/ui)
+  "shell", // org and workspace shells (src/features/shell)
 ] as const;
 
 export class DuplicateNamespaceError extends Error {

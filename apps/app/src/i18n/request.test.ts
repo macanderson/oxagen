@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import en from "../../messages/en.json";
+import shell from "../../messages/shell.json";
 import ui from "../../messages/ui.json";
 
 // getRequestConfig only wraps the factory; unwrap it so the factory runs here.
@@ -14,6 +15,6 @@ describe("i18n request config", () => {
       factory as unknown as () => Promise<{ locale: string; messages: unknown }>
     )();
     expect(config.locale).toBe("en");
-    expect(config.messages).toEqual({ ...en, ...ui });
+    expect(config.messages).toEqual({ ...en, ...ui, ...shell });
   });
 });
