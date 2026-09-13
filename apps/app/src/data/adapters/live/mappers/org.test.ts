@@ -337,10 +337,9 @@ describe("toWorkspace", () => {
   it("never counts an unread workspace as zero agents", () => {
     const draft = toWorkspace({ ...source, agentCount: null });
     expect(draft.agentCount).toBeNull();
-    expect(settle(Workspace, [draft])).toMatchObject({
-      kind: "unrecorded",
-      paths: expect.arrayContaining(["agentCount"]),
-    });
+    const settled = settle(Workspace, [draft]);
+    expect(settled.kind).toBe("unrecorded");
+    expect(settled.kind === "ok" ? [] : settled.paths).toContain("agentCount");
   });
 });
 

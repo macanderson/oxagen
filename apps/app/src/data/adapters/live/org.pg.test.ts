@@ -257,17 +257,17 @@ describe.skipIf(!enabled)(
         Invitation,
         (await postgresOrgStore.invitations(orgId, NOW)).map(toInvitation),
       );
-      expect(settled).toEqual({
-        kind: "ok",
-        value: [
-          {
-            email: `pending-${tag}@mc-live.test`,
-            role: { scope: "org", role: "member" },
-            invitedById: ownerPublicId,
-            sentOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-            expiresOn: inAWeek.toISOString().slice(0, 10),
-          },
-        ],
+      expect(settled.kind).toBe("ok");
+      const rows = settled.kind === "ok" ? settled.value : [];
+      expect(rows).toHaveLength(1);
+      const [{ sentOn, ...row } = { sentOn: "" }] = rows;
+      // created_at is the database's now(), read back as its UTC day.
+      expect(sentOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(row).toEqual({
+        email: `pending-${tag}@mc-live.test`,
+        role: { scope: "org", role: "member" },
+        invitedById: ownerPublicId,
+        expiresOn: inAWeek.toISOString().slice(0, 10),
       });
     });
 

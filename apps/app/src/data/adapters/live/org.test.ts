@@ -170,44 +170,59 @@ const plane = (kind: OrgDataPlaneGetOutput["kind"]): OrgDataPlaneGetOutput => ({
 });
 
 const store = (): OrgStore => ({
-  planTier: vi.fn(async () => "enterprise"),
-  members: vi.fn(async () => [
-    {
-      membership: { role: "Owner", joinedAt: new Date("2026-03-01T09:00:00Z") },
-      user: { publicId: "usr_7m2k9q4x1c8v5b3n6z0p2r", twoFactorEnabled: true },
-      workspaces: [{ slug: "core-platform", role: "owner" }],
-      lastSessionAt: new Date("2026-09-12T08:41:00Z"),
-    },
-  ]),
-  invitations: vi.fn(async () => [
-    {
-      invitation: {
-        email: "priya.nair@acme.test",
-        role: "Member",
-        createdAt: new Date("2026-09-08T14:30:00Z"),
-        expiresAt: new Date("2026-09-15T14:30:00Z"),
+  planTier: vi.fn(() => Promise.resolve("enterprise")),
+  members: vi.fn(() =>
+    Promise.resolve([
+      {
+        membership: {
+          role: "Owner",
+          joinedAt: new Date("2026-03-01T09:00:00Z"),
+        },
+        user: {
+          publicId: "usr_7m2k9q4x1c8v5b3n6z0p2r",
+          twoFactorEnabled: true,
+        },
+        workspaces: [{ slug: "core-platform", role: "owner" }],
+        lastSessionAt: new Date("2026-09-12T08:41:00Z"),
       },
-      inviterPublicId: "usr_7m2k9q4x1c8v5b3n6z0p2r",
-    },
-  ]),
-  apiKeys: vi.fn(async () => [
-    {
-      key: {
-        name: "ci-deployer",
-        keyPrefix: "oxk_live_4f9a",
-        lastUsedAt: null,
-        expiresAt: null,
+    ]),
+  ),
+  invitations: vi.fn(() =>
+    Promise.resolve([
+      {
+        invitation: {
+          email: "priya.nair@acme.test",
+          role: "Member",
+          createdAt: new Date("2026-09-08T14:30:00Z"),
+          expiresAt: new Date("2026-09-15T14:30:00Z"),
+        },
+        inviterPublicId: "usr_7m2k9q4x1c8v5b3n6z0p2r",
       },
-      creatorPublicId: "usr_7m2k9q4x1c8v5b3n6z0p2r",
-    },
-  ]),
-  workspaceFacts: vi.fn(
-    async () =>
+    ]),
+  ),
+  apiKeys: vi.fn(() =>
+    Promise.resolve([
+      {
+        key: {
+          name: "ci-deployer",
+          keyPrefix: "oxk_live_4f9a",
+          lastUsedAt: null,
+          expiresAt: null,
+        },
+        creatorPublicId: "usr_7m2k9q4x1c8v5b3n6z0p2r",
+      },
+    ]),
+  ),
+  workspaceFacts: vi.fn(() =>
+    Promise.resolve(
       new Map([
         [WS_A, { agentCount: 4, ownerPublicId: "usr_7m2k9q4x1c8v5b3n6z0p2r" }],
       ]),
+    ),
   ),
-  assistantSpend: vi.fn(async () => ({ capCents: 2000, spentCents: 250n })),
+  assistantSpend: vi.fn(() =>
+    Promise.resolve({ capCents: 2000, spentCents: 250n }),
+  ),
 });
 
 /** Answers each agent tool the adapter invokes with a representative output. */
@@ -220,20 +235,39 @@ const toolOutputs: Record<string, (input: unknown) => unknown> = {
 };
 
 function fakeInvoke(): OrgInvoke & ReturnType<typeof vi.fn> {
-  const fn = vi.fn(
-    async (call: { contract: { name: string }; input: unknown }) => {
-      const answer = toolOutputs[call.contract.name];
-      if (!answer) throw new Error(`unexpected tool ${call.contract.name}`);
-      return answer(call.input);
-    },
-  );
+  const fn = vi.fn((call: { contract: { name: string }; input: unknown }) => {
+    const answer = toolOutputs[call.contract.name];
+    return answer
+      ? Promise.resolve(answer(call.input))
+      : Promise.reject(new Error(`unexpected tool ${call.contract.name}`));
+  });
   return fn as unknown as OrgInvoke & ReturnType<typeof vi.fn>;
+}
+
+type InvokeCall = {
+  scope: unknown;
+  userId: string;
+  contract: { name: string };
+  input: unknown;
+};
+
+/** Every agent tool call a read made, as plain data. */
+function invokedTools(d: OrgLiveDeps) {
+  return vi.mocked(d.invoke).mock.calls.map(([raw]) => {
+    const call = raw as unknown as InvokeCall;
+    return {
+      scope: call.scope,
+      userId: call.userId,
+      tool: call.contract.name,
+      input: call.input,
+    };
+  });
 }
 
 function deps(over: Partial<OrgLiveDeps> = {}): OrgLiveDeps {
   return {
-    principal: vi.fn(async () => USER_ID),
-    orgRole: vi.fn(async () => "admin"),
+    principal: vi.fn(() => Promise.resolve(USER_ID)),
+    orgRole: vi.fn(() => Promise.resolve("admin")),
     invoke: fakeInvoke(),
     store: store(),
     report: vi.fn(),
@@ -351,7 +385,7 @@ describe("createLiveOrg guards", () => {
   it.each(ALL_METHODS)(
     "%s is denied without a session and reads nothing",
     async (method) => {
-      const d = deps({ principal: vi.fn(async () => null) });
+      const d = deps({ principal: vi.fn(() => Promise.resolve(null)) });
       await expect(createLiveOrg(d)[method](ORG_SCOPE)).resolves.toEqual(
         DENIED,
       );
@@ -361,14 +395,14 @@ describe("createLiveOrg guards", () => {
   );
 
   it.each(ALL_METHODS)("%s is denied to a non-member", async (method) => {
-    const d = deps({ orgRole: vi.fn(async () => null) });
+    const d = deps({ orgRole: vi.fn(() => Promise.resolve(null)) });
     await expect(createLiveOrg(d)[method](ORG_SCOPE)).resolves.toEqual(DENIED);
     expect(d.invoke).not.toHaveBeenCalled();
     expect(d.store.members).not.toHaveBeenCalled();
   });
 
   it.each(ADMIN_METHODS)("%s is denied to a plain member", async (method) => {
-    const d = deps({ orgRole: vi.fn(async () => "member") });
+    const d = deps({ orgRole: vi.fn(() => Promise.resolve("member")) });
     await expect(createLiveOrg(d)[method](ORG_SCOPE)).resolves.toEqual(DENIED);
     expect(d.invoke).not.toHaveBeenCalled();
   });
@@ -381,7 +415,7 @@ describe("createLiveOrg guards", () => {
 
   it("lets a plain member read the organization and its workspace list", async () => {
     const d = deps({
-      orgRole: vi.fn(async () => "viewer"),
+      orgRole: vi.fn(() => Promise.resolve("viewer")),
       views: widenedViews,
     });
     const port = createLiveOrg(d);
@@ -395,13 +429,15 @@ describe("createLiveOrg guards", () => {
 
   it("answers a kernel denial as denied, not as an outage", async () => {
     const d = deps({
-      invoke: vi.fn(async () => {
-        throw new mocks.CapabilityError(
-          "get_data_plane",
-          "authz_denied",
-          "no grant",
-        );
-      }) as unknown as OrgInvoke,
+      invoke: vi.fn(() =>
+        Promise.reject(
+          new mocks.CapabilityError(
+            "get_data_plane",
+            "authz_denied",
+            "no grant",
+          ),
+        ),
+      ) as unknown as OrgInvoke,
     });
     await expect(createLiveOrg(d).dataPlanes(ORG_SCOPE)).resolves.toEqual(
       DENIED,
@@ -427,9 +463,7 @@ describe("createLiveOrg guards", () => {
 
   it("reports a failed role lookup as the same named error", async () => {
     const d = deps({
-      orgRole: vi.fn(async () => {
-        throw new Error("pool exhausted");
-      }),
+      orgRole: vi.fn(() => Promise.reject(new Error("pool exhausted"))),
     });
     await expect(
       createLiveOrg(d).organization(ORG_SCOPE),
@@ -518,10 +552,10 @@ describe("createLiveOrg reads", () => {
       code: ORG_RECORD_UNMAPPABLE,
       status: 500,
     });
-    expect(d.report).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining("personId") }),
-      "org.members unmappable",
-    );
+    const [reported, context] = vi.mocked(d.report).mock.calls[0] ?? [];
+    expect(context).toBe("org.members unmappable");
+    expect(reported).toBeInstanceOf(Error);
+    expect((reported as Error).message).toContain("personId");
   });
 
   it("reads the organization through get_org_settings and the plan tier", async () => {
@@ -543,14 +577,12 @@ describe("createLiveOrg reads", () => {
       },
     });
     // An organization read runs under the organization-only sentinel.
-    expect(d.invoke).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: ORG_SCOPE,
-        userId: USER_ID,
-        contract: expect.objectContaining({ name: "get_org_settings" }),
-        input: {},
-      }),
-    );
+    expect(invokedTools(d)).toContainEqual({
+      scope: ORG_SCOPE,
+      userId: USER_ID,
+      tool: "get_org_settings",
+      input: {},
+    });
     expect(d.store.planTier).toHaveBeenCalledWith(ORG_ID);
   });
 
@@ -570,12 +602,12 @@ describe("createLiveOrg reads", () => {
         },
       ],
     });
-    expect(d.invoke).toHaveBeenCalledWith(
-      expect.objectContaining({
-        contract: expect.objectContaining({ name: "list_workspaces" }),
-        input: { orgSlug: "acme" },
-      }),
-    );
+    expect(invokedTools(d)).toContainEqual({
+      scope: ORG_SCOPE,
+      userId: USER_ID,
+      tool: "list_workspaces",
+      input: { orgSlug: "acme" },
+    });
     expect(d.store.workspaceFacts).toHaveBeenCalledWith(ORG_ID, [WS_A]);
   });
 
@@ -665,9 +697,9 @@ describe("kernelOrgInvoke", () => {
 
   it("loads handlers, invokes as the person in the tenant scope, and parses the output", async () => {
     let seen: unknown = null;
-    mocks.invoke.mockImplementationOnce(async () => {
+    mocks.invoke.mockImplementationOnce(() => {
       seen = getScope();
-      return settings;
+      return Promise.resolve(settings);
     });
     await expect(
       kernelOrgInvoke({
@@ -734,14 +766,14 @@ describe("production deps", () => {
 
   it("reports through telemetry and never throws from a report", async () => {
     liveOrgDeps.report(new Error("boom"), "org.members read failed");
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(mocks.captureError).toHaveBeenCalledWith(
         expect.objectContaining({
           source: "app",
           context: "org.members read failed",
         }),
-      ),
-    );
+      );
+    });
     mocks.captureError.mockImplementationOnce(() => {
       throw new Error("clickhouse down");
     });
@@ -776,7 +808,7 @@ function fakeTx(rows: (q: Recorded) => unknown[], log: Recorded[]) {
       const q: Recorded = {
         table: "",
         columns: Object.keys(selection),
-        scope: getScope() as Recorded["scope"],
+        scope: getScope(),
       };
       const chain = {
         from(table: unknown) {
@@ -967,9 +999,9 @@ describe("postgresOrgStore", () => {
 
   it("resolves the plan tier and the assistant spend inside the organization scope", async () => {
     let tierScope: unknown = null;
-    mocks.resolveOrgTier.mockImplementationOnce(async () => {
+    mocks.resolveOrgTier.mockImplementationOnce(() => {
       tierScope = getScope();
-      return "scale";
+      return Promise.resolve("scale");
     });
     await expect(postgresOrgStore.planTier(ORG_ID)).resolves.toBe("scale");
     expect(tierScope).toMatchObject(ORG_SCOPE);

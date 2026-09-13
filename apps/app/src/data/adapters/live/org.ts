@@ -123,17 +123,17 @@ export type WorkspaceFacts = {
 
 /** The tenant-scoped reads with no agent tool behind them. */
 export type OrgStore = {
-  planTier(orgId: string): Promise<string>;
-  members(orgId: string): Promise<MemberSource[]>;
-  invitations(orgId: string, now: Date): Promise<InvitationSource[]>;
-  apiKeys(orgId: string): Promise<ApiKeySource[]>;
-  workspaceFacts(
+  planTier: (orgId: string) => Promise<string>;
+  members: (orgId: string) => Promise<MemberSource[]>;
+  invitations: (orgId: string, now: Date) => Promise<InvitationSource[]>;
+  apiKeys: (orgId: string) => Promise<ApiKeySource[]>;
+  workspaceFacts: (
     orgId: string,
     workspaceIds: readonly string[],
-  ): Promise<Map<string, WorkspaceFacts>>;
-  assistantSpend(
+  ) => Promise<Map<string, WorkspaceFacts>>;
+  assistantSpend: (
     orgId: string,
-  ): Promise<{ capCents: number | null; spentCents: bigint }>;
+  ) => Promise<{ capCents: number | null; spentCents: bigint }>;
 };
 
 export type OrgInvoke = <I, O>(call: {
