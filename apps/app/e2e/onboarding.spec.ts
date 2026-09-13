@@ -225,7 +225,14 @@ test.describe("onboarding gate", () => {
 
   test("loading", async ({ signedInPage: page, context, baseURL }) => {
     await setPageState(context, baseURL ?? "http://localhost:3000", "loading");
-    await page.goto("/welcome");
+    // `commit` rather than the default `load`. The `loading` switch holds the
+    // read for the fixture adapter's DEFAULT_LOADING_MS, and the document's
+    // load event does not fire until that stream closes — so waiting for it
+    // means arriving after the resolved copy has already been swapped in, and
+    // the skeleton this test is about is gone before the first assertion runs.
+    // Every other state on this page resolves at once, which is why only this
+    // one has to say so.
+    await page.goto("/welcome", { waitUntil: "commit" });
     // The loading state is the Suspense fallback's own skeleton, so while the
     // stream swaps it in the resolved copy briefly sits beside it in a hidden
     // container; assert the one on screen.
