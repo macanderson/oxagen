@@ -1,16 +1,13 @@
 // The drawings a generated image is made of.
 //
-// Three layers. The lattice is the brand's own cell (the cluster in
-// oxagen-house-brand/build/marks.py, the .tex-hex texture in oxagen.css)
-// tiled evenly across the ink and fading toward the edges the way the
-// site's hero does. Over it sits one panel, built the way the site builds
-// its terminal: a raised card, a title bar with two dim dots and one gold,
-// and a tracked label naming the subject. Inside the panel is one of seven
-// line drawings of the things the writing is about: a knowledge graph, an
-// ontology, an agent's loop, a tool call, a policy gate, an audit ledger, a
-// meter. The drawing is a figure, not a watermark: hairlines in the dim
-// tone, working lines in the muted tone, and the one accent in the body
-// tone. Never a gradient, never a translucent fill.
+// Two layers. The honeycomb is the brand's own cell (the cluster in
+// oxagen-house-brand/build/marks.py, the constellation --tex-hex draws behind
+// the hero in oxagen.css) scattered as a field of rings and flat blocks with
+// exactly one cell in gold. Over or beside it sits one of seven hairline drawings of the things
+// the writing is about: a knowledge graph, an ontology, an agent's loop, a
+// tool call, a policy gate, an audit ledger, a meter. Hairlines in the
+// theme's quiet tones, so a drawing reads as a watermark rather than a
+// figure; never a gradient, never a translucent fill.
 //
 // Everything takes a seeded `rand`, so an image is a pure function of its
 // seed and rebuilds identically.

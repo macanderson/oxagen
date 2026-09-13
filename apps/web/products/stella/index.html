@@ -37,18 +37,18 @@
 .hero-note{margin-top:15px;font-size:13.5px;color:var(--ink-3)}
 .hero-note a{color:var(--gold)}
 .badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
-.badge{font-family:"Aeonik Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--ink-3);border:1px solid var(--line);padding:4px 9px;border-radius:var(--r)}
+.badge{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);border:1px solid var(--line);padding:4px 9px;border-radius:var(--r-pill)}
 .badge.on{color:var(--gold);border-color:var(--gold)}
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
-  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:20px}
+  border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-top:20px}
 @media (max-width:700px){.stat-row{grid-template-columns:1fr 1fr}}
 .stat{background:var(--panel);padding:18px}
-.stat b{display:block;font-family:"Aeonik Mono",monospace;font-size:24px;color:var(--gold);font-weight:560;letter-spacing:-.01em}
+.stat b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px;color:var(--gold);font-weight:560;letter-spacing:-.01em}
 .stat span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:4px}
-.gates{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.gates{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
 .gate{background:var(--panel);display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
-  padding:12px 15px;font-family:"Aeonik Mono",monospace;font-size:12.5px}
+  padding:12px 15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
 .gate .g{color:var(--pass)}.gate .b{color:var(--fail)}
 .gate .n{color:var(--ink-2)}.gate .t{color:var(--ink-3)}
 </style>
@@ -310,7 +310,7 @@
   </section>
 
   <!-- ================= GATES ================= -->
-  <section class="sec sec-alt tex tex-hatch">
+  <section class="sec sec-alt tex tex-field">
     <div class="wrap split split-wide">
       <div class="reveal">
         <p class="eyebrow">Verified done</p>
