@@ -1,7 +1,7 @@
 // Root ESLint flat config — used by all non-Next packages and apps.
-// The Next.js apps (apps/app, apps/docs) have their own eslint.config.mjs
-// that re-exports the shared eslint.next.mjs stack; they do NOT use this
-// root config.  apps/mcp also has its own eslint.config.mjs, but it re-exports
+// The Next.js apps have their own eslint.config.mjs: apps/docs and
+// apps/app_deprecated re-export the shared eslint.next.mjs stack, and apps/app
+// carries a standalone ESLint 10 config. None of them use this root config.  apps/mcp also has its own eslint.config.mjs, but it re-exports
 // THIS file verbatim.  Every remaining package ships no config of its own and
 // lets flat-config discovery walk up from its directory to this file.
 import tseslint from "typescript-eslint";
@@ -26,6 +26,7 @@ export default tseslint.config(
       // THIS config to their files and errors on disable directives for
       // plugins only registered there (e.g. react-hooks/exhaustive-deps).
       "apps/app/**",
+      "apps/app_deprecated/**",
       "apps/docs/**",
       // apps/web's browser JS and its build OUTPUT stay unlinted: the site has
       // no tsconfig, so the project service has no project to resolve them

@@ -13,9 +13,26 @@ confirmModulesPurge: false
 
 overrides:
   drizzle-orm: 0.45.2
-  typescript: 6.0.3
+  # Narrowed to <7 so apps/app's `@typescript/native` (npm:typescript@7.0.2,
+  # the `tsc` CLI) and its `typescript` alias (npm:@typescript/typescript6, the
+  # JS API typescript-eslint needs, plus `tsc6`) are not rewritten to 6.0.3.
+  "typescript@<7": 6.0.3
   d3-path: 3.1.0
   d3-shape: 3.2.0
+
+# lucide-react 0.469 (the @oxagen/ui kit's pin) imports "react" types without
+# declaring @types/react as a peer, so pnpm resolves them through the hidden
+# hoist, which holds the highest @types/react in the tree. Once apps/app moved
+# to @types/react 19.3, every 19.2 consumer of lucide saw two unrelated
+# React type trees (TS2322 "Two different types with this name exist"). The
+# optional peer makes each lucide instance use its consumer's @types/react.
+packageExtensions:
+  lucide-react@0.469.0:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
 
 onlyBuiltDependencies:
   - "@swc/core"
@@ -34,6 +51,9 @@ ignoredBuiltDependencies:
   - "@swc/core"
 
 allowBuilds:
+  # @parcel/watcher (pulled in by Storybook 10 in apps/app) ships prebuilt
+  # binaries as optional deps; its node-gyp fallback script is not needed.
+  "@parcel/watcher": false
   "@swc/core": true
   blake3: true
   cpu-features: true
