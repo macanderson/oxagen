@@ -142,13 +142,39 @@ export type RecordedAgentDetail = RecordedAgentRow & {
   roles: Array<{ role: string; resource: string | null }> | null;
 };
 
+/**
+ * A grant as `iam.role_grants` holds it. `conditions` is `conditions_jsonb`;
+ * undefined when it was not read (list_iam_roles returns no conditions).
+ */
+export type RecordedGrant = IamRoleRow["grants"][number] & {
+  conditions?: unknown;
+};
+
+export type RecordedRole = Omit<IamRoleRow, "grants"> & {
+  grants: readonly RecordedGrant[];
+};
+
+/**
+ * A resource narrowing the belt's `scope` string cannot show. Never null:
+ * in `ToolbeltEntry` a null scope means no narrowing, which would render a
+ * narrowed or unread grant as an unrestricted one.
+ * - `conditions_unread`: a held grant's conditions were not read.
+ * - `resource_scope`: a held grant records a `resourceScope` ceiling. The kernel
+ *   intersects every held grant's ceiling across the whole agent, then with the
+ *   invoking person's, so it is no one entry's string.
+ */
+export type UnshownScope = {
+  readonly unshown: "conditions_unread" | "resource_scope";
+};
+
 export type RecordedToolbeltEntry = Omit<
   ToolbeltEntry,
-  "tool" | "description" | "pinned"
+  "tool" | "description" | "pinned" | "scope"
 > & {
   /** A kernel agent tool name (`list_agent_defs`): today's grants carry no version. */
   tool: string;
   description: string | null;
+  scope: UnshownScope | null;
   pinned: null;
 };
 
@@ -307,22 +333,45 @@ const DECISION_RANK: Record<IamRoleRow["grants"][number]["effect"], number> = {
 };
 
 /**
+ * What narrows every entry of the belt. A `resourceScope` ceiling on any held
+ * grant, whatever its capability or effect, narrows all of them
+ * (packages/oxagen/src/iam/resolve.ts collectResourceScope), so null (no
+ * narrowing) only when every held grant's conditions were read and none
+ * records one.
+ */
+export function toBeltScope(
+  grants: readonly RecordedGrant[],
+): UnshownScope | null {
+  if (grants.some((g) => g.conditions === undefined))
+    return { unshown: "conditions_unread" };
+  const narrowed = grants.some(
+    (g) =>
+      typeof g.conditions === "object" &&
+      g.conditions !== null &&
+      "resourceScope" in g.conditions &&
+      g.conditions.resourceScope != null,
+  );
+  return narrowed ? { unshown: "resource_scope" } : null;
+}
+
+/**
  * The belt the agent's roles grant: one entry per agent tool, decided by the
  * strongest effect across the roles it holds, citing the role that decides it.
  */
 export function toToolbelt(
   agentKey: string,
   assignments: readonly AgentRoleAssignmentRow[],
-  roles: readonly IamRoleRow[],
+  roles: readonly RecordedRole[],
   describe: (tool: string) => string | null,
 ): RecordedToolbelt {
   const held = new Set(assignments.map((a) => a.roleId));
+  const heldRoles = roles.filter((role) => held.has(role.id));
+  const scope = toBeltScope(heldRoles.flatMap((role) => role.grants));
   const decided = new Map<
     string,
     { decision: BeltDecision; rank: number; rule: string }
   >();
-  for (const role of roles) {
-    if (!held.has(role.id)) continue;
+  for (const role of heldRoles) {
     for (const grant of role.grants) {
       const rank = DECISION_RANK[grant.effect];
       const current = decided.get(grant.capability);
@@ -342,8 +391,7 @@ export function toToolbelt(
         description: describe(tool),
         decision: d.decision,
         rule: d.rule,
-        // list_iam_roles returns no grant conditions.
-        scope: null,
+        scope,
         pinned: null,
         // A role grant is never one of the searchable belt's meta-tools.
         meta: false,
@@ -498,6 +546,17 @@ const PROBE_ASSIGNMENT: AgentRoleAssignmentRow = {
   workspaceId: null,
 };
 
+const PROBE_ROLE: RecordedRole = {
+  id: "rol_probe",
+  name: "Agent Operator",
+  description: null,
+  scopeKind: "workspace",
+  isSystemDefault: true,
+  version: "1",
+  memberCount: 1,
+  grants: [],
+};
+
 const PROBE_INCIDENT: IncidentRow = {
   publicId: "tin_probe",
   kind: "hooks_removed",
@@ -521,22 +580,27 @@ export const RECORDED_PROBES = {
   getAgent: PROBE_SOURCES.map((s) =>
     toAgentDetail(s, null, s.definition ? [PROBE_ASSIGNMENT] : null),
   ),
-  toolbelt: toToolbelt(
-    PROBE_KEY,
-    [PROBE_ASSIGNMENT],
-    [
-      {
-        id: "rol_probe",
-        name: "Agent Operator",
-        description: null,
-        scopeKind: "workspace",
-        isSystemDefault: true,
-        version: "1",
-        memberCount: 1,
-        grants: [{ capability: "list_agent_defs", effect: "allow" }],
-      },
-    ],
-    () => null,
+  // As list_iam_roles returns the grant (no conditions), and as the seeded
+  // system agent roles hold it (a resourceScope ceiling in conditions_jsonb).
+  toolbelt: [undefined, { resourceScope: { graph: { mode: "extend" } } }].map(
+    (conditions) =>
+      toToolbelt(
+        PROBE_KEY,
+        [PROBE_ASSIGNMENT],
+        [
+          {
+            ...PROBE_ROLE,
+            grants: [
+              {
+                capability: "list_agent_defs",
+                effect: "allow",
+                ...(conditions ? { conditions } : {}),
+              },
+            ],
+          },
+        ],
+        () => null,
+      ),
   ),
   incidents: TACHO_INCIDENT_KINDS.map((kind) =>
     toIncident(PROBE_KEY, { ...PROBE_INCIDENT, kind }),

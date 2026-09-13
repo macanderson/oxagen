@@ -116,7 +116,8 @@ export const LIVE_READINESS: LiveReadiness = {
     rejectedPaths(z.array(AgentRow), RECORDED_PROBES.listAgents).length === 0,
   getAgent:
     rejectedPaths(z.array(AgentDetail), RECORDED_PROBES.getAgent).length === 0,
-  toolbelt: rejectedPaths(Toolbelt, RECORDED_PROBES.toolbelt).length === 0,
+  toolbelt:
+    rejectedPaths(z.array(Toolbelt), RECORDED_PROBES.toolbelt).length === 0,
   incidents:
     rejectedPaths(z.array(Incident), RECORDED_PROBES.incidents).length === 0,
 };
@@ -281,6 +282,9 @@ export function createLiveAgents(
       ]);
       if (!assignments.ok) return assignments;
       if (!roles.ok) return roles;
+      // list_iam_roles returns no grant conditions, so every entry's scope is
+      // unread (never null, which would claim no narrowing) and Toolbelt
+      // refuses it: this stays not-backed until conditions can be shown.
       return serve(
         Toolbelt,
         toToolbelt(key, assignments.value.roles, roles.value, (tool) =>

@@ -1,6 +1,5 @@
 import { TACHO_INCIDENT_KINDS } from "@oxagen/database/schema";
 import type { AgentRoleAssignmentRow } from "@oxagen/oxagen/contracts/agent.role.list";
-import type { IamRoleRow } from "@oxagen/oxagen/contracts/iam.role.list";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -26,6 +25,9 @@ import {
   toAgentStatus,
   toAvatar,
   toHarness,
+  type RecordedGrant,
+  type RecordedRole,
+  toBeltScope,
   toIncident,
   toToolbelt,
 } from "./agents";
@@ -131,8 +133,8 @@ const source = (over: Partial<AgentSource> = {}): AgentSource => ({
 const role = (
   id: string,
   name: string,
-  grants: IamRoleRow["grants"],
-): IamRoleRow => ({
+  grants: readonly RecordedGrant[],
+): RecordedRole => ({
   id,
   name,
   description: null,
@@ -418,12 +420,96 @@ describe("toToolbelt", () => {
     });
     expect(belt.entries[0]).toMatchObject({
       description: "List the agent definitions",
-      scope: null,
       pinned: null,
       meta: false,
       note: null,
     });
     expect(belt.entries[1]?.description).toBeNull();
+  });
+
+  // Seeded for the system agent roles (tools/scripts/seed-iam-defaults.ts).
+  const ceiling = { resourceScope: { graph: { mode: "read" } } };
+  const scopes = (belt: ReturnType<typeof toToolbelt>) =>
+    belt.entries.map((e) => [e.tool, e.decision, e.scope]);
+
+  it("never shows a grant whose conditions it did not read as unscoped", () => {
+    // list_iam_roles returns no conditions.
+    expect(scopes(toToolbelt("k", held, roles, describe_))).toEqual([
+      ["list_agent_defs", "allow", { unshown: "conditions_unread" }],
+      ["resolve_approval", "deny", { unshown: "conditions_unread" }],
+      [
+        "start_background_task",
+        "require_approval",
+        { unshown: "conditions_unread" },
+      ],
+    ]);
+  });
+
+  it("never shows a resource-scoped allow as an unscoped one", () => {
+    const belt = toToolbelt(
+      "k",
+      [ASSIGNMENT],
+      [
+        role("rol_781349a15fcd455e0b2743", "Agent Observer", [
+          {
+            capability: "list_agent_defs",
+            effect: "allow",
+            conditions: ceiling,
+          },
+        ]),
+      ],
+      describe_,
+    );
+    expect(scopes(belt)).toEqual([
+      ["list_agent_defs", "allow", { unshown: "resource_scope" }],
+    ]);
+    expect(
+      belt.entries.some((e) => e.decision === "allow" && e.scope === null),
+    ).toBe(false);
+  });
+
+  it("narrows every entry by a ceiling on any held grant, and none by a role not held", () => {
+    const withCeiling = (conditions: unknown) =>
+      toToolbelt(
+        "k",
+        held,
+        [
+          role("rol_781349a15fcd455e0b2743", "Agent Contributor", [
+            { capability: "list_agent_defs", effect: "allow", conditions: {} },
+          ]),
+          role("rol_operator", "Agent Operator", [
+            { capability: "execute_code", effect: "deny", conditions },
+          ]),
+          role("rol_not_held", "Agent Observer", [
+            { capability: "read_graph", effect: "allow", conditions: ceiling },
+          ]),
+        ],
+        describe_,
+      );
+    expect(scopes(withCeiling(ceiling))).toEqual([
+      ["execute_code", "deny", { unshown: "resource_scope" }],
+      ["list_agent_defs", "allow", { unshown: "resource_scope" }],
+    ]);
+    // Every held grant read, none narrowed: only then is a scope null.
+    expect(scopes(withCeiling(null))).toEqual([
+      ["execute_code", "deny", null],
+      ["list_agent_defs", "allow", null],
+    ]);
+  });
+
+  it("decides the belt scope from read conditions alone", () => {
+    const grant = { capability: "c", effect: "allow" } as const;
+    expect(toBeltScope([])).toBeNull();
+    expect(toBeltScope([{ ...grant, conditions: null }])).toBeNull();
+    expect(
+      toBeltScope([{ ...grant, conditions: { resourceScope: null } }]),
+    ).toBeNull();
+    expect(toBeltScope([{ ...grant, conditions: ceiling }])).toEqual({
+      unshown: "resource_scope",
+    });
+    expect(toBeltScope([{ ...grant, conditions: ceiling }, grant])).toEqual({
+      unshown: "conditions_unread",
+    });
   });
 });
 
@@ -558,17 +644,39 @@ describe("the view models against what the stores record", () => {
     ]).toEqual(expect.arrayContaining(rejected));
   });
 
-  it("Toolbelt refuses only unversioned agent tools and belt facts no store records", () => {
-    const rejected = rejectedPaths(Toolbelt, RECORDED_PROBES.toolbelt);
+  it("Toolbelt refuses only unversioned agent tools, a scope it cannot show and belt facts no store records", () => {
+    const rejected = rejectedPaths(z.array(Toolbelt), RECORDED_PROBES.toolbelt);
     expect([
       "mode",
       "entries.tool",
       "entries.description",
+      "entries.scope",
       "entries.pinned",
       "outside",
       "registryVersions",
       "fullBeltLimit",
     ]).toEqual(expect.arrayContaining(rejected));
+  });
+
+  it("Toolbelt stays refused while a grant's resource scope is unread or unshowable", () => {
+    // Relaxing every other field must not turn the belt live: the string scope
+    // cannot say "not read" or carry a resourceScope ceiling.
+    const Relaxed = Toolbelt.extend({
+      mode: z.enum(["full", "searchable"]).nullable(),
+      entries: z.array(
+        Toolbelt.shape.entries.element.extend({
+          tool: z.string(),
+          description: z.string().nullable(),
+          pinned: z.boolean().nullable(),
+        }),
+      ),
+      outside: Toolbelt.shape.outside.nullable(),
+      registryVersions: z.number().nullable(),
+      fullBeltLimit: z.number().nullable(),
+    });
+    expect(
+      RECORDED_PROBES.toolbelt.map((b) => rejectedPaths(Relaxed, b)),
+    ).toEqual([["entries.scope"], ["entries.scope"]]);
   });
 
   it("Incident refuses only collector kinds and the prose the collector does not write", () => {

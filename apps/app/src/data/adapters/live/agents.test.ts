@@ -373,7 +373,9 @@ beforeEach(() => {
 
 describe("LIVE_READINESS", () => {
   it("turns every served method live once the view models carry recorded nulls", () => {
-    expect(LIVE_READINESS).toEqual(READY);
+    // Except the toolbelt: a string scope cannot show an unread or
+    // resource-scoped grant, and null would claim no narrowing.
+    expect(LIVE_READINESS).toEqual({ ...READY, toolbelt: false });
   });
 });
 
@@ -618,7 +620,7 @@ describe("createLiveAgents.getAgent", () => {
 });
 
 describe("createLiveAgents.toolbelt", () => {
-  it("grants the belt from the roles the agent holds, paging list_iam_roles", async () => {
+  it("pages list_iam_roles, and refuses a belt whose grant conditions it could not read", async () => {
     const { stores, calls } = fakeStores(
       listing({
         list_agent_roles: [ASSIGNMENTS],
@@ -643,18 +645,14 @@ describe("createLiveAgents.toolbelt", () => {
       }),
     );
     const res = await createLiveAgents(stores, READY).toolbelt(SCOPE, KEY);
-    expect(res.ok && res.value.entries).toEqual([
-      {
-        tool: "list_agent_defs",
-        description: "List agents",
-        decision: "allow",
-        rule: "Agent Contributor",
-        scope: null,
-        pinned: null,
-        meta: false,
-        note: null,
-      },
-    ]);
+    // Forced live, the belt still never reaches the page: list_iam_roles
+    // returns no conditions, and an unread scope is not an unscoped allow.
+    expect(res).toEqual({
+      ok: false,
+      reason: "error",
+      code: "contract_output_mismatch",
+      status: 502,
+    });
     expect(
       calls.filter((c) => c.tool === "list_iam_roles").map((c) => c.input),
     ).toEqual([
