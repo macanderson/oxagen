@@ -1771,7 +1771,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -3199,14 +3199,14 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
     {
-      "name": "list_workspace_members",
+      "name": "list_members",
       "file": "workspace.member.list.ts",
-      "domain": "workspace",
+      "domain": "org",
       "mode": "sync",
       "surfaces": ["api", "mcp"],
       "layers": {

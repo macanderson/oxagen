@@ -171,6 +171,14 @@ jobs:
           # Three concurrent tasks bounds peak RSS while keeping the cores busy.
           pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
+      # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
+      # is reachable from a production entry and every dependency is imported.
+      # knip.json wires knip.preprocessor.ts, which applies the shrink-only
+      # apps/app/knip-baseline.json: a finding outside the baseline and a
+      # baseline entry knip no longer reports both fail this step.
+      - name: knip production mode (apps/app)
+        run: pnpm --filter @oxagen/app exec knip --production --strict
+
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders
 

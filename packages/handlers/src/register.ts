@@ -472,10 +472,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "list_workspace_members",
+    "list_members",
     async () =>
       (await import("./workspace.member.list"))
-        .workspaceMemberListHandler as CapabilityHandlerFn,
+        .listMembersHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_budget_policy",

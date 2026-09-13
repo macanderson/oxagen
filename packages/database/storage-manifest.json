@@ -1312,6 +1312,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "list_members",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_memories",
       "reads": [],
@@ -1490,16 +1500,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "list_workspace_members",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2530,7 +2530,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b7c6c8d00014acde011389d84d82cfd10c0fb366255fa299a79287c3859762b4",
+  "contentHash": "cfd99446c0b66f41c24ea236b9d4fd1e1a853ccbee68aa44db1178183b3ad209",
   "domains": [
     {
       "name": "agent",
