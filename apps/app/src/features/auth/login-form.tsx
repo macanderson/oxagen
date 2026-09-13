@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { signInFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveSignIn, rememberPendingNext } from "./client-auth";
@@ -14,6 +14,7 @@ import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
 import { Field, PasswordField } from "./ui/field";
 import { FormAlert, SubmitButton } from "./ui/feedback";
 import { linkText, panel } from "./ui/styles";
+import { formText } from "./form-text";
 
 export type LoginFormProps = {
   next: string;
@@ -32,13 +33,13 @@ export function LoginForm({
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(initialOutcome);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
     const input = {
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
+      email: formText(form, "email"),
+      password: formText(form, "password"),
       rememberMe: form.get("rememberMe") === "on",
     };
     const parsed = LoginSchema.safeParse(input);
@@ -102,7 +103,7 @@ export function LoginForm({
         autoComplete="username"
         inputMode="email"
         label={t("fields.email")}
-        error={errors.email ? t(`errors.${errors.email}` as never) : undefined}
+        error={errors.email ? t(`errors.${errors.email}`) : undefined}
       />
       <PasswordField
         id="login-password"
@@ -116,9 +117,7 @@ export function LoginForm({
             {t("login.forgot")}
           </Link>
         }
-        error={
-          errors.password ? t(`errors.${errors.password}` as never) : undefined
-        }
+        error={errors.password ? t(`errors.${errors.password}`) : undefined}
       />
       <label className="flex items-start gap-2.5 text-sm text-foreground">
         <input

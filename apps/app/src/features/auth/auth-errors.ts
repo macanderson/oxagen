@@ -41,7 +41,7 @@ const BY_CODE: ReadonlyArray<readonly [RegExp, AuthOutcomeKey]> = [
 
 function readError(err: unknown): AuthErrorLike | null {
   if (err === null || typeof err !== "object") return null;
-  return err as AuthErrorLike;
+  return err;
 }
 
 /** The catalog key for a Better Auth failure. */

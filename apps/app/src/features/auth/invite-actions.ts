@@ -35,7 +35,7 @@ async function decide(
     getAuthUser(),
   ]);
   if (!read.ok) return { ok: false, reason: "not_found" };
-  const verdict = decideInvitation(read.value, user?.email ?? null, new Date());
+  const verdict = decideInvitation(read.value, user?.email ?? null);
   if (verdict.kind === "closed") return { ok: false, reason: "closed" };
   if (verdict.kind === "sign-in" || !user)
     return { ok: false, reason: "sign_in" };

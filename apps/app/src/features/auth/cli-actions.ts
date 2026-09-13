@@ -91,6 +91,8 @@ export async function approveCliAuth(
   );
 }
 
+// Server actions must be async functions even when, like this one, they await nothing.
+// eslint-disable-next-line @typescript-eslint/require-await -- a "use server" export has to be async
 export async function cancelCliAuth(
   _prev: CliActionState,
   form: FormData,

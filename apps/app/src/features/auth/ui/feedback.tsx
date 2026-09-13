@@ -31,17 +31,19 @@ export function SubmitButton({
   label,
   pendingLabel,
   className,
+  fullWidth = true,
 }: {
   pending: boolean;
   label: string;
   pendingLabel: string;
   className?: string;
+  fullWidth?: boolean;
 }) {
   return (
     <button
       type="submit"
       aria-disabled={pending || undefined}
-      className={`${buttonPrimary} w-full ${className ?? ""}`}
+      className={`${buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >
       {pending ? (
         <>

@@ -2,7 +2,7 @@
 // wrong account, closed, not found. Server Component; the buttons are the
 // InviteDecision island.
 import Link from "next/link";
-import type { Route } from "next";
+
 import { getFormatter, getTranslations } from "next-intl/server";
 import type { InvitationDecision, InvitationView } from "./invitation";
 import { InviteDecision } from "./invite-decision";
@@ -66,10 +66,7 @@ export async function InvitationBody({
         testId="invite-wrong-account"
         title={t("wrongAccountTitle")}
         actions={
-          <Link
-            href={withNext("/login", here) as Route}
-            className={buttonSecondary}
-          >
+          <Link href={withNext("/login", here)} className={buttonSecondary}>
             {t("logInAsOther")}
           </Link>
         }
@@ -128,16 +125,10 @@ export async function InvitationBody({
             {t("signInLead", { email: invitation.email })}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={withNext("/login", here) as Route}
-              className={buttonPrimary}
-            >
+            <Link href={withNext("/login", here)} className={buttonPrimary}>
               {t("logIn")}
             </Link>
-            <Link
-              href={withNext("/signup", here) as Route}
-              className={buttonSecondary}
-            >
+            <Link href={withNext("/signup", here)} className={buttonSecondary}>
               {t("signUp")}
             </Link>
           </div>
@@ -146,7 +137,7 @@ export async function InvitationBody({
       {decision.kind === "accept" ? (
         <p className="text-xs text-muted-foreground">
           {t("signedInAs", { email: invitation.email })} ·{" "}
-          <Link href={withNext("/login", here) as Route} className={linkText}>
+          <Link href={withNext("/login", here)} className={linkText}>
             {t("notYou")}
           </Link>
         </p>

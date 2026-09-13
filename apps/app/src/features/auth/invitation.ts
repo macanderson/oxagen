@@ -55,7 +55,7 @@ export type InvitationDecision =
 export function decideInvitation(
   invitation: InvitationView,
   viewerEmail: string | null,
-  now: Date,
+  now: Date = new Date(),
 ): InvitationDecision {
   if (invitation.status !== "pending")
     return { kind: "closed", status: invitation.status };

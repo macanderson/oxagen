@@ -3,7 +3,7 @@
 // mc-baseline-w1). The request never says whether an account exists.
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { requestPasswordReset, resetPassword } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
@@ -16,6 +16,7 @@ import {
 import { Field, PasswordField } from "./ui/field";
 import { FormAlert, OutcomePanel, SubmitButton } from "./ui/feedback";
 import { buttonPrimary, buttonSecondary, panel } from "./ui/styles";
+import { formText } from "./form-text";
 
 export function ForgotPasswordForm() {
   const t = useTranslations("auth");
@@ -24,11 +25,11 @@ export function ForgotPasswordForm() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const parsed = ForgotPasswordSchema.safeParse({
-      email: String(new FormData(event.currentTarget).get("email") ?? ""),
+      email: formText(new FormData(event.currentTarget), "email"),
     });
     setOutcome(null);
     if (!parsed.success) {
@@ -108,14 +109,14 @@ export function ResetPasswordForm({ token }: { token: string }) {
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
     const parsed = ResetPasswordSchema.safeParse({
       token,
-      newPassword: String(form.get("newPassword") ?? ""),
-      confirmPassword: String(form.get("confirmPassword") ?? ""),
+      newPassword: formText(form, "newPassword"),
+      confirmPassword: formText(form, "confirmPassword"),
     });
     setOutcome(null);
     if (!parsed.success) {

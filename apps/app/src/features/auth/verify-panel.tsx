@@ -4,12 +4,13 @@
 // the screen says where the link went and offers a resend. The reply to a
 // resend never reveals whether an account is waiting.
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { resendVerification } from "./actions";
 import { ResendVerificationSchema, fieldErrors } from "./schemas";
 import { Field } from "./ui/field";
 import { FormAlert, SubmitButton } from "./ui/feedback";
 import { panel } from "./ui/styles";
+import { formText } from "./form-text";
 
 export function VerifyPanel({
   email,
@@ -25,11 +26,11 @@ export function VerifyPanel({
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const parsed = ResendVerificationSchema.safeParse({
-      email: String(new FormData(event.currentTarget).get("email") ?? ""),
+      email: formText(new FormData(event.currentTarget), "email"),
     });
     setSent(false);
     if (!parsed.success) {

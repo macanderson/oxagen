@@ -1,6 +1,6 @@
 "use client";
 // Accept or decline, for the invited account (mockup `obInvite` @ mc-baseline-w1).
-import type { Route } from "next";
+
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -45,7 +45,7 @@ export function InviteDecision({
         setDeclined(true);
         return;
       }
-      router.replace(result.to as Route);
+      router.replace(result.to);
       router.refresh();
     } catch {
       setFailure("failed");

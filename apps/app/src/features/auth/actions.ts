@@ -67,12 +67,13 @@ export async function signUpFixture(input: {
   name: string;
   email: string;
   password: string;
+  next?: string;
 }): Promise<AuthActionResult> {
   if (!isFixtureMode()) return REFUSED;
   const parsed = SignupSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fields: fieldErrors(parsed.error) };
   await setFixtureSession();
-  return { ok: true, to: AFTER_SIGNUP };
+  return { ok: true, to: sanitizeNext(input.next, AFTER_SIGNUP) };
 }
 
 export async function verifyTwoFactorFixture(input: {

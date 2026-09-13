@@ -2,10 +2,10 @@
 // The sign-in second factor (mockup `obTwoFactor` @ mc-baseline-w1). Reached
 // holding only Better Auth's short-lived two-factor cookie, so the route is
 // public. An authenticator code or a single-use recovery code completes sign-in.
-import type { Route } from "next";
+
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { verifyTwoFactorFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveVerifyTwoFactor, takePendingNext } from "./client-auth";
@@ -14,6 +14,7 @@ import { TwoFactorSchema, fieldErrors } from "./schemas";
 import { Field } from "./ui/field";
 import { FormAlert, SubmitButton } from "./ui/feedback";
 import { linkText, panel } from "./ui/styles";
+import { formText } from "./form-text";
 
 type Method = "totp" | "backup";
 
@@ -31,13 +32,13 @@ export function TwoFactorForm({
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
     const parsed = TwoFactorSchema.safeParse({
       method,
-      code: String(form.get("code") ?? ""),
+      code: formText(form, "code"),
     });
     setOutcome(null);
     if (!parsed.success) {
@@ -57,7 +58,7 @@ export function TwoFactorForm({
         setOutcome(result.outcome ?? "codeWrong");
         return;
       }
-      router.replace(("to" in result ? result.to : destination) as Route);
+      router.replace("to" in result ? result.to : destination);
       router.refresh();
     } catch {
       setOutcome("unavailable");

@@ -55,11 +55,10 @@ export async function liveVerifyTwoFactor(input: {
   code: string;
 }): Promise<ClientAuthResult> {
   const c = await client();
-  const reply = (
+  const reply =
     input.method === "totp"
       ? await c.twoFactor.verifyTotp({ code: input.code })
-      : await c.twoFactor.verifyBackupCode({ code: input.code })
-  ) as BetterAuthReply;
+      : await c.twoFactor.verifyBackupCode({ code: input.code });
   return fail(reply) ?? { ok: true };
 }
 

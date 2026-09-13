@@ -2,14 +2,15 @@
 // Create an account (mockup `obSignup` @ mc-baseline-w1). A new account goes to
 // email verification when the deployment requires it, otherwise straight into
 // the onboarding gate.
-import type { Route } from "next";
+
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import { signUpFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveSignUp } from "./client-auth";
 import { AFTER_SIGNUP } from "./routes";
+import { withNext } from "./safe-next";
 import {
   type FieldErrors,
   PASSWORD_MIN,
@@ -19,24 +20,31 @@ import {
 import { Field, PasswordField } from "./ui/field";
 import { FormAlert, SubmitButton } from "./ui/feedback";
 import { panel } from "./ui/styles";
+import { formText } from "./form-text";
 
 type SignupField = "name" | "email" | "password";
 
-export function SignupForm({ fixture }: { fixture: boolean }) {
+export function SignupForm({
+  fixture,
+  next = AFTER_SIGNUP,
+}: {
+  fixture: boolean;
+  next?: string;
+}) {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errors, setErrors] = useState<FieldErrors<SignupField>>({});
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
     const parsed = SignupSchema.safeParse({
-      name: String(form.get("name") ?? ""),
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
+      name: formText(form, "name"),
+      email: formText(form, "email"),
+      password: formText(form, "password"),
     });
     setOutcome(null);
     if (!parsed.success) {
@@ -47,13 +55,13 @@ export function SignupForm({ fixture }: { fixture: boolean }) {
     setPending(true);
     try {
       if (fixture) {
-        const result = await signUpFixture(parsed.data);
+        const result = await signUpFixture({ ...parsed.data, next });
         if (!result.ok) {
           setErrors(result.fields ?? {});
           setOutcome(result.outcome ?? null);
           return;
         }
-        router.replace(result.to as Route);
+        router.replace(result.to);
         router.refresh();
         return;
       }
@@ -63,9 +71,12 @@ export function SignupForm({ fixture }: { fixture: boolean }) {
         return;
       }
       router.replace(
-        (result.needsVerification
-          ? `/verify?email=${encodeURIComponent(parsed.data.email)}`
-          : AFTER_SIGNUP) as Route,
+        result.needsVerification
+          ? withNext(
+              `/verify?email=${encodeURIComponent(parsed.data.email)}`,
+              next,
+            )
+          : next,
       );
       router.refresh();
     } catch {
