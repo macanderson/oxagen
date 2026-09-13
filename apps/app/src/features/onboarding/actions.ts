@@ -52,6 +52,10 @@ export async function createOrganizationAction(
     return { ok: true, to: wrapStep(result.orgSlug, result.workspaceSlug) };
   if (result.error === "slugTaken")
     return { ok: false, fields: { slug: "slugTaken" } };
+  if (result.error === "slugReserved")
+    return { ok: false, fields: { slug: "slugReserved" } };
+  if (result.error === "workspaceSlugReserved")
+    return { ok: false, fields: { workspaceSlug: "workspaceSlugReserved" } };
   if (result.error === "namespaceTaken")
     return { ok: false, fields: { namespace: "namespaceTaken" } };
   if (result.error === "invalid")

@@ -137,6 +137,15 @@ describe("createOrganizationAction", () => {
     });
   });
 
+  it("refuses an organization address that is a top-level route", async () => {
+    mode("fixture");
+    for (const slug of ["welcome", "login", "api"])
+      expect(await createOrganizationAction({ ...form, slug })).toEqual({
+        ok: false,
+        fields: { slug: "slugReserved" },
+      });
+  });
+
   it("fixture · moves on to wrap in the fixture org, writing nothing", async () => {
     mode("fixture");
     expect(await createOrganizationAction(form)).toEqual({
@@ -184,6 +193,22 @@ describe("createOrganizationAction", () => {
 });
 
 describe("createOrganization", () => {
+  it("re-checks reserved addresses before any write, so a crafted call cannot skip the form", async () => {
+    mode("live");
+    for (const slug of ["welcome", "login", "api"])
+      expect(await createOrganization("u-owner", { ...form, slug })).toEqual({
+        ok: false,
+        error: "slugReserved",
+      });
+    expect(
+      await createOrganization("u-owner", {
+        ...form,
+        workspaceSlug: "billing",
+      }),
+    ).toEqual({ ok: false, error: "workspaceSlugReserved" });
+    expect(inserted).toHaveLength(0);
+  });
+
   it("writes the org with the chosen namespace, both owner memberships and the workspace, then bootstraps IAM and agents", async () => {
     mode("live");
     const result = await createOrganization("u-owner", form);

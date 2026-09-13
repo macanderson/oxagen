@@ -3,6 +3,7 @@
 import { z } from "zod";
 import {
   NAMESPACE_PATTERN,
+  RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
   SLUG_PATTERN,
 } from "./agent-key";
@@ -11,6 +12,7 @@ export type OrgFormErrorKey =
   | "orgNameRequired"
   | "orgNameTooLong"
   | "slugInvalid"
+  | "slugReserved"
   | "namespaceInvalid"
   | "workspaceNameRequired"
   | "workspaceNameTooLong"
@@ -33,7 +35,9 @@ export const OrganizationForm = z.object({
     .trim()
     .min(1, { error: "orgNameRequired" })
     .max(120, { error: "orgNameTooLong" }),
-  slug: slug("slugInvalid"),
+  slug: slug("slugInvalid").refine((s) => !RESERVED_ORG_SLUGS.has(s), {
+    error: "slugReserved",
+  }),
   namespace: z
     .string()
     .trim()

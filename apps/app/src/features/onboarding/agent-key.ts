@@ -27,6 +27,49 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "workspaces",
 ]);
 
+/**
+ * Top-level route segments an organization slug may not take: an org at `/{slug}`
+ * would lose its root page or its workspaces to the route that owns the segment
+ * (`/welcome/core` is a gate step, `/invite/core` an invitation token). The set
+ * covers every top-level segment of `src/app` (sign-in flows, the onboarding
+ * gate, the CLI and GitHub callbacks, the API), the legacy root routes of
+ * apps/app_deprecated that cutover redirects may claim (`account`, `actions`,
+ * `onboarding`), and the static and metadata paths the proxy matcher skips. Promote: the `create_org` contract
+ * should refuse the same set (B4).
+ */
+export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
+  // sign-in flows and invitations
+  "login",
+  "signup",
+  "verify",
+  "two-factor",
+  "forgot-password",
+  "reset-password",
+  "invite",
+  // onboarding gate
+  "welcome",
+  "new-organization",
+  // callbacks and API
+  "api",
+  "cli",
+  "github",
+  // legacy root routes of apps/app_deprecated
+  "account",
+  "actions",
+  "onboarding",
+  // Next internals, static assets and metadata routes the proxy skips
+  "_next",
+  "brand",
+  "favicon",
+  "fonts",
+  "manifest",
+  "pwa",
+  "robots",
+  "sitemap",
+  "social",
+  "spinner",
+]);
+
 /** Lowercase, hyphen-separated, trimmed of edge hyphens, at most `max` characters. */
 export function toSlug(input: string, max = 40): string {
   return input

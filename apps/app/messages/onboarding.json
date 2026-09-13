@@ -27,6 +27,7 @@
       "orgNameRequired": "Enter the organization's name.",
       "orgNameTooLong": "Use at most 120 characters.",
       "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "slugReserved": "That address is used by an Oxagen page. Pick another.",
       "namespaceInvalid": "Use 2–6 lowercase letters or digits.",
       "workspaceNameRequired": "Enter a name for the first workspace.",
       "workspaceNameTooLong": "Use at most 80 characters.",
