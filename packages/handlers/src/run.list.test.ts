@@ -340,6 +340,45 @@ describe("list_runs", () => {
     expect(new Set(seen).size).toBe(6);
   });
 
+  it("pages on when one store alone overflows the limit and the other is empty", async () => {
+    // Three rows in one store, limit 2: the merge holds exactly `limit` items,
+    // so only the store's own overflow can say a second page exists.
+    const ledger = [0, 1, 2].map((i) =>
+      ledgerRun({
+        publicId: `arun_${i}`,
+        runId: `0192d4a8-7c1e-7a00-8000-0000000000b${i}`,
+        run: {
+          runId: `0192d4a8-7c1e-7a00-8000-0000000000b${i}`,
+          publicId: `arun_${i}`,
+          status: "completed",
+          createdAt: at("2026-09-11T10:00:00.000Z"),
+          startedAt: at(`2026-09-11T10:0${i}:00.000Z`),
+        },
+      }),
+    );
+    const tacho = [0, 1, 2].map((i) =>
+      tachoSession({
+        publicId: `tse_${i}`,
+        session: { startedAt: at(`2026-09-11T10:0${i}:00.000Z`) },
+      }),
+    );
+    const cases = [
+      { stores: handlerOver(ledger, []), ids: ["arun_2", "arun_1", "arun_0"] },
+      { stores: handlerOver([], tacho), ids: ["tse_2", "tse_1", "tse_0"] },
+    ];
+    for (const { stores, ids } of cases) {
+      const first = await stores.list({ limit: 2 }, ctx());
+      expect(first.runs.map((r) => r.id)).toEqual(ids.slice(0, 2));
+      expect(first.nextCursor).not.toBeNull();
+      const second = await stores.list(
+        { limit: 2, cursor: first.nextCursor as string },
+        ctx(),
+      );
+      expect(second.runs.map((r) => r.id)).toEqual(ids.slice(2));
+      expect(second.nextCursor).toBeNull();
+    }
+  });
+
   it("refuses a cursor it did not write as invalid_input (negative)", async () => {
     const { list } = handlerOver([], []);
     for (const cursor of [
