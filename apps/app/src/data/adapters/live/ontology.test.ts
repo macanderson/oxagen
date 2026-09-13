@@ -81,13 +81,15 @@ const SCOPE = {
 const USER = "0192d4a8-7c1e-7a00-8000-0000000000ab";
 const GITHUB_ID = "0192d4a8-7c1e-7a00-8000-0000000c0001";
 const LINEAR_ID = "0192d4a8-7c1e-7a00-8000-0000000c0002";
+const GITHUB_PUBLIC = "con_01K5RSGH7Q";
+const LINEAR_PUBLIC = "con_01K5RSLN2B";
 
 type Connection = ConnectionListOutput["connections"][number];
 
 function connection(overrides: Partial<Connection>): Connection {
   return {
     id: GITHUB_ID,
-    publicId: "con_01K5RSGH7Q",
+    publicId: GITHUB_PUBLIC,
     connectorId: "github",
     displayName: "GitHub · acme/platform",
     authScheme: "github_app",
@@ -104,7 +106,7 @@ function connection(overrides: Partial<Connection>): Connection {
 }
 
 const MAPPINGS: Record<string, ConnectionMappingsGetOutput["mappings"]> = {
-  [GITHUB_ID]: [
+  [GITHUB_PUBLIC]: [
     {
       id: "etm-1",
       sourceRecordType: "pull_request",
@@ -115,7 +117,7 @@ const MAPPINGS: Record<string, ConnectionMappingsGetOutput["mappings"]> = {
       updatedAt: "2026-09-01T10:00:00.000Z",
     },
   ],
-  [LINEAR_ID]: [],
+  [LINEAR_PUBLIC]: [],
 };
 
 type Call = { contract: string; input: unknown; userId: string };
@@ -159,6 +161,7 @@ describe("liveOntology.sources", () => {
       connection({}),
       connection({
         id: LINEAR_ID,
+        publicId: LINEAR_PUBLIC,
         connectorId: "linear",
         displayName: "Linear · Platform",
         status: "paused",
@@ -191,17 +194,18 @@ describe("liveOntology.sources", () => {
         },
       ],
     });
-    // Mappings are read only for the listed sources, always as the viewer.
+    // Mappings are read only for the listed sources, by public id (the handler
+    // matches nothing else), always as the viewer.
     expect(calls).toEqual([
       { contract: "list_connections", input: {}, userId: USER },
       {
         contract: "get_connection_mappings",
-        input: { connectionId: GITHUB_ID },
+        input: { connectionId: GITHUB_PUBLIC },
         userId: USER,
       },
       {
         contract: "get_connection_mappings",
-        input: { connectionId: LINEAR_ID },
+        input: { connectionId: LINEAR_PUBLIC },
         userId: USER,
       },
     ]);

@@ -106,7 +106,9 @@ export function createLiveOntology(deps: OntologyLiveDeps): OntologyReadPort {
                 scope,
                 userId,
                 contract: connectionMappingsGet,
-                input: { connectionId: connection.id },
+                // The public id: get_connection_mappings matches
+                // source_connections.public_id only, whatever its contract says.
+                input: { connectionId: connection.publicId },
               });
               return toSource({
                 connection,
