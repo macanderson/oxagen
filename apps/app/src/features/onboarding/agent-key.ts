@@ -4,7 +4,10 @@
 //              the live `organizations_namespace_check`)
 //   slug:      lowercase letters, digits and hyphens (the `create_org` contract)
 import { z } from "zod";
-import { type SdkLanguage } from "./steps";
+import type { SdkLanguage } from "./steps";
+
+/** The variable an SDK agent reads its credential from (spec §7.2). */
+export const AGENT_TOKEN_ENV = "OXAGEN_AGENT_TOKEN";
 
 export const NAMESPACE_PATTERN = /^[a-z0-9]{2,6}$/;
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -71,7 +74,7 @@ export function sdkSnippet(language: SdkLanguage, key: string): SdkSnippet {
           'import { oxagen } from "@oxagen/sdk";',
           "const agent = oxagen.agent.wrap({",
           `  key: ${quoted},`,
-          "  token: process.env.OXAGEN_AGENT_TOKEN,",
+          `  token: process.env.${AGENT_TOKEN_ENV},`,
           "});",
         ].join("\n"),
       };
@@ -82,7 +85,7 @@ export function sdkSnippet(language: SdkLanguage, key: string): SdkSnippet {
           "from oxagen import oxagen",
           "agent = oxagen.agent.wrap(",
           `    key=${quoted},`,
-          '    token=os.environ["OXAGEN_AGENT_TOKEN"],',
+          `    token=os.environ["${AGENT_TOKEN_ENV}"],`,
           ")",
         ].join("\n"),
       };
@@ -93,7 +96,7 @@ export function sdkSnippet(language: SdkLanguage, key: string): SdkSnippet {
           'import "github.com/oxagen/oxagen-go"',
           "agent := oxagen.Agent.Wrap(oxagen.WrapOptions{",
           `    Key:   ${quoted},`,
-          '    Token: os.Getenv("OXAGEN_AGENT_TOKEN"),',
+          `    Token: os.Getenv("${AGENT_TOKEN_ENV}"),`,
           "})",
         ].join("\n"),
       };
