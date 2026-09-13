@@ -3,7 +3,7 @@
 // the error is announced through aria-describedby and marks the input invalid.
 import { Eye, EyeOff } from "lucide-react";
 import { type InputHTMLAttributes, type ReactNode, useState } from "react";
-import { inputBase } from "./styles";
+import { inputBase } from "./control-styles";
 
 export type FieldProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
@@ -59,7 +59,7 @@ export function Field({
         ) : null}
       </div>
       {error ? (
-        <p id={errorId} className="text-sm text-destructive">
+        <p id={errorId} className="text-sm text-error-ink">
           {error}
         </p>
       ) : null}

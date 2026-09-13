@@ -1,12 +1,13 @@
-// The frame every sign-in screen sits in (mockup `obShell` @ mc-baseline-w1):
-// the brand on the top bar, a faint gold wash, and one centred column.
+// The frame every sign-in and onboarding screen sits in (mockup `obShell` @
+// mc-baseline-w1): the brand on the top bar, a faint gold wash, and one centred
+// column.
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
-import { eyebrow } from "./styles";
+import { eyebrow } from "./control-styles";
 
 export async function Brandmark() {
-  const t = await getTranslations("auth.shell");
+  const t = await getTranslations("ui.brand");
   return (
     <Link
       href="/"
@@ -14,7 +15,7 @@ export async function Brandmark() {
       className="inline-flex items-center gap-2 rounded-md text-lg font-semibold tracking-tight text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
     >
       <span aria-hidden className="size-5 rounded-[5px] bg-brand" />
-      <span aria-hidden>{t("brand")}</span>
+      <span aria-hidden>{t("name")}</span>
     </Link>
   );
 }

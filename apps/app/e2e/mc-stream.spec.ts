@@ -3,11 +3,13 @@
 //
 // Fixture tenancy (src/server/fixture-tenancy.ts): the fixture operator belongs
 // to acme / core-platform, not to acme / finops; acme-robotics and platform are
-// historical slugs. Until a data source provides feeds, the route streams the
-// honest not-backed state for each (G6 frames, G3 fleet).
-import { expect, test } from "./support";
+// historical slugs. Run frames come from `dataSource().runs.framesSince`, so the
+// fixture streams the seeded run's frames; the fleet feed answers G3 until a
+// port reads patches by cursor.
+import { expect, setPageState, test } from "./support";
 
 const stream = "/api/mc/acme/core-platform/stream";
+const SEEDED_RUN = "run_01K5RS7M2E8FJ3QW";
 
 test.describe("mc stream route", () => {
   test("a signed-out request never reaches the stream", async ({
@@ -22,7 +24,47 @@ test.describe("mc stream route", () => {
     await anon.dispose();
   });
 
-  test("streams a run's frames as SSE, ending in the not-backed state", async ({
+  test("streams a seeded run's frames as SSE events, each with its seq as the id", async ({
+    signedInPage: page,
+  }) => {
+    // A live stream stays open, so read it the way the Run page does: an
+    // EventSource in the browser, closed once a few frames have arrived.
+    await page.goto("/acme/core-platform");
+    const frames = await page.evaluate(
+      (url) =>
+        new Promise<Array<{ id: string; seq: string; kind: string }>>(
+          (resolve, reject) => {
+            const seen: Array<{ id: string; seq: string; kind: string }> = [];
+            const source = new EventSource(url);
+            const timer = setTimeout(() => {
+              source.close();
+              reject(new Error(`only ${String(seen.length)} frames arrived`));
+            }, 15_000);
+            source.addEventListener("frame", (event) => {
+              const message = event as MessageEvent<string>;
+              const frame = JSON.parse(message.data) as {
+                seq: string;
+                kind: string;
+              };
+              seen.push({ id: message.lastEventId, ...frame });
+              if (seen.length === 3) {
+                clearTimeout(timer);
+                source.close();
+                resolve(seen);
+              }
+            });
+          },
+        ),
+      `${stream}?run=${SEEDED_RUN}&after=0`,
+    );
+    expect(frames).toHaveLength(3);
+    for (const frame of frames) expect(frame.id).toBe(frame.seq);
+    const seqs = frames.map((f) => Number(f.seq));
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(seqs[0]).toBeGreaterThan(0);
+  });
+
+  test("an unknown run streams its not-found state and closes, never an empty stream", async ({
     signedInPage: page,
   }) => {
     const res = await page.request.get(`${stream}?run=arun_01&after=0`);
@@ -32,8 +74,25 @@ test.describe("mc stream route", () => {
     const body = await res.text();
     expect(body).toContain("retry: 3000");
     expect(body).toContain("event: state");
+    expect(body).toContain('"code":"run_not_found"');
+  });
+
+  test("a run page in its not_backed state streams that state and closes", async ({
+    signedInPage: page,
+    context,
+    baseURL,
+  }) => {
+    await setPageState(
+      context,
+      baseURL ?? "http://localhost:3000",
+      "not_backed",
+      "run",
+    );
+    const res = await page.request.get(`${stream}?run=${SEEDED_RUN}&after=0`);
+    expect(res.status()).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("event: state");
     expect(body).toContain('"reason":"not_backed"');
-    expect(body).toContain('"gap":"G6"');
   });
 
   test("streams fleet patches when no run is named", async ({

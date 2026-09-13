@@ -4,7 +4,7 @@
 // mode: there is no provider to round-trip through.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonSecondary } from "./styles";
+import { buttonSecondary } from "@/ui/control-styles";
 
 type Provider = "google" | "github";
 

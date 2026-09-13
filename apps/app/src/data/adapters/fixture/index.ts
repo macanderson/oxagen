@@ -8,6 +8,8 @@
 import { backingOf, notBackedFor } from "@/data/backing";
 import type {
   ApprovalItem,
+  CommandRun,
+  FirstFrameScript,
   Finding,
   Frame,
   RunDetail,
@@ -16,19 +18,29 @@ import type {
   SpendDrill,
   SpendSlice,
   SpendSummary,
+  ShellContext,
   WasteReport,
 } from "@/data/contracts";
 import { FIXTURE_TENANT, fixtureWorkspaceSlug } from "@/data/fixture-tenant";
 import { type Read, denied, readError, readOk } from "@/data/not-backed";
-import { PAGE_FAILURES } from "@/data/page-states";
-import type { DataSource, MethodName, PortName } from "@/data/ports";
+import { PAGE_FAILURES, type PageKey } from "@/data/page-states";
+import type {
+  DataSource,
+  MethodName,
+  OnboardingFlow,
+  PortName,
+} from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
+import { FIXTURE_USER } from "@/server/fixture-session";
 import { seed as defaultSeed } from "./seed";
 import type { Seed } from "./seed-schema";
 import {
+  DEFAULT_SHELL_SWITCHES,
   NO_STATE_SWITCH,
+  type ShellSwitches,
   isStateSwitchHonoured,
   parseStateSwitch,
+  readShellSwitchCookies,
   readStateCookie,
   stateFor,
 } from "./state";
@@ -37,6 +49,13 @@ export type FixtureOptions = {
   seed: Seed;
   /** The raw `mc_state` cookie for the current request. */
   readState: () => Promise<string | undefined>;
+  /** The shell's finer switches (`mc_shell_engine`, `mc_shell_notifications`); defaults when omitted. */
+  readShellSwitches?: () => Promise<ShellSwitches>;
+  /**
+   * Whether the switches apply. Defaults to fixture mode outside production
+   * (`isStateSwitchHonoured`); unit tests and stories that build a source pin it.
+   */
+  honourSwitches?: boolean;
   /** How long the `loading` state holds a read before it resolves loaded. */
   loadingMs: number;
   sleep: (ms: number) => Promise<void>;
@@ -57,6 +76,28 @@ const EMPTY_GRAPH: RunGraph = {
 
 const notFound = (what: string) => readError(`${what}_not_found`, 404);
 
+/** How many recent runs the command menu offers. */
+const RECENT_RUNS = 5;
+
+const flowPage = (flow: OnboardingFlow): PageKey =>
+  flow === "gate" ? "welcome" : "register";
+
+/** The gate's scripted first frame, for the agent being wrapped. */
+export function firstFrameFor(
+  template: FirstFrameScript,
+  q: { agentKey: string; harness: string; operator: string },
+): FirstFrameScript {
+  const fill = (body: string) =>
+    body
+      .replaceAll("{harness}", q.harness)
+      .replaceAll("{agentKey}", q.agentKey)
+      .replaceAll("{operator}", q.operator);
+  return {
+    ...template,
+    frames: template.frames.map((f) => ({ ...f, body: fill(f.body) })),
+  };
+}
+
 function toRow(run: RunDetail): RunRow {
   const {
     model: _model,
@@ -72,6 +113,7 @@ function toRow(run: RunDetail): RunRow {
 
 export function createFixtureSource(options: FixtureOptions): DataSource {
   const { seed } = options;
+  const honoured = () => options.honourSwitches ?? isStateSwitchHonoured();
 
   async function read<P extends PortName, T>(
     port: P,
@@ -79,9 +121,11 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
     loaded: () => Read<T> | Promise<Read<T>>,
     /** Omitted for reads whose page has no empty state (§19): `empty` then reads loaded. */
     empty?: () => T,
+    /** The page reading, when one method serves two (the gate and Register). */
+    pageOverride?: PageKey,
   ): Promise<Read<T>> {
-    const { page } = backingOf(port, method);
-    const switches = isStateSwitchHonoured()
+    const page = pageOverride ?? backingOf(port, method).page;
+    const switches = honoured()
       ? parseStateSwitch(await options.readState())
       : NO_STATE_SWITCH;
     switch (stateFor(switches, page)) {
@@ -162,6 +206,82 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
       ).toISOString(),
     };
   };
+
+  const shellSwitches = (): Promise<ShellSwitches> =>
+    honoured() && options.readShellSwitches
+      ? options.readShellSwitches()
+      : Promise.resolve(DEFAULT_SHELL_SWITCHES);
+
+  const workspacesIn = (scope: Scope) =>
+    seed.workspaces.filter((w) => inScope(scope, w.slug));
+
+  const shellContext = (scope: Scope): ShellContext => {
+    const { organization } = seed;
+    const plan =
+      organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1);
+    const postgres = seed.dataPlanes.find((p) => p.store === "postgres");
+    return {
+      viewer: { ...FIXTURE_USER },
+      org: {
+        slug: organization.slug,
+        name: organization.name,
+        plan,
+        dataPlane: postgres?.mode ?? "shared",
+        region: organization.region,
+      },
+      orgs: [{ slug: organization.slug, name: organization.name, plan }],
+      workspaces: workspacesIn(scope).map((w) => ({
+        slug: w.slug,
+        name: w.name,
+        mainRepo: w.mainRepo,
+        productionBranch: w.productionBranch,
+        agentCount: w.agentCount,
+      })),
+    };
+  };
+
+  /** What each workspace's pages would list: pending approvals, open Context PRs, open incidents. */
+  const navCounts = (scope: Scope) =>
+    Object.fromEntries(
+      workspacesIn(scope).map((w) => {
+        const agentsHere = new Set(
+          seed.agents
+            .filter((a) => a.workspaceSlug === w.slug)
+            .map((a) => a.key),
+        );
+        return [
+          w.slug,
+          {
+            pendingApprovals: seed.approvals.filter(
+              (a) => a.workspaceSlug === w.slug && a.status === "pending",
+            ).length,
+            agents: w.agentCount,
+            // Steering reads are not workspace-filtered in the seed, so the
+            // count is what every workspace's Steering page shows.
+            openProposals: seed.proposals.filter(
+              (p) => p.state === "open_context_pr",
+            ).length,
+            openIncidents: seed.audit.incidents.filter(
+              (i) =>
+                i.status === "open" &&
+                (i.agentKey === null || agentsHere.has(i.agentKey)),
+            ).length,
+          },
+        ];
+      }),
+    );
+
+  /** The command menu's recent runs: newest first. */
+  const recentRuns = (scope: Scope): CommandRun[] =>
+    seed.runs
+      .filter((r) => inScope(scope, r.workspaceSlug))
+      .toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(0, RECENT_RUNS)
+      .map((r) => ({
+        id: r.id,
+        workspace: r.workspaceSlug,
+        agentKey: r.agentKey,
+      }));
 
   return fenceOrganization({
     runs: {
@@ -838,13 +958,37 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
     },
 
     shell: {
-      notifications: () =>
+      context: (scope, userId) =>
+        read("shell", "context", () =>
+          userId === FIXTURE_USER.id
+            ? readOk(shellContext(scope))
+            : notFound("organization"),
+        ),
+      navCounts: (scope) =>
         read(
           "shell",
-          "notifications",
-          () => readOk(seed.notifications),
-          () => [],
+          "navCounts",
+          () => readOk(navCounts(scope)),
+          () => ({}),
         ),
+      notifications: async (scope, userId) => {
+        if (userId !== FIXTURE_USER.id) return notFound("organization");
+        const only = (await shellSwitches()).notifications;
+        if (only === "empty") return readOk({ items: [] });
+        if (only === "error")
+          return readError(
+            PAGE_FAILURES.shell.error.code,
+            PAGE_FAILURES.shell.error.status,
+          );
+        if (only === "not_backed")
+          return notBackedFor("shell", "notifications");
+        return read(
+          "shell",
+          "notifications",
+          () => readOk({ items: seed.notifications }),
+          () => ({ items: [] }),
+        );
+      },
       people: () =>
         read(
           "shell",
@@ -853,24 +997,85 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           () => [],
         ),
       assistantEngine: () =>
+        read("shell", "assistantEngine", async () => {
+          const [switches, engine] = await Promise.all([
+            honoured()
+              ? options.readState().then(parseStateSwitch)
+              : Promise.resolve(NO_STATE_SWITCH),
+            shellSwitches(),
+          ]);
+          return readOk(
+            switches.assistantDown || engine.engine === "down"
+              ? seed.shell.engine.down
+              : seed.shell.engine.up,
+          );
+        }),
+      recentRuns: (scope) =>
         read(
           "shell",
-          "assistantEngine",
-          async () => {
-            const switches = isStateSwitchHonoured()
-              ? parseStateSwitch(await options.readState())
-              : NO_STATE_SWITCH;
-            return readOk({
-              status: switches.assistantDown
-                ? ("down" as const)
-                : ("up" as const),
-              checkedAt: new Date(options.now()).toISOString(),
-            });
-          },
-          () => ({
-            status: "up" as const,
-            checkedAt: new Date(options.now()).toISOString(),
-          }),
+          "recentRuns",
+          () => readOk(recentRuns(scope)),
+          () => [],
+        ),
+      account: (_scope, userId) =>
+        read("shell", "account", () =>
+          userId === FIXTURE_USER.id
+            ? readOk(seed.shell.account)
+            : readError("account_not_found", 404),
+        ),
+    },
+
+    onboarding: {
+      // Tenancy-grade lookups, like src/server/fixture-tenancy.ts: the state
+      // switch never applies, so a page's error or denied state still renders
+      // inside a resolved flow.
+      namespaces: (scope) => {
+        const slug = fixtureWorkspaceSlug(scope.workspaceId);
+        const ws = slug
+          ? keyed(seed.onboarding.namespaces.workspaces, slug)
+          : undefined;
+        return Promise.resolve(
+          ws === undefined
+            ? readError("workspace_not_found", 404)
+            : readOk({ org: seed.onboarding.namespaces.org, ws }),
+        );
+      },
+      invitation: (token) =>
+        Promise.resolve(
+          found(
+            seed.onboarding.invitations.find((i) => i.token === token),
+            "invitation",
+          ),
+        ),
+      gate: (flow, scope) =>
+        scope !== null && scope.orgId !== FIXTURE_TENANT.orgId
+          ? Promise.resolve(notFound("organization"))
+          : read(
+              "onboarding",
+              "gate",
+              () => readOk({ firstFrameAt: null }),
+              undefined,
+              flowPage(flow),
+            ),
+      installerOffer: (_scope, flow) =>
+        read(
+          "onboarding",
+          "installerOffer",
+          () => readOk(seed.onboarding.installer),
+          undefined,
+          flowPage(flow),
+        ),
+      firstFrameScript: (_scope, q) =>
+        read(
+          "onboarding",
+          "firstFrameScript",
+          () => readOk(firstFrameFor(seed.onboarding.firstFrame, q)),
+          undefined,
+          flowPage(q.flow),
+        ),
+      detectedRepository: () =>
+        read("onboarding", "detectedRepository", () =>
+          readOk(seed.onboarding.repository),
         ),
     },
   });
@@ -890,9 +1095,11 @@ function fenceOrganization(source: DataSource): DataSource {
     fenced[port] = Object.fromEntries(
       entries.map(([name, fn]) => [
         name,
-        (scope: Scope, ...args: unknown[]) =>
-          scope.orgId === FIXTURE_TENANT.orgId
-            ? fn(scope, ...args)
+        (first: unknown, ...args: unknown[]) =>
+          // Unscoped reads (an invitation token, the gate before an org
+          // exists) pass through and fence themselves.
+          !isScope(first) || first.orgId === FIXTURE_TENANT.orgId
+            ? fn(first, ...args)
             : Promise.resolve(notFound("organization")),
       ]),
     );
@@ -900,9 +1107,18 @@ function fenceOrganization(source: DataSource): DataSource {
   return fenced as unknown as DataSource;
 }
 
+function isScope(value: unknown): value is Scope {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { orgId?: unknown }).orgId === "string"
+  );
+}
+
 export const fixtureSource: DataSource = createFixtureSource({
   seed: defaultSeed,
   readState: readStateCookie,
+  readShellSwitches: readShellSwitchCookies,
   loadingMs: DEFAULT_LOADING_MS,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => Date.now(),

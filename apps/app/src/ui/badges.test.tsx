@@ -25,7 +25,7 @@ import {
   GateDecision,
   PrincipalKind,
   RunStatus,
-} from "./vocabulary";
+} from "@/data/contracts";
 
 afterEach(() => {
   cleanup();

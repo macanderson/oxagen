@@ -12,10 +12,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { buttonPrimary, mono, panel } from "../../auth/ui/styles";
-import type { FirstFrameScript } from "../model";
+import { buttonPrimary, mono, panel } from "@/ui/control-styles";
+import type { FirstFrameScript } from "@/data/contracts/onboarding";
 import type { FlowMode } from "../steps";
-import { TierBadge } from "./tier-badge";
+import { TierBadge } from "@/ui/tier-badge";
 
 export const AUTO_OPEN_SECONDS = 6;
 

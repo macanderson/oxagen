@@ -10,6 +10,7 @@
 // streams one `event: state` carrying the Read failure, then closes, so the
 // page renders not_backed / denied / error exactly as it would server-side.
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { AppError } from "./errors";
 import { isFixtureMode } from "./fixture-session";
 import {
@@ -109,6 +110,11 @@ export async function handleStreamRequest(
 
   const feeds = await deps.feeds();
   const { scope } = viewer;
+  // The body is pulled by the response writer after this handler returns, i.e.
+  // outside the request's async context, where `cookies()` throws. Every poll
+  // runs in the context captured here, so a read sees this request's cookies
+  // (the fixture `mc_state` switch included) for the life of the stream.
+  const inRequest = AsyncLocalStorage.snapshot();
   const body = createCursorStream({
     ...deps.timings,
     cursor,
@@ -117,8 +123,12 @@ export async function handleStreamRequest(
     ...(deps.onError ? { onError: deps.onError } : {}),
     read:
       runId === null
-        ? (after) => feeds.fleetSince(scope, after, STREAM_PAGE_SIZE)
-        : (after) => feeds.framesSince(scope, runId, after, STREAM_PAGE_SIZE),
+        ? (after) =>
+            inRequest(() => feeds.fleetSince(scope, after, STREAM_PAGE_SIZE))
+        : (after) =>
+            inRequest(() =>
+              feeds.framesSince(scope, runId, after, STREAM_PAGE_SIZE),
+            ),
   });
   return new Response(body, { status: 200, headers: SSE_HEADERS });
 }

@@ -2,7 +2,7 @@
 // (`github__create_pull_request@2.3.0`). The label and category a page shows
 // come from the registry when it has them; these are the fallbacks for a name
 // the registry has not classified yet, derived from the name's verb.
-import type { ToolCategory } from "./vocabulary";
+import type { ToolCategory } from "@/data/contracts";
 
 export type ToolNameParts = { name: string; version: string | null };
 

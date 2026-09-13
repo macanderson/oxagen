@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { notBacked } from "@/data/not-backed";
 import type { StreamFeeds } from "./stream-feeds";
-import { notBackedStreamFeeds, streamFeeds } from "./stream-feeds";
+import { fleetSinceNotBacked, streamFeeds } from "./stream-feeds";
 import {
   STREAM_PAGE_SIZE,
   handleStreamRequest,
@@ -12,6 +13,13 @@ import type { Viewer, ViewerResolution } from "./viewer-resolution";
 
 const { captureErrorMock } = vi.hoisted(() => ({ captureErrorMock: vi.fn() }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: captureErrorMock }));
+// The live source is only a delegation target here: loading the real one pulls
+// every live adapter (and their @oxagen/database/@oxagen/telemetry exports) into
+// a test that exercises none of them.
+const { liveFramesSince } = vi.hoisted(() => ({ liveFramesSince: vi.fn() }));
+vi.mock("@/data/adapters/live", () => ({
+  liveSource: { runs: { framesSince: liveFramesSince } },
+}));
 
 const viewer: Viewer = {
   userId: "u1",
@@ -212,6 +220,28 @@ describe("handleStreamRequest: streaming", () => {
     });
   });
 
+  it("reads every poll in the request's async context, though the body is pulled after the handler returns", async () => {
+    // Stands in for Next's request store, which `cookies()` reads.
+    const request = new AsyncLocalStorage<string>();
+    const seen: Array<string | undefined> = [];
+    const d = deps(undefined, {
+      framesSince: (_s, _r, after: string) => {
+        seen.push(request.getStore());
+        return Promise.resolve(
+          after === "0"
+            ? { ok: true as const, value: [{ seq: "1" }] }
+            : notBacked("M1", "G6"),
+        );
+      },
+    });
+    const res = await request.run("req-1", () =>
+      handleStreamRequest(get(`${base}?run=arun_1`), params, d),
+    );
+    expect(request.getStore()).toBeUndefined();
+    await res.text();
+    expect(seen).toEqual(["req-1", "req-1"]);
+  });
+
   it("rethrows an unexpected failure while resolving the cursor", async () => {
     const req = get(`${base}?run=arun_1`);
     vi.spyOn(req.headers, "get").mockImplementation(() => {
@@ -224,12 +254,74 @@ describe("handleStreamRequest: streaming", () => {
 });
 
 describe("stream feeds", () => {
-  it("answer the plan's honest not-backed gaps until a data source provides them", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("stream a seeded run's frames from the fixture source, oldest first after the cursor", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("MC_DATA", "fixture");
     const feeds = await streamFeeds();
-    expect(feeds).toBe(notBackedStreamFeeds);
+    const first = await feeds.framesSince(
+      viewer.scope,
+      "run_01K5RS7M2E8FJ3QW",
+      "0",
+      3,
+    );
+    if (!first.ok) throw new Error(JSON.stringify(first));
+    expect(first.value).toHaveLength(3);
+    const seqs = first.value.map((f) => BigInt(f.seq));
+    expect(seqs.every((q, i) => i === 0 || q > (seqs[i - 1] ?? 0n))).toBe(true);
+    expect(seqs.every((q) => q > 0n)).toBe(true);
+    const last = first.value.at(-1)?.seq ?? "0";
+    const next = await feeds.framesSince(
+      viewer.scope,
+      "run_01K5RS7M2E8FJ3QW",
+      last,
+      1,
+    );
+    if (!next.ok) throw new Error(JSON.stringify(next));
+    expect(next.value).toHaveLength(1);
+    expect(BigInt(next.value[0]?.seq ?? "0")).toBeGreaterThan(BigInt(last));
+  });
+
+  it("answer an unknown run as not found, never an empty stream (negative)", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("MC_DATA", "fixture");
+    const feeds = await streamFeeds();
+    await expect(
+      feeds.framesSince(viewer.scope, "arun_01", "0", 10),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "error",
+      code: "run_not_found",
+      status: 404,
+    });
+  });
+
+  it("delegate frames to the live source's run port outside fixture mode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MC_DATA", "fixture");
+    const answer = notBacked("M1", "G6");
+    liveFramesSince.mockReset().mockResolvedValue(answer);
+    const feeds = await streamFeeds();
     await expect(
       feeds.framesSince(viewer.scope, "arun_1", "0", 10),
-    ).resolves.toEqual(notBacked("M1", "G6"));
+    ).resolves.toEqual(answer);
+    expect(liveFramesSince).toHaveBeenCalledWith(
+      viewer.scope,
+      "arun_1",
+      "0",
+      10,
+    );
+  });
+
+  it("answer the fleet feed's honest gap (G3) until a port reads patches by cursor", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("MC_DATA", "fixture");
+    const feeds = await streamFeeds();
+    expect(feeds.fleetSince).toBe(fleetSinceNotBacked);
     await expect(feeds.fleetSince(viewer.scope, "0", 10)).resolves.toEqual(
       notBacked("M2", "G3"),
     );

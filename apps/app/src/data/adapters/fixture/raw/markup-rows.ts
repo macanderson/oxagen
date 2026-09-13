@@ -153,3 +153,180 @@ export const DATA_PLANE_ROWS = [
       "object lock, compliance mode · per-organization key-encryption key",
   },
 ] as const;
+
+// ---- Register an agent and the onboarding gate -------------------------------
+
+/**
+ * The Register Agent gate's script (`REG_TOKEN`, `REG_HOST`, `osFile`,
+ * `regLines()` for the Claude Code tab). `{harness}`, `{agentKey}` and
+ * `{operator}` in a frame body are filled in for the agent being wrapped.
+ */
+export const REGISTER_GATE = {
+  token: "oxe_1time_7QK4M2NV9XR3T8ZP",
+  tokenExpiresInMinutes: 30,
+  host: "mbell-mbp.local",
+  sdkCredentialMasked: "oxa_live_••••••••••••3f7a",
+  builds: {
+    macos: {
+      file: "Oxagen-Agent-2.4.0.pkg",
+      size: "14.2 MB",
+      signature: "notarized · Developer ID",
+      digest: "sha256:3f9c71d2…b40a",
+    },
+    windows: {
+      file: "Oxagen-Agent-2.4.0.msi",
+      size: "16.8 MB",
+      signature: "signed · EV certificate",
+      digest: "sha256:7a21ce55…19f3",
+    },
+    linux: {
+      file: "oxagen-agent_2.4.0_amd64.deb",
+      size: "12.9 MB",
+      signature: "deb, rpm and curl script",
+      digest: "sha256:c40b8e19…62dd",
+    },
+  },
+  tier: "gateway",
+  paceMs: 780,
+  log: [
+    { at: "14:01:48", text: "host enrolled · device key ed25519:7f3a…c19e" },
+    {
+      at: "14:01:52",
+      text: "collector oxagend running · pid 4412 · launchd com.oxagen.oxagend",
+    },
+    {
+      at: "14:01:55",
+      text: "hooks written · ~/.claude/settings.json · 7 events",
+    },
+    {
+      at: "14:01:58",
+      text: "ANTHROPIC_BASE_URL set · https://proxy.oxagen.com/v1",
+    },
+    { at: "14:02:01", text: "model proxy reachable · 41 ms · tier gateway" },
+    { at: "14:02:04", text: "MCP endpoint registered · 0 tools granted yet" },
+    {
+      at: "14:02:11",
+      text: "frame received · seq 0 · agent.start",
+      firstFrame: true,
+    },
+  ],
+  frames: [
+    {
+      seq: "0",
+      at: "14:02:11.402",
+      kind: "agent.start",
+      body: "harness={harness} · host=mbell-mbp.local · attested=device-key",
+    },
+    {
+      seq: "1",
+      at: "14:02:11.418",
+      kind: "context.assembled",
+      body: "agent={agentKey} · operator={operator} · tier=gateway · steering=none published",
+    },
+  ],
+} as const;
+
+/** The gate's "Repository detected" card: the installer's working directory remote. */
+export const DETECTED_REPOSITORY = {
+  fullName: "acme/platform",
+  remote: "git@github.com:acme/platform.git",
+  directory: "~/src/platform",
+  branch: "main",
+  provisionalDays: 14,
+} as const;
+
+/**
+ * Not in the mockup: /invite/[token] has no mockup screen, so these are one
+ * invitation per state the page renders (pending for the fixture operator,
+ * already accepted, and pending for another address). Tokens are the public ids.
+ */
+export const INVITE_LINKS = [
+  {
+    token: "invi_acme_pending",
+    invitee: "operator",
+    role: "member",
+    status: "pending",
+    inviter: "priya",
+    invitedAt: "2026-09-11T09:00:00.000Z",
+    expiresAt: "2099-09-18T09:00:00.000Z",
+  },
+  {
+    token: "invi_acme_accepted",
+    invitee: "operator",
+    role: "member",
+    status: "accepted",
+    inviter: "priya",
+    invitedAt: "2026-09-09T09:00:00.000Z",
+    expiresAt: "2026-09-16T09:00:00.000Z",
+  },
+  {
+    token: "invi_acme_other",
+    invitee: "dana.okafor@acme.example",
+    role: "compliance",
+    status: "pending",
+    inviter: "priya",
+    invitedAt: "2026-09-11T09:00:00.000Z",
+    expiresAt: "2099-09-18T09:00:00.000Z",
+  },
+] as const;
+
+// ---- Shell -------------------------------------------------------------------
+
+/** The assistant flyout's engine line (`glm-flash · ready`) and its down state. */
+export const ASSISTANT_ENGINE = {
+  up: { status: "up", model: "glm-flash", version: "0.31.4" },
+  down: {
+    status: "down",
+    httpStatus: 503,
+    version: "0.31.4",
+    lastHealthyAt: "2026-09-12T09:02:11Z",
+  },
+} as const;
+
+/** The Account dialog's panels for the fixture operator (identity comes from the session). */
+export const ACCOUNT_DIALOG = {
+  emailVerifiedAt: "2026-08-22T09:00:00Z",
+  principalId: "prn_01K3F8QB7R",
+  managedBy: "Okta",
+  roles: [
+    { scope: "acme", role: "org.member" },
+    { scope: "core-platform", role: "workspace.owner" },
+  ],
+  preferences: { locale: "en-US", displayCurrency: "USD", timeZone: "UTC" },
+  security: {
+    signInProvider: "Okta SSO",
+    passwordSignIn: false,
+    factors: [
+      {
+        kind: "totp",
+        enrolledAt: "2026-08-22T09:05:00Z",
+        recoveryCodesRemaining: 8,
+      },
+      { kind: "passkey", enrolledAt: null, recoveryCodesRemaining: null },
+    ],
+    sessions: [
+      {
+        id: "ses_mbp_chrome",
+        device: "MacBook Pro · Chrome 141",
+        location: "San Francisco",
+        lastActiveAt: "2026-09-12T15:47:00Z",
+        current: true,
+      },
+      {
+        id: "ses_iphone_safari",
+        device: "iPhone 17 · Safari",
+        location: "San Francisco",
+        lastActiveAt: "2026-09-11T08:12:00Z",
+        current: false,
+      },
+      {
+        id: "ses_cli_mbp01",
+        device: "oxagen CLI · mbp-01",
+        location: "San Francisco",
+        lastActiveAt: "2026-08-22T17:40:00Z",
+        current: false,
+      },
+    ],
+  },
+  privacy: { retentionYears: 7, legalHolds: 0 },
+} as const;

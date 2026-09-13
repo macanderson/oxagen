@@ -15,7 +15,10 @@ import {
   isValidCodeChallenge,
 } from "@oxagen/auth/cli-auth";
 import { isFixtureMode } from "@/server/fixture-session";
-import { FIXTURE_ORG, FIXTURE_WORKSPACE } from "./fixture";
+import {
+  FIXTURE_HOME_WORKSPACE as FIXTURE_WORKSPACE,
+  FIXTURE_ORG,
+} from "@/server/fixture-tenancy";
 import { firstParam } from "./safe-next";
 
 export type CliAuthorizeParams = {

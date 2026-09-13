@@ -4,6 +4,7 @@
 // Steps are URL segments rendered in place (plan §4.10): the first step is the
 // bare route, and any other segment or a deeper path is a 404.
 import { z } from "zod";
+import { InstallerPlatform } from "@/data/contracts/onboarding";
 
 export const GATE_STEPS = ["organization", "wrap", "run"] as const;
 export type GateStep = (typeof GATE_STEPS)[number];
@@ -67,8 +68,9 @@ export function wrapMethodFor(harness: Harness): WrapMethod {
   return "sdk";
 }
 
-export const Platform = z.enum(["macos", "windows", "linux"]);
-export type Platform = z.infer<typeof Platform>;
+/** The installer's platforms: the contract's enum (src/data/contracts/onboarding.ts). */
+export const Platform = InstallerPlatform;
+export type Platform = InstallerPlatform;
 
 export const SdkLanguage = z.enum(["ts", "py", "go"]);
 export type SdkLanguage = z.infer<typeof SdkLanguage>;

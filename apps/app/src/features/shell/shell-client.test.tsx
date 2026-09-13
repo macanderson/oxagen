@@ -25,10 +25,12 @@ import {
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import { denied, notBacked, readError, readOk } from "@/data/not-backed";
+import type { ShellSwitches } from "@/data/adapters/fixture/state";
+import { testFixtureShell } from "@/data/adapters/fixture/testing";
+import { liveShell } from "@/data/adapters/live/shell";
+import { FIXTURE_TENANT } from "@/data/fixture-tenant";
+import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { FIXTURE_USER } from "@/server/fixture-session";
-import { fixtureShell } from "./adapters/fixture";
-import { liveShell } from "./adapters/live";
-import { DEFAULT_SWITCHES, type ShellSwitches } from "./fixture-switches";
 import { loadShellData } from "./load";
 import { MobileNav } from "./mobile-nav";
 import { ShellClient } from "./shell-client";
@@ -109,11 +111,15 @@ afterEach(() => {
   delete document.documentElement.dataset.theme;
 });
 
-async function fixtureData(
-  switches: ShellSwitches = DEFAULT_SWITCHES,
-): Promise<ShellData> {
-  const load = await loadShellData(fixtureShell(switches), {
+const ORG_SCOPE = {
+  orgId: FIXTURE_TENANT.orgId,
+  workspaceId: ORG_ONLY_WORKSPACE_ID,
+};
+
+async function fixtureData(switches?: ShellSwitches): Promise<ShellData> {
+  const load = await loadShellData(testFixtureShell(switches), {
     org: "acme",
+    scope: ORG_SCOPE,
     userId: FIXTURE_USER.id,
   });
   if (load.kind !== "ok") throw new Error("fixture organization not found");
@@ -157,8 +163,9 @@ describe("sidebar", () => {
       "aria-current",
       "page",
     );
+    // The count is the seed's pending approvals in core-platform, what Fleet lists.
     expect(within(main).getByRole("link", { name: /Fleet/ })).toHaveTextContent(
-      "2 need attention",
+      "1 needs attention",
     );
     expect(
       within(sidebar).getByText("38 agents · shared plane"),
@@ -180,7 +187,11 @@ describe("sidebar", () => {
   });
 
   it("degrades to the slug, without counts or switchers, when the context is not wired", async () => {
-    const load = await loadShellData(liveShell, { org: "acme", userId: "" });
+    const load = await loadShellData(liveShell, {
+      org: "acme",
+      scope: ORG_SCOPE,
+      userId: "",
+    });
     if (load.kind !== "ok") throw new Error("unexpected not found");
     renderShell(load.data);
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
@@ -326,19 +337,53 @@ describe("notifications", () => {
     expect(items[0]).toHaveTextContent("Approval waiting");
     expect(within(popover).getByText("3 unread")).toBeInTheDocument();
     expect(
-      within(popover).getByRole("link", { name: "Open run_01K5ZB4T8P" }),
-    ).toHaveAttribute("href", "/acme/core-platform/runs/run_01K5ZB4T8P");
+      within(popover).getByRole("link", { name: "Open run_01K5RS7M2E8FJ3QW" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/run_01K5RS7M2E8FJ3QW");
   });
 
   it.each([
     ["empty", "notifications-empty", "No notifications"],
     ["error", "notifications-error", "notification_store_unavailable"],
-    ["not_backed", "notifications-not_backed", "milestone M1"],
+    ["not_backed", "notifications-not_backed", "does not read it yet"],
   ] as const)("renders the %s state", async (state, testId, text) => {
     const user = userEvent.setup();
     renderShell(await fixtureData({ engine: "up", notifications: state }));
     await user.click(screen.getByTestId("notifications-trigger"));
     expect(await screen.findByTestId(testId)).toHaveTextContent(text);
+  });
+
+  it("draws a recorded row with no severity and no body as a plain bell, never a guessed tone", async () => {
+    const user = userEvent.setup();
+    const data = {
+      ...(await fixtureData()),
+      notifications: readOk({
+        items: [
+          {
+            id: "ntf_live01",
+            kind: "run",
+            severity: null,
+            title: "Run finished",
+            body: null,
+            unread: true,
+            at: "2026-09-11T09:14:02.000Z",
+            runId: null,
+            ref: null,
+          },
+        ],
+      }),
+    };
+    renderShell(data);
+    await user.click(screen.getByTestId("notifications-trigger"));
+    const popover = await screen.findByTestId("notifications-popover");
+    const [item] = within(popover).getAllByRole("listitem");
+    expect(item).toHaveTextContent("Run finished");
+    expect(item).toHaveTextContent("run");
+    const icon = item?.querySelector("svg");
+    expect(icon).toHaveClass("text-muted-foreground");
+    expect(icon?.getAttribute("class")).not.toMatch(
+      /text-(success|info|warning|error)/,
+    );
+    expect(item?.querySelectorAll("p")).toHaveLength(2);
   });
 
   it("renders the denied state", async () => {
@@ -500,7 +545,11 @@ describe("account menu and dialog", () => {
 
   it("labels an unknown viewer and a not-backed account honestly", async () => {
     nav.search = "dialog=account";
-    const base = await loadShellData(liveShell, { org: "acme", userId: "" });
+    const base = await loadShellData(liveShell, {
+      org: "acme",
+      scope: ORG_SCOPE,
+      userId: "",
+    });
     if (base.kind !== "ok") throw new Error("unexpected");
     renderShell({ ...base.data, account: notBacked("M1", "G15") });
     expect(

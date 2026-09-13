@@ -3,20 +3,27 @@
 // member without access is denied on. The codes and permissions are the
 // mockup's (mc.html @ mc-baseline-w1, each page's errorState/deniedState).
 //
-// The fixture adapter's `mc_state` switch returns these, and lane L2's
-// `PageState` can read the same table rather than keep a second copy.
+// The one table: the fixture adapter's `mc_state` switch returns these, and
+// `PageState` (src/ui/page-state.tsx) falls back to them when a failed read
+// names no code or permission of its own.
 
 export const PAGE_KEYS = [
+  "home",
   "fleet",
   "run",
   "agents",
   "agent",
+  "agentSource",
   "mandate",
   "tools",
   "ontology",
   "steering",
   "spend",
+  "register",
+  "welcome",
   "organization",
+  "roles",
+  "apiKeys",
   "billing",
   "audit",
   "shell",
@@ -29,7 +36,14 @@ export type PageFailure = {
   permission: string;
 };
 
+const IAM_DOWN = { code: "iam_principals_unavailable", status: 503 } as const;
+const CONTROL_PLANE_DOWN = {
+  code: "control_plane_unavailable",
+  status: 503,
+} as const;
+
 export const PAGE_FAILURES = {
+  home: { error: CONTROL_PLANE_DOWN, permission: "workspace.read" },
   fleet: {
     error: { code: "run_index_unavailable", status: 503 },
     permission: "workspace.read",
@@ -38,14 +52,9 @@ export const PAGE_FAILURES = {
     error: { code: "frame_store_unreachable", status: 502 },
     permission: "run.read",
   },
-  agents: {
-    error: { code: "iam_principals_unavailable", status: 503 },
-    permission: "agent.read",
-  },
-  agent: {
-    error: { code: "iam_principals_unavailable", status: 503 },
-    permission: "agent.read",
-  },
+  agents: { error: IAM_DOWN, permission: "agent.read" },
+  agent: { error: IAM_DOWN, permission: "agent.read" },
+  agentSource: { error: IAM_DOWN, permission: "agent.read" },
   mandate: {
     error: { code: "mandate_ledger_unavailable", status: 503 },
     permission: "org.billing",
@@ -66,10 +75,12 @@ export const PAGE_FAILURES = {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
   },
-  organization: {
-    error: { code: "control_plane_unavailable", status: 503 },
-    permission: "org.admin",
-  },
+  // Register an agent and the onboarding gate: the enrollment read path.
+  register: { error: IAM_DOWN, permission: "agent.register" },
+  welcome: { error: CONTROL_PLANE_DOWN, permission: "org.create" },
+  organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
+  roles: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
+  apiKeys: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   billing: {
     error: { code: "stripe_unreachable", status: 502 },
     permission: "org.billing",

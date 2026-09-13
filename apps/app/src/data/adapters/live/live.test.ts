@@ -21,7 +21,10 @@ describe("live source before Batch 3", () => {
   });
 
   // M0 methods have a store today: Batch 3 lanes wire them and test each one
-  // beside its adapter. Every method that waits on a milestone must say so here.
+  // beside its adapter (onboarding.namespaces through
+  // src/features/onboarding/reads.test.ts, onboarding.invitation through
+  // src/features/auth/invitations.test.ts). Every method that waits on a
+  // milestone must say so here.
   it.each(allMethods().filter((m) => m.backing.milestone !== "M0"))(
     "$port.$method returns its milestone and gap, never a value",
     async ({ port, method, backing }) => {

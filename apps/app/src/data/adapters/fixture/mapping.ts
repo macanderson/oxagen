@@ -75,6 +75,7 @@ import type {
   TranscriptEntry,
   WasteCause,
 } from "@/data/contracts";
+import { FIXTURE_USER } from "@/server/fixture-session";
 import type { Seed } from "./seed-schema";
 import type rawJson from "./raw/mc-baseline-w1.json";
 import type * as markupRows from "./raw/markup-rows";
@@ -2376,13 +2377,26 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
   };
 
   // ---- notifications ----
-  const TONE = {
-    approval: "approval",
-    failed: "failed",
-    allowed: "allowed",
-    gold: "steering",
-    critical: "critical",
-  } as const;
+  /**
+   * How loudly each kind speaks. By kind, not by the mockup's tone: its `failed`
+   * tone covers both a hard budget stop (critical) and an expired approval
+   * (attention), and `gold` is identity, never a state.
+   */
+  const NOTIFICATION_SEVERITY: Readonly<
+    Record<string, NonNullable<Notification["severity"]>>
+  > = {
+    "approval.requested": "info",
+    "approval.resolved": "attention",
+    "budget.breached": "critical",
+    "context_pr.opened": "info",
+    "run.proven": "success",
+    "repository.indexed": "success",
+    "reconciliation.exception": "attention",
+    "kill_switch.flipped": "critical",
+  };
+  /** The mockup's kinds: an unknown one is a mapping error, not a new kind. */
+  const NOTIFICATION_KINDS: Readonly<Record<string, Notification["kind"]>> =
+    Object.fromEntries(Object.keys(NOTIFICATION_SEVERITY).map((k) => [k, k]));
   /** W4: the two notifications that describe seeded events name them. */
   const NOTIFICATION_REPAIRS: Readonly<
     Record<string, Pick<Notification, "title" | "body" | "runId" | "ref">>
@@ -2404,8 +2418,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     const repair = NOTIFICATION_REPAIRS[n.kind];
     return {
       id: `ntf_0${String(index + 1)}`,
-      kind: n.kind,
-      tone: pick(TONE, n.tone, "notification tone"),
+      kind: pick(NOTIFICATION_KINDS, n.kind, "notification kind"),
+      severity: pick(NOTIFICATION_SEVERITY, n.kind, "notification severity"),
       unread: n.unread,
       at: toInstant(n.t),
       title: repair?.title ?? n.title,
@@ -2463,7 +2477,100 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     billing,
     audit,
     notifications,
+    onboarding: {
+      namespaces: namespacesOf(agents, workspaces),
+      installer: {
+        token: markup.REGISTER_GATE.token,
+        tokenExpiresInMinutes: markup.REGISTER_GATE.tokenExpiresInMinutes,
+        host: markup.REGISTER_GATE.host,
+        sdkCredentialMasked: markup.REGISTER_GATE.sdkCredentialMasked,
+        builds: markup.REGISTER_GATE.builds,
+      },
+      firstFrame: {
+        host: markup.REGISTER_GATE.host,
+        tier: markup.REGISTER_GATE.tier,
+        paceMs: markup.REGISTER_GATE.paceMs,
+        log: markup.REGISTER_GATE.log.map((l) => ({ ...l })),
+        frames: markup.REGISTER_GATE.frames.map((f) => ({ ...f })),
+      },
+      repository: { ...markup.DETECTED_REPOSITORY },
+      invitations: markup.INVITE_LINKS.map((link) => ({
+        token: link.token,
+        orgName: organization.name,
+        orgSlug: organization.slug,
+        email: link.invitee === "operator" ? FIXTURE_USER.email : link.invitee,
+        role: link.role,
+        status: link.status,
+        inviterName: req(
+          people.find((p) => p.id === who(link.inviter)),
+          "inviter",
+        ).name,
+        invitedAt: link.invitedAt,
+        expiresAt: link.expiresAt,
+      })),
+    },
+    shell: {
+      engine: {
+        up: { ...markup.ASSISTANT_ENGINE.up },
+        down: { ...markup.ASSISTANT_ENGINE.down },
+      },
+      account: {
+        profile: {
+          name: FIXTURE_USER.name,
+          email: FIXTURE_USER.email,
+          emailVerifiedAt: markup.ACCOUNT_DIALOG.emailVerifiedAt,
+          principalId: markup.ACCOUNT_DIALOG.principalId,
+          managedBy: markup.ACCOUNT_DIALOG.managedBy,
+          roles: markup.ACCOUNT_DIALOG.roles.map((r) => ({ ...r })),
+        },
+        preferences: { ...markup.ACCOUNT_DIALOG.preferences },
+        security: {
+          signInProvider: markup.ACCOUNT_DIALOG.security.signInProvider,
+          passwordSignIn: markup.ACCOUNT_DIALOG.security.passwordSignIn,
+          factors: markup.ACCOUNT_DIALOG.security.factors.map((f) => ({
+            ...f,
+          })),
+          sessions: markup.ACCOUNT_DIALOG.security.sessions.map((x) => ({
+            ...x,
+          })),
+        },
+        privacy: { ...markup.ACCOUNT_DIALOG.privacy },
+      },
+    },
   };
+}
+
+/**
+ * Agent keys are `org_ns.ws_ns.slug` (spec §3), so the namespaces are read off
+ * the seeded keys rather than invented: every agent in a workspace must agree,
+ * or the mapping throws. A workspace with no agent has no recorded namespace.
+ */
+function namespacesOf(
+  agents: ReadonlyArray<{ key: string; workspaceSlug: string }>,
+  workspaces: ReadonlyArray<{ slug: string }>,
+): Seed["onboarding"]["namespaces"] {
+  let org: string | null = null;
+  const byWorkspace: Record<string, string> = {};
+  for (const a of agents) {
+    const [orgNs = "", wsNs = ""] = a.key.split(".");
+    if (org !== null && org !== orgNs)
+      throw new Error(
+        `agent ${a.key} names organization namespace ${orgNs}, not ${org}`,
+      );
+    org = orgNs;
+    const known = byWorkspace[a.workspaceSlug];
+    if (known !== undefined && known !== wsNs)
+      throw new Error(
+        `agent ${a.key} names workspace namespace ${wsNs}, not ${known}`,
+      );
+    byWorkspace[a.workspaceSlug] = wsNs;
+  }
+  if (org === null)
+    throw new Error("no agent key to read the organization namespace from");
+  for (const slug of Object.keys(byWorkspace))
+    if (!workspaces.some((w) => w.slug === slug))
+      throw new Error(`agent namespace for unknown workspace ${slug}`);
+  return { org, workspaces: byWorkspace };
 }
 
 function contextKind(kind: string) {

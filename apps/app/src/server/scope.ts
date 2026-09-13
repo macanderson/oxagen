@@ -13,6 +13,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
 import { isFixtureMode } from "./fixture-session";
 import { fixtureTenancyLookups } from "./fixture-tenancy";
@@ -36,16 +37,19 @@ export function tenancyLookups(): TenancyLookups {
 
 /** Resolve without throwing a navigation interrupt: route handlers map the result to a Response. */
 export const resolveViewer = cache(
-  async (orgSlug: string, wsSlug?: string): Promise<ViewerResolution> =>
-    resolveViewerWith(
-      {
-        session: await getSession(),
-        lookups: tenancyLookups(),
-        now: new Date(),
-      },
+  async (orgSlug: string, wsSlug?: string): Promise<ViewerResolution> => {
+    const session = await getSession();
+    // The MFA deadline is judged against the request's clock. Under partial
+    // prefetching a runtime prerender resolves cookies but not the clock, so
+    // `new Date()` straight after the session read is a blocking-prerender
+    // error; connection() defers it to the request.
+    await connection();
+    return resolveViewerWith(
+      { session, lookups: tenancyLookups(), now: new Date() },
       orgSlug,
       wsSlug,
-    ),
+    );
+  },
 );
 
 /**

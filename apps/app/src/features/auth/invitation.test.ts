@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type InvitationView, decideInvitation, toOrgRole } from "./invitation";
+import { type InvitationView, toOrgRole } from "@/data/contracts/invitations";
+import { decideInvitation } from "./invitation";
 
 const base: InvitationView = {
   token: "invi_01",

@@ -4,15 +4,17 @@ import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
   AFTER_SIGNUP,
+  VerifyPanel,
+  firstParam,
+  sanitizeNext,
+} from "@/features/auth";
+import {
   AuthColumn,
   AuthFooter,
   AuthHeading,
   AuthSkeleton,
-  VerifyPanel,
-  firstParam,
-  linkText,
-  sanitizeNext,
-} from "@/features/auth";
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 
 export default function VerifyPage(props: PageProps<"/verify">) {
   return (

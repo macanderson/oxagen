@@ -72,10 +72,8 @@ const PROMOTED = {
     retention: z.string().nullable(),
     volume: z.string().nullable(),
   }),
-  Notification: Notification.extend({
-    tone: Notification.shape.tone.nullable(),
-    body: z.string().nullable(),
-  }),
+  // Severity and body are nullable in the contract: nothing left to promote.
+  Notification,
 };
 
 const CURRENT = {
@@ -498,7 +496,7 @@ describe("toNotification", () => {
     expect(n).toEqual({
       id: "ntf_1b3d5f7h9k1m3p5r7t9v1x",
       kind: "approval",
-      tone: "approval",
+      severity: null,
       unread: true,
       at: "2026-09-11T09:14:02.000Z",
       title: "release-manager is waiting on an approval",
@@ -510,14 +508,20 @@ describe("toNotification", () => {
   });
 
   it.each([
-    ["approval", "approval"],
+    // An approval row does not say requested, approved, denied or expired.
+    ["approval", null],
     ["security", "critical"],
     ["run", null],
     ["member", null],
     ["system", null],
-  ] as const)("draws kind %s in tone %s", (kind, tone) => {
-    expect(toNotification({ ...NOTIFICATION, kind }).tone).toBe(tone);
-  });
+  ] as const)(
+    "draws kind %s at severity %s, never a guessed one",
+    (kind, severity) => {
+      const n = toNotification({ ...NOTIFICATION, kind });
+      expect(n.severity).toBe(severity);
+      expect(Notification.parse(n)).toEqual(n);
+    },
+  );
 
   it.each([
     ["run_01K5RS8Q2M", "run_01K5RS8Q2M"],
@@ -557,7 +561,7 @@ describe("recorded probes", () => {
         z.array(CURRENT[method]),
         RECORDED_PROBES[method],
       );
-      expect(refused.length).toBeGreaterThan(0);
+      expect(refused.length > 0).toBe(UNRECORDED_PATHS[method].length > 0);
       for (const path of refused)
         expect(UNRECORDED_PATHS[method] as readonly string[]).toContain(path);
     },

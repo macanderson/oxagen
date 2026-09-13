@@ -8,7 +8,7 @@ import { Tabs } from "@base-ui/react/tabs";
 import { Fingerprint, KeyRound, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, type ReactNode } from "react";
-import type { AccountView } from "./contracts";
+import type { AccountView } from "@/data/contracts/shell";
 import { formatTimestamp, initials } from "./format";
 import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";

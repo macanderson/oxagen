@@ -87,9 +87,18 @@
       "lead": "A wrapped agent routes through at least one gateway seam: the model proxy, the tool gateway, or both. The installer carries a single-use enrollment token for {key}, so nothing is copied or pasted.",
       "methodsLabel": "How to wrap the agent",
       "methods": {
-        "claude-code": { "name": "Claude Code", "sub": "one click · gateway" },
-        "codex-cli": { "name": "Codex CLI", "sub": "one click · gateway" },
-        "sdk": { "name": "SDK agent", "sub": "five lines · gateway" }
+        "claude-code": {
+          "name": "Claude Code",
+          "sub": "one click · gateway"
+        },
+        "codex-cli": {
+          "name": "Codex CLI",
+          "sub": "one click · gateway"
+        },
+        "sdk": {
+          "name": "SDK agent",
+          "sub": "five lines · gateway"
+        }
       },
       "recommended": "recommended",
       "claudeCode": "The installer writes the hooks and ANTHROPIC_BASE_URL, installs the oxagend collector and the oxagen-hook binary, starts them at login, and enrolls this host with an Ed25519 device key.",
@@ -103,16 +112,15 @@
         "nativeShell": "Native shell and file tools",
         "toolCalls": "Tool calls"
       },
-      "tiers": {
-        "gateway": "gateway",
-        "harness": "harness",
-        "observe": "observe"
-      },
       "orObserve": "or observe",
       "tierNote": "The enforcement tier is computed per run from what was actually routed, never from what the adapter can do on paper.",
       "download": "Download",
       "platformsLabel": "Operating system",
-      "platforms": { "macos": "macOS", "windows": "Windows", "linux": "Linux" },
+      "platforms": {
+        "macos": "macOS",
+        "windows": "Windows",
+        "linux": "Linux"
+      },
       "downloadFor": "Download for {platform}",
       "tokenLabel": "Single-use enrollment token embedded",
       "tokenExpires": "expires in {minutes} min · single use",
@@ -123,7 +131,11 @@
       "credentialNote": "Set it as OXAGEN_AGENT_TOKEN. The gateway mints short-lived run tokens from it at run start; revoking the credential ends every run token at the next call.",
       "credentialNotBacked": "Agent credentials for SDK agents are not issued from this screen yet.",
       "languagesLabel": "Language",
-      "languages": { "ts": "TypeScript", "py": "Python", "go": "Go" },
+      "languages": {
+        "ts": "TypeScript",
+        "py": "Python",
+        "go": "Go"
+      },
       "copy": "Copy the five lines",
       "copied": "Copied",
       "back": "Back",
@@ -151,7 +163,7 @@
       "notBacked": "Oxagen does not record the first frame from a newly wrapped agent yet, so this screen cannot wait for it. Your agent's runs appear on Fleet once they are recorded.",
       "continueToFleet": "Continue to Fleet",
       "errorTitle": "The collector cannot reach the model proxy",
-      "errorBody": "The host {host} enrolled, but every request to the model proxy has been refused. A proxy that cannot be reached means an unwrapped agent, so this will not complete on telemetry alone.",
+      "errorBody": "The host enrolled, but every request to the model proxy has been refused. A proxy that cannot be reached means an unwrapped agent, so this will not complete on telemetry alone.",
       "errorHint": "Check that outbound 443 to the proxy is allowed, then run oxagen agent status.",
       "checkAgain": "Check again"
     },

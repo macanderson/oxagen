@@ -371,10 +371,12 @@ export function createLiveAudit({
       Promise.resolve(notBackedFor("audit", "assuranceHistory")),
   };
 
-  const notifications: ShellReadPort["notifications"] = (scope) =>
+  const notifications: ShellReadPort["notifications"] = (scope, userId) =>
     guarded("shell.notifications", SHELL.error, async () => {
-      const userId = await stores.viewerId();
-      if (!userId) return denied(SHELL.permission);
+      // The feed is the session's own: a user id that is not the signed-in
+      // viewer's never reads someone else's notifications.
+      const viewer = await stores.viewerId();
+      if (!viewer || viewer !== userId) return denied(SHELL.permission);
       const feed = await stores.readTool(
         scope,
         userId,
@@ -383,12 +385,13 @@ export function createLiveAudit({
         SHELL.permission,
       );
       if (!feed.ok) return feed;
-      return settle(
+      const items = settle(
         "notifications",
         () => notBackedFor("shell", "notifications"),
         views.Notification,
         feed.value.notifications.map(toNotification),
       );
+      return items.ok ? readOk({ items: items.value }) : items;
     });
 
   return { audit, notifications };

@@ -3,6 +3,7 @@
 // mapping that produces a value the contracts reject fails loudly, once.
 import { z } from "zod";
 import {
+  AccountView,
   AgentDefinition,
   AgentDetail,
   AgentScores,
@@ -10,6 +11,7 @@ import {
   ApprovalItem,
   ArchiveExport,
   AssuranceHistoryRow,
+  AssistantEngine,
   AssuranceRun,
   AuditEvent,
   AutoApprovalRule,
@@ -19,16 +21,20 @@ import {
   ContextWindow,
   Count,
   DataPlane,
+  DetectedRepository,
   EmbeddingIndex,
   EncryptionKey,
   ErasureRequest,
   Finding,
   FindingEvidence,
   FindingFix,
+  FirstFrameScript,
   Frame,
   Incident,
+  InstallerOffer,
   Instant,
   Invitation,
+  InvitationView,
   Invoice,
   KillSwitch,
   LegalHold,
@@ -37,6 +43,7 @@ import {
   Member,
   Meter,
   ModelFunding,
+  Namespace,
   Notification,
   ObservedSchemaProposal,
   OntologyClass,
@@ -169,5 +176,29 @@ export const Seed = z.object({
   }),
 
   notifications: z.array(Notification),
+
+  /** Register an agent and the onboarding gate (spec §4.4). */
+  onboarding: z.object({
+    /** Read off the seeded agent keys (`org_ns.ws_ns.slug`); keyed by workspace slug. */
+    namespaces: z.object({
+      org: Namespace,
+      workspaces: z.record(z.string(), Namespace),
+    }),
+    installer: InstallerOffer,
+    /** Frame bodies carry `{harness}`, `{agentKey}` and `{operator}` for the agent being wrapped. */
+    firstFrame: FirstFrameScript,
+    repository: DetectedRepository,
+    /** One invitation per state /invite/[token] renders, keyed by public token. */
+    invitations: z.array(InvitationView),
+  }),
+
+  shell: z.object({
+    engine: z.object({
+      up: AssistantEngine,
+      down: AssistantEngine,
+    }),
+    /** The fixture operator's Account dialog; the identity is the session's. */
+    account: AccountView,
+  }),
 });
 export type Seed = z.infer<typeof Seed>;

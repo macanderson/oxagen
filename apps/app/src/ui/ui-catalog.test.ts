@@ -17,7 +17,7 @@ import {
   PrincipalKind,
   RunStatus,
   ToolCategory,
-} from "./vocabulary";
+} from "@/data/contracts";
 
 const catalog = ui.ui as unknown as Record<
   string,

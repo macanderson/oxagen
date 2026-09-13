@@ -3,7 +3,7 @@
 import { ChevronRight, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/not-backed";
-import type { AssistantEngine } from "./contracts";
+import type { AssistantEngine } from "@/data/contracts/shell";
 import { engineView } from "./engine";
 import { useShellState } from "./shell-state";
 
@@ -36,9 +36,13 @@ export function AssistantLauncher({
       </span>
       <span className="min-w-0 flex-1">
         <b className="block text-[13px] font-semibold">{t("launcher")}</b>
-        {/* The status words stay in the label ink; the red is carried by the dot.
-            The kit's --error is 4.4:1 on the panel, under the 4.5:1 floor for 11px text. */}
-        <span className="flex items-center gap-1.5 truncate font-mono text-[11px] text-sidebar-nav-label-fg">
+        {/* Engine down reads red: the words take the kit's error ink, which
+            passes 4.5:1 on the sidebar surface at 11px; the dot keeps the mark red. */}
+        <span
+          className={`flex items-center gap-1.5 truncate font-mono text-[11px] ${
+            view.state === "up" ? "text-sidebar-nav-label-fg" : "text-error-ink"
+          }`}
+        >
           {view.state === "up" ? null : (
             <span
               aria-hidden="true"

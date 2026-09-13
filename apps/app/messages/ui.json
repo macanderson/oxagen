@@ -1,5 +1,9 @@
 {
   "ui": {
+    "brand": {
+      "name": "Oxagen",
+      "home": "Oxagen home"
+    },
     "money": {
       "openBasis": "{basis}: how {amount} was measured",
       "dialogTitle": "How this figure was measured",
@@ -303,7 +307,10 @@
       "notBacked": {
         "title": "Not recorded yet",
         "body": "Oxagen does not record this yet. It arrives with milestone {milestone} (backend gap {gap}).",
-        "bodySpecDecision": "Oxagen does not record this yet. It waits on a spec decision (backend gap {gap})."
+        "bodyMilestoneOnly": "Oxagen does not record this yet. It arrives with milestone {milestone}.",
+        "bodySpecDecision": "Oxagen does not record this yet. It waits on a spec decision (backend gap {gap}).",
+        "bodySpecDecisionOnly": "Oxagen does not record this yet. It waits on a spec decision.",
+        "bodyNotWired": "The store behind this exists, but Mission Control does not read it yet."
       },
       "denied": {
         "title": "You do not have access",

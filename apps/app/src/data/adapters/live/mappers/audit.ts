@@ -63,8 +63,9 @@
 //   Notification ← notification.notifications via list_notifications
 //     id ✅ public_id · kind ✅ kind · title ✅ title · unread ✅ unread · at ✅ created_at
 //     body      ✅ body, ∅ when the producer wrote none
-//     tone      approval → approval, security → critical; run, member and
-//               system carry no outcome to draw ∅
+//     severity  security → critical; approval (requested, approved, denied or
+//               expired: the row does not say which), run, member and system
+//               carry no outcome to draw ∅
 //     runId     ✅ the run public id in deep_link, else ∅ · ref ✅ deep_link
 import type {
   principals,
@@ -85,7 +86,7 @@ import {
   type Incident,
   IncidentKind,
   type Notification,
-  type NotificationTone,
+  type NotificationSeverity,
   type RetentionTier,
 } from "@/data/contracts";
 
@@ -217,7 +218,8 @@ export type RecordedRetentionTier = Nullable<
   "store" | "contents" | "retention" | "volume"
 >;
 
-export type RecordedNotification = Nullable<Notification, "tone" | "body">;
+/** Every notification field is recordable: severity and body are nullable in the view model. */
+export type RecordedNotification = Notification;
 
 // ---- Mappers -------------------------------------------------------------------
 
@@ -351,11 +353,11 @@ export function toRetentionTiers(
   ];
 }
 
-const NOTIFICATION_TONE: Record<
+const NOTIFICATION_SEVERITY: Record<
   NotificationRow["kind"],
-  NotificationTone | null
+  NotificationSeverity | null
 > = {
-  approval: "approval",
+  approval: null,
   security: "critical",
   run: null,
   member: null,
@@ -368,7 +370,7 @@ export function toNotification(row: NotificationRow): RecordedNotification {
   return {
     id: row.publicId,
     kind: row.kind,
-    tone: NOTIFICATION_TONE[row.kind],
+    severity: NOTIFICATION_SEVERITY[row.kind],
     unread: row.unread,
     at: row.createdAt,
     title: row.title,
@@ -413,7 +415,7 @@ export const UNRECORDED_PATHS = {
   ],
   erasure: ["subject", "requestedById", "status"],
   retention: ["store", "contents", "retention", "volume"],
-  notifications: ["tone", "body"],
+  notifications: [],
 } as const;
 
 const PROBE_AT = new Date("2026-09-11T09:14:02.000Z");

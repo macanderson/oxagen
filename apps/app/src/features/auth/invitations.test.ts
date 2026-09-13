@@ -21,6 +21,14 @@ function recorded(q: Record<string, { findFirst: (o: unknown) => unknown }>) {
     ]),
   );
 }
+// Only the onboarding port is under test: the real live source loads every live
+// adapter, whose @oxagen/database imports this file's partial mock does not carry.
+vi.mock("@/data/adapters/live", async () => ({
+  liveSource: {
+    onboarding: (await import("@/data/adapters/live/onboarding"))
+      .liveOnboarding,
+  },
+}));
 vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) =>
     fn({ query: recorded(query) }),

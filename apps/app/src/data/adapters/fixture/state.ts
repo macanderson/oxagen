@@ -8,6 +8,11 @@
 //
 // The global form never applies to the shell, so a page's error state still
 // renders inside working chrome; address it as `shell:<state>`.
+//
+// Two finer shell switches walk one read each without touching the rest of the
+// chrome (plan W9 and the notification states):
+//   mc_shell_engine=down                          the assistant engine is down
+//   mc_shell_notifications=empty|error|not_backed only the notifications read
 import { isPageKey, type PageKey } from "@/data/page-states";
 import { isFixtureMode } from "@/server/fixture-session";
 
@@ -65,13 +70,58 @@ export function isStateSwitchHonoured(): boolean {
   return isFixtureMode();
 }
 
-/** The cookie on the current request; undefined outside a request (build, cache scope). */
-export async function readStateCookie(): Promise<string | undefined> {
+/** A cookie on the current request; undefined outside a request (build, cache scope). */
+async function readCookie(name: string): Promise<string | undefined> {
   try {
     const { cookies } = await import("next/headers");
-    return (await cookies()).get(MC_STATE_COOKIE)?.value;
+    return (await cookies()).get(name)?.value;
   } catch {
     // No request in scope (prerender or a unit test): no state switch applies.
     return undefined;
   }
+}
+
+/** The `mc_state` cookie on the current request. */
+export function readStateCookie(): Promise<string | undefined> {
+  return readCookie(MC_STATE_COOKIE);
+}
+
+export const SHELL_ENGINE_COOKIE = "mc_shell_engine";
+export const SHELL_NOTIFICATIONS_COOKIE = "mc_shell_notifications";
+
+export type ShellSwitches = {
+  engine: "up" | "down";
+  /** `loaded` defers to `mc_state`'s shell entry. */
+  notifications: "loaded" | "empty" | "error" | "not_backed";
+};
+
+export const DEFAULT_SHELL_SWITCHES: ShellSwitches = {
+  engine: "up",
+  notifications: "loaded",
+};
+
+/** Read the shell switches from cookie values. Unknown values fall back to the defaults. */
+export function parseShellSwitches(cookie: {
+  engine?: string | undefined;
+  notifications?: string | undefined;
+}): ShellSwitches {
+  const { notifications } = cookie;
+  return {
+    engine: cookie.engine === "down" ? "down" : "up",
+    notifications:
+      notifications === "empty" ||
+      notifications === "error" ||
+      notifications === "not_backed"
+        ? notifications
+        : "loaded",
+  };
+}
+
+/** The shell switches on the current request. */
+export async function readShellSwitchCookies(): Promise<ShellSwitches> {
+  const [engine, notifications] = await Promise.all([
+    readCookie(SHELL_ENGINE_COOKIE),
+    readCookie(SHELL_NOTIFICATIONS_COOKIE),
+  ]);
+  return parseShellSwitches({ engine, notifications });
 }

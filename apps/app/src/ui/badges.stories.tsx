@@ -23,7 +23,7 @@ import {
   GateDecision,
   PrincipalKind,
   RunStatus,
-} from "./vocabulary";
+} from "@/data/contracts";
 
 const meta = {
   title: "Mission Control/Badges",

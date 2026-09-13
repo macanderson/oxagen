@@ -13,12 +13,12 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import type { Read } from "@/data/not-backed";
+import { NO_GAP, type Read } from "@/data/not-backed";
 import type {
   NotificationFeed,
-  NotificationItem,
+  Notification,
   NotificationSeverity,
-} from "./contracts";
+} from "@/data/contracts/shell";
 import {
   SEVERITY_TONE,
   formatTimestamp,
@@ -38,21 +38,23 @@ function Item({
   item,
   runHref,
 }: {
-  item: NotificationItem;
+  item: Notification;
   runHref: string | null;
 }) {
   const t = useTranslations("shell.notifications");
   const locale = useLocale();
-  const Icon = SEVERITY_ICON[item.severity];
+  // A null severity is a kind that records no outcome: a plain bell, no colour.
+  const Icon = item.severity === null ? Bell : SEVERITY_ICON[item.severity];
+  const tone =
+    item.severity === null
+      ? "text-muted-foreground"
+      : SEVERITY_TONE[item.severity];
   return (
     <li
       data-unread={item.unread}
       className={`flex gap-3 border-b border-border px-4 py-3 last:border-b-0 ${item.unread ? "bg-accent/40" : ""}`}
     >
-      <Icon
-        aria-hidden="true"
-        className={`mt-0.5 size-4 flex-none ${SEVERITY_TONE[item.severity]}`}
-      />
+      <Icon aria-hidden="true" className={`mt-0.5 size-4 flex-none ${tone}`} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
           {item.unread ? (
@@ -60,7 +62,11 @@ function Item({
           ) : null}
           {item.title}
         </p>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{item.body}</p>
+        {item.body === null ? null : (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {item.body}
+          </p>
+        )}
         <p className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
           <span>{item.kind}</span>
           {runHref === null || item.runId === null ? null : (
@@ -101,7 +107,17 @@ function Body({ read }: { read: Read<NotificationFeed> }) {
             ]
           : [
               t("notBacked.title"),
-              t("notBacked.body", { milestone: read.milestone, gap: read.gap }),
+              // G0 is "no numbered gap": never shown as "gap G0".
+              read.milestone === "M0"
+                ? t("notBacked.bodyNotWired")
+                : read.gap === NO_GAP
+                  ? t("notBacked.bodyMilestoneOnly", {
+                      milestone: read.milestone,
+                    })
+                  : t("notBacked.body", {
+                      milestone: read.milestone,
+                      gap: read.gap,
+                    }),
             ];
     return (
       <div data-testid={`notifications-${read.reason}`} className="px-4 py-6">

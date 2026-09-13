@@ -6,9 +6,9 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { Field } from "../../auth/ui/field";
-import { FormAlert, SubmitButton } from "../../auth/ui/feedback";
-import { eyebrow, panel } from "../../auth/ui/styles";
+import { Field } from "@/ui/field";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { eyebrow, panel } from "@/ui/control-styles";
 import { createOrganizationAction } from "../actions";
 import { suggestNamespace, toSlug } from "../agent-key";
 import {

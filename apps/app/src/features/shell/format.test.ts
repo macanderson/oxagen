@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { engineView } from "./engine";
-import { parseShellSwitches } from "./fixture-switches";
 import {
   formatTimestamp,
   initials,
@@ -95,36 +94,6 @@ describe("engineView", () => {
     expect(engineView(notBacked("M1", "G6"))).toMatchObject({
       state: "down",
       code: "not_backed_G6",
-    });
-  });
-});
-
-describe("parseShellSwitches", () => {
-  it("reads known values", () => {
-    expect(
-      parseShellSwitches({ engine: "down", notifications: "empty" }),
-    ).toEqual({
-      engine: "down",
-      notifications: "empty",
-    });
-    expect(parseShellSwitches({ notifications: "error" }).notifications).toBe(
-      "error",
-    );
-    expect(
-      parseShellSwitches({ notifications: "not_backed" }).notifications,
-    ).toBe("not_backed");
-  });
-
-  it("falls back to the defaults for missing or unknown values", () => {
-    expect(parseShellSwitches({})).toEqual({
-      engine: "up",
-      notifications: "loaded",
-    });
-    expect(
-      parseShellSwitches({ engine: "DOWN", notifications: "denied" }),
-    ).toEqual({
-      engine: "up",
-      notifications: "loaded",
     });
   });
 });

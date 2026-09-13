@@ -11,7 +11,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useTransition } from "react";
 import type { Read } from "@/data/not-backed";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import type { AssistantEngine } from "./contracts";
+import type { AssistantEngine } from "@/data/contracts/shell";
 import { engineView } from "./engine";
 import { formatTimestamp } from "./format";
 import { useShellState } from "./shell-state";
@@ -60,8 +60,8 @@ export function AssistantFlyout({ engine }: { engine: Read<AssistantEngine> }) {
             {t("badge")}
           </span>
         ) : (
-          // Red border and dot, label-ink words: --error is 4.4:1 on the panel at 11px.
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded border border-error px-1.5 py-0.5 text-[11px] text-foreground">
+          // Red words in the error ink (AA on the panel at 11px); the border and dot keep the mark red.
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded border border-error px-1.5 py-0.5 text-[11px] text-error-ink">
             <span
               aria-hidden="true"
               className="size-1.5 rounded-full bg-error"

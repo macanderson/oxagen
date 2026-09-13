@@ -198,10 +198,34 @@ export const BACKING = {
     assuranceHistory: gap("audit", "A10", "none", "M2", NO_GAP),
   },
   shell: {
+    // §3.2 Organization · members, workspaces ✅: org.organizations, org.org_users, workspace.workspaces.
+    context: wired("shell", "A10"),
+    // Approvals, principals, promotions and incidents per workspace (✅/🟡).
+    navCounts: wired("shell", "A10", "partial"),
+    // §3.2 Shell · notifications ✅: notification.notifications.
     notifications: wired("shell", "A10"),
+    // §3.2 Shell · people, avatars ✅: auth.users, user_preferences.
     people: wired("shell", "A10"),
-    // §3.2 Shell · assistant flyout 🟡: stella-serve health.
+    // §3.2 Shell · assistant flyout 🟡: stella-serve health (ADR-053).
     assistantEngine: wired("shell", "A10", "partial"),
+    // agent.agent_runs through @oxagen/run-ledger (🟡).
+    recentRuns: wired("shell", "A10", "partial"),
+    // auth.users, user_preferences, auth sessions (✅).
+    account: wired("shell", "A10"),
+  },
+  onboarding: {
+    // §3.2 Auth + onboarding gate 🟡: organizations and workspaces are backed.
+    namespaces: wired("welcome", "A8"),
+    // org.invitations ✅, read by public id before any tenant scope exists.
+    invitation: wired("welcome", "A8"),
+    // §3.4 G15: org.onboarding_state + first-frame unlock (M1).
+    gate: gap("welcome", "A8", "none", "M1", "G15"),
+    // The one-click installer with its single-use enrollment token (tacho.enrollment, G15).
+    installerOffer: gap("welcome", "A3", "none", "M1", "G15"),
+    // The first frame from a freshly wrapped agent unlocks the gate (G15).
+    firstFrameScript: gap("welcome", "A3", "none", "M1", "G15"),
+    // The repository the installer saw in its working directory (G15).
+    detectedRepository: gap("welcome", "A5", "none", "M1", "G15"),
   },
 } as const satisfies BackingTable;
 

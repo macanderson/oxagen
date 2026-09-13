@@ -7,9 +7,9 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { resendVerification } from "./actions";
 import { ResendVerificationSchema, fieldErrors } from "./schemas";
-import { Field } from "./ui/field";
-import { FormAlert, SubmitButton } from "./ui/feedback";
-import { panel } from "./ui/styles";
+import { Field } from "@/ui/field";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 export function VerifyPanel({

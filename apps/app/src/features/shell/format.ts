@@ -1,7 +1,10 @@
 // Formatting helpers for the shell. Timestamps render in UTC with explicit
 // options, so the server render and the client hydrate to the same text
 // (spec §15: dates format by locale; the wedge is English and UTC).
-import type { NotificationItem, NotificationSeverity } from "./contracts";
+import type {
+  Notification,
+  NotificationSeverity,
+} from "@/data/contracts/shell";
 
 export function formatTimestamp(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
@@ -15,14 +18,14 @@ export function formatTimestamp(iso: string, locale: string): string {
 }
 
 export function unreadCount(
-  items: readonly Pick<NotificationItem, "unread">[],
+  items: readonly Pick<Notification, "unread">[],
 ): number {
   return items.reduce((n, item) => n + (item.unread ? 1 : 0), 0);
 }
 
 /** Newest first; unread before read at the same instant. */
 export function sortNotifications<
-  T extends Pick<NotificationItem, "at" | "unread">,
+  T extends Pick<Notification, "at" | "unread">,
 >(items: readonly T[]): T[] {
   return [...items].sort((a, b) => {
     const byTime = Date.parse(b.at) - Date.parse(a.at);

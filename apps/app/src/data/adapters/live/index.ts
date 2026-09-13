@@ -13,6 +13,7 @@ import { liveOrg } from "./org";
 import { liveBilling } from "./billing";
 import { liveAudit, liveNotifications } from "./audit";
 import { liveShell } from "./shell";
+import { liveOnboarding } from "./onboarding";
 
 export const liveSource: DataSource = {
   runs: liveRuns,
@@ -27,4 +28,5 @@ export const liveSource: DataSource = {
   billing: liveBilling,
   audit: liveAudit,
   shell: { ...liveShell, notifications: liveNotifications },
+  onboarding: liveOnboarding,
 };

@@ -10,8 +10,8 @@ import {
   buttonSecondary,
   mono,
   panel,
-} from "../../auth/ui/styles";
-import type { DetectedRepository } from "../model";
+} from "@/ui/control-styles";
+import type { DetectedRepository } from "@/data/contracts/onboarding";
 
 type Choice = "open" | "bound" | "skipped";
 

@@ -2,7 +2,7 @@
 // recent run, start an action, ask the graph. Every entry navigates. An action
 // opens the page where it runs as a governed action (the writes land there), so
 // the menu never pretends to have done something.
-import type { CommandRun } from "./contracts";
+import type { CommandRun } from "@/data/contracts/shell";
 import {
   type NavKey,
   ORG_NAV,

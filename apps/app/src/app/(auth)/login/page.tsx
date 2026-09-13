@@ -3,17 +3,19 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
+  LoginForm,
+  OAuthButtons,
+  firstParam,
+  sanitizeNext,
+  withNext,
+} from "@/features/auth";
+import {
   AuthColumn,
   AuthFooter,
   AuthHeading,
   AuthSkeleton,
-  LoginForm,
-  OAuthButtons,
-  firstParam,
-  linkText,
-  sanitizeNext,
-  withNext,
-} from "@/features/auth";
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 import { isFixtureMode } from "@/server/fixture-session";
 
 export default function LoginPage(props: PageProps<"/login">) {

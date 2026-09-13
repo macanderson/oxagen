@@ -10,8 +10,8 @@ import { requireViewer } from "@/server/scope";
 import { PageState } from "@/ui/page-state";
 import { withNext } from "../auth/safe-next";
 import { getAuthUser } from "../auth/session";
-import { OutcomePanel } from "../auth/ui/feedback";
-import { buttonPrimary, buttonSecondary } from "../auth/ui/styles";
+import { OutcomePanel } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { agentKey } from "./agent-key";
 import {
   type AgentChoice,
@@ -21,12 +21,12 @@ import {
   readGateQuery,
   registerHref,
 } from "./flow-links";
-import type { FlowScope } from "./model";
 import {
-  fixturePageState,
+  type ResolvedFlow,
   loadDetectedRepository,
   loadFirstFrameScript,
   loadFlowScope,
+  loadGate,
   loadInstallerOffer,
   loadViewerFlowScope,
 } from "./reads";
@@ -37,7 +37,7 @@ import {
   wrapMethodFor,
 } from "./steps";
 import { FirstFramePanel } from "./ui/first-frame-panel";
-import { GateShell, GateSkeleton, StepHeading } from "./ui/gate-shell";
+import { GateShell, StepHeading } from "./ui/gate-shell";
 import { NameAgentForm } from "./ui/name-agent-form";
 import { OrganizationForm } from "./ui/organization-form";
 import { RepoPanel } from "./ui/repo-panel";
@@ -88,13 +88,16 @@ async function RunStep({
   choice,
 }: {
   mode: FlowMode;
-  scope: FlowScope;
+  scope: ResolvedFlow;
   choice: AgentChoice;
 }) {
   const t = await getTranslations("onboarding");
   const key = agentKey(scope.org.namespace, scope.ws.namespace, choice.agent);
   const fleetHref = `/${scope.org.slug}/${scope.ws.slug}`;
-  const state = await fixturePageState();
+  const [script, repo] = await Promise.all([
+    loadFirstFrameScript(mode, scope, key, choice.harness),
+    mode === "gate" ? loadDetectedRepository(scope) : null,
+  ]);
   const heading = (
     <StepHeading
       index={2}
@@ -108,8 +111,8 @@ async function RunStep({
     />
   );
 
-  if (state === "error") {
-    const script = loadFirstFrameScript(scope, key, choice.harness);
+  // The first frame could not be read: the collector cannot reach the proxy.
+  if (!script.ok && script.reason === "error") {
     return (
       <>
         {heading}
@@ -130,17 +133,13 @@ async function RunStep({
             </Link>
           }
         >
-          <p>
-            {t("run.errorBody", { host: script.ok ? script.value.host : "—" })}
-          </p>
+          <p>{t("run.errorBody")}</p>
           <p className="mt-2">{t("run.errorHint")}</p>
         </OutcomePanel>
       </>
     );
   }
 
-  const script = loadFirstFrameScript(scope, key, choice.harness);
-  const repo = mode === "gate" ? loadDetectedRepository() : null;
   return (
     <>
       {heading}
@@ -192,7 +191,7 @@ async function WrapStep({
   backHref,
 }: {
   mode: FlowMode;
-  scope: FlowScope;
+  scope: ResolvedFlow;
   choice: AgentChoice;
   runPath: string;
   runQuery: Record<string, string>;
@@ -200,7 +199,7 @@ async function WrapStep({
 }) {
   const t = await getTranslations("onboarding.wrap");
   const key = agentKey(scope.org.namespace, scope.ws.namespace, choice.agent);
-  const installer = loadInstallerOffer();
+  const installer = await loadInstallerOffer(mode, scope);
   return (
     <>
       <StepHeading
@@ -249,8 +248,9 @@ export async function WelcomeScreen({
   const user = await getAuthUser();
   if (!user) redirect(withNext("/login", gateHref("organization", null)));
 
-  const state = await fixturePageState();
-  if (state === "loading") return <GateSkeleton />;
+  // Only a denial stops the gate: its state is not recorded yet (G15), and a
+  // read that fails otherwise must not keep anyone out of step 1.
+  const gateState = await loadGate("gate", null);
 
   const gate = readGateQuery(query);
   const links = gate ? { org: gate.org, ws: gate.ws, choice: null } : null;
@@ -266,7 +266,7 @@ export async function WelcomeScreen({
     </GateShell>
   );
 
-  if (state === "denied") {
+  if (!gateState.ok && gateState.reason === "denied") {
     const t = await getTranslations("onboarding.states");
     return shell(
       <PageState page="welcome" result={deniedRead(t("gateDenied"))} />,
@@ -342,8 +342,7 @@ export async function RegisterScreen({
   const scope = await loadViewerFlowScope(viewer);
   if (!scope.ok) notFound();
 
-  const state = await fixturePageState();
-  if (state === "loading") return <GateSkeleton />;
+  const gateState = await loadGate("register", viewer.scope);
 
   const fleetHref = `/${org}/${ws}`;
   const choice = readAgentChoice(query);
@@ -360,7 +359,7 @@ export async function RegisterScreen({
     </GateShell>
   );
 
-  if (state === "denied") {
+  if (!gateState.ok && gateState.reason === "denied") {
     const t = await getTranslations("onboarding.states");
     return shell(
       <PageState

@@ -97,8 +97,10 @@ const banned: [string, string][] = [
     "src/data/adapters/live/mappers/runs.ts",
     "const n = 'runs'; void import(`../../fixture/${n}`);",
   ],
-  // A feature-local adapter is banned everywhere but its own source.ts: a
-  // shell component may not reach for the shell's fixture data.
+  // A feature's source may not select an adapter: the shell reads through
+  // dataSource().shell, and its old feature-local exemption is gone (negative).
+  ["src/features/shell/source.ts", 'void import("@/data/adapters/fixture");'],
+  ["src/features/shell/source.ts", 'import "@/data/adapters/fixture/seed";'],
   ["src/features/shell/command-menu.tsx", 'import "./adapters/fixture";'],
   ["src/features/shell/org-shell.tsx", 'void import("./adapters/fixture");'],
   // A file merely named like a test or story is not exempt.
@@ -118,13 +120,13 @@ const allowed: [string, string][] = [
   ["src/data/adapters/live/probe.ts", 'void import("./fixture-helpers");'],
   // Outside src/data/adapters a local `fixture` module is not the adapter.
   ["src/features/fleet/probe.ts", 'void import("./fixture");'],
-  // PROMOTE: the shell's source.ts selects its feature-local adapter until it
-  // folds into dataSource().shell.
-  ["src/features/shell/source.ts", 'void import("./adapters/fixture");'],
   // Tests and stories never ship, so they may use fixture data directly.
   ["src/features/shell/load.test.ts", 'import "./adapters/fixture";'],
   ["src/features/shell/shell-client.test.tsx", 'import "./adapters/fixture";'],
-  ["src/features/shell/adapters/adapters.test.ts", 'import "./fixture";'],
+  [
+    "src/features/shell/load.test.ts",
+    'import "@/data/adapters/fixture/testing";',
+  ],
   ["src/data/adapters/live/runs.test.ts", 'import "../fixture/runs";'],
   ["src/features/fleet/fleet.stories.tsx", 'import "@/data/adapters/fixture";'],
 ];
@@ -141,7 +143,6 @@ describe("fixture-adapter lint ban", () => {
 
   it.each([
     "src/data/source.ts",
-    "src/features/shell/source.ts",
     "src/features/shell/load.test.ts",
     "src/features/fleet/fleet.stories.tsx",
   ])("%s keeps the tenancy and feature-isolation bans", async (file) => {

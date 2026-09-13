@@ -141,6 +141,33 @@ describe("the integrity check catches what it guards (negative)", () => {
     ).toHaveLength(2);
   });
 
+  it("reports onboarding data that names another organization, a stranger or a namespace no agent uses", () => {
+    const broken = mutate((s) => {
+      const [first] = s.onboarding.invitations;
+      if (first) {
+        first.orgSlug = "globex";
+        first.inviterName = "Nobody Atall";
+      }
+      s.onboarding.namespaces.workspaces["core-platform"] = "platform";
+      s.onboarding.firstFrame.host = "elsewhere.local";
+    });
+    const refs = findDanglingReferences(broken);
+    expect(refs.map((d) => d.expected)).toEqual(
+      expect.arrayContaining([
+        "organization",
+        "people",
+        "the installer's host",
+      ]),
+    );
+    expect(
+      refs.some(
+        (d) =>
+          d.at === "agents[acme.core.release-manager].key" &&
+          d.expected === "a key minted in acme.platform.",
+      ),
+    ).toBe(true);
+  });
+
   it("reports proposal, drill, finding and budget references by their kind", () => {
     const broken = mutate((s) => {
       for (const p of s.proposals) p.source.ref = "nobody";

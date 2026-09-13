@@ -1,6 +1,6 @@
-// Class recipes shared by the sign-in and onboarding screens. House tokens only
-// (packages/ui globals.css component tokens), so a reskin in the kit reaches here.
-// Promote: these become lane L2's Button/Input primitives in src/ui.
+// Class recipes for plain controls (buttons, links, inputs, panels) that are not
+// yet their own component. House tokens only (packages/ui globals.css component
+// tokens), so a reskin in the kit reaches every screen that uses them.
 
 export const buttonBase =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors " +

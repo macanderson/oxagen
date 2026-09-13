@@ -5,14 +5,14 @@ import { useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
 import { approveCliAuth, cancelCliAuth } from "./cli-actions";
 import type { CliAuthorizeParams, OrgOption } from "./cli-authorize";
-import { FormAlert } from "./ui/feedback";
+import { FormAlert } from "@/ui/form-feedback";
 import {
   buttonPrimary,
   buttonSecondary,
   inputBase,
   mono,
   panel,
-} from "./ui/styles";
+} from "@/ui/control-styles";
 
 function Hidden({ params }: { params: CliAuthorizeParams }) {
   return (

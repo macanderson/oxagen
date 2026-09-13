@@ -4,20 +4,22 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
-  AuthColumn,
-  AuthHeading,
-  AuthShell,
-  AuthSkeleton,
   CliConsentForm,
-  OutcomePanel,
   authorizeParamErrors,
   authorizeReturnPath,
-  buttonSecondary,
   getAuthUser,
   loadCliScopes,
   readAuthorizeParams,
   withNext,
 } from "@/features/auth";
+import {
+  AuthColumn,
+  AuthHeading,
+  AuthShell,
+  AuthSkeleton,
+} from "@/ui/auth-shell";
+import { OutcomePanel } from "@/ui/form-feedback";
+import { buttonSecondary } from "@/ui/control-styles";
 
 // The authorize leg of the CLI's loopback OAuth + PKCE login (RFC 8252). A bad
 // redirect_uri is never followed, not even to report an error: it renders here.

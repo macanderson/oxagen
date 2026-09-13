@@ -13,7 +13,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Chip } from "./chip";
 import type { Tone } from "./tone";
-import type { AgentStatus, RunStatus } from "./vocabulary";
+import type { AgentStatus, RunStatus } from "@/data/contracts";
 
 const STATUS = {
   live: { tone: "success", icon: Radio },

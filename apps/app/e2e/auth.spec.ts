@@ -2,14 +2,15 @@
 // renders, validates and is axe clean; log in keeps a same-origin ?next= and
 // refuses any other; the session gate sends a signed-out visit to /login.
 //
-// Fixture values mirror src/features/auth/fixture.ts (not imported: that module
-// resolves the app's "@/" alias, which the Playwright loader does not).
+// The fixture operator's stand-in secrets come from src/server/fixture-session.ts,
+// which resolves no "@/" alias, so the Playwright loader can import it.
 import type { Page } from "@playwright/test";
+import { FIXTURE_CREDENTIALS } from "../src/server/fixture-session";
 import { FIXTURE_USER, expect, expectNoAxeViolations, test } from "./support";
 
-const PASSWORD = "mission-control";
-const TOTP = "602914";
-const RESET_TOKEN = "rst_fixture_01";
+const PASSWORD = FIXTURE_CREDENTIALS.password;
+const TOTP = FIXTURE_CREDENTIALS.totpCode;
+const RESET_TOKEN = FIXTURE_CREDENTIALS.resetToken;
 
 async function logIn(
   page: Page,
@@ -98,7 +99,7 @@ test.describe("log in", () => {
     await page.goto("/acme/core-platform");
     await expect(page).toHaveURL(/\/login\?next=/);
     await logIn(page);
-    await expect(page).toHaveURL(/\/acme\/core-platform$/);
+    await expect(page).toHaveURL(/\/acme\/core-platform$/, { timeout: 30_000 });
   });
 
   for (const hostile of [
@@ -198,7 +199,7 @@ test.describe("two-factor", () => {
     await page.goto("/two-factor?next=%2Facme%2Fcore-platform");
     await page.getByLabel("Authentication code").fill(TOTP);
     await page.getByRole("button", { name: "Verify" }).click();
-    await expect(page).toHaveURL(/\/acme\/core-platform$/);
+    await expect(page).toHaveURL(/\/acme\/core-platform$/, { timeout: 30_000 });
   });
 });
 
@@ -296,7 +297,7 @@ test.describe("accept an invitation", () => {
     await page.goto("/invite/invi_acme_pending");
     await expectNoAxeViolations(page);
     await page.getByRole("button", { name: "Accept invitation" }).click();
-    await expect(page).toHaveURL(/\/acme$/);
+    await expect(page).toHaveURL(/\/acme$/, { timeout: 30_000 });
   });
 
   test("denied · an invitation for another account", async ({

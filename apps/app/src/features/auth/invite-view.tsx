@@ -4,17 +4,18 @@
 import Link from "next/link";
 
 import { getFormatter, getTranslations } from "next-intl/server";
-import type { InvitationDecision, InvitationView } from "./invitation";
+import type { InvitationView } from "@/data/contracts/invitations";
+import type { InvitationDecision } from "./invitation";
 import { InviteDecision } from "./invite-decision";
 import { withNext } from "./safe-next";
-import { OutcomePanel } from "./ui/feedback";
+import { OutcomePanel } from "@/ui/form-feedback";
 import {
   buttonPrimary,
   buttonSecondary,
   linkText,
   mono,
   panel,
-} from "./ui/styles";
+} from "@/ui/control-styles";
 
 export async function InvitationNotFound() {
   const t = await getTranslations("auth.invite");

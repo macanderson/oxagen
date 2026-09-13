@@ -2,16 +2,17 @@
 // fleet. Declared here structurally so the route and the hooks do not depend
 // on a view-model module; the data layer's read ports satisfy these shapes.
 //
-// Until a data source provides a feed, each answers the honest NotBacked state
-// the plan's §3 mapping gives it, and the route streams that as an `event:
-// state` the page renders like any failed read (never an empty "all quiet"):
-//   - run frames: G6 (the :Run/:Frame recorder, M1). The live adapter wraps
-//     run-ledger `readAttemptEventsSince` in Batch 3 lane A1.
-//   - fleet patches: G3 (the `cost.run_totals` rollup, M2), the same gap that
-//     backs the Fleet list itself.
-// Wiring a feed is a change to `streamFeeds()` only.
+//   - run frames: `dataSource().runs.framesSince`, the same read the Run page
+//     renders from. The fixture source streams the seeded run's frames (dev and
+//     e2e); the live source answers its backing (src/data/backing.ts) until
+//     Batch 3 lane A1 wraps run-ledger `readAttemptEventsSince`.
+//   - fleet patches: no read port carries a patch cursor yet, so the feed
+//     answers G3 (the `cost.run_totals` rollup, M2), the gap that backs the
+//     Fleet list itself. The route streams that as an `event: state` the page
+//     renders like any failed read (never an empty "all quiet").
 import "server-only";
 import { notBacked, type Read } from "@/data/not-backed";
+import { dataSource } from "@/data/source";
 import type { StreamItem } from "./sse";
 import type { Scope } from "./tenant-scope";
 
@@ -31,11 +32,15 @@ export type StreamFeeds = {
   ) => Promise<Read<readonly StreamItem[]>>;
 };
 
-export const notBackedStreamFeeds: StreamFeeds = {
-  framesSince: () => Promise.resolve(notBacked("M1", "G6")),
-  fleetSince: () => Promise.resolve(notBacked("M2", "G3")),
-};
+/** The fleet feed until a port reads patches by cursor (G3). */
+export const fleetSinceNotBacked: StreamFeeds["fleetSince"] = () =>
+  Promise.resolve(notBacked("M2", "G3"));
 
-export function streamFeeds(): Promise<StreamFeeds> {
-  return Promise.resolve(notBackedStreamFeeds);
+export async function streamFeeds(): Promise<StreamFeeds> {
+  const source = await dataSource();
+  return {
+    framesSince: (scope, runId, afterSeq, limit) =>
+      source.runs.framesSince(scope, runId, afterSeq, limit),
+    fleetSince: fleetSinceNotBacked,
+  };
 }

@@ -1,7 +1,7 @@
 import { Bot, Server, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Chip } from "./chip";
-import type { PrincipalKind } from "./vocabulary";
+import type { PrincipalKind } from "@/data/contracts";
 
 const PRINCIPAL_ICON = {
   human: User,

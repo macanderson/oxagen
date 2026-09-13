@@ -152,10 +152,8 @@ describe.runIf(enabled)(
           retention: z.string().nullable(),
           volume: z.string().nullable(),
         }),
-        Notification: Notification.extend({
-          tone: Notification.shape.tone.nullable(),
-          body: z.string().nullable(),
-        }),
+        // Severity and body are nullable in the contract: nothing to promote.
+        Notification,
       }) as never;
 
     async function port() {
@@ -284,8 +282,10 @@ describe.runIf(enabled)(
 
     it("reads the viewer's notifications through list_notifications", async () => {
       const { notifications } = await asOwner();
-      const read = await notifications(feedScope);
+      const read = await notifications(feedScope, FEED_OWNER);
       expect(read.ok).toBe(true);
+      for (const item of read.ok ? read.value.items : [])
+        expect(Notification.parse(item)).toEqual(item);
     });
   },
 );

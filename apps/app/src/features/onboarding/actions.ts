@@ -4,7 +4,7 @@
 import { redirect } from "next/navigation";
 import { isFixtureMode } from "@/server/fixture-session";
 import { getAuthUser } from "../auth/session";
-import { FIXTURE_SCOPE } from "./fixture";
+import { FIXTURE_HOME_WORKSPACE, FIXTURE_ORG } from "@/server/fixture-tenancy";
 import {
   OrganizationForm,
   type OrganizationField,
@@ -43,7 +43,7 @@ export async function createOrganizationAction(
   if (isFixtureMode())
     return {
       ok: true,
-      to: wrapStep(FIXTURE_SCOPE.org.slug, FIXTURE_SCOPE.ws.slug),
+      to: wrapStep(FIXTURE_ORG.slug, FIXTURE_HOME_WORKSPACE.slug),
     };
 
   const { createOrganization } = await import("./create-organization");

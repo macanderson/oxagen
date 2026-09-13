@@ -13,9 +13,9 @@ import {
   ResetPasswordSchema,
   fieldErrors,
 } from "./schemas";
-import { Field, PasswordField } from "./ui/field";
-import { FormAlert, OutcomePanel, SubmitButton } from "./ui/feedback";
-import { buttonPrimary, buttonSecondary, panel } from "./ui/styles";
+import { Field, PasswordField } from "@/ui/field";
+import { FormAlert, OutcomePanel, SubmitButton } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary, panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 export function ForgotPasswordForm() {

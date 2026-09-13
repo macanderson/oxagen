@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
-import type { NavCounts, ShellContext } from "./contracts";
+import type { NavCounts, ShellContext } from "@/data/contracts/shell";
 import { filterByName } from "./switcher-filter";
 import { workspaceHref } from "./nav";
 

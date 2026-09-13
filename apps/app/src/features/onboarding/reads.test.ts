@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { describeQuery } from "../auth/test-query";
 
 const cookieJar = new Map<string, string>();
@@ -32,6 +33,11 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({ liveTenancyLookups: lookups }));
+// requireViewer defers its clock read behind connection(), which needs a request scope.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: () => Promise.resolve(),
+}));
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({
@@ -39,6 +45,14 @@ vi.mock("next/headers", () => ({
         cookieJar.has(name) ? { value: cookieJar.get(name) } : undefined,
     }),
   headers: () => Promise.resolve(new Headers()),
+}));
+// Only the onboarding port is under test: the real live source loads every live
+// adapter, whose @oxagen/database imports this file's partial mock does not carry.
+vi.mock("@/data/adapters/live", async () => ({
+  liveSource: {
+    onboarding: (await import("@/data/adapters/live/onboarding"))
+      .liveOnboarding,
+  },
 }));
 vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) =>
@@ -113,22 +127,6 @@ beforeEach(() => {
   for (const fn of Object.values(lookups)) fn.mockReset();
 });
 
-describe("fixturePageState", () => {
-  it("reads the mc_state switch in fixture mode", async () => {
-    fixtureMode();
-    cookieJar.set("mc_state", "denied");
-    await expect(reads.fixturePageState()).resolves.toBe("denied");
-    cookieJar.set("mc_state", "surprise");
-    await expect(reads.fixturePageState()).resolves.toBe("loaded");
-  });
-
-  it("ignores the switch outside fixture mode", async () => {
-    liveMode();
-    cookieJar.set("mc_state", "error");
-    await expect(reads.fixturePageState()).resolves.toBe("loaded");
-  });
-});
-
 const NOT_FOUND = {
   ok: false,
   reason: "error",
@@ -170,6 +168,7 @@ describe("loadFlowScope", () => {
         org: { slug: "acme", name: "Acme Robotics", namespace: "acme" },
         ws: { slug: "core-platform", name: "Core platform", namespace: "core" },
         operator: { name: "Priya Raman", email: "priya@acme.example" },
+        tenant: { orgId: ORG_ID, workspaceId: WS_ID },
       },
     });
     expect(lookups.isWorkspaceMember).toHaveBeenCalledWith(WS_ID, "user-1");
@@ -262,34 +261,42 @@ describe("loadFlowScope", () => {
 });
 
 describe("unbacked reads", () => {
-  it("return NotBacked G15 outside fixture mode, never fixture data", () => {
+  const flow = {
+    org: { slug: "acme", name: "Acme", namespace: "acme" },
+    ws: { slug: "core-platform", name: "Core platform", namespace: "core" },
+    operator: { name: "Marcus Bell", email: "m@a.co" },
+    tenant: {
+      orgId: FIXTURE_TENANT.orgId,
+      workspaceId: FIXTURE_TENANT.workspaces["core-platform"],
+    },
+  };
+  const notBackedG15 = {
+    ok: false,
+    reason: "not_backed",
+    milestone: "M1",
+    gap: "G15",
+  };
+
+  it("return NotBacked G15 outside fixture mode, never fixture data", async () => {
     liveMode();
-    const scope = {
-      org: { slug: "a", name: "A", namespace: "a1" },
-      ws: { slug: "w", name: "W", namespace: "w1" },
-      operator: { name: "P", email: "p@a.co" },
-    };
-    const expected = {
-      ok: false,
-      reason: "not_backed",
-      milestone: "M1",
-      gap: "G15",
-    };
-    expect(reads.loadInstallerOffer()).toEqual(expected);
-    expect(reads.loadFirstFrameScript(scope, "a1.w1.x", "claude-code")).toEqual(
-      expected,
-    );
-    expect(reads.loadDetectedRepository()).toEqual(expected);
+    expect(await reads.loadInstallerOffer("gate", flow)).toEqual(notBackedG15);
+    expect(
+      await reads.loadFirstFrameScript(
+        "gate",
+        flow,
+        "acme.core.x",
+        "claude-code",
+      ),
+    ).toEqual(notBackedG15);
+    expect(await reads.loadDetectedRepository(flow)).toEqual(notBackedG15);
+    expect(await reads.loadGate("gate", null)).toEqual(notBackedG15);
   });
 
-  it("serve the scripted first frame in fixture mode", () => {
+  it("serve the scripted first frame in fixture mode, filled in for the agent being wrapped", async () => {
     fixtureMode();
-    const read = reads.loadFirstFrameScript(
-      {
-        org: { slug: "acme", name: "Acme", namespace: "acme" },
-        ws: { slug: "core-platform", name: "core", namespace: "core" },
-        operator: { name: "Marcus Bell", email: "m@a.co" },
-      },
+    const read = await reads.loadFirstFrameScript(
+      "gate",
+      flow,
       "acme.core.perf-watch",
       "claude-code",
     );
@@ -297,5 +304,43 @@ describe("unbacked reads", () => {
     expect(read.ok && read.value.frames[1]?.body).toContain(
       "acme.core.perf-watch",
     );
+    expect(read.ok && read.value.frames[1]?.body).toContain("Marcus Bell");
+    expect(read.ok && read.value.frames[0]?.body).not.toContain("{harness}");
+  });
+
+  it("walk the gate's states through the mc_state switch in fixture mode", async () => {
+    fixtureMode();
+    cookieJar.set("mc_state", "denied");
+    expect(await reads.loadGate("gate", null)).toEqual({
+      ok: false,
+      reason: "denied",
+      permission: "org.create",
+    });
+    expect(await reads.loadGate("register", flow.tenant)).toEqual({
+      ok: false,
+      reason: "denied",
+      permission: "agent.register",
+    });
+    cookieJar.set("mc_state", "welcome:error");
+    expect(
+      await reads.loadFirstFrameScript("gate", flow, "acme.core.x", "stella"),
+    ).toMatchObject({ ok: false, reason: "error" });
+    // Register is its own page: the gate's error leaves it loaded.
+    expect(
+      (
+        await reads.loadFirstFrameScript(
+          "register",
+          flow,
+          "acme.core.x",
+          "stella",
+        )
+      ).ok,
+    ).toBe(true);
+  });
+
+  it("ignore the switch outside fixture mode (negative)", async () => {
+    liveMode();
+    cookieJar.set("mc_state", "denied");
+    expect(await reads.loadGate("gate", null)).toEqual(notBackedG15);
   });
 });

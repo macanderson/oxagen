@@ -219,3 +219,32 @@ export const PolicySimulation = z.object({
   agentsAffected: z.array(z.string()),
 });
 export type PolicySimulation = z.infer<typeof PolicySimulation>;
+
+/**
+ * What stands between a toolbelt and dispatch for one tool version: the policy
+ * effect (`allow`, `require_approval`, `deny`, spec §6.3), plus the two states
+ * that outrank it on the Tools page, a mandate (§6.9) and a kill switch (§6.11).
+ */
+export const GateDecision = z.enum([
+  "allow",
+  "require_approval",
+  "mandate",
+  "deny",
+  "killed",
+]);
+export type GateDecision = z.infer<typeof GateDecision>;
+
+/** What a tool acts on, least to most consequential (Tools › taxonomy). */
+export const ToolCategory = z.enum([
+  "read",
+  "query",
+  "record",
+  "message",
+  "file",
+  "exec",
+  "vcs",
+  "infra",
+  "access",
+  "finance",
+]);
+export type ToolCategory = z.infer<typeof ToolCategory>;

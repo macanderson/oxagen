@@ -119,7 +119,9 @@
       },
       "notBacked": {
         "title": "Notifications are not recorded yet",
-        "body": "They arrive with milestone {milestone} (backend gap {gap})."
+        "body": "They arrive with milestone {milestone} (backend gap {gap}).",
+        "bodyMilestoneOnly": "They arrive with milestone {milestone}.",
+        "bodyNotWired": "The notification store exists, but Mission Control does not read it yet."
       },
       "denied": {
         "title": "You cannot see notifications here",

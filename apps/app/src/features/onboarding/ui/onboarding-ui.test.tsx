@@ -11,11 +11,11 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IntlProvider } from "../../auth/test-intl";
-import {
-  FIXTURE_INSTALLER,
-  FIXTURE_REPOSITORY,
-  fixtureFirstFrameScript,
-} from "../fixture";
+import { firstFrameFor } from "@/data/adapters/fixture";
+import { seed } from "@/data/adapters/fixture/seed";
+
+const FIXTURE_INSTALLER = seed.onboarding.installer;
+const FIXTURE_REPOSITORY = seed.onboarding.repository;
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -168,11 +168,11 @@ describe("WrapPanel", () => {
 });
 
 describe("FirstFramePanel", () => {
-  const script = fixtureFirstFrameScript(
-    "acme.core.perf-watch",
-    "claude-code",
-    "Marcus Bell",
-  );
+  const script = firstFrameFor(seed.onboarding.firstFrame, {
+    agentKey: "acme.core.perf-watch",
+    harness: "claude-code",
+    operator: "Marcus Bell",
+  });
 
   it("waits line by line, flips to connected on the first frame, then opens Fleet", () => {
     vi.useFakeTimers();

@@ -34,6 +34,11 @@ vi.mock("@/server/tenancy-lookups", async () => ({
 }));
 
 const cookieJar = new Map<string, string>();
+// requireViewer defers its clock read behind connection(), which needs a request scope.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: () => Promise.resolve(),
+}));
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({
@@ -63,12 +68,20 @@ const liveTx = {
     },
   },
 };
+// Only the onboarding port is under test: the real live source loads every live
+// adapter, whose @oxagen/database imports this file's partial mock does not carry.
+vi.mock("@/data/adapters/live", async () => ({
+  liveSource: {
+    onboarding: (await import("@/data/adapters/live/onboarding"))
+      .liveOnboarding,
+  },
+}));
 vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) => fn(liveTx),
 }));
 
 const { RegisterScreen, WelcomeScreen } = await import("./screens");
-const { GateShell, GateSkeleton } = await import("./ui/gate-shell");
+const { GateShell } = await import("./ui/gate-shell");
 const { OrganizationForm } = await import("./ui/organization-form");
 const { NameAgentForm } = await import("./ui/name-agent-form");
 const { FirstFramePanel } = await import("./ui/first-frame-panel");
@@ -125,6 +138,29 @@ function register(
   });
 }
 
+/**
+ * The loading state holds the flow's gate read (the route's Suspense shows the
+ * skeleton meanwhile), then resolves loaded: nothing renders while it holds.
+ */
+async function heldWhileLoading(
+  render: () => Promise<ReactNode>,
+): Promise<ReactNode> {
+  vi.useFakeTimers();
+  try {
+    let settled = false;
+    const pending = render().then((tree) => {
+      settled = true;
+      return tree;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(15_000);
+    return await pending;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 function fixtureMode() {
   vi.stubEnv("NODE_ENV", "development");
   vi.stubEnv("MC_DATA", "fixture");
@@ -167,7 +203,8 @@ describe("WelcomeScreen", () => {
 
   it("honours the loading and denied switches", async () => {
     cookieJar.set("mc_state", "loading");
-    expect((await welcome(undefined)).type).toBe(GateSkeleton);
+    const loaded = await heldWhileLoading(() => welcome(undefined));
+    expect(find(loaded, OrganizationForm)).toBeDefined();
     cookieJar.set("mc_state", "denied");
     const deniedTree = await welcome(undefined);
     expect(find(deniedTree, GateShell)?.props.hiddenTitle).toBe(true);
@@ -283,7 +320,8 @@ describe("RegisterScreen", () => {
       permission: "agent.register on core-platform",
     });
     cookieJar.set("mc_state", "loading");
-    expect((await register(undefined)).type).toBe(GateSkeleton);
+    const loaded = await heldWhileLoading(() => register(undefined));
+    expect(find(loaded, NameAgentForm)).toBeDefined();
   });
 
   it("wrap and run carry the choice", async () => {
@@ -334,7 +372,7 @@ describe("the run and wrap steps", () => {
     expect(find(tree, RepoPanel)).toBeDefined();
   });
 
-  it("fixture · error names the host and offers checking again", async () => {
+  it("fixture · an error reading the first frame says the collector cannot reach the proxy, and offers checking again", async () => {
     cookieJar.set("mc_state", "error");
     const tree = await runStepElement({ org: "acme", ws: "core-platform" });
     expect(
@@ -349,6 +387,15 @@ describe("the run and wrap steps", () => {
         (e) => e.props.testId === "first-frame-error",
       ),
     ).toBe(true);
+  });
+
+  it("an unrecorded gate state never keeps anyone out: not_backed and error still render step 1", async () => {
+    cookieJar.set("mc_state", "welcome:not_backed");
+    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
+    cookieJar.set("mc_state", "welcome:error");
+    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
+    vi.stubEnv("MC_DATA", "live");
+    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
   });
 
   it("live · the first frame and the repository are NotBacked (G15), with a way on to Fleet", async () => {

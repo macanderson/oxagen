@@ -1,42 +1,32 @@
-// Reads for the onboarding gate and Register an agent, each returning Read<T>.
+// Reads for the onboarding gate and Register an agent, each returning Read<T>
+// through the onboarding read port (src/data/ports.ts `OnboardingReadPort`).
 //
 // What is backed today (plan §3.2 "Auth + onboarding gate", 🟡): organizations,
-// workspaces and memberships. What is not (G15, milestone M1): the gate state
-// itself, the one-click installer with its embedded single-use token, the first
-// frame arriving from a freshly wrapped agent, and the repository the installer
-// saw. Those return NotBacked outside fixture mode, and the screens say so
-// instead of pretending to wait.
+// workspaces, memberships and the namespaces agent keys use. What is not (G15,
+// milestone M1): the gate state itself, the one-click installer with its
+// embedded single-use token, the first frame arriving from a freshly wrapped
+// agent, and the repository the installer saw. The live source answers those
+// NotBacked, and the screens say so instead of pretending to wait. In dev and
+// e2e the fixture source serves the mockup's gate, and its `mc_state` switch
+// walks the loading, error and denied states through these same reads.
 import "server-only";
-import { cookies } from "next/headers";
-import { type Read, notBacked, readError, readOk } from "@/data/not-backed";
-import { isFixtureMode } from "@/server/fixture-session";
-import { resolveViewer, type Viewer } from "@/server/scope";
-import {
-  FIXTURE_INSTALLER,
-  FIXTURE_REPOSITORY,
-  FIXTURE_SCOPE,
-  fixtureFirstFrameScript,
-} from "./fixture";
 import type {
   DetectedRepository,
   FirstFrameScript,
   FlowScope,
   InstallerOffer,
-} from "./model";
+  OnboardingGate,
+} from "@/data/contracts/onboarding";
+import { type Read, readError, readOk } from "@/data/not-backed";
+import type { OnboardingFlow } from "@/data/ports";
+import type { Scope } from "@/data/scope";
+import { dataSource } from "@/data/source";
+import { resolveViewer, type Viewer } from "@/server/scope";
 
 export const SCOPE_NOT_FOUND = "workspace_not_found";
 
-/** The mc_state switch (plan §4.12), honoured only in fixture mode. Promote: lane L1's state switch. */
-export type FixturePageState = "loaded" | "loading" | "error" | "denied";
-const STATE_COOKIE = "mc_state";
-
-export async function fixturePageState(): Promise<FixturePageState> {
-  if (!isFixtureMode()) return "loaded";
-  const value = (await cookies()).get(STATE_COOKIE)?.value;
-  return value === "loading" || value === "error" || value === "denied"
-    ? value
-    : "loaded";
-}
+/** A flow's organization and workspace, with the tenant scope `requireViewer` admitted. */
+export type ResolvedFlow = FlowScope & { tenant: Scope };
 
 /**
  * The org and workspace a flow runs in, for a viewer `requireViewer` already
@@ -46,41 +36,22 @@ export async function fixturePageState(): Promise<FixturePageState> {
  */
 export async function loadViewerFlowScope(
   viewer: Viewer,
-): Promise<Read<FlowScope>> {
+): Promise<Read<ResolvedFlow>> {
   const { ws } = viewer;
   if (!ws) return readError(SCOPE_NOT_FOUND, 404);
-  const operator = { name: viewer.user.name ?? "", email: viewer.user.email };
-  if (isFixtureMode()) {
-    return viewer.org.slug === FIXTURE_SCOPE.org.slug &&
-      ws.slug === FIXTURE_SCOPE.ws.slug
-      ? readOk({ ...FIXTURE_SCOPE, operator })
-      : readError(SCOPE_NOT_FOUND, 404);
-  }
-  const { orgId, workspaceId } = viewer.scope;
-  const { withSystemDb } = await import("@oxagen/database");
-  // tenancy: unscoped seam (namespace columns only, by the org and workspace ids requireViewer admitted this user to)
-  const namespaces = await withSystemDb(async (tx) => {
-    const org = await tx.query.organizations.findFirst({
-      where: (o, { and, eq, ne }) =>
-        and(eq(o.id, orgId), ne(o.status, "deleted")),
-      columns: { namespace: true },
-    });
-    if (!org) return null;
-    const workspace = await tx.query.workspaces.findFirst({
-      where: (w, { and, eq }) => and(eq(w.orgId, orgId), eq(w.id, workspaceId)),
-      columns: { namespace: true },
-    });
-    return workspace ? { org: org.namespace, ws: workspace.namespace } : null;
-  });
-  if (!namespaces) return readError(SCOPE_NOT_FOUND, 404);
+  const namespaces = await (await dataSource()).onboarding.namespaces(
+    viewer.scope,
+  );
+  if (!namespaces.ok) return readError(SCOPE_NOT_FOUND, 404);
   return readOk({
     org: {
       slug: viewer.org.slug,
       name: viewer.org.name,
-      namespace: namespaces.org,
+      namespace: namespaces.value.org,
     },
-    ws: { slug: ws.slug, name: ws.name, namespace: namespaces.ws },
-    operator,
+    ws: { slug: ws.slug, name: ws.name, namespace: namespaces.value.ws },
+    operator: { name: viewer.user.name ?? "", email: viewer.user.email },
+    tenant: viewer.scope,
   });
 }
 
@@ -93,27 +64,44 @@ export async function loadViewerFlowScope(
 export async function loadFlowScope(
   orgSlug: string,
   wsSlug: string,
-): Promise<Read<FlowScope>> {
+): Promise<Read<ResolvedFlow>> {
   const result = await resolveViewer(orgSlug, wsSlug);
   return result.kind === "ok"
     ? loadViewerFlowScope(result.viewer)
     : readError(SCOPE_NOT_FOUND, 404);
 }
 
-export function loadInstallerOffer(): Read<InstallerOffer> {
-  return isFixtureMode() ? readOk(FIXTURE_INSTALLER) : notBacked("M1", "G15");
+/** Where the gate stands. Null scope: the organization does not exist yet. */
+export async function loadGate(
+  flow: OnboardingFlow,
+  scope: Scope | null,
+): Promise<Read<OnboardingGate>> {
+  return (await dataSource()).onboarding.gate(flow, scope);
 }
 
-export function loadFirstFrameScript(
-  scope: FlowScope,
-  key: string,
+export async function loadInstallerOffer(
+  flow: OnboardingFlow,
+  scope: ResolvedFlow,
+): Promise<Read<InstallerOffer>> {
+  return (await dataSource()).onboarding.installerOffer(scope.tenant, flow);
+}
+
+export async function loadFirstFrameScript(
+  flow: OnboardingFlow,
+  scope: ResolvedFlow,
+  agentKey: string,
   harness: string,
-): Read<FirstFrameScript> {
-  return isFixtureMode()
-    ? readOk(fixtureFirstFrameScript(key, harness, scope.operator.name))
-    : notBacked("M1", "G15");
+): Promise<Read<FirstFrameScript>> {
+  return (await dataSource()).onboarding.firstFrameScript(scope.tenant, {
+    flow,
+    agentKey,
+    harness,
+    operator: scope.operator.name,
+  });
 }
 
-export function loadDetectedRepository(): Read<DetectedRepository> {
-  return isFixtureMode() ? readOk(FIXTURE_REPOSITORY) : notBacked("M1", "G15");
+export async function loadDetectedRepository(
+  scope: ResolvedFlow,
+): Promise<Read<DetectedRepository>> {
+  return (await dataSource()).onboarding.detectedRepository(scope.tenant);
 }
