@@ -22,6 +22,33 @@ const nextConfig = {
   cacheComponents: true,
   reactStrictMode: true,
   transpilePackages: ["@oxagen/ui"],
+  /**
+   * Force `@swc/helpers`' ESM build into the traced output.
+   *
+   * Next's `require-hook` resolves `@swc/helpers/_/_interop_require_default`
+   * at runtime from its own package directory. That package is `"type":
+   * "module"`, and its `exports` map sends the `import`/`module-sync`
+   * conditions to `./esm/*.js` with `./cjs/*.cjs` only as `default`. The file
+   * tracer sees the CJS branch and copies `cjs/` alone, so the standalone
+   * bundle carries the package without the file the resolver asks for — and
+   * Node reports it as a missing module rather than a missing condition:
+   *
+   *   Cannot find module '…/@swc/helpers/esm/_interop_require_default.js'
+   *
+   * Nothing catches it before the node: `next build` and `next dev` both run
+   * against the full workspace `node_modules`, and only the standalone server
+   * resolves out of the traced copy. So docs built green, shipped, failed its
+   * health check on the instance and rolled back to its previous release on
+   * every deploy since (#2881).
+   *
+   * The glob is versionless so a `@swc/helpers` bump does not silently empty
+   * it; `apps/app` traces the ESM build already and needs no entry.
+   */
+  outputFileTracingIncludes: {
+    "/**/*": [
+      "../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*",
+    ],
+  },
   // Builds on Turbopack (Next 16 default); fumadocs-mdx integrates via
   // createMDX(). Workspace packages are consumed as source with extensionless
   // relative imports, resolved natively under `moduleResolution: "Bundler"`.
