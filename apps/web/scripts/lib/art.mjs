@@ -1,18 +1,22 @@
 // The drawings a generated image is made of.
 //
-// Two layers. The honeycomb is the brand's own cell (the cluster in
+// Three layers. The lattice is the brand's own cell (the cluster in
 // oxagen-house-brand/build/marks.py, the .tex-hex texture in oxagen.css)
-// scattered as a field of rings and flat blocks with exactly one cell in
-// gold. Over or beside it sits one of seven hairline drawings of the things
-// the writing is about: a knowledge graph, an ontology, an agent's loop, a
-// tool call, a policy gate, an audit ledger, a meter. Hairlines in the
-// theme's quiet tones, so a drawing reads as a watermark rather than a
-// figure; never a gradient, never a translucent fill.
+// tiled evenly across the ink and fading toward the edges the way the
+// site's hero does. Over it sits one panel, built the way the site builds
+// its terminal: a raised card, a title bar with two dim dots and one gold,
+// and a tracked label naming the subject. Inside the panel is one of seven
+// line drawings of the things the writing is about: a knowledge graph, an
+// ontology, an agent's loop, a tool call, a policy gate, an audit ledger, a
+// meter. The drawing is a figure, not a watermark: hairlines in the dim
+// tone, working lines in the muted tone, and the one accent in the body
+// tone. Never a gradient, never a translucent fill.
 //
 // Everything takes a seeded `rand`, so an image is a pure function of its
-// seed and theme and rebuilds identically.
+// seed and rebuilds identically.
 
-import { blockTones, lineTones } from "./theme.mjs";
+import { textPath } from "./text.mjs";
+import { INK, lineTones } from "./theme.mjs";
 
 export const TREATMENTS = [
   "graph",
@@ -23,6 +27,17 @@ export const TREATMENTS = [
   "ledger",
   "meter",
 ];
+
+/** What each treatment is a drawing of, for a panel's title bar. */
+export const SUBJECTS = {
+  graph: "knowledge graph",
+  ontology: "ontology",
+  loop: "agent loop",
+  terminal: "tool call",
+  gate: "policy gate",
+  ledger: "audit ledger",
+  meter: "meter",
+};
 
 /** FNV-1a, so a slug picks the same treatment and layout every build. */
 export function hash32(str) {
@@ -51,7 +66,6 @@ export function treatmentFor(seed) {
   return TREATMENTS[hash32(`treatment:${seed}`) % TREATMENTS.length];
 }
 
-const pick = (rand, list) => list[Math.floor(rand() * list.length)];
 const n = (v) => Number(v.toFixed(1));
 
 // pointy-top hex in the brand mark's proportions (CELL = (6.30, 6.64))
@@ -70,53 +84,92 @@ export function hexPoints(cx, cy, rx, ry = rx * CELL_ASPECT) {
     .join(" ");
 }
 
+// the site's .tex-hex sits under a radial mask that is solid to 60% of the
+// way out and gone at the edge; three steps stand in for the mask, so the
+// lattice recedes without a gradient. Quieter than the CSS's 0.7, since a
+// cover is seen at a fifth of the size the hero is.
+const LATTICE_STEPS = [
+  [0.6, 0.5],
+  [0.85, 0.28],
+  [Infinity, 0.1],
+];
+
 /**
- * A field of honeycomb cells filling a box, denser at the box's centre and
- * thinning to its edges, with exactly one solid gold cell kept well inside.
- * @param {{ rand: () => number, t: object, x: number, y: number, w: number, h: number,
- *   cell: number, density: number, tilt?: number, gold?: boolean }} o
- *   cell is a cell's half-width in px; density the chance a central cell draws
+ * A field of hairline honeycomb cells tiled evenly over a box, fading in
+ * steps toward the box's edges. The one place the site's own texture and a
+ * generated image share a construction.
+ * @param {{ t?: object, x: number, y: number, w: number, h: number, cell: number }} o
+ *   cell is a cell's half-width in px
  */
-export function honeycomb(o) {
-  const { rand, t } = o;
+export function lattice(o) {
+  const t = o.t ?? INK;
   const rx = o.cell;
   const ry = rx * CELL_ASPECT;
-  const pitchX = rx * 2.06;
-  const pitchY = ry * 1.545;
+  const pitchX = rx * 2;
+  const pitchY = ry * 1.5;
   const cx0 = o.x + o.w / 2;
   const cy0 = o.y + o.h / 2;
-  const pad = ry * 2;
-  const cols = Math.ceil((o.w + pad * 2) / pitchX) + 1;
-  const rows = Math.ceil((o.h + pad * 2) / pitchY) + 1;
-  const cells = [];
+  const cols = Math.ceil(o.w / pitchX) + 2;
+  const rows = Math.ceil(o.h / pitchY) + 2;
+  const bands = LATTICE_STEPS.map(() => []);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      const cx = o.x - pad + col * pitchX + (row % 2 ? pitchX / 2 : 0);
-      const cy = o.y - pad + row * pitchY;
+      const cx = o.x - rx + col * pitchX + (row % 2 ? rx : 0);
+      const cy = o.y - ry + row * pitchY;
       const dist = Math.hypot((cx - cx0) / (o.w / 2), (cy - cy0) / (o.h / 2));
-      cells.push({ cx, cy, dist });
+      const band = LATTICE_STEPS.findIndex(([edge]) => dist < edge);
+      bands[band].push(`<polygon points="${hexPoints(cx, cy, rx, ry)}"/>`);
     }
   }
-  const inner = cells.filter((c) => c.dist < 0.6);
-  const goldCell = o.gold === false ? null : pick(rand, inner);
-  const blocks = blockTones(t);
-  const lines = lineTones(t);
-  const out = [];
-  for (const c of cells) {
-    const isGold = c === goldCell;
-    const chance = o.density * (1 - Math.min(c.dist, 1) ** 1.6);
-    if (!isGold && rand() >= chance) continue;
-    const pts = hexPoints(c.cx, c.cy, rx, ry);
-    if (isGold) out.push(`<polygon points="${pts}" fill="${t.gold}"/>`);
-    else if (rand() < 0.6)
-      out.push(`<polygon points="${pts}" fill="${pick(rand, blocks)}"/>`);
-    else
-      out.push(
-        `<polygon points="${pts}" fill="none" stroke="${pick(rand, lines)}" stroke-width="1.6"/>`,
-      );
-  }
-  const tilt = o.tilt ?? 0;
-  return `<g transform="rotate(${tilt.toFixed(2)} ${n(cx0)} ${n(cy0)})">${out.join("")}</g>`;
+  return bands
+    .map(
+      (cells, i) =>
+        `<g fill="none" stroke="${t.line}" stroke-width="1" stroke-opacity="${LATTICE_STEPS[i][1]}">${cells.join("")}</g>`,
+    )
+    .join("");
+}
+
+export const PANEL_BAR = 56;
+
+/**
+ * A raised panel the way the site draws its terminal: a rounded card on a
+ * hairline, a title bar with two dim dots and one gold, and a tracked label.
+ * Returns the SVG and the box a drawing may fill under the bar.
+ * @param {{ t?: object, x: number, y: number, w: number, h: number, label: string, pad?: number }} o
+ */
+export function panel(o) {
+  const t = o.t ?? INK;
+  const pad = o.pad ?? 40;
+  const bar = o.y + PANEL_BAR;
+  const dots = [t.dim, t.dim, t.gold]
+    .map(
+      (fill, i) =>
+        `<circle cx="${n(o.x + 26 + i * 20)}" cy="${n(o.y + PANEL_BAR / 2)}" r="5" fill="${fill}"/>`,
+    )
+    .join("");
+  const svg = [
+    `<rect x="${n(o.x)}" y="${n(o.y)}" width="${n(o.w)}" height="${n(o.h)}" rx="12" fill="${t.panel}" stroke="${t.line}" stroke-width="1.5"/>`,
+    `<line x1="${n(o.x)}" y1="${n(bar)}" x2="${n(o.x + o.w)}" y2="${n(bar)}" stroke="${t.line}" stroke-width="1.5"/>`,
+    dots,
+    textPath(o.label.toUpperCase(), {
+      x: o.x + 92,
+      y: o.y + PANEL_BAR / 2 + 6,
+      size: 17,
+      weight: 500,
+      tracking: 0.16,
+      fill: t.muted,
+    }),
+  ].join("");
+  return {
+    svg,
+    box: {
+      x: o.x + pad,
+      y: bar + pad * 0.75,
+      w: o.w - pad * 2,
+      h: o.h - PANEL_BAR - pad * 1.5,
+      surface: t.panel,
+    },
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -125,19 +178,27 @@ export function honeycomb(o) {
 
 /**
  * @param {string} name one of TREATMENTS
- * @param {{ rand: () => number, t: object, x: number, y: number, w: number, h: number }} box
+ * @param {{ rand: () => number, t?: object, x: number, y: number, w: number, h: number,
+ *   surface?: string }} box surface is the fill behind the drawing, which
+ *   hollow shapes are punched in; the panel unless told otherwise
  */
 export function drawing(name, box) {
   const fn = DRAWINGS[name];
   if (!fn) throw new Error(`unknown treatment "${name}"`);
-  const s = Math.min(box.w, box.h);
+  const t = box.t ?? INK;
+  // the panel is wide, so a drawing sized off its height alone sits small
+  // in it; every drawing keeps within 0.8 of its scale vertically, so a
+  // fifth over the height still fits
+  const s = Math.min(box.w, box.h * 1.2);
   const p = {
     ...box,
+    t,
+    surface: box.surface ?? t.panel,
     s,
     cx: box.x + box.w / 2,
     cy: box.y + box.h / 2,
-    sw: Math.max(1.2, s * 0.0035),
-    tone: lineTones(box.t),
+    sw: Math.max(1.6, s * 0.006),
+    tone: lineTones(t),
   };
   return `<g fill="none" stroke="${p.tone[1]}" stroke-width="${p.sw.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round">${fn(p)}</g>`;
 }
@@ -170,7 +231,7 @@ const chevron = (x, y, angle, size) => {
 };
 const quiet = (p) => ` stroke="${p.tone[0]}"`;
 const loud = (p) => ` stroke="${p.tone[2]}"`;
-const punch = (p) => ` fill="${p.t.ground}"`;
+const punch = (p) => ` fill="${p.surface}"`;
 
 /** A knowledge graph: typed nodes, the edges between them, a few labels. */
 function graph(p) {
@@ -353,22 +414,19 @@ function loop(p) {
   return out.join("");
 }
 
-/** A tool call: a terminal panel, a prompt, lines of a log, a cursor. */
+/**
+ * A tool call: a prompt, lines of a log, a cursor. The panel the drawing
+ * sits in is the terminal, so the drawing is only what it printed.
+ */
 function terminal(p) {
   const { rand, s } = p;
-  const x0 = p.x + p.w * 0.08;
-  const y0 = p.y + p.h * 0.1;
-  const w = p.w * 0.84;
-  const h = p.h * 0.8;
-  const out = [rect(x0, y0, w, h)];
-  const bar = y0 + s * 0.07;
-  out.push(line(x0, bar, x0 + w, bar, quiet(p)));
-  for (let i = 0; i < 3; i++)
-    out.push(
-      circle(x0 + s * (0.04 + i * 0.035), y0 + s * 0.035, s * 0.009, quiet(p)),
-    );
-  const rows = Math.floor((h - s * 0.12) / (s * 0.065));
-  let y = bar + s * 0.07;
+  const x0 = p.x + p.w * 0.06;
+  const y0 = p.y + p.h * 0.04;
+  const w = p.w * 0.88;
+  const h = p.h * 0.92;
+  const out = [];
+  const rows = Math.floor((h - s * 0.05) / (s * 0.065));
+  let y = y0 + s * 0.03;
   let indent = 0;
   for (let i = 0; i < rows; i++) {
     const prompt = rand() < 0.3;

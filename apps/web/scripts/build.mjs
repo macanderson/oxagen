@@ -51,7 +51,6 @@ import {
   withOgImage,
 } from "./lib/pages.mjs";
 import { renderPng } from "./lib/raster.mjs";
-import { THEMES } from "./lib/theme.mjs";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -127,48 +126,32 @@ async function emit(file, content) {
 }
 
 /**
- * Render a share card in both themes, and unless `ogOnly`, a banner and a
- * thumbnail too, into dist/<base>/. Returns the site-absolute URLs. A post
- * that ships its own `image` keeps it for the banner and thumbnail; the card
- * is still generated, since it carries the title.
+ * Render a share card and, unless `ogOnly`, a banner and a thumbnail too,
+ * into dist/<base>/. Returns the site-absolute URLs. A post that ships its
+ * own `image` keeps it for the banner and thumbnail; the card is still
+ * generated, since it carries the title.
  * @param {{ base: string, seed: string, treatment?: string, override?: string | null,
  *   ogOnly?: boolean, og: { title: string, summary: string, kind: string, meta: string[] } }} o
+ * @returns {Promise<{ og: string, banner?: string, thumb?: string }>}
  */
 async function generateImages(o) {
   const dir = path.join(DIST, o.base);
   const url = (name) => `${o.base}/${name}`;
-  const images = { og: {}, banner: {}, thumb: {} };
-  for (const theme of THEMES) {
-    const card = ogSvg({
-      seed: o.seed,
-      theme,
-      treatment: o.treatment,
-      ...o.og,
-    });
-    await emit(
-      path.join(dir, `og-${theme}.png`),
-      renderPng(card, { width: OG.w }),
-    );
-    images.og[theme] = url(`og-${theme}.png`);
-    if (o.ogOnly) continue;
-    if (o.override) {
-      images.banner[theme] = o.override;
-      images.thumb[theme] = o.override;
-      continue;
-    }
-    const banner = bannerSvg({ seed: o.seed, theme, treatment: o.treatment });
-    await emit(
-      path.join(dir, `banner-${theme}.png`),
-      renderPng(banner, { width: BANNER.w }),
-    );
-    await emit(
-      path.join(dir, `thumb-${theme}.png`),
-      renderPng(banner, { width: THUMB.w }),
-    );
-    images.banner[theme] = url(`banner-${theme}.png`);
-    images.thumb[theme] = url(`thumb-${theme}.png`);
-  }
-  return images;
+  const card = ogSvg({ seed: o.seed, treatment: o.treatment, ...o.og });
+  await emit(path.join(dir, "og.png"), renderPng(card, { width: OG.w }));
+  const images = { og: url("og.png") };
+  if (o.ogOnly) return images;
+  if (o.override) return { ...images, banner: o.override, thumb: o.override };
+  const banner = bannerSvg({ seed: o.seed, treatment: o.treatment });
+  await emit(
+    path.join(dir, "banner.png"),
+    renderPng(banner, { width: BANNER.w }),
+  );
+  await emit(
+    path.join(dir, "thumb.png"),
+    renderPng(banner, { width: THUMB.w }),
+  );
+  return { ...images, banner: url("banner.png"), thumb: url("thumb.png") };
 }
 
 /** Every .html under `dir` (relative paths), skipping the blog the build wrote itself. */
@@ -227,7 +210,7 @@ export async function build({ log = console.log } = {}) {
         meta: [`${count} ${count === 1 ? "post" : "posts"}`],
       },
     });
-    images += 6;
+    images += 3;
   }
   for (const post of posts) {
     if (post.image) {
@@ -257,7 +240,7 @@ export async function build({ log = console.log } = {}) {
         meta: [formatDate(post.date), `${post.readingMinutes} min read`],
       },
     });
-    images += post.image ? 2 : 6;
+    images += post.image ? 1 : 3;
   }
   const blogCard = await generateImages({
     base: urls.blog(),
@@ -271,7 +254,7 @@ export async function build({ log = console.log } = {}) {
       meta: [`${posts.length} posts`],
     },
   });
-  images += 2;
+  images += 1;
 
   const wordmark = inlineWordmark(
     await readFile(
@@ -323,7 +306,7 @@ export async function build({ log = console.log } = {}) {
   }
   await emit(
     path.join(DIST, "blog", "index.html"),
-    indexPage({ pillars, posts, wordmark, image: blogCard.og.dark }),
+    indexPage({ pillars, posts, wordmark, image: blogCard.og }),
   );
   await emit(path.join(DIST, "blog", "feed.xml"), feedXml(posts, pillars));
 
@@ -340,25 +323,22 @@ export async function build({ log = console.log } = {}) {
       );
     }
     const key = pageKey(rel);
-    for (const theme of THEMES) {
-      const card = ogSvg({
-        seed: `page:${key}`,
-        theme,
-        title: cardTitle(title),
-        summary: description,
-        kind: pageKind(rel),
-        meta: [],
-      });
-      await emit(
-        path.join(DIST, "og", `${key}-${theme}.png`),
-        renderPng(card, { width: OG.w }),
-      );
-    }
-    images += 2;
+    const card = ogSvg({
+      seed: `page:${key}`,
+      title: cardTitle(title),
+      summary: description,
+      kind: pageKind(rel),
+      meta: [],
+    });
+    await emit(
+      path.join(DIST, "og", `${key}.png`),
+      renderPng(card, { width: OG.w }),
+    );
+    images += 1;
     await writeFile(
       file,
       withOgImage(html, {
-        url: `${SITE}/og/${key}-dark.png`,
+        url: `${SITE}/og/${key}.png`,
         width: OG.w,
         height: OG.h,
         alt: title,

@@ -1,23 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { blockTones, lineTones, theme, THEMES } from "./theme.mjs";
+import { INK, lineTones } from "./theme.mjs";
 
-describe("theme", () => {
-  it("has a dark and a light palette on the house tokens", () => {
-    expect(THEMES).toEqual(["dark", "light"]);
-    expect(theme("dark").ground).toBe("#10100F");
-    expect(theme("light").ground).toBe("#F2EEE5");
-    expect(theme("dark").gold).toBe("#D6962C");
-    expect(theme("light").goldText).toBe("#8B5E1A");
+describe("INK", () => {
+  it("is the house ink palette, byte for byte", () => {
+    expect(INK.ground).toBe("#10100F");
+    expect(INK.panel).toBe("#181715");
+    expect(INK.line).toBe("#292722");
+    expect(INK.text).toBe("#F2EEE5");
+    expect(INK.gold).toBe("#D6962C");
   });
 
-  it("rejects an unknown theme", () => {
-    expect(() => theme("sepia")).toThrow(/unknown theme/);
+  it("has no paper surface: every generated image is on ink", () => {
+    // paper (#F2EEE5) is the text tone here, never a ground or a panel
+    expect(INK.ground).not.toBe("#F2EEE5");
+    expect(Object.values(INK)).not.toContain("#F8F5EE");
+    expect(Object.isFrozen(INK)).toBe(true);
   });
 
-  it("offers three hairline tones and two block tones per theme", () => {
-    for (const name of THEMES) {
-      expect(lineTones(theme(name))).toHaveLength(3);
-      expect(blockTones(theme(name))).toHaveLength(2);
-    }
+  it("offers three stroke tones, quietest first, none of them a hairline of the ground", () => {
+    const tones = lineTones();
+    expect(tones).toEqual([INK.dim, INK.muted, INK.body]);
+    expect(lineTones(INK)).toEqual(tones);
+    expect(tones).not.toContain(INK.line);
   });
 });
