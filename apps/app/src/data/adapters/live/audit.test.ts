@@ -66,9 +66,13 @@ vi.mock("@/server/session", () => ({ getSession: kernel.getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
   liveTenancyLookups: { orgRole: kernel.orgRole },
 }));
+// The wiring test imports the whole live source, so every adapter's telemetry
+// import must resolve here too (the runs adapter binds its token-usage reader
+// when the module loads).
 vi.mock("@oxagen/telemetry", () => ({
   chSelect: kernel.chSelect,
   captureError: kernel.captureError,
+  sumTokenUsageByExecutionStep: vi.fn(),
 }));
 
 // A drizzle transaction stand-in: every builder call chains, `from` records the
