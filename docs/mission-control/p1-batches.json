@@ -1,0 +1,1343 @@
+[
+  {
+    "batch": "org-identity",
+    "tools": [
+      {
+        "name": "create_org",
+        "file": "create-org.ts",
+        "group": "Organization and workspace",
+        "does": "organization, Neo4j database, keys, billing account",
+        "absorbs": [
+          {
+            "name": "create_org",
+            "path": "packages/oxagen/src/contracts/org.create.ts"
+          }
+        ]
+      },
+      {
+        "name": "update_org",
+        "file": "update-org.ts",
+        "group": "Organization and workspace",
+        "does": "name, settings, retention policy",
+        "absorbs": [
+          {
+            "name": "update_org_settings",
+            "path": "packages/oxagen/src/contracts/org.settings.write.ts"
+          }
+        ]
+      },
+      {
+        "name": "invite_member",
+        "file": "invite-member.ts",
+        "group": "Organization and workspace",
+        "does": "invite to org or workspace with role",
+        "absorbs": [
+          {
+            "name": "send_workspace_invite",
+            "path": "packages/oxagen/src/contracts/workspace.invite.send.ts"
+          },
+          {
+            "name": "add_org_member",
+            "path": "packages/oxagen/src/contracts/org.member.add.ts"
+          }
+        ]
+      },
+      {
+        "name": "respond_to_invite",
+        "file": "respond-to-invite.ts",
+        "group": "Organization and workspace",
+        "does": "accept or decline",
+        "absorbs": [
+          {
+            "name": "accept_member_invite",
+            "path": "packages/oxagen/src/contracts/org.member_invite.accept.ts"
+          },
+          {
+            "name": "decline_member_invite",
+            "path": "packages/oxagen/src/contracts/org.member_invite.decline.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_member_role",
+        "file": "set-member-role.ts",
+        "group": "Organization and workspace",
+        "does": "set a role or remove (role `none`) at org or workspace",
+        "absorbs": [
+          {
+            "name": "change_member_role",
+            "path": "packages/oxagen/src/contracts/org.member_role.change.ts"
+          },
+          {
+            "name": "remove_org_member",
+            "path": "packages/oxagen/src/contracts/org.member.remove.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_members",
+        "file": "list-members.ts",
+        "group": "Organization and workspace",
+        "does": "members with roles at either scope",
+        "absorbs": [
+          {
+            "name": "list_workspace_members",
+            "path": "packages/oxagen/src/contracts/workspace.member.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "update_workspace",
+        "file": "update-workspace.ts",
+        "group": "Organization and workspace",
+        "does": "governance mode, retention mode, promotion thresholds, budgets, model routes",
+        "absorbs": [
+          {
+            "name": "update_workspace_settings",
+            "path": "packages/oxagen/src/contracts/workspace.settings.write.ts"
+          },
+          {
+            "name": "update_memory_policy",
+            "path": "packages/oxagen/src/contracts/agent.memory_policy.write.ts"
+          },
+          {
+            "name": "update_budget_policy",
+            "path": "packages/oxagen/src/contracts/workspace.budget_policy.write.ts"
+          },
+          {
+            "name": "set_routing_policy",
+            "path": "packages/oxagen/src/contracts/router.policy.set.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_workspaces",
+        "file": "list-workspaces.ts",
+        "group": "Organization and workspace",
+        "does": "scoped listing",
+        "absorbs": [
+          {
+            "name": "list_workspaces",
+            "path": "packages/oxagen/src/contracts/workspace.list.ts"
+          },
+          {
+            "name": "list_orgs",
+            "path": "packages/oxagen/src/contracts/org.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_data_plane",
+        "file": "get-data-plane.ts",
+        "group": "Organization and workspace",
+        "does": "plane binding, DSN never returned",
+        "absorbs": [
+          {
+            "name": "get_data_plane",
+            "path": "packages/oxagen/src/contracts/org.data_plane.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_data_plane",
+        "file": "set-data-plane.ts",
+        "group": "Organization and workspace",
+        "does": "approval-gated",
+        "absorbs": [
+          {
+            "name": "set_data_plane",
+            "path": "packages/oxagen/src/contracts/org.data_plane.set.ts"
+          }
+        ]
+      },
+      {
+        "name": "create_api_key",
+        "file": "create-api-key.ts",
+        "group": "Identity and access",
+        "does": "purpose-locked keys for humans and services",
+        "absorbs": [
+          {
+            "name": "create_api_key",
+            "path": "packages/oxagen/src/contracts/api.key.create.ts"
+          }
+        ]
+      },
+      {
+        "name": "rotate_api_key",
+        "file": "rotate-api-key.ts",
+        "group": "Identity and access",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "rotate_api_key",
+            "path": "packages/oxagen/src/contracts/api.key.rotate.ts"
+          }
+        ]
+      },
+      {
+        "name": "revoke_api_key",
+        "file": "revoke-api-key.ts",
+        "group": "Identity and access",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "revoke_api_key",
+            "path": "packages/oxagen/src/contracts/api.key.revoke.ts"
+          }
+        ]
+      },
+      {
+        "name": "register_agent",
+        "file": "register-agent.ts",
+        "group": "Identity and access",
+        "does": "opens a Context PR adding `.oxagen/agents/<slug>.toml` and the generated harness files; identity is created on merge",
+        "absorbs": [
+          {
+            "name": "create_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.create.ts"
+          },
+          {
+            "name": "suggest_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.suggest.ts"
+          },
+          {
+            "name": "summarize_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.summarize.ts"
+          }
+        ]
+      },
+      {
+        "name": "update_agent",
+        "file": "update-agent.ts",
+        "group": "Identity and access",
+        "does": "a Context PR changing the definition; identity and belt update on merge",
+        "absorbs": [
+          {
+            "name": "update_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.update.ts"
+          },
+          {
+            "name": "revise_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.revise.ts"
+          },
+          {
+            "name": "publish_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.publish.ts"
+          },
+          {
+            "name": "deploy_agent",
+            "path": "packages/oxagen/src/contracts/agent.deploy.ts"
+          }
+        ]
+      },
+      {
+        "name": "retire_agent",
+        "file": "retire-agent.ts",
+        "group": "Identity and access",
+        "does": "a Context PR removing the file; principal retired, never deleted",
+        "absorbs": [
+          {
+            "name": "delete_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.delete.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_agent",
+        "file": "get-agent.ts",
+        "group": "Identity and access",
+        "does": "identity, roles, belt, mandates",
+        "absorbs": [
+          {
+            "name": "get_agent_def",
+            "path": "packages/oxagen/src/contracts/agent.definition.get.ts"
+          },
+          {
+            "name": "get_agent_role",
+            "path": "packages/oxagen/src/contracts/agent.role.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_agents",
+        "file": "list-agents.ts",
+        "group": "Identity and access",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "list_agent_defs",
+            "path": "packages/oxagen/src/contracts/agent.definition.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_agent_role",
+        "file": "set-agent-role.ts",
+        "group": "Identity and access",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "assign_agent_role",
+            "path": "packages/oxagen/src/contracts/agent.role.assign.ts"
+          },
+          {
+            "name": "revoke_agent_role",
+            "path": "packages/oxagen/src/contracts/agent.role.revoke.ts"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "batch": "control-assistant",
+    "tools": [
+      {
+        "name": "enroll_host",
+        "file": "enroll-host.ts",
+        "group": "Wrapping and control",
+        "does": "device key, host agent, bundle, hooks",
+        "absorbs": [
+          {
+            "name": "create_tacho_enrollment",
+            "path": "packages/oxagen/src/contracts/tacho.enrollment.create.ts"
+          }
+        ]
+      },
+      {
+        "name": "revoke_enrollment",
+        "file": "revoke-enrollment.ts",
+        "group": "Wrapping and control",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "revoke_tacho_enrollment",
+            "path": "packages/oxagen/src/contracts/tacho.enrollment.revoke.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_hosts",
+        "file": "list-hosts.ts",
+        "group": "Wrapping and control",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "list_tacho_hosts",
+            "path": "packages/oxagen/src/contracts/tacho.host.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_policy_bundle",
+        "file": "get-policy-bundle.ts",
+        "group": "Wrapping and control",
+        "does": "signed bundle for a host or agent",
+        "absorbs": [
+          {
+            "name": "get_tacho_bundle",
+            "path": "packages/oxagen/src/contracts/tacho.bundle.get.ts"
+          },
+          {
+            "name": "get_registry_config",
+            "path": "packages/oxagen/src/contracts/schema.registry.config.ts"
+          }
+        ]
+      },
+      {
+        "name": "ingest_frames",
+        "file": "ingest-frames.ts",
+        "group": "Wrapping and control",
+        "does": "the one evidence ingress; headless",
+        "absorbs": [
+          {
+            "name": "ingest_tacho_events",
+            "path": "packages/oxagen/src/contracts/tacho.events.ingest.ts"
+          },
+          {
+            "name": "record_execution",
+            "path": "packages/oxagen/src/contracts/agent.execution.record.ts"
+          },
+          {
+            "name": "ingest_stella_operational_telemetry",
+            "path": "packages/oxagen/src/contracts/telemetry.stella.ingest.ts"
+          },
+          {
+            "name": "debug_execution",
+            "path": "packages/oxagen/src/contracts/agent.debug.trace.ts"
+          }
+        ]
+      },
+      {
+        "name": "fetch_commands",
+        "file": "fetch-commands.ts",
+        "group": "Wrapping and control",
+        "does": "control channel; headless",
+        "absorbs": [
+          {
+            "name": "fetch_tacho_commands",
+            "path": "packages/oxagen/src/contracts/tacho.command.fetch.ts"
+          }
+        ]
+      },
+      {
+        "name": "dispatch_command",
+        "file": "dispatch-command.ts",
+        "group": "Wrapping and control",
+        "does": "pause, resume, steer, cancel, revoke",
+        "absorbs": [
+          {
+            "name": "dispatch_tacho_command",
+            "path": "packages/oxagen/src/contracts/tacho.command.dispatch.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_runs",
+        "file": "list-runs.ts",
+        "group": "Wrapping and control",
+        "does": "by operator, agent, task, tier, verdict",
+        "absorbs": [
+          {
+            "name": "list_executions",
+            "path": "packages/oxagen/src/contracts/agent.execution.list.ts"
+          },
+          {
+            "name": "list_tacho_sessions",
+            "path": "packages/oxagen/src/contracts/tacho.session.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_run",
+        "file": "get-run.ts",
+        "group": "Wrapping and control",
+        "does": "run with turns, steps, frames, receipts, cost",
+        "absorbs": [
+          {
+            "name": "get_tacho_session",
+            "path": "packages/oxagen/src/contracts/tacho.session.get.ts"
+          },
+          {
+            "name": "get_execution_trace",
+            "path": "packages/oxagen/src/contracts/agent.trace.get.ts"
+          },
+          {
+            "name": "get_message_execution",
+            "path": "packages/oxagen/src/contracts/chat.message.execution.ts"
+          }
+        ]
+      },
+      {
+        "name": "resolve_approval",
+        "file": "resolve-approval.ts",
+        "group": "Wrapping and control",
+        "does": "approve or deny, mints the token",
+        "absorbs": [
+          {
+            "name": "resolve_approval",
+            "path": "packages/oxagen/src/contracts/agent.approval.resolve.ts"
+          },
+          {
+            "name": "resolve_mcp_consent",
+            "path": "packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts"
+          }
+        ]
+      },
+      {
+        "name": "ask_assistant",
+        "file": "ask-assistant.ts",
+        "group": "Assistant and account",
+        "does": "a turn of the in-app agent",
+        "absorbs": [
+          {
+            "name": "send_message",
+            "path": "packages/oxagen/src/contracts/chat.message.send.ts"
+          },
+          {
+            "name": "post_conversation_message",
+            "path": "packages/oxagen/src/contracts/conversation.chat.ts"
+          },
+          {
+            "name": "add_conversation_attachment",
+            "path": "packages/oxagen/src/contracts/conversation.attachment.add.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_conversations",
+        "file": "list-conversations.ts",
+        "group": "Assistant and account",
+        "does": "with the actions as arguments",
+        "absorbs": [
+          {
+            "name": "list_conversations",
+            "path": "packages/oxagen/src/contracts/conversation.list.ts"
+          },
+          {
+            "name": "rename_conversation",
+            "path": "packages/oxagen/src/contracts/conversation.rename.ts"
+          },
+          {
+            "name": "archive_conversation",
+            "path": "packages/oxagen/src/contracts/conversation.archive.ts"
+          },
+          {
+            "name": "delete_conversation",
+            "path": "packages/oxagen/src/contracts/conversation.delete.ts"
+          },
+          {
+            "name": "export_conversation",
+            "path": "packages/oxagen/src/contracts/conversation.export.ts"
+          },
+          {
+            "name": "purge_conversations",
+            "path": "packages/oxagen/src/contracts/conversation.purge.ts"
+          },
+          {
+            "name": "list_conversation_files",
+            "path": "packages/oxagen/src/contracts/conversation.files.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_preferences",
+        "file": "set-preferences.ts",
+        "group": "Assistant and account",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "update_user_preferences",
+            "path": "packages/oxagen/src/contracts/user.preferences.write.ts"
+          },
+          {
+            "name": "get_user_preferences",
+            "path": "packages/oxagen/src/contracts/user.preferences.read.ts"
+          },
+          {
+            "name": "update_workspace_user_preferences",
+            "path": "packages/oxagen/src/contracts/user.workspace_preferences.write.ts"
+          },
+          {
+            "name": "get_workspace_user_preferences",
+            "path": "packages/oxagen/src/contracts/user.workspace_preferences.read.ts"
+          },
+          {
+            "name": "set_auth_alerts",
+            "path": "packages/oxagen/src/contracts/plugin.settings.set_auth_alerts.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_notifications",
+        "file": "list-notifications.ts",
+        "group": "Assistant and account",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "list_notifications",
+            "path": "packages/oxagen/src/contracts/notification.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "mark_notification",
+        "file": "mark-notification.ts",
+        "group": "Assistant and account",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "mark_notification",
+            "path": "packages/oxagen/src/contracts/notification.mark.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_install_instructions",
+        "file": "get-install-instructions.ts",
+        "group": "Assistant and account",
+        "does": "per harness",
+        "absorbs": [
+          {
+            "name": "get_install_instructions",
+            "path": "packages/oxagen/src/contracts/system.install.instructions.ts"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "batch": "ontology",
+    "tools": [
+      {
+        "name": "link_repository",
+        "file": "link-repository.ts",
+        "group": "Ontology and knowledge",
+        "does": "link, role, production branch, issue import",
+        "absorbs": [
+          {
+            "name": "configure_repo",
+            "path": "packages/oxagen/src/contracts/repo.configure.ts"
+          },
+          {
+            "name": "sync_repo",
+            "path": "packages/oxagen/src/contracts/repo.sync.ts"
+          }
+        ]
+      },
+      {
+        "name": "unlink_repository",
+        "file": "unlink-repository.ts",
+        "group": "Ontology and knowledge",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "pause_repo",
+            "path": "packages/oxagen/src/contracts/repo.pause.ts"
+          },
+          {
+            "name": "delete_integration",
+            "path": "packages/oxagen/src/contracts/integration.delete.ts"
+          }
+        ]
+      },
+      {
+        "name": "sync_repository",
+        "file": "sync-repository.ts",
+        "group": "Ontology and knowledge",
+        "does": "manual full re-index",
+        "absorbs": [
+          {
+            "name": "sync_repo",
+            "path": "packages/oxagen/src/contracts/repo.sync.ts"
+          },
+          {
+            "name": "resume_repo",
+            "path": "packages/oxagen/src/contracts/repo.resume.ts"
+          },
+          {
+            "name": "sync_integration",
+            "path": "packages/oxagen/src/contracts/integration.sync.ts"
+          }
+        ]
+      },
+      {
+        "name": "add_source",
+        "file": "add-source.ts",
+        "group": "Ontology and knowledge",
+        "does": "connector source",
+        "absorbs": [
+          {
+            "name": "install_plugin",
+            "path": "packages/oxagen/src/contracts/plugin.org.install.ts"
+          },
+          {
+            "name": "configure_integration",
+            "path": "packages/oxagen/src/contracts/integration.configure.ts"
+          }
+        ]
+      },
+      {
+        "name": "update_source",
+        "file": "update-source.ts",
+        "group": "Ontology and knowledge",
+        "does": "mappings, state",
+        "absorbs": [
+          {
+            "name": "update_connection",
+            "path": "packages/oxagen/src/contracts/connection.update.ts"
+          },
+          {
+            "name": "set_connection_mappings",
+            "path": "packages/oxagen/src/contracts/connection.mappings.set.ts"
+          },
+          {
+            "name": "suggest_connection_mappings",
+            "path": "packages/oxagen/src/contracts/connection.mappings.suggest.ts"
+          },
+          {
+            "name": "pause_connection",
+            "path": "packages/oxagen/src/contracts/connection.pause.ts"
+          },
+          {
+            "name": "preview_connection",
+            "path": "packages/oxagen/src/contracts/connection.preview.ts"
+          }
+        ]
+      },
+      {
+        "name": "remove_source",
+        "file": "remove-source.ts",
+        "group": "Ontology and knowledge",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "delete_connection",
+            "path": "packages/oxagen/src/contracts/connection.delete.ts"
+          },
+          {
+            "name": "uninstall_plugin",
+            "path": "packages/oxagen/src/contracts/plugin.org.uninstall.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_sources",
+        "file": "list-sources.ts",
+        "group": "Ontology and knowledge",
+        "does": "health, cursors, counts",
+        "absorbs": [
+          {
+            "name": "list_connections",
+            "path": "packages/oxagen/src/contracts/connection.list.ts"
+          },
+          {
+            "name": "list_integrations",
+            "path": "packages/oxagen/src/contracts/integration.list.ts"
+          },
+          {
+            "name": "list_plugins",
+            "path": "packages/oxagen/src/contracts/plugin.org.list.ts"
+          },
+          {
+            "name": "get_integration",
+            "path": "packages/oxagen/src/contracts/integration.get.ts"
+          },
+          {
+            "name": "get_integration_metrics",
+            "path": "packages/oxagen/src/contracts/integration.metrics.ts"
+          },
+          {
+            "name": "get_reconcile_status",
+            "path": "packages/oxagen/src/contracts/schema.reconcile.status.ts"
+          }
+        ]
+      },
+      {
+        "name": "propose_ontology_version",
+        "file": "propose-ontology-version.ts",
+        "group": "Ontology and knowledge",
+        "does": "profiler plus author; opens the pull request on the main repo (merge activates, §11.8)",
+        "absorbs": [
+          {
+            "name": "recommend_schema",
+            "path": "packages/oxagen/src/contracts/schema.recommend.ts"
+          },
+          {
+            "name": "setup_schema",
+            "path": "packages/oxagen/src/contracts/schema.setup.ts"
+          },
+          {
+            "name": "create_schema_version",
+            "path": "packages/oxagen/src/contracts/schema.version.create.ts"
+          },
+          {
+            "name": "run_schema_chat",
+            "path": "packages/oxagen/src/contracts/schema.chat.ts"
+          },
+          {
+            "name": "pin_schema_version",
+            "path": "packages/oxagen/src/contracts/schema.version.pin.ts"
+          },
+          {
+            "name": "toggle_schema",
+            "path": "packages/oxagen/src/contracts/schema.toggle.ts"
+          },
+          {
+            "name": "dispatch_schema_reconcile",
+            "path": "packages/oxagen/src/contracts/schema.reconcile.dispatch.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_ontology",
+        "file": "get-ontology.ts",
+        "group": "Ontology and knowledge",
+        "does": "active version, classes, relations, synonyms, proposals, diffs; also served to agents as `graph` frames",
+        "absorbs": [
+          {
+            "name": "get_schema_registry",
+            "path": "packages/oxagen/src/contracts/schema.registry.get.ts"
+          },
+          {
+            "name": "list_schema_versions",
+            "path": "packages/oxagen/src/contracts/schema.version.list.ts"
+          },
+          {
+            "name": "list_schemas",
+            "path": "packages/oxagen/src/contracts/schema.list.ts"
+          },
+          {
+            "name": "diff_schema_versions",
+            "path": "packages/oxagen/src/contracts/schema.version.diff.ts"
+          },
+          {
+            "name": "export_schema",
+            "path": "packages/oxagen/src/contracts/schema.export.ts"
+          },
+          {
+            "name": "get_node_labels",
+            "path": "packages/oxagen/src/contracts/graph.node_label.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "update_ontology",
+        "file": "update-ontology.ts",
+        "group": "Ontology and knowledge",
+        "does": "edits on a proposal branch",
+        "absorbs": [
+          {
+            "name": "upsert_schema_label",
+            "path": "packages/oxagen/src/contracts/schema.label.upsert.ts"
+          },
+          {
+            "name": "upsert_schema_property",
+            "path": "packages/oxagen/src/contracts/schema.property.upsert.ts"
+          },
+          {
+            "name": "upsert_schema_relationship",
+            "path": "packages/oxagen/src/contracts/schema.relationship.upsert.ts"
+          },
+          {
+            "name": "delete_schema_label",
+            "path": "packages/oxagen/src/contracts/schema.label.delete.ts"
+          },
+          {
+            "name": "delete_schema_property",
+            "path": "packages/oxagen/src/contracts/schema.property.delete.ts"
+          },
+          {
+            "name": "delete_schema_relationship",
+            "path": "packages/oxagen/src/contracts/schema.relationship.delete.ts"
+          },
+          {
+            "name": "validate_schema_node",
+            "path": "packages/oxagen/src/contracts/schema.validate.node.ts"
+          },
+          {
+            "name": "validate_schema_relationship",
+            "path": "packages/oxagen/src/contracts/schema.validate.relationship.ts"
+          }
+        ]
+      },
+      {
+        "name": "search_graph",
+        "file": "search-graph.ts",
+        "group": "Ontology and knowledge",
+        "does": "hybrid semantic",
+        "absorbs": [
+          {
+            "name": "search_graph",
+            "path": "packages/oxagen/src/contracts/graph.search.ts"
+          },
+          {
+            "name": "search_nodes",
+            "path": "packages/oxagen/src/contracts/graph.node.search.ts"
+          },
+          {
+            "name": "search_references",
+            "path": "packages/oxagen/src/contracts/reference.search.ts"
+          },
+          {
+            "name": "list_nodes",
+            "path": "packages/oxagen/src/contracts/graph.node.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "expand_graph",
+        "file": "expand-graph.ts",
+        "group": "Ontology and knowledge",
+        "does": "typed traversal",
+        "absorbs": [
+          {
+            "name": "get_ontology_neighbors",
+            "path": "packages/oxagen/src/contracts/ontology.neighbors.ts"
+          },
+          {
+            "name": "get_node",
+            "path": "packages/oxagen/src/contracts/graph.node.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "query_graph",
+        "file": "query-graph.ts",
+        "group": "Ontology and knowledge",
+        "does": "natural language to Cypher",
+        "absorbs": [
+          {
+            "name": "query_ontology",
+            "path": "packages/oxagen/src/contracts/ontology.query.ts"
+          },
+          {
+            "name": "get_graph_stats",
+            "path": "packages/oxagen/src/contracts/graph.stats.ts"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "batch": "toolbelt-steering",
+    "tools": [
+      {
+        "name": "register_tool_server",
+        "file": "register-tool-server.ts",
+        "group": "Toolbelt",
+        "does": "MCP or HTTP server",
+        "absorbs": [
+          {
+            "name": "register_mcp_server",
+            "path": "packages/oxagen/src/contracts/agent.mcp.register.ts"
+          },
+          {
+            "name": "set_mcp_enabled",
+            "path": "packages/oxagen/src/contracts/agent.mcp.set_enabled.ts"
+          }
+        ]
+      },
+      {
+        "name": "remove_tool_server",
+        "file": "remove-tool-server.ts",
+        "group": "Toolbelt",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "delete_mcp_server",
+            "path": "packages/oxagen/src/contracts/agent.mcp.delete.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_tool_servers",
+        "file": "list-tool-servers.ts",
+        "group": "Toolbelt",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "list_mcp_servers",
+            "path": "packages/oxagen/src/contracts/agent.mcp.list.ts"
+          },
+          {
+            "name": "resolve_mcp_servers",
+            "path": "packages/oxagen/src/contracts/agent.mcp.resolve.ts"
+          },
+          {
+            "name": "list_mcp_consents",
+            "path": "packages/oxagen/src/contracts/agent.mcp_consent.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "import_tools",
+        "file": "import-tools.ts",
+        "group": "Toolbelt",
+        "does": "pull `tools/list`, version, store schemas",
+        "absorbs": [
+          {
+            "name": "list_tool_declarations",
+            "path": "packages/oxagen/src/contracts/tool.declaration.list.ts"
+          },
+          {
+            "name": "publish_tool_declaration",
+            "path": "packages/oxagen/src/contracts/tool.declaration.publish.ts"
+          },
+          {
+            "name": "list_agent_tools",
+            "path": "packages/oxagen/src/contracts/agent.tool.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "search_tools",
+        "file": "search-tools.ts",
+        "group": "Toolbelt",
+        "does": "belt search meta-tool; also the UI's command menu",
+        "absorbs": [
+          {
+            "name": "search_command_menu",
+            "path": "packages/oxagen/src/contracts/command.menu.search.ts"
+          },
+          {
+            "name": "suggest_commands",
+            "path": "packages/oxagen/src/contracts/command.menu.suggest.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_connection",
+        "file": "set-connection.ts",
+        "group": "Toolbelt",
+        "does": "credential to a tool server or provider, tested before save",
+        "absorbs": [
+          {
+            "name": "set_model_credential",
+            "path": "packages/oxagen/src/contracts/org.model_credential.set.ts"
+          },
+          {
+            "name": "verify_model_credential",
+            "path": "packages/oxagen/src/contracts/org.model_credential.verify.ts"
+          },
+          {
+            "name": "upsert_secret_key",
+            "path": "packages/oxagen/src/contracts/secret.key.upsert.ts"
+          },
+          {
+            "name": "set_secret_value",
+            "path": "packages/oxagen/src/contracts/secret.value.set.ts"
+          },
+          {
+            "name": "set_plugin_secret",
+            "path": "packages/oxagen/src/contracts/plugin.credential.set_secret.ts"
+          },
+          {
+            "name": "reauth_plugin_credential",
+            "path": "packages/oxagen/src/contracts/plugin.credential.reauth.ts"
+          }
+        ]
+      },
+      {
+        "name": "delete_connection",
+        "file": "delete-connection.ts",
+        "group": "Toolbelt",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "delete_connection",
+            "path": "packages/oxagen/src/contracts/connection.delete.ts"
+          },
+          {
+            "name": "delete_model_credential",
+            "path": "packages/oxagen/src/contracts/org.model_credential.delete.ts"
+          },
+          {
+            "name": "delete_secret_key",
+            "path": "packages/oxagen/src/contracts/secret.key.delete.ts"
+          },
+          {
+            "name": "unset_secret_value",
+            "path": "packages/oxagen/src/contracts/secret.value.unset.ts"
+          },
+          {
+            "name": "revoke_plugin_credential",
+            "path": "packages/oxagen/src/contracts/plugin.credential.revoke.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_connections",
+        "file": "list-connections.ts",
+        "group": "Toolbelt",
+        "does": "never returns secrets",
+        "absorbs": [
+          {
+            "name": "list_connections",
+            "path": "packages/oxagen/src/contracts/connection.list.ts"
+          },
+          {
+            "name": "list_secret_keys",
+            "path": "packages/oxagen/src/contracts/secret.key.list.ts"
+          },
+          {
+            "name": "get_model_credential",
+            "path": "packages/oxagen/src/contracts/org.model_credential.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "append_record",
+        "file": "append-record.ts",
+        "group": "Context and steering",
+        "does": "the protocol's append",
+        "absorbs": [
+          {
+            "name": "write_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.write.ts"
+          },
+          {
+            "name": "save_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.remember.ts"
+          },
+          {
+            "name": "attach_memory_evidence",
+            "path": "packages/oxagen/src/contracts/agent.memory_evidence.attach.ts"
+          },
+          {
+            "name": "cite_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.cite.ts"
+          },
+          {
+            "name": "cite_reference",
+            "path": "packages/oxagen/src/contracts/reference.cite.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_records",
+        "file": "list-records.ts",
+        "group": "Context and steering",
+        "does": "by kind, scope, status, lineage",
+        "absorbs": [
+          {
+            "name": "list_context_records",
+            "path": "packages/oxagen/src/contracts/context.record.list.ts"
+          },
+          {
+            "name": "list_memories",
+            "path": "packages/oxagen/src/contracts/agent.memory.list.ts"
+          },
+          {
+            "name": "list_memory_citations",
+            "path": "packages/oxagen/src/contracts/agent.memory_citation.list.ts"
+          },
+          {
+            "name": "get_citation_stats",
+            "path": "packages/oxagen/src/contracts/agent.memory_citation.stats.ts"
+          }
+        ]
+      },
+      {
+        "name": "retract_record",
+        "file": "retract-record.ts",
+        "group": "Context and steering",
+        "does": "new record on the lineage",
+        "absorbs": [
+          {
+            "name": "delete_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.delete.ts"
+          },
+          {
+            "name": "demote_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.demote.ts"
+          }
+        ]
+      },
+      {
+        "name": "recall_context",
+        "file": "recall-context.ts",
+        "group": "Context and steering",
+        "does": "the provider's query, as a tool for agents",
+        "absorbs": [
+          {
+            "name": "recall_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.recall.ts"
+          }
+        ]
+      },
+      {
+        "name": "propose_record",
+        "file": "propose-record.ts",
+        "group": "Context and steering",
+        "does": "a proposal",
+        "absorbs": [
+          {
+            "name": "promote_memory",
+            "path": "packages/oxagen/src/contracts/agent.memory.promote.ts"
+          },
+          {
+            "name": "promote_context_record",
+            "path": "packages/oxagen/src/contracts/context.record.promote.ts"
+          },
+          {
+            "name": "suggest_promotion_rationales",
+            "path": "packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts"
+          }
+        ]
+      },
+      {
+        "name": "open_context_pr",
+        "file": "open-context-pr.ts",
+        "group": "Context and steering",
+        "does": "the pull request",
+        "absorbs": [
+          {
+            "name": "publish_context_record",
+            "path": "packages/oxagen/src/contracts/context.record.publish.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_proposals",
+        "file": "list-proposals.ts",
+        "group": "Context and steering",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "list_memory_promotions",
+            "path": "packages/oxagen/src/contracts/agent.memory_promotion.list.ts"
+          }
+        ]
+      },
+      {
+        "name": "dismiss_proposal",
+        "file": "dismiss-proposal.ts",
+        "group": "Context and steering",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "dismiss_memory_promotion",
+            "path": "packages/oxagen/src/contracts/agent.memory_promotion.dismiss.ts"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "batch": "spend-audit",
+    "tools": [
+      {
+        "name": "get_spend",
+        "file": "get-spend.ts",
+        "group": "Spend and billing",
+        "does": "rollups at any level with basis",
+        "absorbs": [
+          {
+            "name": "get_usage_breakdown",
+            "path": "packages/oxagen/src/contracts/billing.usage.breakdown.ts"
+          },
+          {
+            "name": "list_routing_stats",
+            "path": "packages/oxagen/src/contracts/router.stats.list.ts"
+          },
+          {
+            "name": "get_repo_metrics",
+            "path": "packages/oxagen/src/contracts/repo.metrics.ts"
+          }
+        ]
+      },
+      {
+        "name": "list_findings",
+        "file": "list-findings.ts",
+        "group": "Spend and billing",
+        "does": "ranked optimizations",
+        "absorbs": [
+          {
+            "name": "list_error_clusters",
+            "path": "packages/oxagen/src/contracts/telemetry.error.cluster.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_budget",
+        "file": "set-budget.ts",
+        "group": "Spend and billing",
+        "does": "any level",
+        "absorbs": [
+          {
+            "name": "set_spend_budget",
+            "path": "packages/oxagen/src/contracts/billing.budget.set.ts"
+          },
+          {
+            "name": "get_spend_budget",
+            "path": "packages/oxagen/src/contracts/billing.budget.get.ts"
+          },
+          {
+            "name": "update_user_budget",
+            "path": "packages/oxagen/src/contracts/budget.policy.write.ts"
+          },
+          {
+            "name": "get_user_budget",
+            "path": "packages/oxagen/src/contracts/budget.policy.read.ts"
+          },
+          {
+            "name": "get_budget_policy",
+            "path": "packages/oxagen/src/contracts/workspace.budget_policy.read.ts"
+          }
+        ]
+      },
+      {
+        "name": "set_model_route",
+        "file": "set-model-route.ts",
+        "group": "Spend and billing",
+        "does": "tiers and fallbacks",
+        "absorbs": [
+          {
+            "name": "update_model_settings",
+            "path": "packages/oxagen/src/contracts/workspace.model_settings.write.ts"
+          },
+          {
+            "name": "get_model_settings",
+            "path": "packages/oxagen/src/contracts/workspace.model_settings.read.ts"
+          },
+          {
+            "name": "preview_routing_decision",
+            "path": "packages/oxagen/src/contracts/router.decision.preview.ts"
+          },
+          {
+            "name": "get_routing_policy",
+            "path": "packages/oxagen/src/contracts/router.policy.get.ts"
+          }
+        ]
+      },
+      {
+        "name": "get_subscription",
+        "file": "get-subscription.ts",
+        "group": "Spend and billing",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "get_subscription",
+            "path": "packages/oxagen/src/contracts/billing.subscription.read.ts"
+          }
+        ]
+      },
+      {
+        "name": "change_subscription",
+        "file": "change-subscription.ts",
+        "group": "Spend and billing",
+        "does": "",
+        "absorbs": [
+          {
+            "name": "start_subscription_upgrade",
+            "path": "packages/oxagen/src/contracts/billing.subscription_upgrade.start.ts"
+          },
+          {
+            "name": "purchase_credits",
+            "path": "packages/oxagen/src/contracts/billing.credits.purchase.ts"
+          }
+        ]
+      },
+      {
+        "name": "query_audit_log",
+        "file": "query-audit-log.ts",
+        "group": "Audit and compliance",
+        "does": "control-plane events, receipts",
+        "absorbs": [
+          {
+            "name": "query_audit_log",
+            "path": "packages/oxagen/src/contracts/audit.log.query.ts"
+          },
+          {
+            "name": "get_auth_alerts",
+            "path": "packages/oxagen/src/contracts/plugin.settings.get_auth_alerts.ts"
+          }
+        ]
+      },
+      {
+        "name": "export_data",
+        "file": "export-data.ts",
+        "group": "Audit and compliance",
+        "does": "organization export",
+        "absorbs": [
+          {
+            "name": "export_data",
+            "path": "packages/oxagen/src/contracts/privacy.data.export.ts"
+          }
+        ]
+      },
+      {
+        "name": "erase_data",
+        "file": "erase-data.ts",
+        "group": "Audit and compliance",
+        "does": "crypto-shred",
+        "absorbs": [
+          {
+            "name": "erase_data",
+            "path": "packages/oxagen/src/contracts/privacy.data.erase.ts"
+          }
+        ]
+      }
+    ]
+  }
+]

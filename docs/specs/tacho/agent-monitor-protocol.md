@@ -14,13 +14,13 @@ any process that supervises one.
 Every failure mode worth catching in a running agent — an arm that never
 authenticated, a confident premature "done", a verdict that arrived too late
 to act on, a hung trial burning its allowance — is visible in artifacts the
-run is already writing, long before the run ends. What has been missing is a
-shared shape for *reporting* it: each watching tool inventing its own output
-means each supervising process grows a bespoke parser, and in practice the
-supervision never gets built — the failure is diagnosed by hand, hours later
-(issue #1480 records a 110-minute match lost exactly this way).
+run is already writing, long before the run ends. Without a shared shape for
+*reporting* it, each watching tool invents its own output, each supervising
+process needs a bespoke parser, and in practice the supervision is not built;
+the failure is diagnosed by hand, hours later (issue #1480 records a
+110-minute match lost this way).
 
-This protocol is that shared shape. It is deliberately **not** specific to
+This protocol is that shared shape. It is not specific to
 ArenaBench, benchmarks, or Stella: the subject is "an agent run" in the
 broadest sense — a benchmark arm, a fleet worker, a CI-driven session, a
 pipeline stage — and the emitter is whichever plugin or tool can see that
@@ -41,9 +41,9 @@ to know ArenaBench exists.
   detections; it never writes to the stream.
 
 There is no handshake, no acknowledgement, and no control channel. A
-subscription is "run the emitter and read", which is what lets a shell pipe,
-a CI step, a `Monitor`, and the self-driving loop all be consumers without any of
-them linking anything.
+subscription is "run the emitter and read", so a shell pipe, a CI step, a
+`Monitor`, and the self-driving loop can all be consumers without any of them
+linking anything.
 
 ## Transport and framing
 
@@ -87,9 +87,9 @@ Fields on a `detection`:
 
 A `watching` event opens a stream (`rules`: the list armed); an `end` event
 closes it (`detections`: counts by severity, `invalidating`: boolean). The
-lifecycle events are what make "no detections" and "the watcher died"
-distinguishable: a stream that stops without `end` was interrupted, and a
-consumer must treat its silence as unknown, not as clean.
+lifecycle events distinguish "no detections" from "the watcher died": a stream
+that stops without `end` was interrupted, and a consumer must treat its silence
+as unknown, not as clean.
 
 ## Severity
 
@@ -111,10 +111,9 @@ without reading a line.
 
 ## The rule registry
 
-A rule named here means the same thing from **every** emitter — that is the
-point of a registry: `self-driving` reacts to `zero-token` identically whether
-ArenaBench or a fleet watcher emitted it. An emitter adding a rule with
-emitter-specific semantics must pick a name not listed here, and should
+A rule named here means the same thing from every emitter: `self-driving`
+reacts to `zero-token` identically whether ArenaBench or a fleet watcher
+emitted it. An emitter adding a rule with emitter-specific semantics must pick a name not listed here, and should
 propose it for this table the moment a second emitter could want it.
 
 | rule | severity | fires when | canonical evidence |
@@ -131,8 +130,8 @@ propose it for this table the moment a second emitter could want it.
 kinds, new rules, and new severities are additive and do not bump it —
 correspondingly, a consumer **must ignore** fields and kinds it does not
 recognise. This is the same additive discipline as Stella's serde-first wire
-types: the cheapest protocol to keep compatible is one whose consumers were
-never allowed to be strict.
+types: consumers that ignore what they do not recognise keep additive changes
+compatible.
 
 ## Non-goals
 
@@ -145,7 +144,7 @@ never allowed to be strict.
 - **Not Stella's `AgentEvent` stream.** That is one agent's own internal
   telemetry, rich and agent-specific. This protocol is the thin cross-agent
   supervision layer *above* whatever any particular agent writes — an
-  emitter's job is precisely to reduce agent-specific artifacts to these
+  emitter's job is to reduce agent-specific artifacts to these
   agent-agnostic events.
 
 ## Emitters

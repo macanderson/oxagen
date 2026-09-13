@@ -10,7 +10,7 @@
    heaviest segments (billing, activity, knowledge, automation) block the entire route render on their slowest
    server fetch, with no progressive reveal. Navigation shows a blank/stale screen until everything resolves.
 2. **Broken-image icon on mobile during page transitions.** The route-transition loader renders an `<img>` whose
-   `src` points at `/pwa/oxagen-spinner-assemble-{dark,light}.gif`, but those GIFs actually live at
+   `src` points at `/pwa/oxagen-spinner-assemble-{dark,light}.gif`, but those GIFs live at
    `/spinner/…`. `public/pwa/` holds only PWA icons + `manifest.json`. The transition loader is **mobile-gated**
    (CSS media query) and fires for ~600ms on every navigation, so mobile users get the browser broken-image
    placeholder on every transition. Desktop hides the element, so it is invisible there.
@@ -129,7 +129,7 @@ Per page:
 - **`automation/playbooks`** — currently mock/no-async → `loading.tsx` skeleton only (nav consistency); no
   streaming needed until wired to live data.
 - **Other automation tabs (`agents`, `triggers`, `event-sources`)** — apply the streaming pattern **only where
-  the page actually performs a server fetch** (checked per tab during implementation); otherwise skeleton-only.
+  the page performs a server fetch** (checked per tab during implementation); otherwise skeleton-only.
 
 ## Testing strategy
 
@@ -147,7 +147,7 @@ lowered.
   - Per heavy segment: navigate and observe skeleton → content (throttle/intercept to make the skeleton
     observable). Screenshot the loaded success state.
   - **Mobile viewport route transition:** assert the transition spinner requests `/spinner/…` and receives
-    HTTP 200 (not 404), and that no broken-image placeholder is present — the exact reported bug. Screenshot.
+    HTTP 200 (not 404), and that no broken-image placeholder is present (the reported bug). Screenshot.
   - Screenshots written to a gitignored, deleted-and-recreated `apps/app/e2e/screenshots/`.
 
 ## Verification & handoff

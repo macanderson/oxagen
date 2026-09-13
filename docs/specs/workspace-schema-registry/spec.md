@@ -14,8 +14,7 @@ described, constrained properties — that govern its knowledge graph. It is the
 authoritative, queryable contract that tells the ingestion AI *what to collect*
 for every node/relationship it creates and *how to validate it* at the property
 level. The registry is also the workspace's **single source of truth** for its
-label + relationship-type vocabulary (see §1.3 and §7.1): it is authoritative,
-not a passive observation of what ingestion happened to see.
+label + relationship-type vocabulary (see §1.3 and §7.1).
 
 This epic delivers:
 
@@ -89,7 +88,7 @@ terms for graph data. Do not invent or drift to generic graph-theory words for
 the data model. ("Entity" / "entity type" / "edge type" are banned for the data
 model.)
 
-**Authority (Neo4j official docs).** These terms are exact, not house style. Per
+**Authority (Neo4j official docs).** Per
 Neo4j *Getting Started — Graph database concepts*
 (<https://neo4j.com/docs/getting-started/appendix/graphdb-concepts/>): "A node
 represents an entity… nodes are classified by **labels**. A label marks a node as
@@ -118,8 +117,7 @@ Notes and consequences:
   inputs use `startLabel` / `endLabel`.
 - **Legacy `*.edge.*` contracts are renamed in v1 (in scope), with a one-release
   deprecation alias.** The user wants "edge type" → "relationship type"
-  *everywhere*, including the shipped contracts — so the rename is **v1 scope**,
-  not a deferred follow-up:
+  *everywhere*, including the shipped contracts, so the rename is **v1 scope**:
   - `graph.edge.upsert` → **`graph.relationship.upsert`**
   - `semantic.edge.*` → **`semantic.relationship.*`** (all four
     `semantic.edge.*` capabilities — combined route `semantic-edge.ts` is renamed
@@ -217,8 +215,6 @@ three sources:
   **current workspace config** stored in a separate small current-config table
   keyed by stable schema **identity** (workspace + schema name), not by version
   row, so a schema disabled in version N stays disabled when N+1 publishes (§4.3).
-  Net: toggling never mutates a frozen snapshot, but it **does** auto-publish a
-  new one and re-pin — the behavior the north-star requires.
 
 ## 2. Goals & Acceptance Criteria
 
@@ -256,15 +252,15 @@ type" as a friendly synonym for "node label."
 
 ### 2.1 Acceptance criteria
 
-**Two co-equal authoring modes (first-class, neither a fallback).** The schema
+**Two co-equal authoring modes.** The schema
 builder ships BOTH a complete **traditional form-based UI** — define every node
 label, relationship type, and property by hand (criterion 4) — AND an
 **agent-assisted setup/config experience** — the AI assistant drawer + recommender
-(criteria 1, 3, 5). Neither is secondary: a user can build and maintain the entire
+(criteria 1, 3, 5). A user can build and maintain the entire
 registry **purely by hand**, **purely by prompting the agent**, or by **freely
 mixing the two**. Both modes edit the **same shared draft** (§16.3) through the
 **same `schema.*` mutation contracts**, so form edits and agent edits interoperate
-seamlessly — e.g. scaffold with a prompt, then hand-tune a property in the form;
+— e.g. scaffold with a prompt, then hand-tune a property in the form;
 or hand-build two labels, then ask the agent to fill in the relationships between
 them.
 
@@ -295,21 +291,21 @@ The epic is complete when **all** of the following hold:
    `startLabel`/`endLabel` constraints, edit or delete any label / relationship /
    property, organize them into schemas, and save to the **draft** — all via the
    same `schema.*` contracts the agent uses. The form builder is a **complete
-   authoring surface on its own**, not a fallback to the agent; everything the AI
-   drawer can produce is also directly editable by hand.
+   authoring surface on its own**; everything the AI drawer can produce is also
+   directly editable by hand.
 5. **Graph-derived recommendation.** On first load with an existing graph, the
    builder also offers an AI-recommended starter schema derived from
    `graph.stats` + the `graph_observed_labels` ClickHouse telemetry + sampled
    `ontology.query` (NOT from `entity_types`), which the user can accept, edit, or
    discard.
-6. **Activation auto-publishes + auto-pins (ready for use) — no separate
-   publish/pin chore.** Toggling a schema **active** automatically (a) publishes
-   the current draft as a new immutable version *if it has unpublished edits* and
-   (b) **pins** the resulting version to the workspace, so the schema is
-   immediately "ready for use" for grounding + validation. Toggling a schema
-   **inactive** likewise re-pins a published version reflecting the new active set
-   (non-destructive — never deletes graph data). The user performs **no separate**
-   `version.create` / `version.pin` step in the common flow; the explicit
+6. **Activation auto-publishes + auto-pins (ready for use).** Toggling a schema
+   **active** automatically (a) publishes the current draft as a new immutable
+   version *if it has unpublished edits* and (b) **pins** the resulting version to
+   the workspace, so the schema is immediately "ready for use" for grounding +
+   validation. Toggling a schema **inactive** likewise re-pins a published version
+   reflecting the new active set (non-destructive — never deletes graph data).
+   The user performs **no separate** `version.create` / `version.pin` step in the
+   common flow; the explicit
    `schema.version.create` / `schema.version.pin` contracts remain for advanced
    manual control, and the user can still **list** and **diff** versions (§1.4,
    §16.8).
@@ -381,8 +377,8 @@ The epic is complete when **all** of the following hold:
 ### 3.1 Why a new Postgres schema, and why `ingestion.entity_types` is sunset
 
 `entity_types` is a *passive observation cache* (mutated by ingestion, never
-versioned) — and, worse, it durably stored what is really runtime observation,
-which the four-store law assigns to ClickHouse. The registry is *authored,
+versioned), and it durably stores runtime observation, which the four-store law
+assigns to ClickHouse. The registry is *authored,
 versioned, pinned, enabled, validated* state with its own lifecycle. Co-mingling
 would conflate the observed and the authored and break the immutable-version
 pattern. Therefore:
@@ -405,8 +401,8 @@ from `graph.relationship.upsert.ts` (the renamed `graph.edge.upsert.ts`, §1.2)
 and validate relationship types against the workspace registry's **active
 vocabulary** (enabled schemas of the pinned version) instead.
 
-**Security constraint this creates — do not regress.** `GRAPH_EDGE_TYPES` is not
-only a product allow-list; it is the **Cypher-injection guard** for the ontology
+**Security constraint this creates — do not regress.** `GRAPH_EDGE_TYPES` is
+both a product allow-list and the **Cypher-injection guard** for the ontology
 query layer. Three handlers interpolate the relationship type directly into
 Cypher and today reject anything not in the static enum:
 `packages/handlers/src/ontology.neighbors.ts`,
@@ -440,7 +436,7 @@ Concretely:
   "all types" default becomes the pinned active vocabulary's relationship types
   (or unconstrained traversal when none pinned), not the old static list.
 - Delete `GRAPH_EDGE_TYPES` and `GraphEdgeType`; update the handful of importers
-  found by `grep -rn 'GRAPH_EDGE_TYPES'`. This is part of v1 scope, not a follow-up.
+  found by `grep -rn 'GRAPH_EDGE_TYPES'`. This is v1 scope.
 
 ### 3.3 Migration off `:EntityNode {entityType}` to first-class labels — phased
 
@@ -457,7 +453,7 @@ it for graph-data re-derivation would collide. The phased relabel below is the o
 place "migration" applies in the database sense (it ships partly as Atlas/job
 work); the *graph* operation it performs is still "reconcile."
 
-**Blast radius (grounded in real files):**
+**Blast radius:**
 
 - **Ingestion writes** — `packages/ingestion/src/mutations/upsert-entity.ts`:
   `upsertEntityNode` MERGEs `(n:EntityNode { … })` and sets `n.entityType`; the
@@ -493,7 +489,7 @@ work); the *graph* operation it performs is still "reconcile."
    remove the `entityType` property and the `:EntityNode` secondary label from
    writes and readers.
 
-Be honest: the physical relabel is large and phased; v1 ships the vocabulary,
+The physical relabel is large and phased; v1 ships the vocabulary,
 registry, grounding, and validation, with ingestion beginning dual-write so new
 data lands with real labels immediately.
 
@@ -582,8 +578,8 @@ versioned):
 | audit | — | `auditMixin()` |
 
 Unique `(workspace_id, schema_name) WHERE deleted_at IS NULL`. Keying on
-`schema_name` (not `version_id`/`schema_id`) is deliberate: it is **current
-config that survives re-versioning** — a schema disabled in version N stays
+`schema_name` (not `version_id`/`schema_id`) makes it **current config that
+survives re-versioning**: a schema disabled in version N stays
 disabled when version N+1 is published, without mutating either frozen snapshot
 (§1.4).
 
@@ -967,7 +963,7 @@ two complementary modes over the same conversation + current draft:
   named schemas, each with pre-filled node labels, relationship types (with
   start/end-label constraints), and typed properties with descriptions. Everything
   it creates lands in the **draft, disabled/unpublished** (§1.4) until the user
-  activates — no graph impact from merely asking.
+  activates.
 - **Iterative refinement (Q&A).** The agent also asks intent questions ("What kind
   of business are you?", "Do you track customers / source code / CRM data / vendors
   & contracts?") to fill gaps and refine.
@@ -1000,7 +996,7 @@ are absent from `getPinnedSchema()`, so they neither ground nor validate.)
 
 ## 8. Ingestion Integration Seam (pinned to real files)
 
-The registry feeds the universal pipeline at three precise points in
+The registry feeds the universal pipeline at three points in
 `packages/ingestion/`:
 
 1. **Schema load — `pipeline.ts`, `PipelineContext`.** Add
@@ -1032,7 +1028,7 @@ The registry feeds the universal pipeline at three precise points in
      `conformance_floor`, also emit `schema.conformance.low`.
    - `off`: skip validation entirely.
 
-   This is also the natural seam to begin the §3.3 **dual-write**: `upsertEntityNode`
+   This is also the seam where the §3.3 **dual-write** begins: `upsertEntityNode`
    writes the real label as primary (and, transitionally, retains `:EntityNode`
    as a secondary label + `entityType`).
 
@@ -1306,7 +1302,7 @@ All originally-open questions are now decided (signed off):
    Validation moves to the registry's **active vocabulary**, with a lexical
    identifier guard (`^[A-Z][A-Z0-9_]{0,62}$`, `RELATIONSHIP_TYPE_PATTERN`)
    preserving Cypher-injection safety in the ontology query layer. This is v1
-   scope, not a follow-up.
+   scope.
 2. **Conformance score formula — accepted.** `score = 1 − (weighted
    missing-required + type-error penalties) / total-evaluated-properties`, with
    required-property misses weighted higher than optional/type penalties. Exact
@@ -1337,7 +1333,7 @@ All originally-open questions are now decided (signed off):
    vocabulary + dual-write and v2 doing the batch relabel. The legacy
    `graph.edge.upsert` / `semantic.edge.*` contracts are **renamed in v1**
    (`graph.relationship.upsert` / `semantic.relationship.*`) with **one-release
-   deprecation aliases** (removed in v2) — the rename is in scope, not deferred.
+   deprecation aliases** (removed in v2).
 7. **`ingestion.entity_types` sunset — decided (§1.3, §3.1, §10).** The registry
    is the single authoritative vocabulary. *Observation* moves to ClickHouse
    (`graph_observed_labels`) per the four-store law; the recommender seeds from

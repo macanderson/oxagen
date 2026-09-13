@@ -514,7 +514,7 @@ All InferredEdge nodes (any approvalStatus) are listed with optional filters by 
 <!-- entities: KnowledgeNode, EntityNode -->
 <!-- enforced: graph.node.get.graphNodeGetHandler(), graph.node.upsert.graphNodeUpsertHandler(), graph.node.delete.graphNodeDeleteHandler(), graph.node.list.graphNodeListHandler(), graph.node.search.graphNodeSearchHandler(), ontology.query.ontologyQueryHandler(), ontology.neighbors.ontologyNeighborsHandler() -->
 
-Tenant isolation is non-negotiable. Node operations MATCH or WHERE both `n.orgId = $orgId` AND `n.workspaceId = $workspaceId`. Org-only filtering would allow a node with the same publicId in a sibling workspace to be read, modified, or deleted — a breach of tenant isolation. Every entry point that accesses nodes enforces dual scoping.
+Node operations MATCH or WHERE both `n.orgId = $orgId` AND `n.workspaceId = $workspaceId`. Org-only filtering would allow a node with the same publicId in a sibling workspace to be read, modified, or deleted — a breach of tenant isolation. Every entry point that accesses nodes enforces dual scoping.
 
 > Last verified: 2026-06-20 (commit 2f628504)
 
@@ -536,7 +536,7 @@ Relationship endpoints (from and to nodes) are independently scoped by orgId and
 <!-- entities: KnowledgeNode -->
 <!-- enforced: graph.node.upsert.graphNodeUpsertHandler() -->
 
-Natural keys are derived from externalId (if provided) or the tuple `{label}:{displayName}:{workspaceId}`. This ensures that the same entity (by external reference or by workspace-local identity) is always MERGE'd to the same node, enabling idempotent ingestion. If externalId is provided, it takes absolute precedence and prevents duplicate nodes with the same external reference.
+Natural keys are derived from externalId (if provided) or the tuple `{label}:{displayName}:{workspaceId}`. This ensures that the same entity (by external reference or by workspace-local identity) is always MERGE'd to the same node, enabling idempotent ingestion. If externalId is provided, it takes precedence and prevents duplicate nodes with the same external reference.
 
 > Last verified: 2026-06-20 (commit 2f628504)
 

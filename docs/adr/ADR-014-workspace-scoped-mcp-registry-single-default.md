@@ -6,7 +6,7 @@
 
 ## Context
 
-`mcp.registries` previously mixed two concepts that do not belong together:
+`mcp.registries` previously mixed two concepts:
 
 1. **Global seed rows** (`org_id IS NULL`, `is_default_seed = true`) — a single platform-wide official MCP registry record used to populate the plugin catalog via a periodic sync job.
 2. **Org-added rows** (`org_id = <uuid>`, `is_default_seed = false`) — registries an org admin added for their own use, but without workspace scope.
@@ -22,7 +22,7 @@ Three options were considered for the default-registry invariant:
 
 **Option A — DB CHECK constraint.** Enforce "exactly one default per workspace" via a CHECK constraint. Not expressible as a standard CHECK (requires aggregate); would need a trigger or application-layer enforcement anyway.
 
-**Option B — Partial unique index + application state machine.** A `UNIQUE (org_id, workspace_id) WHERE is_default = true` partial unique index enforces *at most one* default at the DB level. The application state machine enforces *at least one* when any row exists. This gives a clean invariant with DB-backed safety and no triggers.
+**Option B — Partial unique index + application state machine.** A `UNIQUE (org_id, workspace_id) WHERE is_default = true` partial unique index enforces *at most one* default at the DB level. The application state machine enforces *at least one* when any row exists. The invariant is DB-backed and needs no triggers.
 
 **Option C — Separate `default_registry_id` column on workspaces.** Store the default pointer on the workspace row. Avoids the partial unique index but creates a foreign-key circular dependency (workspace → registry → workspace) and complicates the workspace-creation transaction.
 
@@ -60,7 +60,7 @@ Two helpers in `packages/handlers/src/registry-default.ts` implement all transit
    - If none remain → return `{ removed: true, promotedId: null }`.
    - If a row exists → `UPDATE ... SET is_default = true` on that row and return `{ removed: true, promotedId: <id> }`.
 
-Delete-first ordering is intentional: the partial unique index would conflict if we promoted before deleting (two `is_default = true` rows momentarily). Delete first removes the constraint, then promotion is a clean single-row update.
+The ordering is delete-first because the partial unique index would conflict if promotion ran before deletion (two `is_default = true` rows momentarily). Deleting first removes the constraint, then promotion is a single-row update.
 
 ### Invariant
 
@@ -83,6 +83,6 @@ Delete-first ordering is intentional: the partial unique index would conflict if
 - The `addRegistry` / `removeRegistry` helpers are pure (accept `Tx`), unit-testable without a live DB, and reusable by future bulk-import paths.
 
 **Negative / trade-offs:**
-- Delete-first ordering is a subtle correctness constraint — future contributors modifying `removeRegistry` must preserve this ordering or the partial unique index will cause a conflict. The comment in `registry-default.ts` documents this.
+- Delete-first ordering is a correctness constraint — future contributors modifying `removeRegistry` must preserve this ordering or the partial unique index will cause a conflict. The comment in `registry-default.ts` documents this.
 - The `seedWorkspaceDefaultRegistry` idempotent seeder is now the only source of the first registry for a workspace. Any workspace-creation path that omits this call will start with zero registries (though `addRegistry` will correctly mark the first user-added one as default).
 - API route and MCP surface updates (Task 9) must be completed before the new `scoped: true` contracts are callable from those surfaces.

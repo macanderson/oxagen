@@ -175,7 +175,7 @@ lowered.
   - Per heavy segment: navigate and observe skeleton → content (throttle/intercept to make the skeleton
     observable). Screenshot the loaded success state.
   - **Mobile viewport route transition:** assert the transition spinner requests `/spinner/…` and receives
-    HTTP 200 (not 404), and that no broken-image placeholder is present — the exact reported bug. Screenshot.
+    HTTP 200 (not 404), and that no broken-image placeholder is present — the reported bug. Screenshot.
   - Screenshots written to a gitignored, deleted-and-recreated `apps/app/e2e/screenshots/`.
 
 ### Verification & handoff

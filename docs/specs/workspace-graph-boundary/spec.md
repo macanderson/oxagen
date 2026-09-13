@@ -6,17 +6,15 @@
 
 ## Executive decision
 
-The right model is not one code graph. It is **two graph planes joined by an immutable evidence bridge**:
+The model is **two graph planes joined by an immutable evidence bridge**:
 
 1. **Stella owns the exact working-code graph.** It stays beside each checkout or worktree and follows the actual bytes the agent can see: symbols, lines, calls, imports, references, embeddings, dirty files, and candidate-only changes.
 2. **Oxagen owns the governed workspace graph.** It stores a small, commit-addressed projection of shared repository structure: repository, canonical snapshot, domain/code-scope topology, ownership, policy, runs, context manifests, artifacts, commits, and pull requests.
 3. **Oxagen's evidence ledger stores the exact bridge.** It retains immutable commit/file mutations, context-frame manifests, digests, approvals, tool receipts, and verification results. Exact file facts belong in evidence even when files are not first-class workspace-graph nodes.
 
-The concise rule is:
-
 > The detailed graph follows the worktree. The shared graph follows verified canonical commits. The evidence ledger follows every governed agent attempt.
 
-Two important corrections to the main/default-branch instinct:
+Two corrections to a main/default-branch model:
 
 - Use an **immutable commit SHA observed at the configured default ref**, never the moving name `main`, as snapshot identity.
 - Make shared topology canonical-ref-only, but do **not** make provenance main-only. Unmerged and rejected agent work still needs immutable run, changed-file, commit, PR, and verification evidence.

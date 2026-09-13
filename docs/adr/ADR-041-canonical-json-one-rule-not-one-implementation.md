@@ -27,12 +27,12 @@ be hashed, and they had four behaviours:
 of them as `{}`. In a content-addressed store the hash *is* the identity, so
 two records differing only in a timestamp were one record: the second write
 deduped onto the first and replay returned the first payload, with an intact
-integrity check, because the content really did hash to the ref it was filed
+integrity check, because the content did hash to the ref it was filed
 under.
 
-Issue #1415 asks the question this ADR answers: should engram adopt
-run-evidence's implementation rather than repair its own, given that repairing
-them separately is how four implementations became four behaviours?
+Issue #1415 asks whether engram should adopt run-evidence's implementation
+rather than repair its own, since repairing them separately is how four
+implementations became four behaviours.
 
 ## Decision
 
@@ -64,11 +64,11 @@ boundaries, and merging them would move cost to the wrong side of each:
   rule, not the isolation machinery, and engram taking `@oxagen/run-evidence`
   would pull the CGP SDK into the memory plane to get it.
 
-So the choice is not "one implementation or four". It is one *rule* with two
-enforcement strengths, and the strength is chosen by who can reach the input.
+The result is one *rule* with two enforcement strengths, and the strength is
+chosen by who can reach the input.
 
-`@oxagen/replay`'s copy needed no decision: the package was deleted with the
-in-process agent runtime under ADR-040, which closes #1402.
+`@oxagen/replay`'s copy was deleted with the in-process agent runtime under
+ADR-040, which closes #1402.
 
 ## Consequences
 
@@ -78,11 +78,10 @@ in-process agent runtime under ADR-040, which closes #1402.
   values that were already colliding change, and they change from one shared id
   to an error or to distinct ids.
 - A caller that was passing a `Date` into a hashed body now finds out at the
-  write instead of at the collision. That is the point: the failure was
-  previously invisible, and a store that silently contains fewer records than
-  were written is the hardest kind of corruption to notice.
-- A fifth canonicalizer is a review question, not a free choice. It has to state
-  which trust boundary it sits at and follow the five rules above.
+  write instead of at the collision. Previously the failure was invisible: the
+  store held fewer records than were written, with no error.
+- A fifth canonicalizer has to state which trust boundary it sits at and follow
+  the five rules above.
 - The rule is asserted from the inequality direction — distinct inputs produce
-  distinct outputs — because every one of these modules had tests covering only
-  the equality half, and the equality half is the half that was never broken.
+  distinct outputs — because each of these modules had tests covering only the
+  equality direction, which never failed.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close out the installable-plugins epic with comprehensive Playwright E2E coverage of all nine enumerated flows, offline fixture servers, a plugin-seed DB helper, and user-facing docs for the marketplace and workspace install surfaces.
+**Goal:** Close out the installable-plugins epic with Playwright E2E coverage of all nine enumerated flows, offline fixture servers, a plugin-seed DB helper, and user-facing docs for the marketplace and workspace install surfaces.
 
 **Architecture:** Two in-process fixture HTTP servers (mock MCP + mock OAuth) are started by `playwright.config.ts` via `globalSetup`; each spec seeds its own tenant via a lightweight `seedPlugin` DB helper that mirrors the existing `setupAgentRuntimeFixture` pattern; the fixture servers write to a shared port file so specs can read their URLs. All specs are deterministic and offline — no real Stripe, Anthropic, or registry calls are made.
 
@@ -1653,4 +1653,4 @@ pnpm --filter @oxagen/app lint
 
 > **This completes the installable-plugins epic (Plans 1–7).**
 >
-> Plans 1–6 built the schema, credential service, catalog sync, spine capabilities, OAuth auth subsystem, notifications, and UI. Plan 7 closes the loop with deterministic offline E2E coverage of every enumerated flow and user-facing documentation for the marketplace and workspace install surfaces.
+> Plans 1–6 built the schema, credential service, catalog sync, spine capabilities, OAuth auth subsystem, notifications, and UI. Plan 7 adds deterministic offline E2E coverage of every enumerated flow and user-facing documentation for the marketplace and workspace install surfaces.

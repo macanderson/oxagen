@@ -29,8 +29,8 @@ renaming an export leaves the mock returning the old name, the importer gets
 
 #1172 proposed four remedies. Before adopting any, each was tried against
 `packages/billing/src/bootstrap.test.ts` — the #1171 file — by renaming an
-override and running `pnpm --filter @oxagen/billing typecheck`. The results
-decided this ADR, and two of them were not what the issue assumed:
+override and running `pnpm --filter @oxagen/billing typecheck`. Two of the
+results differ from what the issue assumed:
 
 | Form | Rename caught at typecheck? |
 |---|---|
@@ -41,23 +41,22 @@ decided this ADR, and two of them were not what the issue assumed:
 
 `importOriginal` alone does **not** catch a rename. Vitest infers the factory's
 return type rather than checking it against the module, so an override naming a
-nonexistent export is just another property. `importOriginal` solves a different
-problem — keeping the exports a test does not override real — and is worth using
-for that, but it is not the guard.
+nonexistent export is another property. `importOriginal` solves a different
+problem, keeping the exports a test does not override real; it is not a rename
+guard.
 
 The guard is `satisfies`. The choice between its two forms is about cost:
 
 - `satisfies typeof import(m)` demands the factory reproduce **every** export.
   For `./metering` that is twelve, and for `./logger` it is a full pino
   `Logger` — `level`, `fatal`, `trace`, `silent`, `msgPrefix` — to stand in for
-  four methods a bootstrap test reads. Measured, not guessed: it produced
-  `TS2322` on the logger double.
-- `satisfies Pick<typeof import(m), "a" | "b">` asks only the question that
-  matters — do the names this file replaces still exist? — and a rename fails on
-  the `Pick` constraint itself.
+  four methods a bootstrap test reads. It produced `TS2322` on the logger
+  double.
+- `satisfies Pick<typeof import(m), "a" | "b">` checks only that the names this
+  file replaces still exist, and a rename fails on the `Pick` constraint itself.
 
-Spreading `importOriginal` to get completeness cheaply looks attractive and is
-a trap here: it imports the real module. In `bootstrap.test.ts` that means the
+Spreading `importOriginal` to get completeness imports the real module. In
+`bootstrap.test.ts` that means the
 real kernel, database client and pino logger, and the suite went from 47ms to
 timing out against a 5s limit.
 
@@ -65,16 +64,16 @@ timing out against a 5s limit.
 
 **1. A `vi.mock` factory for a workspace module carries
 `satisfies Pick<typeof import("..."), <the names it replaces>>`.** This is the
-default and it is nearly free: `Pick` is a type, so it costs nothing at runtime,
-and it turns #1171 into a typecheck error in the file that caused it.
+default. `Pick` is a type, so it costs nothing at runtime, and it turns #1171
+into a typecheck error in the file that caused it.
 
-**2. Use `satisfies typeof import("...")` when the double is genuinely the whole
+**2. Use `satisfies typeof import("...")` when the double is the whole
 module** and the export surface is small enough to state. It is strictly
 stronger; it is only sometimes affordable.
 
 **3. Skip the annotation, with a comment saying why, when the type is
-disproportionate** — the `logger` case. A comment is honest; a cast that looks
-like a check and is none is not.
+disproportionate** — the `logger` case. A cast that looks like a check and is
+none misleads; a comment does not.
 
 **4. Use `importOriginal` when a test needs the unmocked exports to be real**,
 not as a rename guard, and never for a module with import-time side effects.
@@ -88,12 +87,12 @@ reference and already the pattern — #1148's fix.
 TypeScript list is mirrored into a database CHECK constraint, a test asserts
 equality. `packages/compliance/src/security-event-types.test.ts` — "the latest
 event_type migration contains every value in `SECURITY_EVENT_TYPES`" — is the
-reference, and is what #1163 was missing rather than what it got wrong.
+reference; #1163 was missing it.
 
 ## Scope, stated honestly
 
-This governs **new and modified** mocks. It is not a mass conversion, and saying
-so is the point: there are **2,240 `vi.mock` factories naming a workspace module
+This governs **new and modified** mocks. It is not a mass conversion: there are
+**2,240 `vi.mock` factories naming a workspace module
 (`@oxagen/*` or a relative path) across 834 test files**. A rule that claims to
 cover all of them on the day it is written is one nobody can comply with.
 

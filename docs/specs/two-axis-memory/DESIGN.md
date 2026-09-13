@@ -27,7 +27,7 @@ This doc is the contract every layer codes against. Field names in **Neo4j** are
 Kept infra props: `id`, `publicId`, `orgId`, `workspaceId`, `nodeRef`, `label`,
 `displayName`, `is_system`, `embedding`, `createdAt`, `updatedAt`.
 
-Kept content prop: `lesson` (≡ schema `body`; **not renamed** — pure churn, no
+Kept content prop: `lesson` (≡ schema `body`; **not renamed**: a rename is churn with no
 functional gain. TS field stays `lesson`).
 
 New / changed:

@@ -14,7 +14,7 @@
 Oxagen spans four stores with strict boundaries (Postgres = transactional
 state, ClickHouse = append-only events, Neo4j = graph, blob = binary assets)
 across ~21 Postgres domains, plus a registry of ~340 capabilities that read and
-write them. That structure is knowable — it is fully determined by committed
+write them. That structure is fully determined by committed
 artifacts: the Drizzle schema objects, the ClickHouse `schema.sql`, the Neo4j
 `schema.cypher`, the `@oxagen/storage` asset kinds, the tenant-policy manifest,
 and the capability contracts — **but nothing assembles it into one place.**
@@ -25,7 +25,7 @@ Two costs follow from that gap:
    grounds agents in *customer* data (ADR-012, the ontology), but when an agent
    (or a human via the agent) asks "where does billing data live, and which
    capabilities write it?", there is no grounded, citable answer — only whatever
-   the model half-remembers from training. That is exactly the failure mode the
+   the model half-remembers from training. That is the failure mode the
    knowledge graph exists to prevent, applied to the platform itself.
 2. **Storage drift is invisible until it breaks something.** A new table, a
    renamed column, a capability whose declared domain no longer matches where it
@@ -34,9 +34,9 @@ Two costs follow from that gap:
    to catch it.
 
 Per ADR-021's determinism ladder, this is a **rung-1/rung-2 problem** (a pure
-function over committed inputs, then an index lookup) that today gets answered,
-badly, at rung 5 (a frontier model guessing). The fix is to compute the
-self-model deterministically and make it the grounded source.
+function over committed inputs, then an index lookup) that today is answered
+at rung 5 (a frontier model guessing). This ADR computes the self-model
+deterministically and makes it the grounded source.
 
 ## Decision
 
@@ -109,7 +109,7 @@ Manifest shape (abridged):
 }
 ```
 
-This manifest is **independently valuable now**, before any later phase: it is a
+Before any later phase ships, the manifest is a
 drift-aware, machine-readable inventory of the platform's storage that CI diffs
 on every PR and that any tool can consume.
 
@@ -163,34 +163,32 @@ Expose the model to agents along a strict cost gradient, mirroring the
   contract — the same grounded, cited path used for customer data.
 
 An agent climbs tiers only as the question demands, so the common case
-(Tier 0) costs nothing and the expensive case (Tier 2) is reserved for genuine
-graph traversal — the determinism ladder applied to platform self-knowledge.
+(Tier 0) costs nothing and the expensive case (Tier 2) is reserved for graph
+traversal.
 
 ### Phase 4 — drift enforcement + lineage (Proposed)
 
 Promote `--check` from an advisory drift gate to a lineage-aware one: diff the
 new manifest against the committed one and the projected graph, classify changes
 (added/removed/renamed table, column, capability edge), and surface them as a
-structured changelog for review — turning silent storage drift into an explicit,
-diffable event.
+structured changelog for review.
 
 ## Consequences
 
 - The platform gains a single, deterministic, content-addressed source of truth
   for its storage layer, diffed by CI on every PR (Phase 1, now). Storage drift
-  becomes a failing check instead of a latent surprise.
+  becomes a failing check.
 - Agents get a grounded, citable self-model of where data lives and which
   capabilities touch it (Phases 2–3), answered on the same determinism ladder as
   every other Oxagen inference — cheaply at Tier 0, by graph traversal only when
   the question needs it.
 - The manifest is a pure function of committed artifacts, so it never needs a
-  live database and never drifts from the code: the code IS its input. The cost
+  live database and never drifts from the code, which is its input. The cost
   is that each input parser (ClickHouse DDL, Neo4j cypher) must track its source
   file's format; both are small and unit-tested against real fixtures.
 - `reads`/`writes` are deliberately sparse in Phase 1 (only where a contract
-  declares data tags). This is honest under-reporting rather than confident
-  wrong-reporting — later phases fill it in from handler scanning without ever
-  having shipped a hallucinated mapping.
+  declares data tags). A mapping the generator cannot derive stays empty, so no
+  guessed mapping ships; later phases fill it in from handler scanning.
 - Adding `@oxagen/oxagen` as a dependency of `@oxagen/database` is safe only
   because the generator imports the `contracts` + `registry` subpaths, which do
   not import `@oxagen/database`. A future import of the package root or `/kernel`

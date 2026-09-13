@@ -14,18 +14,17 @@
 in the CLI's permission broker, was missing one line — the one that consumes the
 separator after `**` — so `**` plus `/.env` required a directory and did not
 match `.env` at the workspace root. That copy was the one deciding
-`allow | deny`, and a rule that does not match is a rule that does not deny.
+`allow | deny`, so the deny rule for `.env` at the root did not deny it.
 
 Nothing compared the copies. The divergence was found by reading them side by
 side, months after it shipped.
 
 ADR-041 faced the same question about canonical JSON and answered it the other
-way: share the rule, keep the implementations. That was right there because
-those modules sit at different trust boundaries — one faces a hostile peer and
-pays for it, and merging them would have moved that cost to the wrong side.
+way: share the rule, keep the implementations. Those modules sit at different
+trust boundaries — one faces a hostile peer and pays for it, and merging them
+would have moved that cost to the wrong side.
 
-Nothing like that is true here. All four copies filter paths for the same kind
-of caller. They had nothing to disagree about, and disagreed anyway.
+Here, all four copies filter paths for the same kind of caller.
 
 ## Decision
 
@@ -33,24 +32,22 @@ of caller. They had nothing to disagree about, and disagreed anyway.
 
 `@oxagen/ingestion` and `@oxagen/github` share no dependency, so no existing
 package could hold this. The nearest candidate, `@oxagen/agent-engine`, pulls
-the AI SDK — a cost `ingestion` should not pay for a nine-line function, and a
-dependency edge from a data pipeline to the agent loop that would be wrong even
-if it were free. So this is case (b) of the new-package rule: a direction the
+the AI SDK — a cost `ingestion` should not pay for a nine-line function — and
+would add a dependency edge from a data pipeline to the agent loop. So this is
+case (b) of the new-package rule: a direction the
 current graph forbids.
 
-The semantics live in `packages/glob/src/glob.test.ts` as a table, which is the
-half that keeps this from happening again. A rule that is not in the table is a
-rule nothing holds.
+The semantics live in `packages/glob/src/glob.test.ts` as a table. A rule that
+is not in the table is not enforced by any test.
 
 **`**` followed by a separator means zero or more whole segments.** Every
 surviving copy emitted a bare `.*` after consuming the slash, so `**` plus
 `/.env` also matched `foo.env` — a rule about one file silently becoming a rule
 about every name ending in it. Consuming the separator and emitting `(?:.*/)?`
-is the only shape that is neither over-broad nor requires a directory nobody
-asked for.
+is the only shape that neither over-matches nor requires a directory.
 
-**`matchGlob` in `@oxagen/mcp-config` stays separate**, and this is ADR-041's
-reasoning applied honestly rather than an exception to this one. It matches flat
+**`matchGlob` in `@oxagen/mcp-config` stays separate**, on ADR-041's
+reasoning. It matches flat
 values — MCP tool names and URLs — where `*` is expected to cross every
 separator. Merging them would make a tool-name rule and a path rule mean the
 same thing by the same character, which they do not.
@@ -62,8 +59,7 @@ same thing by the same character, which they do not.
 - A change to path-glob semantics is now one diff with one test table, rather
   than four diffs that can be applied to three of four places.
 - The stricter `**` rule narrows existing patterns. A filter written as `**`
-  plus `/.env` stops matching `foo.env`. That is the correct reading and the one
-  every glob a user has met gives, but it is a behaviour change, not only a
-  cleanup.
-- Anyone adding a fifth copy has somewhere obvious to import from and a table
-  that will disagree with them if they do not.
+  plus `/.env` stops matching `foo.env`. Common glob implementations read it
+  the same way. It is a behaviour change.
+- Code that needs a path glob imports `@oxagen/glob`, whose test table records
+  the semantics a new copy would have to match.

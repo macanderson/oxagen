@@ -7,16 +7,15 @@ identity → permitted action → verified outcome → audit record, **per edit*
 
 ## Why this feature exists
 
-Torn and misapplied patches are still the #1 silent killer of agent accuracy. An agent
+Torn and misapplied patches are the most common silent cause of agent accuracy loss. An agent
 reads a file, another session (or its own earlier bash command) changes it, and the next
-`edit_file` lands in the wrong place or clobbers someone else's work. Worse, an edit can
-land *cleanly* and still poison the file — a broken JSX tag, a mangled import — and the
+`edit_file` lands in the wrong place or clobbers someone else's work. An edit can also
+land cleanly and still poison the file — a broken JSX tag, a mangled import — and the
 damage is only discovered N turns later by a failing build, after the agent has stacked
-more work on top of it. Both failure classes are structural, so the defense must be
-structural too: not a prompt asking the model to be careful, but a harness that makes the
-bad write impossible.
+more work on top of it. Both failure classes are structural, so the defense is a
+harness that rejects the bad write before it lands.
 
-This is also the product wedge in miniature. Oxagen's positioning is the one enforced
+Oxagen's positioning is the one enforced
 object binding identity → knowledge scope → permitted action → commercial terms →
 verified outcome → audit record. V1 applies the last three links to every file mutation;
 the later phases add the first three.
@@ -38,8 +37,7 @@ runs all inherit it with zero per-surface wiring:
    to the file's prior state is rejected and the errors are returned to the model. Files
    that were already broken are not re-punished — only *new* damage gates.
 3. **Declared breakage escape hatch.** `expect_errors: true` lets the agent say "this
-   will break until step 4." The write proceeds and the declaration is recorded — visible
-   intent instead of silent damage.
+   will break until step 4." The write proceeds and the declaration is recorded.
 4. **Diagnostics port.** A `DiagnosticsProvider` seam (`ports.ts`) so a surface can plug
    a real project-wide typechecker into the same before/after delta gate. V1 ships the
    port; the built-in single-file syntax check is the default provider.
@@ -63,7 +61,7 @@ export that breaks three importers is rejected (or declared) at write time.
 ### V2 — AST-applied transforms (target: +1 quarter)
 Add first-class structural edit operations alongside string replacement: `rename_symbol`,
 `add_import`, `update_signature`, `wrap_node` — applied via the TypeScript AST (ts-morph
-or compiler transforms), so whitespace and formatting drift cannot misplace them at all.
+or compiler transforms), so whitespace and formatting drift cannot misplace them.
 String edits stay for prose/config; structural edits become the preferred tool for code.
 - Anchors become node anchors (file hash + AST path + node text hash) — stable under
   reformatting.
@@ -90,8 +88,9 @@ Promote the mutation itself to a metered, IAM-gated capability (`edit_apply`): t
 chain identity → knowledge scope → permitted action → commercial terms → verified outcome
 → audit record, per edit. Fleet operators can scope *which paths an agent may mutate*
 (permitted action), price mutation classes (commercial terms), and resell governed edit
-capacity. This is the Stripe-for-agents wedge on the file system, and the reason V1 was
-built at the single enforcement seam every surface shares.
+capacity. This phase is the Stripe-for-agents wedge on the file system. V1 was built at
+the single enforcement seam every surface shares so that this phase applies to every
+surface.
 - **Acceptance:** an org policy denying `packages/billing/**` mutations to a contractor
   agent is enforced at the tool layer and visible in the audit trail.
 

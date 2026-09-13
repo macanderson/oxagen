@@ -127,7 +127,7 @@ terms for graph data. Do not invent or drift to generic graph-theory words for
 the data model. ("Entity" / "entity type" / "edge type" are banned for the data
 model.)
 
-**Authority (Neo4j official docs).** These terms are exact, not house style. Per
+**Authority (Neo4j official docs).** Per
 Neo4j *Getting Started — Graph database concepts*
 (\<https://neo4j.com/docs/getting-started/appendix/graphdb-concepts/>): "A node
 represents an entity… nodes are classified by **labels**. A label marks a node as
@@ -156,8 +156,7 @@ Notes and consequences:
   inputs use `startLabel` / `endLabel`.
 - **Legacy `*.edge.*` contracts are renamed in v1 (in scope), with a one-release
   deprecation alias.** The user wants "edge type" → "relationship type"
-  *everywhere*, including the shipped contracts — so the rename is **v1 scope**,
-  not a deferred follow-up:
+  *everywhere*, including the shipped contracts — so the rename is **v1 scope**:
   - `graph.edge.upsert` → **`graph.relationship.upsert`**
   - `semantic.edge.*` → **`semantic.relationship.*`** (all four
     `semantic.edge.*` capabilities — combined route `semantic-edge.ts` is renamed
@@ -255,14 +254,14 @@ three sources:
   **current workspace config** stored in a separate small current-config table
   keyed by stable schema **identity** (workspace + schema name), not by version
   row, so a schema disabled in version N stays disabled when N+1 publishes (§4.3).
-  Net: toggling never mutates a frozen snapshot, but it **does** auto-publish a
-  new one and re-pin — the behavior the north-star requires.
+  Toggling never mutates a frozen snapshot, but it **does** auto-publish a
+  new one and re-pin, as the north-star requires.
 
 ### 2. Goals & Acceptance Criteria
 
 #### 2.0 North-star user goal (authoritative intent, verbatim)
 
-This is the user's own statement of the flagship flow. Every acceptance
+This is the user's own statement of the flow. Every acceptance
 criterion in §2.1 traces back to it; where this prose and the rest of the spec
 disagree, **this intent wins** and the spec is reconciled to it (this section
 is what drove the §1.4 / §16.8 activation-model refactor below).
@@ -298,11 +297,11 @@ type" as a friendly synonym for "node label."
 builder ships BOTH a complete **traditional form-based UI** — define every node
 label, relationship type, and property by hand (criterion 4) — AND an
 **agent-assisted setup/config experience** — the AI assistant drawer + recommender
-(criteria 1, 3, 5). Neither is secondary: a user can build and maintain the entire
+(criteria 1, 3, 5). A user can build and maintain the entire
 registry **purely by hand**, **purely by prompting the agent**, or by **freely
 mixing the two**. Both modes edit the **same shared draft** (§16.3) through the
-**same `schema.*` mutation contracts**, so form edits and agent edits interoperate
-seamlessly — e.g. scaffold with a prompt, then hand-tune a property in the form;
+**same `schema.*` mutation contracts**, so form edits and agent edits interoperate:
+e.g. scaffold with a prompt, then hand-tune a property in the form;
 or hand-build two labels, then ask the agent to fill in the relationships between
 them.
 
@@ -332,8 +331,7 @@ The epic is complete when **all** of the following hold:
    optional `description`), create relationship types with typed properties and
    `startLabel`/`endLabel` constraints, edit or delete any label / relationship /
    property, organize them into schemas, and save to the **draft** — all via the
-   same `schema.*` contracts the agent uses. The form builder is a **complete
-   authoring surface on its own**, not a fallback to the agent; everything the AI
+   same `schema.*` contracts the agent uses. Everything the AI
    drawer can produce is also directly editable by hand.
 5. **Graph-derived recommendation.** On first load with an existing graph, the
    builder also offers an AI-recommended starter schema derived from
@@ -419,7 +417,7 @@ The epic is complete when **all** of the following hold:
 #### 3.1 Why a new Postgres schema, and why `ingestion.entity_types` is sunset
 
 `entity_types` is a *passive observation cache* (mutated by ingestion, never
-versioned) — and, worse, it durably stored what is really runtime observation,
+versioned) — and it durably stored runtime observation,
 which the four-store law assigns to ClickHouse. The registry is *authored,
 versioned, pinned, enabled, validated* state with its own lifecycle. Co-mingling
 would conflate the observed and the authored and break the immutable-version
@@ -478,7 +476,7 @@ Concretely:
   "all types" default becomes the pinned active vocabulary's relationship types
   (or unconstrained traversal when none pinned), not the old static list.
 - Delete `GRAPH_EDGE_TYPES` and `GraphEdgeType`; update the handful of importers
-  found by `grep -rn 'GRAPH_EDGE_TYPES'`. This is part of v1 scope, not a follow-up.
+  found by `grep -rn 'GRAPH_EDGE_TYPES'`. This is v1 scope.
 
 #### 3.3 Migration off `:EntityNode {entityType}` to first-class labels — phased
 
@@ -531,7 +529,7 @@ work); the *graph* operation it performs is still "reconcile."
    remove the `entityType` property and the `:EntityNode` secondary label from
    writes and readers.
 
-Be honest: the physical relabel is large and phased; v1 ships the vocabulary,
+The physical relabel is large and phased; v1 ships the vocabulary,
 registry, grounding, and validation, with ingestion beginning dual-write so new
 data lands with real labels immediately.
 
@@ -620,7 +618,7 @@ versioned):
 | audit | — | `auditMixin()` |
 
 Unique `(workspace_id, schema_name) WHERE deleted_at IS NULL`. Keying on
-`schema_name` (not `version_id`/`schema_id`) is deliberate: it is **current
+`schema_name` (not `version_id`/`schema_id`) makes it **current
 config that survives re-versioning** — a schema disabled in version N stays
 disabled when version N+1 is published, without mutating either frozen snapshot
 (§1.4).
@@ -850,7 +848,7 @@ Validators add `conformanceScore: number` and `outcome` to the output.
 
 #### 5.3 `oxagen schemas setup` — LLM-assisted CLI walkthrough
 
-The flagship onboarding command, mirroring the app's agent-assisted
+The onboarding command, mirroring the app's agent-assisted
 configuration in a terminal wizard (Commander + Ink, per `apps/cli`). Flow:
 
 1. Resolve org/workspace context; check for an existing registry (offer to edit
@@ -1038,7 +1036,7 @@ are absent from `getPinnedSchema()`, so they neither ground nor validate.)
 
 ### 8. Ingestion Integration Seam (pinned to real files)
 
-The registry feeds the universal pipeline at three precise points in
+The registry feeds the universal pipeline at three points in
 `packages/ingestion/`:
 
 1. **Schema load — `pipeline.ts`, `PipelineContext`.** Add
@@ -1070,7 +1068,7 @@ The registry feeds the universal pipeline at three precise points in
      `conformance_floor`, also emit `schema.conformance.low`.
    - `off`: skip validation entirely.
 
-   This is also the natural seam to begin the §3.3 **dual-write**: `upsertEntityNode`
+   The §3.3 **dual-write** also begins at this seam: `upsertEntityNode`
    writes the real label as primary (and, transitionally, retains `:EntityNode`
    as a secondary label + `entityType`).
 
@@ -1296,7 +1294,7 @@ pin moves to a different (older) version (`isDowngrade`). The
   chat + **schemas list with enable/disable toggles**; configurable recommender
   sampling; `oxagen schemas setup` wizard with enable/disable.
   **v1 completion gate = unit tests + coverage thresholds + the §13 Storybook /
-  light-dark-screenshot / LLM-judge visual gate.** E2E is explicitly deferred to
+  light-dark-screenshot / LLM-judge visual gate.** E2E is deferred to
   v2.
 - **v2 — Reconciliation workers + physical relabel + E2E.** §4.7 (reuse of
   `agent_executions`) + §9: `schema.reconcile.dispatch` / `.status`, Inngest
@@ -1344,7 +1342,7 @@ All originally-open questions are now decided (signed off):
    Validation moves to the registry's **active vocabulary**, with a lexical
    identifier guard (`^[A-Z][A-Z0-9_]{0,62}$`, `RELATIONSHIP_TYPE_PATTERN`)
    preserving Cypher-injection safety in the ontology query layer. This is v1
-   scope, not a follow-up.
+   scope.
 2. **Conformance score formula — accepted.** `score = 1 − (weighted
    missing-required + type-error penalties) / total-evaluated-properties`, with
    required-property misses weighted higher than optional/type penalties. Exact
@@ -1375,7 +1373,7 @@ All originally-open questions are now decided (signed off):
    vocabulary + dual-write and v2 doing the batch relabel. The legacy
    `graph.edge.upsert` / `semantic.edge.*` contracts are **renamed in v1**
    (`graph.relationship.upsert` / `semantic.relationship.*`) with **one-release
-   deprecation aliases** (removed in v2) — the rename is in scope, not deferred.
+   deprecation aliases** (removed in v2).
 7. **`ingestion.entity_types` sunset — decided (§1.3, §3.1, §10).** The registry
    is the single authoritative vocabulary. *Observation* moves to ClickHouse
    (`graph_observed_labels`) per the four-store law; the recommender seeds from

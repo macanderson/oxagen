@@ -111,7 +111,7 @@ Same atoms, cross-org, fed by `get_my_usage`. The distinguishing element is the 
 ```
 
 Security reminder rendered as a footnote: *"Shows only your own activity."* (The contract's
-`WHERE user_id = session` guard is what makes that true — §02 §2.2.)
+`WHERE user_id = session` guard enforces this — §02 §2.2.)
 
 ## 4. Workspace overview — enhancement diff
 

@@ -57,7 +57,7 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
   (`packages/iam/src/emit-audit.ts:117`). Verified file attribution remains an
   evidence-ledger gap rather than an automatic graph edge.
 - **An eval loop and CI/PR readers exist** (`eval.run.start` with LLM judge;
-  `repo.ci.status`, `repo.pr.get`) — the ingredients of verification, unwired.
+  `repo.ci.status`, `repo.pr.get`); they are not wired into verification.
 
 ### The gaps, bluntly
 
@@ -85,7 +85,7 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
 
 ## Epics, in implementation order
 
-Ordering logic: **Epic 1 is the keystone** — nothing downstream has an identity to
+Ordering logic: **Epic 1 comes first** because nothing downstream has an identity to
 filter, meter, or attest until it lands. Epics 2–4 win play 1 (fastest to claim,
 matches the #1-ranked wedge). Epics 5–6 build play 2's foundation on the new
 dimensions. Epics 7–8 build play 3 on the hardened lineage. Epics 9–10 are the
@@ -106,7 +106,7 @@ Carry the resolved principal from IAM through the kernel into every downstream l
   principal/agent/capability.
 
 ### Epic 2 — Tenant-isolation trust floor *(play 1 credibility; small, urgent)*
-Fix the defects that would sink a governance pitch in the first security review.
+Fix the tenant-isolation defects a security review would flag.
 - Verify every remaining workspace-graph query and provider-metadata projection
   constrains both org and workspace; the exact code graph remains local.
 - Replace the substring `SCOPE_GUARD` regex with a predicate that requires org AND
@@ -190,8 +190,7 @@ Upgrade integrity from "append-only by convention" to third-party verifiable.
 ### Epic 10 — Outcome-priced billing + compliance evidence plane *(capstone)*
 Monetize verification; close the loop for "a compliance officer signs off."
 - New price type in `packages/billing/src/pricing.ts`: per-resolution / success-fee,
-  chargeable only against a **signed outcome event** (Epics 7+8) — the attestation IS
-  the meter.
+  chargeable only against a **signed outcome event** (Epics 7+8).
 - Evidence exports: replayable accountability-chain reports (who → agent → tool →
   data → terms → outcome → audit) mapped to EU AI Act / NIST AI RMF / SOC 2 asks.
 - **Done when:** a customer can price a capability per verified outcome, and export

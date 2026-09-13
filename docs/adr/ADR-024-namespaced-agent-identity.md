@@ -11,9 +11,9 @@ a workspace-scoped slug (A2A `metadata.skillId`), a `agt_…` public id, or a
 raw UUID — none of which is simultaneously human-readable, global, and
 immutable. Org and workspace **slugs cannot serve as the global prefix**: both
 are renameable by design (`org_slug_history` / `workspace_slug_history` exist
-precisely to track renames), and they are uncapped in length.
+to track renames), and they are uncapped in length.
 
-This is wedge-relevant: the accountability chain (identity → knowledge scope →
+The accountability chain (identity → knowledge scope →
 permitted action → billing → audit) needs one identity string that a customer
 can put in a bill, an audit row, an A2A address, or an IAM grant and trust it
 never dangles or gets recycled.
@@ -30,7 +30,7 @@ never dangles or gets recycled.
    "." + agent_slug`. New agent slugs are capped at 18 characters, so a new
    agent's full key never exceeds **32 characters** (6+1+6+1+18). Existing
    agents with longer slugs are grandfathered — their keys are still unique
-   and immutable, merely longer.
+   and immutable, and longer.
 3. **100% immutable, enforced in the database.** BEFORE UPDATE triggers reject
    any change to `organizations.namespace`, `workspaces.namespace`, and
    `agent.agents.slug`; a BEFORE INSERT trigger rejects new agent slugs over

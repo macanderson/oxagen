@@ -35,12 +35,11 @@ supervised from a serverless function was an ops burden". The platform
 left Vercel on 2026-08-21 and runs as containers on one node. The engine
 binary is built to run containerized beside them.
 
-There is also a funding question the code answers by accident. Every
-model call reads one key from the process environment. There is no way
+Every model call reads one key from the process environment. There is no way
 for a customer to bring a key, and the platform key's balance on
 2026-09-09 was under ten dollars. ADR-052 names BYOK as a design
-constraint and then says tokens are never billed, which is right for a
-token Oxagen never paid and wrong for one it did.
+constraint and then says tokens are never billed, a rule that also covers
+tokens Oxagen paid the vendor for.
 
 ## Decision
 
@@ -94,7 +93,7 @@ back is too.
 
 ### 3. A token is billed only when Oxagen paid for it
 
-ADR-052 is amended for exactly one case. Its rule, "tokens are reported in
+ADR-052 is amended for one case. Its rule, "tokens are reported in
 full and billed at zero", governs every token Oxagen did not pay for: a
 customer's agents on the customer's keys, and the in-app agent under a
 customer key. For the in-app agent under the `platform` source, Oxagen is

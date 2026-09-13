@@ -132,7 +132,7 @@ Source: [http example config](https://github.com/basementstudio/xmcp/blob/main/e
 
 #### 3.3 Representative Tool: `agent.tool.list`
 
-This example shows exactly how a tool delegates to the existing `@oxagen/agent` handler and `@oxagen/oxagen` contract, preserving the no-drift constraint.
+This example shows how a tool delegates to the existing `@oxagen/agent` handler and `@oxagen/oxagen` contract, preserving the no-drift constraint.
 
 ```typescript
 // apps/mcp/src/tools/agent.tool.list.ts
@@ -312,7 +312,7 @@ Source: [Vercel xmcp docs](https://vercel.com/docs/frameworks/backend/xmcp) · [
 | **Node.js Version** | **24.x** |
 | **vercel.json** | Not required — framework preset handles routing |
 
-**Runtime**: Vercel Functions using **Fluid compute** (the default for xmcp on Vercel). Not Edge Runtime — xmcp targets Node.js, not the Edge runtime, which is important because `@oxagen/database` (Postgres/Drizzle) and `@oxagen/agent` are not Edge-compatible.
+**Runtime**: Vercel Functions using **Fluid compute** (the default for xmcp on Vercel). Not Edge Runtime — xmcp targets Node.js, not the Edge runtime; `@oxagen/database` (Postgres/Drizzle) and `@oxagen/agent` are not Edge-compatible.
 
 **HTTP Transport on Vercel**: xmcp uses **Streamable HTTP** transport (current MCP spec). The `/mcp` endpoint (configurable in `xmcp.config.ts` via `http.endpoint`) becomes a Vercel Function. MCP clients connect to `https://mcp.oxagen.sh/mcp`.
 
@@ -396,9 +396,9 @@ xmcp uses rspack (not tsc) for compilation, so `tsconfig.json` only needs to sat
 
 **Problem**: The current `invoke()` kernel and all `@oxagen/agent`/`@oxagen/handlers` functions require a `CapabilityContext` argument (`orgId`, `workspaceId`, `userId`, `apiKeyId`, `surface`, `requestId`). xmcp does not pass a context object to tool functions — auth state is communicated via HTTP headers.
 
-**Mitigation**: The `buildContext(headers())` pattern in `src/context.ts` reconstructs `CapabilityContext` from request headers inside each tool's `default` function (Section 3.3). The middleware is responsible for validating the bearer token / API key and writing the resolved `orgId` / `workspaceId` / `userId` into custom response headers (`x-oxagen-org-id`, etc.) that the tool reads back. This is a one-time pattern that all 14 tools share identically.
+**Mitigation**: The `buildContext(headers())` pattern in `src/context.ts` reconstructs `CapabilityContext` from request headers inside each tool's `default` function (Section 3.3). The middleware is responsible for validating the bearer token / API key and writing the resolved `orgId` / `workspaceId` / `userId` into custom response headers (`x-oxagen-org-id`, etc.) that the tool reads back. All 14 tools share this pattern.
 
-**Phase 1 fallback**: While `placeholderContext()` is still in use (i.e. before the auth subagent lands), `buildContext` simply returns the same zeros — behaviour is identical to today. No regression.
+**Phase 1 fallback**: While `placeholderContext()` is still in use (i.e. before the auth subagent lands), `buildContext` returns the same zeros — behaviour is identical to today.
 
 #### Risk 2: xmcp rspack bundler and `@oxagen/*` workspace packages
 
@@ -418,7 +418,7 @@ xmcp uses rspack (not tsc) for compilation, so `tsconfig.json` only needs to sat
 - Verify `@oxagen/database` uses a connection pool that reconnects on demand (e.g. `pg` pool or Drizzle with a connection string — Drizzle lazy-connects by default).
 - Neo4j driver (`neo4j-driver`) should use `driver.session()` per-request, not a long-lived session.
 - Fluid compute keeps functions warm between requests within a window, so pooled connections typically survive; but the code must handle reconnection gracefully.
-- This is the same concern that exists for `apps/api` on Vercel — if it works there, it works here.
+- `apps/api` on Vercel has the same constraint; connection handling that works there works here.
 
 ---
 

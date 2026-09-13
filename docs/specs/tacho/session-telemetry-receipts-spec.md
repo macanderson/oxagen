@@ -20,13 +20,13 @@ single **session that fans across many models**, such that:
    the exact messages the model saw, which were cached, and what was added,
    compacted, or removed since the previous step.
 2. Every token carried in context is **attributable as useful or unuseful**, with
-   a named method and a real cost-of-carry number rather than a vibe.
+   a named method and a cost-of-carry number.
 3. **Memory writes and their subsequent citations** are joined by a stable id, so
    the write→recall→citation→usefulness loop is a first-class, queryable object.
 4. A model can **consume its own receipt and self-rate its performance**, grounded
    in block ids and step coordinates rather than free-floating scalars.
-5. Every record is **sliceable by `(role, provider, model)`**, because the whole
-   point of one-session-many-models is *comparative* per-model attribution.
+5. Every record is **sliceable by `(role, provider, model)`**, so attribution in a
+   one-session-many-models run can be compared per model.
 
 The design is **additive over the existing event-sourced fold**. It introduces no
 daemon, no parallel content store, and no span/trace layer. It adds new
@@ -64,8 +64,7 @@ compaction), #366 (per-turn `files_touched`), #368 (overflow summarizer),
 
 ## 1. What already exists (do not rebuild)
 
-The fold is already most of the way there. This spec **indexes what the journal
-already carries** rather than duplicating it.
+This spec **indexes what the journal already carries** rather than duplicating it.
 
 - **`AgentEvent`** (`crates/stella-protocol/src/event.rs`) — one internally-tagged
   (`#[serde(tag = "type")]`) enum, additive-only, round-trip and legacy-parse
@@ -86,8 +85,8 @@ already carries** rather than duplicating it.
   write↔citation link already exists, keyed `(execution_id, memory_id)` where
   `memory_id` is a `nod_…` node id.
 - **Journal-replay equivalence** — replaying `journal.jsonl` through the deck's
-  pure fold rebuilds the visible session byte-for-byte. This is the property the
-  whole spec must preserve.
+  pure fold rebuilds the visible session byte-for-byte. Every change in this spec
+  must preserve this property.
 
 ---
 
@@ -226,8 +225,8 @@ content-addressed, a tool output that reappears verbatim (supersession) resolves
 to the same block, so "this exact content was carried for N steps" is directly
 countable.
 
-**`BlockOrigin.call_id` is birth provenance, not a call set.** Content-addressing
-cuts both ways: a block is registered exactly once, so when two *distinct* calls
+**`BlockOrigin.call_id` is birth provenance, not a call set.** A content-addressed
+block is registered exactly once, so when two *distinct* calls
 produce byte-identical output (two `git status` runs), `origin.call_id` names only
 the first. Reading eviction identities through it would silently under-report —
 the second call's contribution to context would be invisible, and an eviction
@@ -241,8 +240,7 @@ event's block ids against the manifests that carried them, *not* by the registry
 
 ## 5. Per-step request manifest — the receipt (#364 item 2)
 
-The manifest is the single most essential addition: the ordered list of blocks
-the model actually saw on step *N*. It makes "re-run `compact()` over journal
+The manifest is the ordered list of blocks the model saw on step *N*. It makes "re-run `compact()` over journal
 replay" a faithful audit and turns every subsequent attribution into a join.
 
 ```rust
@@ -337,7 +335,7 @@ struct ContextFrameRef {
 
 The frame *content* itself is journaled once via `BlockRegistered` for the frame's
 `block_id` (local only; the `content` field is stripped by the content-free export
-projection). This is the minimal closure of G1: digest in the wire event, bytes in
+projection). This closes G1: digest in the wire event, bytes in
 the local block registry, never in export.
 
 ---
@@ -379,7 +377,7 @@ enum CompactionPass { Dedup, Supersession, Aging, Eviction, OverflowSummary }
 ```
 
 This lets the inspector answer "block `blk_ab12…` was evicted at turn 4 step 9 by
-the Eviction pass" and — critically for §8 — "it was never cited or referenced
+the Eviction pass" and, for §8, "it was never cited or referenced
 before eviction, so its carried tokens were provably wasted."
 
 ### 6.3 Typed decision events (#364 item 3)
@@ -470,8 +468,8 @@ AgentEvent::CacheAttribution {
 `CacheCause` already exists (`PrefixInstability`, `IdleBeyondTtl`,
 `OptInNeverEngaged`). By attaching `culprit_block_id`, a low hit rate becomes a
 first-class output: "step 7 paid full input because `blk_9f…` (a recalled frame)
-was inserted before the tail breakpoint and shifted the cache boundary" — not a
-manual diagnosis. This directly connects to #372 (dedup keeping the *latest*
+was inserted before the tail breakpoint and shifted the cache boundary". This
+connects to #372 (dedup keeping the *latest*
 duplicate maximally invalidates the prefix): the inspector can show the exact
 block whose relocation cost a cache miss.
 
@@ -479,8 +477,8 @@ block whose relocation cost a cache miss.
 
 ## 8. Usefulness attribution — useful vs unuseful tokens (New extension #1)
 
-This is the user's headline ask. The metric is **cost-of-carry**, anchored in real
-token economics; usefulness is a *labeling layer* on top of it.
+The metric is **cost-of-carry**, computed from token prices; usefulness is a
+*labeling layer* on top of it.
 
 ### 8.1 Cost-of-carry (the real number)
 
@@ -501,8 +499,7 @@ This is derived, not stored per step — it is computed by the inspector from th
 manifest series (§5) + `CacheAttribution` (§7) + catalog pricing. A block resident
 40 steps in the volatile zone costs 40× its tokens at the cache-miss rate; the
 same block in the stable prefix costs its tokens once at the write rate plus 39×
-at the hit rate. **This is what makes "unuseful tokens" a dollar figure, not an
-opinion.**
+at the hit rate. **Cost-of-carry expresses "unuseful tokens" as a dollar figure.**
 
 ### 8.2 Usefulness signals (the labeling layer)
 
@@ -563,15 +560,14 @@ Per block, the inspector produces:
 | `verdict` | `useful` (Cited/ReferencedDownstream) · `wasted` (WastedEvicted) · `speculative` (SurvivedUnreferenced) · `disputed` (SelfReported-negative but referenced) |
 | `waste_usd` | `total_carry_usd` when `verdict = wasted`, else 0 |
 
-Rolled up, this answers the exact question — **"of the tokens we kept in context,
-which were useful and which were dead weight, in dollars, per model"** — and
-because `ReferencedDownstream`/`SelfReported` carry a method+confidence, the
-weak signals never masquerade as the provable ones.
+Rolled up, this answers **"of the tokens we kept in context, which were useful
+and which were dead weight, in dollars, per model"**. Because
+`ReferencedDownstream`/`SelfReported` carry a method+confidence, the weak signals
+stay distinguishable from the provable ones.
 
 ### 8.4 Reference detection (defining the weak signal precisely)
 
-`ReferencedDownstream` is the fuzziest and most dangerous signal, so its method is
-pinned, not left to "the model seemed to use it":
+`ReferencedDownstream` is an inferred signal that still counts as `useful` in the ledger, so its method is pinned:
 
 - **Primary:** normalized token-overlap between block content and the subsequent
   assistant message / tool-call arguments, over a shingled n-gram set, with an
@@ -628,8 +624,7 @@ write (ContextWrite.written[].memory_id = nod_X)
       → OR never cited + evicted → UsefulnessSignal::WastedEvicted on blk_Y
 ```
 
-This closes the user's exact request: a memory write and **every** subsequent
-retrieval (not just the ones that ended in a citation), with the carry cost of
+This records a memory write and **every** subsequent retrieval (not just the ones that ended in a citation), with the carry cost of
 memories that were recalled but never paid off.
 
 ### 9.3 Memory scorecard (derived)
@@ -653,7 +648,7 @@ cache-miss tokens, and are never cited — is only computable once §8 + §9.2 e
 ## 10. Multi-model session ledger
 
 Everything above already carries `(role, provider, model)`. This section names the
-two rollups that make "one session, many models" the payoff rather than a caption.
+two per-model rollups over a session.
 
 ### 10.1 Model roster (per session)
 
@@ -682,20 +677,19 @@ The inspector groups every receipt-derived metric by `(role, provider, model)`:
 | memories *it* wrote and their payoff | §9 filtered to `MemoryWriteRef.origin_turn` served by this model |
 | its self-ratings vs verifier verdicts | §11 vs `VerifierVerdict`/`GoalVerdict` |
 
-This is the Stella-specific shape a generic OpenTelemetry export cannot produce:
-not just "model X cost $Y," but "the triage model's recalled context was 70%
-wasted while the worker's was 20%," and "the verifier and worker disagree on the
-worker's self-rating." That comparison is only possible because usefulness and
-self-rating are attributed per model-call coordinate (rule §6).
+A generic OpenTelemetry export reports "model X cost $Y"; this shape also reports
+"the triage model's recalled context was 70% wasted while the worker's was 20%,"
+and "the verifier and worker disagree on the worker's self-rating." The comparison
+requires usefulness and self-rating to be attributed per model-call coordinate
+(rule §6).
 
 ---
 
 ## 11. Self-reflection & self-rating (New extension #3)
 
 The user wants the model to "self-reflect and rate their own performance." The
-receipt makes this *grounded*: the model reflects by **consuming its own receipt**
-(§13 read API) and emits critique referencing `block_id`s and step coordinates —
-not a free-floating scalar. This builds on the existing reflection loop
+model reflects by **consuming its own receipt** (§13 read API) and emits critique
+referencing `block_id`s and step coordinates. This builds on the existing reflection loop
 (`reflect_and_record`, the `reflections` / `execution_reflection` tables,
 `GoalVerdict`, `VerifierVerdict`), not a parallel path.
 
@@ -728,7 +722,7 @@ struct SelfNote {
 }
 ```
 
-Two properties make this trustworthy rather than a hallucinated scorecard:
+Two properties constrain a self-assessment:
 
 1. **Receipt-grounded.** Every `SelfNote.anchor` must resolve to a real block/step
    in the turn's manifest; the inspector rejects notes that anchor to nonexistent
@@ -739,9 +733,8 @@ Two properties make this trustworthy rather than a hallucinated scorecard:
    systematic self-overrating per model is a first-class, sliceable metric (§10.2).
 
 `SelfNote.usefulness_score` feeds the `SelfReported` signal in §8 at low
-confidence — closing the loop: the model's own opinion of which context was noise
-becomes one (clearly labeled, weakest) input to the usefulness ledger, never the
-authority over it.
+confidence: the model's own opinion of which context was noise is one labeled,
+weakest input to the usefulness ledger, and never overrides the other signals.
 
 ---
 
@@ -925,12 +918,12 @@ Manifests + block registry make this O(context depth), not O(session length).
 
 ## 14. Build plan — verifiable core now, inferred layer gated on data
 
-The sections above describe the full shape. They should **not** be built as one
-program. Split by *verifiability*: build the parts that are measurements or
-byte-exact reconstructions now; treat the parts that rest on inferred labels as
-experiments that only earn their place once the core's data shows they would
-change a decision. The dividing question for every item is: *is this a fact the
-fold can prove, or a judgment a heuristic is guessing?*
+The sections above should **not** be built as one program. Split by
+*verifiability*: build the parts that are measurements or byte-exact
+reconstructions now; treat the parts that rest on inferred labels as experiments
+that are kept only once the core's data shows they would change a decision. Each
+item is sorted by whether it is a fact the fold can prove or a judgment a
+heuristic infers.
 
 ### Tier A — build now (verifiable, rides the fold, debugging ROI)
 
@@ -953,30 +946,28 @@ found (#360/#363/#372) into visible data instead of code reads.
 only the provable signals of §8.2).** `CacheAttribution`, the cost-of-carry
 derivation, and only `Cited` (from the existing `cite_memory`) and `WastedEvicted`
 (evicted before any reference). Delivers a *dollar figure* for wasted context
-carry — provable, and directly actionable for compaction tuning.
+carry, provable and usable for compaction tuning.
 
-Tier A is justified independent of self-reflection: it is the instrument that
-catches the next compaction/cache/budget regression, and it is the #364
-differentiator — "proof, per step, of what the model saw and what it cost." Ship
-it even if no one ever self-reflects.
+Tier A does not depend on self-reflection: it catches the next
+compaction/cache/budget regression, and it delivers #364's "proof, per step, of
+what the model saw and what it cost." Ship it even if no one ever self-reflects.
 
 ### Gate — measure before building Tier B
 
-After Tier A has run over real sessions, decide with data, not a hunch. Proceed
-to Tier B only where the receipts show the inferred layer would change a decision:
+After Tier A has run over real sessions, proceed to Tier B only where the receipts show the inferred layer would change a decision:
 
 - **Waste headroom.** Is a material fraction of token spend `WastedEvicted`
   (say ≥ ~20%)? If most context is provably required and cache hits are
-  healthy, the inferred layer is solving a problem you do not have — stop here.
+  healthy, do not build the inferred layer.
 - **Label signal.** Do the provable signals leave enough unexplained useful
-  context that an inferred `ReferencedDownstream` detector would add real
-  coverage? If `Cited` + exact-echo already explain usefulness, the fuzzy detector
-  is redundant risk.
+  context that an inferred `ReferencedDownstream` detector would add coverage? If
+  `Cited` + exact-echo already explain usefulness, the fuzzy detector adds risk
+  and no coverage.
 - **Calibration feasibility.** Tier A gives you `SelfAssessment`-shaped slots next
   to `VerifierVerdict`. Run self-rating in *shadow* first (§11 emitted, not
   surfaced), and productize only if self-scores correlate with verifier verdicts per
-  model. If they do not, self-rating is theater — keep it as a research signal,
-  not a product surface.
+  model. If they do not, keep self-rating as a research signal, not a product
+  surface.
 
 ### Tier B — gated on the above (experiments, validated against ground truth)
 
@@ -1005,8 +996,8 @@ Every item: new fields `#[serde(default)]`, new tables `IF NOT EXISTS`, old
 journals and `stream-json` consumers unaffected. No item adds a daemon, a
 background thread, or a network call; all emission rides the existing
 `EventSender` seam (`crates/stella-core/src/event_sender.rs`) and the journal writer.
-Emitting a Tier B event for shadow measurement is not the same as building its UI
-or acting on it — the gate governs the latter.
+The gate governs building a Tier B event's UI or acting on it; emitting the event
+for shadow measurement needs no gate.
 
 ---
 

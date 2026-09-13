@@ -34,7 +34,7 @@ flowchart LR
   V[Vercel project settings] --> E[process.env]
   L[.env.local] --> E
   E --> N[normalizeEnv: strip one quote pair from known keys]
-  N --> Z{Zod schema parse}
+  N --> Z{{Zod schema parse}}:::accent
   Z -->|valid| T[Typed env]
   Z -->|invalid| F[Throw: Invalid environment]
 `} />

@@ -1,6 +1,6 @@
 # 04 — Build Plan, Ready-to-Go Prompts, and Model Selection
 
-How to actually ship this, in what order, and which model to run each piece with. Model
+How to ship this, in what order, and which model to run each piece with. Model
 picks follow the `CLAUDE.md` operating model: Haiku for single-file/lookups, Sonnet for
 cross-package or non-trivial logic, Opus for architecture, security/billing, and
 multi-system work. Each prompt is copy-paste ready for a subagent or a Claude Code session.
@@ -132,8 +132,8 @@ false-positive list).
 
 ## Phase 3 — Studio (the hero surfaces)
 
-Build order: Tools (read-only, easy win) → Skills polish → Prompts UI → Commands UI →
-Agents Builder (the big one). Agents last because it consumes all the others.
+Build order: Tools (read-only) → Skills polish → Prompts UI → Commands UI →
+Agents Builder. Agents last because it consumes all the others.
 
 ### WP-3.1 — Studio → Tools catalog
 **Model: Haiku** (single read-only page over `agent.tool.list`; list + detail drawer).
@@ -173,7 +173,7 @@ CRUD, add the New-skill form from wireframe §4).
 > appears in the Ask composer's slash list. Declare `appRoute`. Narrow tests."
 
 ### WP-3.5 — Studio → Agents Builder  ★
-**Model: Opus** (the centerpiece: multi-step builder, the uniform Equip picker across four
+**Model: Opus** (multi-step builder, the uniform Equip picker across four
 tool types, graph access, triggers, IAM govern step, versioning/publish; cross-package,
 security-adjacent, the highest-value surface).
 
@@ -294,4 +294,4 @@ starred items and anything touching auth, billing, or the parity law itself.
 4. `pnpm check:parity` shows the WP's capabilities now covered.
 5. `test-completeness-judge` APPROVED (required for the starred WPs).
 6. `pnpm gate` green locally, CI green via `gh run watch`.
-7. Vision Gate verdict: advances (this whole effort is squarely on-wedge).
+7. Vision Gate verdict: advances (this effort is on-wedge).

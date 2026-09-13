@@ -66,9 +66,8 @@ an already granted capability. It may not:
 (No built-in media tool exists; this section binds any host that constructs
 one.)
 
-An approving `MediaSpendGate` is necessary but not sufficient. The registry
-constructs approving image/video tools only when the host also supplies a
-retry-stable operation ID source, the host-owned operation journal, the
+The registry constructs approving image/video tools only when the host
+supplies an approving `MediaSpendGate`, a retry-stable operation ID source, the host-owned operation journal, the
 managed approval ceiling, and `HostDataIsolation::ProcessFree`. That isolation
 mode removes every built-in process-launching, process-control, delegation,
 and process-backed issue tool from the same registry, including fixed-command
@@ -91,11 +90,11 @@ Pipeline one-shot, goal, fleet, deck, interactive, workspace-port, and candidate
 workspace constructors return a named authority error before provider or
 subprocess-capable port construction. The raw path does not construct MCP,
 custom, interactive, skill, discovery-action, hook, typed-test, Git diagnostic,
-or candidate-workspace wrappers. This is a production composition property,
-not an environment-variable or synthetic-registry attestation.
+or candidate-workspace wrappers. Production composition enforces this; no
+environment variable or synthetic registry attests to it.
 
-Child-environment scrubbing is defense in depth, not a same-user security
-boundary. Deployments that provide telemetry credentials in environment
+Child-environment scrubbing is defense in depth and does not isolate processes
+running as the same user. Deployments that provide telemetry credentials in environment
 variables MUST isolate enrolled Stella from untrusted same-UID processes with
 an OS account, container, or equivalent host boundary. A credential broker
 that issues request-scoped delivery authority is the preferred longer-term
@@ -109,13 +108,13 @@ snapshot. The witness author, baseline test, worker, revision, and final test
 all observe that snapshot. A candidate the pipeline refuses on integrity — one
 that wrote through its isolation, whose witness artifact was mutated after its
 baseline was pinned, or whose tree moved after verification — is never adopted.
-A candidate that merely failed to prove itself is adopted and reported as
-unproven: the verdict is a claim about the work, not what decides the work
-exists (#2927).
+A candidate that failed to prove itself is adopted and reported as unproven;
+the verdict describes the work and does not decide whether it is adopted
+(#2927).
 
 Test execution uses a typed invocation containing a program and argument
-vector. Shell operators, redirection, interpolation, and pipelines are not a
-test protocol. Existing free-form commands remain available only as explicit,
+vector. The test protocol does not accept shell operators, redirection,
+interpolation, or pipelines. Existing free-form commands remain available only as explicit,
 user-supplied legacy configuration and require host approval.
 
 ## Enterprise operational telemetry
@@ -204,8 +203,8 @@ an explicit managed fail-closed rule.
 - Budget aborts retain settled spend and stop before another paid call.
 - Telemetry enrollment, spool, and delivery failures are observable but do not
   fail an agent turn.
-- Unsupported compliance enrollment is a configuration error, not a silent
-  downgrade to operational telemetry.
+- Unsupported compliance enrollment is a configuration error; it does not fall
+  back to operational telemetry.
 
 ## Acceptance evidence
 

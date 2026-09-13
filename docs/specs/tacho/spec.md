@@ -8,7 +8,7 @@
 
 **First surface:** a developer workstation enrolled with one command, after which every Claude Code session on that machine is observed, policy-gated, and evidenced by Oxagen
 
-**Related:** `docs/adr/ADR-040-governance-plane-refocus.md` (the mandate; this spec is its Phase 2 "wrapper"), `docs/specs/governance-plane-refocus/review.md` §2(a) (the two enforcement tiers), `docs/specs/run-evidence-ingress/spec.md` (Approved; `client_attested` authority is reserved for exactly this), `docs/adr/ADR-024-namespaced-agent-identity.md` (`agentKey`), `docs/adr/ADR-035-consume-context-graph-protocol-directly.md` / `ADR-036` (CGP consumption), `design/` (the Tacho product design re-homed from `cgp-website`, with its three decision records `design/adr-0003..0005`), Stella `docs/spec/oxagen-trace-drain.md` and `docs/spec/serve-surface.md` (the Stella-side seams this contract must also fit), `context-graph-protocol` `contextgraph-trace` (the host-trace journal and its eight replay oracles)
+**Related:** `docs/adr/ADR-040-governance-plane-refocus.md` (the mandate; this spec is its Phase 2 "wrapper"), `docs/specs/governance-plane-refocus/review.md` §2(a) (the two enforcement tiers), `docs/specs/run-evidence-ingress/spec.md` (Approved; `client_attested` authority is reserved for this), `docs/adr/ADR-024-namespaced-agent-identity.md` (`agentKey`), `docs/adr/ADR-035-consume-context-graph-protocol-directly.md` / `ADR-036` (CGP consumption), `design/` (the Tacho product design re-homed from `cgp-website`, with its three decision records `design/adr-0003..0005`), Stella `docs/spec/oxagen-trace-drain.md` and `docs/spec/serve-surface.md` (the Stella-side seams this contract must also fit), `context-graph-protocol` `contextgraph-trace` (the host-trace journal and its eight replay oracles)
 
 ---
 
@@ -22,12 +22,12 @@
 | **Claude Agent SDK** agents | the same hook handlers, passed in-process through `options.hooks` | the **agent**: registered under an `agentKey`, credentialed with a scoped API key |
 | **Custom agents** (Vercel AI SDK, OpenAI Agents SDK, LangChain, bespoke loops) | `tacho.wrap(agent)` / `wrapTool` / `wrapModel` / `authorize` proxies | the **agent**, as above |
 
-The design formerly called Tacho ("the tachograph for AI agents", `design/overview.md`) is not a sibling product to this wrapper; **it is this wrapper.** Its tamper-evident trace model, approval tokens, trust scoring, and threat model are adopted here as-is where this spec does not narrow them. Where the two disagree, this spec wins and says so in §12.
+The design formerly called Tacho ("the tachograph for AI agents", `design/overview.md`) **is this wrapper.** Its tamper-evident trace model, approval tokens, trust scoring, and threat model are adopted here as-is where this spec does not narrow them. Where the two disagree, this spec wins and says so in §12.
 
-Two commitments shape everything below:
+The spec makes two commitments:
 
-1. **Claude Code is controlled through the same contract Stella will implement natively.** Stella today has no live Oxagen control loop either (it has a content-free telemetry export, a usage drain, a headless engine, and a driver channel; see Stella `docs/spec/oxagen-trace-drain.md` §1). This spec therefore defines the **control contract** (§7), the **evidence contract** (§6), and the **enrollment contract** (§5) once, in Oxagen. Claude Code meets it through hooks; Stella meets it through `tacho-core` linked into its executor (`design/examples/rust-stella.md`). "Controlled like a Stella agent" is thereby a statement about the contract, not about parity with a Stella feature that does not yet exist.
-2. **The claim is honest about the two tiers.** Per ADR-040 §4 and the review §2(a): a hook that denies a tool call inside a process Oxagen does not own is **attestation with harness-level enforcement**, graded `client_attested`. Only tool calls that route through Oxagen's governed gateway (the workspace MCP endpoint, or a reverse-RPC engine such as `stella-serve`) are **gateway-enforced**. Every session record carries its `enforcement_tier` and every event its `fidelity`; nothing in the UI, docs, or attestation reports may say "prevented" where the record says "observed".
+1. **Claude Code is controlled through the same contract Stella will implement natively.** Stella today has no live Oxagen control loop either (it has a content-free telemetry export, a usage drain, a headless engine, and a driver channel; see Stella `docs/spec/oxagen-trace-drain.md` §1). This spec therefore defines the **control contract** (§7), the **evidence contract** (§6), and the **enrollment contract** (§5) once, in Oxagen. Claude Code meets it through hooks; Stella meets it through `tacho-core` linked into its executor (`design/examples/rust-stella.md`). "Controlled like a Stella agent" means controlled through this contract; Stella has no live control loop yet.
+2. **The record distinguishes the two enforcement tiers.** Per ADR-040 §4 and the review §2(a): a hook that denies a tool call inside a process Oxagen does not own is **attestation with harness-level enforcement**, graded `client_attested`. Only tool calls that route through Oxagen's governed gateway (the workspace MCP endpoint, or a reverse-RPC engine such as `stella-serve`) are **gateway-enforced**. Every session record carries its `enforcement_tier` and every event its `fidelity`; nothing in the UI, docs, or attestation reports may say "prevented" where the record says "observed".
 
 Codex CLI is out of scope for v1 (§13). Its hook surface is documented upstream but was not verified in this design pass, and the user's instruction was to focus on Claude Code if Codex would need a materially different approach.
 
@@ -42,7 +42,7 @@ Tacho's seven product requirements (`design/overview.md` §2: R1 SDK-agnostic, R
 - **H3 — One contract, three producers.** The event envelope, policy bundle, elevation exchange, and evidence finalization are the same for the Claude Code adapter, the Claude Agent SDK adapter, the custom-agent SDK, and Stella's native `tacho-core`. A session from any producer lands in the same tables and compares in the same UI.
 - **H4 — Two projections, one record.** The hash-chained `tacho/1.0` stream is the evidentiary record. The OpenTelemetry view (`design/trace-model.md` §4) and the CGP host-trace journal (§6.4) are derived projections. A projection is never the source of truth and is never chain-verified on its own.
 - **H5 — Fail-open telemetry, fail-closed enforcement.** Verbatim from the design and restated because Claude Code's own hook semantics would otherwise invert it: a failed telemetry hook must never block a session; a failed **enforcement** hook must never let an out-of-grant action proceed. §5.4 shows how the two are separated at the hook level.
-- **H6 — Tamper-evident, and honest about tamper-proof.** An engineer can edit `~/.claude/settings.json`, set `disableAllHooks`, or run an unenrolled Claude Code binary. The design's answer holds: this is visible evidence (an `unobserved_session` or `hooks_removed` incident, a chain gap), it lowers the trust score, and an enterprise that needs prevention deploys the managed-settings lockdown (§5.5). The spec never claims the hooks cannot be removed.
+- **H6 — Tamper-evident, not tamper-proof.** An engineer can edit `~/.claude/settings.json`, set `disableAllHooks`, or run an unenrolled Claude Code binary. As in the design, this is visible evidence (an `unobserved_session` or `hooks_removed` incident, a chain gap), it lowers the trust score, and an enterprise that needs prevention deploys the managed-settings lockdown (§5.5). The spec never claims the hooks cannot be removed.
 - **H7 — Zero coupling in the published artifact.** `@oxagen/tacho` is one of three public npm packages (with `@oxagen/cli` and `@oxagen/skills`). It ships with no `@oxagen/*` runtime dependency, following the CLI's standalone-publish discipline (`apps/cli/scripts/prepare-standalone-publish.mjs`) and the usage-telemetry pattern of carrying its own copy of a schema with a test-only cross-check against the server package.
 
 Non-goals for v1: an egress proxy or eBPF ambient capture (`design/overview.md` §4(c)), the insurer attestation API (`design/insurer-api.md`), and a Codex adapter. The event model reserves room for all three.
@@ -119,11 +119,11 @@ Unchanged from the design (R3): a telemetry hook costs one HTTP POST to loopback
 
 The `oxagen` CLI (`apps/cli`) gains `oxagen tacho <enroll|status|unenroll|export|verify>` as thin delegates to the same functions, so a machine that already has the CLI uses it and a machine that does not runs `npx @oxagen/tacho enroll`. Both paths are the same code and the same enrollment contract.
 
-Server-side code lives where every other capability lives: contracts in `packages/oxagen/src/contracts/tacho.*.ts`, handlers in `packages/handlers/src/tacho.*.ts`, routes in `apps/api/src/routes/v1/tacho.*.ts`, ClickHouse migrations in `packages/telemetry/src/migrations/`, Drizzle schema in `packages/database/src/schema/agent.ts`. A shared-schema package is not introduced; the published wrapper carries its own copy of the wire schema and a test asserts byte parity with the contract's zod-to-JSON-Schema output, exactly as `apps/cli/src/telemetry/usage.ts` does for usage telemetry.
+Server-side code lives where every other capability lives: contracts in `packages/oxagen/src/contracts/tacho.*.ts`, handlers in `packages/handlers/src/tacho.*.ts`, routes in `apps/api/src/routes/v1/tacho.*.ts`, ClickHouse migrations in `packages/telemetry/src/migrations/`, Drizzle schema in `packages/database/src/schema/agent.ts`. A shared-schema package is not introduced; the published wrapper carries its own copy of the wire schema and a test asserts byte parity with the contract's zod-to-JSON-Schema output, as `apps/cli/src/telemetry/usage.ts` does for usage telemetry.
 
 ### 4.2 Why one package and not three
 
-The design's R1 and R2 are only true if the Claude Code hook handler, the Claude Agent SDK hook callback, and the custom-agent `wrapTool` gate are the same function with three entry points. A second package per harness is the "per-framework connector sprawl" the governance review names as the risk to resist. The adapters are subpath exports precisely so that a Codex adapter, when it comes, is one more subpath and not one more product.
+The design's R1 and R2 are only true if the Claude Code hook handler, the Claude Agent SDK hook callback, and the custom-agent `wrapTool` gate are the same function with three entry points. A second package per harness is the "per-framework connector sprawl" the governance review names as the risk to resist. The adapters are subpath exports so that a Codex adapter, when it comes, is one more subpath and not one more product.
 
 ---
 
@@ -148,7 +148,7 @@ Steps, each idempotent, each printed as it runs:
 
 ### 5.2 `create_tacho_host_enrollment`
 
-Modeled on `create_stella_enrollment` (`packages/oxagen/src/contracts/telemetry.stella.enroll.ts`) because its shape already answers the hard questions: an operator-only, session-authenticated, org-scoped capability that mints a purpose-locked API key and returns a signed claims document.
+Modeled on `create_stella_enrollment` (`packages/oxagen/src/contracts/telemetry.stella.enroll.ts`) because it already has the needed shape: an operator-only, session-authenticated, org-scoped capability that mints a purpose-locked API key and returns a signed claims document.
 
 ```ts
 input: z.object({
@@ -245,7 +245,7 @@ These fields are what the review's honesty rule is enforced by: the fleet UI and
 
 1. **OpenTelemetry** as designed (`design/trace-model.md` §4): `tachod` and the control plane can export OTLP with GenAI semantic conventions and `oxagen.tacho.*` attributes.
 2. **CGP export provider** as designed (§5): sessions as `episode` frames, incidents as `fact` frames, distilled behaviour as `memory`, chains as `graph` relations, `DataFlow.egress_scopes: ["local-only"]` by default.
-3. **CGP host-trace journal.** `contextgraph-trace` (`TRACE_FORMAT = "contextgraph-trace/0.1-sketch"`) is the closest thing CGP has to agent conformance: an NDJSON journal graded by eight replay oracles. CGP does not define a "conformant agent" (SPEC §12 binds providers and hosts), so the claim this spec makes is exact: **every Tacho session exports a journal that passes all eight oracles, and the package ships the oracle port and pinned upstream fixtures that prove it.** The mapping:
+3. **CGP host-trace journal.** `contextgraph-trace` (`TRACE_FORMAT = "contextgraph-trace/0.1-sketch"`) is the closest thing CGP has to agent conformance: an NDJSON journal graded by eight replay oracles. CGP does not define a "conformant agent" (SPEC §12 binds providers and hosts), so this spec claims: **every Tacho session exports a journal that passes all eight oracles, and the package ships the oracle port and pinned upstream fixtures that prove it.** The mapping:
 
 | Tacho | `contextgraph-trace` |
 |---|---|
@@ -259,7 +259,7 @@ These fields are what the review's honesty rule is enforced by: the fleet UI and
 | `file_io`, `network`, `command` | `side_effect { effect_id, kind, call_id }`; `effect_id = sha256(session, tool_use_id, path-or-url)` so a crash-replayed effect is the same id twice by construction |
 | verify observations | `verify_observed` only when frames came from a CGP provider through the Oxagen MCP endpoint; otherwise absent, and `staleness-at-use` / `citation-at-use` / `deterministic-composition` report `skipped`, never `pass` |
 
-The `assembly-budget-honesty` oracle is honest for Claude Code only in the degenerate sense (no frames declared, so no arithmetic to drift). The export marks `frames_source: "none" | "oxagen-mcp"` in the journal's `session_start.agent` suffix so a reader knows which oracles had teeth. The package pins `contextgraph-trace/fixtures/` (golden, golden-resume, one `trip-*` per oracle) byte-for-byte with an upstream-commit manifest and a drift gate, the ADR-035 pattern applied to the trace crate.
+For Claude Code the `assembly-budget-honesty` oracle passes trivially: no frames are declared, so there is no arithmetic to drift. The export marks `frames_source: "none" | "oxagen-mcp"` in the journal's `session_start.agent` suffix so a reader knows which oracles checked served frames. The package pins `contextgraph-trace/fixtures/` (golden, golden-resume, one `trip-*` per oracle) byte-for-byte with an upstream-commit manifest and a drift gate, the ADR-035 pattern applied to the trace crate.
 
 ### 6.5 Storage
 
@@ -330,7 +330,7 @@ These are the same operations `stella-serve` exposes as `/pause`, `/resume`, `/c
 
 ### 7.5 Governed context injection
 
-The bundle's `context.system` is injected at `SessionStart` and after `compact` via `additionalContext`. It is authored on the control plane through the same closed operation set the lifecycle framework already uses (`prepend_system_context` / `append_system_context` only; nothing rewrites the harness's instructions), it is IAM-gated, and the injected text's digest is chained as part of `agent_start` so a replay shows exactly what the agent was told.
+The bundle's `context.system` is injected at `SessionStart` and after `compact` via `additionalContext`. It is authored on the control plane through the same closed operation set the lifecycle framework already uses (`prepend_system_context` / `append_system_context` only; nothing rewrites the harness's instructions), it is IAM-gated, and the injected text's digest is chained as part of `agent_start` so a replay shows what the agent was told.
 
 ---
 
@@ -356,7 +356,7 @@ Custom agents are `client_attested` by construction. They reach the `gateway` ti
 
 ## 10. Stella
 
-Stella implements this contract natively (`tacho-core`, `design/examples/rust-stella.md`): the executor's `tool.call.requested` bus event is the `PreToolUse` equivalent, `policy.evaluated` maps to `policy_decision`, its `ApprovalRequest`/`ApprovalResponse` types carry elevation, and `stella-serve`'s `/pause` `/resume` `/cancel` are the command set. Its existing signed-enrollment machinery (`enterprise_telemetry.rs`) is what §5.2 copies, so the Stella side of enrollment is a second event class on an existing document, not a new mechanism. A `stella-serve` session is `gateway` tier by construction and needs no hooks; a workstation Stella session is `client_attested` like Claude Code. The Stella-repo plan is a numbered sub-plan of this spec (plan §PR 9) and a Stella `docs/spec/` companion, following the `serve-surface.md` pattern.
+Stella implements this contract natively (`tacho-core`, `design/examples/rust-stella.md`): the executor's `tool.call.requested` bus event is the `PreToolUse` equivalent, `policy.evaluated` maps to `policy_decision`, its `ApprovalRequest`/`ApprovalResponse` types carry elevation, and `stella-serve`'s `/pause` `/resume` `/cancel` are the command set. Its existing signed-enrollment machinery (`enterprise_telemetry.rs`) is what §5.2 copies, so the Stella side of enrollment is a second event class on an existing document. A `stella-serve` session is `gateway` tier by construction and needs no hooks; a workstation Stella session is `client_attested` like Claude Code. The Stella-repo plan is a numbered sub-plan of this spec (plan §PR 9) and a Stella `docs/spec/` companion, following the `serve-surface.md` pattern.
 
 ## 11. Threat model deltas for a hooked harness
 

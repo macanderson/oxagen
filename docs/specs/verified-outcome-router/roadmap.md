@@ -8,7 +8,7 @@ outcomes as a product. Phase 0 is in the tree today; everything after it is plan
 
 ## Phase 0 (shipped, this PR): the data spine and the decision core
 
-What landed, in one line each:
+What landed:
 
 - `router_outcomes` ClickHouse table: per (task class x model) verified-success +
   cost + latency record, tenant-scoped, append-only.
@@ -36,7 +36,7 @@ architectural. This phase makes the curves trustworthy enough to enforce.
 - **Confidence-aware eligibility.** Replace the raw success-rate threshold with a
   Wilson lower bound (or Beta posterior) so a venue with 20/20 successes is not
   treated like one with 2000/2000. Policy gains a confidence parameter; `minSamples`
-  becomes a floor, not the whole story.
+  becomes a floor alongside it.
 - **Hierarchical pooling.** Small tenants never accumulate enough per-class samples.
   Blend tenant-local curves with platform-global curves (shrinkage weighting by
   sample count), with a policy switch for tenants who want strictly local data.
@@ -83,7 +83,7 @@ within one sync cycle with no human involvement.
 
 ## Phase 3: learned signatures and exploration
 
-Regex task classes are a bootstrap. This phase learns the structure of the work.
+Regex task classes are a bootstrap. This phase replaces them with learned signatures.
 
 - **Learned task signatures.** Replace regex classes with clustered prompt
   embeddings (plus structural features: file count, cross-package, capability,
@@ -93,11 +93,10 @@ Regex task classes are a bootstrap. This phase learns the structure of the work.
   that a new cheap model clears the bar. Route a small policy-capped exploration
   share (Thompson sampling over the Beta posteriors) to under-sampled venues,
   in shadow-verified fashion where possible (run cheap venue, verify hard, record).
-  Exploration spend is metered and visible: it is a line item, not a leak.
+  Exploration spend is metered and visible as a line item.
 - **Verifier-integrated datasets.** Auto-build eval datasets per task signature from
   metered traces (`eval.dataset.from_traces` already exists) and run scheduled evals
-  against new venues before giving them production traffic: a paper-trading phase
-  for models.
+  against new venues before giving them production traffic.
 - **Per-role curves.** Extend beyond the worker: judge and triage roles get their own
   curves (a judge only needs to be accurate at judging, which cheaper models often
   are). Preserve the judge-independence invariant (judge is never the worker model).
@@ -107,8 +106,7 @@ production task class with no human in the loop.
 
 ## Phase 4: billing-native accuracy SLAs (the endgame)
 
-The pure Stripe-for-agents move nobody else can make, because it needs metering,
-verification, and billing in one loop.
+This phase needs metering, verification, and billing in one loop.
 
 - **SLA objects.** A new contract object attached to a task class and a workspace:
   "at least 95 percent verified success at or under $0.50 per task." SLAs are typed,
@@ -117,17 +115,16 @@ verification, and billing in one loop.
 - **Automatic remediation.** When a period closes below the SLA bar, credits are
   refunded automatically through the existing credit ledger (a new
   `sla_refund` ledger reason beside today's grant reasons), enforced by the same
-  metering-to-Stripe loop that billed the usage. No ticket, no dispute thread.
+  metering-to-Stripe loop that billed the usage, without a ticket or dispute thread.
 - **Attainment reporting.** Per-invoice SLA attainment statements, queryable and
   auditable: which task classes, which venues, what verified rate, what was refunded
-  and why. This is the artifact a buyer's finance team has never seen from an AI
-  vendor.
+  and why.
 - **Business-unit pass-through.** Each team inside the enterprise gets the attainment
-  curve for the task classes it actually runs, backed by the same evidence, so a
+  curve for the task classes it runs, backed by the same evidence, so a
   platform team can offer its internal customers a guarantee it can prove.
 - **Marketplace pricing of accuracy.** Published agents and skills carry an accuracy
   SLA and a price as first-class listing metadata. Buyers compare guaranteed
-  outcomes, not marketing claims.
+  outcomes.
 
 Exit criteria: first customer invoice carrying an SLA attainment statement, and first
 automatic refund issued by the loop with a full audit trail.

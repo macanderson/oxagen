@@ -50,7 +50,7 @@ Rationale, specific to this endpoint:
   tokens grant repo access. Oxagen's `authorize` → `callback` flow has **no
   installation handling** — going GitHub App would mean building that first.
 - The pre-registered-client escape hatch expects a single `client_id` /
-  `client_secret` pair — exactly an OAuth App's shape.
+  `client_secret` pair, which is an OAuth App's shape.
 
 Revisit a GitHub App only if per-repo governance through this MCP endpoint later
 becomes a requirement (it would be net-new installation-flow work).
@@ -107,7 +107,7 @@ To add more DCR-less providers later, add more host keys to the same object.
    → GitHub consent screen ("Authorize Oxagen") → back to Oxagen showing
    **Connected**.
 
-A curated one-click **catalog** tile for GitHub is deliberately **out of scope**
+A curated one-click **catalog** tile for GitHub is **out of scope**
 here: the catalog is DB-backed and synced from external MCP registries, and
 GitHub's official remote server is not listed in any of them
 (`https://registry.modelcontextprotocol.io` returns only third-party

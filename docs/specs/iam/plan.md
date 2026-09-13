@@ -6,7 +6,7 @@
 > role table entries for them no longer apply; the resolution mechanism they
 > illustrated is unaffected.
 
-Sequenced delivery plan for the load-bearing foundation that every operational surface in v2 depends on. Built from [`../information-architecture/spec.md`](../information-architecture/spec.md) §§ 9, 12, 15.
+Sequenced delivery plan for the foundation that every operational surface in v2 depends on. Built from [`../information-architecture/spec.md`](../information-architecture/spec.md) §§ 9, 12, 15.
 
 Status: **ready to execute** — Wave 1 only. Waves 5 + 6 (Access surface UI, SSO/SCIM, Compliance dashboards) will appear in this file as separate phases when their predecessors land.
 
@@ -247,7 +247,7 @@ Drop the IAM tables in reverse FK order. ClickHouse table drop. Seed reverses cl
 
 **Ticket:** OXA-XXX
 
-**Deliverable:** Single PR that introduces the `defineContract()` helper as the single load-bearing capability boundary, the pure resolver function, the audit event emitter, and migrates every existing contract handler through `defineContract`.
+**Deliverable:** Single PR that introduces the `defineContract()` helper as the single capability boundary, the pure resolver function, the audit event emitter, and migrates every existing contract handler through `defineContract`.
 
 ### Scope
 
@@ -319,7 +319,7 @@ Implements the documented order (see IA spec §12):
 7. Role-inherited grant → inherit role
 8. Default-deny
 
-Pure function: takes pre-fetched data, returns a decision + trace. No I/O. `defineContract`'s `invoke` is the only caller. Easy to unit-test exhaustively. Note: the `capabilityRegistry` parameter from the original design is removed — capability metadata is carried on each contract object and does not need to be passed into the resolver.
+Pure function: takes pre-fetched data, returns a decision + trace. No I/O. `defineContract`'s `invoke` is the only caller. Note: the `capabilityRegistry` parameter from the original design is removed — capability metadata is carried on each contract object and does not need to be passed into the resolver.
 
 **Audit emitter (`packages/oxagen/src/iam/emit-audit.ts`)**
 
@@ -402,7 +402,7 @@ Aim for >95% line coverage on `resolve.ts`.
 
 - **ClickHouse write latency** on hot paths. Mitigation: fire-and-forget with a bounded retry queue in-process. If ClickHouse is unavailable, queue locally up to 1000 events, then circuit-break and log. Audit writes never block user actions.
 - **Hash chain race conditions** if two contract invocations for the same `(org_id, capability)` happen concurrently. Mitigation: chain hash is best-effort linkage, not a strict-ordering guarantee. Tamper-detection is at the *range* level (any reorder is detectable), not at the per-event level. Document this clearly.
-- **Forgotten export.** Mitigation: the CI `contracts` array check catches any contract file not added to the package array. Structurally there is no bypass to miss.
+- **Forgotten export.** Mitigation: the CI `contracts` array check catches any contract file not added to the package array.
 
 ### Rollback
 
@@ -412,7 +412,7 @@ Aim for >95% line coverage on `resolve.ts`.
 
 ## After Wave 1
 
-Wave 1 lands. The platform now has:
+After Wave 1 lands, the platform has:
 
 - A clean schema with no tenant terminology.
 - A unified principal/grant/role/policy data model (6 Postgres tables).
@@ -421,7 +421,7 @@ Wave 1 lands. The platform now has:
 - A per-package `contracts` array that is the canonical capability registry, discoverable without a database table.
 - A lightweight CI guard that ensures every contract file is exported in its package array.
 
-The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) becomes a "walk the contracts arrays, read the data model, and render it" problem, which is exactly what we want for a stable IAM ship.
+The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) walks the contracts arrays, reads the data model, and renders it.
 
 ---
 

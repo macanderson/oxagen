@@ -12,7 +12,7 @@
 
 Model providers diverge in ways that are invisible until one bites: a
 token-budget refusal, a broken stream, a cache that reports hits differently.
-`macanderson/stella` keeps a matrix for exactly this — one row per provider per
+`macanderson/stella` keeps a matrix for this — one row per provider per
 axis, each naming a witness test — because a gap there was found four times by a
 benchmark run paying for it rather than by a test.
 
@@ -21,9 +21,6 @@ benchmark run paying for it rather than by a test.
 ## Decision
 
 **No matrix. Divergence is handled where it occurs, which here is the gateway.**
-
-The two codebases are not in the same position, and the difference is
-structural rather than a matter of maturity.
 
 **stella calls vendors directly.** It ships an adapter per vendor — `anthropic.rs`,
 `openai.rs`, `gemini.rs`, `vertex.rs`, `bedrock.rs`, `zai.rs` — so a behaviour
@@ -34,26 +31,24 @@ A matrix is the only way to know which file is missing which handling.
 `@ai-sdk/gateway` and resolves every model through `gateway.languageModel()`.
 There is one call path in front of every vendor.
 
-That is not a detail. #2629 is the evidence: OpenRouter refused a request
+In #2629, OpenRouter refused a request
 because it prices against the requested `max_tokens` rather than what the reply
 spends. **The credit check belongs to the gateway, not the vendor** — the refusal
 happens before the request reaches Anthropic, OpenAI, Google, xAI, Meta,
 Mistral, DeepSeek or BFL. A per-vendor matrix would have carried eight identical
-rows describing behaviour no vendor has, and the honest place to record it was
-the single caller in front of all of them. The fix lives in
+rows describing behaviour no vendor has; the behaviour belongs to the single
+caller in front of all of them. The fix lives in
 `packages/ai/src/output-budget.ts` for that reason.
 
 ## What we give up, stated
 
-**A matrix makes absence visible.** Its real value is not the rows that are
-filled in but the ones that are conspicuously empty — an axis nobody has checked
-for a provider reads as a gap rather than as silence. Declining it means a
+**A matrix makes absence visible.** An empty row marks an axis nobody has checked
+for a provider as a gap. Declining it means a
 divergence oxagen has not met yet will be found the way #2629 was: by something
 breaking.
 
-That is accepted here because the shape of the risk is different. A gap behind a
-single gateway is one gap, in one file, affecting every model equally — it is
-found once and fixed once. A gap across six vendor adapters is six gaps that can
+That is accepted here because a gap behind a single gateway is one gap, in one
+file, affecting every model equally; it is found once and fixed once. A gap across six vendor adapters is six gaps that can
 each be fixed in five places and missed in the sixth, which is what a matrix
 exists to prevent.
 
@@ -61,11 +56,11 @@ exists to prevent.
 
 **The moment `@ai-sdk/gateway` stops being the only path.** If oxagen adds a
 direct vendor client — for a model the gateway does not carry, for latency, or
-to use a vendor feature the gateway flattens — the reasoning above expires that
-day, and this decision should be reopened rather than inherited.
+to use a vendor feature the gateway flattens — the reasoning above no longer
+holds, and this decision should be reopened.
 
-A second trigger: a third distinct gateway-level divergence. One (#2629) is an
-incident; three is a class, and a class wants a table.
+A second trigger: a third distinct gateway-level divergence (#2629 is the first).
+Three divergences are a class, and a class of divergence gets a table.
 
 ## Consequences
 

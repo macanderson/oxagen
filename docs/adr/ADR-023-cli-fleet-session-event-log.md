@@ -22,8 +22,8 @@ dialect:
 4. **Subcommands** — ~33 command modules with per-command `--json` flags of
    varying shape and coverage.
 
-None of these can do what users of an agentic CLI actually need at fleet
-scale: dispatch work and immediately dispatch more without waiting; watch
+None of these supports what users of an agentic CLI need at fleet scale:
+dispatch work and immediately dispatch more without waiting; watch
 *all* agents' messages in one aggregated view; follow up with a running agent;
 pipe any of it between processes as JSON; or observe from a second terminal a
 fleet started in a first.
@@ -60,8 +60,8 @@ Concretely:
 3. **Interactive and non-interactive are the same program.** The engine run is
    wrapped once (`SessionRunner`) and emits envelope events to an in-process
    bus *and* the disk log. The Ink Mission Control renders the bus; `--json`
-   serializes it; `fleet watch` in another terminal tails the disk. Parity is
-   a property of the architecture, not a feature to maintain.
+   serializes it; `fleet watch` in another terminal tails the disk. Parity
+   between these views needs no separate code to maintain.
 
 4. **Dispatch is immediate, always.** `dispatch` returns a `sid` synchronously.
    In the TUI the session starts in-process; from a script it spawns a
@@ -85,7 +85,7 @@ Concretely:
   cross-process observation and script dispatch, and ties session lifetime to
   the TUI's.
 - **A second transport for the TUI** (rich in-proc objects, thin JSON twin).
-  Rejected: that is exactly the drift that produced three vocabularies today.
+  Rejected: that drift produced the three vocabularies in use today.
 
 ## Consequences
 

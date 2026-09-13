@@ -10,12 +10,11 @@ system that certifies, permissions, observes, meters, and audits *any* agent
 Stella in observability, permission-requesting, and Context Graph Protocol
 conformance — and what code should be cut to get there?
 
-**Verdict: yes, and the codebase is much closer than the surface area
-suggests.** The governance kernel is already engine-agnostic, the external-agent
+**Verdict: yes.** The governance kernel is already engine-agnostic, the external-agent
 seams are already designed (several are live), and the agent-execution platform
 is cleanly separable. The work is roughly one-third deletion, one-third
 extraction (to Stella / a separate engine product), and one-third building the
-one genuinely missing product: the external-agent wrapper + evidence ingress +
+one missing product: the external-agent wrapper + evidence ingress +
 an approvals-first UI.
 
 ---
@@ -62,15 +61,15 @@ these headline facts:
 
 - **Live:** Stella operational-telemetry ingress
   (`telemetry.stella.ingest` — enrollment-scoped API keys, content-free usage
-  rollups, tenant stamped server-side into ClickHouse). This is
-  metering-an-external-agent, shipping today.
+  rollups, tenant stamped server-side into ClickHouse). It meters an external
+  agent in production today.
 - **Live:** A2A v1.0 transport (`apps/api/src/routes/a2a/`) with
   `/.well-known/agent-card.json` discovery — currently pointed *inward* at the
   local engine, and (per `docs/specs/a2a-agent-identity/spec.md`) still
   anonymous/lineage-less.
 - **Approved spec, half-built:** `docs/specs/run-evidence-ingress/spec.md`
   defines `RunEvidenceEnvelopeV1` (producer payload) vs `RunEvidenceManifestV1`
-  (Oxagen-stamped immutable record), and — critically — distinguishes
+  (Oxagen-stamped immutable record), and distinguishes
   `runner_observed` (hosted) from **`client_attested`** (standalone/third-party
   agent) evidence authority. `RunSpecV2`, fenced attempts, and
   `finalization-grant.ts` exist; **the `ingest_run_evidence` capability itself
@@ -81,7 +80,7 @@ these headline facts:
 - **Dormant:** `packages/stella-engine-client` — an HTTP+SSE reverse-RPC
   transport where Oxagen is the *host* (supplies every model completion and
   tool result) and the external engine only orchestrates. Zero production
-  consumers, but it is exactly the govern-an-external-engine posture.
+  consumers; it implements the govern-an-external-engine posture.
 - **Already written down:** ADR-034 / `docs/specs/customer-capabilities/` —
   whose running example is agents *on a non-Oxagen platform* calling governed
   capabilities via the workspace MCP endpoint.
@@ -103,13 +102,13 @@ these headline facts:
 
 ### The single most important structural finding (frontend)
 
-The four most on-brand governance widgets in the product — the **approval
-card, consent card, risk badge, and execution/activity timeline** — exist
+The four governance widgets — the **approval card, consent card, risk badge,
+and execution/activity timeline** — exist
 *only as inline cards inside a chat transcript*
 (`apps/app/src/components/chat/`). There is **no standalone "pending
-approvals" page anywhere in the app**. The crown jewels of the governance
-story are trapped inside the biggest cut candidate. Extraction is therefore
-the first move, and it decouples the keep-list from the cut-list.
+approvals" page anywhere in the app**. These widgets live inside the biggest
+cut candidate, so extracting them is the first move; it decouples the
+keep-list from the cut-list.
 
 ---
 
@@ -121,22 +120,22 @@ security reviews:
 
 1. **Gateway-enforced (strong).** The agent's tools, credentials, and model
    keys live behind Oxagen (governed MCP endpoint, Oxagen-issued scoped
-   credentials, sidecar-host transport). Oxagen can actually *block* — deny,
+   credentials, sidecar-host transport). Oxagen can *block* — deny,
    require approval, meter pre-spend. This supports the "program the refund
    rules, Oxagen makes sure no agent screws it up" claim.
 2. **Client-attested (weaker).** An SDK inside someone else's agent emits
    evidence. Oxagen can prove what was reported and detect tampering/gaps, but
    cannot prevent an ungoverned side channel. The approved spec already
-   encodes this honestly as `client_attested` authority with replay grades —
+   encodes this as `client_attested` authority with replay grades —
    "missing evidence lowers the replay grade; it never disappears silently."
 
-The dashcam analogy survives this — a dashcam the driver can unplug still cuts
-premiums, because unplugging is itself visible evidence. But sell tier 1 as
-enforcement and tier 2 as attestation; never claim prevention where you only
-have observation. The insurance-grade claim is *tamper-evident completeness*,
-not omniscience.
+Tier 2 still supports the reduced-premium claim: a dashcam the driver can
+unplug still cuts premiums, because unplugging is itself visible evidence.
+Sell tier 1 as enforcement and tier 2 as attestation;
+never claim prevention where you only have observation. The insurance-grade
+claim is *tamper-evident completeness*.
 
-**(b) The insurance/certification story is a business layer, not a codebase.**
+**(b) The insurance/certification story is a business layer.**
 Reduced-premium positioning requires an actuarial counterparty (insurer, broker,
 or captive) willing to price against Oxagen evidence. Nothing should be built
 for it beyond what SOC2 + evidence export already requires until a design
@@ -148,37 +147,36 @@ evidence export. Certification tiers, scorecards, and premium models are GTM.
 **(c) Don't kill chat; demote and slim it.** Chat is the app's spine: the Ask
 bar is mounted in the global shell, `lib/page-context/` is fed by nearly every
 page, and the form-fill protocol touches 7 unrelated forms. Wholesale deletion
-is a rewrite of the shell. More importantly, "ask what your agents did, what
-context they had, what they touched" — graph-grounded Q&A over audit, lineage,
-and evidence — is squarely on-vision and is the natural query surface for a
-governance product. Recommendation: keep one slim conversational surface
+is a rewrite of the shell. "Ask what your agents did, what context they had,
+what they touched" — graph-grounded Q&A over audit, lineage, and evidence — is
+on-vision and is the query surface for a governance product. Recommendation: keep one slim conversational surface
 re-scoped from "chat with the coding agent" to "interrogate the fleet record";
 cut the coding-agent generative-UI registry (code-diff, terminal-trace,
 research-swarm, media generation ≈ 8k of 15.8k) and the in-process coding loop
 behind it.
 
-**(d) "Govern any agent" must not become connector breadth in a costume.** The
-temptation will be deep bespoke integrations per framework (LangGraph,
+**(d) "Govern any agent" must not become per-framework connector breadth.** The
+risk is deep bespoke integrations per framework (LangGraph,
 CrewAI, OpenAI Agents, AutoGen, …). That is the drift VISION.md already bans.
 Keep the integration surface to **one protocol + thin shims**: the evidence
 envelope (CGP-conformant), the governed MCP endpoint, A2A, and at most 2–3
 reference shims (e.g. a Claude Code hooks adapter, an OpenAI-Agents
 middleware) maintained as examples, not products.
 
-**(e) One real tension with VISION.md.** The vision says "teams that build and
+**(e) Tension with VISION.md.** The vision says "teams that build and
 resell AI agents"; this repositioning sells to *enterprises adopting anyone's
 agents*, and the reseller half was retired outright in #2811. The metering loop becomes
 chargeback/showback + insurance-grade cost attribution for enterprises — but
 the vision doc should be amended so the Vision Gate doesn't judge the wrapper
-work as drift. The accountability-chain language in VISION.md already *is*
-this product; the amendment is deleting the implicit "and we also run the
+work as drift. The accountability-chain language in VISION.md already describes
+this product; the amendment deletes the implicit "and we also run the
 agents."
 
-**(f) Revenue reality check.** Today, billing meters agents Oxagen executes.
+**(f) Revenue path.** Today, billing meters agents Oxagen executes.
 After the cut, metering must ride on evidence ingress and the gateway path —
 which the Stella telemetry ingress already prototypes (`cost_microusd` rollups
-from an external agent). This is a strengthening move (billing survives the
-engine leaving), but it must be sequenced *before* the in-process engine is
+from an external agent). Billing then survives the engine leaving, but this
+must be sequenced *before* the in-process engine is
 removed, or the meter goes dark.
 
 ---
@@ -252,7 +250,7 @@ launch integration shims. Gate: Vision Gate green on the amended vision.
    CLI execution core out (separate repo or a clearly-fenced `engine/`
    workspace pending Stella convergence per ADR-033).
 
-**Phase 2 — the wrapper (the new product; the only genuinely new build).**
+**Phase 2 — the wrapper (the new product; the only new build).**
 1. **`ingest_run_evidence` contract + hosted finalizer** — finish the approved
    spec's first slice (`runner_observed`).
 2. **`client_attested` ingress** — enrollment-keyed (pattern already live in
@@ -287,11 +285,10 @@ partner. Code prerequisite is Phase 2/3, nothing more.
 
 ## 5. Feasibility answer
 
-Possible — and structurally cheap relative to appearances, because the
-governance plane was built engine-agnostic from the start and the external
-seams were specced before this review asked for them. The genuinely new
+Possible. The governance plane was built engine-agnostic from the start and
+the external seams were specced before this review asked for them. The new
 engineering is Phase 2 (evidence ingress + gateway + identity for foreign
 agents), most of which has an approved spec, existing DB tables, and live
-prototypes. The genuinely hard parts are not code: keeping the wrapper claim
+prototypes. The hard parts are not code: keeping the wrapper claim
 honest across the two enforcement tiers, resisting per-framework connector
 sprawl, and landing the insurance story with a real counterparty.

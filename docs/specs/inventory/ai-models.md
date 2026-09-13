@@ -46,7 +46,7 @@ When a caller invokes `selectModel()` with an optional model id or tier, the fun
 <!-- entities: TextModel -->
 <!-- enforced: languageProvider() -->
 
-The gateway is the default and remains the platform's metered path. Setting `OXAGEN_MODEL_PROVIDER=openrouter` selects a direct OpenAI-compatible provider instead, for a deployment that cannot reach the gateway. Selection is EXPLICIT, never a fallback: an automatic failover on gateway error would silently move spend onto a different vendor's bill and bypass the metering the gateway exists to provide.
+The gateway is the default and remains the platform's metered path. Setting `OXAGEN_MODEL_PROVIDER=openrouter` selects a direct OpenAI-compatible provider instead, for a deployment that cannot reach the gateway. There is no automatic fallback: a failover on gateway error would silently move spend onto a different vendor's bill and bypass the metering the gateway exists to provide.
 
 #### Scenario: Opt-out requires its own key
 - **WHEN** `OXAGEN_MODEL_PROVIDER=openrouter` is set and `OPENROUTER_API_KEY` is absent
@@ -54,7 +54,7 @@ The gateway is the default and remains the platform's metered path. Setting `OXA
 
 #### Scenario: Embeddings are not redirected
 - **WHEN** the language path is redirected to OpenRouter
-- **THEN** `embeddingModel` still routes through the gateway, because OpenRouter does not serve it — embedding calls fail visibly rather than being papered over
+- **THEN** `embeddingModel` still routes through the gateway, because OpenRouter does not serve it — embedding calls fail visibly
 
 ---
 
@@ -144,7 +144,7 @@ When a caller invokes `supportsReasoning(model)` with a model id string or objec
 
 #### Scenario: Unknown model
 - **WHEN** `supportsReasoning("unknown/model")` is called
-- **THEN** `false` is returned conservatively
+- **THEN** `false` is returned
 
 ---
 
@@ -283,7 +283,7 @@ When env var reading returns undefined (e.g., in test environments where mocking
 <!-- entities: User, Workspace, ModelDefaults -->
 <!-- enforced: resolveModelDefaults() -->
 
-When a workspace sets a text model default, that value MUST override the user's preference, even if the user's preference is non-null. The `overriddenByWorkspace.text` flag accurately reports that the workspace set something — not that the workspace won, since a caller preferring `text.model` can still land on the user's model when the workspace set only a tier.
+When a workspace sets a text model default, that value MUST override the user's preference, even if the user's preference is non-null. The `overriddenByWorkspace.text` flag reports that the workspace set something — not that the workspace won, since a caller preferring `text.model` can still land on the user's model when the workspace set only a tier.
 
 ---
 

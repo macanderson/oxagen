@@ -24,7 +24,7 @@ Creating an organization also creates a default workspace within it. You are aut
 
 <Mermaid chart={`
 flowchart TD
-  O["Organization<br/>billing · IAM policies · audit logs"] --> W1[Default workspace]
+  O["Organization<br/>billing · IAM · audit logs"]:::accent --> W1[Default workspace]
   O --> W2[More workspaces]
   O --> M[Org members + org roles]
   W1 --> WM[Workspace members + roles]

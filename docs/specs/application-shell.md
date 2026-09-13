@@ -52,11 +52,11 @@ Vercel, Linear, GitHub, and Google Cloud Console solve this with **two-level nav
 - A **sidebar** holds primary destinations (the level-1 nouns).
 - A **horizontal tab bar** at the top of each page holds the sub-sections (level-2).
 
-The sidebar answers "where am I?" The tab bar answers "what part of here?"
+The sidebar shows the current primary destination; the tab bar shows the sub-section within it.
 
 This spec adopts that model and adds two refinements specific to Oxagen:
 
-1. **Three navigation modes** (Workspace / Org / Account) — the sidebar shape switches based on URL scope. You're never looking at workspace items and org items at the same time, because they're never useful at the same time.
+1. **Three navigation modes** (Workspace / Org / Account) — the sidebar shape switches based on URL scope. Workspace items and org items never render together, because they are not used together.
 2. **Universal Ask bar** — the central topbar control replaces command palette + search + chat-launcher into a single intent-routed input.
 
 ---
@@ -186,7 +186,7 @@ Every level-1 destination that contains sub-sections renders them as a horizonta
 1. **URL-addressable.** Each tab maps to a nested route (`/knowledge/sources`, not `/knowledge?tab=sources`). Deep links are bookmarkable; back-button works correctly.
 2. **Active state is route-driven.** The active tab is whichever route segment matches the current URL.
 3. **Default tab.** Visiting the parent route (`/knowledge`) redirects to the first tab (`/knowledge/sources`).
-4. **No three-deep tabs.** If a tab needs sub-tabs, the design is wrong — restructure into the page body.
+4. **No three-deep tabs.** If a tab needs sub-tabs, restructure them into the page body.
 5. **Overflow.** When tabs don't fit horizontally, the tab bar becomes horizontally scrollable with edge fade indicators. Never wrap to a second row.
 6. **Counts and badges allowed.** A tab can carry a badge (`Approvals (3)`). Badges are only for actionable state, never decoration.
 
@@ -294,7 +294,7 @@ When the intent resolves to **Ask**, the right-side drawer opens with chat. The 
 
 ### 8. Page-level Ask affordance
 
-Every detail page (a Run, a Playbook, a Trigger, an OntologyNode, etc.) renders an **"Ask about this"** button in the page header. Clicking it opens the Ask drawer pre-loaded with that entity. This is how chat becomes ambient — it's never more than one click from any object.
+Every detail page (a Run, a Playbook, a Trigger, an OntologyNode, etc.) renders an **"Ask about this"** button in the page header. Clicking it opens the Ask drawer pre-loaded with that entity. Chat is one click from any detail page.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

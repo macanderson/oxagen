@@ -11,15 +11,14 @@ surface that exists (Stella's local trace) onto a surface that exists
 (Oxagen's three storage planes) and names the one piece that does not exist
 between them (a content-bearing drain).
 
-**How this document was produced, and what that is worth.** Every claim below
+**How this document was produced.** Every claim below
 about Stella is read from this workspace's source at the commit this branch
 forked from, and cites the file. Every claim about Oxagen is read from
 `~/Projects/oxagen-platform` at its then-current checkout, and cites the file.
-**No drain was run, no intake was exercised, and no schema was migrated** —
-this is a reading of two codebases, not an observation of a working pipe. The
-mapping tables are therefore *proposals with citations*, and the column-level
-mismatches in §6–§8 are the parts most likely to be wrong in the direction of
-optimism. They are called out individually rather than smoothed over.
+**No drain was run, no intake was exercised, and no schema was migrated.** The
+mapping tables are *proposals with citations*, and the column-level mismatches
+in §6–§8 are the parts most likely to be too optimistic. Each is called out
+individually.
 
 ---
 
@@ -28,7 +27,7 @@ optimism. They are called out individually rather than smoothed over.
 > Does Stella have a way for Oxagen to be fed the full trace for every agent
 > execution?
 
-**No — and the absence is deliberate and enforced.**
+**No.** The absence is deliberate and enforced.
 
 Three egress paths exist today. All three are either **content-free by
 construction** or **local-only**:
@@ -39,13 +38,12 @@ construction** or **local-only**:
 | Enterprise operational rollup | one row per *execution*: outcome + tokens + cost + counts | **No** — narrower still, catalog-collapsed | Yes — `crates/stella-store/src/enterprise_telemetry.rs` |
 | `/export` session archive | prompts, tool arguments, touched files — the real thing | **Yes** | Yes, but **local only**: a `0600` file on disk, no transport |
 
-The full trace **does** exist, completely, on every machine that runs Stella.
-It has two representations (§2). What does not exist is a pipe that carries it
-off the box, because AGENTS.md #3 ("zero telemetry egress by
-default") makes building one an explicit, reviewed decision rather than a
-feature increment.
+The full trace exists on every machine that runs Stella. It has two
+representations (§2). No pipe carries it off the box, because AGENTS.md #3
+("zero telemetry egress by default") makes building one an explicit, reviewed
+decision.
 
-So the work is **not** "instrument Stella". The event model, the published
+The event model, the published
 wire schema, the ordered durable sink, the batching/cursor/poison-row loop and
 the HTTPS transport are all already built and tested. The work is a **fourth
 drain**: a content-bearing, consent-gated trace format that reuses that
@@ -83,13 +81,12 @@ older reader never silently drops a newer producer's event.
 `agentevent.d.ts` (the same contract as TypeScript declarations), both derived
 from the Rust types by `stella_protocol::schema_export` and gate-enforced by
 `make wire-schema`. **Oxagen should generate its intake types from these
-artifacts rather than hand-writing them** — that is what they are for, and it
-is the difference between a wire break landing as a reviewable diff and landing
-as a production decode failure.
+artifacts rather than hand-writing them**; with generated types, a wire break
+lands as a reviewable diff instead of a production decode failure.
 
 > **Cardinality warning, from the source.** `AgentEvent::type_tag` returns the
-> *preserved original* tag for `Unknown`, which means its return value is not
-> drawn from a closed set — it is arbitrary, externally authored text. Any
+> *preserved original* tag for `Unknown`, so its return value can be
+> arbitrary, externally authored text. Any
 > ClickHouse `LowCardinality(String)` column or metric label fed from it must
 > be validated against `KNOWN_TYPE_TAGS` and bucket everything else as a single
 > `unknown` cohort. Letting a foreign stream drive cardinality on
@@ -101,7 +98,7 @@ as a production decode failure.
 `--output-format stream-json` emits every `AgentEvent` as newline-delimited
 JSON. Setting `STELLA_DURABLE_STREAM_JSON_PATH` additionally routes the stream
 through an ordered durable writer to a file
-(`crates/stella-cli/src/agent/output.rs`). It is strict in both directions: the
+(`crates/stella-cli/src/agent/output.rs`). The
 env var without `--output-format stream-json` is a startup error, the path is
 preflighted before the run begins, and a write failure exits `74` rather than
 letting a run proceed unrecorded. The Harbor bench rig already uses this at
@@ -133,8 +130,8 @@ normalized projections a dashboard can query without JSON-scanning the log:
 
 Tap B is richer than Tap A for anything the engine *derived* (the live
 `tool_calls` lifecycle, the reconstructable manifest); Tap A is richer for
-ordering and for events that never reach a projection. **A serious ingest wants
-both**, and §9 recommends starting with A.
+ordering and for events that never reach a projection. A complete ingest reads
+both, and §9 recommends starting with A.
 
 ---
 
@@ -160,16 +157,15 @@ cache_read_tokens · cache_miss_tokens · cache_write_tokens
 cost_usd · duration_ms · retries · tool_calls · usage_complete
 ```
 
-No prompt. No tool argument. No path. No event. The batch envelope carries an
+It carries no prompt, tool argument, path, or event. The batch envelope carries an
 integer `schema_version` and the intake accepts a *range*; an unknown version
 is a terminal non-poison reject, distinguished from a poison *row* so one bad
 row dead-letters instead of wedging an org's cursor forever.
 
-`project_id` deserves a note the source already makes: it is an FNV-1a/64
-digest of the canonical workspace path, and it is **a pseudonym, not an
-anonymization** — 64 bits of non-cryptographic hash over a guessable input is
-dictionary-attackable by a determined intake operator. Oxagen is that operator.
-Treat it as identifying.
+`project_id` is an FNV-1a/64 digest of the canonical workspace path, and, as
+the source notes, it is **a pseudonym, not an anonymization**: 64 bits of
+non-cryptographic hash over a guessable input is dictionary-attackable by an
+intake operator, and Oxagen is that operator. Treat it as identifying.
 
 ### 3.2 The enterprise operational rollup
 
@@ -184,8 +180,8 @@ document and an active enrollment.
 
 ### 3.3 The guard that makes both of those true
 
-`crates/stella-store/src/content_free.rs` is why §3.1 and §3.2 can be stated as
-fact rather than intent:
+`crates/stella-store/src/content_free.rs` enforces §3.1 and §3.2 with two
+mechanisms:
 
 1. **A schema allowlist.** `HUB_TELEMETRY_COLUMNS` is compared against the live
    `PRAGMA table_info`, so adding a hub column fails the build until a human
@@ -206,23 +202,22 @@ without registering a guard fails the gate.
 >
 > **A full-trace drain cannot be added to the existing encoder registry.** It
 > would fail `every_registered_encoder_is_content_free` by design, because it
-> ships exactly what the sentinels forbid. Widening the allowlist to make the
-> gate green is precisely the expedient `CLAUDE.md` names as a defect.
+> ships what the sentinels forbid. `CLAUDE.md` names widening the allowlist to
+> make the gate green as a defect.
 >
-> The correct shape is a **separate, declared egress class** —
+> The proposed shape is a **separate, declared egress class** —
 > content-bearing, consent-gated — with its own guard asserting its own
 > rules (that it never runs without explicit consent, that redaction ran,
-> that the endpoint is the enrolled one). That is an architecture decision for
-> a maintainer, not an implementation detail, and §12 records it as an open
-> question rather than deciding it here.
+> that the endpoint is the enrolled one). A maintainer owns that architecture
+> decision; §12 records it as an open question.
 
 ---
 
 ## 4. Identity — the hard part, and the part most likely to break
 
-Stella's identifiers and Oxagen's do not line up, and the mismatch is not
-cosmetic. `AGENTS.md`'s glossary already warns that six Stella ids can each be
-read as "one thing the agent did" and are genuinely distinct entities.
+Stella's identifiers and Oxagen's do not line up. `AGENTS.md`'s glossary warns
+that six Stella ids can each be read as "one thing the agent did" and are
+distinct entities.
 
 | Stella | Type | Scope of uniqueness | Oxagen wants |
 |---|---|---|---|
@@ -235,7 +230,7 @@ read as "one thing the agent did" and are genuinely distinct entities.
 | `project_id` | FNV-1a/64 digest of canonical path | global, collision-prone, reversible | — |
 | fleet `run_id` | `TEXT` | per fleet ledger | — |
 
-**`executions.id` is the trap.** It is a per-file autoincrement. Two workspaces
+**`executions.id` is a per-file autoincrement.** Two workspaces
 on two machines both have an `execution_id = 41`, and they are unrelated. An
 intake that keys on it directly will silently merge distinct executions the
 first time a second workspace reports.
@@ -252,7 +247,7 @@ tool_call_uuid = uuidv5(NS_STELLA_TOOLCALL,  "{execution_uuid}/{event_seq}")
 session_uuid   = uuidv5(NS_STELLA_SESSION,   "{org_id}/{workspace_id}/{session_id}")
 ```
 
-Three notes on that, each a real constraint rather than a preference:
+Three constraints on that derivation:
 
 - **`event_seq`, not `call_id`, keys a tool call.** `call_id` is *not unique
   within an execution* — several providers mint it positionally, so
@@ -268,14 +263,14 @@ Three notes on that, each a real constraint rather than a preference:
   forever — one more shared cell to drift.
 - **The identity fields must be present at all.** `org_id` and `workspace_id`
   are `NULL` until `stella cloud register` runs. A trace drain therefore has
-  the same registration precondition as the existing one, and the same honest
+  the same registration precondition as the existing one, and the same
   failure mode: unregistered installs drain nothing.
 
 ---
 
 ## 5. The three planes, and what belongs in each
 
-Oxagen already stores agent executions three ways, and the split is principled:
+Oxagen already stores agent executions three ways:
 
 | Plane | Store | Grain | Retention | Role |
 |---|---|---|---|---|
@@ -283,8 +278,8 @@ Oxagen already stores agent executions three ways, and the split is principled:
 | **ClickHouse** | `packages/telemetry/src/schema.sql` | high-volume append-only | 90 / 180 / 365 day TTLs | analytics, dashboards, cost |
 | **Neo4j** | `packages/ontology` (`neo4j-driver`) | entities + relationships | indefinite | lineage, provenance, semantic recall |
 
-Stella's trace splits along the same seam almost exactly, which is the reason
-this mapping is cheap rather than a translation layer:
+Stella's trace splits along nearly the same seam, so the mapping needs no
+translation layer:
 
 - `events` (the raw journal) → **ClickHouse**. High volume, append-only,
   bounded retention, queried in aggregate.
@@ -313,16 +308,16 @@ migrations.
 | `payload` (the event's JSON) | `payload String CODEC(ZSTD(3))` | **this is the content-bearing column** |
 | `ts` | `emitted_at DateTime64(3)` | |
 
-The fit is exact and needs no migration. Two decisions ride on it:
+This mapping needs no migration. Two decisions ride on it:
 
-- **The 90-day TTL is almost certainly wrong for the stated purpose.** The ask
+- **The 90-day TTL is too short for audit.** The ask
   is "aggregation for reporting *and audit*". `events` drops rows after
   `INTERVAL 90 DAY`. Either the audit-grade subset lives in Postgres/Neo4j
   (§7, §8) with the ClickHouse copy as the analytics mirror, or this table
-  needs a longer TTL for `source_system = 'stella'`. **Decide before ingest,
-  not after** — a TTL cannot retroactively un-drop a partition.
+  needs a longer TTL for `source_system = 'stella'`. **Decide before ingest**:
+  a TTL cannot retroactively un-drop a partition.
 - **`payload` is where redaction has to happen**, because it is where the
-  prompt text, tool arguments and file diffs actually live. §10.
+  prompt text, tool arguments and file diffs live. §10.
 
 ### 6.2 Per-call usage → `token_usage`
 
@@ -344,13 +339,12 @@ The fit is exact and needs no migration. Two decisions ride on it:
 
 > **⚠️ Migration required.** Stella measures the prompt cache as a *triple*
 > (`read` / `miss` / `write`) and ClickHouse stores one `cached_tokens`.
-> Collapsing to `cache_read_tokens` loses the write cost, which is the half
-> that is actually *billed* on Anthropic and the half a cache-efficacy
-> dashboard needs. Stella treats provider cache posture as a declared parity
-> axis for exactly this reason (AGENTS.md #8, `CachePosture`).
+> Collapsing to `cache_read_tokens` loses the write cost, which Anthropic
+> bills and a cache-efficacy dashboard needs. Stella treats provider cache
+> posture as a declared parity axis for this reason (AGENTS.md #8,
+> `CachePosture`).
 > **Add `cache_write_tokens` and `cache_miss_tokens` columns** rather than
-> flattening. `retries` likewise has no home and is a genuine reliability
-> signal.
+> flattening. `retries` likewise has no column and is a reliability signal.
 
 ### 6.3 Tool calls → `tool_invocations`
 
@@ -368,10 +362,10 @@ The fit is exact and needs no migration. Two decisions ride on it:
 | MCP server id | `external_server_id Nullable(UUID)`, `external_provider` | from `mcp_usage.server` |
 | — | `risk_level`, `required_approval` | Oxagen policy fields; Stella has `policy_decision` events that could feed them |
 
-> **⚠️ `abandoned` is a real state and dropping it makes error rates
-> dishonest.** Stella split it from `error` in #3146 precisely because every
-> error-rate reader groups on this column, and charging an interrupt as an
-> "error" against whatever tool was in flight made those rates lie. Oxagen's
+> **⚠️ Dropping `abandoned` inflates error rates.** Stella split it from
+> `error` in #3146 because every error-rate reader groups on this column, and
+> charging an interrupt as an "error" against whatever tool was in flight
+> overstated those rates. Oxagen's
 > `agent_tool_calls_status_check` allows `pending/running/completed/failed`;
 > the ClickHouse column is unconstrained but its dashboards assume the same
 > four. **Add `abandoned` on both sides**, or Stella's traces will import a
@@ -387,14 +381,13 @@ The fit is exact and needs no migration. Two decisions ride on it:
 | `provider_fallback`, `retry`, `retries_exhausted` | `router_outcomes` (migration 0025) | Stella's fallback events are exactly this table's subject |
 | **`step_manifest` / `context_blocks`** | **no table** | ⚠️ new table needed — see below |
 
-> **⚠️ The context receipts have no home, and they are the most differentiated
-> thing Stella produces.** `step_manifest` records, in wire order, every block
+> **⚠️ The context receipts have no table.** `step_manifest` records, in wire
+> order, every block
 > the model saw on every call, with its cache zone and residency; `step_receipt`
 > records the budget the compaction pass compared against. Together they make
 > any past step reconstructable — "what did the model actually have in context
-> when it made this decision" — which is a question no other agent runtime in
-> Oxagen can answer. Landing the trace without them throws away the part worth
-> having. Proposed: a `context_manifests` MergeTree ordered by
+> when it made this decision" — which no other agent runtime in Oxagen can
+> answer. Proposed: a `context_manifests` MergeTree ordered by
 > `(org_id, execution_id, step, call_seq, ordinal)`, 365-day TTL to match
 > `token_usage`.
 
@@ -450,7 +443,7 @@ Read from `packages/database/src/schema/agent.ts`. Every table carries
 | `retries` | `attempts` |
 
 `claimed_by` / `lease_expires_at` are Oxagen's durable-worker lease and have no
-Stella counterpart — leave null. Note that `call_seq` (which separates the
+Stella counterpart — leave null. `call_seq` (which separates the
 several model calls that can share one step — worker 0, overflow summarizer 1,
 allocated roles 2+) has **no column**; it must ride `step_type` or a new
 column, or two calls in one step will collide on `(execution_id, step_number)`.
@@ -496,8 +489,8 @@ The shape it already writes
 ```
 
 Every node carries the `:GraphNode` anchor label and an optional `embedding`,
-which is what puts it in the universal vector index — so a Stella execution
-becomes semantically searchable for free.
+which puts it in the universal vector index, so a Stella execution becomes
+semantically searchable without further work.
 
 ### 8.1 What maps onto existing edges
 
@@ -520,22 +513,21 @@ Three edge types with no counterpart, each carrying something Oxagen cannot
 currently express:
 
 - **`VERIFIED_BY`** — `(:Execution)-[:VERIFIED_BY]->(:Verification)`, from
-  `proof` / `verdict` events. This is the "verified done, not claimed done"
-  chain: which check ran, what it found, whether the fail→pass flip was
-  credited. Note that in this workspace these events have **no production
-  emitter** — the built-in pipeline was deleted (#3865) and the only remaining
-  producer would be an installed verification plugin (Vera). So the edge type
-  is worth defining and the ingest is worth writing, but **it will be empty
+  `proof` / `verdict` events. It records which check ran, what it found, and
+  whether the fail→pass flip was credited. In this workspace these events have
+  **no production emitter** — the built-in pipeline was deleted (#3865) and the
+  only remaining producer would be an installed verification plugin (Vera).
+  Define the edge type and write the ingest, but **the edge will be empty
   until a verification plugin is installed**, and a dashboard must not read
   empty as "unverified".
 - **`SAW_CONTEXT`** — `(:Execution)-[:SAW_CONTEXT]->(:ContextBlock)`, from
-  `step_manifest` / `block_registered`. The provenance answer: *which retrieved
-  block was in context when the model wrote this line*. This is the pairing
-  that makes an audit trail causal rather than merely chronological.
+  `step_manifest` / `block_registered`. It records *which retrieved block was
+  in context when the model wrote this line*, so the audit trail links each
+  output to the context the model had.
 - **`CITED_MEMORY`** — from `memory_citations`, carrying `useful_score` and
-  `truthful`. Oxagen has `REMEMBERS`; this is the *feedback* on it, which is
-  what would let Engram's reinforcement/decay machinery learn from real agent
-  usage rather than from retrieval counts alone.
+  `truthful`. Oxagen has `REMEMBERS`; this edge carries feedback on it, which
+  would let Engram's reinforcement/decay machinery learn from agent usage as
+  well as retrieval counts.
 
 ---
 
@@ -553,9 +545,9 @@ events outside every turn — `HookEvent::ALL` is the set. A `Stop` hook configu
   file, and it exercises the whole Oxagen intake against real traces before any
   wire contract is frozen.
 - **Con:** per-turn rather than batched, no cursor, no retry, no poison-row
-  handling, no ack. Everything `drain_org` already solved is re-solved badly.
-- **Verdict: build this first, as a spike to validate §6–§8, and throw it
-  away.** Do not let it become the product.
+  handling, no ack.
+- **Build this first, as a spike to validate §6–§8, then discard it.** It does
+  not ship as the product.
 
 ### v1 — a trace drain format (the recommendation)
 
@@ -563,26 +555,26 @@ Add a content-bearing format alongside the existing two, reusing
 `drain_org`'s cursor / batching / bisection / ack loop and `HttpCloudIntake`'s
 transport, with its own consent gate and its own guard (§3.3).
 
-- **Pro:** every hard part — idempotency, poison rows, terminal-vs-transient
-  classification, schema versioning — is already built and tested. The
+- **Pro:** idempotency, poison rows, terminal-vs-transient classification and
+  schema versioning are already built and tested. The
   additional surface is an encoder, a config block, and a consent gate.
 - **Con:** requires the architectural decision in §3.3 to be made first.
 - **Shape:** a `trace` block in `~/.stella/cloud.json` beside `drain`, not a
   `format` value inside it. They are different pipes with different consent
   postures, and the existing code already models "different pipe" that way —
   `cloud_drain.rs` is an adapter over the drain port rather than a second use
-  of the enterprise spool, for exactly this reason.
+  of the enterprise spool, for the same reason.
 
 ### v2 — `stella serve` (already built, different use case)
 
 `crates/stella-serve` is a headless engine a host process drives over the wire,
 already documented as "the headless engine for Oxagen"
 (`doc:serve-surface`). Every model and tool call is remoted back to the host,
-so **Oxagen sees the whole trace live, by construction** — no drain needed,
-because Oxagen is running the engine.
+so **Oxagen sees the whole trace live**; no drain is needed because Oxagen runs
+the engine.
 
-This is the right answer for *Oxagen-hosted* agents and the wrong answer for
-*developer-workstation* agents, which is what the question is about. Both will
+`stella serve` fits *Oxagen-hosted* agents and does not cover
+*developer-workstation* agents, which the question is about. Both will
 exist. The trace schema in §6–§8 should be the same for both, so a
 `stella serve` session and a drained CLI session land in one table and compare.
 
@@ -590,21 +582,21 @@ exist. The trace schema in §6–§8 should be the same for both, so a
 
 ## 10. Privacy, redaction, and the audit posture
 
-The whole point of the drain is to ship what AGENTS.md #3 currently forbids, so
-the compensating controls are not optional decoration.
+The drain ships what AGENTS.md #3 currently forbids, so these compensating
+controls are required.
 
 1. **Consent is explicit, per-workspace, and revocable.** The existing drain's
    posture — no `org_id` *and* no config block means zero network I/O — is the
-   floor, not the ceiling. A content-bearing drain should additionally require
+   minimum. A content-bearing drain should additionally require
    an affirmative per-workspace grant, and should say so at session start.
 2. **Redaction runs before the encoder, not inside the intake.** `/export`
    already masks credentials on its way to a local archive
    (`crates/stella-cli/src/export/`, #817) — that masking is the reusable
    piece, and it must run on the trace path too. A secret that reaches
    ClickHouse has egressed regardless of what the intake does with it.
-3. **The guard is the deliverable, not the encoder.** §3.3's harness exists
-   because a privacy regression here is an incident. The trace class needs the
-   equivalent: a test that fails the build if the encoder runs without a
+3. **The trace class needs its own guard.** §3.3's harness exists because a
+   privacy regression here is an incident. The trace equivalent is a test that
+   fails the build if the encoder runs without a
    consent grant, if redaction is bypassed, or if the endpoint is not the
    enrolled one.
 4. **Retention must be decided before the first row lands.** ClickHouse TTLs
@@ -618,8 +610,7 @@ the compensating controls are not optional decoration.
 
 ## 11. The other direction — Oxagen tools for Stella agents
 
-Four mechanisms exist, and they are genuinely different rather than three
-flavours of one thing. Picking the wrong one is the common mistake.
+Four mechanisms exist, each for a different job:
 
 | Mechanism | Where it lives | Good for |
 |---|---|---|
@@ -630,7 +621,7 @@ flavours of one thing. Picking the wrong one is the common mistake.
 
 ### 11.1 MCP is the answer for capabilities — but not all 334 of them
 
-Oxagen's `apps/mcp` already ships an enormous tool surface (a-to-z:
+Oxagen's `apps/mcp` already ships a large tool surface (a-to-z:
 `agent`, `graph`, `ontology`, `schema`, `skill`, `sandbox`, `eval`, `billing`,
 `iam`, …). **Do not point Stella at all of it.**
 
@@ -639,14 +630,13 @@ model chooses a tool from its `description` alone, and that the built-in
 surface is tiny — one shell, the file CRUD quartet, one unified
 search, plus a coordination half. A few hundred additional tool descriptions in
 the prompt would dominate the context budget and degrade tool choice on every
-turn, and it would do so *silently* — the failure mode is worse decisions, not
-an error.
+turn without raising an error; the failure mode is worse decisions.
 
 **Recommendation: a curated `stella` MCP profile** — a named subset Oxagen
 exposes specifically for coding agents, single-purpose per AGENTS.md #9 (a
 parameter may scope an operation, never select one).
 
-A defensible starting set:
+A proposed starting set:
 
 | Tool | One job | Backed by |
 |---|---|---|
@@ -659,7 +649,7 @@ A defensible starting set:
 | `oxagen_artifact_publish` | store one generated asset | `content.generated_assets` |
 | `oxagen_eval_submit` | record one run into the eval tables | `eval_runs` / `eval_results` |
 
-Three design notes that will otherwise be discovered the hard way:
+Three design notes:
 
 - **Single-purpose is enforced at review.** `update_task(delete=true)` is two
   tools wearing one schema and gets split. An `oxagen_graph(op="search"|"write")`
@@ -676,22 +666,22 @@ Three design notes that will otherwise be discovered the hard way:
 
 ### 11.2 Where a plugin beats a tool
 
-Oxagen's most valuable integration may not be a tool at all. The wrapper socket
+The wrapper socket
 (`doc:wrapper-socket`, `crates/stella-runtime/src/wrapper/`) hands a plugin the
 whole turn via `before_turn` / `after_turn` and lets it report an `EvidenceSet`
-judged against a declared `VerdictRule`. That is the natural home for:
+judged against a declared `VerdictRule`. It can host:
 
 - **an org policy wrapper** — refuse a turn that violates a governance rule
   before any model call is paid for;
-- **the trace drain itself** — `after_turn` is a natural, already-authorized
+- **the trace drain itself** — `after_turn` is an already-authorized
   place to ship a completed turn, and it composes with the plugin consent flow
   (`stella_plugin::consent_text`, the project-tier trust gate) instead of
   needing a new one.
 
-That last point is worth weighing against §9's v1 seriously: it may be that the
-right answer is *an Oxagen plugin*, not a new drain format in Stella's tree —
-which would keep the content-bearing egress out of the reference implementation
-entirely, and leave AGENTS.md #3 intact and unqualified. §12.
+This is an alternative to §9's v1: *an Oxagen plugin*, instead of a new drain
+format in Stella's tree, would keep the content-bearing egress out of the
+reference implementation entirely and leave AGENTS.md #3 intact and
+unqualified. §12.
 
 ---
 
@@ -700,9 +690,8 @@ entirely, and leave AGENTS.md #3 intact and unqualified. §12.
 1. **Does the content-bearing egress live in Stella's tree at all?** §11.2's
    plugin route keeps AGENTS.md #3 unqualified and puts the trace drain in
    Oxagen's repository where its consent story already exists. §9's v1 route
-   makes it a first-class Stella feature with better reliability machinery.
-   These are genuinely different products, and this is the decision everything
-   else hangs off.
+   makes it a built-in Stella feature with better reliability machinery.
+   The other open questions depend on this decision.
 2. **What is the trace's consent unit** — org enrollment (like enterprise
    telemetry), per-workspace grant, or per-session flag?
 3. **Where does `call_role` land in ClickHouse** — reuse `capability_name`, or

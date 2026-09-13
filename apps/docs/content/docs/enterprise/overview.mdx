@@ -47,9 +47,9 @@ Today every access decision is made by role: a principal's role grants, then the
 
 <Mermaid chart={`
 flowchart LR
-  Q["invoke() capability"] --> RG{"Role grant<br/>for this capability?"}
+  Q["invoke() capability"] --> RG{{"Role grant<br/>for this capability?"}}:::accent
   RG -->|deny · require approval · allow| DONE["Decision"]
-  RG -->|none| OW{"System org Owner?"}
+  RG -->|none| OW{{"System org Owner?"}}
   OW -->|yes| ALLOW["Allow"]
   OW -->|no| DEF["Contract defaultEffect"]
 `} />
@@ -60,9 +60,9 @@ The IAM resolver also defines two stronger tiers: org-enforced policies that wor
 
 Every agent configuration is a principal with its own grants. A department can give their agents exactly the capabilities needed for their use case, nothing more. Triggered and scheduled agents use their configured grants — they never inherit a user's session grants.
 
-### Just-in-time access
+### Approval-gated capabilities
 
-When an employee or agent needs a capability they do not currently have, they submit a JIT access request. The request is routed to an approver, granted with a TTL, and auto-expired. The entire flow is recorded in the audit log. There is no "ask on Slack and someone will remember to update the permissions" path.
+When a role grant says a capability requires approval, the call is refused with `pending_approval` and Oxagen records an access request (`arq_…`) naming the principal and the capability, alongside the security event. There is no in-app screen for approving these requests yet, and no time-limited grant flow.
 
 ## Contact
 

@@ -1698,7 +1698,7 @@ Expected: `gate` + `rls-integration` both green on the PR.
 
 ### Task 16: Enable enforcement per environment
 
-Not a code change — an env-var operation, gated on telemetry. No migration.
+An env-var operation, gated on telemetry. No code change and no migration.
 
 - [ ] **Step 1: Verify seeding-window coverage**
 
@@ -1706,7 +1706,7 @@ In staging, confirm `db.query.unscoped` (Task 6) reads **zero** over a represent
 
 - [ ] **Step 2: Flip preview, then production**
 
-Set `TENANT_RLS_ENFORCEMENT_ENABLED=true` on the Vercel projects (api, app, mcp), preview first, then production after a soak. (Use `pnpm env:pull`/the env-manager per repo convention; value is `"true"`.) `withTenantDb` stops setting `app.rls_bypass='on'`, so policies become load-bearing. Reversible: set back to `false` to re-bypass without a migration.
+Set `TENANT_RLS_ENFORCEMENT_ENABLED=true` on the Vercel projects (api, app, mcp), preview first, then production after a soak. (Use `pnpm env:pull`/the env-manager per repo convention; value is `"true"`.) `withTenantDb` stops setting `app.rls_bypass='on'`, so the policies filter rows. Reversible: set back to `false` to re-bypass without a migration.
 
 - [ ] **Step 3: File the post-deploy ticket**
 
@@ -1717,9 +1717,9 @@ Per repo policy, file an URGENT Linear ticket tracking the prod env-var flip wit
 ## Self-Review
 
 **Spec coverage:**
-- §5 tenancy seam → Tasks 1–2. §6 Postgres RLS + flag → Tasks 4, 5, 12, 13, 14. §6.1a flag → Tasks 4, 5, 16. §7.1 Neo4j → Tasks 8, 9. §7.2 ClickHouse → Tasks 10, 11. §8 kernel/actions/inngest propagation → Tasks 3, 7. §9 testing strategy → mocks (Tasks 5, 7), single proof (Task 14), seam guards (Tasks 8, 10), CI (Task 15). §11 file list → all tasks. §12 rollout phases → Phase headings. Decisions (§15): flag (Tasks 4/5/16), no CH row policy (none added — correct), keep predicates (Task 7 Step 2 keeps them).
+- §5 tenancy seam → Tasks 1–2. §6 Postgres RLS + flag → Tasks 4, 5, 12, 13, 14. §6.1a flag → Tasks 4, 5, 16. §7.1 Neo4j → Tasks 8, 9. §7.2 ClickHouse → Tasks 10, 11. §8 kernel/actions/inngest propagation → Tasks 3, 7. §9 testing strategy → mocks (Tasks 5, 7), single proof (Task 14), seam guards (Tasks 8, 10), CI (Task 15). §11 file list → all tasks. §12 rollout phases → Phase headings. Decisions (§15): flag (Tasks 4/5/16), no CH row policy (none added), keep predicates (Task 7 Step 2 keeps them).
 - Known-gap fixes: MCP `orgId:""` → Task 3 Step 4; Neo4j `tenantId` drift → Task 9 Step 1.
 
-**Placeholder scan:** every code step has concrete code; "adjust to real schema" notes point at named files to read, not vague TODOs. No `NotImplemented`/`TBD`.
+**Placeholder scan:** every code step has concrete code; "adjust to real schema" notes point at named files to read. No `NotImplemented`/`TBD`.
 
 **Type consistency:** `TenantScope {orgId, workspaceId}`, `runInTenantScope`, `requireScope`, `getScope`, `TenantScopeError`, `withTenantDb`, `Tx`, `scopedSession`, `chInsert`/`chSelect`, `POLICY_MANIFEST`/`PolicyClass`/`PolicyEntry`, `rlsEnforced`, GUCs `app.current_org_id`/`app.current_workspace_id`/`app.rls_bypass`, env `TENANT_RLS_ENFORCEMENT_ENABLED` — used consistently across all tasks.

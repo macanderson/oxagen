@@ -7,7 +7,7 @@
 
 The GitHub write capabilities (`repo.create` / `repo.file.put` / `repo.fork` / `repo.branch.create` / `repo.pr.open` / `agent.repo.edit`) currently resolve their token from a single global `GITHUB_PERSONAL_ACCESS_TOKEN` env var (`packages/handlers/src/lib/github-token.ts`) — a dev/demo stub. For real multi-tenant use, each **workspace** must act on GitHub with **its own** credentials.
 
-What already exists (reuse, don't reinvent):
+What already exists:
 - **`ingestion.source_connections`** — workspace-scoped (`workspaceId`, `orgId`), `connectorId = "github"`, `deliveryConfig` jsonb holding `installationId` / `owner` / `repo` / `defaultBranch`, and `oauthAccountId` FK.
 - **`ingestion.oauth_accounts`** — `provider = "github"`, `accessTokenEnc` / `refreshTokenEnc` (KMS envelope `{ keyId, ciphertext }`), `scopes`.
 - **The connect flow** (`apps/api/src/routes/v1/github-oauth.ts`) — installs the GitHub App, exchanges the OAuth code, KMS-encrypts the user-to-server token into `oauth_accounts`, links it to `source_connections`, and records `installationId` in `deliveryConfig`.
@@ -28,7 +28,7 @@ If none resolve, throw a clean, actionable error ("Connect GitHub for this works
 
 ### Why this shape
 - **Reuses everything** — the workspace connection model, the connect flow, the encrypted store, the KMS adapter — so the only new code is the minter + the resolver chain.
-- **Installation tokens are the right production default** (granular, short-lived, org-managed) while the **OAuth fallback** keeps working for connections that predate the App-key rollout, and the **env fallback** keeps local dev frictionless.
+- **Installation tokens are the production default** (granular, short-lived, org-managed) while the **OAuth fallback** keeps working for connections that predate the App-key rollout, and the **env fallback** keeps local dev frictionless.
 - **Per-workspace** by construction: `source_connections` is workspace-scoped; the chosen token derives from that row only.
 
 ## Consequences

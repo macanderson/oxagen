@@ -1,12 +1,10 @@
 # The Verified-Outcome Market Router
 
-**Accuracy with an SLA and a price tag.**
-
 This spec covers the learned, economic model router: the feature that turns Oxagen's
 existing per-function model routing into a market mechanism grounded in the platform's
-own verified history, and eventually into a billable, guaranteed product. It is the
-purest expression of the Stripe-for-agents wedge (`docs/VISION.md`): the same loop that
-meters and bills usage becomes the loop that prices, guarantees, and refunds accuracy.
+own verified history, and eventually into a billable, guaranteed product. It extends the
+Stripe-for-agents wedge (`docs/VISION.md`): the loop that meters and bills usage also
+prices, guarantees, and refunds accuracy.
 
 - `roadmap.md`, the phased enhancement roadmap from today's v1 to billing-native
   accuracy SLAs.
@@ -56,7 +54,7 @@ stores that were never joined:
 - **Completion, unattributed.** Postgres `agent_executions` records success/failure
   per run but has no model column.
 
-Two structural gaps defined the opportunity: no durable record joining
+Two gaps remained: no durable record joining
 (task class x model) to verified success and cost, and no tier escalation when the
 judge rejected a result (the revise loop re-ran the same model).
 
@@ -95,7 +93,6 @@ the billing rail (charge or refund accordingly). Competitors own at most one.
 Observability vendors see cost but not verified outcomes. Eval vendors see outcomes
 but neither meter nor bill. Framework vendors own the loop but none of the
 accounting. Oxagen's accountability chain (identity, scope, action, terms, verified
-outcome, audit record) is exactly the substrate a market router needs, which is why
-the endgame (billing-native accuracy SLAs with automatic credit refunds) is a move
-nobody else can make. Accuracy stops being a vibe and becomes a priced, guaranteed,
-auditable product.
+outcome, audit record) covers all three, and the endgame (billing-native accuracy SLAs
+with automatic credit refunds) requires all three. Accuracy becomes a priced,
+guaranteed, auditable product.

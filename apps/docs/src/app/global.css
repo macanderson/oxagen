@@ -22,6 +22,155 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
+ * Docs diagrams (<Mermaid>, src/components/mdx/mermaid.tsx).
+ *
+ * Drawn to match the diagrams on stella.oxagen.sh: line art, not panels.
+ * Boxes are outlines at one hairline weight with a 6px radius, wires are the
+ * same grey with open chevrons, labels are monospace, and gold marks only the
+ * node a diagram is about (`:::accent` in the chart). Mermaid injects its own
+ * id-scoped <style>, so each rule here needs !important to win.
+ *
+ * Contrast, measured against the Fumadocs ground (#f5f5f5 / #121212):
+ *   rule   --ox-dim-ink    3.3:1 light, 5.2:1 dark (graphics need 3:1)
+ *   accent --ox-gold-deep  5.2:1 light; --ox-gold 7.4:1 dark
+ *   sub    --ox-muted-ink  5.2:1 light; --ox-muted 6.3:1 dark
+ * ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --ox-dg-rule: var(--ox-dim-ink);
+  --ox-dg-accent: var(--ox-gold-deep);
+  --ox-dg-label: var(--color-fd-foreground);
+  --ox-dg-sub: var(--ox-muted-ink);
+  --ox-dg-ground: var(--color-fd-background);
+}
+.dark {
+  --ox-dg-accent: var(--ox-gold);
+  --ox-dg-sub: var(--ox-muted);
+}
+
+.ox-mermaid svg {
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+}
+.ox-mermaid p {
+  margin: 0 !important;
+}
+
+/* Boxes: flowchart nodes and cylinders, state boxes, sequence participants,
+   notes, and the alt/loop frame label tab. */
+.ox-mermaid .node .label-container,
+.ox-mermaid .node rect.basic,
+.ox-mermaid .node polygon,
+.ox-mermaid .node circle:not(.state-start),
+.ox-mermaid rect.actor,
+.ox-mermaid .note,
+.ox-mermaid .labelBox {
+  fill: none !important;
+  stroke: var(--ox-dg-rule) !important;
+  stroke-width: 1px !important;
+}
+.ox-mermaid .node rect.label-container,
+.ox-mermaid rect.actor,
+.ox-mermaid rect.note {
+  rx: 6px;
+  ry: 6px;
+}
+/* The frame label tab sits over the frame line; paint it the page ground so
+   the tab reads as a notch, not as a crossed-out box. */
+.ox-mermaid .labelBox {
+  fill: var(--ox-dg-ground) !important;
+}
+
+.ox-mermaid .node.accent .label-container,
+.ox-mermaid .node.accent rect.basic,
+.ox-mermaid .node.accent polygon {
+  stroke: var(--ox-dg-accent) !important;
+  stroke-width: 1.25px !important;
+}
+
+/* Labels. Node and participant names are the label; everything on a wire or a
+   frame is secondary. */
+.ox-mermaid .nodeLabel,
+.ox-mermaid .node .label,
+.ox-mermaid text.actor,
+.ox-mermaid text.actor > tspan,
+.ox-mermaid .messageText,
+.ox-mermaid .noteText,
+.ox-mermaid .noteText > tspan {
+  fill: var(--ox-dg-label) !important;
+  color: var(--ox-dg-label) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 500;
+}
+.ox-mermaid .messageText,
+.ox-mermaid .noteText,
+.ox-mermaid .noteText > tspan {
+  font-weight: 400;
+}
+.ox-mermaid .edgeLabel,
+.ox-mermaid .edgeLabel p,
+.ox-mermaid .loopText,
+.ox-mermaid .loopText > tspan,
+.ox-mermaid .labelText,
+.ox-mermaid .labelText > tspan {
+  fill: var(--ox-dg-sub) !important;
+  color: var(--ox-dg-sub) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+}
+/* No chip behind a wire label: only the page ground, so the wire stops short
+   of the words instead of striking through them. */
+.ox-mermaid .edgeLabel,
+.ox-mermaid .edgeLabel p,
+.ox-mermaid .edgeLabel span,
+.ox-mermaid .labelBkg,
+.ox-mermaid .edgeLabel rect {
+  background-color: var(--ox-dg-ground) !important;
+  fill: var(--ox-dg-ground) !important;
+}
+
+/* Wires. Solid carries something; dashed (a reply, a lifeline, a frame) is an
+   edge that is not a delivery. */
+.ox-mermaid .flowchart-link,
+.ox-mermaid .transition,
+.ox-mermaid .messageLine0,
+.ox-mermaid .messageLine1,
+.ox-mermaid .actor-line,
+.ox-mermaid .loopLine {
+  stroke: var(--ox-dg-rule) !important;
+  stroke-width: 1px !important;
+  fill: none !important;
+}
+.ox-mermaid .messageLine1,
+.ox-mermaid .actor-line,
+.ox-mermaid .loopLine {
+  stroke-dasharray: 3 4 !important;
+}
+.ox-mermaid marker path {
+  fill: none !important;
+  stroke: var(--ox-dg-rule) !important;
+  stroke-width: 1.2px !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: none !important;
+}
+
+/* State diagrams: the start dot and the end mark are the only filled marks.
+   Mermaid draws the end mark as two sketched paths (ring, then dot) in a node
+   whose id ends in `root_end`, not as circles. */
+.ox-mermaid .state-start {
+  fill: var(--ox-dg-label) !important;
+  stroke: var(--ox-dg-label) !important;
+}
+.ox-mermaid .node[id*="root_end"] path {
+  fill: none !important;
+  stroke: var(--ox-dg-label) !important;
+  stroke-width: 1px !important;
+}
+.ox-mermaid .node[id*="root_end"] .outer-path path:last-child {
+  fill: var(--ox-dg-label) !important;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
  * Marketing landing page (the (home) route only).
  *
  * Pure-CSS animation layer for the docs landing page. Everything is namespaced

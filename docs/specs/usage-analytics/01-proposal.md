@@ -21,13 +21,13 @@ items."* Usage dashboards are the **cost-attribution surface** of that loop:
   or ground?* → **yes, meter + attribute**.)
 - **Advances vendor-neutral fleet lineage:** slicing by model **provider** (anthropic / openai
   / google / bfl / xai …) makes BYOK cost visible per vendor — reinforcing the vendor-neutral
-  design constraint rather than hiding spend behind one provider.
+  design constraint.
 - **Advances resale:** the same aggregation that powers these dashboards
   already drives usage attribution. A clean per-user /
   per-workspace / per-capability view is the customer-facing twin of the rebill math.
 
-This is **not** a new data pipeline; it is a UI + aggregation-contract layer on top of the
-existing `invoke()` metering chokepoint. Routine surfacing of already-metered data reads as
+This is a UI + aggregation-contract layer on top of the existing `invoke()` metering
+chokepoint; it adds no data pipeline. Routine surfacing of already-metered data reads as
 *advances* to the Vision Gate, not *drifts*.
 
 ## What we deliver — three surfaces, one aggregation spine

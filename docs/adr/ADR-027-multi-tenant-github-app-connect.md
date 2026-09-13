@@ -36,7 +36,7 @@ webhook derived affected connections by scanning that JSONB.
 
 2. **Installation registry.** A platform-scoped `ingestion.github_installations`
    table (UNIQUE on `installation_id`) is the source of truth for installation
-   identity + lifecycle. It is deliberately **not** tenant-scoped — like
+   identity + lifecycle. It is **not** tenant-scoped — like
    `ingestion.connector_schemas` it is a shared/system catalog (no
    `org_id`/`workspace_id`, no RLS, `oxagen_app` grants only). The App webhook
    maintains it (created/unsuspend → reactivate; suspend/deleted → record +

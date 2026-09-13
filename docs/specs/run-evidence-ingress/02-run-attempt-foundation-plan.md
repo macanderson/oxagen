@@ -32,7 +32,7 @@
 | 1A | Tasks 1–5 plus Task 6 compatibility work, excluding the contract migration | PR 0B for shared digest/contract primitives | Expand-only schema, dual V1/V2 readers and workers, fenced attempts, immutable grant issuance, authorization snapshots, and live denies exist while V1 work can still drain |
 | 1B | Task 6 drain assertion, code-mode cutover, and contract migration | PR 1A + PR 2B | Zero nonterminal V1 code-mode rows is proven, new V1 code-mode admission is impossible, and V2 claims may be enabled without stranding finalization |
 
-PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot enable V2 execution until finalization consumption exists. Unrelated explicitly non-evidence V1 surfaces retain their centralized legacy parser and claim path until a later compatibility cleanup.
+PR 1A must deploy before any drain. PR 1B lands after PR 2B: it cannot enable V2 execution until finalization consumption exists. Unrelated explicitly non-evidence V1 surfaces retain their centralized legacy parser and claim path until a later compatibility cleanup.
 
 ---
 
@@ -246,4 +246,4 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 - [ ] Every attempt seal creates one immutable finalization grant and obligation in the seal transaction.
 - [ ] The application database role cannot update or delete evidence-bearing foundation rows.
 - [ ] Every governed operation persists an authorization decision and checks the pinned ceiling plus current status/deny generation.
-- [ ] New V1 governed code-mode admission is impossible after PR 1B; queued V1 work was drained before the contract guard, any retained unrelated V1 surface is explicitly non-evidence, and historical V1 rows remain honestly labeled/readable.
+- [ ] New V1 governed code-mode admission is impossible after PR 1B; queued V1 work was drained before the contract guard, any retained unrelated V1 surface is explicitly non-evidence, and historical V1 rows remain labeled and readable.

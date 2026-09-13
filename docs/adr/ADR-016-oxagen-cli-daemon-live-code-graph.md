@@ -17,16 +17,15 @@ by *connectors* (GitHub, Linear, …) on a poll/webhook cadence — minutes-to-h
 and blind to in-flight, uncommitted work. When a developer (or a coding agent like Claude
 Code) edits files locally, nothing observes those edits until they are committed, pushed,
 and re-ingested. So if you ask the Oxagen CLI "what is the blast radius of this change?"
-mid-edit, it answers from a stale picture and is, by construction, wrong.
+mid-edit, it answers from a stale picture and is wrong.
 
-The end goal is bigger than a query: **we want to run Oxagen's product-engineering agents
-from the `oxagen` CLI instead of from inside Claude Code.** For that, the CLI must hold a
+The end goal is to **run Oxagen's product-engineering agents from the `oxagen` CLI
+instead of from inside Claude Code.** For that, the CLI must hold a
 continuously-current model of the working tree — every edit, every tool call, every session
 boundary — and be able to reason over it (blast radius, impacted tests, ownership) and to
 sync that model to the cloud so the rest of the platform shares it.
 
-There is meaningful prior art already in the tree, all of which this ADR formalizes and
-absorbs rather than replaces:
+This ADR formalizes and absorbs the prior art already in the tree:
 
 - **Edit telemetry exists but is fire-and-forget and CC-specific.** `.claude/settings.json`
   (PostToolUse / Stop hooks) invokes `tools/scripts/claude-telemetry-logger.ts`, which
@@ -41,11 +40,11 @@ absorbs rather than replaces:
 - **The capability kernel** (`packages/oxagen/src/kernel.ts` `invoke()`, `@oxagen/handlers/register`,
   `bootstrapEntitlementRuntime()` from `@oxagen/plugins`, `runInTenantScope()` from
   `@oxagen/tenancy`) is the one legal path to call cloud capabilities with metering + IAM.
-- **There is no code-structure graph.** A thorough search found `agent.code.execute`
+- **There is no code-structure graph.** A search found `agent.code.execute`
   (sandbox *execution*) and `workflow.*` lineage, but **no** `code.structure.*`,
   `dependency.*`, `lineage.*`, or "typed code graph" implementation. CLAUDE.md's "query the
-  typed code graph before changing code" is aspirational. **The blast-radius ontology must
-  be designed fresh — this ADR does so.**
+  typed code graph before changing code" is aspirational. **This ADR designs the
+  blast-radius ontology.**
 
 The four-store law (CLAUDE.md "Infrastructure boundaries") is binding: **Neo4j = graph**,
 **ClickHouse = append-only events**, **Postgres = transactional state**, **blob = binaries**.
@@ -189,7 +188,7 @@ cursor (never lose your place), Neo4j is the retryable index, ClickHouse is obse
   connectivity returns.
 - **Batched + cursor-tracked.** Edit events accumulate into a WAL; a debounced flusher pushes
   graph deltas (upsert nodes/edges) and event batches to the cloud, advancing the Postgres
-  cursor only after Neo4j + ClickHouse writes ack — exactly ADR-012's recovery guarantee.
+  cursor only after Neo4j + ClickHouse writes ack — ADR-012's recovery guarantee.
   Stale cloud nodes are possible (retryable); a lost cursor is not.
 - **Scoped + authorized.** Sync targets the org+workspace bound in the CLI config; every push
   is an `invoke()` so IAM/entitlement gates apply. A workspace without the code-graph
@@ -208,7 +207,7 @@ cursor (never lose your place), Neo4j is the retryable index, ClickHouse is obse
   structure (high-churn, machine-derived) with curated product entities, pollutes semantic
   retrieval, and couples two very different lifecycles. The user chose a separate ontology.
 - **TCP/HTTP local server (like apps/api).** Opens a port and an auth surface for what is a
-  single-user, single-host concern. Unix socket + OS file permissions is strictly safer and
+  single-user, single-host concern. Unix socket + OS file permissions is safer and
   simpler. Rejected.
 - **Claude-Code-only hooks, no abstraction.** Faster now, but the stated goal is to run *our*
   agents and others off this. A one-envelope protocol with adapters costs little and avoids a

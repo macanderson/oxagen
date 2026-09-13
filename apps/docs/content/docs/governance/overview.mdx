@@ -32,18 +32,18 @@ Every capability call — from the app, the REST API, the MCP server, or an agen
 <Mermaid
   chart={`
 flowchart TD
-  A["invoke(capability, input)"] --> S{"Exposed on this surface?"}
+  A["invoke(capability, input)"] --> S{{"Exposed on this surface?"}}
   S -- no --> SD["surface_denied"]
-  S -- yes --> V{"Input matches contract?"}
+  S -- yes --> V{{"Input matches contract?"}}
   V -- no --> VI["invalid_input"]
-  V -- yes --> I{"IAM decision"}
+  V -- yes --> I{{"IAM decision"}}:::accent
   I -- deny --> D["authz_denied"]
   I -- "check errored" --> D
   I -- pending_approval --> P["Access request recorded,<br/>call refused"]
-  I -- allow --> G{"Credit, budget, entitlement<br/>and decision-rule gates"}
+  I -- allow --> G{{"Credit, budget, entitlement<br/>and decision-rule gates"}}
   G -- refused --> R["insufficient_credits,<br/>budget_exceeded, ..."]
   G -- pass --> H["Handler runs"]
-  H --> O{"Output matches contract?"}
+  H --> O{{"Output matches contract?"}}
   O -- no --> IO["invalid_output"]
   O -- yes --> AU["Security event: allow"]
   AU --> M["Governed action metered"]
