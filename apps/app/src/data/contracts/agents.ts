@@ -47,10 +47,15 @@ export const AgentRow = z.object({
   beltMode: z.enum(["full", "searchable"]),
   runs30d: Count,
   spend30d: Money,
-  proven30d: Money,
-  productiveRatio: Ratio,
+  // Null means not recorded: `listAgents`/`getAgent` are wired at M0, before
+  // the stores these fields need. Never a zero or empty stand-in.
+  /** Proven spend over 30 days. Null until the witness flip is recorded (G7). */
+  proven30d: Money.nullable(),
+  /** Proven over total spend. Null until G7. */
+  productiveRatio: Ratio.nullable(),
   openIncidents: Count,
-  mandateIds: z.array(PublicId),
+  /** The agent's mandates. Null until the mandate store lands (G1); empty means none granted. */
+  mandateIds: z.array(PublicId).nullable(),
   modelTier: ModelTier,
   avatar: Avatar,
 });

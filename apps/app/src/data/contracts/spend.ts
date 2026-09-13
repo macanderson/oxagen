@@ -16,11 +16,16 @@ export const SpendSummary = z.object({
   /** `YYYY-MM`. */
   period: z.string().regex(/^\d{4}-\d{2}$/),
   total: Money,
-  proven: Money,
-  /** A human verified the outcome without a witness. */
-  accepted: Money,
-  unproven: Money,
-  productiveRatio: Ratio,
+  // Null means not recorded: the proven/accepted/unproven split needs the
+  // witness flip (G7, M6). A live adapter never sends zeros in its place.
+  /** Spend a witness proved. Null until G7. */
+  proven: Money.nullable(),
+  /** A human verified the outcome without a witness. Null until G7. */
+  accepted: Money.nullable(),
+  /** Null until G7. */
+  unproven: Money.nullable(),
+  /** Proven over total spend. Null until G7. */
+  productiveRatio: Ratio.nullable(),
   cacheHitRate: Ratio,
   runs: Count,
   governedActions: Count,
@@ -32,8 +37,11 @@ export const SpendByOperator = z.object({
   agents: Count,
   runs: Count,
   spend: Money,
-  proven: Money,
-  productiveRatio: Ratio,
+  // `byOperator` is wired at M0; proven spend waits on G7 (null = not recorded).
+  /** Null until G7. */
+  proven: Money.nullable(),
+  /** Null until G7. */
+  productiveRatio: Ratio.nullable(),
   budget: Money,
   budgetUsedRatio: Ratio,
 });

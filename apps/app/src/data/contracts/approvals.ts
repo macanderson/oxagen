@@ -55,9 +55,17 @@ export const ApprovalItem = z.object({
   amount: Money.nullable(),
   counterparty: z.string(),
   mandateId: PublicId.nullable(),
-  policyVersionId: PublicId,
+  // Null means not recorded, never a guessed value: the live adapter wires
+  // `approvals.pending` at M0, before the stores below exist (plan §3.1).
+  /** The policy version that decided the call. Null until the policy store lands (G2). */
+  policyVersionId: PublicId.nullable(),
   inputDigest: Digest,
-  tainted: z.boolean(),
+  /**
+   * Whether untrusted content reached the call's arguments. Null until taint
+   * tracking is recorded (§3.1 "rules, taint, mandate ❌"): `false` would be a
+   * trust badge stronger than anything the gateway wrote.
+   */
+  tainted: z.boolean().nullable(),
   tier: EnforcementTier,
   requestedAt: Instant,
   expiresAt: Instant,
@@ -67,16 +75,20 @@ export const ApprovalItem = z.object({
     /** People excluded from resolving this one, with the rule that excludes them. */
     excluded: z.array(z.object({ personId: PublicId, rule: z.string() })),
   }),
-  rules: z.array(
-    z.object({ id: z.string(), verdict: RuleVerdict, text: z.string() }),
-  ),
-  taintSources: z.array(
-    z.object({
-      frameSeq: z.number().int().nonnegative(),
-      tool: ToolVersionRef,
-      path: z.string(),
-      note: z.string(),
-    }),
-  ),
+  /** The rules that contributed to the decision. Null until rule evaluations are recorded (G2). */
+  rules: z
+    .array(z.object({ id: z.string(), verdict: RuleVerdict, text: z.string() }))
+    .nullable(),
+  /** Where the taint came from. Null when taint is not recorded (see `tainted`); empty means recorded and clean. */
+  taintSources: z
+    .array(
+      z.object({
+        frameSeq: z.number().int().nonnegative(),
+        tool: ToolVersionRef,
+        path: z.string(),
+        note: z.string(),
+      }),
+    )
+    .nullable(),
 });
 export type ApprovalItem = z.infer<typeof ApprovalItem>;

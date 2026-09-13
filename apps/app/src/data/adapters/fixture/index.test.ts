@@ -22,6 +22,16 @@ const ORG: Scope = {
   orgId: FIXTURE_TENANT.orgId,
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
+/** A tenant the fixture does not hold. */
+const FOREIGN_ORG: Scope = {
+  orgId: "7f1c2a9e-0000-4000-8000-000000000000",
+  workspaceId: FIXTURE_TENANT.workspaces["core-platform"],
+};
+/** The fixture organization with a workspace id it does not have. */
+const UNKNOWN_WS: Scope = {
+  orgId: FIXTURE_TENANT.orgId,
+  workspaceId: "913d6df1-0000-4000-8000-000000000000",
+};
 const NOW = Date.parse("2026-09-11T16:00:00Z");
 
 /** Arguments after the scope, per method, that name real seeded rows. */
@@ -45,6 +55,11 @@ const ARGS: Record<string, unknown[]> = {
   "spend.findingEvidence": ["fnd_01K5RTGH"],
   "spend.findingFix": ["fnd_01K5RT6C"],
   "audit.getReceipt": ["rcp_01K4X8M2E"],
+};
+
+/** Methods whose seeded row lives outside core-platform, with the scope that sees it. */
+const SCOPE: Record<string, Scope> = {
+  "agents.getMandate": FINOPS,
 };
 
 const list = <T extends z.ZodType>(schema: T) => z.array(schema);
@@ -131,7 +146,12 @@ type Invoke = (
   method: string,
   scope?: Scope,
 ) => Promise<Read<unknown>>;
-const invoke: Invoke = (source, port, method, scope = CORE) => {
+const invoke: Invoke = (
+  source,
+  port,
+  method,
+  scope = SCOPE[`${port}.${method}`] ?? CORE,
+) => {
   const target = source[port] as unknown as Record<
     string,
     (...args: unknown[]) => Promise<Read<unknown>>
@@ -253,7 +273,7 @@ describe("fixture source · mc_state", () => {
     expect(ok(await empty.runs.getRun(CORE, "run_01K5RS7M2E8FJ3QW")).id).toBe(
       "run_01K5RS7M2E8FJ3QW",
     );
-    const mandate = ok(await empty.agents.getMandate(CORE, "mnd_7K2ETQ4"));
+    const mandate = ok(await empty.agents.getMandate(FINOPS, "mnd_7K2ETQ4"));
     expect(mandate.ledger).toEqual([]);
     expect(mandate.mandate.usage.remaining).toEqual(
       mandate.mandate.limits.perPeriod,
@@ -433,14 +453,96 @@ describe("fixture source · reads", () => {
     expect(
       ok(
         await source().approvals.pending(CORE, {
+          runId: "run_01K5RS7M2E8FJ3QW",
+        }),
+      ).map((a) => a.id),
+    ).toEqual(["apr_01K5RS3K7"]);
+  });
+
+  it("keeps the workspace filter when filtering approvals by run (negative)", async () => {
+    // run_01K5RN8F3J2GHY6T is a finops run; a core-platform viewer must not see its approval.
+    expect(
+      ok(
+        await source().approvals.pending(CORE, {
+          runId: "run_01K5RN8F3J2GHY6T",
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      ok(
+        await source().approvals.pending(FINOPS, {
           runId: "run_01K5RN8F3J2GHY6T",
         }),
       ).map((a) => a.id),
     ).toEqual(["apr_01K5RN9T4"]);
   });
 
+  it("shows an unknown workspace nothing (negative)", async () => {
+    const s = source();
+    expect(ok(await s.approvals.pending(UNKNOWN_WS))).toEqual([]);
+    expect(
+      ok(
+        await s.approvals.pending(UNKNOWN_WS, {
+          runId: "run_01K5RS7M2E8FJ3QW",
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      ok(await s.runs.listRuns(UNKNOWN_WS, { filter: "all" })).rows,
+    ).toEqual([]);
+    expect(ok(await s.agents.listAgents(UNKNOWN_WS))).toEqual([]);
+    expect(ok(await s.tools.autoApprovalRules(UNKNOWN_WS))).toEqual([]);
+    expect(ok(await s.tools.mandateLedger(UNKNOWN_WS))).toEqual([]);
+    expect(
+      await s.runs.getRun(UNKNOWN_WS, "run_01K5RS7M2E8FJ3QW"),
+    ).toMatchObject({ code: "run_not_found", status: 404 });
+    expect(await s.agents.getMandate(UNKNOWN_WS, "mnd_7K2ETQ4")).toMatchObject({
+      code: "mandate_not_found",
+      status: 404,
+    });
+  });
+
+  it("shows another organization nothing (negative)", async () => {
+    const s = source();
+    expect(await s.approvals.pending(FOREIGN_ORG)).toEqual({
+      ok: false,
+      reason: "error",
+      code: "organization_not_found",
+      status: 404,
+    });
+    expect(
+      await s.approvals.pending(
+        { ...FOREIGN_ORG, workspaceId: ORG_ONLY_WORKSPACE_ID },
+        { runId: "run_01K5RS7M2E8FJ3QW" },
+      ),
+    ).toMatchObject({ ok: false, code: "organization_not_found" });
+  });
+
+  it.each(methods)(
+    "$name refuses a scope from another organization (negative)",
+    async ({ port, method }) => {
+      for (const cookie of [undefined, "empty,shell:empty"]) {
+        expect(
+          await invoke(source(cookie), port, method, FOREIGN_ORG),
+        ).toMatchObject({ ok: false, code: "organization_not_found" });
+      }
+    },
+  );
+
+  it("shows a mandate only to the workspace of the agent that holds it (negative)", async () => {
+    expect(await source().agents.getMandate(CORE, "mnd_7K2ETQ4")).toMatchObject(
+      { code: "mandate_not_found", status: 404 },
+    );
+    expect(
+      ok(await source().tools.mandateLedger(CORE)).map((d) => d.mandate.id),
+    ).not.toContain("mnd_7K2ETQ4");
+    expect(
+      ok(await source().tools.mandateLedger(ORG)).map((d) => d.mandate.id),
+    ).toContain("mnd_7K2ETQ4");
+  });
+
   it("reads a mandate by its id, never the first mandate (W4)", async () => {
-    const detail = ok(await source().agents.getMandate(CORE, "mnd_7K2ETQ4"));
+    const detail = ok(await source().agents.getMandate(FINOPS, "mnd_7K2ETQ4"));
     expect(detail.mandate.id).toBe("mnd_7K2ETQ4");
     expect(detail.ledger.map((e) => e.kind)).toEqual([
       "reserve",
@@ -448,7 +550,7 @@ describe("fixture source · reads", () => {
       "settle",
       "release",
     ]);
-    expect(await source().agents.getMandate(CORE, "mnd_nope")).toMatchObject({
+    expect(await source().agents.getMandate(FINOPS, "mnd_nope")).toMatchObject({
       code: "mandate_not_found",
     });
   });

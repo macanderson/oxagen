@@ -75,8 +75,12 @@ export type RunSummary = z.infer<typeof RunSummary>;
 export const RunDetail = RunRow.extend({
   model: z.string(),
   cacheHitRate: Ratio,
-  provenSpend: Money,
-  productiveRatio: Ratio,
+  // Null means not recorded: `getRun` is wired at M0, but proven spend needs
+  // the witness flip and cost.run_totals (G7, M6). Never a zero stand-in.
+  /** Spend on turns a witness proved. Null until G7. */
+  provenSpend: Money.nullable(),
+  /** Proven over total spend. Null until G7. */
+  productiveRatio: Ratio.nullable(),
   summary: RunSummary.nullable(),
   /** What the run touched, as short references (issues, branches, files). */
   touched: z.array(z.string()),

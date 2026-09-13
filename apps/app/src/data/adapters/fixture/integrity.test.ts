@@ -49,7 +49,7 @@ describe("fixture referential integrity", () => {
 
   it("every agent's mandate exists and names that agent", () => {
     for (const a of seed.agents) {
-      for (const id of a.mandateIds) {
+      for (const id of a.mandateIds ?? []) {
         expect(seed.mandates.find((m) => m.id === id)?.agentKey).toBe(a.key);
       }
     }

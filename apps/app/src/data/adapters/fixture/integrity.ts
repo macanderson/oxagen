@@ -128,7 +128,8 @@ export function findDanglingReferences(seed: Seed): DanglingReference[] {
     const at = `agents[${a.key}]`;
     expect(`${at}.operatorId`, "people", a.operatorId);
     expect(`${at}.workspaceSlug`, "workspaces", a.workspaceSlug);
-    for (const id of a.mandateIds) expect(`${at}.mandateIds`, "mandates", id);
+    for (const id of a.mandateIds ?? [])
+      expect(`${at}.mandateIds`, "mandates", id);
     for (const r of a.roles) expect(`${at}.roles`, "roles", r.role);
   }
   for (const belt of seed.toolbelts) {

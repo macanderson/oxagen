@@ -15,11 +15,11 @@ import type {
   SpendSummary,
   WasteReport,
 } from "@/data/contracts";
-import { fixtureWorkspaceSlug } from "@/data/fixture-tenant";
+import { FIXTURE_TENANT, fixtureWorkspaceSlug } from "@/data/fixture-tenant";
 import { type Read, denied, readError, readOk } from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
 import type { DataSource, MethodName, PortName } from "@/data/ports";
-import type { Scope } from "@/data/scope";
+import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
 import { seed as defaultSeed } from "./seed";
 import type { Seed } from "./seed-schema";
 import {
@@ -101,10 +101,15 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
     }
   }
 
-  /** Workspace pages see their workspace; organization-level scopes see every workspace. */
+  /**
+   * Workspace pages see their workspace; the organization-only scope sees every
+   * workspace. Fails closed: another organization, or a workspace id the
+   * fixture tenant does not have, sees nothing.
+   */
   const inScope = (scope: Scope, workspaceSlug: string) => {
-    const slug = fixtureWorkspaceSlug(scope.workspaceId);
-    return slug === null || slug === workspaceSlug;
+    if (scope.orgId !== FIXTURE_TENANT.orgId) return false;
+    if (scope.workspaceId === ORG_ONLY_WORKSPACE_ID) return true;
+    return fixtureWorkspaceSlug(scope.workspaceId) === workspaceSlug;
   };
   const found = <T>(value: T | undefined, what: string): Read<T> =>
     value === undefined ? notFound(what) : readOk(value);
@@ -129,7 +134,7 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
     };
   };
 
-  return {
+  return fenceOrganization({
     runs: {
       listRuns: (scope, q) =>
         read(
@@ -218,10 +223,11 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           () =>
             readOk(
               seed.approvals
-                .filter((a) =>
-                  q?.runId
-                    ? a.runId === q.runId
-                    : inScope(scope, a.workspaceSlug),
+                // The run filter narrows the scope; it never replaces it.
+                .filter(
+                  (a) =>
+                    inScope(scope, a.workspaceSlug) &&
+                    (!q?.runId || a.runId === q.runId),
                 )
                 .map(rebase),
             ),
@@ -311,8 +317,11 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
               : notFound("agent"),
           () => [],
         ),
-      getMandate: (_scope, mandateId) => {
-        const mandate = seed.mandates.find((m) => m.id === mandateId);
+      getMandate: (scope, mandateId) => {
+        // A mandate is as visible as the agent that holds it.
+        const mandate = seed.mandates.find(
+          (m) => m.id === mandateId && agentIn(scope, m.agentKey),
+        );
         const ledger = seed.mandateLedger.filter(
           (e) => e.mandateId === mandateId,
         );
@@ -389,18 +398,20 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           () => readOk(seed.observedSchemas),
           () => [],
         ),
-      mandateLedger: () =>
+      mandateLedger: (scope) =>
         read(
           "tools",
           "mandateLedger",
           () =>
             readOk(
-              seed.mandates.map((mandate) => ({
-                mandate,
-                ledger: seed.mandateLedger.filter(
-                  (e) => e.mandateId === mandate.id,
-                ),
-              })),
+              seed.mandates
+                .filter((mandate) => agentIn(scope, mandate.agentKey))
+                .map((mandate) => ({
+                  mandate,
+                  ledger: seed.mandateLedger.filter(
+                    (e) => e.mandateId === mandate.id,
+                  ),
+                })),
             ),
           () => [],
         ),
@@ -818,7 +829,31 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           }),
         ),
     },
-  };
+  });
+}
+
+/**
+ * Every read, org-level ones included, refuses a scope from another
+ * organization before anything else runs: the fixture holds one tenant, and a
+ * foreign org id sees none of it.
+ */
+function fenceOrganization(source: DataSource): DataSource {
+  const fenced: Record<string, Record<string, unknown>> = {};
+  for (const [port, methods] of Object.entries(source)) {
+    const entries = Object.entries(
+      methods as Record<string, (...args: unknown[]) => Promise<Read<unknown>>>,
+    );
+    fenced[port] = Object.fromEntries(
+      entries.map(([name, fn]) => [
+        name,
+        (scope: Scope, ...args: unknown[]) =>
+          scope.orgId === FIXTURE_TENANT.orgId
+            ? fn(scope, ...args)
+            : Promise.resolve(notFound("organization")),
+      ]),
+    );
+  }
+  return fenced as unknown as DataSource;
 }
 
 export const fixtureSource: DataSource = createFixtureSource({
