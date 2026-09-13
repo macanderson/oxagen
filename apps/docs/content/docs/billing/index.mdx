@@ -8,7 +8,7 @@ Everything an agent, API call, or MCP tool does in Oxagen is metered at the `inv
 <Mermaid
   chart="
 flowchart LR
-  A[Agent / API / MCP call] --> B[invoke boundary]
+  A[Agent / API / MCP call] --> B[invoke boundary]:::accent
   B --> C[(ClickHouse usage event)]
   B --> D[Credits debited]
   C --> E[Usage dashboard]

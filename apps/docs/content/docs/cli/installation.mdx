@@ -17,14 +17,14 @@ The script works out your platform (macOS or Linux, arm64 or x64), downloads the
 
 <Mermaid chart={`
 flowchart TD
-  P[Detect OS and arch] -->|darwin or linux, arm64 or x64| D{Binary published?}
+  P[Detect OS and arch] -->|darwin or linux, arm64 or x64| D{{Binary published?}}
   P -->|anything else| X[Exit: unsupported]
-  D -->|yes| S{.sha256 present and matches?}
+  D -->|yes| S{{.sha256 present and matches?}}
   S -->|no| R[Exit: refuse to install]
-  S -->|yes| I[install -m 755 to OXAGEN_INSTALL_DIR]
-  I --> Q{Dir on PATH?}
+  S -->|yes| I[install -m 755 to OXAGEN_INSTALL_DIR]:::accent
+  I --> Q{{Dir on PATH?}}
   Q -->|no| H[Print the export PATH line]
-  D -->|no| N{Node.js 20+ and npm?}
+  D -->|no| N{{Node.js 20+ and npm?}}
   N -->|yes| G[npm install -g @oxagen/cli]
   N -->|no| E[Exit: install Node first]
 `} />

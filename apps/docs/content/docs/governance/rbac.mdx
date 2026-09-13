@@ -33,12 +33,12 @@ When a principal invokes a capability, the IAM resolver (`packages/oxagen/src/ia
 <Mermaid
   chart={`
 flowchart TD
-  T{"Enterprise org?"} -- "no, human or API key" --> TG["ALLOW<br/>recorded as tier_gate"]
-  T -- "yes, or any agent principal" --> R7{"Role grants for<br/>this capability?"}
+  T{{"Enterprise org?"}} -- "no, human or API key" --> TG["ALLOW<br/>recorded as tier_gate"]
+  T -- "yes, or any agent principal" --> R7{{"Role grants for<br/>this capability?"}}:::accent
   R7 -- "any deny" --> D7["DENY"]
   R7 -- "else any require approval" --> P7["PENDING APPROVAL"]
   R7 -- "else allow" --> A7["ALLOW"]
-  R7 -- none --> R75{"System org Owner role?"}
+  R7 -- none --> R75{{"System org Owner role?"}}
   R75 -- yes --> A75["ALLOW"]
   R75 -- no --> R8["Contract defaultEffect"]
 `}
@@ -76,9 +76,9 @@ Every agent configuration is also a principal with its own grant matrix. An agen
 <Mermaid
   chart={`
 flowchart LR
-  C["Agent calls a capability"] --> AG["Resolve the agent principal<br/>(rules 1–8)"]
-  C --> HU["Resolve the initiating human<br/>(rules 1–8)"]
-  AG --> M{"Merge: deny beats<br/>pending approval beats allow"}
+  C["Agent calls a capability"] --> AG["Resolve the agent principal"]
+  C --> HU["Resolve the initiating human"]
+  AG --> M{{"Merge: deny beats<br/>pending approval beats allow"}}:::accent
   HU --> M
   M --> OUT["Effective outcome"]
 `}
