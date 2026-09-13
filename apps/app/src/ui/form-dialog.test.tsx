@@ -75,13 +75,11 @@ describe("<FormDialog>", () => {
 
   it("puts a field error under its field, keeps the typed value, and stays open", async () => {
     const user = userEvent.setup();
-    const action = vi
-      .fn<FormDialogAction>()
-      .mockResolvedValue({
-        ok: false,
-        field: "reason",
-        code: "deny_requires_reason",
-      });
+    const action = vi.fn<FormDialogAction>().mockResolvedValue({
+      ok: false,
+      field: "reason",
+      code: "deny_requires_reason",
+    });
     renderDialog(action, { deny_requires_reason: "Say why you denied it." });
     await open(user);
     await user.type(screen.getByRole("textbox", { name: "Ticket" }), "LIN-9");
@@ -113,9 +111,13 @@ describe("<FormDialog>", () => {
     );
     await open(user);
     await user.click(screen.getByRole("button", { name: "Deny call" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That did not work (approval_expired). Nothing was changed.",
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "That did not finish (approval_expired). Check the audit record before trying again.",
     );
+    // The primitive cannot know whether a governed write committed before the
+    // failure, so the fallback must never promise that nothing changed.
+    expect(alert.textContent).not.toMatch(/nothing (was|has been) changed/i);
   });
 
   it("shows the pending label and disables submit while the action runs", async () => {

@@ -5,8 +5,11 @@
 // dialog, or `{ ok: false, code, field? }`: a `field` puts the message under
 // that <FormField> (aria-invalid + aria-describedby), no field shows it above
 // the form. Error codes resolve through `errorMessages`, already translated by
-// the page, with a generic sentence as the fallback. Typed values survive a
-// failed submit; reopening the dialog starts a fresh form.
+// the page, with a generic sentence as the fallback. The fallback claims no
+// outcome: a write can commit before its output parse or a timeout fails, so
+// only a page that knows the write was rejected before dispatch (validation,
+// denied) may say "nothing was changed", in its own `errorMessages`. Typed
+// values survive a failed submit; reopening the dialog starts a fresh form.
 import { useTranslations } from "next-intl";
 import {
   type ReactNode,

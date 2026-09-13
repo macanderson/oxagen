@@ -71,7 +71,9 @@ describe("<Money>", () => {
     );
     expect(screen.getByTestId("money")).toHaveTextContent("$4.13");
     await user.click(
-      screen.getByRole("button", { name: "How $4.13 was measured" }),
+      screen.getByRole("button", {
+        name: "client_attested: how $4.13 was measured",
+      }),
     );
     const dialog = await screen.findByRole("dialog", {
       name: "How this figure was measured",
@@ -90,12 +92,33 @@ describe("<Money>", () => {
     renderWithIntl(
       <Money variant="large" value={{ micros: "0", currency: "USD" }} />,
     );
-    await user.click(screen.getByRole("button", { name: /was measured/ }));
+    // Label in Name: the visible basis text starts the accessible name.
+    await user.click(
+      screen.getByRole("button", { name: /^basis not recorded: how / }),
+    );
     const dialog = await screen.findByRole("dialog");
     const current = dialog.querySelectorAll("[data-current]");
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent(
       "No basis was recorded for this figure.",
+    );
+  });
+
+  it("starts the trigger's accessible name with the visible basis label", () => {
+    renderWithIntl(
+      <Money
+        variant="large"
+        value={{
+          micros: "2450000000",
+          currency: "USD",
+          basis: "gateway_observed",
+        }}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: /gateway_observed/ });
+    expect(trigger).toHaveTextContent("gateway_observed");
+    expect(trigger).toHaveAccessibleName(
+      "gateway_observed: how $2,450.00 was measured",
     );
   });
 

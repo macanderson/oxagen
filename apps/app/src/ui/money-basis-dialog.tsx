@@ -10,7 +10,7 @@ import { DialogPanel, DialogRoot, DialogTrigger } from "./dialog-shell";
 
 export type MoneyBasisDialogProps = {
   basis: CostBasis | null;
-  /** The figure as displayed, for the trigger's accessible name. */
+  /** The figure as displayed, for the trigger's accessible name (after the basis label). */
   amount: string;
   /** Every recorded micro-unit, formatted. */
   exact: string;
@@ -25,17 +25,20 @@ export function MoneyBasisDialog({
 }: MoneyBasisDialogProps) {
   const t = useTranslations("ui");
   const key = basis ?? "unknown";
+  const basisLabel = t(`basis.${key}.label`);
   return (
     <DialogRoot>
       <DialogTrigger
-        aria-label={t("money.openBasis", { amount })}
+        // WCAG 2.5.3 Label in Name: the accessible name starts with the
+        // visible basis label, so a voice-control user can say what they see.
+        aria-label={t("money.openBasis", { basis: basisLabel, amount })}
         className={cx(
           "inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground",
           "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           basis === null && "border-dashed",
         )}
       >
-        {t(`basis.${key}.label`)}
+        {basisLabel}
         <Info aria-hidden focusable={false} className="size-3" />
       </DialogTrigger>
       <DialogPanel

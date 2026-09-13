@@ -1,7 +1,7 @@
 {
   "ui": {
     "money": {
-      "openBasis": "How {amount} was measured",
+      "openBasis": "{basis}: how {amount} was measured",
       "dialogTitle": "How this figure was measured",
       "dialogDescription": "Every number that is money carries its basis: where the figure came from. It never reads stronger than what was recorded.",
       "exactLabel": "Exact amount",
@@ -333,7 +333,7 @@
     "formDialog": {
       "cancel": "Cancel",
       "pending": "Working…",
-      "error": "That did not work ({code}). Nothing was changed."
+      "error": "That did not finish ({code}). Check the audit record before trying again."
     },
     "avatar": {
       "fallback": "?"
