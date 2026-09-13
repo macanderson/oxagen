@@ -135,7 +135,7 @@ function utcDay(instant: string | Date): string {
 /** micro-units from integer cents, exactly (no float arithmetic). */
 export function centsToMicros(cents: number): string {
   if (!Number.isSafeInteger(cents))
-    throw new RangeError(`cents must be a safe integer, got ${cents}`);
+    throw new RangeError(`cents must be a safe integer, got ${String(cents)}`);
   return (BigInt(cents) * 10_000n).toString();
 }
 

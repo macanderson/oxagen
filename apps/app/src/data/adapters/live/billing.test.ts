@@ -106,10 +106,16 @@ const PAID: InvoiceRow = {
 
 function fakeDeps(over: Partial<BillingLiveDeps> = {}) {
   return {
-    principal: vi.fn<BillingLiveDeps["principal"]>(async () => USER),
-    subscription: vi.fn<BillingLiveDeps["subscription"]>(async () => ACTIVE),
-    planTier: vi.fn<BillingLiveDeps["planTier"]>(async () => "build"),
-    invoiceRows: vi.fn<BillingLiveDeps["invoiceRows"]>(async () => []),
+    principal: vi.fn<BillingLiveDeps["principal"]>(() => Promise.resolve(USER)),
+    subscription: vi.fn<BillingLiveDeps["subscription"]>(() =>
+      Promise.resolve(ACTIVE),
+    ),
+    planTier: vi.fn<BillingLiveDeps["planTier"]>(() =>
+      Promise.resolve("build"),
+    ),
+    invoiceRows: vi.fn<BillingLiveDeps["invoiceRows"]>(() =>
+      Promise.resolve([]),
+    ),
     ...over,
   };
 }
@@ -137,7 +143,9 @@ describe("liveBilling.plan", () => {
 
   it("with no subscription it reads no plan row and is not recorded yet", async () => {
     const deps = fakeDeps({
-      subscription: vi.fn(async () => ({ ...ACTIVE, subscription: null })),
+      subscription: vi.fn(() =>
+        Promise.resolve({ ...ACTIVE, subscription: null }),
+      ),
     });
     await expect(createLiveBilling(deps).plan(SCOPE)).resolves.toEqual({
       ok: false,
@@ -149,7 +157,7 @@ describe("liveBilling.plan", () => {
   });
 
   it("without a session it is denied and never reaches the kernel", async () => {
-    const deps = fakeDeps({ principal: vi.fn(async () => null) });
+    const deps = fakeDeps({ principal: vi.fn(() => Promise.resolve(null)) });
     await expect(createLiveBilling(deps).plan(SCOPE)).resolves.toEqual(DENIED);
     expect(deps.subscription).not.toHaveBeenCalled();
   });
@@ -161,9 +169,11 @@ describe("liveBilling.plan", () => {
     "capability_not_installed",
   ])("a kernel %s is the page's denied state", async (code) => {
     const deps = fakeDeps({
-      subscription: vi.fn(async () => {
-        throw new mocks.CapabilityError("get_subscription", code, "no");
-      }),
+      subscription: vi.fn(() =>
+        Promise.reject(
+          new mocks.CapabilityError("get_subscription", code, "no"),
+        ),
+      ),
     });
     await expect(createLiveBilling(deps).plan(SCOPE)).resolves.toEqual(DENIED);
     expect(deps.planTier).not.toHaveBeenCalled();
@@ -176,13 +186,13 @@ describe("liveBilling.plan", () => {
       "bad",
     );
     const deps = fakeDeps({
-      subscription: vi.fn(async () => Promise.reject(failure)),
+      subscription: vi.fn(() => Promise.reject(failure)),
     });
     await expect(createLiveBilling(deps).plan(SCOPE)).rejects.toBe(failure);
     const down = new Error("connect ECONNREFUSED 127.0.0.1:5433");
     await expect(
       createLiveBilling(
-        fakeDeps({ planTier: vi.fn(async () => Promise.reject(down)) }),
+        fakeDeps({ planTier: vi.fn(() => Promise.reject(down)) }),
       ).plan(SCOPE),
     ).rejects.toBe(down);
   });
@@ -199,7 +209,9 @@ describe("liveBilling.invoices", () => {
   });
 
   it("issued invoices read as not backed on G13 (no run count is recorded)", async () => {
-    const deps = fakeDeps({ invoiceRows: vi.fn(async () => [PAID]) });
+    const deps = fakeDeps({
+      invoiceRows: vi.fn(() => Promise.resolve([PAID])),
+    });
     await expect(createLiveBilling(deps).invoices(SCOPE)).resolves.toEqual({
       ok: false,
       reason: "not_backed",
@@ -210,14 +222,12 @@ describe("liveBilling.invoices", () => {
 
   it("a person get_subscription denies never reaches the invoices table", async () => {
     const deps = fakeDeps({
-      subscription: vi.fn(async () => {
-        throw new mocks.CapabilityError(
-          "get_subscription",
-          "authz_denied",
-          "no",
-        );
-      }),
-      invoiceRows: vi.fn(async () => [PAID]),
+      subscription: vi.fn(() =>
+        Promise.reject(
+          new mocks.CapabilityError("get_subscription", "authz_denied", "no"),
+        ),
+      ),
+      invoiceRows: vi.fn(() => Promise.resolve([PAID])),
     });
     await expect(createLiveBilling(deps).invoices(SCOPE)).resolves.toEqual(
       DENIED,
@@ -226,7 +236,7 @@ describe("liveBilling.invoices", () => {
   });
 
   it("without a session the invoices table is never read", async () => {
-    const deps = fakeDeps({ principal: vi.fn(async () => null) });
+    const deps = fakeDeps({ principal: vi.fn(() => Promise.resolve(null)) });
     await expect(createLiveBilling(deps).invoices(SCOPE)).resolves.toEqual(
       DENIED,
     );
@@ -281,9 +291,9 @@ describe("liveBillingDeps (production I/O)", () => {
   it("subscription invokes get_subscription in the tenant scope and parses the output", async () => {
     mocks.getCapability.mockReturnValue({ name: "get_subscription" });
     let seenScope: unknown;
-    mocks.invoke.mockImplementation(async () => {
+    mocks.invoke.mockImplementation(() => {
       seenScope = getScope();
-      return ACTIVE;
+      return Promise.resolve(ACTIVE);
     });
     await expect(
       liveBillingDeps.subscription({ scope: SCOPE, userId: USER }),
@@ -333,15 +343,15 @@ describe("liveBillingDeps (production I/O)", () => {
         calls.where = cond;
         return tx;
       },
-      limit: async (n: number) => {
+      limit: (n: number) => {
         calls.limit = n;
-        return [{ tier: "scale" }];
+        return Promise.resolve([{ tier: "scale" }]);
       },
     };
     let seenScope: unknown;
-    mocks.withTenantDb.mockImplementation(async (fn) => {
+    mocks.withTenantDb.mockImplementation((fn) => {
       seenScope = getScope();
-      return fn(tx);
+      return Promise.resolve(fn(tx));
     });
     await expect(liveBillingDeps.planTier(SCOPE, "scale-v2")).resolves.toBe(
       "scale",
@@ -354,7 +364,7 @@ describe("liveBillingDeps (production I/O)", () => {
     });
     expect(seenScope).toMatchObject(SCOPE);
 
-    tx.limit = async () => [];
+    tx.limit = () => Promise.resolve([]);
     await expect(liveBillingDeps.planTier(SCOPE, "gone")).resolves.toBeNull();
   });
 
@@ -370,15 +380,15 @@ describe("liveBillingDeps (production I/O)", () => {
         calls.where = cond;
         return tx;
       },
-      orderBy: async (order: unknown) => {
+      orderBy: (order: unknown) => {
         calls.orderBy = order;
-        return [PAID];
+        return Promise.resolve([PAID]);
       },
     };
     let seenScope: unknown;
-    mocks.withTenantDb.mockImplementation(async (fn) => {
+    mocks.withTenantDb.mockImplementation((fn) => {
       seenScope = getScope();
-      return fn(tx);
+      return Promise.resolve(fn(tx));
     });
     await expect(liveBillingDeps.invoiceRows(SCOPE)).resolves.toEqual([PAID]);
     expect(calls).toEqual({
