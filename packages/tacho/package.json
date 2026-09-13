@@ -21,7 +21,8 @@
     "test:coverage": "vitest run --coverage",
     "bundle": "node scripts/bundle.mjs",
     "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
-    "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone"
+    "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone",
+    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/tacho.cjs --name tacho --out dist-bin"
   },
   "dependencies": {
     "canonicalize": "1.0.8",

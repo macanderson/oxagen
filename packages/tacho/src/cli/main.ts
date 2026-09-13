@@ -4,7 +4,8 @@
  * credentials.
  */
 import { Command } from "commander";
-import { startDaemon } from "../collector/daemon";
+import { runHookProcess } from "../claude-code/hook-process";
+import { runDaemonProcess } from "../collector/run";
 import { defaultCliDeps, isNativeBuild } from "./deps";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
@@ -180,16 +181,21 @@ export function buildTachoProgram(): Command {
     .command("daemon")
     .description("Run tachod in the foreground (what the service runs)")
     .action(async () => {
-      const daemon = await startDaemon({ paths: deps.paths });
-      const stop = () => {
-        daemon
-          .stop()
-          .then(() => process.exit(0))
-          .catch(() => process.exit(1));
-      };
-      process.on("SIGTERM", stop);
-      process.on("SIGINT", stop);
-      await new Promise(() => undefined);
+      await runDaemonProcess();
+    });
+
+  // The command hook, for the compiled single binary where there is no
+  // sibling `tacho-hook`. Flags (`--enrollment`, `--harness`) are read from
+  // argv by the hook itself, so commander must let them through untouched.
+  program
+    .command("hook")
+    .description(
+      "Run as the command hook (reads the harness payload on stdin; used by the installed hooks)",
+    )
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async () => {
+      await runHookProcess(process.argv);
     });
 
   return program;

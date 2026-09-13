@@ -4,7 +4,8 @@
  * foreign entry intact (acceptance 1, 18); status and export read what is
  * there; verify drives a fake `claude`.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FetchLike } from "../host/control-client";
@@ -738,7 +739,7 @@ describe("harnesses and reassign", () => {
     expect(fresh.errors[0]).toContain("Not enrolled");
   });
 
-  it("prefers native sibling executables and quotes for cmd.exe on Windows", () => {
+  it("uses the multi-call binary when compiled and quotes for cmd.exe on Windows", () => {
     const native = runtimeCommands(
       undefined,
       {},
@@ -748,10 +749,11 @@ describe("harnesses and reassign", () => {
     );
     expect(native.binDir).toBe("/Applications/Oxagen.app/Contents/MacOS");
     expect(native.hookCommand).toBe(
-      "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+      "/Applications/Oxagen.app/Contents/MacOS/tacho hook",
     );
     expect(native.daemonCommand).toEqual([
-      "/Applications/Oxagen.app/Contents/MacOS/tachod",
+      "/Applications/Oxagen.app/Contents/MacOS/tacho",
+      "daemon",
     ]);
     const win = runtimeCommands(
       undefined,
@@ -760,10 +762,23 @@ describe("harnesses and reassign", () => {
       "win32",
       true,
     );
-    expect(win.hookCommand).toBe('"C:\\Program Files\\Oxagen\\tacho-hook.exe"');
+    expect(win.hookCommand).toBe('"C:\\Program Files\\Oxagen\\tacho.exe" hook');
     expect(win.daemonCommand).toEqual([
-      "C:\\Program Files\\Oxagen\\tachod.exe",
+      "C:\\Program Files\\Oxagen\\tacho.exe",
+      "daemon",
     ]);
+    // A directory holding only the compiled binary (TACHO_BIN_DIR from the
+    // desktop app) is the native layout even when this process is not.
+    const dir = mkdtempSync(join(tmpdir(), "tacho-bin-"));
+    writeFileSync(join(dir, "tacho"), "");
+    const pointed = runtimeCommands(
+      undefined,
+      { TACHO_BIN_DIR: dir },
+      "/usr/bin/node",
+      "darwin",
+      false,
+    );
+    expect(pointed.daemonCommand).toEqual([join(dir, "tacho"), "daemon"]);
     expect(shellQuote("C:\\a b\\x.exe", "win32")).toBe('"C:\\a b\\x.exe"');
     expect(
       harnessFacts(

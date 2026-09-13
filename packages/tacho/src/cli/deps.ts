@@ -125,10 +125,11 @@ function exeName(name: string, platform: NodeJS.Platform): string {
 }
 
 /**
- * Locate the sibling executables. Three layouts exist:
+ * Locate the executables the hooks and the service run. Three layouts:
  *
- *   - native: the compiled `tacho` binary (a Tauri sidecar or a Homebrew
- *     install) sits next to compiled `tachod` and `tacho-hook`; no `node`;
+ *   - native: one compiled, multi-call `tacho` binary (a Tauri sidecar or a
+ *     Homebrew install); the hook is `tacho hook`, the daemon `tacho daemon`;
+ *     no `node` on the machine is assumed;
  *   - bundle: `tacho.mjs` next to `tachod.mjs` and `tacho-hook.mjs`, run by
  *     the current `node`;
  *   - source: the `bin/` shims that load TypeScript through tsx.
@@ -159,12 +160,14 @@ export function runtimeCommands(
       else binDir = resolve(here, "..", "..", "bin");
     }
   }
-  const nativeHook = P.join(binDir, exeName("tacho-hook", platform));
-  const nativeDaemon = P.join(binDir, exeName("tachod", platform));
-  if (native || existsSync(nativeDaemon)) {
+  const nativeTacho = P.join(binDir, exeName("tacho", platform));
+  const nativeLayout =
+    native ||
+    (existsSync(nativeTacho) && !existsSync(P.join(binDir, "tachod.mjs")));
+  if (nativeLayout) {
     return {
-      hookCommand: shellQuote(nativeHook, platform),
-      daemonCommand: [nativeDaemon],
+      hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
+      daemonCommand: [nativeTacho, "daemon"],
       binDir,
     };
   }
@@ -349,7 +352,11 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   };
 }
 
+/** Stamped by `scripts/bundle.mjs`; undefined when running from source. */
+declare const __TACHO_VERSION__: string | undefined;
+
 function packageVersion(): string {
+  if (typeof __TACHO_VERSION__ === "string") return __TACHO_VERSION__;
   try {
     const here = dirname(fileURLToPath(import.meta.url));
     const pkg = JSON.parse(
