@@ -106,6 +106,34 @@ export class MappingError extends Error {
 
 // ---- scalar helpers -------------------------------------------------------------
 
+/** A value the mockup always carries. Missing means the mockup changed shape: fail loudly. */
+export function req<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined)
+    throw new MappingError(what, value);
+  return value;
+}
+
+type Columns<N extends number, R extends string[] = []> = R["length"] extends N
+  ? R
+  : Columns<N, [...R, string]>;
+
+/** The first `n` columns of a mockup row or split, as strings. Fewer means the mockup changed shape. */
+export function cols<N extends number>(
+  values: ReadonlyArray<string | number>,
+  n: N,
+  what: string,
+): Columns<N> {
+  if (values.length < n) throw new MappingError(what, values);
+  return values.slice(0, n).map(String) as Columns<N>;
+}
+
+/** A keyed collection's own entry; the mockup keys some collections by agent. */
+function own(record: object, key: string): unknown {
+  return Object.hasOwn(record, key)
+    ? (record as Record<string, unknown>)[key]
+    : undefined;
+}
+
 function pick<V>(
   table: Readonly<Record<string, V>>,
   key: string,
@@ -124,7 +152,8 @@ export function toMicros(dollars: string | number): string {
       : dollars.replace(/[$,\s]|USD/g, "");
   const match = /^(-?)(\d+)(?:\.(\d{1,6}))?$/.exec(text);
   if (!match) throw new MappingError("amount", dollars);
-  const [, sign = "", whole = "0", fraction = ""] = match;
+  const [sign, whole] = cols(match.slice(1, 3), 2, "amount");
+  const fraction = match[3] ?? "";
   const micros = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
   return micros === 0n ? "0" : `${sign}${micros.toString()}`;
 }
@@ -149,14 +178,14 @@ function present(value: string | null | undefined): string | null {
 export function toInstant(clock: string, day: string = DEMO_DAY): string {
   const text = clock.trim();
   const dateOnly = /^(\d{4}-\d{2}-\d{2})$/.exec(text);
-  if (dateOnly) return `${dateOnly[1] ?? day}T00:00:00Z`;
+  if (dateOnly) return `${req(dateOnly[1], "date")}T00:00:00Z`;
   const match =
     /^(?:(\d{4}-\d{2}-\d{2})[ T])?(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s*(?:Z|UTC)?$/.exec(
       text,
     );
   if (!match) throw new MappingError("clock", clock);
   const [, date = day, hh, mm, ss = "00", fraction = ""] = match;
-  return `${date}T${hh ?? "00"}:${mm ?? "00"}:${ss}${fraction}Z`;
+  return `${date}T${req(hh, "hour")}:${req(mm, "minute")}:${ss}${fraction}Z`;
 }
 
 /** "2 min ago", "2 min", "2 h ago" → FIXTURE_NOW minus that. */
@@ -238,6 +267,12 @@ const FRAME_KIND: Readonly<Record<string, FrameKind>> = {
   "control.steer": "control.steer",
   approval_request: "approval.request",
 };
+const COST_BASIS: Readonly<Record<string, CostBasis>> = {
+  gateway_observed: "gateway_observed",
+  client_attested: "client_attested",
+  mixed: "mixed",
+  estimated: "estimated",
+};
 const SEVERITY: Readonly<Record<string, Severity>> = {
   info: 1,
   warning: 3,
@@ -304,34 +339,28 @@ const ADDED_PEOPLE = [
   },
 ] as const;
 
-function orgRoleOf(role: string): {
+const ROLE_NAMES: Readonly<
+  Record<string, { org: OrgRole; workspace: "owner" | "member" | null }>
+> = {
+  "org.owner": { org: "owner", workspace: null },
+  "org.billing": { org: "billing", workspace: "owner" },
+  "org.auditor": { org: "compliance", workspace: null },
+  "workspace.owner": { org: "member", workspace: "owner" },
+  "workspace.member": { org: "member", workspace: "member" },
+};
+
+export function orgRoleOf(role: string): {
   org: OrgRole;
   workspace: { slug: string; role: "owner" | "member" } | null;
 } {
-  const [name = "", slug] = role.split(" · ");
-  switch (name) {
-    case "org.owner":
-      return { org: "owner", workspace: null };
-    case "org.billing":
-      return {
-        org: "billing",
-        workspace: slug ? { slug, role: "owner" } : null,
-      };
-    case "org.auditor":
-      return { org: "compliance", workspace: null };
-    case "workspace.owner":
-      return {
-        org: "member",
-        workspace: slug ? { slug, role: "owner" } : null,
-      };
-    case "workspace.member":
-      return {
-        org: "member",
-        workspace: slug ? { slug, role: "member" } : null,
-      };
-    default:
-      throw new MappingError("role", role);
-  }
+  const [name] = cols(role.split(" · "), 1, "role");
+  const slug = role.split(" · ")[1];
+  const mapped = pick(ROLE_NAMES, name, "role");
+  return {
+    org: mapped.org,
+    workspace:
+      mapped.workspace && slug ? { slug, role: mapped.workspace } : null,
+  };
 }
 
 function mfaFactors(text: string): Array<"passkey" | "totp"> {
@@ -354,30 +383,30 @@ function avatar(raw: {
     case "icon":
       return {
         kind: "icon",
-        icon: raw.icon ?? "",
+        icon: req(raw.icon, "avatar icon"),
         tone: pick(
           { solid: "solid", soft: "soft", line: "line" } as const,
-          raw.tone ?? "",
+          req(raw.tone, "avatar tone"),
           "tone",
         ),
       };
     case "initials":
       return {
         kind: "initials",
-        text: raw.text ?? "",
+        text: req(raw.text, "avatar text"),
         font: pick(
           { sans: "sans", serif: "serif", mono: "mono" } as const,
-          raw.font ?? "",
+          req(raw.font, "avatar font"),
           "font",
         ),
         tone: pick(
           { solid: "solid", soft: "soft", line: "line" } as const,
-          raw.tone ?? "",
+          req(raw.tone, "avatar tone"),
           "tone",
         ),
       };
     case "photo":
-      return { kind: "photo", src: raw.src ?? "" };
+      return { kind: "photo", src: req(raw.src, "avatar src") };
     default:
       throw new MappingError("avatar kind", raw.kind);
   }
@@ -408,8 +437,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     raw.AGENTS.find((a) => a.key === key)?.harness;
   const runIds = new Set(raw.RUNS.map((r) => r.id));
   /** A run link only when the run is in the record (W4). */
-  const runLink = (id: string | null | undefined): string | null => {
-    if (!id) return null;
+  const runLink = (id: string): string | null => {
     const repaired = RUN_ID_REPAIRS[id] ?? id;
     return runIds.has(repaired) ? repaired : null;
   };
@@ -489,8 +517,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       const person = people.find((p) => p.id === who(m.p));
       return {
         personId: who(m.p),
-        role: person?.orgRole ?? "member",
-        workspaces: person?.workspaceRoles ?? [],
+        role: req(person, "member").orgRole,
+        workspaces: req(person, "member").workspaceRoles,
         allWorkspaces: m.ws === "all",
         status: pick(
           { active: "active", invited: "invited", removed: "removed" } as const,
@@ -524,10 +552,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       role: role.workspace
         ? {
             scope: "workspace" as const,
-            role:
-              role.workspace.role === "owner"
-                ? ("owner" as const)
-                : ("member" as const),
+            role: role.workspace.role,
             workspaceSlug: role.workspace.slug,
           }
         : { scope: "org" as const, role: role.org },
@@ -619,7 +644,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
 
   // ---- agents ----
   const agents: AgentDetail[] = raw.AGENTS.map((a) => {
-    const slug = a.key.split(".").pop() ?? a.key;
+    const slug = req(a.key.split(".").pop(), "agent slug");
     return {
       key: a.key,
       name: a.name,
@@ -697,13 +722,14 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
         perDay: money(a.budgetDay),
         usedToday: money(a.usedDay),
       },
-      roles: (raw.AGENT_ROLES[a.key as keyof typeof raw.AGENT_ROLES] ?? []).map(
-        (assignment: string) => {
-          const match = /^([a-z.]+)(?:\((.+)\))?$/.exec(assignment);
-          if (!match) throw new MappingError("role assignment", assignment);
-          return { role: match[1] ?? assignment, resource: match[2] ?? null };
-        },
-      ),
+      roles: req(
+        own(raw.AGENT_ROLES, a.key) as string[] | undefined,
+        "AGENT_ROLES",
+      ).map((assignment: string) => {
+        const match = /^([a-z.]+)(?:\((.+)\))?$/.exec(assignment);
+        if (!match) throw new MappingError("role assignment", assignment);
+        return { role: match[1] ?? assignment, resource: match[2] ?? null };
+      }),
     };
   });
 
@@ -715,33 +741,32 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       a.beltMode,
       "belt mode",
     ),
-    entries: (
-      raw.AGENT_BELTS[a.key as keyof typeof raw.AGENT_BELTS] ?? []
+    entries: req(
+      own(raw.AGENT_BELTS, a.key) as string[] | undefined,
+      "AGENT_BELTS",
     ).flatMap((id: string) => {
-      const b = beltById.get(id);
-      return b
-        ? [
+      const b = req(beltById.get(id), "belt entry");
+      return [
+        {
+          tool: b.id,
+          description: b.d,
+          decision: pick(
             {
-              tool: b.id,
-              description: b.d,
-              decision: pick(
-                {
-                  allow: "allow",
-                  deny: "deny",
-                  require_approval: "require_approval",
-                  mandate: "mandate",
-                } as const,
-                b.dec,
-                "belt decision",
-              ),
-              rule: b.rule,
-              scope: present(b.scope),
-              pinned: b.pinned ?? false,
-              meta: b.meta ?? false,
-              note: b.note ?? null,
-            },
-          ]
-        : [];
+              allow: "allow",
+              deny: "deny",
+              require_approval: "require_approval",
+              mandate: "mandate",
+            } as const,
+            b.dec,
+            "belt decision",
+          ),
+          rule: b.rule,
+          scope: present(b.scope),
+          pinned: b.pinned ?? false,
+          meta: b.meta ?? false,
+          note: b.note ?? null,
+        },
+      ];
     }),
     outside: raw.BELT_OUTSIDE.map((o) => ({ tool: o.id, reason: o.why })),
     registryVersions: markup.REGISTRY.versions,
@@ -749,7 +774,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
   }));
 
   const definitions: AgentDefinition[] = raw.AGENTS.map((a) => {
-    const slug = a.key.split(".").pop() ?? a.key;
+    const slug = req(a.key.split(".").pop(), "agent slug");
     return {
       agentKey: a.key,
       path: `.oxagen/agents/${slug}.toml`,
@@ -943,8 +968,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
   const request = /seq (\d+) · (\S+)$/.exec(raw.CTXW.req);
   const contextWindows: Seed["contextWindows"] = {
     [liveRunId]: {
-      requestFrameSeq: Number(request?.[1] ?? 0),
-      requestedAt: toInstant(request?.[2] ?? "00:00"),
+      requestFrameSeq: Number(req(request?.[1], "request capture 1")),
+      requestedAt: toInstant(req(request?.[2], "request capture 2")),
       totalTokens: raw.CTXW.total,
       cachedTokens: raw.CTXW.cached,
       freshTokens: raw.CTXW.fresh,
@@ -1024,7 +1049,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
         turn: f.turn,
         turnStart: { at: toInstant(f.turnStart, day), seq: f.turnStartSeq },
         flipped:
-          f.flippedAt === null || f.flipSeq === null
+          f.flippedAt === null
             ? null
             : { at: toInstant(f.flippedAt, day), seq: f.flipSeq },
         turnEnd: { at: toInstant(f.turnEnd, day), seq: f.turnEndSeq },
@@ -1035,7 +1060,10 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
           "fingerprint",
         ),
         segmentId: f.segment,
-        heldOut: { held: Number(held?.[1] ?? 0), of: Number(held?.[2] ?? 0) },
+        heldOut: {
+          held: Number(req(held?.[1], "held capture 1")),
+          of: Number(req(held?.[2], "held capture 2")),
+        },
         attempts: f.attempts.map((x) => ({
           n: x.n,
           result: pick(
@@ -1064,11 +1092,17 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       timeoutSeconds,
     };
     const requestedAt = toInstant(a.parkedAt);
-    const [ruleKind = "", ...ruleRest] = a.rule.split(" · ");
+    const [ruleKind] = cols(a.rule.split(" · "), 1, "approval rule");
+    const ruleRest = a.rule.split(" · ").slice(1);
     const trigger = /^(mandate|role_grant|taint rule) (\S+)$/.exec(ruleKind);
     if (!trigger) throw new MappingError("approval rule", a.rule);
-    const [roleClause = "", ...exclusions] = a.approvers.split(" · ");
-    const [rolesText = "", eligibleText = ""] = roleClause.split(" — ");
+    const [roleClause] = cols(a.approvers.split(" · "), 1, "approvers");
+    const exclusions = a.approvers.split(" · ").slice(1);
+    const [rolesText, eligibleText] = cols(
+      roleClause.split(" — "),
+      2,
+      "approver roles",
+    );
     return {
       id: a.id,
       runId: a.run,
@@ -1085,10 +1119,10 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
               role_grant: "role_grant",
               "taint rule": "taint",
             } as const,
-            trigger[1] ?? "",
+            req(trigger[1], "trigger capture 1"),
             "approval trigger",
           ),
-          ref: trigger[2] ?? "",
+          ref: req(trigger[2], "trigger capture 2"),
           detail: ruleRest.join(" · "),
         },
       },
@@ -1129,7 +1163,14 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
             /^(.+?) is the operator of this run and is excluded by (\S+)$/.exec(
               clause,
             );
-          return m ? [{ personId: who(m[1] ?? ""), rule: m[2] ?? "" }] : [];
+          return m
+            ? [
+                {
+                  personId: who(req(m[1], "m capture 1")),
+                  rule: req(m[2], "m capture 2"),
+                },
+              ]
+            : [];
         }),
       },
       rules: a.rules.map((rule) => ({
@@ -1160,7 +1201,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     agentKey: m.agent,
     grantedById: who(m.by),
     roleAtGrant: m.roleAt,
-    secondApproverId: m.second ? who(m.second) : null,
+    secondApproverId: who(m.second),
     twoPerson: m.twoPerson,
     consequenceTags: consequenceTags(m.effect),
     limits: {
@@ -1297,7 +1338,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
   }));
 
   const toolVersions: ToolVersion[] = raw.TOOLS.map((t) => {
-    const [kind = "none", downscope = "none"] = t.cred.split(" → ");
+    const [kind] = cols(t.cred.split(" → "), 1, "credential");
+    const downscope = t.cred.split(" → ")[1] ?? "none";
     return {
       name: t.n,
       version: t.v,
@@ -1366,7 +1408,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       raw.OBSERVED_SAMPLES[t.n as keyof typeof raw.OBSERVED_SAMPLES];
     const notes = [
       ...html.matchAll(/"(\w+)":[^\n]*<span class="c">\/\/ ([^<]+)<\/span>/g),
-    ].map((m) => `${m[1] ?? ""}: ${m[2] ?? ""}`);
+    ].map((m) => `${req(m[1], "m capture 1")}: ${req(m[2], "m capture 2")}`);
     return {
       tool: t.n,
       version: t.v,
@@ -1397,7 +1439,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     const level = pick(SWITCH_LEVEL, s.lvl, "switch level");
     const count = (pattern: RegExp) => {
       const m = pattern.exec(s.stops);
-      return m ? toCount(m[1] ?? "0") : null;
+      return m ? toCount(req(m[1], "m capture 1")) : null;
     };
     return {
       id: `ksw_${s.id.replace(/^ks_/, "").replace(/_/g, "")}`,
@@ -1408,7 +1450,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
           : level === "operator"
             ? who(s.target)
             : level === "connection"
-              ? (s.target.split(" · ")[0] ?? s.target)
+              ? req(s.target.split(" · ")[0], "connection target")
               : s.target,
       on: s.on,
       headline: s.headline ?? false,
@@ -1479,27 +1521,28 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       authoredAt: toInstant(p.at),
       ruleCount: p.rules,
       tests: {
-        passed: Number(tests?.[1] ?? 0),
-        total: Number(tests?.[2] ?? 0),
+        passed: Number(req(tests?.[1], "tests capture 1")),
+        total: Number(req(tests?.[2], "tests capture 2")),
       },
       note: p.note,
     };
   });
-  const simulated = policyVersions.find((p) => p.status === "simulated");
-  const policySimulations: Seed["policySimulations"] = simulated
-    ? [
-        {
-          policyVersionId: simulated.id,
-          days: raw.SIM.days,
-          calls: raw.SIM.calls,
-          wouldDeny: raw.SIM.nowDenied,
-          wouldRequireApproval: raw.SIM.nowApproval,
-          wasDeniedNowAllowed: raw.SIM.wasDeniedNowAllowed,
-          unchanged: raw.SIM.unchanged,
-          agentsAffected: [...raw.SIM.agentsAffected],
-        },
-      ]
-    : [];
+  const simulated = req(
+    policyVersions.find((p) => p.status === "simulated"),
+    "simulated policy version",
+  );
+  const policySimulations: Seed["policySimulations"] = [
+    {
+      policyVersionId: simulated.id,
+      days: raw.SIM.days,
+      calls: raw.SIM.calls,
+      wouldDeny: raw.SIM.nowDenied,
+      wouldRequireApproval: raw.SIM.nowApproval,
+      wasDeniedNowAllowed: raw.SIM.wasDeniedNowAllowed,
+      unchanged: raw.SIM.unchanged,
+      agentsAffected: [...raw.SIM.agentsAffected],
+    },
+  ];
 
   // ---- ontology ----
   const classes: Seed["classes"] = raw.CLASSES.map((c) => ({
@@ -1538,7 +1581,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
         r.events,
       );
     if (!events) throw new MappingError("repository events", r.events);
-    const gaps = Number(events[3] ?? 0);
+    const gaps = Number(req(events[3], "events capture 3"));
     const drift = /^(\d+) data-layer findings?$/.exec(r.drift);
     return {
       fullName: r.n,
@@ -1552,15 +1595,17 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       lastIndexedAt: fromRelative(r.indexed),
       issues: {
         enabled: r.issues.startsWith("enabled"),
-        imported: imported ? toCount(imported[1] ?? "0") : 0,
+        imported: imported
+          ? toCount(req(imported[1], "imported capture 1"))
+          : 0,
       },
       events: {
         health: pick(
           { ok: "ok", degraded: "degraded", failed: "failed" } as const,
-          events[1] ?? "",
+          req(events[1], "events capture 1"),
           "event health",
         ),
-        deliveries30d: toCount(events[2] ?? "0"),
+        deliveries30d: toCount(req(events[2], "events capture 2")),
         gaps: events[4] ? 0 : gaps,
         gapsRecovered: events[4] ? gaps : 0,
       },
@@ -1588,7 +1633,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     }),
   );
   const embeddingIndexes: Seed["embeddingIndexes"] = raw.INDEXES.map((i) => {
-    const [name = i.n, model = ""] = i.n.split(" · ");
+    const [name, model] = cols(i.n.split(" · "), 2, "index name");
     return {
       name,
       model,
@@ -1659,7 +1704,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     };
   });
   const proposals: Seed["proposals"] = raw.PROPOSALS.map((p) => {
-    const [sourceKind = "", sourceRef] = p.from.split(" · ");
+    const [sourceKind] = cols(p.from.split(" · "), 1, "proposal source");
+    const sourceRef = p.from.split(" · ")[1];
     const checks = /^(\d+) \/ (\d+)( · .*running)?/.exec(p.checks);
     return {
       id: p.id,
@@ -1668,9 +1714,15 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       force: pick(FORCE, p.force, "record force"),
       source:
         sourceKind === "findings job"
-          ? { kind: "findings_job" as const, ref: sourceRef ?? "" }
+          ? {
+              kind: "findings_job" as const,
+              ref: req(sourceRef, "proposal source"),
+            }
           : sourceKind === "reflector"
-            ? { kind: "reflector" as const, ref: sourceRef ?? "" }
+            ? {
+                kind: "reflector" as const,
+                ref: req(sourceRef, "proposal source"),
+              }
             : { kind: "person" as const, ref: who(sourceKind) },
       statement: p.st,
       support: p.support,
@@ -1754,7 +1806,9 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       return {
         key,
         label:
-          kind === "operator" ? (byShort.get(label)?.name ?? label) : label,
+          kind === "operator"
+            ? req(byShort.get(label), "operator").name
+            : label,
         spend: money(Number(spend), "mixed"),
       };
     });
@@ -1819,37 +1873,42 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       worstRuns: S.wasteRunsList.map((w) => ({
         runId: w.run,
         wasted: money(w.wasted, "mixed"),
-        badges: w.badges.map(([label = "", tone = ""]) => ({
-          label,
-          tone: pick(
-            {
-              critical: "critical",
-              failed: "failed",
-              denied: "denied",
-              approval: "approval",
-              allowed: "allowed",
-              q: "neutral",
-            } as const,
-            tone,
-            "badge tone",
-          ),
-        })),
+        badges: w.badges.map((badge) => {
+          const [label, tone] = cols(badge, 2, "badge");
+          return {
+            label,
+            tone: pick(
+              {
+                critical: "critical",
+                failed: "failed",
+                denied: "denied",
+                approval: "approval",
+                allowed: "allowed",
+                q: "neutral",
+              } as const,
+              tone,
+              "badge tone",
+            ),
+          };
+        }),
         what: w.what,
       })),
     },
     drills: Object.entries(raw.SPEND_DETAIL).map(([id, d]): SpendDrill => {
-      const [kind = "", key = ""] = id.split(/:(.*)/s);
+      const [kind, key] = cols(id.split(/:(.*)/s), 2, "drill id");
       const detail = d as Partial<Record<string, unknown>> & {
         cache: number;
         wasted: number;
         trend: string;
       };
-      const num = (field: string): number | null =>
-        typeof detail[field] === "number" ? (detail[field] as number) : null;
-      const cash = (field: string): Money | null =>
-        typeof detail[field] === "number"
-          ? money(detail[field] as number, "mixed")
-          : null;
+      const num = (field: string): number | null => {
+        const value = detail[field];
+        return typeof value === "number" ? value : null;
+      };
+      const cash = (field: string): Money | null => {
+        const value = detail[field];
+        return typeof value === "number" ? money(value, "mixed") : null;
+      };
       const rows = (field: string) =>
         detail[field] as
           | ReadonlyArray<ReadonlyArray<string | number>>
@@ -1905,6 +1964,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     evidence: Object.entries(raw.EVIDENCE).map(
       ([findingId, e]): FindingEvidence => {
         const repaired = EVIDENCE_AGENT_REPAIRS[e.who.agent] ?? e.who.agent;
+        const evidenceBasis = pick(COST_BASIS, e.basis, "cost basis");
         return {
           findingId,
           confidence: pick(
@@ -1927,35 +1987,31 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
           measured: e.measured,
           baseline: e.baseline,
           counterfactual: e.counterfactual,
-          method: e.method.map(([step = "", text = ""]) => ({ step, text })),
+          method: e.method.map((row) => {
+            const [step, text] = cols(row, 2, "evidence method");
+            return { step, text };
+          }),
           who: {
             agentKey: agentKeys.has(repaired) ? repaired : null,
             scope: agentKeys.has(repaired) ? repaired : e.who.agent,
             operatorId: who(e.who.operator),
             note: e.who.note,
           },
-          runs: e.runs.map(
-            ([
-              id = "",
-              task = "",
-              at = "",
-              cost = "0",
-              wasted = "0",
-              note = "",
-            ]) => ({
+          runs: e.runs.map((row) => {
+            const [id, task, at, cost, wasted, note] = cols(
+              row,
+              6,
+              "cited run",
+            );
+            return {
               runId: runLink(id),
               task,
               at,
-              cost: money(
-                cost,
-                e.basis === "client_attested"
-                  ? "client_attested"
-                  : "gateway_observed",
-              ),
+              cost: money(cost, evidenceBasis),
               wasted: money(wasted, "gateway_observed"),
               note,
-            }),
-          ),
+            };
+          }),
         };
       },
     ),
@@ -2002,7 +2058,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       checkedAt: toInstant("09:12"),
     },
     budgets: S.budgets.map((b): Budget => {
-      const [scope = "", id = ""] = b.scope.split(" · ");
+      const [scope, id] = cols(b.scope.split(" · "), 2, "budget scope");
       return {
         scopeKind: pick(
           {
@@ -2038,14 +2094,17 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
 
   // ---- billing ----
   const B = raw.BILLING;
-  const discount =
+  const discount = req(
     /(\d+)% off usage for (\d+) months \(converted (\d{4})-(\d{2})-(\d{2})/.exec(
       B.discount,
-    );
-  const retention = /^(\d+) months included · ([\d.]+) GB · \$([\d.,]+)$/.exec(
-    B.retention,
+    ),
+    "billing discount",
   );
-  const overage = /× \$([\d.]+)$/.exec(B.tier2);
+  const retention = req(
+    /^(\d+) months included · ([\d.]+) GB · \$([\d.,]+)$/.exec(B.retention),
+    "billing retention",
+  );
+  const overage = req(/× \$([\d.]+)$/.exec(B.tier2), "billing overage");
   const METER: ReadonlyArray<Meter["key"]> = [
     "sealed_runs",
     "governed_actions",
@@ -2063,30 +2122,28 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       ),
       status: "active",
       nextInvoiceOn: B.next,
-      discount: discount
-        ? {
-            description: B.discount.split(" — ")[0] ?? B.discount,
-            percentOff: Number(discount[1]),
-            until: `${String(Number(discount[3]) + Math.floor(Number(discount[2]) / 12))}-${discount[4] ?? "01"}-${discount[5] ?? "01"}`,
-          }
-        : null,
+      discount: {
+        description: req(B.discount.split(" — ")[0], "discount"),
+        percentOff: Number(discount[1]),
+        until: `${String(Number(discount[3]) + Math.floor(Number(discount[2]) / 12))}-${req(discount[4], "discount capture 4")}-${req(discount[5], "discount capture 5")}`,
+      },
     },
     allowance: {
       includedRuns: B.runsIncluded,
       runsUsed: B.runsUsed,
       billableRuns: B.billable,
-      overagePerRun: money(overage?.[1] ?? "0"),
+      overagePerRun: money(req(overage[1], "overage capture 1")),
       usage: money(B.amount),
       discount: money(B.discountAmount),
       total: money(B.total),
       retention: {
-        includedMonths: Number(retention?.[1] ?? 0),
-        retainedGb: Number(retention?.[2] ?? 0),
-        charge: money(retention?.[3] ?? "0"),
+        includedMonths: Number(req(retention[1], "retention capture 1")),
+        retainedGb: Number(req(retention[2], "retention capture 2")),
+        charge: money(req(retention[3], "retention capture 3")),
       },
     },
     meters: B.meters.map((m, index) => ({
-      key: METER[index] ?? "sealed_runs",
+      key: req(METER[index], "meter"),
       value: Number(m.v.replace(/[^\d.]/g, "")),
       priced: m.note === "the billable unit",
     })),
@@ -2220,7 +2277,7 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       note: h.note,
     })),
     exports: raw.EXPORTS.map((x) => {
-      const [from = "", to = ""] = x.range.split(" → ");
+      const [from, to] = cols(x.range.split(" → "), 2, "export range");
       return {
         id: x.id,
         description: x.what,
@@ -2283,14 +2340,13 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
       holdId: /hld_[A-Za-z0-9]+/.exec(e.note)?.[0] ?? null,
       note: present(e.note),
     })),
-    retention: raw.RETENTION_TIERS.map(
-      ([
-        label = "",
-        store = "",
-        contents = "",
-        retentionText = "",
-        volume = "",
-      ]) => ({
+    retention: raw.RETENTION_TIERS.map((row) => {
+      const [label, store, contents, retentionText, volume] = cols(
+        row,
+        5,
+        "retention tier",
+      );
+      return {
         tier: pick(
           {
             Ledger: "ledger",
@@ -2305,8 +2361,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
         contents,
         retention: retentionText,
         volume,
-      }),
-    ),
+      };
+    }),
     assuranceHistory: raw.ASSURANCE_HISTORY.map((a) => ({
       suiteVersion: a.rel.replace(/^suite /, ""),
       ranAt: toInstant(a.ran),
@@ -2437,38 +2493,38 @@ function transcriptEntry(
       return {
         ...base,
         kind: "prompt",
-        body: e.body ?? "",
+        body: req(e.body, "transcript body"),
         taskRef: e.meta?.task ?? null,
-        byPersonId: who(e.meta?.by ?? ""),
+        byPersonId: who(req(e.meta?.by, "transcript by")),
       };
     case "context_recall":
       return {
         ...base,
         kind: "context_recall",
-        contextFrames: e.meta?.frames ?? 0,
-        tokens: e.meta?.tok ?? 0,
-        candidatesScored: e.meta?.scored ?? 0,
-        durationMs: e.meta?.ms ?? 0,
+        contextFrames: req(e.meta?.frames, "transcript frames"),
+        tokens: req(e.meta?.tok, "transcript tok"),
+        candidatesScored: req(e.meta?.scored, "transcript scored"),
+        durationMs: req(e.meta?.ms, "transcript ms"),
       };
     case "reasoning":
     case "text":
-      return { ...base, kind: e.kind, body: e.body ?? "" };
+      return { ...base, kind: e.kind, body: req(e.body, "transcript body") };
     case "usage":
       return {
         ...base,
         kind: "usage",
-        model: e.meta?.model ?? "",
-        tokensIn: e.meta?.tin ?? 0,
-        cacheRead: e.meta?.cache ?? 0,
-        tokensOut: e.meta?.tout ?? 0,
-        cost: money(e.meta?.cost ?? 0, "gateway_observed"),
-        providerRequestId: e.meta?.req ?? "",
+        model: req(e.meta?.model, "transcript model"),
+        tokensIn: req(e.meta?.tin, "transcript tin"),
+        cacheRead: req(e.meta?.cache, "transcript cache"),
+        tokensOut: req(e.meta?.tout, "transcript tout"),
+        cost: money(req(e.meta?.cost, "transcript cost"), "gateway_observed"),
+        providerRequestId: req(e.meta?.req, "transcript req"),
       };
     case "tool":
       return {
         ...base,
         kind: "tool",
-        tool: e.title ?? "",
+        tool: req(e.title, "transcript title"),
         toolClass: pick(
           {
             repo: "repo",
@@ -2476,11 +2532,11 @@ function transcriptEntry(
             mutate: "mutate",
             verify: "verify",
           } as const,
-          e.cls ?? "",
+          req(e.cls, "transcript cls"),
           "tool class",
         ),
-        argument: e.arg ?? "",
-        rawInput: e.raw ?? "",
+        argument: req(e.arg, "transcript arg"),
+        rawInput: req(e.raw, "transcript raw"),
         decision: e.gov
           ? {
               outcome: pick(
@@ -2510,9 +2566,9 @@ function transcriptEntry(
       return {
         ...base,
         kind: "steer",
-        body: e.body ?? "",
-        byPersonId: who(e.meta?.by ?? ""),
-        tokens: e.meta?.tok ?? 0,
+        body: req(e.body, "transcript body"),
+        byPersonId: who(req(e.meta?.by, "transcript by")),
+        tokens: req(e.meta?.tok, "transcript tok"),
       };
     default:
       throw new MappingError("transcript entry kind", e.kind);

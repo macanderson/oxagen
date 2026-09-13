@@ -17,7 +17,7 @@ import {
   notBacked,
 } from "./not-backed";
 import type { PageKey } from "./page-states";
-import type { DataSource, MethodName, PortName } from "./ports";
+import type { MethodName, PortName } from "./ports";
 
 export type StoreStatus = "backed" | "partial" | "none";
 export type LiveLane =
@@ -221,5 +221,3 @@ export function allMethods(): Array<{
     })),
   );
 }
-
-export type { DataSource };
