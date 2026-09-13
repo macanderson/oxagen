@@ -13,6 +13,8 @@ export const CATALOG_FILES = [
   "en", // shared namespaces: app, routes, states, notFound, globalError
   "ui", // Mission Control primitives (src/ui)
   "shell", // org and workspace shells (src/features/shell)
+  "auth", // sign-in flows, invitation, CLI and GitHub callbacks (src/features/auth)
+  "onboarding", // onboarding gate (src/features/onboarding)
 ] as const;
 
 export class DuplicateNamespaceError extends Error {
