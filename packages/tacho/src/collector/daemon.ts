@@ -93,6 +93,8 @@ export interface DaemonOptions {
   listen?: boolean;
   /** Override the loopback port from the host file (0 = ephemeral). */
   port?: number;
+  /** `win32` listens on loopback TCP only (no Unix socket). */
+  platform?: NodeJS.Platform;
   kill?: (pid: number, signal: "SIGTERM" | "SIGKILL") => boolean;
   transcriptRoots?: string[];
 }
@@ -119,6 +121,7 @@ interface SpoolFile {
   payload: unknown;
   env?: Record<string, string | undefined>;
   evaluation?: HookReplay["evaluation"];
+  harness?: HookEnvelope["harness"];
 }
 
 function defaultExec(command: string, args: string[]): ReturnType<Exec> {
@@ -400,6 +403,7 @@ export async function startDaemon(
   const spoolEnvelope = (file: SpoolFile): HookEnvelope => ({
     payload: file.payload,
     ...(file.env !== undefined ? { env: file.env } : {}),
+    ...(file.harness !== undefined ? { harness: file.harness } : {}),
     replay: {
       receivedAt: file.received_at,
       ...(file.evaluation !== undefined ? { evaluation: file.evaluation } : {}),
@@ -429,6 +433,7 @@ export async function startDaemon(
         now,
       },
       envelope.replay,
+      envelope.harness,
     );
     record(outcome.events);
     return outcome.response;
@@ -574,12 +579,17 @@ export async function startDaemon(
   const server = createCollectorServer(api, log);
   let port: number | undefined;
   if (options.listen ?? true) {
+    const unixSocket = (options.platform ?? process.platform) !== "win32";
     const listening = await server.listen({
-      socketPath: paths.socket,
+      ...(unixSocket ? { socketPath: paths.socket } : {}),
       port: options.port ?? host.port,
     });
     port = listening.port;
-    log(`listening on ${paths.socket} and 127.0.0.1:${port ?? "?"}`);
+    log(
+      unixSocket
+        ? `listening on ${paths.socket} and 127.0.0.1:${port ?? "?"}`
+        : `listening on 127.0.0.1:${port ?? "?"}`,
+    );
   }
 
   let lastRefresh = 0;

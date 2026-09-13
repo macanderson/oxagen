@@ -11,6 +11,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import type { TachoHarness } from "../wire";
 import type { ExportFormat } from "./exporters";
 import type { HookReplay } from "./hook-handler";
 
@@ -18,6 +19,8 @@ export interface HookEnvelope {
   payload: unknown;
   env?: Record<string, string | undefined>;
   replay?: HookReplay;
+  /** Which harness ran the hook; absent means Claude Code. */
+  harness?: TachoHarness;
 }
 
 /** What the daemon exposes to the listener; the daemon implements it. */

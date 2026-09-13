@@ -1,7 +1,7 @@
 {
   "name": "@oxagen/cli",
   "version": "2.1.1",
-  "description": "Oxagen governance CLI \u2014 spend, lineage, grounding, credentials, and audit (agentic coding lives in the stella CLI)",
+  "description": "Oxagen governance CLI — spend, lineage, grounding, credentials, and audit (agentic coding lives in the stella CLI)",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -36,7 +36,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/oxagen.cjs --name oxagen --out dist-bin"
   },
   "dependencies": {
     "@oxagen/billing": "workspace:*",

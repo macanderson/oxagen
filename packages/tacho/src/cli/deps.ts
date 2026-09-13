@@ -14,7 +14,8 @@ import {
   release,
   userInfo,
 } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
@@ -96,33 +97,83 @@ export interface RuntimeCommands {
   binDir: string;
 }
 
-export function shellQuote(value: string): string {
-  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value)
-    ? value
-    : `'${value.replace(/'/g, "'\\''")}'`;
+export function shellQuote(
+  value: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
+  // Claude Code and Codex hand command hooks to cmd.exe on Windows, where
+  // double quotes are the only quoting and a `"` inside a path cannot occur.
+  if (platform === "win32") return `"${value}"`;
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/** True when this process is a compiled single-executable (Node SEA) build. */
+export function isNativeBuild(): boolean {
+  try {
+    const sea = createRequire(import.meta.url)("node:sea") as {
+      isSea?: () => boolean;
+    };
+    return sea.isSea?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+function exeName(name: string, platform: NodeJS.Platform): string {
+  return platform === "win32" ? `${name}.exe` : name;
 }
 
 /**
- * Locate the sibling executables. From the published bundle they sit next
- * to the running `tacho.mjs`; from the source tree they are the `bin/`
- * shims that load TypeScript through tsx. `TACHO_BIN_DIR` overrides both.
+ * Locate the executables the hooks and the service run. Three layouts:
+ *
+ *   - native: one compiled, multi-call `tacho` binary (a Tauri sidecar or a
+ *     Homebrew install); the hook is `tacho hook`, the daemon `tacho daemon`;
+ *     no `node` on the machine is assumed;
+ *   - bundle: `tacho.mjs` next to `tachod.mjs` and `tacho-hook.mjs`, run by
+ *     the current `node`;
+ *   - source: the `bin/` shims that load TypeScript through tsx.
+ *
+ * `TACHO_BIN_DIR` overrides the directory; the layout is still detected from
+ * what is in it, so the desktop app can point at its own resources.
  */
 export function runtimeCommands(
   entry: string | undefined = process.argv[1],
   env: Record<string, string | undefined> = process.env,
   nodePath: string = process.execPath,
+  platform: NodeJS.Platform = process.platform,
+  native: boolean = isNativeBuild(),
 ): RuntimeCommands {
-  const here = dirname(fileURLToPath(import.meta.url));
+  // Path flavour follows the target platform, not the host, so a macOS test
+  // can describe a Windows layout.
+  const P = platform === "win32" ? win32 : posix;
   let binDir = env["TACHO_BIN_DIR"];
   if (binDir === undefined) {
-    const entryDir = entry !== undefined ? dirname(resolve(entry)) : undefined;
-    if (entryDir !== undefined && existsSync(join(entryDir, "tachod.mjs")))
-      binDir = entryDir;
-    else binDir = resolve(here, "..", "..", "bin");
+    if (native) {
+      binDir = P.dirname(nodePath);
+    } else {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const entryDir =
+        entry !== undefined ? P.dirname(P.resolve(entry)) : undefined;
+      if (entryDir !== undefined && existsSync(P.join(entryDir, "tachod.mjs")))
+        binDir = entryDir;
+      else binDir = resolve(here, "..", "..", "bin");
+    }
+  }
+  const nativeTacho = P.join(binDir, exeName("tacho", platform));
+  const nativeLayout =
+    native ||
+    (existsSync(nativeTacho) && !existsSync(P.join(binDir, "tachod.mjs")));
+  if (nativeLayout) {
+    return {
+      hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
+      daemonCommand: [nativeTacho, "daemon"],
+      binDir,
+    };
   }
   return {
-    hookCommand: `${shellQuote(nodePath)} ${shellQuote(join(binDir, "tacho-hook.mjs"))}`,
-    daemonCommand: [nodePath, join(binDir, "tachod.mjs")],
+    hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
+    daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
     binDir,
   };
 }
@@ -131,6 +182,9 @@ export interface ClaudeFacts {
   path?: string;
   version?: string;
 }
+
+/** What `enroll` records about an installed harness executable. */
+export type HarnessFacts = ClaudeFacts;
 
 export interface CliDeps {
   paths: TachoPaths;
@@ -150,7 +204,11 @@ export interface CliDeps {
   nodeVersion: string;
   readSettings: () => unknown;
   writeSettings: (document: unknown) => void;
+  /** Codex CLI's `hooks.json`, undefined when absent. */
+  readCodexHooks: () => unknown;
+  writeCodexHooks: (document: unknown) => void;
   claude: () => ClaudeFacts;
+  codex: () => HarnessFacts;
   runtime: RuntimeCommands;
   /** GET a daemon route on the loopback port with the local bearer. */
   daemonGet: (path: string) => Promise<unknown | undefined>;
@@ -169,13 +227,35 @@ function realExec(command: string, args: string[]): ReturnType<Exec> {
   };
 }
 
-export function claudeFacts(exec: Exec): ClaudeFacts {
-  const which = exec("sh", ["-lc", "command -v claude"]);
-  const path = which.status === 0 ? which.stdout.trim() : undefined;
+/**
+ * Find a harness executable on PATH and read its version. `sh -lc` on POSIX
+ * so a login-shell PATH (nvm, Homebrew) is honoured; `where` on Windows,
+ * whose first line is the first match.
+ */
+export function harnessFacts(
+  exec: Exec,
+  name: string,
+  platform: NodeJS.Platform = process.platform,
+): HarnessFacts {
+  const which =
+    platform === "win32"
+      ? exec("where", [name])
+      : exec("sh", ["-lc", `command -v ${name}`]);
+  const path =
+    which.status === 0
+      ? (which.stdout.split(/\r?\n/)[0] ?? "").trim()
+      : undefined;
   if (path === undefined || path.length === 0) return {};
   const version = exec(path, ["--version"]);
   const match = /(\d+\.\d+\.\d+)/.exec(version.stdout);
   return { path, ...(match?.[1] !== undefined ? { version: match[1] } : {}) };
+}
+
+export function claudeFacts(
+  exec: Exec,
+  platform: NodeJS.Platform = process.platform,
+): ClaudeFacts {
+  return harnessFacts(exec, "claude", platform);
 }
 
 export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
@@ -221,7 +301,12 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     platform,
     fetch: (input, init) => fetch(input, init) as never,
     exec,
-    serviceManager: serviceManagerFor({ platform, home, exec }),
+    serviceManager: serviceManagerFor({
+      platform,
+      home,
+      exec,
+      launcherPath: paths.daemonLauncher,
+    }),
     out: (line) => process.stdout.write(`${line}\n`),
     err: (line) => process.stderr.write(`${line}\n`),
     now: () => Date.now(),
@@ -237,8 +322,16 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         `${JSON.stringify(document, null, 2)}\n`,
         0o644,
       ),
-    claude: () => claudeFacts(exec),
-    runtime: runtimeCommands(),
+    readCodexHooks: () => readJsonFileIfExists(paths.codexHooks),
+    writeCodexHooks: (document) =>
+      writeSensitiveFileAtomic(
+        paths.codexHooks,
+        `${JSON.stringify(document, null, 2)}\n`,
+        0o644,
+      ),
+    claude: () => claudeFacts(exec, platform),
+    codex: () => harnessFacts(exec, "codex", platform),
+    runtime: runtimeCommands(undefined, env, undefined, platform),
     daemonGet,
     findFreePort: () =>
       new Promise((resolvePromise, reject) => {
@@ -259,7 +352,11 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   };
 }
 
+/** Stamped by `scripts/bundle.mjs`; undefined when running from source. */
+declare const __TACHO_VERSION__: string | undefined;
+
 function packageVersion(): string {
+  if (typeof __TACHO_VERSION__ === "string") return __TACHO_VERSION__;
   try {
     const here = dirname(fileURLToPath(import.meta.url));
     const pkg = JSON.parse(
