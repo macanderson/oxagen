@@ -23,7 +23,7 @@
 //                  denominator is input_uncached + cache_read. Undefined when a
 //                  model has no prompt tokens (0/0): the row does not fit a
 //                  non-null Ratio and the read is not backed (promote: nullable)
-//   assistant      true for every row. @oxagen/ai is the only writer of          structural
+//   assistant      true for every row. @oxagen/ai is the only writer of  structural
 //                  token_usage, so every row is a model call Oxagen made (the
 //                  in-app agent and the platform jobs behind it). A customer
 //                  agent's own model calls reach no Oxagen table until the model
