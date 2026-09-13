@@ -83,19 +83,13 @@ export type NavCounts = z.infer<typeof NavCounts>;
 // ---- Notifications ------------------------------------------------------------
 
 /**
- * Notification kinds. Every kind maps to a frame kind or an audit event, never
- * to something invented for a bell (mockup notifications footer).
+ * What a notification is about: a frame kind, an audit event kind, or the kind
+ * the notification store records (`notification.notifications.kind`:
+ * `approval`, `member`, `run`, `security`, `system`). Open on purpose: a closed
+ * enum of the mockup's kinds (`approval.requested`, `run.proven`, ...) could not
+ * carry a recorded row, and nothing is invented for a bell.
  */
-export const NotificationKind = z.enum([
-  "approval.requested",
-  "approval.resolved",
-  "budget.breached",
-  "context_pr.opened",
-  "run.proven",
-  "repository.indexed",
-  "reconciliation.exception",
-  "kill_switch.flipped",
-]);
+export const NotificationKind = z.string().regex(/^[a-z_]+(\.[a-z_]+)*$/);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
 /** How loudly a notification speaks; the icon and colour follow it. */
@@ -110,9 +104,15 @@ export type NotificationSeverity = z.infer<typeof NotificationSeverity>;
 export const Notification = z.object({
   id: PublicId,
   kind: NotificationKind,
-  severity: NotificationSeverity,
+  /**
+   * Null when the recorded kind carries no outcome to draw (a stored `run`,
+   * `member` or `system` row says nothing about how it went). Rendered as a
+   * plain bell, never as a guessed severity.
+   */
+  severity: NotificationSeverity.nullable(),
   title: z.string().min(1),
-  body: z.string(),
+  /** Null when the producer wrote no body. */
+  body: z.string().nullable(),
   unread: z.boolean(),
   at: Instant,
   /** The run the notification is about, when it is about one. */

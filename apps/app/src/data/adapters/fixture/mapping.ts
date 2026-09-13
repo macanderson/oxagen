@@ -75,7 +75,6 @@ import type {
   TranscriptEntry,
   WasteCause,
 } from "@/data/contracts";
-import { NotificationKind } from "@/data/contracts/shell";
 import { FIXTURE_USER } from "@/server/fixture-session";
 import type { Seed } from "./seed-schema";
 import type rawJson from "./raw/mc-baseline-w1.json";
@@ -2383,10 +2382,8 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
    * tone covers both a hard budget stop (critical) and an expired approval
    * (attention), and `gold` is identity, never a state.
    */
-  const NOTIFICATION_KINDS: Readonly<Record<string, Notification["kind"]>> =
-    Object.fromEntries(NotificationKind.options.map((k) => [k, k]));
   const NOTIFICATION_SEVERITY: Readonly<
-    Record<string, Notification["severity"]>
+    Record<string, NonNullable<Notification["severity"]>>
   > = {
     "approval.requested": "info",
     "approval.resolved": "attention",
@@ -2397,6 +2394,9 @@ export function mapSeed(raw: RawMockup, markup: RawMarkup): Seed {
     "reconciliation.exception": "attention",
     "kill_switch.flipped": "critical",
   };
+  /** The mockup's kinds: an unknown one is a mapping error, not a new kind. */
+  const NOTIFICATION_KINDS: Readonly<Record<string, Notification["kind"]>> =
+    Object.fromEntries(Object.keys(NOTIFICATION_SEVERITY).map((k) => [k, k]));
   /** W4: the two notifications that describe seeded events name them. */
   const NOTIFICATION_REPAIRS: Readonly<
     Record<string, Pick<Notification, "title" | "body" | "runId" | "ref">>

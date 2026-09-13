@@ -11,7 +11,7 @@ import { liveSteering } from "./steering";
 import { liveSpend } from "./spend";
 import { liveOrg } from "./org";
 import { liveBilling } from "./billing";
-import { liveAudit } from "./audit";
+import { liveAudit, liveNotifications } from "./audit";
 import { liveShell } from "./shell";
 import { liveOnboarding } from "./onboarding";
 
@@ -27,6 +27,6 @@ export const liveSource: DataSource = {
   org: liveOrg,
   billing: liveBilling,
   audit: liveAudit,
-  shell: liveShell,
+  shell: { ...liveShell, notifications: liveNotifications },
   onboarding: liveOnboarding,
 };

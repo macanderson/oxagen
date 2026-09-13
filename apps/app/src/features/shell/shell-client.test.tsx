@@ -352,6 +352,40 @@ describe("notifications", () => {
     expect(await screen.findByTestId(testId)).toHaveTextContent(text);
   });
 
+  it("draws a recorded row with no severity and no body as a plain bell, never a guessed tone", async () => {
+    const user = userEvent.setup();
+    const data = {
+      ...(await fixtureData()),
+      notifications: readOk({
+        items: [
+          {
+            id: "ntf_live01",
+            kind: "run",
+            severity: null,
+            title: "Run finished",
+            body: null,
+            unread: true,
+            at: "2026-09-11T09:14:02.000Z",
+            runId: null,
+            ref: null,
+          },
+        ],
+      }),
+    };
+    renderShell(data);
+    await user.click(screen.getByTestId("notifications-trigger"));
+    const popover = await screen.findByTestId("notifications-popover");
+    const [item] = within(popover).getAllByRole("listitem");
+    expect(item).toHaveTextContent("Run finished");
+    expect(item).toHaveTextContent("run");
+    const icon = item?.querySelector("svg");
+    expect(icon).toHaveClass("text-muted-foreground");
+    expect(icon?.getAttribute("class")).not.toMatch(
+      /text-(success|info|warning|error)/,
+    );
+    expect(item?.querySelectorAll("p")).toHaveLength(2);
+  });
+
   it("renders the denied state", async () => {
     const user = userEvent.setup();
     const data = {

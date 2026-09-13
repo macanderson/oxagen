@@ -43,16 +43,18 @@ function Item({
 }) {
   const t = useTranslations("shell.notifications");
   const locale = useLocale();
-  const Icon = SEVERITY_ICON[item.severity];
+  // A null severity is a kind that records no outcome: a plain bell, no colour.
+  const Icon = item.severity === null ? Bell : SEVERITY_ICON[item.severity];
+  const tone =
+    item.severity === null
+      ? "text-muted-foreground"
+      : SEVERITY_TONE[item.severity];
   return (
     <li
       data-unread={item.unread}
       className={`flex gap-3 border-b border-border px-4 py-3 last:border-b-0 ${item.unread ? "bg-accent/40" : ""}`}
     >
-      <Icon
-        aria-hidden="true"
-        className={`mt-0.5 size-4 flex-none ${SEVERITY_TONE[item.severity]}`}
-      />
+      <Icon aria-hidden="true" className={`mt-0.5 size-4 flex-none ${tone}`} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
           {item.unread ? (
@@ -60,7 +62,11 @@ function Item({
           ) : null}
           {item.title}
         </p>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{item.body}</p>
+        {item.body === null ? null : (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {item.body}
+          </p>
+        )}
         <p className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
           <span>{item.kind}</span>
           {runHref === null || item.runId === null ? null : (
