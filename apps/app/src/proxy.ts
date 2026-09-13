@@ -10,7 +10,15 @@ import {
   readFixtureSession,
 } from "@/server/fixture-session";
 
-/** Reachable without a session: the sign-in flows, invitations, auth API and callbacks. */
+/**
+ * Reachable without a session: the sign-in flows, invitations, the auth API and
+ * the two callbacks. Two-factor is public because after the password step the
+ * person holds only Better Auth's short-lived two-factor cookie. The CLI and
+ * GitHub callbacks are public so an invalid CLI request renders its error
+ * without a detour, and each sends a signed-out visitor to /login itself with
+ * the exact request as `next`. The onboarding gate (/welcome, /new-organization)
+ * and Register an agent are not public.
+ */
 export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/,
   /^\/invite\//,

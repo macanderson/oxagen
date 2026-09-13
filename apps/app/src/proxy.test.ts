@@ -39,6 +39,12 @@ describe("isPublicPath", () => {
     "/loginx",
     "/invite",
     "/api/mc/acme/core-platform/stream",
+    "/welcome",
+    "/welcome/wrap",
+    "/new-organization",
+    "/acme/core-platform/register",
+    "/cli/authorizex",
+    "/github/setupx",
   ])("%s is gated", (path) => {
     expect(isPublicPath(path)).toBe(false);
   });
@@ -57,6 +63,15 @@ describe("proxy", () => {
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("next")).toBe(
       "/acme/core-platform/tools?tab=registry",
+    );
+  });
+
+  it("sends a signed-out onboarding visit to /login and back to the same step", () => {
+    const res = proxy(request("/welcome/wrap?org=acme&ws=core-platform"));
+    const location = new URL(res.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("next")).toBe(
+      "/welcome/wrap?org=acme&ws=core-platform",
     );
   });
 
