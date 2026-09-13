@@ -340,16 +340,21 @@ describe("route guard", () => {
   );
   const program = createProgram([...routes, ...probeRoutes]);
 
-  it("covers every [org] page, layout and route handler", () => {
-    expect(routes.length).toBeGreaterThan(0);
-    expect(routes.every((file) => file.includes("[org]"))).toBe(true);
+  it("covers page, layout and route modules with an [org] segment, under src/app/[org] and src/app/api alike", () => {
     expect(
       guardedRoutes([
         "src/app/[org]/x/page.tsx",
+        "src/app/[org]/layout.tsx",
+        "src/app/api/mc/[org]/[ws]/stream/route.ts",
         "src/app/login/page.tsx",
         "src/app/[org]/loading.tsx",
+        "src/features/[org]/page.tsx",
       ]),
-    ).toEqual(["src/app/[org]/x/page.tsx"]);
+    ).toEqual([
+      "src/app/[org]/x/page.tsx",
+      "src/app/[org]/layout.tsx",
+      "src/app/api/mc/[org]/[ws]/stream/route.ts",
+    ]);
   });
 
   it("today's violations are exactly the baseline", () => {
