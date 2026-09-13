@@ -2,7 +2,7 @@
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { denied, notBacked, readError } from "@/data/not-backed";
+import { NO_GAP, denied, notBacked, readError } from "@/data/not-backed";
 import { ErrorState } from "./error-state";
 import { PageState } from "./page-state";
 import { renderWithIntl } from "./testing/render-with-intl";
@@ -34,6 +34,33 @@ describe("PageState", () => {
       "waits on a spec decision (backend gap G12)",
     );
     expect(state).not.toHaveTextContent("milestone");
+  });
+
+  it("names the milestone alone when the read has no numbered gap (G0)", () => {
+    renderWithIntl(<PageState page="tools" result={notBacked("M2", NO_GAP)} />);
+    const state = screen.getByTestId("page-state-not_backed");
+    expect(state).toHaveTextContent("arrives with milestone M2.");
+    expect(state).not.toHaveTextContent("gap");
+    expect(state).not.toHaveTextContent("G0");
+  });
+
+  it("says the store exists but is not read yet for M0, never 'milestone M0' (negative)", () => {
+    renderWithIntl(
+      <PageState page="organization" result={notBacked("M0", NO_GAP)} />,
+    );
+    const state = screen.getByTestId("page-state-not_backed");
+    expect(state).toHaveTextContent("does not read it yet");
+    expect(state).not.toHaveTextContent("M0");
+    expect(state).not.toHaveTextContent("G0");
+  });
+
+  it("drops the gap from a spec decision with no numbered gap", () => {
+    renderWithIntl(
+      <PageState page="tools" result={notBacked("spec-decision", NO_GAP)} />,
+    );
+    const state = screen.getByTestId("page-state-not_backed");
+    expect(state).toHaveTextContent("waits on a spec decision.");
+    expect(state).not.toHaveTextContent("G0");
   });
 
   it("names the missing permission when denied", () => {
