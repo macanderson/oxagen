@@ -226,7 +226,12 @@ test.describe("onboarding gate", () => {
   test("loading", async ({ signedInPage: page, context, baseURL }) => {
     await setPageState(context, baseURL ?? "http://localhost:3000", "loading");
     await page.goto("/welcome");
-    await expect(page.getByTestId("page-state-loading")).toBeVisible();
+    // The loading state is the Suspense fallback's own skeleton, so while the
+    // stream swaps it in the resolved copy briefly sits beside it in a hidden
+    // container; assert the one on screen.
+    await expect(
+      page.getByTestId("page-state-loading").filter({ visible: true }),
+    ).toBeVisible();
     await expectNoAxeViolations(page);
   });
 
