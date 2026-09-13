@@ -3,8 +3,6 @@ title: Configuration
 description: Environment configuration for running and deploying Oxagen — transactional email (SMTP) and local-development behavior.
 ---
 
-<IllustrationConfiguration />
-
 ## Overview
 
 This section covers the environment configuration that controls how Oxagen behaves
@@ -30,3 +28,30 @@ feature.
 - Security-relevant predicates are resolved deterministically and are **fail-safe**:
   a control that protects production can never be relaxed by a value that leaks into a
   deployed environment.
+
+<Mermaid chart={`
+flowchart LR
+  V[Vercel project settings] --> E[process.env]
+  L[.env.local] --> E
+  E --> N[normalizeEnv: strip one quote pair from known keys]
+  N --> Z{Zod schema parse}
+  Z -->|valid| T[Typed env]
+  Z -->|invalid| F[Throw: Invalid environment]
+`} />
+
+Validation lives in `@oxagen/config`. A service validates the whole schema once at boot with `loadEnv()` (the API server does this in `apps/api/src/bootstrap.ts`). A package validates only the variables it reads with `requireEnv()`, so importing one package never demands every variable in the monorepo:
+
+```ts title="Validate only the keys a package uses"
+import { requireEnv } from "@oxagen/config";
+
+const env = requireEnv(["DATABASE_URL"] as const);
+// env.DATABASE_URL: string
+// env.NEO4J_URI  ← type error: not requested
+```
+
+A missing or malformed value throws at startup, listing each failing key:
+
+```text
+Invalid environment (required: DATABASE_URL):
+  - DATABASE_URL: <validation message>
+```

@@ -3,8 +3,6 @@ title: Installing the CLI
 description: Install the oxagen CLI with the install script, from the monorepo, as a portable single-file bundle, or from npm.
 ---
 
-<IllustrationCli />
-
 The `oxagen` CLI requires **Node.js 20 or newer**. Check your version with `node --version`.
 
 There are four ways to get it. Pick the install script unless you have a reason not to.
@@ -15,7 +13,31 @@ There are four ways to get it. Pick the install script unless you have a reason 
 curl -fsSL https://cli.oxagen.sh/install.sh | sh
 ```
 
-The script works out your platform (macOS or Linux, arm64 or x64), downloads the matching prebuilt binary, checks it against its published SHA-256, and puts it in `~/.local/bin`. It never asks for `sudo`, and it refuses to install a binary whose checksum file is missing or does not match.
+The script works out your platform (macOS or Linux, arm64 or x64), downloads the matching prebuilt binary, checks it against its published SHA-256, and puts it in `~/.local/bin`. It never asks for `sudo`, and it refuses to install a binary whose checksum file is missing or does not match. If no prebuilt binary is published for your platform yet, it falls back to `npm install -g @oxagen/cli`, which needs Node.js 20 or newer.
+
+<Mermaid chart={`
+flowchart TD
+  P[Detect OS and arch] -->|darwin or linux, arm64 or x64| D{Binary published?}
+  P -->|anything else| X[Exit: unsupported]
+  D -->|yes| S{.sha256 present and matches?}
+  S -->|no| R[Exit: refuse to install]
+  S -->|yes| I[install -m 755 to OXAGEN_INSTALL_DIR]
+  I --> Q{Dir on PATH?}
+  Q -->|no| H[Print the export PATH line]
+  D -->|no| N{Node.js 20+ and npm?}
+  N -->|yes| G[npm install -g @oxagen/cli]
+  N -->|no| E[Exit: install Node first]
+`} />
+
+A successful run on an Apple Silicon Mac:
+
+```console title="Terminal"
+$ curl -fsSL https://cli.oxagen.sh/install.sh | sh
+▸ detecting platform · darwin-arm64
+▸ fetching oxagen · verifying checksum
+✓ install: /Users/you/.local/bin/oxagen
+✓ oxagen is on your PATH — run `oxagen` to get started
+```
 
 Two environment variables change where it looks and where it writes:
 
@@ -69,7 +91,7 @@ oxagen --version
 ```
 
 <Callout type="info">
-The bundle is a single `.mjs` file with no native dependencies — it needs only Node 22 on `PATH`.
+The bundle is a single `.mjs` file with no native dependencies — it needs only Node.js 20 or newer on `PATH`.
 </Callout>
 
 ## From npm
@@ -93,8 +115,6 @@ oxagen --version
 ```
 
 ## Verify the install
-
-<IllustrationCliInstallSpot />
 
 Whichever method you used, confirm the binary works and see the top-level help:
 

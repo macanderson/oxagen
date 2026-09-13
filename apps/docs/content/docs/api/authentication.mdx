@@ -1,6 +1,6 @@
 ---
 title: Authentication
-description: How to create, scope, and use API keys to authenticate with the Oxagen REST API and MCP server.
+description: How to create, use, rotate, and revoke API keys for the Oxagen REST API and MCP server.
 ---
 
 ## API keys
@@ -14,11 +14,9 @@ Keys use the format `ox_…` (the prefix `ox_` followed by a base64url-encoded 3
 1. Go to **Organization → Developer → Tokens**.
 2. Click **Create API key**.
 3. Enter a descriptive name (e.g., "CI integration", "Slack bot").
-4. Select the workspace the key will operate within.
-5. Assign scopes (capability domains the key is permitted to invoke).
-6. Click **Create**. Copy the key — it is shown only once.
+4. Click **Create**. Copy the key — it is shown only once.
 
-API keys are service-account credentials. They appear in **Organization → Access → Identities → Service** as service principal records and are subject to the same IAM resolution as human users.
+A key acts with the access of the user who created it. See [What a key is allowed to do](#what-a-key-is-allowed-to-do).
 
 ## Using the key
 
@@ -49,7 +47,7 @@ When a key is used:
 
 1. The key is validated (signature, expiry).
 2. The org and workspace associated with the key are resolved.
-3. The principal's grants (including role-inherited grants) are evaluated for the capability being invoked.
+3. The capability call is authorized as the user who created the key (see below).
 
 ## Revoking a key
 
@@ -67,32 +65,18 @@ Content-Type: application/json
 }
 ```
 
-## Scopes
+## What a key is allowed to do
 
-When creating a key, you assign it capability domain scopes. A key can only invoke capabilities within its assigned scopes, regardless of what the service principal's role would otherwise allow.
+A key has no permissions of its own. Every call made with it is authorized as the user who created the key:
 
-| Scope | Capabilities included |
-|---|---|
-| `agent` | Agent capabilities — `list_agent_tools`, `recall_memory`, `write_memory`, `resolve_approval`, and the rest |
-| `chat` | Chat and conversation capabilities — `send_message`, `list_conversations`, `archive_conversation`, … |
-| `knowledge` | Memory and asset capabilities — `recall_memory`, `write_memory`, `upload_asset` |
-| `billing` | Billing capabilities — `get_subscription`, `purchase_credits`, `start_subscription_upgrade` |
-| `org` | Org and workspace capabilities — `create_org`, `add_org_member`, `create_workspace`, … |
-| `plugins` | Plugin capabilities — `install_plugin`, `set_plugin_enabled`, `browse_plugin_catalog`, … |
+- **Enterprise organizations** run the full IAM resolver against that user's role grants. If the creator can no longer be resolved in the org (for example, they were removed), every call with the key is denied.
+- **Free, Build, and Scale organizations** do not restrict people at the IAM layer, so a key can call any capability its surface exposes. Plan, credit, and budget checks still apply.
 
-The [Capabilities](/docs/api/capabilities) page lists the capability names in each domain.
-
-Assign only the scopes a key needs — principle of least privilege.
+Keys cannot yet be narrowed to a subset of capabilities. The create call accepts a `scope` field, but it is reserved and does not restrict what the key can invoke. Treat every key as carrying its creator's full access, and create keys from an account whose role matches what the integration needs.
 
 ## Key rotation
 
-Keys do not expire automatically. To rotate a key:
-
-1. Create a new key with the same scopes.
-2. Update your integration to use the new key.
-3. Revoke the old key.
-
-There is no graceful rotation period — the old key stops working immediately on revocation.
+Keys do not expire automatically. To rotate a key, click **Rotate** next to it in **Organization → Developer → Tokens**. Rotation issues a replacement key (shown once), carries over the old key's expiry, and revokes the old key in the same step — so update your integration with the new key immediately, because the old one stops working at once.
 
 ## Security notes
 

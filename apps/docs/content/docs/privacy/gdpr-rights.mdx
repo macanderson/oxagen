@@ -3,45 +3,53 @@ title: GDPR rights
 description: How Oxagen supports GDPR Article 17 (right to erasure) and Article 20 (right to data portability).
 ---
 
-<IllustrationPrivacySpot />
-
 ## Overview
 
 Oxagen provides self-service controls for the two most operationally significant GDPR rights:
 
 | Right | Article | Scope | Surface |
 |---|---|---|---|
-| Data portability | Art. 20 | User-level | Account → Privacy, API, MCP |
-| Right to erasure | Art. 17 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, API, MCP |
+| Data portability | Art. 20 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, in-app agent |
+| Right to erasure | Art. 17 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, in-app agent |
 
-Both rights can be exercised without contacting support. They are also available via API and MCP for operators who need to fulfill requests programmatically.
+Both rights can be exercised without contacting support.
+
+Both requests are tied to a person: the handlers reject any call that carries no signed-in user. The REST routes below therefore work with an app session, but not with an `ox_…` API key, because an API key carries org and workspace scope and no user. The MCP server authenticates with API keys only, so the `export_data` and `erase_data` MCP tools are registered but currently reject every call.
 
 ## Data export (Article 20)
 
-A user-scope export produces a ZIP archive containing:
+An export produces a ZIP archive containing:
 
 | File | Contents |
 |---|---|
-| `user-profile.json` | Name, email, created_at, org memberships |
-| `conversations/` | Conversation metadata and message history |
-| `api-keys.json` | Key metadata only — never key values |
-| `audit-log.json` | Security events where the user is the subject |
-| `generated-assets/` | List of asset URLs and metadata |
+| `user-profile.json` | The requesting user's profile. If this read fails, the whole export fails. |
+| `conversations/<id>.json` | One file per conversation, with its messages |
+| `api-keys.json` | Key metadata only (name, prefix, created, last used, scopes). Never key material. |
+| `audit-log.json` | Security events for the user (user scope) or the org (org scope) |
+| `members.json`, `workspaces.json` | Org scope only |
 
-Exports are assembled asynchronously. The request returns immediately with `status: "queued"` and a polling endpoint (`GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId`) updates status as the job progresses. When ready, `status` transitions to `"ready"` and a signed `downloadUrl` is provided.
+Every file except `user-profile.json` is read independently. If one of those reads fails, it is logged and skipped, and a partial export still ships.
+
+Exports are assembled asynchronously. The request returns immediately with `status: "queued"`. Poll `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId` as the job moves through `processing` to `ready` (or `failed`). When the export is `ready`, the response includes a `downloadUrl`. The archive is stored as a private object and served only through an authenticated path, never a public URL. A user can poll only their own exports.
 
 ### API
 
-```
+```http
 POST /v1/:org_slug/:workspace_slug/privacy/export
-{ "scope": "user" }
+Content-Type: application/json
 
-→ 202 { "exportId": "...", "status": "queued" }
+{ "scope": "user" }
 ```
 
-### MCP
+```json
+{ "exportId": "…", "status": "queued" }
+```
 
-Capability: `privacy.data.export`
+An org-scope export sends `{ "scope": "org", "orgId": "<uuid>" }` and requires the Owner or Admin role on that org.
+
+### Capability
+
+`export_data` (domain `privacy`). The in-app agent can call it without an approval card.
 
 ### CLI
 
@@ -49,37 +57,72 @@ CLI support for privacy commands is not yet implemented.
 
 ## Account and org erasure (Article 17)
 
-Erasure is available at two scopes:
+Erasure is requested at two scopes. Any authenticated user may request erasure of their own account (`scope: "user"`). An org-scope request (`scope: "org"`) requires the Owner role; Admin is not enough. In the in-app agent, `erase_data` always pauses for an approval card before it runs.
 
-### User-scope erasure
-Any authenticated user may request deletion of their own account. The request:
-1. Revokes the requesting user's active sessions immediately.
-2. Schedules a soft-delete of the user account (executed asynchronously by the grace-period job, not immediately at request time).
-3. Schedules a hard-delete of all personal data within 30 days (configurable via `PRIVACY_ERASURE_GRACE_DAYS`).
-4. Emits a `privacy.erasure_requested` security event and dispatches a `privacy/erasure.execute` Inngest job.
+<Mermaid chart={`
+sequenceDiagram
+  actor U as User
+  participant K as invoke() erase_data
+  participant PG as Postgres
+  participant J as Inngest job
+  U->>K: POST /privacy/erase, confirm true
+  K->>PG: Insert request (queued) and delete the user's sessions, one transaction
+  K->>PG: Security event privacy.erasure_requested
+  K->>J: privacy/erasure.execute with scheduledAt
+  K-->>U: 202 requestId, queued, effectiveAt
+  J->>J: Sleep until scheduledAt (grace period)
+  J->>PG: Status processing
+  J->>PG: User scope: anonymise profile, delete credentials and preferences
+  J->>PG: Status failed (cross-store cascade not implemented)
+`} />
 
-### Org-scope erasure
-An org Owner may request deletion of the entire organization. The request:
-1. Revokes the requesting owner's active sessions immediately. Downstream member session revocation is scheduled asynchronously via the Inngest job.
-2. Offboards all members.
-3. Schedules deletion of all org data (workspaces, conversations, assets, billing records).
-4. Emits `privacy.org_erasure_requested` security event and webhook.
+### What happens at request time
+
+1. The erasure request is recorded with `status: "queued"`. **In the same transaction**, every active session of the requesting user is deleted, so access ends immediately.
+2. A `privacy.erasure_requested` (user scope) or `privacy.org_erasure_requested` (org scope) security event is written.
+3. A `privacy/erasure.execute` job is dispatched for `scheduledAt`, the end of the grace period.
+
+### What the erasure job does today
+
+For **user scope**, once the grace period has passed, the job:
+
+- anonymises the user's identity row: display name `Deleted User`, email replaced with an `@deleted.invalid` address, avatar removed;
+- deletes the user's linked accounts, including OAuth tokens and the password hash;
+- deletes the user's personal preferences.
+
+For **org scope**, no data is erased by the job yet.
+
+The job then marks the request `failed` rather than `completed`. This is deliberate. The full cross-store cascade is not implemented, so personal data can remain in these places:
+
+- ClickHouse telemetry rows that store the user's email;
+- Neo4j nodes owned by the user (there is no delete-by-owner path yet);
+- generated-asset blobs;
+- Postgres `created_by` / `updated_by` references.
+
+Oxagen will not tell a data subject that erasure is complete while data remains. A `failed` request is the signal for an operator to follow up.
 
 ### Grace period
-The default grace period is 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set to `0` for immediate erasure in test environments. The grace period exists to allow cancellation in case of an accidental request — contact `privacy@oxagen.ai` within the grace period to cancel.
+
+The default grace period is 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set it to `0` for immediate erasure in test environments; a missing or unparseable value falls back to 30. The grace period exists to allow cancellation of an accidental request — contact `privacy@oxagen.ai` within the grace period to cancel.
 
 ### API
 
-```
+```http
 POST /v1/:org_slug/:workspace_slug/privacy/erase
-{ "scope": "user", "confirm": true }
+Content-Type: application/json
 
-→ 202 { "requestId": "...", "status": "queued", "effectiveAt": "2026-07-09T..." }
+{ "scope": "user", "confirm": true }
 ```
 
-### Webhook event
+```json
+{ "requestId": "…", "status": "queued", "effectiveAt": "2026-07-09T…" }
+```
 
-When erasure is requested, Oxagen emits a `privacy/erasure.execute` event through Inngest. You can subscribe to this event via the webhook channel to trigger downstream cleanup (CRM, analytics, internal systems):
+`confirm` must be the literal `true`. An org-scope request also sends `orgId`.
+
+### Job event
+
+`privacy/erasure.execute` is an internal Inngest event that drives the job above. Its payload is:
 
 ```json
 {
@@ -91,9 +134,11 @@ When erasure is requested, Oxagen emits a `privacy/erasure.execute` event throug
 }
 ```
 
+There is no customer-facing webhook subscription for this event.
+
 ## Security events
 
-All privacy actions are recorded as immutable security events in the `security.security_events` table:
+All privacy requests are recorded as immutable security events in the `security.security_events` table:
 
 | Action | Event type |
 |---|---|

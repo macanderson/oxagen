@@ -7,8 +7,8 @@ Oxagen governs the agents your organization builds and runs; it does not run
 a coding agent of its own. The sandbox layer, subagent fan-out, background
 tasks, plan mode, skills authoring, and content-generation tools have been
 excised (ADR-043, `docs/adr/ADR-043-runtime-excision.md` in the repository).
-What remains is one conversational surface: a thin, in-process governed turn
-loop (`runGovernedTurn`) whose job is to interrogate the **fleet record** and
+What remains is one conversational surface: a governed turn
+(`runGovernedTurn`) whose job is to interrogate the **fleet record** and
 the **knowledge graph** — what did my agents do, what context did they have,
 what did it cost, what is pending approval.
 
@@ -18,35 +18,51 @@ call it makes is a capability contract invoked through the same
 metered, and audit-logged identically regardless of which surface triggered
 it.
 
-<IllustrationAgent />
+The turn loop itself runs on Stella's headless engine, `stella-serve`
+(ADR-053). The engine owns the step cap, loop detection, compaction, and
+cancellation, but it holds no model key and runs no tool. Every completion and
+every tool call it wants comes back to Oxagen as a request, and Oxagen answers
+it under governance. There is no in-process fallback: if the engine is
+unreachable, the turn fails before anything streams.
 
 ## Architecture
 
-```
-User message
-    │
-    ▼
-chat/stream route
-    │  streamText (Vercel AI SDK, via @oxagen/ai)
-    ▼
-Governed turn loop (runGovernedTurn)
-    │  materializes tools from capability contracts filtered by
-    │  workspace tool policy and principal grants
-    │
-    ├─ Text response → streamed to client
-    │
-    ├─ Tool call → kernel.invoke(capability, input, ctx)
-    │     │  IAM check
-    │     │  Credit debit
-    │     │  Audit record
-    │     │  Handler runs in tenant scope
-    │     └─ Tool output → streamed to client
-    │
-    └─ Approval required → stream paused
-                         → approval card rendered
-                         → user approves/denies
-                         → stream resumes
-```
+<Mermaid chart={`
+sequenceDiagram
+  actor U as User
+  participant R as chat/stream route
+  participant T as runGovernedTurn
+  participant E as stella-serve
+  participant K as kernel.invoke()
+  U->>R: Message
+  R->>T: Turn, tools filtered by policy and grants
+  T->>E: Start turn with messages and tool contracts
+  loop Each step, up to the step cap
+    E->>T: provider_request
+    T->>T: streamAgentReply on the org's funding source
+    T-->>E: Completion
+    E-->>R: Text frames
+    R-->>U: text events
+    opt Model calls a tool
+      E->>T: tool_request
+      opt Capability requires approval
+        T-->>U: approval-required card
+        U->>T: Approve or deny, 5 min TTL
+      end
+      T->>K: invoke(capability, input, ctx)
+      K->>K: IAM check, credit debit, audit record
+      K-->>T: Tool output
+      T-->>E: Tool result
+      R-->>U: tool-call-start / tool-call-end
+    end
+  end
+  E-->>T: Turn outcome
+  T-->>R: Final text and usage
+`} />
+
+The engine sees tool results; it never sees a credential. A denied approval
+fails the tool call before `invoke()` runs, and the handler always runs inside
+the kernel's tenant scope.
 
 ## What the agent can do
 
@@ -77,7 +93,7 @@ service identity configured for an automated trigger.
 | Category | Examples |
 |---|---|
 | Fleet & registry | Look up agent definitions, roles, deployments, and environment bindings |
-| Execution history | List and inspect past agent executions, traces, and citations |
+| Run history | List and inspect past agent runs, traces, and citations |
 | Memory | Recall and write memories from the workspace knowledge graph |
 | Knowledge | Query the ontology, search the graph, browse nodes and relationships |
 | Approvals | Resolve a pending tool-call or MCP-consent approval |
@@ -92,8 +108,9 @@ list.
 
 Every agent turn produces:
 
-- Streamed `text_delta` events (the response) and `tool_call_*` events (tool
-  invocations) via SSE.
+- Streamed SSE events: `text` (the response), `tool-call-start` and
+  `tool-call-end` (tool calls), `approval-required` (an approval card), and
+  `usage`.
 - One `agent.agent_tool_calls` row in Postgres per tool invocation (durable
   record).
 - One ClickHouse `tool_invocations` row per tool invocation (analytics).
