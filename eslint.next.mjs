@@ -1,4 +1,4 @@
-// Shared ESLint flat config for the Next.js apps (apps/app, apps/docs).
+// Shared ESLint flat config for the Next.js apps (apps/app_deprecated, apps/docs; apps/app has its own ESLint 10 config).
 // Centralizes the eslint-config-next stack PLUS the workspace rule overrides so
 // lint enforcement cannot drift app-by-app. apps/mcp is not a Next app and uses
 // the root eslint.config.mjs instead. Per-app configs should re-export this

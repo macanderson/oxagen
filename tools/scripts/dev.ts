@@ -292,6 +292,9 @@ async function turbo(): Promise<void> {
       "--ui=stream",
       "--filter=!@oxagen/cli",
       "--filter=!@oxagen/env-manager",
+      // Not run in dev: it shares port 3000 with the new apps/app and is kept
+      // only for the parity gates until the Mission Control cutover.
+      "--filter=!@oxagen/app-deprecated",
     ],
     {
       stdin: "inherit",

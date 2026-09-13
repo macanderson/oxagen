@@ -50,6 +50,7 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { APP_DIR } from "./lib/app-dir.mjs";
 
 const ARGS = new Set(process.argv.slice(2));
 const JSON_MODE = ARGS.has("--json");
@@ -57,8 +58,8 @@ const WARN_ONLY = ARGS.has("--warn-only");
 const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 
 const ROOT = resolve(process.cwd());
-const APP_SRC = join(ROOT, "apps/app/src");
-const MANIFEST = join(ROOT, "apps/app/mobile-parity.json");
+const APP_SRC = join(ROOT, APP_DIR, "src");
+const MANIFEST = join(ROOT, APP_DIR, "mobile-parity.json");
 
 // ── Detection ────────────────────────────────────────────────────────────────
 const VISIBLE_AT_BREAKPOINT_RE =
@@ -255,8 +256,7 @@ export function computeMobileParity(findings, manifest) {
       violations.push({
         type: "uncovered-finding",
         finding,
-        reason:
-          "flagged mobile-hiding pattern is not registered in apps/app/mobile-parity.json",
+        reason: `flagged mobile-hiding pattern is not registered in ${APP_DIR}/mobile-parity.json`,
       });
     } else {
       coveredEntryIndexes.add(idx);
@@ -381,7 +381,7 @@ function describeViolation(v) {
 
 function main() {
   if (!existsSync(APP_SRC)) {
-    console.error(`No apps/app/src at ${APP_SRC}.`);
+    console.error(`No ${APP_DIR}/src at ${APP_SRC}.`);
     process.exit(2);
   }
   const manifest = readManifest();
@@ -428,7 +428,9 @@ function main() {
     "\nMobile is not a second-class surface — every desktop capability must work on mobile (ADR-026). For each" +
       "\nviolation above, either:" +
       "\n  1) make the feature available on mobile (preferred — drop the hiding class), or" +
-      '\n  2) if this is a genuine reflow, register a kind="reflow" entry in apps/app/mobile-parity.json describing' +
+      '\n  2) if this is a genuine reflow, register a kind="reflow" entry in ' +
+      APP_DIR +
+      "/mobile-parity.json describing" +
       "\n     the mobile-equivalent surface (>=20 chars), or" +
       '\n  3) if hiding is truly required, register a kind="hidden" entry with a security/performance reason, a' +
       "\n     >=120 char justification, and an approvedBy.",
