@@ -290,6 +290,7 @@ function fakeStores(tools: Tools, over: Partial<AgentStores> = {}) {
     principals: () => Promise.resolve(new Map([[AGENT_ID, PRINCIPAL]])),
     latestTiers: () =>
       Promise.resolve(new Map([[HOST_KEY, "harness" as const]])),
+    openIncidents: () => Promise.resolve(new Map([[HOST_KEY, 1]])),
     hostFacts: () =>
       Promise.resolve({
         deviceKeyFingerprint: "ed25519:8c41f02b70",
@@ -423,6 +424,17 @@ describe("createLiveAgents.listAgents", () => {
       operatorId: null,
       openIncidents: 1,
     });
+  });
+
+  it("counts open incidents for every key it lists, whatever the host row says", async () => {
+    const openIncidents = vi.fn(() => Promise.resolve(new Map([[KEY, 2]])));
+    const { stores } = fakeStores(listing(), { openIncidents });
+    const res = await createLiveAgents(stores, READY).listAgents(SCOPE);
+    expect(openIncidents).toHaveBeenCalledWith(SCOPE, [KEY, HOST_KEY]);
+    expect(res.ok && res.value.map((r) => [r.key, r.openIncidents])).toEqual([
+      [KEY, 2],
+      [HOST_KEY, 0],
+    ]);
   });
 
   it("merges a definition and its enrollment into one agent", async () => {
@@ -704,7 +716,7 @@ describe("createLiveAgents.definition", () => {
 
 describe("createLiveAgents.incidents", () => {
   it("parses collector incidents through Incident", async () => {
-    const { stores } = fakeStores({});
+    const { stores } = fakeStores(listing());
     const res = await createLiveAgents(stores, READY).incidents(SCOPE, KEY);
     expect(res.ok && res.value).toEqual([
       expect.objectContaining({
@@ -717,17 +729,40 @@ describe("createLiveAgents.incidents", () => {
   });
 
   it("rejects a row that breaks the view model instead of passing it on", async () => {
-    const { stores } = fakeStores(
-      {},
-      {
-        incidents: () => Promise.resolve([{ ...INCIDENT, severity: 7 }]),
-      },
-    );
+    const { stores } = fakeStores(listing(), {
+      incidents: () => Promise.resolve([{ ...INCIDENT, severity: 7 }]),
+    });
     await expect(
       createLiveAgents(stores, READY).incidents(SCOPE, KEY),
     ).resolves.toMatchObject({
       code: "contract_output_mismatch",
     });
+  });
+
+  it.each(["list_agent_defs", "list_tacho_hosts"])(
+    "returns the denial %s gave and never reads the incident stores",
+    async (tool) => {
+      const { stores } = fakeStores(listing({ [tool]: [DENIED] }));
+      const incidents = vi.spyOn(stores, "incidents");
+      await expect(
+        createLiveAgents(stores, READY).incidents(SCOPE, KEY),
+      ).resolves.toEqual(DENIED);
+      expect(incidents).not.toHaveBeenCalled();
+    },
+  );
+
+  it("is not found for a key in no store, and reads no incidents for it", async () => {
+    const { stores } = fakeStores(listing());
+    const incidents = vi.spyOn(stores, "incidents");
+    await expect(
+      createLiveAgents(stores, READY).incidents(SCOPE, "e2eavg.defaul.nobody"),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "error",
+      code: "agent_not_found",
+      status: 404,
+    });
+    expect(incidents).not.toHaveBeenCalled();
   });
 });
 
@@ -926,6 +961,31 @@ describe("liveAgentStores: tenant-scoped store reads", () => {
       liveAgentStores.latestTiers(SCOPE, [KEY, HOST_KEY]),
     ).resolves.toEqual(new Map([[KEY, "gateway"]]));
     expect(db.tables).toEqual([schema.tachoSessions]);
+  });
+
+  it("counts each key's unresolved incidents by host or run, once per incident", async () => {
+    await expect(liveAgentStores.openIncidents(SCOPE, [])).resolves.toEqual(
+      new Map(),
+    );
+    expect(db.tables).toEqual([]);
+    // The UNION already drops a (key, incident) pair linked by host and run.
+    db.queue.push([
+      { agentKey: KEY, id: "i1" },
+      { agentKey: KEY, id: "i2" },
+      { agentKey: HOST_KEY, id: "i3" },
+    ]);
+    await expect(
+      liveAgentStores.openIncidents(SCOPE, [KEY, HOST_KEY, "e2eavg.defaul.x"]),
+    ).resolves.toEqual(
+      new Map([
+        [KEY, 2],
+        [HOST_KEY, 1],
+      ]),
+    );
+    // One statement: incidents by host, UNION incidents by run.
+    expect(db.tables).toEqual([schema.tachoIncidents, schema.tachoIncidents]);
+    expect(db.scopes).toHaveLength(1);
+    expect(db.scopes[0]).toMatchObject(SCOPE);
   });
 
   it("reads host device, credential prefix and first session", async () => {

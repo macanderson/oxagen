@@ -124,6 +124,7 @@ const source = (over: Partial<AgentSource> = {}): AgentSource => ({
   host: null,
   principal: PRINCIPAL,
   latestTier: null,
+  openIncidents: 0,
   ...over,
 });
 
@@ -256,15 +257,32 @@ describe("toAgentRow", () => {
     ).toBe("Written");
   });
 
-  it("reads harness, version, tier and the incident counter from the enrollment", () => {
+  it("reads harness, version and tier from the enrollment", () => {
     const row = toAgentRow(source({ host: HOST, latestTier: "harness" }));
     expect(row).toMatchObject({
       harness: "claude-code",
       harnessVersion: "2.1.4",
       tier: "harness",
       status: "active",
-      openIncidents: 2,
     });
+  });
+
+  it("counts open incidents from tacho.incidents, never the host's unwritten counter", () => {
+    // Enrolled: its only open incident links through a run, so the host's
+    // incidents_open (no writer, always its default) must not stand in.
+    expect(
+      toAgentRow(
+        source({ host: { ...HOST, incidentsOpen: 0 }, openIncidents: 1 }),
+      ).openIncidents,
+    ).toBe(1);
+    expect(
+      toAgentRow(source({ host: HOST, openIncidents: 0 })).openIncidents,
+    ).toBe(0);
+    // Never enrolled: a control-plane or human incident on one of its runs
+    // still counts.
+    expect(
+      toAgentRow(source({ host: null, openIncidents: 2 })).openIncidents,
+    ).toBe(2);
   });
 
   it("names an enrolled-only agent by nothing it did not record", () => {

@@ -95,6 +95,12 @@ export type AgentSource = {
   principal: PrincipalFacts | null;
   /** The tier the agent's latest run recorded (`tacho.sessions.enforcement_tier`). */
   latestTier: EnforcementTier | null;
+  /**
+   * Unresolved `tacho.incidents` rows linked to the key by its host or a run.
+   * Counted from the incidents themselves: `tacho.hosts.incidents_open` has no
+   * writer, and a session-linked incident has no host.
+   */
+  openIncidents: number;
 };
 
 // ---- Recorded view models ------------------------------------------------------
@@ -250,9 +256,7 @@ export function toAgentRow(s: AgentSource): RecordedAgentRow {
     spend30d: null,
     proven30d: null,
     productiveRatio: null,
-    // `tacho.hosts.incidents_open` is the collector's own counter. An agent that
-    // was never enrolled has no incident a collector could have opened.
-    openIncidents: s.host?.incidentsOpen ?? 0,
+    openIncidents: s.openIncidents,
     mandateIds: null,
     modelTier: null,
     avatar: toAvatar(def?.avatarUrl ?? null, def?.name ?? s.key),
@@ -469,6 +473,7 @@ const PROBE_SOURCES: AgentSource[] = [
     host: null,
     principal: null,
     latestTier: null,
+    openIncidents: 0,
   },
   {
     key: PROBE_KEY,
@@ -477,6 +482,7 @@ const PROBE_SOURCES: AgentSource[] = [
     host: PROBE_HOST,
     principal: null,
     latestTier: null,
+    openIncidents: 0,
   },
 ];
 

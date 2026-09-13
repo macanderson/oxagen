@@ -6,7 +6,8 @@
 // list_tacho_hosts), so IAM decides and audits them exactly as on the API. The
 // stores no agent tool exposes (iam.principals, tacho.hosts device and
 // credential facts, tacho.sessions tiers, tacho.incidents) are read with
-// withTenantDb inside runInTenantScope, so RLS scopes them. Every result is
+// withTenantDb inside runInTenantScope, so RLS scopes them, and only after the
+// agent tools above have let the person see the agent. Every result is
 // parsed through its view-model schema before it leaves.
 //
 // A method whose view model cannot carry what the stores record (a field with
@@ -34,7 +35,7 @@ import {
 } from "@oxagen/oxagen/contracts/iam.role.list";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq, inArray, min, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, min, or } from "drizzle-orm";
 import { z } from "zod";
 import { notBackedFor } from "@/data/backing";
 import {
@@ -89,6 +90,14 @@ export type AgentStores = {
     scope: Scope,
     keys: readonly string[],
   ): Promise<Map<string, EnforcementTier>>;
+  /**
+   * Unresolved `tacho.incidents` per agent key, linked by its host or by one of
+   * its runs. A key with none is absent from the map.
+   */
+  openIncidents(
+    scope: Scope,
+    keys: readonly string[],
+  ): Promise<Map<string, number>>;
   hostFacts(scope: Scope, key: string): Promise<HostFacts | null>;
   incidents(scope: Scope, key: string): Promise<IncidentRow[]>;
 };
@@ -184,12 +193,14 @@ export function createLiveAgents(
         host: h,
       });
 
-    const [principals, tiers] = await Promise.all([
+    const keys = [...byKey.keys()];
+    const [principals, tiers, open] = await Promise.all([
       stores.principals(
         scope,
         defs.value.agents.map((d) => d.publicId),
       ),
-      stores.latestTiers(scope, [...byKey.keys()]),
+      stores.latestTiers(scope, keys),
+      stores.openIncidents(scope, keys),
     ]);
     return readOk(
       [...byKey.entries()]
@@ -203,6 +214,8 @@ export function createLiveAgents(
             ? (principals.get(definition.publicId) ?? null)
             : null,
           latestTier: tiers.get(key) ?? null,
+          // A count of recorded rows: zero means none are open, not unknown.
+          openIncidents: open.get(key) ?? 0,
         })),
     );
   }
@@ -290,6 +303,10 @@ export function createLiveAgents(
     async incidents(scope, key) {
       if (!ready.incidents) return notBackedFor("agents", "incidents");
       if (isOrgOnlyScope(scope)) return WORKSPACE_REQUIRED;
+      // The incident stores have no agent tool: the agent's own IAM-checked
+      // reads decide who may see them, and whether the key exists at all.
+      const found = await source(scope, key);
+      if (!found.ok) return found;
       const rows = await stores.incidents(scope, key);
       return serve(
         z.array(Incident),
@@ -452,6 +469,35 @@ export const liveAgentStores: AgentStores = {
       if (tier.success) tiers.set(row.agentKey, tier.data);
     }
     return tiers;
+  },
+
+  async openIncidents(scope, keys) {
+    const open = new Map<string, number>();
+    if (keys.length === 0) return open;
+    const t = schema.tachoIncidents;
+    const hosts = schema.tachoHosts;
+    const sessions = schema.tachoSessions;
+    // UNION (not ALL) keeps one (key, incident) pair when an incident links
+    // to both the agent's host and one of its runs.
+    const links = await inTenant(scope, (tx) =>
+      tx
+        .select({ agentKey: hosts.agentKey, id: t.id })
+        .from(t)
+        .innerJoin(hosts, eq(t.hostId, hosts.id))
+        .where(and(isNull(t.resolvedAt), inArray(hosts.agentKey, [...keys])))
+        .union(
+          tx
+            .select({ agentKey: sessions.agentKey, id: t.id })
+            .from(t)
+            .innerJoin(sessions, eq(t.sessionId, sessions.id))
+            .where(
+              and(isNull(t.resolvedAt), inArray(sessions.agentKey, [...keys])),
+            ),
+        ),
+    );
+    for (const { agentKey } of links)
+      open.set(agentKey, (open.get(agentKey) ?? 0) + 1);
+    return open;
   },
 
   async hostFacts(scope, key) {
