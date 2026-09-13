@@ -96,14 +96,14 @@ describe("PageState", () => {
         empty
         title="No runs yet"
         body="Wrap an agent to see its first run here."
-        actions={<a href="/acme/core-platform/register">Register an agent</a>}
+        actions={<button type="button">Register an agent</button>}
       />,
     );
     const state = screen.getByTestId("page-state-empty");
     expect(state).toHaveAccessibleName("No runs yet");
     expect(state).toHaveTextContent("Wrap an agent to see its first run here.");
     expect(
-      screen.getByRole("link", { name: "Register an agent" }),
+      screen.getByRole("button", { name: "Register an agent" }),
     ).toBeVisible();
   });
 
