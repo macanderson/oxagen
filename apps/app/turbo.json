@@ -1,6 +1,14 @@
 {
   "extends": ["//"],
   "tasks": {
+    // Lint is type-aware, and App Router files use the RouteContext / PageProps /
+    // LayoutProps globals that `next typegen` writes to .next/types. Both lint
+    // and typecheck run typegen (neither caches .next/types as an output, so a
+    // turbo cache hit on one leaves the other without them); lint waits for
+    // typecheck so the two never rewrite .next/types while tsc reads it.
+    "lint": {
+      "dependsOn": ["typecheck"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
