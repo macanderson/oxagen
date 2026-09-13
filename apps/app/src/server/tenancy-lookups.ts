@@ -28,25 +28,31 @@ export type WorkspaceRecord = {
   name: string;
 };
 
-export interface TenancyLookups {
+export type TenancyLookups = {
   /** The organization whose current slug is `slug`. */
-  orgBySlug(slug: string): Promise<OrgRecord | null>;
+  readonly orgBySlug: (slug: string) => Promise<OrgRecord | null>;
   /** The organization a redirect-enabled historical slug points at (most recent rename wins). */
-  orgBySlugHistory(slug: string): Promise<OrgRecord | null>;
+  readonly orgBySlugHistory: (slug: string) => Promise<OrgRecord | null>;
   /** The workspace in `orgId` whose current slug is `slug`. */
-  workspaceBySlug(orgId: string, slug: string): Promise<WorkspaceRecord | null>;
-  /** The workspace in `orgId` a redirect-enabled historical slug points at. */
-  workspaceBySlugHistory(
+  readonly workspaceBySlug: (
     orgId: string,
     slug: string,
-  ): Promise<WorkspaceRecord | null>;
+  ) => Promise<WorkspaceRecord | null>;
+  /** The workspace in `orgId` a redirect-enabled historical slug points at. */
+  readonly workspaceBySlugHistory: (
+    orgId: string,
+    slug: string,
+  ) => Promise<WorkspaceRecord | null>;
   /** The member's organization role, lowercased; null for a non-member. */
-  orgRole(orgId: string, userId: string): Promise<string | null>;
-  isWorkspaceMember(workspaceId: string, userId: string): Promise<boolean>;
+  readonly orgRole: (orgId: string, userId: string) => Promise<string | null>;
+  readonly isWorkspaceMember: (
+    workspaceId: string,
+    userId: string,
+  ) => Promise<boolean>;
   /** The organization's MFA policy, or null when it has none. */
-  mfaPolicy(orgId: string): Promise<MfaPolicy | null>;
-  twoFactorEnabled(userId: string): Promise<boolean>;
-}
+  readonly mfaPolicy: (orgId: string) => Promise<MfaPolicy | null>;
+  readonly twoFactorEnabled: (userId: string) => Promise<boolean>;
+};
 
 function toOrg(row: typeof schema.organizations.$inferSelect): OrgRecord {
   return { id: row.id, publicId: row.publicId, slug: row.slug, name: row.name };

@@ -6,6 +6,7 @@ import {
   ContractOutputMismatch,
   FixtureWriteRefused,
   InvalidStreamCursor,
+  ToolInputInvalid,
   ToolNotRegistered,
   toActionFailure,
 } from "./errors";
@@ -32,6 +33,7 @@ describe("AppError subclasses", () => {
   it.each([
     [new FixtureWriteRefused("resolve_approval"), "fixture_write_refused", 409],
     [new ToolNotRegistered("resolve_approval"), "tool_not_registered", 500],
+    [new ToolInputInvalid("resolve_approval", []), "tool_input_invalid", 422],
     [
       new ContractOutputMismatch("resolve_approval", [{ path: ["x"] }]),
       "contract_output_mismatch",

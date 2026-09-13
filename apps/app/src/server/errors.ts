@@ -12,6 +12,7 @@
 export type AppErrorCode =
   | "fixture_write_refused"
   | "tool_not_registered"
+  | "tool_input_invalid"
   | "contract_output_mismatch"
   | "invalid_stream_cursor"
   | "cache_tag_scope";
@@ -49,6 +50,25 @@ export class ToolNotRegistered extends AppError {
   constructor(readonly tool: string) {
     super(`agent tool not registered: ${tool}`);
     this.name = "ToolNotRegistered";
+  }
+}
+
+/**
+ * Input a tool's contract rejects, caught by the fixture write path the same
+ * way the kernel's `invalid_input` catches it on the live path.
+ */
+export class ToolInputInvalid extends AppError {
+  readonly code = "tool_input_invalid";
+  readonly status = 422;
+
+  constructor(
+    readonly tool: string,
+    readonly issues: readonly unknown[],
+  ) {
+    super(
+      `input for agent tool "${tool}" does not match its contract (${String(issues.length)} issue(s))`,
+    );
+    this.name = "ToolInputInvalid";
   }
 }
 
