@@ -13,7 +13,7 @@ const item = {
 };
 
 describe("list_approvals contract", () => {
-  it("is a console read: scoped, non-mutating, never metered, deny by default for Owner/Admin/Member", () => {
+  it("is a console read: scoped, non-mutating, unmetered, deny by default for Owner/Admin/Member", () => {
     expect(agentApprovalList.name).toBe("list_approvals");
     expect(agentApprovalList.scoped).toBe(true);
     expect(agentApprovalList.mutates).toBe(false);
@@ -65,7 +65,7 @@ describe("list_approvals contract", () => {
     ).toBeNull();
   });
 
-  it("carries only public ids, never a row uuid", () => {
+  it("carries public ids only", () => {
     expect(
       approvalListItem.safeParse({
         ...item,

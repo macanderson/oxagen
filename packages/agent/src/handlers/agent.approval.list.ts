@@ -24,9 +24,9 @@ export type ApprovalListRow = {
 
 /**
  * A page boundary: the last row's (expires_at, public_id). Public ids are
- * lowercase Crockford base32 (schema/_mixins.ts `cryptoRandom`), so two
- * distinct ids never compare equal under the column's citext collation and the
- * tuple is a total order.
+ * lowercase Crockford base32 (schema/_mixins.ts `cryptoRandom`), so
+ * two distinct ids compare unequal under the column's citext collation and
+ * the tuple is a total order.
  */
 export type ApprovalCursor = { expiresAt: Date; id: string };
 
@@ -82,7 +82,8 @@ export async function agentApprovalListHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListOutput> {
   // No approval row names a run (contract header), so no approval is on the
-  // run the caller asks about. The page is empty by record, never by query.
+  // run the caller asks about: the page is empty because the record holds no
+  // such row.
   if (input.runId !== undefined) return { items: [], nextCursor: null };
 
   const after = decodeCursor(input.cursor);

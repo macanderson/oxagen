@@ -2,9 +2,9 @@
 // first, cursor-paged. The read behind the Fleet approvals panel and the Run
 // approvals strip (apps/app/ARCHITECTURE.md §1.2, §3.3).
 //
-// A console read is never a governed action (ADR-052 exclusion 2, INV-28), so
-// the contract declares `noBillingGate: true`: a page load or an SSE poll of
-// this list neither meters nor locks a customer out. `mutates: false` is what
+// A console read is outside the metering surface (ADR-052 exclusion 2,
+// INV-28), so the contract declares `noBillingGate: true`: a page load or an
+// SSE poll of this list meters nothing and locks nobody out. `mutates: false` is what
 // lets the app's `kernelRead` accept it (INV-03).
 //
 // Every item field is either recorded on the approval row, joined from a row
@@ -14,7 +14,7 @@
 // agent.ts:130-151) and none of them names an `agent_runs` or
 // `tacho_sessions` row, and no column carries the agent key or the rule that
 // parked the call (the gateway of MC spec §7.5, which writes the four-hop
-// chain, does not exist). Those fields are nullable and null, never guessed.
+// chain, does not exist). Those fields are nullable and null.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 

@@ -6,7 +6,7 @@
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp
 **Risk level:** low
-**Billing:** `noBillingGate: true` — a console read is never a governed action (ADR-052 exclusion 2)
+**Billing:** `noBillingGate: true` — a console read is outside the metering surface (ADR-052 exclusion 2)
 **Mutates:** no
 
 ## Intent
@@ -44,14 +44,13 @@ Each item:
 | `chain.agentKey` | `string \| null` | The agent that raised the call. Not recorded today.                                         |
 | `chain.rule`     | `string \| null` | The grant, mandate or standing rule that parked the call (MC spec §7.5). Not recorded today. |
 
-Only public ids leave the handler; the row uuid is never exposed.
+Only public ids leave the handler.
 
 ## Semantics
 
 - **Pending only:** `resolution IS NULL AND expires_at > now()`. A resolved or
   expired approval is not listed.
-- **Workspace-bound:** rows are filtered on the context's org and workspace;
-  another workspace's approvals never appear.
+- **Workspace-bound:** rows are filtered on the context's org and workspace.
 - **`runId`:** because no approval row names a run, a run filter yields an
   empty page. The field exists so the Run strip asks the question the record
   answers; the answer changes when the store records the link.
