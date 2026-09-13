@@ -9,10 +9,15 @@ export const OntologyClass = z.object({
   freshAt: Instant,
   sources: z.array(z.string()),
   relations: z.array(z.string().regex(/^[A-Z][A-Z0-9_]*$/)),
-  citedByAgents: Count,
+  // `classes` is wired at M0 (plan §3.1 🟡); these counts need stores that do
+  // not exist yet, so null means not recorded, never zero.
+  /** Agents whose context cited the class. Null until `USED_CONTEXT` edges are recorded (G10). */
+  citedByAgents: Count.nullable(),
   rulesReferencing: Count,
-  provenRuns: Count,
-  driftFindings: Count,
+  /** Proven runs that touched the class. Null until verdicts are recorded (G7). */
+  provenRuns: Count.nullable(),
+  /** Open drift findings. Null until the findings job runs (G4). */
+  driftFindings: Count.nullable(),
   builtin: z.boolean(),
 });
 export type OntologyClass = z.infer<typeof OntologyClass>;

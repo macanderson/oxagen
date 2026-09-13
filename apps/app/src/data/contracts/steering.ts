@@ -19,7 +19,10 @@ export const SteeringRecord = z.object({
   scope: z.enum(["workspace", "repository"]),
   status: z.enum(["published", "archived"]),
   statement: z.string(),
-  effect: z.object({ rendered: Count, cited: Count, violated: Count }),
+  /** Measured effect. Null until effect metrics are recorded (M3); `records` is wired at M0. */
+  effect: z
+    .object({ rendered: Count, cited: Count, violated: Count })
+    .nullable(),
   commitSha: CommitSha,
   publishedOn: Day,
 });

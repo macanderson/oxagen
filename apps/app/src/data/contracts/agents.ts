@@ -69,8 +69,11 @@ export const AgentDetail = AgentRow.extend({
     collectorVersion: z.string(),
     deviceKey: z.string(),
     firstFrameAt: Instant,
-    /** The strongest replay grade this agent's runs record. */
-    replayGrade: ReplayGrade,
+    /**
+     * The strongest replay grade this agent's runs record. Null until the M1
+     * recorder writes grades (G6): a guessed grade is a trust badge.
+     */
+    replayGrade: ReplayGrade.nullable(),
   }),
   credential: z.object({
     prefix: z.string(),
@@ -78,11 +81,17 @@ export const AgentDetail = AgentRow.extend({
     lastUsedAt: Instant,
     activeRunTokens: Count,
   }),
-  definition: z.object({
-    path: z.string(),
-    digest: Digest,
-    commitSha: CommitSha,
-  }),
+  /**
+   * The definition file in git. Null while definitions are DB-backed
+   * (`agent.definition.*`, plan §3.1 🟡): there is no path or commit to cite.
+   */
+  definition: z
+    .object({
+      path: z.string(),
+      digest: Digest,
+      commitSha: CommitSha,
+    })
+    .nullable(),
   budget: z.object({
     perRun: Money,
     /** Spend of the latest run against the per-run cap. */
@@ -136,14 +145,23 @@ export const AgentBranch = z.object({
 });
 export type AgentBranch = z.infer<typeof AgentBranch>;
 
-/** The definition in git: `.oxagen/agents/<slug>.toml` on the main repo (spec §6.2). */
+/**
+ * The definition in git: `.oxagen/agents/<slug>.toml` on the main repo (spec §6.2).
+ * `definition` is wired at M0 against DB-backed `agent.definition.*` (plan §3.1
+ * 🟡), which holds the source but no git file: the git fields are null until
+ * definitions live in git, never a made-up path or sha.
+ */
 export const AgentDefinition = z.object({
   agentKey: AgentKey,
-  path: z.string().regex(/^\.oxagen\/agents\/[a-z0-9-]+\.toml$/),
-  digest: Digest,
-  commitSha: CommitSha,
+  path: z
+    .string()
+    .regex(/^\.oxagen\/agents\/[a-z0-9-]+\.toml$/)
+    .nullable(),
+  digest: Digest.nullable(),
+  commitSha: CommitSha.nullable(),
   source: z.string(),
-  branches: z.array(AgentBranch),
+  /** Branches of the definition file. Null until definitions live in git; empty means none open. */
+  branches: z.array(AgentBranch).nullable(),
 });
 export type AgentDefinition = z.infer<typeof AgentDefinition>;
 

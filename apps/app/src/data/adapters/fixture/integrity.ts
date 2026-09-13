@@ -139,7 +139,7 @@ export function findDanglingReferences(seed: Seed): DanglingReference[] {
   }
   for (const d of seed.definitions) {
     expect(`definitions[${d.agentKey}]`, "agents", d.agentKey);
-    for (const b of d.branches)
+    for (const b of d.branches ?? [])
       expect(
         `definitions[${d.agentKey}].branches[${b.name}].authorId`,
         "people",

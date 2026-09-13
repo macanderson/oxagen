@@ -8,10 +8,13 @@
 import { backingOf, notBackedFor } from "@/data/backing";
 import type {
   ApprovalItem,
+  Finding,
   Frame,
   RunDetail,
   RunGraph,
   RunRow,
+  SpendDrill,
+  SpendSlice,
   SpendSummary,
   WasteReport,
 } from "@/data/contracts";
@@ -119,6 +122,32 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
     seed.runs.find((r) => r.id === runId && inScope(scope, r.workspaceSlug));
   const agentIn = (scope: Scope, key: string) =>
     seed.agents.find((a) => a.key === key && inScope(scope, a.workspaceSlug));
+
+  // Spend is workspace data: a row, slice or citation is as visible as the
+  // agent or run it names, so nothing on the Spend page links to a 404.
+  /** A drill slice that names an agent the scope cannot see is dropped. */
+  const slicesIn = (scope: Scope, slices: SpendSlice[]) =>
+    slices.filter((s) => s.key === null || agentIn(scope, s.key));
+  /** Agent drills follow the agent; operator and tool drills keep only visible agents. */
+  const drillIn = (scope: Scope, d: SpendDrill): SpendDrill | undefined => {
+    if (d.kind === "agent" && !agentIn(scope, d.id)) return undefined;
+    return { ...d, agents: slicesIn(scope, d.agents) };
+  };
+  const evidenceOf = (findingId: string) =>
+    seed.spend.evidence.find((e) => e.findingId === findingId);
+  /**
+   * A finding is visible when its subject is (agent and workspace findings)
+   * and when the agent its evidence names is: an operator's finding about
+   * another workspace's agent stays in that workspace.
+   */
+  const findingIn = (scope: Scope, f: Finding) => {
+    if (f.level === "agent" && !agentIn(scope, f.subject)) return false;
+    if (f.level === "workspace" && !inScope(scope, f.subject)) return false;
+    const whoKey = evidenceOf(f.id)?.who.agentKey;
+    return !whoKey || agentIn(scope, whoKey) !== undefined;
+  };
+  const visibleFinding = (scope: Scope, findingId: string) =>
+    seed.spend.findings.find((f) => f.id === findingId && findingIn(scope, f));
 
   /** A pending approval's clock runs from now, keeping the wait the mockup drew. */
   const rebase = (a: ApprovalItem): ApprovalItem => {
@@ -555,11 +584,14 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           () => readOk(seed.spend.byOperator),
           () => [],
         ),
-      byAgent: () =>
+      byAgent: (scope) =>
         read(
           "spend",
           "byAgent",
-          () => readOk(seed.spend.byAgent),
+          () =>
+            readOk(
+              seed.spend.byAgent.filter((row) => agentIn(scope, row.agentKey)),
+            ),
           () => [],
         ),
       byModel: () =>
@@ -576,11 +608,17 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
           () => readOk(seed.spend.byTool),
           () => [],
         ),
-      waste: () =>
+      waste: (scope) =>
         read(
           "spend",
           "waste",
-          () => readOk(seed.spend.waste),
+          () =>
+            readOk({
+              ...seed.spend.waste,
+              worstRuns: seed.spend.waste.worstRuns.filter((r) =>
+                runIn(scope, r.runId),
+              ),
+            }),
           (): WasteReport => ({
             total: ZERO,
             share: 0,
@@ -589,31 +627,37 @@ export function createFixtureSource(options: FixtureOptions): DataSource {
             worstRuns: [],
           }),
         ),
-      drill: (_scope, kind, id) =>
-        read("spend", "drill", () =>
-          found(
-            seed.spend.drills.find((d) => d.kind === kind && d.id === id),
-            "drill",
-          ),
-        ),
-      findings: () =>
+      drill: (scope, kind, id) =>
+        read("spend", "drill", () => {
+          const drill = seed.spend.drills.find(
+            (d) => d.kind === kind && d.id === id,
+          );
+          return found(drill && drillIn(scope, drill), "drill");
+        }),
+      findings: (scope) =>
         read(
           "spend",
           "findings",
-          () => readOk(seed.spend.findings),
+          () => readOk(seed.spend.findings.filter((f) => findingIn(scope, f))),
           () => [],
         ),
-      findingEvidence: (_scope, id) =>
-        read("spend", "findingEvidence", () =>
-          found(
-            seed.spend.evidence.find((e) => e.findingId === id),
-            "finding",
-          ),
-        ),
-      findingFix: (_scope, id) =>
+      findingEvidence: (scope, id) =>
+        read("spend", "findingEvidence", () => {
+          const evidence = visibleFinding(scope, id) && evidenceOf(id);
+          if (!evidence) return notFound("finding");
+          // A cited run the scope cannot see is dropped, never shown unlinked.
+          return readOk({
+            ...evidence,
+            runs: evidence.runs.filter(
+              (r) => r.runId === null || runIn(scope, r.runId),
+            ),
+          });
+        }),
+      findingFix: (scope, id) =>
         read("spend", "findingFix", () =>
           found(
-            seed.spend.fixes.find((f) => f.findingId === id),
+            visibleFinding(scope, id) &&
+              seed.spend.fixes.find((f) => f.findingId === id),
             "finding",
           ),
         ),

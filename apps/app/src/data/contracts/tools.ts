@@ -99,7 +99,8 @@ export const Connection = z.object({
   reviewOn: Day,
   grants30d: Count,
   status: z.enum(["active", "expired", "revoked"]),
-  requiresMandate: z.boolean(),
+  /** Whether a grant needs a mandate. Null until the mandate store lands (G1). */
+  requiresMandate: z.boolean().nullable(),
   downscope: DownscopeMethod,
 });
 export type Connection = z.infer<typeof Connection>;

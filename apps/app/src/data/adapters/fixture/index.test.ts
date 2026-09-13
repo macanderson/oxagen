@@ -52,7 +52,7 @@ const ARGS: Record<string, unknown[]> = {
   "agents.getMandate": ["mnd_7K2ETQ4"],
   "tools.policySimulation": ["pol_v42"],
   "spend.drill": ["agent", "acme.core.triage"],
-  "spend.findingEvidence": ["fnd_01K5RTGH"],
+  "spend.findingEvidence": ["fnd_01K5RTEG"],
   "spend.findingFix": ["fnd_01K5RT6C"],
   "audit.getReceipt": ["rcp_01K4X8M2E"],
 };
@@ -528,6 +528,106 @@ describe("fixture source · reads", () => {
       }
     },
   );
+
+  describe.each([
+    ["core-platform", CORE],
+    ["finops", FINOPS],
+  ] as const)("spend under %s", (slug, scope) => {
+    /** Every run id and agent key a spend read hands the page, from every drill and finding. */
+    async function spendReferences() {
+      const s = source();
+      const runIds: string[] = [];
+      const agentKeys: string[] = [];
+      for (const row of ok(await s.spend.byAgent(scope)))
+        agentKeys.push(row.agentKey);
+      for (const r of ok(await s.spend.waste(scope)).worstRuns)
+        runIds.push(r.runId);
+      for (const d of seed.spend.drills) {
+        const read = await s.spend.drill(scope, d.kind, d.id);
+        if (!read.ok) continue;
+        if (read.value.kind === "agent") agentKeys.push(read.value.id);
+        for (const slice of read.value.agents)
+          if (slice.key !== null) agentKeys.push(slice.key);
+      }
+      for (const f of ok(await s.spend.findings(scope))) {
+        if (f.level === "agent") agentKeys.push(f.subject);
+        const evidence = ok(await s.spend.findingEvidence(scope, f.id));
+        if (evidence.who.agentKey) agentKeys.push(evidence.who.agentKey);
+        for (const cited of evidence.runs)
+          if (cited.runId) runIds.push(cited.runId);
+        expect((await s.spend.findingFix(scope, f.id)).ok).toBe(true);
+      }
+      return { runIds, agentKeys };
+    }
+
+    it("links only to runs and agents the same scope can open (W4)", async () => {
+      const s = source();
+      const { runIds, agentKeys } = await spendReferences();
+      expect(runIds.length).toBeGreaterThan(0);
+      expect(agentKeys.length).toBeGreaterThan(0);
+      for (const id of runIds)
+        expect((await s.runs.getRun(scope, id)).ok, id).toBe(true);
+      for (const key of agentKeys)
+        expect((await s.agents.getAgent(scope, key)).ok, key).toBe(true);
+    });
+
+    it("hides the other workspace's spend drills, findings and evidence (negative)", async () => {
+      const s = source();
+      const visible = new Set(
+        ok(await s.spend.findings(scope)).map((f) => f.id),
+      );
+      const others = seed.spend.findings.filter((f) => !visible.has(f.id));
+      expect(others.length).toBeGreaterThan(0);
+      for (const f of others) {
+        expect(await s.spend.findingEvidence(scope, f.id)).toMatchObject({
+          code: "finding_not_found",
+          status: 404,
+        });
+        expect(await s.spend.findingFix(scope, f.id)).toMatchObject({
+          code: "finding_not_found",
+          status: 404,
+        });
+      }
+      const foreignAgents = seed.agents.filter((a) => a.workspaceSlug !== slug);
+      expect(foreignAgents.length).toBeGreaterThan(0);
+      for (const a of foreignAgents)
+        expect(await s.spend.drill(scope, "agent", a.key)).toMatchObject({
+          code: "drill_not_found",
+          status: 404,
+        });
+    });
+  });
+
+  it("spells out the finops finding a core-platform viewer cannot open (negative)", async () => {
+    const s = source();
+    // fnd_01K5RTGH is a tool finding whose evidence names acme.finops.invoice-bot
+    // and cites two finops runs.
+    expect(await s.spend.findingEvidence(CORE, "fnd_01K5RTGH")).toMatchObject({
+      code: "finding_not_found",
+    });
+    expect(
+      ok(await s.spend.byAgent(CORE)).map((r) => r.agentKey),
+    ).not.toContain("acme.finops.invoice-bot");
+    expect(
+      await s.spend.drill(CORE, "agent", "acme.finops.invoice-bot"),
+    ).toMatchObject({ code: "drill_not_found", status: 404 });
+    const evidence = ok(await s.spend.findingEvidence(FINOPS, "fnd_01K5RTGH"));
+    expect(evidence.runs.map((r) => r.runId)).toEqual([
+      "run_01K5RN8F3J2GHY6T",
+      "run_01K5RF2J7M3EDC5F",
+      null,
+    ]);
+    expect(
+      ok(await s.spend.waste(CORE)).worstRuns.map((r) => r.runId),
+    ).not.toContain("run_01K5RN8F3J2GHY6T");
+    // The organization scope still sees every workspace's spend.
+    expect(ok(await s.spend.findings(ORG))).toHaveLength(
+      seed.spend.findings.length,
+    );
+    expect(ok(await s.spend.byAgent(ORG))).toHaveLength(
+      seed.spend.byAgent.length,
+    );
+  });
 
   it("shows a mandate only to the workspace of the agent that holds it (negative)", async () => {
     expect(await source().agents.getMandate(CORE, "mnd_7K2ETQ4")).toMatchObject(

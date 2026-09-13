@@ -47,7 +47,8 @@ export const RunRow = z.object({
   /** Null = not recorded; the badge says so rather than guessing. */
   tier: EnforcementTier.nullable(),
   grade: ReplayGrade.nullable(),
-  verdict: Verdict,
+  /** The witness verdict. Null until verdicts are recorded (G7); `getRun` is wired at M0. */
+  verdict: Verdict.nullable(),
   /** An issue, a PR or free text (spec §8.1). */
   taskRef: z.string().nullable(),
   startedAt: Instant,
@@ -82,8 +83,11 @@ export const RunDetail = RunRow.extend({
   /** Proven over total spend. Null until G7. */
   productiveRatio: Ratio.nullable(),
   summary: RunSummary.nullable(),
-  /** What the run touched, as short references (issues, branches, files). */
-  touched: z.array(z.string()),
+  /**
+   * What the run touched, as short references (issues, branches, files). Null
+   * until the run's work graph is recorded (G6); empty means recorded and none.
+   */
+  touched: z.array(z.string()).nullable(),
 });
 export type RunDetail = z.infer<typeof RunDetail>;
 

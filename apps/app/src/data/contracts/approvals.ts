@@ -46,14 +46,19 @@ export const ApprovalItem = z.object({
     operatorId: PublicId,
     agentKey: AgentKey,
     action: ToolVersionRef,
-    trigger: ApprovalTrigger,
+    /**
+     * The fourth hop. Null when the store did not record which rule raised the
+     * call: rule evaluations (G2) and mandates (G1) are not recorded at M0.
+     */
+    trigger: ApprovalTrigger.nullable(),
   }),
   risk: Risk,
   sideEffect: SideEffect,
   egress: EgressClass,
   /** The measured amount, when the tool declares one. */
   amount: Money.nullable(),
-  counterparty: z.string(),
+  /** The measured counterparty, when the tool declares one (like `amount`). */
+  counterparty: z.string().nullable(),
   mandateId: PublicId.nullable(),
   // Null means not recorded, never a guessed value: the live adapter wires
   // `approvals.pending` at M0, before the stores below exist (plan §3.1).

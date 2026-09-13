@@ -51,8 +51,14 @@ export const SpendByAgent = z.object({
   agentKey: AgentKey,
   runs: Count,
   spend: Money,
-  proven: Money,
-  /** Null when the agent has no proven run to divide by. */
+  // `byAgent` is wired at M0; proven spend waits on G7 (null = not recorded).
+  /** Null until G7. */
+  proven: Money.nullable(),
+  /**
+   * Spend per proven run. Null in two cases, told apart by `proven`: when
+   * `proven` is null the split is not recorded (G7); when `proven` is recorded
+   * the agent has no proven run to divide by.
+   */
   perProvenRun: Money.nullable(),
   /** Change against the previous period, in percent. */
   trendPercent: z.number(),
@@ -135,7 +141,9 @@ export const SpendDrill = z.object({
   kind: DrillKind,
   id: z.string(),
   cacheHitRate: Ratio,
-  wasted: Money,
+  // `drill` is wired at M0; waste needs verdicts (M6, G7). Null = not recorded.
+  /** Spend whose frames show it bought nothing. Null until G7. */
+  wasted: Money.nullable(),
   accepted: Money.nullable(),
   unproven: Money.nullable(),
   perRun: Money.nullable(),

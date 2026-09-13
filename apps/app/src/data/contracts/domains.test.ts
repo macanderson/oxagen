@@ -22,7 +22,7 @@ describe("runs", () => {
 
   it("rejects the mockup's vocabulary on a run row (negative)", () => {
     expect(RunRow.safeParse({ ...row, grade: "full" }).success).toBe(false);
-    expect(RunRow.safeParse({ ...row, verdict: null }).success).toBe(false);
+    expect(RunRow.safeParse({ ...row, verdict: "passed" }).success).toBe(false);
     expect(
       RunRow.safeParse({ ...row, cost: { micros: "4.13", currency: "USD" } })
         .success,
@@ -32,10 +32,11 @@ describe("runs", () => {
     );
   });
 
-  it("keeps tier and grade nullable: not recorded is not a guess", () => {
-    expect(RunRow.safeParse({ ...row, tier: null, grade: null }).success).toBe(
-      true,
-    );
+  it("keeps tier, grade and verdict nullable: not recorded is not a guess", () => {
+    expect(
+      RunRow.safeParse({ ...row, tier: null, grade: null, verdict: null })
+        .success,
+    ).toBe(true);
   });
 
   it("requires a decimal seq cursor and a spec frame kind", () => {
