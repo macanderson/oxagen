@@ -73,8 +73,18 @@ describe("knip baseline", () => {
     expect(run.out).not.toMatch(/Unused/);
   });
 
-  it("refuses a baseline that is not an array of strings", () => {
-    expect(knipRun({ files: [UNUSED_FILE] }).status).not.toBe(0);
+  it("refuses a baseline that is not an array", () => {
+    const run = knipRun({ files: [UNUSED_FILE] });
+    expect(run.status).not.toBe(0);
+    expect(run.out).toContain("expected a JSON array of strings");
+    expect(run.out).not.toMatch(/Unused|Stale/);
+  });
+
+  it("refuses a baseline array with a non-string entry", () => {
+    const run = knipRun([UNUSED_FILE, UNUSED_EXPORT, 1]);
+    expect(run.status).not.toBe(0);
+    expect(run.out).toContain("expected a JSON array of strings");
+    expect(run.out).not.toMatch(/Unused|Stale/);
   });
 
   it("refuses duplicate baseline entries", () => {
