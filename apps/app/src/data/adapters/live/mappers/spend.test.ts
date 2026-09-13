@@ -1,4 +1,5 @@
 import type { schema } from "@oxagen/database";
+import type { CapabilityContext } from "@oxagen/oxagen";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingUsageBreakdown } from "@oxagen/oxagen/contracts/billing.usage.breakdown";
 import { describe, expect, it, vi } from "vitest";
@@ -72,7 +73,7 @@ vi.mock("@oxagen/billing", async () => {
       Promise.resolve(
         (pg.rows as SpendBudgetRowSelect[]).map((row) => {
           const spentMicros = pg.spentMicros.get(row.workspaceId) ?? 0n;
-          const limitMicros = BigInt(row.limitMicros);
+          const limitMicros = row.limitMicros;
           const ratio = Number(spentMicros) / Number(limitMicros);
           return {
             budget: {
@@ -115,7 +116,7 @@ const { billingBudgetGetHandler } = await import(
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-0000000c0de0";
-const CTX = {
+const CTX: CapabilityContext = {
   orgId: ORG,
   workspaceId: WS,
   userId: "0192d4a8-7c1e-7a00-8000-000000000b31",
@@ -123,7 +124,7 @@ const CTX = {
   requestId: "req-spend-contract",
   surface: "app",
   messageId: null,
-} as const;
+};
 
 const clickhouseModelRow = (o: Record<string, string>) => ({
   group_key: "claude-sonnet-4-5",
@@ -149,7 +150,7 @@ async function realModelRows(
       end: "2026-10-01T00:00:00.000Z",
       workspaceId: WS,
     },
-    CTX as never,
+    CTX,
   );
   return billingUsageBreakdown.output.parse(raw).byModel;
 }
@@ -178,7 +179,7 @@ async function realBudgetStatuses(
 ): Promise<SpendBudgetStatus[]> {
   pg.rows = rows;
   pg.spentMicros = new Map(spent);
-  const raw = await billingBudgetGetHandler({}, CTX as never);
+  const raw = await billingBudgetGetHandler({}, CTX);
   return billingBudgetGet.output.parse(raw).budgets;
 }
 

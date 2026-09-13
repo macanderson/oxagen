@@ -117,7 +117,7 @@ function fakeDeps(
   outputs: {
     byModel?: ModelRow[];
     budgets?: BudgetStatus[];
-    error?: unknown;
+    error?: Error;
   },
   overrides?: Partial<SpendLiveDeps>,
 ) {
