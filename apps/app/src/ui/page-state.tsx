@@ -1,55 +1,45 @@
 // The non-loaded states of a page, driven by a port's `Read<T>` result
-// (plan §4.8). Batch 1 lane L2 grows this into the full set (skeleton, empty,
-// error, denied, not recorded yet) with per-page error codes; the contract stays:
-// pass the failed read, never invent a zero.
-import { getTranslations } from "next-intl/server";
+// (plan §4.8): pass the failed read, never invent a zero. Each state renders
+// with data-testid `page-state-<state>` for the e2e state walk.
+import type { ReactNode } from "react";
 import type { ReadFailure } from "@/data/not-backed";
+import { DeniedState } from "./denied-state";
+import { EmptyState } from "./empty-state";
+import { ErrorState } from "./error-state";
+import { NotRecordedYet } from "./not-recorded-yet";
+import { PAGE_ERRORS, type PageKey } from "./page-errors";
+import { PageSkeleton, type SkeletonLayout } from "./page-skeleton";
 
-export type PageStateProps = { page: string } & (
+export type PageStateProps = { page: PageKey } & (
   | { result: ReadFailure }
-  | { empty: true }
+  | { empty: true; title?: string; body?: ReactNode; actions?: ReactNode }
+  | { loading: true; layout?: SkeletonLayout }
 );
 
-export async function PageState(props: PageStateProps) {
-  const t = await getTranslations("states");
-  if ("empty" in props) {
+export function PageState(props: PageStateProps) {
+  if ("loading" in props)
+    return <PageSkeleton layout={props.layout ?? "table"} />;
+  if ("empty" in props)
     return (
-      <section
-        aria-labelledby={`page-state-${props.page}-empty`}
-        data-testid="page-state-empty"
-      >
-        <h2 id={`page-state-${props.page}-empty`}>{t("empty.title")}</h2>
-      </section>
+      <EmptyState
+        {...(props.title !== undefined ? { title: props.title } : {})}
+        body={props.body}
+        actions={props.actions}
+      />
     );
-  }
   const r = props.result;
-  const titleId = `page-state-${props.page}-${r.reason}`;
-  let title: string;
-  let body: string;
+  const fallback = PAGE_ERRORS[props.page];
   switch (r.reason) {
     case "not_backed":
-      title = t("notBacked.title");
-      body = t("notBacked.body", { milestone: r.milestone, gap: r.gap });
-      break;
+      return <NotRecordedYet milestone={r.milestone} gap={r.gap} />;
     case "denied":
-      title = t("denied.title");
-      body = t("denied.body", { permission: r.permission });
-      break;
+      return <DeniedState permission={r.permission || fallback.permission} />;
     case "error":
-      title = t("error.title");
-      body = t("error.body", { code: r.code, status: r.status });
-      break;
+      return (
+        <ErrorState
+          code={r.code || fallback.code}
+          status={r.status || fallback.status}
+        />
+      );
   }
-  return (
-    <section
-      aria-labelledby={titleId}
-      data-testid={`page-state-${r.reason}`}
-      className="flex flex-col gap-2 py-6"
-    >
-      <h2 id={titleId} className="text-lg font-semibold">
-        {title}
-      </h2>
-      <p className="text-muted-foreground">{body}</p>
-    </section>
-  );
 }
