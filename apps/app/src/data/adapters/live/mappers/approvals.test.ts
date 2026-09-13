@@ -131,6 +131,24 @@ describe("toApprovalCandidate", () => {
     });
   });
 
+  // The read id and the write key differ. resolve_approval and
+  // mcp_consent.resolve look the row up by the uuid primary key
+  // (`eq(approvalRequests.id, input.approvalId)`), so resolving with this id
+  // fails in Postgres with `invalid input syntax for type uuid` until those
+  // handlers accept the public id. B4's approve/deny action must not pass
+  // `item.id` to either handler before that backend change lands.
+  it("uses the row's public_id as the item id, not the uuid the resolve handlers match", () => {
+    const row = approvalRow();
+    const candidate = toApprovalCandidate(row, ctx);
+    expect(candidate.id).toBe(row.publicId);
+    expect(candidate.id).not.toBe(row.id);
+    expect(candidate.id).toMatch(/^apr_/);
+    expect(row.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(Object.values(candidate)).not.toContain(row.id);
+  });
+
   it.each(["low", "medium", "high", "critical"])("maps risk %s", (risk) => {
     expect(
       toApprovalCandidate(approvalRow({ riskLevel: risk }), ctx).risk,

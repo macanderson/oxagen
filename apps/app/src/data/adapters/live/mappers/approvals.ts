@@ -5,7 +5,18 @@
 //
 // agent.approval_requests → ApprovalItem (plan §3.1 "Fleet · approvals panel")
 //
-//   public_id            → id                  recorded
+//   public_id            → id                  recorded, BUT not the key the decision writes use.
+//                                              resolve_approval (packages/agent/src/handlers/
+//                                              agent.approval.resolve.ts) and mcp_consent.resolve
+//                                              match `approval_requests.id` (the uuid), and the
+//                                              runtime's waitForApproval/pg_notify key on the uuid
+//                                              too. Passing this `apr_…` id to either resolve
+//                                              handler makes Postgres fail with `invalid input
+//                                              syntax for type uuid`. The read is recorded; the
+//                                              decision is 🟡 until the handlers accept the public
+//                                              id (see "Promote" item 1 in the PR). The row uuid
+//                                              is deliberately not exposed: view-model ids are
+//                                              public ids.
 //   workspace_id         → workspaceSlug       recorded (workspace.workspaces.slug)
 //   resolution, expires_at → status           recorded: null + future expiry = pending,
 //                                              null + past expiry = expired (waitForApproval
