@@ -17,12 +17,14 @@
 // A read whose store is down answers the page's named error (page-states.ts);
 // a row the view model cannot express answers `not_backed` (mappers/runs.ts).
 //
-// INTERIM (listed under "promote" in the lane PR): tacho sessions are read with
-// withTenantDb rather than through `list_tacho_sessions` / `get_tacho_session`.
-// Those contracts' outputs carry no run public id, operator, seal time or cost
-// basis, and a read port receives a Scope with no actor for the kernel's IAM
-// check. Swapping `tachoPage`/`tachoSession` for kernel invokes is local to
-// this file once both land.
+// Wrapped sessions are readable only as capabilities (`list_tacho_sessions`,
+// `get_tacho_session`, both default-deny), so the kernel decides who may see
+// them: every tacho read is preceded by an invoke of the capability as the
+// signed-in person (authorizeTacho), and a refusal answers `denied` before any
+// tacho row is read. The rows themselves still come from withTenantDb
+// (INTERIM, listed under "promote"): those contracts' outputs carry no run
+// public id, operator, seal time or cost basis, so the enrichment query stays
+// until they do.
 import "server-only";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import {
@@ -35,6 +37,14 @@ import {
   sumTokenUsageByExecutionStep,
   type TokenUsageByStepRow,
 } from "@oxagen/telemetry";
+import {
+  type CapabilityContext,
+  CapabilityError,
+  getCapability,
+  invoke,
+} from "@oxagen/oxagen";
+import { tachoSessionGet } from "@oxagen/oxagen/contracts/tacho.session.get";
+import { tachoSessionList } from "@oxagen/oxagen/contracts/tacho.session.list";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
@@ -51,10 +61,18 @@ import {
 } from "drizzle-orm";
 import { Frame, type RunDetail, type RunPage } from "@/data/contracts/runs";
 import { notBackedFor as notBackedForMethod } from "@/data/backing";
-import { notBacked, type Read, readError, readOk } from "@/data/not-backed";
+import {
+  denied,
+  notBacked,
+  type Read,
+  readError,
+  readOk,
+} from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
 import type { RunReadPort } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
+import { ToolNotRegistered } from "@/server/errors";
+import { getSession } from "@/server/session";
 import {
   decodeRunCursor,
   EMPTY_ROLLUP,
@@ -288,6 +306,7 @@ export function ledgerSealQuery(
 
 const tachoColumns = {
   sessionId: sessions.id,
+  sessionUuid: sessions.sessionUuid,
   session: {
     publicId: sessions.publicId,
     agentKey: sessions.agentKey,
@@ -389,7 +408,7 @@ export function tachoTouchedQuery(
 // ---- Dependencies -------------------------------------------------------------------
 
 type LedgerPageRow = { run: LedgerRunCore; identity: LedgerRunIdentity };
-type TachoRow = TachoSessionRecord & { sessionId: string };
+type TachoRow = TachoSessionRecord & { sessionId: string; sessionUuid: string };
 type FleetItem =
   | { kind: "ledger"; id: string; startedAt: string; row: LedgerPageRow }
   | { kind: "tacho"; id: string; startedAt: string; row: TachoRow };
@@ -414,9 +433,23 @@ export type RunQueries = {
   tachoTouched: (scope: Scope, sessionId: string) => Promise<string[]>;
 };
 
+/**
+ * The capability a tacho read needs: listing wrapped sessions (Fleet, and the
+ * Run page before it looks a session up), or reading one session.
+ */
+export type TachoAccess =
+  | { tool: "list" }
+  | { tool: "get"; sessionUuid: string };
+
 export type LiveRunsDeps = {
   /** Enter the viewer's tenant scope for the whole read. */
   inScope: <T>(scope: Scope, fn: () => Promise<T>) => Promise<T>;
+  /**
+   * Ask the kernel whether the signed-in person may make this tacho read.
+   * `ok` to proceed, `denied` when IAM refuses (or there is no session),
+   * `run_not_found` when the session is gone. A store failure throws.
+   */
+  authorizeTacho: (scope: Scope, access: TachoAccess) => Promise<Read<void>>;
   /** The ledger's read side (RunStore). */
   store: {
     getRunByPublicId: RunStore["getRunByPublicId"];
@@ -467,6 +500,86 @@ export const postgresRunQueries: RunQueries = {
   },
 };
 
+/** Kernel codes that mean "this person may not read this", not "the store failed". */
+const DENIAL_CODES: ReadonlySet<string> = new Set([
+  "authz_denied",
+  "pending_approval",
+  "surface_denied",
+  "capability_not_installed",
+]);
+
+type KernelInvoke = (
+  name: string,
+  input: unknown,
+  ctx: CapabilityContext,
+) => Promise<unknown>;
+
+export type TachoAuthorizationIo = {
+  /** The signed-in person's user id; null without a session. */
+  principal: () => Promise<string | null>;
+  /** The kernel's invoke (IAM, surface and install checks, then the handler). */
+  invoke: KernelInvoke;
+};
+
+let handlersRegistered: Promise<unknown> | null = null;
+
+/** The production I/O: the request's session and the kernel, handlers loaded once. */
+export const kernelTachoAuthorizationIo: TachoAuthorizationIo = {
+  async principal() {
+    return (await getSession())?.user.id ?? null;
+  },
+  async invoke(name, input, ctx) {
+    // The handler registry must be loaded before the first invoke(), or the
+    // kernel finds no handler (the rule src/server/invoke.ts follows).
+    handlersRegistered ??= import("@oxagen/handlers/register");
+    await handlersRegistered;
+    if (!getCapability(name)) throw new ToolNotRegistered(name);
+    return invoke(name, input, ctx);
+  },
+};
+
+/**
+ * authorizeTacho through the kernel: the capability is invoked as the viewer in
+ * the viewer's tenant scope, and only its authorization outcome is kept (the
+ * rows come from the enrichment queries, see the file header).
+ */
+export function createTachoAuthorization(
+  io: TachoAuthorizationIo,
+): LiveRunsDeps["authorizeTacho"] {
+  return async (scope, access) => {
+    const contract =
+      access.tool === "list" ? tachoSessionList : tachoSessionGet;
+    const userId = await io.principal();
+    if (userId === null) return denied(contract.name);
+    const ctx: CapabilityContext = {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      userId,
+      apiKeyId: null,
+      requestId: crypto.randomUUID(),
+      surface: "app",
+      messageId: null,
+    };
+    const input =
+      access.tool === "list"
+        ? { limit: 1 }
+        : { sessionUuid: access.sessionUuid };
+    try {
+      await runInTenantScope(scope, () => io.invoke(contract.name, input, ctx));
+      return readOk(undefined);
+    } catch (error) {
+      if (error instanceof CapabilityError) {
+        if (DENIAL_CODES.has(error.code)) return denied(contract.name);
+        // get_tacho_session answers a session that is not there (deleted
+        // since the lookup) as invalid_input.
+        if (access.tool === "get" && error.code === "invalid_input")
+          return runNotFound();
+      }
+      throw error;
+    }
+  };
+}
+
 export function defaultLiveRunsDeps(): LiveRunsDeps {
   // Construction is pure (closures over withTenantDb); nothing connects until
   // a read runs inside a tenant scope.
@@ -477,6 +590,7 @@ export function defaultLiveRunsDeps(): LiveRunsDeps {
         { orgId: scope.orgId, workspaceId: scope.workspaceId },
         fn,
       ),
+    authorizeTacho: createTachoAuthorization(kernelTachoAuthorizationIo),
     store: {
       getRunByPublicId: (id) => ledger.getRunByPublicId(id),
       listRunAttempts: (id) => ledger.listRunAttempts(id),
@@ -529,6 +643,10 @@ export function createLiveRuns(deps: LiveRunsDeps): RunReadPort {
       if (q.cursor !== undefined && cursor === null) return invalidCursor();
 
       return guarded<RunPage>("fleet", "listRuns", scope, async () => {
+        // Fleet lists wrapped sessions, so the kernel decides first: a refusal
+        // answers the page before either store is read.
+        const allowed = await deps.authorizeTacho(scope, { tool: "list" });
+        if (!allowed.ok) return allowed;
         const page = {
           live: q.filter === "live",
           cursor,
@@ -606,8 +724,18 @@ export function createLiveRuns(deps: LiveRunsDeps): RunReadPort {
 
       return guarded<RunDetail>("run", "getRun", scope, async () => {
         if (kind === "tacho") {
+          // Fail closed before the lookup, so a refused viewer learns nothing,
+          // not even whether the session exists; then the kernel decides on the
+          // one session before its paths are read.
+          const listed = await deps.authorizeTacho(scope, { tool: "list" });
+          if (!listed.ok) return listed;
           const found = await deps.queries.tachoSession(scope, runId);
           if (!found) return runNotFound();
+          const read = await deps.authorizeTacho(scope, {
+            tool: "get",
+            sessionUuid: found.sessionUuid,
+          });
+          if (!read.ok) return read;
           const touched = await deps.queries.tachoTouched(
             scope,
             found.sessionId,

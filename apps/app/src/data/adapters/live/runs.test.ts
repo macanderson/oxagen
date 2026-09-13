@@ -2,6 +2,7 @@
 // filters every query carries, and (opt-in) the same reads against a seeded
 // local Postgres.
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import { CapabilityError } from "@oxagen/oxagen";
 import {
   type AttemptEventReadRecord,
   type AttemptRecord,
@@ -12,11 +13,12 @@ import {
   sumTokenUsageByExecutionStep,
   type TokenUsageByStepRow,
 } from "@oxagen/telemetry";
-import { requireScope, TenantScopeError } from "@oxagen/tenancy";
+import { getScope, requireScope, TenantScopeError } from "@oxagen/tenancy";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq, inArray, isNotNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Frame, RunDetail, RunPage } from "@/data/contracts/runs";
+import { denied, readOk } from "@/data/not-backed";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import {
   decodeRunCursor,
@@ -27,7 +29,9 @@ import {
 } from "./mappers/runs";
 import {
   createLiveRuns,
+  createTachoAuthorization,
   defaultLiveRunsDeps,
+  kernelTachoAuthorizationIo,
   ledgerIdentityQuery,
   ledgerPageQuery,
   ledgerRollupQuery,
@@ -44,6 +48,11 @@ import {
   tachoTouchedQuery,
 } from "./runs";
 
+const sessionMock = vi.hoisted(() => ({
+  getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
+}));
+vi.mock("@/server/session", () => ({ getSession: sessionMock.getSession }));
+
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
   workspaceId: "0192d4a8-7c1e-7a00-8000-0000000c0e01",
@@ -53,6 +62,8 @@ const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SHA = `sha256:${"b".repeat(64)}`;
+const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-0000000005e6";
+const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 
 // ---- Fakes ----------------------------------------------------------------------
 
@@ -122,6 +133,7 @@ function session(over: Partial<TachoSessionColumns> = {}): TachoSessionColumns {
 function tachoRow(over: Partial<TachoSessionColumns> = {}) {
   return {
     sessionId: "0192d4a8-7c1e-7a00-8000-0000000005e5",
+    sessionUuid: SESSION_UUID,
     session: session(over),
     workspaceSlug: "core-platform",
     operatorPublicId: "prn_7h2k9m4q8r1t6v3x5z0b2d" as string | null,
@@ -192,9 +204,13 @@ function fakeDeps(
     queries?: Partial<RunQueries>;
     store?: Partial<LiveRunsDeps["store"]>;
     sumTokenUsage?: LiveRunsDeps["sumTokenUsage"];
+    authorizeTacho?: LiveRunsDeps["authorizeTacho"];
   } = {},
 ) {
   const inScope = vi.fn();
+  const authorizeTacho = vi.fn<LiveRunsDeps["authorizeTacho"]>(
+    over.authorizeTacho ?? (() => Promise.resolve(readOk(undefined))),
+  );
   const report = vi.fn();
   const queries: RunQueries = {
     ledgerPage: vi.fn(() => Promise.resolve([])),
@@ -220,12 +236,21 @@ function fakeDeps(
       inScope(scope);
       return fn();
     },
+    authorizeTacho,
     store,
     queries,
     sumTokenUsage,
     report,
   };
-  return { deps, port: createLiveRuns(deps), inScope, report, queries, store };
+  return {
+    deps,
+    port: createLiveRuns(deps),
+    inScope,
+    report,
+    queries,
+    store,
+    authorizeTacho,
+  };
 }
 
 const nb = (milestone: string, gap: string) => ({
@@ -234,6 +259,7 @@ const nb = (milestone: string, gap: string) => ({
   milestone,
   gap,
 });
+const refused = denied;
 const err = (code: string, status: number) => ({
   ok: false,
   reason: "error",
@@ -303,6 +329,30 @@ describe("listRuns", () => {
       orgId: SCOPE.orgId,
       executionStepIds: [RUN_UUID],
     });
+    expect(deps.authorizeTacho).toHaveBeenCalledWith(SCOPE, { tool: "list" });
+  });
+
+  it("answers denied without reading either store when the kernel refuses list_tacho_sessions (negative)", async () => {
+    const { port, queries, report } = fakeDeps({
+      authorizeTacho: () => Promise.resolve(refused("list_tacho_sessions")),
+    });
+    await expect(port.listRuns(SCOPE, { filter: "all" })).resolves.toEqual(
+      refused("list_tacho_sessions"),
+    );
+    expect(queries.tachoPage).not.toHaveBeenCalled();
+    expect(queries.ledgerPage).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("reports an authorization failure that is not a refusal as Fleet's named error", async () => {
+    const { port, queries, report } = fakeDeps({
+      authorizeTacho: () => Promise.reject(new Error("iam down")),
+    });
+    await expect(port.listRuns(SCOPE, { filter: "all" })).resolves.toEqual(
+      err("run_index_unavailable", 503),
+    );
+    expect(queries.tachoPage).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledOnce();
   });
 
   it("passes the live filter and a decoded cursor to both sources", async () => {
@@ -468,7 +518,7 @@ describe("getRun", () => {
   });
 
   it("parses a recorded wrapped session through RunDetail", async () => {
-    const { port, queries } = fakeDeps({
+    const { port, queries, authorizeTacho } = fakeDeps({
       queries: {
         tachoSession: vi.fn(() => Promise.resolve(tachoRow())),
         tachoTouched: vi.fn(() => Promise.resolve(["src/release.ts"])),
@@ -491,6 +541,44 @@ describe("getRun", () => {
       SCOPE,
       tachoRow().sessionId,
     );
+    expect(authorizeTacho.mock.calls).toEqual([
+      [SCOPE, { tool: "list" }],
+      [SCOPE, { tool: "get", sessionUuid: SESSION_UUID }],
+    ]);
+  });
+
+  it("answers denied before looking the session up when the kernel refuses (negative)", async () => {
+    const { port, queries } = fakeDeps({
+      authorizeTacho: () => Promise.resolve(refused("list_tacho_sessions")),
+      queries: { tachoSession: vi.fn(() => Promise.resolve(tachoRow())) },
+    });
+    await expect(port.getRun(SCOPE, TACHO_ID)).resolves.toEqual(
+      refused("list_tacho_sessions"),
+    );
+    expect(queries.tachoSession).not.toHaveBeenCalled();
+    expect(queries.tachoTouched).not.toHaveBeenCalled();
+  });
+
+  it("answers denied without reading touched paths when get_tacho_session is refused (negative)", async () => {
+    const { port, queries } = fakeDeps({
+      authorizeTacho: (_scope, access) =>
+        Promise.resolve(
+          access.tool === "get"
+            ? refused("get_tacho_session")
+            : readOk(undefined),
+        ),
+      queries: { tachoSession: vi.fn(() => Promise.resolve(tachoRow())) },
+    });
+    await expect(port.getRun(SCOPE, TACHO_ID)).resolves.toEqual(
+      refused("get_tacho_session"),
+    );
+    expect(queries.tachoTouched).not.toHaveBeenCalled();
+  });
+
+  it("does not ask the tacho capabilities about a ledger run", async () => {
+    const { port, authorizeTacho } = fakeDeps();
+    await port.getRun(SCOPE, LEDGER_ID);
+    expect(authorizeTacho).not.toHaveBeenCalled();
   });
 
   it("404s a wrapped session outside the workspace", async () => {
@@ -817,6 +905,119 @@ describe("defaultLiveRunsDeps", () => {
   });
 });
 
+// ---- Kernel authorization for tacho reads ------------------------------------------
+
+describe("createTachoAuthorization", () => {
+  function io(
+    over: {
+      principal?: () => Promise<string | null>;
+      invoke?: (name: string, input: unknown) => Promise<unknown>;
+    } = {},
+  ) {
+    const seen: { scope?: unknown } = {};
+    const invoke = vi.fn((name: string, input: unknown, _ctx: unknown) => {
+      seen.scope = getScope();
+      return over.invoke ? over.invoke(name, input) : Promise.resolve({});
+    });
+    const principal = vi.fn(over.principal ?? (() => Promise.resolve(USER)));
+    return {
+      authorize: createTachoAuthorization({ principal, invoke }),
+      invoke,
+      seen,
+    };
+  }
+
+  it("invokes list_tacho_sessions as the viewer in the tenant scope", async () => {
+    const { authorize, invoke, seen } = io();
+    await expect(authorize(SCOPE, { tool: "list" })).resolves.toEqual(
+      readOk(undefined),
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      "list_tacho_sessions",
+      { limit: 1 },
+      expect.objectContaining({
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+        userId: USER,
+        apiKeyId: null,
+        surface: "app",
+        messageId: null,
+      }),
+    );
+    expect(seen.scope).toMatchObject(SCOPE);
+  });
+
+  it("invokes get_tacho_session for the one session", async () => {
+    const { authorize, invoke } = io();
+    await expect(
+      authorize(SCOPE, { tool: "get", sessionUuid: SESSION_UUID }),
+    ).resolves.toEqual(readOk(undefined));
+    expect(invoke).toHaveBeenCalledWith(
+      "get_tacho_session",
+      { sessionUuid: SESSION_UUID },
+      expect.objectContaining({ userId: USER }),
+    );
+  });
+
+  it("answers denied without a session, and never reaches the kernel (negative)", async () => {
+    const { authorize, invoke } = io({
+      principal: () => Promise.resolve(null),
+    });
+    await expect(authorize(SCOPE, { tool: "list" })).resolves.toEqual(
+      refused("list_tacho_sessions"),
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "authz_denied",
+    "pending_approval",
+    "surface_denied",
+    "capability_not_installed",
+  ] as const)("maps the kernel's %s to denied (negative)", async (code) => {
+    const { authorize } = io({
+      invoke: (name) =>
+        Promise.reject(new CapabilityError(name, code, "refused")),
+    });
+    await expect(authorize(SCOPE, { tool: "list" })).resolves.toEqual(
+      refused("list_tacho_sessions"),
+    );
+    await expect(
+      authorize(SCOPE, { tool: "get", sessionUuid: SESSION_UUID }),
+    ).resolves.toEqual(refused("get_tacho_session"));
+  });
+
+  it("404s a session get_tacho_session no longer finds", async () => {
+    const { authorize } = io({
+      invoke: (name) =>
+        Promise.reject(new CapabilityError(name, "invalid_input", "gone")),
+    });
+    await expect(
+      authorize(SCOPE, { tool: "get", sessionUuid: SESSION_UUID }),
+    ).resolves.toEqual(err("run_not_found", 404));
+  });
+
+  it("rethrows a failure that is not a refusal, so the page answers its store error", async () => {
+    const down = new Error("iam store down");
+    const { authorize } = io({ invoke: () => Promise.reject(down) });
+    await expect(authorize(SCOPE, { tool: "list" })).rejects.toBe(down);
+    const invalid = io({
+      invoke: (name) =>
+        Promise.reject(new CapabilityError(name, "invalid_input", "bad")),
+    });
+    await expect(
+      invalid.authorize(SCOPE, { tool: "list" }),
+    ).rejects.toBeInstanceOf(CapabilityError);
+  });
+
+  it("reads the principal from the request session", async () => {
+    sessionMock.getSession.mockResolvedValueOnce({ user: { id: USER } });
+    await expect(kernelTachoAuthorizationIo.principal()).resolves.toBe(USER);
+    sessionMock.getSession.mockResolvedValueOnce(null);
+    await expect(kernelTachoAuthorizationIo.principal()).resolves.toBeNull();
+  });
+});
+
 // ---- Against a seeded local Postgres (opt-in) ------------------------------------------
 //
 // MC_LIVE_DB_TEST=1 with DATABASE_URL and the CLICKHOUSE_* variables pointing at
@@ -842,7 +1043,12 @@ describe.runIf(process.env.MC_LIVE_DB_TEST === "1")(
       sessionPublicId: "",
       agentKey: "",
     };
-    const port = createLiveRuns(defaultLiveRunsDeps());
+    // IAM is proven by the kernel's own suites and by createTachoAuthorization
+    // above; the seeded suite has no request session, so it allows the read.
+    const port = createLiveRuns({
+      ...defaultLiveRunsDeps(),
+      authorizeTacho: () => Promise.resolve(readOk(undefined)),
+    });
 
     beforeAll(async () => {
       await withSystemDb(async (tx) => {
