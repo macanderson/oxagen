@@ -1,9 +1,11 @@
 // INV-01 (ARCHITECTURE.md §4): every page.tsx, layout.tsx and route.ts whose
 // path has an [org] segment resolves its viewer with `requireViewer` or
-// `resolveViewer`, passing every tenant segment it has ([org], then [ws]). A
-// delegating route.ts satisfies it when its delegate's deps type requires
-// `resolveViewer` and the delegate's unit test carries the non-member 404
-// negative; the delegate is followed with the type checker.
+// `resolveViewer` imported from `src/server/viewer.ts` (§3.1), passing every
+// tenant segment it has ([org], then [ws]). A delegating route.ts satisfies it
+// when its delegate's deps type requires `resolveViewer` and the delegate's
+// unit test carries the non-member 404 negative; the delegate is followed with
+// the type checker. A binding with one of those names from any other module
+// is `resolver-not-from-viewer`: the name alone proves nothing.
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -14,10 +16,13 @@ import {
   diffBaseline,
   listFiles,
   productionFiles,
+  resolveInternal,
 } from "./parse";
 
 const RULE = "route-guard";
 const VIEWER_RESOLVERS = ["requireViewer", "resolveViewer"] as const;
+/** The one module that exports them, as `resolveInternal` spells it. */
+const VIEWER_MODULE = "server/viewer";
 
 /** The route modules INV-01 covers. */
 function guardedRoutes(files: readonly string[]): string[] {
@@ -79,9 +84,30 @@ function createProgram(roots: readonly string[]): ts.Program {
 
 // --- Analysis ---------------------------------------------------------------
 
-type Binding = { readonly imported: string; readonly specifier: string };
+type Binding = {
+  readonly imported: string;
+  /** The specifier resolves to `src/server/viewer.ts`. */
+  readonly fromViewer: boolean;
+};
 
-function importBindings(sf: ts.SourceFile): Map<string, Binding> {
+/** A binding of `requireViewer` / `resolveViewer` taken from the viewer seam. */
+function isViewerResolver(binding: Binding | undefined): boolean {
+  return (
+    binding !== undefined &&
+    binding.fromViewer &&
+    (VIEWER_RESOLVERS as readonly string[]).includes(binding.imported)
+  );
+}
+
+/** A binding of one of those names taken from anywhere else. */
+function isForeignResolver(binding: Binding): boolean {
+  return (
+    !binding.fromViewer &&
+    (VIEWER_RESOLVERS as readonly string[]).includes(binding.imported)
+  );
+}
+
+function importBindings(sf: ts.SourceFile, file: string): Map<string, Binding> {
   const bindings = new Map<string, Binding>();
   for (const statement of sf.statements) {
     if (
@@ -92,10 +118,13 @@ function importBindings(sf: ts.SourceFile): Map<string, Binding> {
     }
     const named = statement.importClause?.namedBindings;
     if (!named || !ts.isNamedImports(named)) continue;
+    const target = resolveInternal(file, statement.moduleSpecifier.text);
+    const fromViewer =
+      target?.kind === "module" && target.path === VIEWER_MODULE;
     for (const element of named.elements) {
       bindings.set(element.name.text, {
         imported: (element.propertyName ?? element.name).text,
-        specifier: statement.moduleSpecifier.text,
+        fromViewer,
       });
     }
   }
@@ -183,17 +212,14 @@ function delegationReasons(
         ts.isObjectLiteralExpression(argument) &&
         argument.properties.some((property) => {
           if (ts.isShorthandPropertyAssignment(property)) {
-            return (
-              bindings.get(property.name.text)?.imported === "resolveViewer"
-            );
+            return isViewerResolver(bindings.get(property.name.text));
           }
           return (
             ts.isPropertyAssignment(property) &&
             ts.isIdentifier(property.name) &&
             property.name.text === "resolveViewer" &&
             ts.isIdentifier(property.initializer) &&
-            bindings.get(property.initializer.text)?.imported ===
-              "resolveViewer"
+            isViewerResolver(bindings.get(property.initializer.text))
           );
         }),
     ),
@@ -262,16 +288,12 @@ function routeGuardViolations(
   const sf = program.getSourceFile(toAbs(file));
   if (!sf) throw new Error(`${file} is not in the program`);
   const segments = tenantSegments(at);
-  const bindings = importBindings(sf);
-  const calls = collect(sf, ts.isCallExpression).filter((call) => {
-    const callee = call.expression;
-    if (!ts.isIdentifier(callee)) return false;
-    const binding = bindings.get(callee.text);
-    return (
-      binding !== undefined &&
-      (VIEWER_RESOLVERS as readonly string[]).includes(binding.imported)
-    );
-  });
+  const bindings = importBindings(sf, file);
+  const calls = collect(sf, ts.isCallExpression).filter(
+    (call) =>
+      ts.isIdentifier(call.expression) &&
+      isViewerResolver(bindings.get(call.expression.text)),
+  );
   let reasons = directCallReasons(calls, segments);
   if (calls.length > 0 && reasons.length === 0) return [];
   if (at.endsWith("/route.ts")) {
@@ -280,6 +302,9 @@ function routeGuardViolations(
       if (delegated.length === 0) return [];
       reasons = [...reasons, ...delegated];
     }
+  }
+  if (reasons.length === 0 && [...bindings.values()].some(isForeignResolver)) {
+    reasons.push("resolver-not-from-viewer");
   }
   return [`${RULE} ${at} ${reasons[0] ?? "no-viewer-call"}`];
 }
@@ -306,6 +331,10 @@ const PROBES: Readonly<Record<string, { at: string; expect: string | null }>> =
       at: "src/app/[org]/[ws]/probe/page.tsx",
       expect: null,
     },
+    "page-fake-viewer/page.tsx": {
+      at: "src/app/[org]/probe/page.tsx",
+      expect: "resolver-not-from-viewer",
+    },
     "layout-ok/layout.tsx": { at: "src/app/[org]/layout.tsx", expect: null },
     "route-direct-ok/route.ts": {
       at: "src/app/api/probe/[org]/[ws]/route.ts",
@@ -330,6 +359,10 @@ const PROBES: Readonly<Record<string, { at: string; expect: string | null }>> =
     "route-delegate-unresolved/route.ts": {
       at: "src/app/api/probe/[org]/[ws]/route.ts",
       expect: "delegate-unresolved",
+    },
+    "route-delegate-fake-viewer/route.ts": {
+      at: "src/app/api/probe/[org]/[ws]/route.ts",
+      expect: "resolver-not-from-viewer",
     },
   };
 

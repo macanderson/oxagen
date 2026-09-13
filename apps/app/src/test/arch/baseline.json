@@ -363,5 +363,6 @@
   "route-guard src/app/[org]/billing/page.tsx no-viewer-call",
   "route-guard src/app/[org]/layout.tsx no-viewer-call",
   "route-guard src/app/[org]/page.tsx no-viewer-call",
-  "route-guard src/app/[org]/roles/page.tsx no-viewer-call"
+  "route-guard src/app/[org]/roles/page.tsx no-viewer-call",
+  "route-guard src/app/api/mc/[org]/[ws]/stream/route.ts resolver-not-from-viewer"
 ]
