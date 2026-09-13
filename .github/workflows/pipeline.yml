@@ -492,7 +492,15 @@ jobs:
           # compilation). Two concurrent tasks leaves enough headroom for
           # apps/app's own build to run without contending against another
           # large build at the same time.
-          pnpm turbo run build --concurrency=2 $TURBO_FILTER
+          #
+          # --filter=!@oxagen/app-deprecated: the deprecated app is not under
+          # e2e (its test:e2e script is gone) and nothing here serves it, yet
+          # its `next build` reserves the same 5GB heap as apps/app. Building
+          # both on this runner is the OOM above twice over. Its build stays
+          # gated in exactly one place, the `test` job's `turbo run build`.
+          # Turbo subtracts an exclusion from the include set, and with an
+          # empty TURBO_FILTER (push to main) it starts from every package.
+          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead

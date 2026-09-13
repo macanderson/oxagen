@@ -4,7 +4,15 @@
 // streams a skeleton and the pre-paint theme script.
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import shellMessages from "../../../messages/shell.json";
 import { FIXTURE_USER } from "@/server/fixture-session";
 import { fixtureShell } from "./adapters/fixture";
@@ -47,6 +55,13 @@ const fixtureSource = (): ShellSource => ({
   port: fixtureShell(DEFAULT_SWITCHES),
   userId: FIXTURE_USER.id,
 });
+
+// The first import of the chrome pulls the whole shell graph through jsdom. On
+// the CI runner that alone outlasted the first test's 5s budget, so load it once
+// here; each test's own `await import` then resolves from the module cache.
+beforeAll(async () => {
+  await import("./shell-chrome");
+}, 30_000);
 
 beforeEach(() => {
   source.current = fixtureSource();

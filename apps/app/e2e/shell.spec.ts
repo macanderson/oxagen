@@ -19,6 +19,32 @@ const sidebar = (page: Page) =>
 const mainNav = (page: Page) =>
   sidebar(page).getByRole("navigation", { name: "Main" });
 
+/**
+ * The chrome is server-rendered, so the sidebar is visible before React
+ * hydrates. React replays a click that lands early, but the ⌘K listener is
+ * attached in an effect, so a key pressed before hydration is simply lost.
+ * `next dev` compiles the client bundle on the first visit, which on the 2-core
+ * CI runner outlasts the gap between "sidebar visible" and the key press. Wait
+ * until React owns the sidebar node, then one frame for passive effects.
+ */
+async function waitForHydration(page: Page) {
+  await page.waitForFunction(() => {
+    const aside = document.querySelector('aside[aria-label="Sidebar"]');
+    return (
+      aside !== null &&
+      Object.keys(aside).some((key) => key.startsWith("__reactFiber$"))
+    );
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 0);
+        });
+      }),
+  );
+}
+
 /** Every page the sidebar reaches, with the heading the page renders. */
 const SIDEBAR_PAGES = [
   { label: "Fleet", path: `/${ORG}/${WS}`, heading: "Fleet" },
@@ -150,6 +176,7 @@ test.describe("shell · command menu", () => {
   }) => {
     await page.goto(`/${ORG}/${WS}`);
     await expect(sidebar(page)).toBeVisible();
+    await waitForHydration(page);
     await page.keyboard.press("ControlOrMeta+k");
     const menu = page.getByTestId("command-menu");
     await expect(menu).toBeVisible();
