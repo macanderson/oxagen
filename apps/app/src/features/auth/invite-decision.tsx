@@ -9,8 +9,8 @@ import {
   acceptInvitation,
   declineInvitation,
 } from "./invite-actions";
-import { FormAlert } from "./ui/feedback";
-import { buttonPrimary, buttonSecondary } from "./ui/styles";
+import { FormAlert } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { LoaderCircle } from "lucide-react";
 
 type Failure = Extract<InviteActionResult, { ok: false }>["reason"];

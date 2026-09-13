@@ -2,15 +2,13 @@ import { connection } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
-  AuthColumn,
-  AuthHeading,
-  AuthSkeleton,
   InvitationBody,
   InvitationNotFound,
   decideInvitation,
   getAuthUser,
   loadInvitation,
 } from "@/features/auth";
+import { AuthColumn, AuthHeading, AuthSkeleton } from "@/ui/auth-shell";
 
 // Public: the token is the capability. A signed-out visitor sees what the
 // invitation email already said and is asked to sign in as the invited address.

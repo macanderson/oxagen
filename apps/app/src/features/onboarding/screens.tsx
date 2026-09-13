@@ -10,8 +10,8 @@ import { requireViewer } from "@/server/scope";
 import { PageState } from "@/ui/page-state";
 import { withNext } from "../auth/safe-next";
 import { getAuthUser } from "../auth/session";
-import { OutcomePanel } from "../auth/ui/feedback";
-import { buttonPrimary, buttonSecondary } from "../auth/ui/styles";
+import { OutcomePanel } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { agentKey } from "./agent-key";
 import {
   type AgentChoice,

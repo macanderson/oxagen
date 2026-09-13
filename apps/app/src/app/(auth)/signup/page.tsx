@@ -4,17 +4,19 @@ import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import {
   AFTER_SIGNUP,
+  OAuthButtons,
+  SignupForm,
+  firstParam,
+  sanitizeNext,
+  withNext,
+} from "@/features/auth";
+import {
   AuthColumn,
   AuthFooter,
   AuthHeading,
   AuthSkeleton,
-  OAuthButtons,
-  SignupForm,
-  firstParam,
-  linkText,
-  sanitizeNext,
-  withNext,
-} from "@/features/auth";
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 import { isFixtureMode } from "@/server/fixture-session";
 
 export default function SignupPage(props: PageProps<"/signup">) {

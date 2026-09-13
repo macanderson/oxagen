@@ -11,9 +11,9 @@ import type { AuthOutcomeKey } from "./auth-errors";
 import { liveSignIn, rememberPendingNext } from "./client-auth";
 import { withNext } from "./safe-next";
 import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
-import { Field, PasswordField } from "./ui/field";
-import { FormAlert, SubmitButton } from "./ui/feedback";
-import { linkText, panel } from "./ui/styles";
+import { Field, PasswordField } from "@/ui/field";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { linkText, panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 export type LoginFormProps = {

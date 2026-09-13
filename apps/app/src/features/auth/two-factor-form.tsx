@@ -11,9 +11,9 @@ import type { AuthOutcomeKey } from "./auth-errors";
 import { liveVerifyTwoFactor, takePendingNext } from "./client-auth";
 import { DEFAULT_NEXT, sanitizeNext } from "./safe-next";
 import { TwoFactorSchema, fieldErrors } from "./schemas";
-import { Field } from "./ui/field";
-import { FormAlert, SubmitButton } from "./ui/feedback";
-import { linkText, panel } from "./ui/styles";
+import { Field } from "@/ui/field";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { linkText, panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 type Method = "totp" | "backup";

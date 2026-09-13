@@ -33,8 +33,8 @@ const {
   AuthShell,
   AuthSkeleton,
   Brandmark,
-} = await import("./ui/auth-shell");
-const { OutcomePanel } = await import("./ui/feedback");
+} = await import("@/ui/auth-shell");
+const { OutcomePanel } = await import("@/ui/form-feedback");
 const { CliConsentForm } = await import("./cli-consent-form");
 const { GateShell, GateSkeleton, StepHeading } = await import(
   "../onboarding/ui/gate-shell"

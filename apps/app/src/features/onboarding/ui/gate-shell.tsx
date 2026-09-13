@@ -5,8 +5,8 @@ import Link from "next/link";
 
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
-import { Brandmark } from "../../auth/ui/auth-shell";
-import { buttonSecondary } from "../../auth/ui/styles";
+import { Brandmark } from "@/ui/auth-shell";
+import { buttonSecondary } from "@/ui/control-styles";
 import { type AgentChoice, flowHref } from "../flow-links";
 import { GATE_STEPS, REGISTER_STEPS, type FlowMode } from "../steps";
 

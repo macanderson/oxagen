@@ -17,9 +17,9 @@ import {
   SignupSchema,
   fieldErrors,
 } from "./schemas";
-import { Field, PasswordField } from "./ui/field";
-import { FormAlert, SubmitButton } from "./ui/feedback";
-import { panel } from "./ui/styles";
+import { Field, PasswordField } from "@/ui/field";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 type SignupField = "name" | "email" | "password";

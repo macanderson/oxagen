@@ -1,5 +1,9 @@
 {
   "ui": {
+    "brand": {
+      "name": "Oxagen",
+      "home": "Oxagen home"
+    },
     "money": {
       "openBasis": "{basis}: how {amount} was measured",
       "dialogTitle": "How this figure was measured",

@@ -1,6 +1,9 @@
 "use client";
-// A WAI-ARIA tablist with roving focus: Arrow keys, Home and End move between
-// tabs and select them; only the selected tab is in the tab order.
+// Tabs that switch content in place (a WAI-ARIA tablist with roving focus):
+// Arrow keys, Home and End move between tabs and select them; only the selected
+// tab is in the tab order. For tabs that are pages, use RouteTabs (plan §4.10):
+// each tab there is a URL segment. These are for choices inside one page (an
+// install method, a platform, an SDK language) that no URL should name.
 import { type KeyboardEvent, type ReactNode, useRef } from "react";
 
 export type TabItem<T extends string> = { id: T; label: ReactNode };

@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { TwoFactorForm, firstParam, sanitizeNext } from "@/features/auth";
 import {
   AuthColumn,
   AuthFooter,
   AuthHeading,
   AuthSkeleton,
-  TwoFactorForm,
-  firstParam,
-  linkText,
-  sanitizeNext,
-} from "@/features/auth";
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 import { isFixtureMode } from "@/server/fixture-session";
 
 // Public: after the password step the person holds only Better Auth's short-lived

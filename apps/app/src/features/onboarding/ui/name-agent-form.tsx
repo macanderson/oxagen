@@ -6,9 +6,9 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { Field } from "../../auth/ui/field";
-import { SubmitButton } from "../../auth/ui/feedback";
-import { buttonSecondary, inputBase, panel } from "../../auth/ui/styles";
+import { Field } from "@/ui/field";
+import { SubmitButton } from "@/ui/form-feedback";
+import { buttonSecondary, inputBase, panel } from "@/ui/control-styles";
 import Link from "next/link";
 import { AgentSlug, agentKey, toSlug } from "../agent-key";
 import { registerHref } from "../flow-links";

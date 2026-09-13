@@ -1,8 +1,9 @@
-// Status pieces shared by the sign-in and onboarding screens: an announced
-// alert, a pending-aware submit button, and a centred outcome panel.
+// Form status pieces: an announced alert, a pending-aware submit button, and a
+// centred outcome panel. Words stay in the text ink; red is carried by the
+// glyph and the border, so every tone passes AA on the panel.
 import { CircleCheck, LoaderCircle, Lock, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { buttonPrimary, panel } from "./styles";
+import { buttonPrimary, panel } from "./control-styles";
 
 export function FormAlert({
   children,

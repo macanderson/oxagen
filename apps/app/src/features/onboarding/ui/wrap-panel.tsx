@@ -20,7 +20,7 @@ import {
   eyebrow,
   mono,
   panel,
-} from "../../auth/ui/styles";
+} from "@/ui/control-styles";
 import { enrollCommand, sdkSnippet } from "../agent-key";
 import type { InstallerOffer } from "../model";
 import {
@@ -30,8 +30,8 @@ import {
   type WrapMethod,
   WRAP_METHODS,
 } from "../steps";
-import { TabList, TabPanel } from "./tabs";
-import { TierBadge } from "./tier-badge";
+import { TabList, TabPanel } from "@/ui/tabs";
+import { TierBadge } from "@/ui/tier-badge";
 
 export type WrapPanelProps = {
   agentKey: string;

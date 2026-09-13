@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { ResetPasswordForm, firstParam } from "@/features/auth";
 import {
   AuthColumn,
   AuthFooter,
   AuthHeading,
   AuthSkeleton,
-  ResetPasswordForm,
-  firstParam,
-  linkText,
-} from "@/features/auth";
+} from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
 
 export default function ResetPasswordPage(props: PageProps<"/reset-password">) {
   return (

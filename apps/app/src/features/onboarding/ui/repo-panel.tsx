@@ -10,7 +10,7 @@ import {
   buttonSecondary,
   mono,
   panel,
-} from "../../auth/ui/styles";
+} from "@/ui/control-styles";
 import type { DetectedRepository } from "../model";
 
 type Choice = "open" | "bound" | "skipped";
