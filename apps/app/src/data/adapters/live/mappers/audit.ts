@@ -55,7 +55,9 @@
 //   RetentionTier ← get_evidence_retention (evidence.retention_policy_versions)
 //     tier      ✅ `bodies`: the policies' ttl_days is the exact-payload window
 //     retention ✅ effectiveRetentionDays as an ISO 8601 duration, ∅ before a policy is pinned
-//     volume    ✅ storedGbBeyondIncluded when measured, else ∅
+//     volume    ∅ no store records the tier's total volume; storedGbBeyondIncluded
+//                 is only what is held beyond the included window, so an org
+//                 inside that window would read as storing 0 GB
 //     store, contents ∅ not recorded
 //
 //   Notification ← notification.notifications via list_notifications
@@ -341,10 +343,10 @@ export function toRetentionTiers(
         posture.effectiveRetentionDays === null
           ? null
           : `P${String(posture.effectiveRetentionDays)}D`,
-      volume:
-        posture.storedGbMeasured && posture.storedGbBeyondIncluded !== null
-          ? `${String(posture.storedGbBeyondIncluded)} GB`
-          : null,
+      // storedGbBeyondIncluded is the overage past the included window, not
+      // the tier's volume: relabelling it would show an org inside its window
+      // as storing 0 GB. No store records the tier's total.
+      volume: null,
     },
   ];
 }

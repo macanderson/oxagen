@@ -454,11 +454,23 @@ describe("toRetentionTiers", () => {
         store: null,
         contents: null,
         retention: "P400D",
-        volume: "12.5 GB",
+        volume: null,
       },
     ]);
     expect(z.array(PROMOTED.RetentionTier).parse(tiers)).toEqual(tiers);
   });
+
+  it.each([0, 12.5])(
+    "never reads a measured overage of %s GB as the tier's volume",
+    (storedGbBeyondIncluded) => {
+      const [tier] = toRetentionTiers({
+        ...POSTURE,
+        storedGbBeyondIncluded,
+        storedGbMeasured: true,
+      });
+      expect(tier?.volume).toBeNull();
+    },
+  );
 
   it("says nothing about a window or a volume nobody declared or measured", () => {
     expect(

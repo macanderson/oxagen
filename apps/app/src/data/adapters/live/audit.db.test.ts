@@ -234,22 +234,6 @@ describe.runIf(enabled)(
       });
     });
 
-    it("resolves an agent-invoked decision in ClickHouse to the agent's key", async () => {
-      const { liveAuditStores } = await import("./audit");
-      const rows = await liveAuditStores.decisions(scope, [
-        { requestId: REQUEST, capability: "assign_agent_role" },
-      ]);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({
-        requestId: REQUEST,
-        capability: "assign_agent_role",
-        actingPrincipalKind: "agent",
-        targetKind: "agent",
-      });
-      expect(rows[0]?.principal?.agentKey).toMatch(
-        /^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/,
-      );
-    });
     // The agent-tool reads run through the real kernel and handlers without the
     // IAM runtime (this test boots no instrumentation), so they read real rows
     // through each tool's own output schema and write no audit rows of their
@@ -302,6 +286,49 @@ describe.runIf(enabled)(
       const { notifications } = await asOwner();
       const read = await notifications(feedScope);
       expect(read.ok).toBe(true);
+    });
+  },
+);
+
+// No seeding hooks here, so this suite also runs as the RLS-bound app role,
+// which may read seeded rows but not delete them. The local stack's default
+// role is a superuser, and RLS never applies to a superuser, so under it this
+// test passes whether or not the lookup respects RLS. The proof needs the app role:
+//   DATABASE_URL="<local url>?options=-c%20role%3Doxagen_app" \
+//   TENANT_RLS_ENFORCEMENT_ENABLED=true MC_LIVE_DB=1 \
+//   pnpm exec vitest run src/data/adapters/live/audit.db.test.ts -t "row-level security"
+describe.runIf(enabled)(
+  "agent actors under row-level security",
+  { timeout: 120_000 },
+  () => {
+    beforeAll(async () => {
+      await import("./audit");
+    }, 120_000);
+
+    it("resolves an agent-invoked decision in ClickHouse to the agent's key under the audit page's organization scope", async () => {
+      const { liveAuditStores } = await import("./audit");
+      // The audit page reads at organization scope, where RLS hides every
+      // agent: the lookup must run under the workspace the event ran in.
+      const rows = await liveAuditStores.decisions(
+        { orgId: ORG, workspaceId: "00000000-0000-0000-0000-000000000000" },
+        [
+          {
+            requestId: REQUEST,
+            capability: "assign_agent_role",
+            workspaceId: WS,
+          },
+        ],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        requestId: REQUEST,
+        capability: "assign_agent_role",
+        actingPrincipalKind: "agent",
+        targetKind: "agent",
+      });
+      expect(rows[0]?.principal?.agentKey).toMatch(
+        /^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/,
+      );
     });
   },
 );

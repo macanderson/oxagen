@@ -71,27 +71,47 @@ vi.mock("@oxagen/telemetry", () => ({
   captureError: kernel.captureError,
 }));
 
-// A drizzle transaction stand-in: every builder call chains, awaiting the chain
-// pops the next scripted result, and `from` records the table read.
+// A drizzle transaction stand-in: every builder call chains, `from` records the
+// table read, and awaiting the chain pops the next scripted result — or, when a
+// test sets `resolver`, asks it for the rows that table shows under the tenant
+// scope the transaction was opened in (a stand-in for RLS).
+type Resolver = (
+  table: unknown,
+  scope: { orgId: string; workspaceId: string },
+) => unknown[];
 const db = vi.hoisted(() => {
   const queue: unknown[][] = [];
   const tables: unknown[] = [];
   const scopes: unknown[] = [];
-  const chain = (): unknown =>
+  const reads: { table: unknown; scope: unknown }[] = [];
+  const state = { resolver: null as Resolver | null };
+  const chain = (scope: unknown, table?: unknown): unknown =>
     new Proxy(() => undefined, {
       get(_target, prop) {
         if (prop === "then")
           return (
             resolve: (v: unknown) => unknown,
             reject: (e: unknown) => unknown,
-          ) => Promise.resolve(queue.shift() ?? []).then(resolve, reject);
+          ) =>
+            Promise.resolve(
+              state.resolver
+                ? state.resolver(
+                    table,
+                    scope as { orgId: string; workspaceId: string },
+                  )
+                : (queue.shift() ?? []),
+            ).then(resolve, reject);
         return (...args: unknown[]) => {
-          if (prop === "from") tables.push(args[0]);
-          return chain();
+          if (prop === "from") {
+            tables.push(args[0]);
+            reads.push({ table: args[0], scope });
+            return chain(scope, args[0]);
+          }
+          return chain(scope, table);
         };
       },
     });
-  return { queue, tables, scopes, tx: chain() };
+  return { queue, tables, scopes, reads, state, chain };
 });
 
 vi.mock("@oxagen/database", async () => {
@@ -99,8 +119,9 @@ vi.mock("@oxagen/database", async () => {
   return {
     schema: await vi.importActual("@oxagen/database/schema"),
     withTenantDb: (fn: (tx: unknown) => unknown) => {
-      db.scopes.push(scopeNow());
-      return fn(db.tx);
+      const scope = scopeNow();
+      db.scopes.push(scope);
+      return fn(db.chain(scope));
     },
   };
 });
@@ -366,9 +387,18 @@ describe("audit.events", () => {
       },
     ]);
     // Only invocations with a uuid request id and a capability are joined.
+    // Each carries the workspace it ran in, where its principal is visible.
     expect(mocks.decisions).toHaveBeenCalledWith(ORG_SCOPE, [
-      { requestId: BUDGET_EVENT.requestId, capability: "set_spend_budget" },
-      { requestId: ROLE_EVENT.requestId, capability: "assign_agent_role" },
+      {
+        requestId: BUDGET_EVENT.requestId,
+        capability: "set_spend_budget",
+        workspaceId: SCOPE.workspaceId,
+      },
+      {
+        requestId: ROLE_EVENT.requestId,
+        capability: "assign_agent_role",
+        workspaceId: SCOPE.workspaceId,
+      },
     ]);
     expect(mocks.userPublicIds).toHaveBeenCalledWith(ORG_SCOPE, [VIEWER]);
   });
@@ -763,6 +793,8 @@ describe("liveAuditStores", () => {
     db.queue.length = 0;
     db.tables.length = 0;
     db.scopes.length = 0;
+    db.reads.length = 0;
+    db.state.resolver = null;
     kernel.getCapability.mockReturnValue({});
   });
 
@@ -870,85 +902,120 @@ describe("liveAuditStores", () => {
   describe("decisions", () => {
     const PRINCIPAL_ID = "7fc508b1-fe9e-4fc4-9edd-e9241905dd30";
     const HUMAN_PRINCIPAL_ID = "11111111-1111-4111-8111-111111111111";
+    const OTHER_AGENT_ID = "33333333-3333-4333-8333-333333333333";
+    const NIL = "00000000-0000-0000-0000-000000000000";
+    const decision = (over: Record<string, unknown>) => ({
+      request_id: AGENT_DECISION.requestId,
+      capability: "assign_agent_role",
+      acting_principal_id: PRINCIPAL_ID,
+      acting_principal_kind: "agent",
+      target_kind: null,
+      target_id: null,
+      workspace_id: null,
+      ...over,
+    });
+
+    // iam.principals is workspace_nullable (null workspace, or the scope's) and
+    // agent.agents is standard (the scope's workspace only): an agent resolves
+    // only under its own workspace, never under an organization scope.
+    const PRINCIPALS = [
+      {
+        id: PRINCIPAL_ID,
+        workspaceId: SCOPE.workspaceId,
+        kind: "agent",
+        displayName: "E2E RBAC Agent",
+        parentUserId: VIEWER,
+      },
+      {
+        id: OTHER_AGENT_ID,
+        workspaceId: OTHER_WS,
+        kind: "agent",
+        displayName: "Release Manager",
+        parentUserId: VIEWER,
+      },
+      {
+        id: HUMAN_PRINCIPAL_ID,
+        workspaceId: null,
+        kind: "human",
+        displayName: "Marcus Bell",
+        parentUserId: VIEWER,
+      },
+    ];
+    const AGENTS = [
+      {
+        principalId: PRINCIPAL_ID,
+        workspaceId: SCOPE.workspaceId,
+        slug: "rbac-mtxbbpju",
+        workspaceNamespace: "defaul",
+        orgNamespace: "e2erb5",
+      },
+      {
+        principalId: OTHER_AGENT_ID,
+        workspaceId: OTHER_WS,
+        slug: "release-manager",
+        workspaceNamespace: "core",
+        orgNamespace: "e2erb5",
+      },
+    ];
+    const rls: Resolver = (table, scope) => {
+      const strip = <T extends { workspaceId: string | null }>(rows: T[]) =>
+        rows.map(({ workspaceId: _ws, ...row }) => row);
+      if (table === schema.principals)
+        return strip(
+          PRINCIPALS.filter(
+            (p) =>
+              p.workspaceId === null || p.workspaceId === scope.workspaceId,
+          ),
+        );
+      if (table === schema.agents)
+        return strip(AGENTS.filter((a) => a.workspaceId === scope.workspaceId));
+      if (table === schema.users)
+        return [{ id: VIEWER, publicId: VIEWER_PUBLIC_ID }];
+      return [];
+    };
+    const scopesReading = (table: unknown) =>
+      db.reads.flatMap((r) => (r.table === table ? [r.scope] : []));
 
     it("reads audit_events through chSelect, org-filtered, and keeps only the asked invocations", async () => {
+      db.state.resolver = rls;
       kernel.chSelect.mockResolvedValueOnce({
         data: [
-          {
-            request_id: AGENT_DECISION.requestId,
-            capability: "assign_agent_role",
-            acting_principal_id: PRINCIPAL_ID,
-            acting_principal_kind: "agent",
+          decision({
             target_kind: "agent",
             target_id: "agt_9bn4fpe5th01qem8478m3z",
-          },
-          {
-            request_id: AGENT_DECISION.requestId,
-            capability: "list_agent_roles",
-            acting_principal_id: PRINCIPAL_ID,
-            acting_principal_kind: "agent",
-            target_kind: null,
-            target_id: null,
-          },
-          {
+          }),
+          decision({ capability: "list_agent_roles" }),
+          decision({
             request_id: BUDGET_EVENT.requestId,
             capability: "set_spend_budget",
             acting_principal_id: HUMAN_PRINCIPAL_ID,
             acting_principal_kind: "human",
-            target_kind: null,
-            target_id: null,
-          },
-          {
+          }),
+          decision({
             request_id: "22222222-2222-4222-8222-222222222222",
             capability: "set_spend_budget",
-            acting_principal_id: "00000000-0000-0000-0000-000000000000",
+            acting_principal_id: NIL,
             acting_principal_kind: "service",
-            target_kind: null,
-            target_id: null,
-          },
+          }),
         ],
       });
-      // principals, then users and agents in parallel.
-      db.queue.push(
-        [
-          {
-            id: PRINCIPAL_ID,
-            kind: "agent",
-            displayName: "E2E RBAC Agent",
-            parentUserId: VIEWER,
-          },
-          {
-            id: HUMAN_PRINCIPAL_ID,
-            kind: "human",
-            displayName: "Marcus Bell",
-            parentUserId: VIEWER,
-          },
-        ],
-        [{ id: VIEWER, publicId: VIEWER_PUBLIC_ID }],
-        [
-          {
-            principalId: PRINCIPAL_ID,
-            slug: "rbac-mtxbbpju",
-            workspaceNamespace: "defaul",
-            orgNamespace: "e2erb5",
-          },
-        ],
-      );
       const rows = await liveAuditStores.decisions(ORG_SCOPE, [
         {
           requestId: AGENT_DECISION.requestId,
           capability: "assign_agent_role",
+          workspaceId: SCOPE.workspaceId,
         },
         {
           requestId: BUDGET_EVENT.requestId ?? "",
           capability: "set_spend_budget",
+          workspaceId: null,
         },
         {
           requestId: "22222222-2222-4222-8222-222222222222",
           capability: "set_spend_budget",
+          workspaceId: null,
         },
       ]);
-      const scopeSeen = db.scopes[0];
 
       const [q] = kernel.chSelect.mock.calls[0] ?? [];
       expect(q?.query).toMatch(/FROM audit_events FINAL/);
@@ -962,12 +1029,6 @@ describe("liveAuditStores", () => {
           "22222222-2222-4222-8222-222222222222",
         ],
       });
-      expect(scopeSeen).toMatchObject(ORG_SCOPE);
-      expect(db.tables).toEqual([
-        schema.principals,
-        schema.users,
-        schema.agents,
-      ]);
       expect(rows).toEqual([
         AGENT_DECISION,
         {
@@ -993,6 +1054,104 @@ describe("liveAuditStores", () => {
           principal: null,
         },
       ]);
+    });
+
+    it("resolves an agent under the workspace its event ran in, not the page's organization scope", async () => {
+      db.state.resolver = rls;
+      kernel.chSelect.mockResolvedValueOnce({
+        data: [
+          decision({}),
+          decision({
+            request_id: BUDGET_EVENT.requestId,
+            capability: "set_spend_budget",
+            acting_principal_id: OTHER_AGENT_ID,
+          }),
+          decision({
+            request_id: "22222222-2222-4222-8222-222222222222",
+            capability: "set_spend_budget",
+            acting_principal_id: HUMAN_PRINCIPAL_ID,
+            acting_principal_kind: "human",
+          }),
+        ],
+      });
+      const rows = await liveAuditStores.decisions(ORG_SCOPE, [
+        {
+          requestId: AGENT_DECISION.requestId,
+          capability: "assign_agent_role",
+          workspaceId: SCOPE.workspaceId,
+        },
+        {
+          requestId: BUDGET_EVENT.requestId ?? "",
+          capability: "set_spend_budget",
+          workspaceId: OTHER_WS,
+        },
+        {
+          requestId: "22222222-2222-4222-8222-222222222222",
+          capability: "set_spend_budget",
+          workspaceId: null,
+        },
+      ]);
+
+      expect(rows.map((r) => r.principal?.agentKey ?? null)).toEqual([
+        "e2erb5.defaul.rbac-mtxbbpju",
+        "e2erb5.core.release-manager",
+        null,
+      ]);
+      expect(rows[2]?.principal).toMatchObject({
+        kind: "human",
+        userPublicId: VIEWER_PUBLIC_ID,
+      });
+      // One lookup per workspace the events ran in, one for the org-level event.
+      expect(scopesReading(schema.agents)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining(SCOPE),
+          expect.objectContaining({
+            orgId: SCOPE.orgId,
+            workspaceId: OTHER_WS,
+          }),
+        ]),
+      );
+      expect(scopesReading(schema.agents)).not.toContainEqual(
+        expect.objectContaining(ORG_SCOPE),
+      );
+      expect(scopesReading(schema.principals)).toHaveLength(3);
+      expect(scopesReading(schema.principals)).toContainEqual(
+        expect.objectContaining(ORG_SCOPE),
+      );
+    });
+
+    it("falls back to the decision's own workspace when the security event recorded none", async () => {
+      db.state.resolver = rls;
+      kernel.chSelect.mockResolvedValueOnce({
+        data: [decision({ workspace_id: SCOPE.workspaceId })],
+      });
+      const rows = await liveAuditStores.decisions(ORG_SCOPE, [
+        {
+          requestId: AGENT_DECISION.requestId,
+          capability: "assign_agent_role",
+          workspaceId: null,
+        },
+      ]);
+      expect(rows[0]?.principal?.agentKey).toBe("e2erb5.defaul.rbac-mtxbbpju");
+      expect(scopesReading(schema.principals)).toEqual([
+        expect.objectContaining(SCOPE),
+      ]);
+    });
+
+    it("leaves an agent unresolved when neither record names its workspace", async () => {
+      db.state.resolver = rls;
+      kernel.chSelect.mockResolvedValueOnce({ data: [decision({})] });
+      const [row] = await liveAuditStores.decisions(ORG_SCOPE, [
+        {
+          requestId: AGENT_DECISION.requestId,
+          capability: "assign_agent_role",
+          workspaceId: null,
+        },
+      ]);
+      expect(row).toMatchObject({
+        actingPrincipalKind: "agent",
+        principal: null,
+      });
     });
 
     it("reads nothing for no invocations", async () => {

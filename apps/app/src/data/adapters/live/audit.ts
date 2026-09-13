@@ -48,7 +48,7 @@ import type { Scope } from "@/data/scope";
 import type { ToolContract } from "@/server/invoke";
 import { getSession } from "@/server/session";
 import { liveTenancyLookups } from "@/server/tenancy-lookups";
-import { isOrgOnlyScope } from "@/server/tenant-scope";
+import { isOrgOnlyScope, ORG_ONLY_WS } from "@/server/tenant-scope";
 import {
   type DecisionRow,
   type ErasureRow,
@@ -101,11 +101,12 @@ export type AuditStores = {
     input: unknown,
     permission: string,
   ): Promise<Read<O>>;
-  /** ClickHouse audit_events decisions for these invocations, principals resolved. */
-  decisions(
-    scope: Scope,
-    keys: readonly { requestId: string; capability: string }[],
-  ): Promise<DecisionRow[]>;
+  /**
+   * ClickHouse audit_events decisions for these invocations, principals
+   * resolved under each invocation's own workspace (RLS hides an agent and its
+   * principal from any other workspace, and from an organization scope).
+   */
+  decisions(scope: Scope, keys: readonly DecisionKey[]): Promise<DecisionRow[]>;
   /** `auth.users.public_id` keyed by user id. */
   userPublicIds(
     scope: Scope,
@@ -136,6 +137,14 @@ export const CONTRACT_VIEWS: AuditViews = {
   ErasureRequest,
   RetentionTier,
   Notification,
+};
+
+/** One invocation to join: security_events' request id, capability and workspace. */
+export type DecisionKey = {
+  requestId: string;
+  capability: string;
+  /** `security_events.workspace_id`: the workspace the call ran in, null for an org-level call. */
+  workspaceId: string | null;
 };
 
 export type LiveAuditDeps = {
@@ -236,9 +245,15 @@ export function createLiveAudit({
         if (!feed.ok) return feed;
         const events = feed.value.events;
 
-        const keys = events.flatMap((e) =>
+        const keys = events.flatMap((e): DecisionKey[] =>
           e.requestId && e.capability && UUID.safeParse(e.requestId).success
-            ? [{ requestId: e.requestId, capability: e.capability }]
+            ? [
+                {
+                  requestId: e.requestId,
+                  capability: e.capability,
+                  workspaceId: e.workspaceId,
+                },
+              ]
             : [],
         );
         const actorIds = [
@@ -489,6 +504,40 @@ async function resolvePrincipals(
 }
 
 /**
+ * Resolve acting principals once per workspace the invocations ran in.
+ *
+ * iam.principals is `workspace_nullable` (visible when `workspace_id` is null or
+ * the scope's) and agent.agents is `standard`, so an agent principal is only
+ * visible under its own workspace. The audit page reads at organization scope,
+ * and an Owner's feed spans every workspace, so one lookup under the page's
+ * scope would hide every agent. Principals of an invocation with no workspace
+ * (humans and services, whose `workspace_id` is null) resolve under the
+ * organization scope.
+ */
+async function resolvePrincipalsByWorkspace(
+  orgId: string,
+  byWorkspace: ReadonlyMap<string | null, ReadonlySet<string>>,
+): Promise<Map<string, ResolvedPrincipal>> {
+  const groups = [...byWorkspace].filter(([, ids]) => ids.size > 0);
+  const resolved = await Promise.all(
+    groups.map(([workspaceId, ids]) =>
+      resolvePrincipals({ orgId, workspaceId: workspaceId ?? ORG_ONLY_WS }, [
+        ...ids,
+      ]),
+    ),
+  );
+  const merged = new Map<string, ResolvedPrincipal>();
+  for (const map of resolved)
+    for (const [id, principal] of map) {
+      // A workspace lookup sees what the organization lookup sees and more.
+      const known = merged.get(id);
+      if (!known || (known.agentKey === null && principal.agentKey !== null))
+        merged.set(id, principal);
+    }
+  return merged;
+}
+
+/**
  * The JSON format returns UUIDs as strings and an Enum8 as its label. No
  * `toString(x) AS x` in the query: ClickHouse resolves an alias inside WHERE,
  * so a String alias of request_id would never match the Array(UUID) filter.
@@ -500,6 +549,7 @@ type DecisionWire = {
   acting_principal_kind: "human" | "agent" | "service";
   target_kind: string | null;
   target_id: string | null;
+  workspace_id: string | null;
 };
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
@@ -551,7 +601,8 @@ export const liveAuditStores: AuditStores = {
             acting_principal_id,
             acting_principal_kind,
             target_kind,
-            target_id
+            target_id,
+            workspace_id
           FROM audit_events FINAL
           WHERE org_id = {orgId:UUID}
             AND request_id IN {requestIds:Array(UUID)}
@@ -561,17 +612,28 @@ export const liveAuditStores: AuditStores = {
         params: { requestIds },
       }),
     );
-    const wanted = new Set(keys.map((k) => `${k.requestId}:${k.capability}`));
+    const wanted = new Map<string, string | null>();
+    for (const k of keys) {
+      const id = `${k.requestId}:${k.capability}`;
+      wanted.set(id, wanted.get(id) ?? k.workspaceId);
+    }
     const rows = result.data.filter((r) =>
       wanted.has(`${r.request_id}:${r.capability}`),
     );
-    const principals = await resolvePrincipals(scope, [
-      ...new Set(
-        rows.flatMap((r) =>
-          r.acting_principal_id === NIL_UUID ? [] : [r.acting_principal_id],
-        ),
-      ),
-    ]);
+    // The security event's workspace, else the IAM decision's own.
+    const byWorkspace = new Map<string | null, Set<string>>();
+    for (const r of rows) {
+      if (r.acting_principal_id === NIL_UUID) continue;
+      const workspaceId =
+        wanted.get(`${r.request_id}:${r.capability}`) ?? r.workspace_id ?? null;
+      const ids = byWorkspace.get(workspaceId) ?? new Set<string>();
+      ids.add(r.acting_principal_id);
+      byWorkspace.set(workspaceId, ids);
+    }
+    const principals = await resolvePrincipalsByWorkspace(
+      scope.orgId,
+      byWorkspace,
+    );
     return rows.map(
       (r): DecisionRow => ({
         requestId: r.request_id,
