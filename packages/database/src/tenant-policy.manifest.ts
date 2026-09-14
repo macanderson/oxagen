@@ -97,6 +97,14 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // allowance and the volume band are both annual and org-wide, so a workspace
   // column would imply a per-workspace allowance that does not exist.
   { table: "billing.governed_action_counters", policyClass: "org_only" },
+  // ADR-055 GAU model (20260914165423_gau_buckets_and_contract_terms.sql).
+  // All three carry org_id NOT NULL and no workspace_id: terms, the month
+  // bucket and the settlement ledger are org-wide. The recorder reads and
+  // writes them through withTenantDb; the webhook branches and the close job
+  // through withSystemDb.
+  { table: "billing.contract_terms", policyClass: "org_only" },
+  { table: "billing.gau_buckets", policyClass: "org_only" },
+  { table: "billing.gau_settlements", policyClass: "org_only" },
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },

@@ -769,7 +769,39 @@ export interface SubscriptionPlanDef {
   weight: number;
   /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
   features: PlanFeatures;
+  /**
+   * ADR-055 §2: the tier's published governed-action terms, written to
+   * billing.plans by `pnpm billing:stripe-sync` and resolved live by
+   * resolveContractTerms for an org with no negotiated agreement.
+   * `(ratePerGauMicros * blockSizeGau) % 10000 === 0` so a block prices to
+   * whole cents (the plans_gau_terms_check CHECK).
+   */
+  gauTerms: GauTerms;
 }
+
+/** ADR-055 §2: the four figures that price governed action units for a tier. */
+export interface GauTerms {
+  /** ISO 4217, lower case, as billing.plans.currency stores it. */
+  currency: string;
+  /** Micro-dollars per GAU (1 cent = 10,000 micros). */
+  ratePerGauMicros: bigint;
+  /** GAUs per purchased block. */
+  blockSizeGau: number;
+  /** GAUs included in every month of a subscription. */
+  includedGauPerMonth: number;
+}
+
+/**
+ * The published rate, block size and currency are the same on every tier
+ * (v1 GAU pricing approved 2026-09-14, metering spec §4.2 / ADR-055: $5 per
+ * 1,000 GAU, 5,000-GAU blocks at $25.00, USD); tiers differ in the monthly
+ * allowance.
+ */
+const PUBLISHED_GAU_RATE = {
+  currency: "usd",
+  ratePerGauMicros: 5_000n,
+  blockSizeGau: 5_000,
+} as const;
 
 export interface CreditPackDef {
   /** Version-2 identifier (carries the `-v2` suffix). */
@@ -809,6 +841,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Email support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 50_000 },
   },
   {
     slug: "scale-v2",
@@ -829,6 +862,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Priority support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
   {
     // Priced self-serve plan (Enterprise customers may also engage at rate card
@@ -855,6 +889,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Immutable audit log",
       ],
     },
+    // Enterprise terms are negotiated (a billing.contract_terms row); the
+    // published row carries the Scale figures until one exists.
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
 ];
 

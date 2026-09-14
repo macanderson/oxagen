@@ -81,6 +81,10 @@ describe.skipIf(!enabled)("live billing adapter against Postgres", async () => {
         tier: "scale",
         stripeProductId: `prod_mclivepg${tag}`,
         monthlyCents: 9_900,
+        // ADR-055 published terms (NOT NULL on billing.plans): the Scale figures.
+        ratePerGauMicros: 5_000n,
+        blockSizeGau: 5_000,
+        includedGauPerMonth: 300_000,
       });
       const [sub] = await tx
         .insert(schema.subscriptions)

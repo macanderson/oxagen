@@ -435,6 +435,12 @@ async function upsertPlans(
       // 1 credit = 1 cent → included credit count == included credit cents.
       includedCreditCents: plan.includedCredits,
       includedSeats: plan.seats,
+      // ADR-055 §2: the tier's published GAU terms, read live by
+      // resolveContractTerms for an org with no negotiated agreement.
+      currency: plan.gauTerms.currency,
+      ratePerGauMicros: plan.gauTerms.ratePerGauMicros,
+      blockSizeGau: plan.gauTerms.blockSizeGau,
+      includedGauPerMonth: plan.gauTerms.includedGauPerMonth,
       features: plan.features,
       isPublic: true,
     };
@@ -459,6 +465,10 @@ async function upsertPlans(
           annualCents: row.annualCents,
           includedCreditCents: row.includedCreditCents,
           includedSeats: row.includedSeats,
+          currency: row.currency,
+          ratePerGauMicros: row.ratePerGauMicros,
+          blockSizeGau: row.blockSizeGau,
+          includedGauPerMonth: row.includedGauPerMonth,
           features: row.features,
           updatedAt: new Date(),
         },

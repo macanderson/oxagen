@@ -134,11 +134,29 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 92 as of billing.governed_action_counters (ADR-052). The preceding note
-    // read "97 as of org.model_credentials" while the assertion said 91, so it
-    // had already drifted from the number it was describing — a count nobody
-    // can check against its own comment is a pin with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(92);
+    // 95 as of billing.contract_terms, billing.gau_buckets and
+    // billing.gau_settlements (ADR-055, WL-24). Was 92 as of
+    // billing.governed_action_counters (ADR-052). An earlier note read "97 as
+    // of org.model_credentials" while the assertion said 91, so it had already
+    // drifted from the number it was describing — a count nobody can check
+    // against its own comment is a pin with no ratchet behind it.
+    expect(POLICY_MANIFEST.length).toBe(95);
+  });
+
+  it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
+    // Named as well as counted, for the same reason as the governed-action
+    // counter below: the contract terms, the month bucket and the settlement
+    // ledger are the rows a customer's GAU invoice is computed from. All three
+    // carry org_id NOT NULL and no workspace_id.
+    for (const t of [
+      "billing.contract_terms",
+      "billing.gau_buckets",
+      "billing.gau_settlements",
+    ]) {
+      const entry = POLICY_MANIFEST.find((e) => e.table === t);
+      expect(entry, t).toBeDefined();
+      expect(entry?.policyClass, t).toBe("org_only");
+    }
   });
 
   it("covers billing.governed_action_counters as org_only (ADR-052)", () => {
