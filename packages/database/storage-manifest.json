@@ -96,6 +96,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "bisect_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "browse_plugin_catalog",
       "reads": [],
@@ -527,6 +537,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "export_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "export_schema",
       "reads": [],
@@ -553,6 +573,16 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "fork_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -953,6 +983,26 @@
     {
       "domain": "run",
       "name": "get_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_frame_body",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_transcript",
       "reads": [],
       "surfaces": [
         "api",
@@ -2234,6 +2284,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "summarize_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "integration",
       "name": "sync_integration",
       "reads": [],
@@ -2567,7 +2627,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9457fc972a84f6ec39eef781d4f7f4408a216f9c9a36d546084564af42573dc1",
+  "contentHash": "c24577893cdc35f802304a09b5826268dd302f63a8748d8d4f7c8c2e70576953",
   "domains": [
     {
       "name": "agent",
@@ -5351,6 +5411,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "model_calls",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_calls",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "turns",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         }
       ],
       "domain": "agent",
