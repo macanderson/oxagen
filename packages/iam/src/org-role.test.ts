@@ -4,10 +4,10 @@
 //   - resolveActorOrgRole: no active principal → null; principal with no
 //     org-scoped role → null; the assigned role name; expired (JIT)
 //     assignments are excluded from the lookup
-//   - assertOrgRole: neither userId nor apiKeyId → forbidden (no query);
-//     no principal, no role, or a role outside the set → forbidden with
-//     `org_role_required`; a role in the set → returns it; apiKeyId stands
-//     in for a missing userId
+//   - assertOrgRole: no userId (an API-key call, or no actor) → forbidden
+//     `no_principal` with no query; no principal, no role, or a role outside
+//     the set → forbidden with `org_role_required`; a role in the set →
+//     returns it
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
@@ -113,48 +113,46 @@ describe("assertOrgRole", () => {
   });
 
   const OWNER_ADMIN = { org: ["Owner", "Admin"] } as const;
+  const USER = { orgId: "org_1", userId: "user_1" } as const;
 
-  it("refuses a context with neither userId nor apiKeyId before any query", async () => {
+  it("refuses a context with no user before any query", async () => {
     stubRoleResolution("prn_1", "Owner");
     await expect(
-      assertOrgRole(
-        { orgId: "org_1", userId: null, apiKeyId: null },
-        OWNER_ADMIN,
-      ),
+      assertOrgRole({ orgId: "org_1", userId: null }, OWNER_ADMIN),
     ).rejects.toSatisfy(forbidden("no_principal"));
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("refuses an API-key call the same way: a key holds no org role here", async () => {
+    stubRoleResolution("prn_1", "Owner");
+    const ctx = { orgId: "org_1", userId: null, apiKeyId: "aky_1" };
+    await expect(assertOrgRole(ctx, OWNER_ADMIN)).rejects.toSatisfy(
+      forbidden("no_principal"),
+    );
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 
   it("refuses an actor with no active principal in the org", async () => {
     stubRoleResolution(null, null);
-    await expect(
-      assertOrgRole(
-        { orgId: "org_1", userId: "user_1", apiKeyId: null },
-        OWNER_ADMIN,
-      ),
-    ).rejects.toSatisfy(forbidden("org_role_required"));
+    await expect(assertOrgRole(USER, OWNER_ADMIN)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
   });
 
   it("refuses a principal that holds no org-scoped role", async () => {
     stubRoleResolution("prn_1", null);
-    await expect(
-      assertOrgRole(
-        { orgId: "org_1", userId: "user_1", apiKeyId: null },
-        OWNER_ADMIN,
-      ),
-    ).rejects.toSatisfy(forbidden("org_role_required"));
+    await expect(assertOrgRole(USER, OWNER_ADMIN)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
   });
 
   it.each(["Member", "Viewer", "Billing", "Compliance"])(
     "refuses the org role %s when the set is Owner and Admin",
     async (role) => {
       stubRoleResolution("prn_1", role);
-      await expect(
-        assertOrgRole(
-          { orgId: "org_1", userId: "user_1", apiKeyId: null },
-          OWNER_ADMIN,
-        ),
-      ).rejects.toSatisfy(forbidden("org_role_required"));
+      await expect(assertOrgRole(USER, OWNER_ADMIN)).rejects.toSatisfy(
+        forbidden("org_role_required"),
+      );
     },
   );
 
@@ -162,33 +160,14 @@ describe("assertOrgRole", () => {
     "returns the role %s when it is in the set",
     async (role) => {
       stubRoleResolution("prn_1", role);
-      await expect(
-        assertOrgRole(
-          { orgId: "org_1", userId: "user_1", apiKeyId: null },
-          OWNER_ADMIN,
-        ),
-      ).resolves.toBe(role);
+      await expect(assertOrgRole(USER, OWNER_ADMIN)).resolves.toBe(role);
     },
   );
 
   it("accepts a role outside Owner/Admin when the handler names it", async () => {
     stubRoleResolution("prn_1", "Billing");
     await expect(
-      assertOrgRole(
-        { orgId: "org_1", userId: "user_1", apiKeyId: null },
-        { org: ["Owner", "Billing"] },
-      ),
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
     ).resolves.toBe("Billing");
-  });
-
-  it("uses apiKeyId as the actor when userId is absent", async () => {
-    stubRoleResolution("prn_1", "Owner");
-    await expect(
-      assertOrgRole(
-        { orgId: "org_1", userId: null, apiKeyId: "aky_1" },
-        OWNER_ADMIN,
-      ),
-    ).resolves.toBe("Owner");
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 });

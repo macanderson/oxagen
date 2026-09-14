@@ -43,6 +43,6 @@ Inserts one `auth.verifications` row under `cli_auth:<code>` with the bound scop
 | code | meaning |
 |---|---|
 | `forbidden` (`HandlerError`, reason `user_session_required`) | No user session on the context. |
-| `forbidden` (`HandlerError`, reason `org_role_required` or `no_principal`) | The user is not an org Owner or Admin. |
+| `forbidden` (`HandlerError`, reason `org_role_required`) | The user is not an org Owner or Admin. |
 | `invalid_input` | `redirectUri` is not a loopback http URL with an explicit port. |
 | `not_found` (`HandlerError`, reason `workspace_not_found`) | The workspace on the context is not in the org. |

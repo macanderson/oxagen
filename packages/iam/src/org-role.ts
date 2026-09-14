@@ -88,7 +88,6 @@ export async function resolveActorOrgRole(
 export interface OrgRoleActor {
   readonly orgId: string;
   readonly userId: string | null;
-  readonly apiKeyId: string | null;
 }
 
 /** The org roles a handler accepts, by IAM role name (`iam.roles.name`). */
@@ -97,26 +96,29 @@ export interface OrgRoleRequirement {
 }
 
 /**
- * Refuse unless the actor holds one of `required.org` in `ctx.orgId`.
+ * Refuse unless the signed-in user holds one of `required.org` in `ctx.orgId`.
  *
- * Throws `HandlerError { code: "forbidden" }` with reason `no_principal` when
- * the context carries neither a user nor an API key, and `org_role_required`
- * when the resolved role is absent or not in the set. Returns the role that
- * satisfied the check so a handler can record it.
+ * Org roles are assigned to human principals (`iam.principals.parent_user_id`
+ * with `kind = 'human'`), so the gate resolves `ctx.userId` and nothing else.
+ * A context with no user — an API-key call, or none — is refused with reason
+ * `no_principal` before any query: the kernel's enterprise IAM path is where
+ * an API key authorizes as its creator (fetch-authz.ts), and this gate makes
+ * no such mapping. Reason `org_role_required` covers a user with no active
+ * principal, no org-scoped role, or a role outside the set. Returns the role
+ * that satisfied the check so a handler can record it.
  */
 export async function assertOrgRole(
   ctx: OrgRoleActor,
   required: OrgRoleRequirement,
 ): Promise<string> {
-  const actorId = ctx.userId ?? ctx.apiKeyId;
-  if (!actorId) {
+  if (!ctx.userId) {
     throw new HandlerError({
       code: "forbidden",
       reason: "no_principal",
-      message: "No authenticated principal",
+      message: "No signed-in user on the request",
     });
   }
-  const role = await resolveActorOrgRole(ctx.orgId, actorId);
+  const role = await resolveActorOrgRole(ctx.orgId, ctx.userId);
   if (role === null || !required.org.includes(role)) {
     throw new HandlerError({
       code: "forbidden",
