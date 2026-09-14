@@ -35,7 +35,7 @@ Top MCP Servers:
 - [ ] Playwright — drives a real browser for E2E tests and UI verification. Bundled as a Claude Code plugin; enable it with `/mcp`.
 - [ ] Vercel — deployments, build logs, runtime errors/logs for our app + api. Authenticate via `/mcp` (Vercel plugin) — you'll need access to the Oxagen Vercel team.
 - [ ] Docker (MCP_DOCKER) — local containers + Postgres/ClickHouse/Neo4j helpers. Requires Docker Desktop running locally.
-- [ ] Linear — reads/writes tickets in the `oxagen-v2` project. Authenticate via `/mcp`; ask for a seat on the Oxagen Linear workspace.
+- [ ] GitHub — issues are the tracker (CLAUDE.md "Issues and labels"); `gh auth login` is enough. No Linear seat is needed: Linear only receives release notes (`.github/workflows/linear-release.yml`).
 
 ### Skills to Know About
 - [ ] /oxagen-engineering-policy — binding engineering law; consult BEFORE writing code, picking a dep, or opening a PR.
