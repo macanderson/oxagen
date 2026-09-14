@@ -26,11 +26,33 @@ vi.mock("node:os", async (importOriginal) => {
   return { ...actual, homedir: () => HOME };
 });
 
-const { watchMock } = vi.hoisted(() => ({ watchMock: vi.fn() }));
+const { watchMock, reads } = vi.hoisted(() => ({
+  watchMock: vi.fn(),
+  // Counts the drain's log reads so a test can tell "the drain finished" from
+  // "the drain is still reading". See `waitUntil` and the follow test below.
+  reads: { started: 0, finished: 0 },
+}));
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, watch: watchMock };
 });
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    readFile: async (...args: Parameters<typeof actual.readFile>) => {
+      reads.started += 1;
+      try {
+        return await actual.readFile(...args);
+      } finally {
+        reads.finished += 1;
+      }
+    },
+  };
+});
+
+/** True when no log read is in flight, so the drain has run to completion. */
+const drainIsIdle = (): boolean => reads.started === reads.finished;
 
 import { handleLogs } from "../logs.js";
 import { debugLog, clearDebugLog, DEBUG_ENV } from "../../lib/debug-log.js";
@@ -43,6 +65,8 @@ let errWrite: typeof process.stderr.write;
 beforeEach(() => {
   out = "";
   err = "";
+  reads.started = 0;
+  reads.finished = 0;
   watchMock.mockReset();
   outWrite = process.stdout.write.bind(process.stdout);
   errWrite = process.stderr.write.bind(process.stderr);
@@ -132,17 +156,19 @@ describe("oxagen logs --follow", () => {
     listener!();
     // Two watch events for one append must collapse into one drain, not print twice.
     listener!();
-    await waitUntil(() => out.includes("after.follow"), "the drain to print the new entry");
-    // The second event queued a trailing re-read. Wait for stdout to stay
-    // unchanged across consecutive polls so a double print is caught here
-    // rather than raced past by the assertion below.
-    let previous = "";
-    let settled = 0;
-    await waitUntil(() => {
-      settled = previous === out ? settled + 1 : 0;
-      previous = out;
-      return settled >= 3;
-    }, "stdout to go quiet after the drain");
+    // The second event queued a trailing re-read, and the duplicate that read
+    // prints if `seen` fails to advance is exactly what `toHaveLength(1)`
+    // below guards. Quiet stdout cannot tell "the drain finished" from "the
+    // trailing read has not come back yet", so a wait on elapsed quiet lets a
+    // late duplicate land after the assertion and the guard passes without
+    // guarding. `readDebugLog` awaits one thing, `readFile`, so an equal
+    // started/finished count is the drain's real idle signal — and the poll is
+    // a macrotask, which cannot interleave with the microtasks that carry one
+    // drain iteration into the next.
+    await waitUntil(
+      () => out.includes("after.follow") && drainIsIdle(),
+      "the drain to print the new entry and run out of reads",
+    );
 
     expect(stops.length).toBeGreaterThan(0);
     stops[0]!();
