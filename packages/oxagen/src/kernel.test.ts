@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { CapabilityContext } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { clearRegistryForTests, registerCapability } from "./registry";
-import { HandlerError } from "./handler-error";
 import {
   CapabilityError,
   assertHandlersComplete,
@@ -281,48 +280,6 @@ describe("kernel security event emitter", () => {
       }),
     );
   });
-
-  it("emits a 'deny' event carrying the code when the handler refuses with forbidden", async () => {
-    const emitter = vi.fn();
-    setSecurityEventEmitter(emitter);
-    echoCap();
-    registerHandler("test.echo", async () => async () => {
-      throw new HandlerError({
-        code: "forbidden",
-        reason: "insufficient_role",
-      });
-    });
-
-    await expect(
-      invoke("test.echo", { value: "x" }, ctx),
-    ).rejects.toMatchObject({ code: "forbidden", reason: "insufficient_role" });
-
-    expect(emitter).toHaveBeenCalledOnce();
-    expect(emitter).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "deny", errorCode: "forbidden" }),
-    );
-  });
-
-  it.each(["not_found", "conflict"] as const)(
-    "emits an 'error' event carrying the code when the handler refuses with %s",
-    async (code) => {
-      const emitter = vi.fn();
-      setSecurityEventEmitter(emitter);
-      echoCap();
-      registerHandler("test.echo", async () => async () => {
-        throw new HandlerError({ code, reason: "r" });
-      });
-
-      await expect(
-        invoke("test.echo", { value: "x" }, ctx),
-      ).rejects.toMatchObject({ code });
-
-      expect(emitter).toHaveBeenCalledOnce();
-      expect(emitter).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: "error", errorCode: code }),
-      );
-    },
-  );
 
   it("does not call the emitter when no emitter is registered", async () => {
     // No setSecurityEventEmitter call — should not throw.

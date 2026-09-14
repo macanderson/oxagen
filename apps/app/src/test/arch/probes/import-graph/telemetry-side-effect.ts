@@ -1,3 +1,0 @@
-import "@oxagen/telemetry";
-
-export {};

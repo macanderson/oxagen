@@ -1,10 +1,17 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  schema,
+  withTenantDb,
+  isUniqueViolation,
+  deriveNamespace,
+} from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { bootstrapWorkspace } from "./workspace-bootstrap";
+import { bootstrapWorkspaceAgents } from "./workspace-agents";
+import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
+import { seedWorkspaceDefaultEnvironment } from "./workspace-environment-seed";
 
 export const workspaceCreateHandler: CapabilityHandler<
   typeof workspaceCreate
@@ -16,7 +23,6 @@ export const workspaceCreateHandler: CapabilityHandler<
     );
     throw new Error("workspace.create requires an authenticated user");
   }
-  const userId = ctx.userId;
 
   const tenant = await withTenantDb((tx) =>
     tx.query.organizations.findFirst({
@@ -48,33 +54,90 @@ export const workspaceCreateHandler: CapabilityHandler<
     throw new Error(`slug "${input.slug}" already in use for this tenant`);
   }
 
+  let workspaceId: string = "";
   try {
-    const ws = await withTenantDb((tx) =>
-      bootstrapWorkspace({
-        tx,
-        orgId: ctx.orgId,
-        userId,
-        name: input.name,
-        slug: input.slug,
-      }),
-    );
+    const result = await withTenantDb(async (tx) => {
+      // Derive the immutable namespace from the slug, unique WITHIN this org
+      // (workspace namespaces are per-org, like slugs). The (org_id, namespace)
+      // unique index is the authoritative guard against a concurrent-create race.
+      const takenNamespaces = new Set(
+        (
+          await tx
+            .select({ namespace: schema.workspaces.namespace })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, ctx.orgId))
+        ).map((r) => r.namespace.toLowerCase()),
+      );
+      const namespace = deriveNamespace(input.slug, takenNamespaces);
 
-    logger.info(
-      {
+      const [ws] = await tx
+        .insert(schema.workspaces)
+        .values({
+          orgId: ctx.orgId,
+          name: input.name,
+          slug: input.slug,
+          namespace,
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
+        })
+        .returning({
+          publicId: schema.workspaces.publicId,
+          name: schema.workspaces.name,
+          slug: schema.workspaces.slug,
+          id: schema.workspaces.id,
+          createdAt: schema.workspaces.createdAt,
+        });
+
+      if (!ws) throw new Error("workspace insert returned no row");
+
+      await tx.insert(schema.workspaceUsers).values({
+        workspaceId: ws.id,
+        userId: ctx.userId!,
+        role: "owner",
+        joinedAt: new Date(),
+        createdByUserId: ctx.userId,
+        updatedByUserId: ctx.userId,
+      });
+
+      await bootstrapWorkspaceAgents({
         workspaceId: ws.id,
         orgId: ctx.orgId,
+        userId: ctx.userId!,
+        tx,
+      });
+
+      const result = {
+        publicId: ws.publicId,
+        name: ws.name,
         slug: ws.slug,
-        surface: ctx.surface,
-      },
-      "workspace.create: workspace created successfully",
-    );
+        orgSlug: tenant.slug,
+        createdAt: ws.createdAt.toISOString(),
+      };
+      logger.info(
+        {
+          workspaceId: ws.id,
+          orgId: ctx.orgId,
+          slug: ws.slug,
+          surface: ctx.surface,
+        },
+        "workspace.create: workspace created successfully",
+      );
+      workspaceId = ws.id;
+      return result;
+    });
+
+    // Seed the default MCP registry for the new workspace (idempotent).
+    await seedWorkspaceDefaultRegistry({ orgId: ctx.orgId, workspaceId });
+
+    // Seed the default environment so runs always resolve to a default (idempotent).
+    await seedWorkspaceDefaultEnvironment({ orgId: ctx.orgId, workspaceId });
 
     // Record security event for workspace creation (privileged mutation).
     emitSecurityEventAsync({
       eventType: "workspace.created",
-      actorUserId: userId,
+      actorUserId: ctx.userId!,
       orgId: ctx.orgId,
-      workspaceId: ws.id,
+      workspaceId,
       outcome: "success",
       capability: null,
       ip: null,
@@ -82,18 +145,12 @@ export const workspaceCreateHandler: CapabilityHandler<
       requestId: ctx.requestId,
     }).catch((err: unknown) => {
       logger.error(
-        { err, orgId: ctx.orgId, workspaceId: ws.id },
+        { err, orgId: ctx.orgId, workspaceId },
         "workspace.create: failed to record security event",
       );
     });
 
-    return {
-      publicId: ws.publicId,
-      name: ws.name,
-      slug: ws.slug,
-      orgSlug: tenant.slug,
-      createdAt: ws.createdAt.toISOString(),
-    };
+    return result;
   } catch (err) {
     if (isUniqueViolation(err)) {
       logger.warn(

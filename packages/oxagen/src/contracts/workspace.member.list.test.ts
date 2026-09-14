@@ -1,125 +1,121 @@
 import { describe, expect, it } from "vitest";
-import { listMembers } from "./workspace.member.list";
+import { workspaceMemberList } from "./workspace.member.list";
 import { getCapability } from "../registry";
-import { capabilityMutates } from "../types";
 
-const member = {
-  id: "usr_alice",
-  name: "Alice",
-  email: "alice@example.com",
-  role: "admin",
-  joinedAt: "2024-01-15T08:00:00.000Z",
-};
+describe("workspace.member.list capability", () => {
+  // ── input: optional workspace_id ─────────────────────────────────────────
 
-const invitation = {
-  id: "invi_bob",
-  email: "bob@example.com",
-  role: "Member",
-  invitedAt: "2024-02-01T00:00:00.000Z",
-  expiresAt: "2024-02-08T00:00:00.000Z",
-};
-
-describe("list_members contract", () => {
-  it("is registered under its Appendix E name and the former name is gone", () => {
-    expect(getCapability("list_members")).toBe(listMembers);
-    expect(getCapability("list_workspace_members")).toBeUndefined();
+  it("parses empty input (workspace_id is optional)", () => {
+    const parsed = workspaceMemberList.input.parse({});
+    expect(parsed.workspace_id).toBeUndefined();
   });
 
-  it("is a console read: mutates:false, noBillingGate:true, scoped", () => {
-    expect(capabilityMutates(listMembers)).toBe(false);
-    expect(listMembers.noBillingGate).toBe(true);
-    expect(listMembers.scoped).toBe(true);
-  });
-
-  // ── input ─────────────────────────────────────────────────────────────────
-
-  it("defaults the scope to the request's workspace, so callers that pass nothing keep their listing", () => {
-    expect(listMembers.input.parse({}).scope).toBe("workspace");
-  });
-
-  it("accepts the org scope", () => {
-    expect(listMembers.input.parse({ scope: "org" }).scope).toBe("org");
-  });
-
-  it("refuses a scope outside org | workspace", () => {
-    expect(() => listMembers.input.parse({ scope: "user" })).toThrow();
-  });
-
-  // ── output ────────────────────────────────────────────────────────────────
-
-  it("org scope carries members and invitations", () => {
-    const parsed = listMembers.output.parse({
-      scope: "org",
-      members: [member],
-      invitations: [invitation],
+  it("accepts a workspace_id string", () => {
+    const parsed = workspaceMemberList.input.parse({
+      workspace_id: "ws-001",
     });
-    expect(parsed.scope).toBe("org");
-    if (parsed.scope !== "org") throw new Error("unreachable");
-    expect(parsed.members[0]?.id).toBe("usr_alice");
-    expect(parsed.invitations[0]?.id).toBe("invi_bob");
+    expect(parsed.workspace_id).toBe("ws-001");
   });
 
-  it("org scope requires the invitations array", () => {
+  it("rejects non-string workspace_id", () => {
     expect(() =>
-      listMembers.output.parse({ scope: "org", members: [member] }),
+      workspaceMemberList.input.parse({ workspace_id: 42 }),
     ).toThrow();
   });
 
-  it("workspace scope carries members only", () => {
-    const parsed = listMembers.output.parse({
-      scope: "workspace",
-      members: [member],
-    });
-    expect(parsed.scope).toBe("workspace");
-    expect("invitations" in parsed).toBe(false);
+  // ── output shape ──────────────────────────────────────────────────────────
+
+  it("parses a valid output array with one member", () => {
+    const parsed = workspaceMemberList.output.parse([
+      {
+        id: "user-001",
+        email: "alice@example.com",
+        role: "admin",
+        joined_at: "2024-01-15T08:00:00.000Z",
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.id).toBe("user-001");
+    expect(parsed[0]?.email).toBe("alice@example.com");
+    expect(parsed[0]?.role).toBe("admin");
+    expect(parsed[0]?.joined_at).toBe("2024-01-15T08:00:00.000Z");
   });
 
-  it("workspace scope drops an invitations array: a workspace has none", () => {
-    const parsed = listMembers.output.parse({
-      scope: "workspace",
-      members: [],
-      invitations: [invitation],
-    });
-    expect("invitations" in parsed).toBe(false);
+  it("parses a valid empty array", () => {
+    const parsed = workspaceMemberList.output.parse([]);
+    expect(parsed).toHaveLength(0);
   });
 
-  it("a member's name is nullable and its email, role and joinedAt are not", () => {
-    expect(
-      listMembers.output.safeParse({
-        scope: "workspace",
-        members: [{ ...member, name: null }],
-      }).success,
-    ).toBe(true);
-    for (const key of ["email", "role", "joinedAt"] as const) {
-      const { [key]: _dropped, ...rest } = member;
-      expect(
-        listMembers.output.safeParse({ scope: "workspace", members: [rest] })
-          .success,
-      ).toBe(false);
-    }
+  it("parses an array with multiple members", () => {
+    const parsed = workspaceMemberList.output.parse([
+      {
+        id: "user-001",
+        email: "alice@example.com",
+        role: "owner",
+        joined_at: "2024-01-01T00:00:00.000Z",
+      },
+      {
+        id: "user-002",
+        email: "bob@example.com",
+        role: "member",
+        joined_at: "2024-02-01T00:00:00.000Z",
+      },
+    ]);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[1]?.role).toBe("member");
   });
 
-  it("an invitation's expiresAt is nullable and its email, role and invitedAt are not", () => {
-    expect(
-      listMembers.output.safeParse({
-        scope: "org",
-        members: [],
-        invitations: [{ ...invitation, expiresAt: null }],
-      }).success,
-    ).toBe(true);
-    for (const key of ["email", "role", "invitedAt"] as const) {
-      const { [key]: _dropped, ...rest } = invitation;
-      expect(
-        listMembers.output.safeParse({
-          scope: "org",
-          members: [],
-          invitations: [rest],
-        }).success,
-      ).toBe(false);
-    }
+  it("rejects a member missing the email field", () => {
+    expect(() =>
+      workspaceMemberList.output.parse([
+        {
+          id: "user-001",
+          role: "member",
+          joined_at: "2024-01-01T00:00:00.000Z",
+        },
+      ]),
+    ).toThrow();
   });
 
-  it("refuses the former bare-array output", () => {
-    expect(listMembers.output.safeParse([member]).success).toBe(false);
+  it("rejects a member missing joined_at", () => {
+    expect(() =>
+      workspaceMemberList.output.parse([
+        {
+          id: "user-001",
+          email: "alice@example.com",
+          role: "member",
+        },
+      ]),
+    ).toThrow();
+  });
+
+  it("rejects a member with non-string id", () => {
+    expect(() =>
+      workspaceMemberList.output.parse([
+        {
+          id: 42,
+          email: "alice@example.com",
+          role: "member",
+          joined_at: "2024-01-01T00:00:00.000Z",
+        },
+      ]),
+    ).toThrow();
+  });
+
+  it("rejects a non-array output", () => {
+    expect(() =>
+      workspaceMemberList.output.parse({
+        id: "user-001",
+        email: "alice@example.com",
+        role: "member",
+        joined_at: "2024-01-01T00:00:00.000Z",
+      }),
+    ).toThrow();
+  });
+
+  // ── registry ──────────────────────────────────────────────────────────────
+
+  it("is registered in the capability registry", () => {
+    expect(getCapability("list_workspace_members")).toBe(workspaceMemberList);
   });
 });

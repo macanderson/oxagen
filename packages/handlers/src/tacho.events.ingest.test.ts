@@ -33,8 +33,6 @@ import { foldDelta, tachoEventsIngestHandler } from "./tacho.events.ingest";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
-const ENROLLER_USER_ID = "22222222-2222-4222-8222-222222222222";
-const ENROLLER_PRINCIPAL_ID = "33333333-3333-4333-8333-333333333333";
 const CONTEXT: CapabilityContext = {
   orgId: "00000000-0000-0000-0000-000000000001",
   workspaceId: "00000000-0000-0000-0000-000000000002",
@@ -146,8 +144,6 @@ function session(): TachoEvent[] {
 
 interface FakeDb {
   hosts: Array<Record<string, unknown>>;
-  principals: Array<Record<string, unknown>>;
-  principalLookups: ReturnType<typeof vi.fn>;
   sessions: Map<string, Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
   files: Array<Record<string, unknown>>;
@@ -169,18 +165,8 @@ function fakeDb(): FakeDb {
         mode: "observe",
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         bundleVersionServed: null,
-        createdByUserId: ENROLLER_USER_ID,
       },
     ],
-    principals: [
-      {
-        id: ENROLLER_PRINCIPAL_ID,
-        orgId: CONTEXT.orgId,
-        parentUserId: ENROLLER_USER_ID,
-        kind: "human",
-      },
-    ],
-    principalLookups: vi.fn(),
     sessions: new Map(),
     models: [],
     files: [],
@@ -225,12 +211,6 @@ function wire(db: FakeDb): void {
             }),
           },
           tachoHosts: { findFirst: async () => db.hosts[0] },
-          principals: {
-            findFirst: async () => {
-              db.principalLookups();
-              return db.principals[0];
-            },
-          },
           tachoSessions: { findFirst: async () => db.sessions.get(SESSION) },
           authorizationDenyGenerations: {
             findMany: async () => [
@@ -335,9 +315,7 @@ describe("ingest_tacho_events", () => {
       cwd: "/home/dev/proj",
       toolsAvailable: ["Read"],
       chainVerified: true,
-      initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
     });
-    expect(db.principalLookups).toHaveBeenCalledOnce();
     expect(db.models[0]).toMatchObject({
       model: "claude-haiku-4-5-20251001",
       requests: 1,
@@ -436,72 +414,6 @@ describe("ingest_tacho_events", () => {
       CONTEXT,
     );
     expect(broken.chain_breaks[0]?.reason).toContain("recorded chain head");
-  });
-
-  it("attributes nobody when the host has no enroller or the enroller has no principal", async () => {
-    const orphan = fakeDb();
-    (orphan.hosts[0] as Record<string, unknown>)["createdByUserId"] = null;
-    wire(orphan);
-    await tachoEventsIngestHandler(
-      {
-        schema: "tacho.batch.v1",
-        host_enrollment_id: HOST_PUBLIC,
-        events: session(),
-      },
-      CONTEXT,
-    );
-    expect(orphan.sessions.get(SESSION)).toMatchObject({
-      initiatingPrincipalId: null,
-    });
-    expect(orphan.principalLookups).not.toHaveBeenCalled();
-
-    const unprovisioned = fakeDb();
-    unprovisioned.principals = [];
-    wire(unprovisioned);
-    await tachoEventsIngestHandler(
-      {
-        schema: "tacho.batch.v1",
-        host_enrollment_id: HOST_PUBLIC,
-        events: session(),
-      },
-      CONTEXT,
-    );
-    expect(unprovisioned.sessions.get(SESSION)).toMatchObject({
-      initiatingPrincipalId: null,
-    });
-    expect(unprovisioned.principalLookups).toHaveBeenCalledOnce();
-  });
-
-  it("leaves an existing session's initiating principal as recorded", async () => {
-    const db = fakeDb();
-    const events = session();
-    const recorded = "44444444-4444-4444-8444-444444444444";
-    db.sessions.set(SESSION, {
-      id: "s1",
-      seqCount: 3,
-      lastHash: events[2]?.hash,
-      chainVerified: true,
-      hostId: HOST_ID,
-      initiatingPrincipalId: recorded,
-    });
-    wire(db);
-    await tachoEventsIngestHandler(
-      {
-        schema: "tacho.batch.v1",
-        host_enrollment_id: HOST_PUBLIC,
-        events: events.slice(3),
-      },
-      CONTEXT,
-    );
-    expect(db.sessions.get(SESSION)).toMatchObject({
-      initiatingPrincipalId: recorded,
-      outcome: "completed",
-    });
-    expect(db.principalLookups).not.toHaveBeenCalled();
-    const sessionUpdates = db.updates.filter((u) => u.table === "sessions");
-    expect(sessionUpdates.length).toBeGreaterThan(0);
-    for (const update of sessionUpdates)
-      expect(update.values).not.toHaveProperty("initiatingPrincipalId");
   });
 
   it("denies a batch that names another host, a missing key, or a revoked host", async () => {

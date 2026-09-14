@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  apiLayerSatisfied,
-  buildApiRouteIndex,
-  manifestContentChanged,
-} from "./check_manifest.mjs";
+import { apiLayerSatisfied, buildApiRouteIndex } from "./check_manifest.mjs";
 
 describe("buildApiRouteIndex", () => {
   it("collects contract stems imported by any route file", () => {
@@ -107,58 +103,5 @@ describe("apiLayerSatisfied", () => {
       routeIndex,
     });
     expect(ok).toBe(false);
-  });
-});
-
-describe("manifestContentChanged", () => {
-  const manifest = {
-    capabilities: [
-      {
-        name: "list_members",
-        file: "workspace.member.list.ts",
-        domain: "org",
-        mode: "sync",
-        surfaces: ["api", "mcp"],
-        layers: { schema: true, api: true },
-      },
-    ],
-  };
-
-  it("treats a formatting-only difference as unchanged", () => {
-    // The committed file is Biome-formatted: arrays inline, and the script's
-    // own JSON.stringify(…, 2) layout must compare equal to it.
-    const biomeLayout = `{
-  "capabilities": [
-    {
-      "name": "list_members",
-      "file": "workspace.member.list.ts",
-      "domain": "org",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": { "schema": true, "api": true }
-    }
-  ]
-}
-`;
-    expect(manifestContentChanged(biomeLayout, manifest)).toBe(false);
-    expect(
-      manifestContentChanged(JSON.stringify(manifest, null, 2), manifest),
-    ).toBe(false);
-  });
-
-  it("reports a content difference", () => {
-    const changed = {
-      capabilities: [
-        { ...manifest.capabilities[0], layers: { schema: true, api: false } },
-      ],
-    };
-    expect(manifestContentChanged(JSON.stringify(manifest), changed)).toBe(
-      true,
-    );
-  });
-
-  it("reports a missing or unparseable file as changed", () => {
-    expect(manifestContentChanged("", manifest)).toBe(true);
-    expect(manifestContentChanged("{ not json", manifest)).toBe(true);
   });
 });

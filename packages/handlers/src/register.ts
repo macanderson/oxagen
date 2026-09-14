@@ -49,11 +49,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .apiKeyCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "list_api_keys",
-    async () =>
-      (await import("./api.key.list")).apiKeyListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "revoke_api_key",
     async () =>
       (await import("./api.key.revoke"))
@@ -472,10 +467,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "list_members",
+    "list_workspace_members",
     async () =>
       (await import("./workspace.member.list"))
-        .listMembersHandler as CapabilityHandlerFn,
+        .workspaceMemberListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_budget_policy",
@@ -812,16 +807,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.command.fetch"))
         .tachoCommandFetchHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_runs",
-    async () =>
-      (await import("./run.list")).runListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_run",
-    async () =>
-      (await import("./run.get")).runGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_tacho_hosts",

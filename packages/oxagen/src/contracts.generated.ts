@@ -3,7 +3,6 @@
 // is the single import that pulls them all in. Run `pnpm check:manifest`
 // (or the gate) to regenerate after adding or removing a contract.
 
-import "./contracts/agent.approval.list";
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.debug.trace";
 import "./contracts/agent.definition.create";
@@ -56,7 +55,6 @@ import "./contracts/agent.role.revoke";
 import "./contracts/agent.tool.list";
 import "./contracts/agent.trace.get";
 import "./contracts/api.key.create";
-import "./contracts/api.key.list";
 import "./contracts/api.key.revoke";
 import "./contracts/api.key.rotate";
 import "./contracts/asset.upload";
@@ -183,8 +181,6 @@ import "./contracts/router.decision.preview";
 import "./contracts/router.policy.get";
 import "./contracts/router.policy.set";
 import "./contracts/router.stats.list";
-import "./contracts/run.get";
-import "./contracts/run.list";
 import "./contracts/schema.chat";
 import "./contracts/schema.delete";
 import "./contracts/schema.export";

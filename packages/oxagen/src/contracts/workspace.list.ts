@@ -23,9 +23,7 @@ export const workspaceListItemSchema = z.object({
   role: z
     .string()
     .nullable()
-    .describe(
-      "The caller's workspace role, or null when they are an org admin without a direct workspace membership",
-    ),
+    .describe("The caller's workspace role, or null when they are an org admin without a direct workspace membership"),
 });
 
 export const workspaceList = registerCapability({
@@ -40,9 +38,6 @@ export const workspaceList = registerCapability({
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
   mutates: false,
-  // A console read is never a governed action (ADR-052 exclusion 2); the
-  // app's shell reads this list from an org context on every page load.
-  noBillingGate: true,
   // allow by default: same reasoning as org.list — listing workspaces within an
   // org the caller already belongs to is a user-intrinsic right. The handler
   // enforces membership before listing (not-a-member → error). Keeping this as
@@ -50,21 +45,11 @@ export const workspaceList = registerCapability({
   // before workspace.list was seeded in role_grants. (OXA fix — CLI picker 403.)
   defaultEffect: "allow",
   defaultRoles: {
-    org: {
-      Owner: "allow",
-      Admin: "allow",
-      Member: "allow",
-      Billing: "allow",
-      Compliance: "allow",
-      Viewer: "allow",
-    },
+    org: { Owner: "allow", Admin: "allow", Member: "allow", Billing: "allow", Compliance: "allow", Viewer: "allow" },
     workspace: {},
   },
   input: z.object({
-    orgSlug: z
-      .string()
-      .min(1)
-      .describe("Slug of the organization whose workspaces to list"),
+    orgSlug: z.string().min(1).describe("Slug of the organization whose workspaces to list"),
   }),
   output: z.object({
     organization: z.object({

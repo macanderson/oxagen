@@ -36,8 +36,4 @@ describe("org.member.invite.decline capability", () => {
   it("is registered in the capability registry", () => {
     expect(getCapability("decline_member_invite")).toBe(orgMemberInviteDecline);
   });
-
-  it("is never a charge: membership declares noBillingGate (ADR-052 exclusion 2)", () => {
-    expect(orgMemberInviteDecline.noBillingGate).toBe(true);
-  });
 });

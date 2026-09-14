@@ -1,23 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-// Both value sets mirror the CHECK constraints on mcp.mcp_servers
-// (packages/database/src/schema/mcp.ts). Plugin-installed servers are
-// written with transport 'sse' and health 'unknown', so the list output has
-// to admit every value the table can hold. The handler narrows each row
-// through these same schemas.
-export const mcpServerTransportType = z.enum([
-  "streamable-http",
-  "sse",
-  "stdio",
-]);
-export const mcpServerHealthStatus = z.enum([
-  "healthy",
-  "degraded",
-  "unreachable",
-  "unknown",
-]);
-
 export const agentMcpList = registerCapability({
   name: "list_mcp_servers",
   domain: "agent",
@@ -45,9 +28,9 @@ export const agentMcpList = registerCapability({
       z.object({
         publicId: z.string(),
         name: z.string(),
-        transportType: mcpServerTransportType,
+        transportType: z.enum(["streamable-http", "stdio"]),
         endpointUrl: z.string(),
-        healthStatus: mcpServerHealthStatus,
+        healthStatus: z.enum(["healthy", "degraded", "unreachable"]),
         lastHealthcheckAt: z.string().nullable(),
         toolCount: z.number().int().nonnegative(),
       }),

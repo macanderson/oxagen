@@ -7,18 +7,18 @@
  *   - @oxagen/telemetry         → recordSecurityEvent
  *   - drizzle-orm               → and, eq, isNull
  *
- * Scenarios (every refusal is a HandlerError asserted by code, never message):
- *   1. No authenticated principal → forbidden
- *   2. No orgId → forbidden
- *   3. Actor has insufficient role (Member) → forbidden
- *   4. Target not in org → not_found (IDOR guard)
- *   5. Requested role does not exist in org → not_found
- *   6. Demoting last owner → conflict
+ * Scenarios:
+ *   1. No authenticated principal → throws Unauthorized
+ *   2. No orgId → throws Forbidden
+ *   3. Actor has insufficient role (Member) → throws Forbidden
+ *   4. Target not in org → throws Not found (IDOR guard)
+ *   5. Requested role does not exist in org → throws with descriptive message
+ *   6. Demoting last owner → blocked
  *   7. Happy path → changes role, emits org.role_changed event, returns changed:true
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { HandlerError, type CapabilityContext } from "@oxagen/oxagen";
+import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── @oxagen/database/security mock ───────────────────────────────────────────
 // The handler emits through the consolidated registry helper emitSecurityEvent
@@ -71,20 +71,6 @@ function makeCtx(
   } as CapabilityContext;
 }
 
-/** Awaits a rejection and asserts it is a HandlerError with this code and reason. */
-async function expectHandlerError(
-  run: Promise<unknown>,
-  code: HandlerError["code"],
-  reason: string,
-): Promise<void> {
-  const err = await run.then(
-    () => null,
-    (e: unknown) => e,
-  );
-  expect(err).toBeInstanceOf(HandlerError);
-  expect(err).toMatchObject({ code, reason });
-}
-
 function buildSelectMock(calls: unknown[][]) {
   let callCount = 0;
   return vi.fn().mockImplementation(() => {
@@ -105,39 +91,33 @@ describe("orgMemberRoleChangeHandler", () => {
     vi.clearAllMocks();
   });
 
-  it("no authenticated principal → forbidden", async () => {
+  it("no authenticated principal → throws Unauthorized", async () => {
     const ctx = makeCtx({ userId: null, apiKeyId: null });
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler({ targetUserId: "t", newRole: "Admin" }, ctx),
-      "forbidden",
-      "unauthenticated",
-    );
+    ).rejects.toThrow("Unauthorized");
   });
 
-  it("no orgId → forbidden", async () => {
+  it("no orgId → throws Forbidden", async () => {
     const ctx = makeCtx({ orgId: null as unknown as string });
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler({ targetUserId: "t", newRole: "Admin" }, ctx),
-      "forbidden",
-      "org_scope_required",
-    );
+    ).rejects.toThrow("Forbidden");
   });
 
-  it("actor has Member role → forbidden", async () => {
+  it("actor has Member role → throws Forbidden", async () => {
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Member" }], // actor PRA = Member
     ]);
 
     const ctx = makeCtx();
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler({ targetUserId: "t", newRole: "Admin" }, ctx),
-      "forbidden",
-      "insufficient_role",
-    );
+    ).rejects.toThrow("Forbidden");
   });
 
-  it("target not a member → not_found (IDOR guard)", async () => {
+  it("target not a member → throws Not found (IDOR guard)", async () => {
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Admin" }], // actor PRA = Admin
@@ -145,17 +125,15 @@ describe("orgMemberRoleChangeHandler", () => {
     ]);
 
     const ctx = makeCtx();
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler(
         { targetUserId: "stranger", newRole: "Admin" },
         ctx,
       ),
-      "not_found",
-      "target_not_member",
-    );
+    ).rejects.toThrow("Not found");
   });
 
-  it("newRole does not exist in org → not_found", async () => {
+  it("newRole does not exist in org → throws with descriptive message", async () => {
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Owner" }], // actor PRA = Owner
@@ -164,17 +142,15 @@ describe("orgMemberRoleChangeHandler", () => {
     ]);
 
     const ctx = makeCtx();
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler(
         { targetUserId: "target", newRole: "Nonexistent" },
         ctx,
       ),
-      "not_found",
-      "role_not_found",
-    );
+    ).rejects.toThrow("does not exist");
   });
 
-  it("demoting last Owner → conflict, nothing written", async () => {
+  it("demoting last Owner → blocked", async () => {
     // The handler has two kinds of select calls:
     //  (a) chained with .limit()  — resolves via limit()
     //  (b) chained WITHOUT .limit() (allOwnerPras) — .where() must itself be thenable
@@ -212,21 +188,13 @@ describe("orgMemberRoleChangeHandler", () => {
       return { from };
     });
 
-    mockTx.update = vi.fn();
-    mockTx.insert = vi.fn();
-
     const ctx = makeCtx();
-    await expectHandlerError(
+    await expect(
       orgMemberRoleChangeHandler(
         { targetUserId: "target", newRole: "Admin" },
         ctx,
       ),
-      "conflict",
-      "last_owner",
-    );
-    expect(mockTx.update).not.toHaveBeenCalled();
-    expect(mockTx.insert).not.toHaveBeenCalled();
-    expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
+    ).rejects.toThrow("Cannot demote the last org owner");
   });
 
   it("happy path → changes role, emits org.role_changed, returns changed:true", async () => {

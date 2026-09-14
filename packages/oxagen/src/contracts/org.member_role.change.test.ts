@@ -55,8 +55,4 @@ describe("org.member.role.change capability", () => {
     expect(orgMemberRoleChange.defaultEffect).toBe("deny");
     expect(orgMemberRoleChange.agent?.riskLevel).toBe("high");
   });
-
-  it("is never a charge: membership declares noBillingGate (ADR-052 exclusion 2)", () => {
-    expect(orgMemberRoleChange.noBillingGate).toBe(true);
-  });
 });

@@ -48,7 +48,6 @@ describe("handler registry", () => {
     "get_citation_stats",
     "list_memory_promotions",
     "resolve_mcp_consent",
-    "list_approvals",
   ])(
     "resolves a handler function for snake_case capability %s",
     async (cap) => {
