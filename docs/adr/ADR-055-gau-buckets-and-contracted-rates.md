@@ -269,11 +269,16 @@ table carries a retention rate and no app component prints one.
 `RETENTION_USD_PER_GB_MONTH` constant for their API and MCP callers
 (`billing.action_rate_card.ts:90`, `billing.evidence_retention.ts:119`;
 the latter with `storedGbMeasured: false`, since no job measures
-per-organisation evidence volume), and both stay unbound in the app.
-Retention settles later as an invoice line at a contracted per-GB-month
-rate that the lane which meters per-organisation evidence volume adds to
-`plans` and `contract_terms`. `chargeEvidenceRetention`, which had no
-production caller, is deleted.
+per-organisation evidence volume). `get_rate_card` has no app caller. The
+audit adapter's `retention` port reads `get_evidence_retention` for
+`RetentionTier` (`apps/app/src/data/adapters/live/audit.ts:349-367`), and
+its mapper `toRetentionTiers` (`mappers/audit.ts:336-354`) carries
+`effectiveRetentionDays` only, so the rate never reaches a view model;
+WL-08 deletes that adapter with the live data layer, and no rev1 port reads
+the contract after it. Retention settles later as an invoice line at a
+contracted per-GB-month rate that the lane which meters per-organisation
+evidence volume adds to `plans` and `contract_terms`.
+`chargeEvidenceRetention`, which had no production caller, is deleted.
 
 ### 13. `create_org` grants no credits
 
