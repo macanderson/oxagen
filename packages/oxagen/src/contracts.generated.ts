@@ -182,6 +182,8 @@ import "./contracts/router.decision.preview";
 import "./contracts/router.policy.get";
 import "./contracts/router.policy.set";
 import "./contracts/router.stats.list";
+import "./contracts/run.get";
+import "./contracts/run.list";
 import "./contracts/schema.chat";
 import "./contracts/schema.delete";
 import "./contracts/schema.export";

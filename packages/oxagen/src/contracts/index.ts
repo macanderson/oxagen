@@ -45,6 +45,8 @@ import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
+import { runList } from "./run.list";
+import { runGet } from "./run.get";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -434,6 +436,8 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  runList,
+  runGet,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -678,6 +682,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  runList,
+  runGet,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,

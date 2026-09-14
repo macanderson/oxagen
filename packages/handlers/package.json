@@ -29,6 +29,7 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/run-ledger": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/telemetry": "workspace:*",

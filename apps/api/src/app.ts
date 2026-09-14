@@ -210,6 +210,8 @@ import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
+import { runListRoute } from "./routes/v1/run.list";
+import { runGetRoute } from "./routes/v1/run.get";
 
 export type AppEnv = {
   Variables: {
@@ -404,6 +406,10 @@ orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
+// Runs across both stores (the evidence ledger and tacho sessions): the
+// Fleet list and the Run header with its frame page.
+orgScoped.route("/runs", runListRoute);
+orgScoped.route("/runs/get", runGetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",

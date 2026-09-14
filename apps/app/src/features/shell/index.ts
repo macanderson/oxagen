@@ -2,8 +2,9 @@
 // reaches into the folder (eslint: `@/features/*/*` is restricted).
 //
 // Server entries: the organization layout renders <ShellFrame> with
-// <ShellChrome>; the workspace layout renders <WorkspaceGuard>.
-export { ShellChrome, WorkspaceGuard } from "./shell-chrome";
+// <ShellChrome>. The workspace layout resolves its viewer itself and renders
+// nothing from here.
+export { ShellChrome } from "./shell-chrome";
 export { ShellFrame } from "./shell-frame";
 
 // The phone navigation seam (feedback 3, plan §6 Q3): the design replaces the

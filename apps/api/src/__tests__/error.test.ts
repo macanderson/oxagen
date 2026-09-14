@@ -398,6 +398,31 @@ describe("errorMiddleware CapabilityError", () => {
   });
 });
 
+// ── HandlerError → the status its code names ─────────────────────────────────
+
+describe("errorMiddleware HandlerError", () => {
+  it.each([
+    ["forbidden", 403],
+    ["not_found", 404],
+    ["conflict", 409],
+  ] as const)("%s → %i with the code on the wire", async (code, expected) => {
+    const { HandlerError } = await import("@oxagen/oxagen/handler-error");
+    const { status, body } = await triggerError(
+      new HandlerError(code, "run_not_found"),
+    );
+    expect(status).toBe(expected);
+    expect((body as { error: { code: string } }).error.code).toBe(code);
+  });
+
+  it("a plain Error whose message names a code is still a 500 (negative)", async () => {
+    const { status, body } = await triggerError(new Error("not_found"));
+    expect(status).toBe(500);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
+  });
+});
+
 // ── Billing errors → 402 Payment Required ────────────────────────────────────
 
 describe("errorMiddleware billing errors", () => {
