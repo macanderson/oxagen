@@ -43,11 +43,6 @@ export const orgList = registerCapability({
   },
   sensitivity: "low",
   mutates: false,
-  // A console read is never a governed action (ADR-052 exclusion 2). The
-  // kernel records every top-level scoped invoke that carries an orgId unless
-  // the contract declares this flag, and the app's shell reads this list from
-  // an org context on every page load.
-  noBillingGate: true,
   // allow by default: "list my own orgs" is a user-intrinsic right. Any
   // authenticated principal who passes the enterprise resolver without an
   // explicit deny policy must be allowed — the handler enforces that the

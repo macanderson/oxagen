@@ -8,17 +8,10 @@ import {
 } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
+import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
-import { bootstrapWorkspace } from "./workspace-bootstrap";
 
-/**
- * The org bootstrap: the organization row, the creator's owner membership,
- * the IAM roles and grants, and the first workspace with everything a
- * workspace needs, in one system transaction. Nothing billing-shaped is
- * written (ADR-055 §3.9 item 14): the org's assistant balance starts at zero,
- * and the billing settings row appears on the first write that needs it.
- */
 export const organizationCreateHandler: CapabilityHandler<
   typeof organizationCreate
 > = async (input, ctx) => {
@@ -29,7 +22,6 @@ export const organizationCreateHandler: CapabilityHandler<
     );
     throw new Error("organization.create requires an authenticated user");
   }
-  const userId = ctx.userId;
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
   // rows; no tenant scope exists yet because the new org does not exist yet, and
   // ctx.orgId is the caller's current org, not the one being created) (see docs/specs/tenancy-rls/spec.md)
@@ -45,8 +37,17 @@ export const organizationCreateHandler: CapabilityHandler<
     throw new Error(`slug "${input.slug}" already in use`);
   }
 
+  let orgId: string;
+  let result: {
+    publicId: string;
+    name: string;
+    slug: string;
+    type: string;
+    createdAt: string;
+  };
+
   try {
-    const created = await withSystemDb(async (tx) => {
+    const txResult = await withSystemDb(async (tx) => {
       // Derive the immutable, globally-unique namespace from the slug, avoiding
       // any namespace already taken. The unique index is the authoritative guard
       // against a concurrent-create race; this best-effort read just picks a
@@ -75,8 +76,8 @@ export const organizationCreateHandler: CapabilityHandler<
           industry: input.type === "business" ? (input.industry ?? null) : null,
           employeeSize:
             input.type === "business" ? (input.employeeSize ?? null) : null,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
         })
         .returning({
           publicId: schema.organizations.publicId,
@@ -93,11 +94,11 @@ export const organizationCreateHandler: CapabilityHandler<
       // never see an org they cannot reach.
       await tx.insert(schema.orgUsers).values({
         orgId: org.id,
-        userId,
+        userId: ctx.userId!,
         role: "owner",
         joinedAt: new Date(),
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdByUserId: ctx.userId,
+        updatedByUserId: ctx.userId,
       });
 
       // Bootstrap full IAM state for the org — system roles, owner principal,
@@ -106,38 +107,38 @@ export const organizationCreateHandler: CapabilityHandler<
       // the owner having access (atomic with the org creation).
       await bootstrapOrgIAM({
         orgId: org.id,
-        ownerUserId: userId,
-        actorUserId: userId,
+        ownerUserId: ctx.userId!,
+        actorUserId: ctx.userId!,
         tx,
       });
 
-      // The first workspace, on the same transaction: an org with no
-      // workspace has no page to land on.
-      const workspace = await bootstrapWorkspace({
-        tx,
-        orgId: org.id,
-        userId,
-        name: input.workspace.name,
-        slug: input.workspace.slug,
-      });
-
-      return { org, workspace };
+      return {
+        publicId: org.publicId,
+        name: org.name,
+        slug: org.slug,
+        type: org.type,
+        createdAt: org.createdAt.toISOString(),
+        id: org.id,
+      };
     });
 
+    orgId = txResult.id;
+    result = {
+      publicId: txResult.publicId,
+      name: txResult.name,
+      slug: txResult.slug,
+      type: txResult.type,
+      createdAt: txResult.createdAt,
+    };
     logger.info(
-      {
-        orgId: created.org.id,
-        slug: created.org.slug,
-        workspaceId: created.workspace.id,
-        surface: ctx.surface,
-      },
+      { orgId: txResult.id, slug: txResult.slug, surface: ctx.surface },
       "organization.create: organization created successfully",
     );
     // Record security event for org creation (privileged mutation).
     emitSecurityEventAsync({
       eventType: "organization.created",
-      actorUserId: userId,
-      orgId: created.org.id,
+      actorUserId: ctx.userId!,
+      orgId: txResult.id,
       workspaceId: null,
       outcome: "success",
       capability: null,
@@ -146,22 +147,10 @@ export const organizationCreateHandler: CapabilityHandler<
       requestId: ctx.requestId,
     }).catch((err: unknown) => {
       logger.error(
-        { err, orgId: created.org.id },
+        { err, orgId: txResult.id },
         "organization.create: failed to record security event",
       );
     });
-
-    return {
-      publicId: created.org.publicId,
-      name: created.org.name,
-      slug: created.org.slug,
-      type: created.org.type,
-      createdAt: created.org.createdAt.toISOString(),
-      workspace: {
-        publicId: created.workspace.publicId,
-        slug: created.workspace.slug,
-      },
-    };
   } catch (err) {
     if (isUniqueViolation(err)) {
       logger.warn(
@@ -176,4 +165,37 @@ export const organizationCreateHandler: CapabilityHandler<
     );
     throw err;
   }
+
+  // Grant the free $5 (500 credits) signup bonus AFTER the org transaction
+  // commits so a billing failure never rolls back the org creation itself.
+  // grantFreeCredits is idempotent — INSERT … ON CONFLICT DO NOTHING — so a
+  // second attempt is always safe, even if the first partially succeeded.
+  await grantFreeCredits(orgId).catch(async (firstErr: unknown) => {
+    const firstErrMsg =
+      firstErr instanceof Error
+        ? `${firstErr.message}\n${firstErr.stack}`
+        : String(firstErr);
+    logger.warn(
+      { err: firstErr, firstErrMsg, orgId },
+      "organization.create: grantFreeCredits failed on first attempt — retrying once",
+    );
+    // One idempotent retry. If this also fails, log the error and continue so
+    // the org creation itself is not surfaced as a failure to the caller.
+    // The orgId is logged at error level so ops can re-run the grant manually.
+    await grantFreeCredits(orgId).catch((retryErr: unknown) => {
+      const retryErrMsg =
+        retryErr instanceof Error
+          ? `${retryErr.message}\n${retryErr.stack}`
+          : String(retryErr);
+      logger.error(
+        { err: retryErr, retryErrMsg, orgId },
+        "organization.create: grantFreeCredits failed after retry — org created, credits not granted; re-apply manually",
+      );
+    });
+  });
+
+  // Registries are per-(org, workspace); the default registry is seeded by
+  // seedWorkspaceDefaultRegistry when the first workspace is created.
+
+  return result;
 };

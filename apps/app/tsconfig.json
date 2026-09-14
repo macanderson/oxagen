@@ -1,29 +1,26 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2024",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "preserve",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "declaration": false,
-    "declarationMap": false,
-    "sourceMap": false,
-    "incremental": false,
-    "allowJs": false,
-    "exactOptionalPropertyTypes": false,
+    "allowJs": true,
+    "incremental": true,
     "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] },
-    "types": ["node", "@testing-library/jest-dom/vitest"]
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["node", "google.maps", "@testing-library/jest-dom"]
   },
   "include": [
     "next-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     ".next/types/**/*.ts",
-    "*.ts",
-    "e2e/**/*.ts"
+    ".storybook/**/*.ts",
+    "playwright.config.ts"
   ],
-  "exclude": ["node_modules", ".next", "src/test/arch/probes"]
+  "exclude": ["node_modules", ".next", "e2e"]
 }

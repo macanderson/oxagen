@@ -4,11 +4,11 @@
 //   1. Auth + scope guard — require authenticated principal + orgId.
 //   2. Resolve actor's principal and check they hold Owner or Admin role in the
 //      org via principal_role_assignments (not the legacy org_users.role string).
-//      Refuses with `forbidden`, not `not_found`, because the actor IS a
+//      Returns 403 for insufficient role, not 404, because the actor IS a
 //      confirmed org member — revealing "you lack permission" is not a leak here.
 //   3. Resolve target membership — verify the target userId belongs to ctx.orgId
-//      (IDOR guard: `not_found` if target is not in this org).
-//   4. Last-owner guard — `conflict` if target is the only remaining org Owner.
+//      (IDOR guard: 404 if target is not in this org).
+//   4. Last-owner guard — block if target is the only remaining org Owner.
 //   5. In a transaction:
 //      a. Delete the org_users membership row.
 //      b. Soft-delete all principal_role_assignments for the target's principal
@@ -16,7 +16,7 @@
 //      c. Mark the target's principal status = 'deleted'.
 //   6. Emit org.member_removed security event (fire-and-forget).
 
-import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -83,19 +83,11 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "org.member.remove: rejected — no authenticated principal",
     );
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "unauthenticated",
-      message: "No authenticated principal",
-    });
+    throw new Error("Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
     logger.warn({}, "org.member.remove: rejected — missing orgId");
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "org_scope_required",
-      message: "orgId is required",
-    });
+    throw new Error("Forbidden: orgId is required");
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -113,23 +105,18 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       { orgId: ctx.orgId, actorId, actorRole },
       "org.member.remove: rejected — insufficient org role",
     );
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "insufficient_role",
-      message: "Only org Owners and Admins can remove members",
-    });
+    throw new Error("Forbidden: only org Owners and Admins can remove members");
   }
 
   // ── Scoped reads + mutation (single tenant-scoped transaction) ────────────────
   // withTenantDb opens one RLS-scoped transaction for the current org. All
   // reads (IDOR + last-owner guards) and the membership/IAM writes run inside
   // it so they are atomic and RLS-policied. A guard throw rolls the (so-far
-  // read-only) transaction back and propagates its HandlerError to the surface.
+  // read-only) transaction back and propagates a 403/404 to the surface.
   await withTenantDb(async (tx) => {
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
-    // Verify the target userId belongs to THIS org. `not_found` on mismatch —
-    // if the target is not a member of this org, confirm nothing about their
-    // existence.
+    // Verify the target userId belongs to THIS org. 404 on mismatch — if the
+    // target is not a member of this org, confirm nothing about their existence.
     const [targetOrgUser] = await tx
       .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
       .from(schema.orgUsers)
@@ -146,11 +133,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
         { orgId: ctx.orgId, targetUserId: input.targetUserId },
         "org.member.remove: target not a member of this org",
       );
-      throw new HandlerError({
-        code: "not_found",
-        reason: "target_not_member",
-        message: "Target user is not a member of this org",
-      });
+      throw new Error("Not found: target user is not a member of this org");
     }
 
     // ── Last-owner guard ───────────────────────────────────────────────────────
@@ -219,12 +202,9 @@ export const orgMemberRemoveHandler: CapabilityHandler<
             { orgId: ctx.orgId, targetUserId: input.targetUserId },
             "org.member.remove: blocked — would remove last org owner",
           );
-          throw new HandlerError({
-            code: "conflict",
-            reason: "last_owner",
-            message:
-              "Cannot remove the last org owner. Transfer ownership first or promote another member to Owner.",
-          });
+          throw new Error(
+            "Cannot remove the last org owner. Transfer ownership first or promote another member to Owner.",
+          );
         }
       }
     }
