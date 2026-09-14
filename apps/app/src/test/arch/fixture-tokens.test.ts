@@ -28,7 +28,7 @@ const SELF = "src/test/arch/fixture-tokens.test.ts";
 const PROBES = "src/test/arch/probes/";
 
 /** The scanned set: every file under `src/` but the probes and this test, plus the two app-root modules. */
-export function scannedFiles(): string[] {
+function scannedFiles(): string[] {
   return [
     ...listFiles("src").filter(
       (file) => file !== SELF && !file.startsWith(PROBES),
@@ -39,7 +39,7 @@ export function scannedFiles(): string[] {
 }
 
 /** `fixture-tokens <file>:<line> <token>` for every line of every file that carries a token. */
-export function tokenHits(files: readonly string[]): string[] {
+function tokenHits(files: readonly string[]): string[] {
   const hits: string[] = [];
   for (const file of files) {
     const lines = readFileSync(path.join(APP_DIR, file), "utf8").split("\n");

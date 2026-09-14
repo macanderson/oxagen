@@ -1,7 +1,8 @@
 // The one import-graph architecture test (ARCHITECTURE.md §2, §4): the layer
-// matrix (INV-07), the platform-package allowlist (INV-03, INV-05) and the
-// client boundary (INV-21), over static, dynamic and relative imports alike,
-// with the shrink-only baseline in baseline.json.
+// matrix (INV-07), the test-only targets (INV-22), the platform-package
+// allowlist (INV-03, INV-05) and the client boundary (INV-21), over static,
+// dynamic and relative imports alike, with the shrink-only baseline in
+// baseline.json.
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -256,6 +257,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   ],
   "alias-dot-segments-data.ts": [
     { at: "src/server/kernel.ts", expect: "layer" },
+  ],
+  // INV-22: test-only targets, each placed where the importer's row would
+  // otherwise admit the edge.
+  "feature-imports-builders.ts": [
+    { at: "src/features/shell/probe.ts", expect: "layer" },
+  ],
+  "server-imports-viewer-testing.ts": [
+    { at: "src/server/viewer.ts", expect: "layer" },
   ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },

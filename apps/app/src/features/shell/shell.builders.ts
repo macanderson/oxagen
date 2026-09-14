@@ -1,7 +1,8 @@
 // Typed shell view-model values for the shell's unit and component tests
 // (ARCHITECTURE.md §5): one organization with two workspaces, a viewer who
 // belongs to the first, and every read in its `ok` state. Tests override the
-// reads they exercise. Importable from tests only (import graph, knip).
+// reads they exercise. Importable from tests only: `testOnlyTarget` in
+// src/test/arch/layers.ts refuses every production edge to a `*.builders` module.
 import type {
   AccountView,
   AssistantEngine,
