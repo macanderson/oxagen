@@ -205,7 +205,18 @@ figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
 </figure>
 </div>
 
-<h2><span class="n">3</span>The panels</h2>
+<h2><span class="n">3</span>First run: the wizard</h2>
+<p>The app opens as one pane on paper (the light canvas, whatever the OS theme). On a machine with no enrollment it walks five steps; the step is derived from the machine's state, so a relaunch resumes where the operator left off, and an enrolled machine never sees it.</p>
+<ol>
+  <li><b>Authenticate with Oxagen.</b> <code>oxagen login</code> in the browser. A saved session that answers 401 is shown as expired and the step reopens.</li>
+  <li><b>Select an organization and workspace.</b> The pickers list only what the signed-in user belongs to (<code>/v1/user/organizations</code>, <code>/v1/user/workspaces</code>), defaulting to the pair the browser sign-in chose.</li>
+  <li><b>Register the agents on this machine.</b> <code>tacho detect --json</code> finds Claude Code and Codex through a login-shell PATH lookup (the app itself launches from Finder with the bare system PATH). Every installed agent is ticked; an absent one is greyed with "not found"; with neither found the step names the two install commands and offers Rescan. "Yes, register … with Oxagen" runs <code>tacho enroll --org … --workspace … --harness …</code>, which writes the hooks into each chosen agent's settings.</li>
+  <li><b>Confirmation.</b> Success shows the agent key, the reports-to pair, the collector's port and the attestation tier. Failure shows the last line of <code>tacho enroll</code>'s stderr, what usually causes it, and leaves the Register button live for a retry.</li>
+  <li><b>Record a first run.</b> One checkbox per registered agent (all ticked); "Yes, run the connect prompt" runs <code>tacho verify --harness &lt;h&gt; --json</code> for each — one headless turn ("reply OK": <code>claude -p</code>, or <code>codex exec</code>) confirmed recorded and sealed by the collector — then <b>Open Mission Control</b> becomes the primary and opens <code>/&lt;org&gt;/&lt;workspace&gt;/runs</code> with that first session in it.</li>
+</ol>
+<p>Every later launch shows the management pane below. Its Wrapped agents panel carries one <b>De-register…</b> per wrapped agent (confirm in place; re-enrolls with the rest, or <code>tacho unenroll</code> when it was the last) and <b>Register</b> for an installed agent not yet wrapped; <b>Uninstall Oxagen…</b> asks twice, then runs <code>tacho unenroll --purge</code>, removes the PATH links and <code>~/.config/oxagen</code>, and names the platform uninstaller — the install side asked twice, so the uninstall side does.</p>
+
+<h2><span class="n">3b</span>The panels</h2>
 <div class="wide"><div class="tw">
 <table>
 <thead><tr><th>Panel</th><th>Shows</th><th>Controls</th><th>Runs</th></tr></thead>
