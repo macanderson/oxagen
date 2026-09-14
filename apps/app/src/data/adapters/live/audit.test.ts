@@ -62,7 +62,7 @@ vi.mock("@oxagen/handlers/register", () => {
 });
 vi.mock("@/server/session", () => ({ getSession: kernel.getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
-  liveTenancyLookups: { orgRole: kernel.orgRole },
+  systemLookups: { orgRole: kernel.orgRole },
 }));
 // The wiring test imports the whole live source, so every adapter's telemetry
 // import must resolve here too (the runs adapter binds its token-usage reader

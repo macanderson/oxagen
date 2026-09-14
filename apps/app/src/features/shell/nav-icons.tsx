@@ -7,7 +7,6 @@ import {
   KeyRound,
   type LucideIcon,
   Network,
-  Plus,
   Radar,
   Receipt,
   ScrollText,
@@ -28,5 +27,4 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   audit: ScrollText,
   apiKeys: KeyRound,
   roles: UserCog,
-  register: Plus,
 };

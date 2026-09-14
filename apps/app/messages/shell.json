@@ -22,8 +22,7 @@
       "billing": "Billing",
       "audit": "Audit",
       "apiKeys": "API keys",
-      "roles": "Roles",
-      "register": "Register an agent"
+      "roles": "Roles"
     },
     "switcher": {
       "org": {

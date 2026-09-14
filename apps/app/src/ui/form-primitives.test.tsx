@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The form primitives promoted from the sign-in and onboarding screens: a field
+// The form primitives promoted from the sign-in and organization screens: a field
 // wires its hint and error for assistive technology, the submit button reports
 // pending without losing focus, the outcome panel names its tone, and Tabs move
 // selection with the keyboard.

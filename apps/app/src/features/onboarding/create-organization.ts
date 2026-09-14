@@ -1,4 +1,4 @@
-// Create the tenant and its first workspace: gate step 1 in production.
+// Create the tenant and its first workspace: the /new-organization write.
 //
 // Carried over from apps/app_deprecated/src/app/(onboarding)/new-organization/
 // actions.ts, with two changes the new screen needs: the person picks the

@@ -73,7 +73,7 @@ async function CliAuthorize({
           testId="cli-no-scope"
           title={t("noScopeTitle")}
           actions={
-            <Link href="/welcome" className={buttonSecondary}>
+            <Link href="/new-organization" className={buttonSecondary}>
               {t("createOrganization")}
             </Link>
           }

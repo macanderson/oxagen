@@ -45,7 +45,7 @@ import type { AuditReadPort } from "@/data/ports";
 import type { Scope } from "@/data/scope";
 import type { ToolContract } from "@/server/invoke";
 import { getSession } from "@/server/session";
-import { liveTenancyLookups } from "@/server/tenancy-lookups";
+import { systemLookups } from "@/server/tenancy-lookups";
 import { isOrgOnlyScope, ORG_ONLY_WS } from "@/server/tenant-scope";
 import {
   type DecisionRow,
@@ -529,7 +529,7 @@ export const liveAuditStores: AuditStores = {
     return session?.user.id ?? null;
   },
 
-  orgRole: (scope, userId) => liveTenancyLookups.orgRole(scope.orgId, userId),
+  orgRole: (scope, userId) => systemLookups.orgRole(scope.orgId, userId),
 
   async readTool(scope, userId, contract, input, permission) {
     await registerHandlers();

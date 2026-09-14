@@ -25,7 +25,7 @@ vi.mock("@oxagen/database", async () => ({
 }));
 
 import * as schema from "@oxagen/database/schema";
-import { liveTenancyLookups as l } from "./tenancy-lookups";
+import { systemLookups as l } from "./tenancy-lookups";
 
 const orgRow = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -48,7 +48,7 @@ beforeEach(() => {
   tables.length = 0;
 });
 
-describe("liveTenancyLookups", () => {
+describe("systemLookups", () => {
   it("resolves an organization by current slug through the RLS-bypassing system seam", async () => {
     queue.push([orgRow]);
     await expect(l.orgBySlug("acme")).resolves.toEqual({
@@ -149,5 +149,51 @@ describe("liveTenancyLookups", () => {
       schema.users,
       schema.users,
     ]);
+  });
+
+  describe("invitationByToken", () => {
+    const invitationRow = {
+      id: "33333333-3333-4333-8333-333333333333",
+      orgId: orgRow.id,
+      email: "priya@acme.example",
+      role: "Admin",
+      status: "pending",
+      createdAt: new Date("2026-09-11T09:00:00Z"),
+      expiresAt: new Date("2099-01-01T00:00:00Z"),
+    };
+
+    it("reads the invitation by public token and names its organization, with the stored role and status", async () => {
+      queue.push([invitationRow], [orgRow]);
+      await expect(l.invitationByToken("invi_live")).resolves.toEqual({
+        invitationId: invitationRow.id,
+        orgId: orgRow.id,
+        orgName: "Acme Robotics",
+        orgSlug: "acme",
+        email: "priya@acme.example",
+        role: "Admin",
+        status: "pending",
+        invitedAt: invitationRow.createdAt,
+        expiresAt: invitationRow.expiresAt,
+      });
+      expect(tables).toEqual([schema.invitations, schema.organizations]);
+    });
+
+    it("returns null for an unknown token without reading the organization", async () => {
+      queue.push([]);
+      await expect(l.invitationByToken("invi_gone")).resolves.toBeNull();
+      expect(tables).toEqual([schema.invitations]);
+    });
+
+    it("returns null when the invitation's organization is gone", async () => {
+      queue.push([invitationRow], []);
+      await expect(l.invitationByToken("invi_live")).resolves.toBeNull();
+    });
+
+    it("carries a null expiry as null", async () => {
+      queue.push([{ ...invitationRow, expiresAt: null }], [orgRow]);
+      await expect(l.invitationByToken("invi_live")).resolves.toMatchObject({
+        expiresAt: null,
+      });
+    });
   });
 });

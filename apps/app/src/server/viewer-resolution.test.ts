@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/not-backed";
 import type { MfaPolicy } from "./mfa-gate";
 import type { AppSession } from "./session";
-import type { TenancyLookups } from "./tenancy-lookups";
+import type { SystemLookups } from "./tenancy-lookups";
 import { ORG_ONLY_WS } from "./tenant-scope";
 import {
   canonicalPath,
@@ -11,9 +11,9 @@ import {
   resolveViewerWith,
 } from "./viewer-resolution";
 
-type OrgRecord = NonNullable<Awaited<ReturnType<TenancyLookups["orgBySlug"]>>>;
+type OrgRecord = NonNullable<Awaited<ReturnType<SystemLookups["orgBySlug"]>>>;
 type WorkspaceRecord = NonNullable<
-  Awaited<ReturnType<TenancyLookups["workspaceBySlug"]>>
+  Awaited<ReturnType<SystemLookups["workspaceBySlug"]>>
 >;
 
 const org: OrgRecord = {
@@ -35,11 +35,11 @@ const session: AppSession = {
 const now = new Date("2026-09-12T12:00:00Z");
 
 type Overrides = Partial<{
-  [K in keyof TenancyLookups]: TenancyLookups[K];
+  [K in keyof SystemLookups]: SystemLookups[K];
 }>;
 
 /** A member of acme and core-platform, no MFA policy, unless overridden. */
-function lookups(overrides: Overrides = {}): TenancyLookups {
+function lookups(overrides: Overrides = {}): SystemLookups {
   return {
     orgBySlug: vi.fn((slug: string) =>
       Promise.resolve(slug === org.slug ? org : null),
@@ -53,11 +53,12 @@ function lookups(overrides: Overrides = {}): TenancyLookups {
     isWorkspaceMember: vi.fn(() => Promise.resolve(true)),
     mfaPolicy: vi.fn(() => Promise.resolve(null)),
     twoFactorEnabled: vi.fn(() => Promise.resolve(false)),
+    invitationByToken: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }
 
-const resolve = (l: TenancyLookups, o: string, w?: string, s = session) =>
+const resolve = (l: SystemLookups, o: string, w?: string, s = session) =>
   resolveViewerWith({ session: s, lookups: l, now }, o, w);
 
 describe("resolveViewerWith: allowed", () => {
