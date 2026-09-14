@@ -28,9 +28,6 @@ export const schema = {
   employeeSize: organizationCreateInputBase.shape.employeeSize.describe(
     "Employee size range slug (business type only; e.g. '2-10', '51-200')",
   ),
-  workspace: organizationCreateInputBase.shape.workspace.describe(
-    "The first workspace ({ name, slug }); defaults to 'Default' at slug 'default'",
-  ),
 };
 
 export const metadata: ToolMetadata = {

@@ -49,7 +49,6 @@ import { agentMemoryPromotionCandidates } from "@oxagen/oxagen/contracts/agent.m
 import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.memory_promotion.rationales";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
-import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -83,7 +82,6 @@ import { agentMemoryPromotionCandidatesRoute } from "./agent.memory_promotion.li
 import { agentMemoryPromotionRationalesRoute } from "./agent.memory_promotion.rationales";
 import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
-import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -353,14 +351,6 @@ const ROUTES: ThinRoute[] = [
     capability: agentRoleRevoke.name,
     body: { agentId: "agt_1", roleName: "Agent Contributor" },
     invalidBody: { roleName: "" },
-    status: 200,
-  },
-  {
-    file: "api.key.list",
-    route: apiKeyListRoute as unknown as Hono<never>,
-    method: "GET",
-    capability: apiKeyList.name,
-    expectedInput: {},
     status: 200,
   },
   {

@@ -10,10 +10,8 @@
 
 import type { CapabilityDeclaration } from "../types";
 import { apiKeyCreate } from "./api.key.create";
-import { apiKeyList } from "./api.key.list";
 import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
-import { agentApprovalList } from "./agent.approval.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -46,8 +44,6 @@ import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
-import { runList } from "./run.list";
-import { runGet } from "./run.get";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -139,7 +135,7 @@ import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
 import { conversationChat } from "./conversation.chat";
-import { listMembers } from "./workspace.member.list";
+import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
@@ -378,10 +374,8 @@ export type {
 
 export {
   apiKeyCreate,
-  apiKeyList,
   apiKeyRevoke,
   assetUpload,
-  agentApprovalList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -438,8 +432,6 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
-  runList,
-  runGet,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -505,7 +497,7 @@ export {
   capabilityRegistryGet,
   iamRoleList,
   conversationChat,
-  listMembers,
+  workspaceMemberList,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
@@ -628,10 +620,8 @@ export {
 // what the compiler will serialize into a declaration file.
 export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyCreate,
-  apiKeyList,
   apiKeyRevoke,
   assetUpload,
-  agentApprovalList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -685,8 +675,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
-  runList,
-  runGet,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -752,7 +740,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryGet,
   iamRoleList,
   conversationChat,
-  listMembers,
+  workspaceMemberList,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,

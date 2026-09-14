@@ -34,7 +34,7 @@ export type {
   AssetServePrincipal,
   AssetServeResult,
 } from "./generated-asset.serve";
-export { listMembersHandler } from "./workspace.member.list";
+export { workspaceMemberListHandler } from "./workspace.member.list";
 export { workspaceInviteSendHandler } from "./workspace.invite.send";
 export { conversationChatHandler } from "./conversation.chat";
 export { privacyDataExportHandler } from "./privacy.data.export";
