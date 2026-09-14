@@ -1,7 +1,13 @@
 name: Feature request
-description: Propose a new capability or improvement
-labels: ["enhancement"]
+description: A genuinely new capability, none of it half-built (the triage pass adds kind:feature)
+labels: ["triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: `kind:feature`, one or more `area:*`, one `job:*`, one or more `pillar:*`. Do not add those yourself.
+
+        `kind:feature` is for capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is a gap: use the Task template and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
   - type: textarea
     id: problem
     attributes:
@@ -20,4 +26,19 @@ body:
     id: vision
     attributes:
       label: Vision alignment
-      description: How does this help a team that builds and resells AI agents meter, govern, ground, or bill their product? (See docs/VISION.md — feature work is judged against the wedge.)
+      description: Which job does this serve — govern, ground, explain, meter, rate — and which pillar does it move (SCR-004)? See docs/VISION.md; feature work is judged against it.
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of done
+      description: Checklist the closer must verify line-by-line (SCR-003). One issue carries the whole feature; add items rather than filing sub-issues.
+      value: |
+        - [ ] Contract registered with API, MCP, CLI and UI parity (`pnpm check:manifest` clean)
+        - [ ] Scoped tests added and passing; user-facing changes have E2E coverage
+        - [ ] Full CI green
+        - [ ] `docs/capabilities/` and code comments updated; an ADR for any architectural choice (SCR-002)
+        - [ ] Residue fixed in the same PR, or filed with the `triage` label only
+    validations:
+      required: true

@@ -176,17 +176,38 @@ The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `fr
 
 Use oxagen.sh domains in OAuth callbacks, env values, allowedOrigins, docs. Keep URLs isolated to env vars — oxagen.sh domain migration is a single env-var sweep.
 
-## Linear
+## Issues and labels
 
-Project: `oxagen-v2`. API key in repo root env.
+GitHub issues on `macanderson/oxagen` are the tracker; Linear holds no active tickets (the tracker was reset on 2026-09-13: every open issue was closed as not planned or absorbed into one of #2949–#2978, and the labels were rebuilt from scratch). The rules below are the floor; `docs/scr/SCR-003`, `SCR-004` and `SCR-005` are the standing decisions they summarize.
 
-**Ticket convention:**
-- **One ticket = one PR.** Sub-issues for chunks within the ticket (3–6 per parent).
-- **Assignee: Mac Anderson** (`mac@oxagen.ai`, `aa47fc28-1b3a-4b45-bb02-d18f2e59c6bb`).
-- **Labels:** Call `list_issue_labels` — don't guess. Active ~28 slugs: `web-app`, `mobile-ux`, `api`, `mcp`, `knowledge-graph`, `ingestion`, `connectors`, `agents`, `agent-memory`, `content-studio`, `llm`, `automation`, `auth`, `billing`, `security`, `soc-2`, `observability`, `infra`, `ci`, `database`, `performance`, `reliability`, `bug`, `epic`, `tech-debt`, `testing`, `user-docs`, `adr`. Defunct (do not use): `agent-created`, `foundations`, `application-shell`, `iam`, `SOC2`.
-- **Estimate:** XS(1)≤1h · S(2)half-day · M(3)1day · L(5)multi-day · XL(8)week+. Size on largest of risk / blast-radius / effort.
-- **Priority:** P1=Urgent (blocks others) · P2=High (next quarter) · P3=Medium · P4=Low.
-- **Description:** purpose sentence · spec.md link · explicit file/migration list · acceptance checklist · risks+mitigations · rollback plan.
+**Fix over file (SCR-004).** A defect noticed during a task is fixed in that task's PR, named in the PR description. File an issue only when the fix cannot responsibly ride the PR — it needs a decision only the maintainer can make, a rig, a credential or real spend, or it is larger than the session — and only when fixing it moves at least one of stability, reliability, maintainability, innovation, efficiency, performance. Say which case and which pillar in the body. Not issues: open design questions (decide in the PR or write an ADR under `docs/adr/`), records of choices already in effect, measurements that cannot change a decision, tests for unreachable paths, tracker bookkeeping, follow-ups your own change made moot.
+
+**One issue carries one full change.** The body is a handoff: context with file paths, how to reproduce, constraints already found, the SCR-004 case that stopped the fix, the pillar it moves, a spec for how to get there, and a definition of done as a `- [ ]` checklist covering every part of the change — contract, API, MCP, CLI, UI, tests, docs. Add checklist rows, never sub-issues, parent tickets or epics; the DoD gate (`.github/workflows/dod-check.yml`, `tools/scripts/scr-dod-check.mjs`) verifies the checklist, and a `Closes #N` PR merges only when every box is ticked (SCR-003). Use the templates in `.github/ISSUE_TEMPLATE/`: `task.yml` for gaps, deferred defects and debt; `bug_report.yml` for a defect reported from outside a task; `feature_request.yml` for a feature.
+
+**Issue kinds** (`kind:*`, exactly one, applied at triage):
+- `kind:defect` — something that exists behaves wrongly. Allowed only when the fix could not ride the PR that found it (SCR-004).
+- `kind:gap` — the spec (`docs/specs/mission-control/spec.md`) or the mockup shows it and the built app lacks all or part of it. One gap issue carries the whole page or slice, backend included; half-built capability is a gap, never a feature.
+- `kind:feature` — genuinely new capability, none of it half-built, with a product rationale against `docs/VISION.md` (which job it serves: govern, ground, explain, meter, rate). If any part exists in the spec, the mockup or the tree, it is `kind:gap`.
+- `kind:debt` — maintenance, dependencies, tooling, docs sync; no user-visible change.
+- A decision is not a kind. A decision with no defect behind it is an ADR (SCR-002); a decision that blocks a fix is `needs:decision` on the issue that carries the fix, and that issue closes with the ADR that settles it.
+
+**Label scheme** (one dimension per prefix; the live list is `gh label list`):
+- `triage` — the only label a creator applies; the guard (`.github/workflows/triage-guard.yml`) adds it to any issue opened without it.
+- `P0`–`P4` — priority, exactly one per triaged issue, triage identity only: `P0` drop everything · `P1` this cycle · `P2` next cycle · `P3` backlog · `P4` someday. Every open issue carries `triage` or one `P*`, never neither, never both (SCR-005).
+- `size/XS|S|M|L|XL` — triage identity only; ≤1h · half-day · 1 day · multi-day · week+ (a multi-session lane). Sized on the largest of risk, blast radius, effort.
+- `kind:defect|gap|feature|debt` — exactly one, as above.
+- `area:app|surfaces|kernel|auth|billing|knowledge|evidence|data|platform|ops` — one or more; each label's description names the apps and packages it covers.
+- `job:govern|ground|explain|meter|rate` — exactly one; the product job the change serves. An issue that serves none is the one the Mission section says not to build.
+- `pillar:stability|reliability|maintainability|innovation|efficiency|performance` — one or more; the SCR-004 pillars fixing it moves.
+- `needs:decision|rig` — zero or more; the SCR-004 case that stopped the fix riding a PR (`needs:rig` covers a rig, a credential or real spend).
+- `no-issue`, `closes-nothing` — PR labels only (SCR-003): `no-issue` for a trivial change, `closes-nothing` for a substantial change that closes no issue by design.
+- `infra-drift`, `store-drift`, `main-unverified`, `agent-escalated`, `stella-verified-locally` — workflow-owned; written by the workflow or Stella source named in each label's description. Never apply or rename by hand.
+
+**Who labels what (SCR-005).** Creators — human or agent — apply `triage` and nothing else. The triage identity (`TRIAGE_LOGINS` in `triage-guard.yml`; the maintainer until the triage bot stands up) replaces `triage` with one `P*`, optionally a `size/*`, and the descriptive dimensions `kind`, `area`, `job`, `pillar`, `needs`, then comments a one-line rationale. The guard strips a `P*` set by anyone else and re-queues the issue.
+
+**Closing.** Close as completed only against a verified DoD (SCR-003; `dod-close-guard.yml` reopens otherwise). Close as not planned with a comment for won't-fix, superseded or duplicate — there are no `wontfix`, `duplicate`, `epic` or `blocked` labels; the close reason and the comment carry that.
+
+**CI-filed tickets.** `pnpm check:manifest:tickets` (`tools/scripts/ensure-manifest-tickets.ts`, run on `main` pushes by `pipeline.yml`) and `pnpm e2e:failure-ticket` (`tools/scripts/ensure-e2e-failure-ticket.ts`, run by `nightly.yml`) still file Linear tickets and no-op without `LINEAR_API_KEY`; #2980 moves both to GitHub issues under this scheme. `linear-release.yml` is the release-notes integration and is unaffected.
 
 ## Operating model
 
@@ -247,7 +268,7 @@ Authorized and encouraged every session without asking permission. Use `creds.js
   1. The capability's contract declares `app` in its `layers[]` — the promise that a human can operate it in `apps/app`.
   2. It has a binding in `apps/app/capability-ui-map.json` → `{ route, page, entry, proof }`, where `page` exists and `proof` points at a runtime artifact (a screenshot committed under `verifications/<session>/`, or an `apps/app/e2e/<slug>.spec.ts`) captured against a **working, non-erroring** page.
   3. `pnpm check:ui-parity` enforces it. **Forward gate** (`--strict` fails CI): every `app`-layer capability must be bound to an existing, proven page. **Reverse advisory** (warn-only): every capability the app actually invokes (`invoke(<contract>.name, …)`) but does not declare `app` for is flagged — either promise + wire it, or it is internal plumbing behind another surface. Wired into `pnpm gate`. Run `pnpm check:ui-parity --json` to see `{ forward, reverse }`.
-  4. Prime-directive corollary: encountering an app surface that 404s / throws / renders a placeholder for a capability that works elsewhere is a **defect to fix now** — wire the UI or, if the build is large (Opus/Fable-tier), open a sub-issue under the `UI Capability Parity` milestone in Linear before moving on. Never ship the dead surface.
+  4. Prime-directive corollary: encountering an app surface that 404s / throws / renders a placeholder for a capability that works elsewhere is a **defect to fix now** — wire the UI or, if the build is large (Opus/Fable-tier), file one `kind:gap` issue (`triage` label only) whose DoD checklist carries the whole page — contract binding, page, proof — before moving on (see "Issues and labels"). Never ship the dead surface.
 - **App route map (verified 2026-09-10, do NOT treat as mock):** org-level sections under `apps/app/src/app/[orgSlug]/` are `dashboard` (usage/metering home and the org-root redirect target), `access` (sessions, reviews), `billing`, `developer` (mcp, tokens), `governance`, `members`, `security` (compliance, audit, mfa), `settings`, `workspaces`, `new-workspace`. Workspace sections under `[orgSlug]/[workspaceSlug]/` are `sessions` (the chat front door), `knowledge`, `marketplace`, `workbench` (agents, environments, tools), `settings`. All are real pages with server `actions.ts` backed by contracts/handlers and unit tests. There are no `ask/`, `activity/`, or `tools/studio/` routes any more — do not link to them. The `security/page.tsx` posture dashboard reads live data but honestly flags controls not yet built (org-wide MFA / SSO enforcement, the backup-restore drill); those, plus any surface still awaiting its contract, remain unwired until the contract lands, per the rule above.
 - **`check:manifest` combined route files:** `tools/scripts/check_manifest.mjs` content-scans `apps/api/src/routes/v1/*.ts` (contract imports + literal capability-name matches) as a fallback beyond per-capability filename existence, so a capability dispatched from a combined multi-capability route file no longer reports as a false-positive `api` gap — no manual verification needed before filing a parity ticket. Where these families live today: `connection.ts` (the `connection.*` family: create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update), `integration.ts` (the `integration.*` family), `repo.ts` (the read/observe `repo.*` family — repository mutation left with the runtime), `schema.ts` (the `schema.*` family), `plugin-schema.ts` (`plugin.schema.get/validate` + `plugin.version.list`), `reseller.ts` (the `billing.reseller_*` family), `org.data_plane.ts` (`get_data_plane`/`set_data_plane`), `webhook.ts`, `github-*.ts`, `chat-memory.ts`, `chat-stream-translator.ts`. The former `workflow.ts`, `semantic-edge.ts`, and `semantic-relationship.ts` combined files and their capability families are gone — do not reference them. All surviving combined files are mounted in `apps/api/src/app.ts`. To see only genuine surface gaps (ignore docs/unit/e2e-only entries): `pnpm check:manifest --json` and filter for gaps whose `missing` includes `api` or `mcp`.
 
