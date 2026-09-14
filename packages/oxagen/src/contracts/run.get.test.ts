@@ -114,7 +114,7 @@ describe("get_run contract", () => {
         ...frame,
         body: {
           ...frame.body,
-          redactions: [{ path: "bytes:0-1", reason: "password" }],
+          redactions: [{ path: "bytes:0-1", reason: "" }],
         },
       }).success,
     ).toBe(false);

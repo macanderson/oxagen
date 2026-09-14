@@ -3,12 +3,14 @@
 // stands in for, so a test proves paging and scoping behaviour rather than the
 // shape of a canned reply.
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { schema } from "@oxagen/database";
 import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
-import type { TokenUsageByStepRow } from "@oxagen/telemetry";
+import type { TachoFrameRow, TokenUsageByStepRow } from "@oxagen/telemetry";
 import { NO_BODY } from "@oxagen/run-ledger";
 import {
   type LedgerEventRollup,
   type LedgerRunRow,
+  type LedgerSeal,
   type PageQuery,
   type RunQueries,
   type RunScope,
@@ -38,6 +40,34 @@ export function ctx(scope: RunScope = SCOPE): CapabilityContext {
   };
 }
 
+/**
+ * A `withTenantDb` transaction double that answers the role gate's two
+ * queries (`assertOrgRole` in @oxagen/iam): the acting user's principal and
+ * one org-role assignment. `null` is a user with no org role. Every other
+ * read the run handlers make goes through injected deps, so a test file
+ * mocks `@oxagen/database` with this and nothing else.
+ */
+export function roleTx(roleName: string | null) {
+  const rowsFor = (table: unknown): unknown[] => {
+    if (table === schema.principals) return [{ id: "prn_1" }];
+    if (table === schema.principalRoleAssignments)
+      return roleName ? [{ roleName }] : [];
+    throw new Error("unexpected table in the role double");
+  };
+  return {
+    select: () => ({
+      from: (table: unknown) => {
+        const chain = {
+          innerJoin: () => chain,
+          where: () => chain,
+          limit: () => Promise.resolve(rowsFor(table)),
+        };
+        return chain;
+      },
+    }),
+  };
+}
+
 const sameScope = (a: RunScope, b: RunScope) =>
   a.orgId === b.orgId && a.workspaceId === b.workspaceId;
 
@@ -45,9 +75,28 @@ export type LedgerFixture = LedgerRunRow & {
   scope: RunScope;
   specVersion: number;
   rollup?: LedgerEventRollup;
-  sealedAt?: Date | null;
+  seal?: LedgerSeal | null;
   usage?: TokenUsageByStepRow | null;
 };
+
+/** A graded seal for a ledger fixture; `over` narrows the grade or the gaps. */
+export function seal(
+  runId: string,
+  over: Partial<LedgerSeal> = {},
+): LedgerSeal {
+  return {
+    runId,
+    attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
+    sealedAt: new Date("2026-09-11T10:05:00.000Z"),
+    replayGrade: "view",
+    completenessGaps: [],
+    finalRunSeq: "3",
+    eventCount: 3,
+    merkleRoot: `sha256:${"f".repeat(64)}`,
+    archiveSegmentRef: "evidence/o/w/segments/a/f.ndjson.zst",
+    ...over,
+  };
+}
 
 export type TachoFixture = TachoSessionRow & {
   scope: RunScope;
@@ -68,6 +117,10 @@ export function ledgerRun(
       status: "completed",
       createdAt: new Date("2026-09-11T10:00:00.000Z"),
       startedAt: new Date("2026-09-11T10:00:01.000Z"),
+      name: null,
+      summary: null,
+      summaryGeneratedAt: null,
+      summaryModel: null,
     },
     identity: {
       orgNamespace: "acme",
@@ -91,6 +144,7 @@ export function tachoSession(
     scope: SCOPE,
     session: {
       publicId,
+      sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
       agentKey: "acme.core.cc-laptop",
       outcome: "completed",
       numTurns: 2,
@@ -102,6 +156,13 @@ export function tachoSession(
       hasUnknownModelCost: null,
       startedAt: new Date("2026-09-11T09:00:00.000Z"),
       sealedAt: new Date("2026-09-11T09:05:00.000Z"),
+      replayGrade: null,
+      completenessGaps: [],
+      enforcementTier: "observe",
+      name: null,
+      summary: null,
+      summaryGeneratedAt: null,
+      summaryModel: null,
       ...session,
     },
     operatorPublicId: "prn_0123456789abcdefghjkmn",
@@ -182,8 +243,8 @@ export function memoryStores(
         Promise.resolve(
           new Map(
             inScope(scope)
-              .ledger.filter((r) => runIds.includes(r.run.runId) && r.sealedAt)
-              .map((r) => [r.run.runId, r.sealedAt as Date]),
+              .ledger.filter((r) => runIds.includes(r.run.runId) && r.seal)
+              .map((r) => [r.run.runId, r.seal as LedgerSeal]),
           ),
         ),
       tachoPage: (scope, q) =>
@@ -283,6 +344,48 @@ export function event(
     body: NO_BODY,
     ...over,
   };
+}
+
+/** A `tacho_events` row as the telemetry seam returns it. */
+export function tachoRow(
+  seq: number,
+  over: Partial<TachoFrameRow> = {},
+): TachoFrameRow {
+  return {
+    seq,
+    ts: `2026-09-11 09:00:${String(seq % 60).padStart(2, "0")}.000`,
+    kind: "tool_call",
+    hash: `sha256:${String(seq).padStart(64, "0")}`,
+    contentDigest: "",
+    bytesRef: "",
+    redactions: "",
+    body: "{}",
+    toolName: "Read",
+    toolStatus: "ok",
+    toolUseId: `tu_${seq}`,
+    model: "",
+    provider: "",
+    policyDecision: "",
+    costUsdMicros: null,
+    turnSeq: null,
+    ...over,
+  };
+}
+
+/**
+ * An in-memory `selectTachoEvents`: strictly after the cursor, ascending, at
+ * most `limit`, fenced to the session it was built for.
+ */
+export function memoryTachoFrames(sessionUuid: string, rows: TachoFrameRow[]) {
+  return (args: { sessionUuid: string; afterSeq: number; limit: number }) =>
+    Promise.resolve(
+      args.sessionUuid === sessionUuid
+        ? rows
+            .filter((r) => r.seq > args.afterSeq)
+            .sort((a, b) => a.seq - b.seq)
+            .slice(0, args.limit)
+        : [],
+    );
 }
 
 /**

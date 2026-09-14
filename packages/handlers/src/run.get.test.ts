@@ -2,12 +2,12 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
+import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRunGetHandler,
   decodeFrameCursor,
   encodeFrameCursor,
-  frameSummary,
   POLL_INTERVAL_MS,
   type RunGetDeps,
 } from "./run.get";
@@ -18,8 +18,11 @@ import {
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memoryTachoFrames,
   OTHER_WORKSPACE,
+  seal,
   summary,
+  tachoRow,
   tachoSession,
   usage,
 } from "./run.test-support";
@@ -27,11 +30,14 @@ import {
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
+const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 
 type Over = {
   ledger?: Parameters<typeof memoryStores>[0];
   tacho?: Parameters<typeof memoryStores>[1];
   events?: AttemptEventReadRecord[];
+  /** The wrapped session's `tacho_events` rows. */
+  tachoRows?: TachoFrameRow[];
   /** What RunStore answers for the public id; defaults to the seeded run. */
   found?: boolean;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
@@ -58,6 +64,7 @@ function harness(over: Over = {}) {
       readAttemptEventsSince: memoryEvents(log),
     },
     sumTokenUsage: stores.sumTokenUsage,
+    tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -74,17 +81,131 @@ const input = (
 ) => ({ runId: LEDGER_ID, frameLimit: 200, waitMs: 0, ...over });
 
 describe("get_run", () => {
-  it("answers a wrapped session's header with frames null, and never waits for it", async () => {
-    const { get, sleeps } = harness();
-    const out = await get(input({ runId: TACHO_ID, waitMs: 5_000 }), ctx());
+  it("answers a wrapped session's header and its frames from the tacho seam, from seq 0, with body references and cost records", async () => {
+    const digest = `sha256:${"c".repeat(64)}`;
+    const { get, sleeps } = harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { replayGrade: "view" } }),
+      ],
+      tachoRows: [
+        tachoRow(0, { kind: "agent_start", toolName: "", toolStatus: "" }),
+        tachoRow(1, {
+          contentDigest: digest,
+          bytesRef: "evb:v1:k:" + "c".repeat(64),
+          redactions:
+            '[{"path":"bytes:0-4","reason":"jwt","original_digest":"sha256:' +
+            "d".repeat(64) +
+            '"}]',
+        }),
+        tachoRow(2, {
+          kind: "llm_call",
+          toolName: "",
+          toolStatus: "",
+          model: "claude-haiku-4.5",
+          provider: "anthropic",
+          contentDigest: digest,
+          costUsdMicros: 1_250,
+        }),
+      ],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(runGet.output.parse(out)).toEqual(out);
     expect(out.run).toMatchObject({
       id: TACHO_ID,
       source: "tacho",
       cost: null,
+      replayGrade: "view",
     });
-    expect(out.frames).toBeNull();
+    expect(out.frames.frames.map((f) => f.seq)).toEqual(["0", "1", "2"]);
+    expect(out.frames.frames[0]).toMatchObject({
+      type: "agent_start",
+      stage: "session",
+      body: {
+        digest: null,
+        bytesRef: null,
+        redactions: [],
+        fidelity: "digest_only",
+      },
+      cost: null,
+    });
+    expect(out.frames.frames[1]).toMatchObject({
+      type: "tool_call",
+      stage: "tool",
+      summary: "Read ok",
+      body: {
+        digest,
+        bytesRef: "evb:v1:k:" + "c".repeat(64),
+        redactions: [
+          {
+            path: "bytes:0-4",
+            reason: "jwt",
+            originalDigest: `sha256:${"d".repeat(64)}`,
+          },
+        ],
+        fidelity: "full",
+      },
+    });
+    expect(out.frames.frames[2]).toMatchObject({
+      summary: "anthropic/claude-haiku-4.5",
+      body: { digest, bytesRef: null, fidelity: "digest_only" },
+      cost: { micros: "1250", currency: "USD", basis: "client_attested" },
+    });
+    expect(decodeFrameCursor(out.frames.cursor ?? "")).toBe("2");
     expect(sleeps).toEqual([]);
+
+    // The cursor resumes a wrapped session the same way.
+    const rest = await get(
+      input({ runId: TACHO_ID, framesAfter: out.frames.frames[0]?.cursor }),
+      ctx(),
+    );
+    expect(rest.frames.frames.map((f) => f.seq)).toEqual(["1", "2"]);
+  });
+
+  it("carries a ledger frame's body reference and the seal's recorded grade", async () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const { get } = harness({
+      ledger: [
+        ledgerRun({
+          publicId: LEDGER_ID,
+          runId: RUN_UUID,
+          seal: seal(RUN_UUID, { replayGrade: "view" }),
+        }),
+      ],
+      events: [
+        event(1, {
+          body: {
+            bodyRef: "evb:v1:k:" + "a".repeat(64),
+            bodyDigest: digest,
+            bodyBytes: 12,
+            redactions: [],
+            fidelity: "full",
+          },
+        }),
+        event(2, {
+          body: {
+            bodyRef: null,
+            bodyDigest: digest,
+            bodyBytes: 12,
+            redactions: [],
+            fidelity: "digest_only",
+          },
+        }),
+      ],
+    });
+    const out = await get(input(), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.replayGrade).toBe("view");
+    expect(out.frames.frames.map((f) => f.body)).toEqual([
+      {
+        digest,
+        bytesRef: "evb:v1:k:" + "a".repeat(64),
+        redactions: [],
+        fidelity: "full",
+      },
+      { digest, bytesRef: null, redactions: [], fidelity: "digest_only" },
+    ]);
+    // A ledger frame carries no cost record: spend is metered per run.
+    expect(out.frames.frames.every((f) => f.cost === null)).toBe(true);
   });
 
   it("answers a ledger run's header and a first frame page whose cursor resumes it", async () => {
@@ -252,64 +373,29 @@ describe("get_run", () => {
     expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
   });
 
-  it("does not call ClickHouse or the ledger reader for a wrapped session", async () => {
+  it("does not read token_usage or the ledger for a wrapped session, and reads only its own session's frames", async () => {
     const readEvents = vi.fn();
     const stores = memoryStores([], [tachoSession({ publicId: TACHO_ID })]);
+    const tachoFrames = vi.fn(
+      memoryTachoFrames("0192d4a8-7c1e-7a00-8000-00000000dead", [tachoRow(0)]),
+    );
     const get = createRunGetHandler({
       queries: stores.queries,
       store: { getRunByPublicId: vi.fn(), readAttemptEventsSince: readEvents },
       sumTokenUsage: stores.sumTokenUsage,
+      tachoFrames,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
-    await get(input({ runId: TACHO_ID }), ctx());
+    const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(readEvents).not.toHaveBeenCalled();
     expect(stores.usageCalls).toEqual([]);
-  });
-});
-
-describe("frameSummary", () => {
-  it("labels each receipt from its identifiers and falls back to the type", () => {
-    expect(
-      frameSummary(
-        event(1, {
-          eventType: "admission.run_admitted",
-          payload: { engine_name: "stella", engine_version: "2.1.0" },
-        }),
-      ),
-    ).toBe("stella@2.1.0");
-    expect(
-      frameSummary(
-        event(1, {
-          eventType: "context.frames_selected",
-          payload: { frame_count: 12 },
-        }),
-      ),
-    ).toBe("frames=12");
-    expect(
-      frameSummary(
-        event(1, {
-          eventType: "model.call_completed",
-          payload: { provider: "anthropic", model: "claude-sonnet-4-5" },
-        }),
-      ),
-    ).toBe("anthropic/claude-sonnet-4-5");
-    expect(frameSummary(event(1))).toBe("read_file ok");
-    // An encrypted payload shows nothing it cannot read.
-    expect(
-      frameSummary(
-        event(1, {
-          eventType: "model.call_completed",
-          payload: null,
-          encryptedPayloadRef: "blob://x",
-        }),
-      ),
-    ).toBe("model.call_completed");
-    expect(
-      frameSummary(
-        event(1, { eventType: "checkout.completed", payload: { sha: "abc" } }),
-      ),
-    ).toBe("checkout.completed");
+    expect(tachoFrames).toHaveBeenCalledWith({
+      sessionUuid: SESSION_UUID,
+      afterSeq: -1,
+      limit: 200,
+    });
+    expect(out.frames).toEqual({ frames: [], cursor: null });
   });
 });
 

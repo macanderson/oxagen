@@ -24,7 +24,6 @@
  *
  * `noBillingGate: true`: an SSE poll is not a governed action (§1.5).
  */
-import { REDACTION_REASONS } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { runCostSchema, runItemSchema, runPublicIdSchema } from "./run.list";
@@ -37,12 +36,16 @@ export const WAIT_MS_MAX = 20_000;
 
 export const frameFidelitySchema = z.enum(["full", "digest_only"]);
 
-/** One removal the recorder made before the body was written (§13.5). */
+/**
+ * One removal made before the body was written (§13.5): by the platform's
+ * detectors for a ledger frame, by the host's for a wrapped one, so `reason`
+ * is the redactor's own word.
+ */
 export const frameRedactionSchema = z
   .object({
     /** The span removed, e.g. `bytes:12-60` in the original bytes. */
     path: z.string(),
-    reason: z.enum(REDACTION_REASONS),
+    reason: z.string().min(1),
     /** sha256 of the bytes removed, so an auditor can prove what was cut. */
     originalDigest: z.string(),
   })

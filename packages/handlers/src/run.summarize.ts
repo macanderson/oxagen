@@ -1,0 +1,81 @@
+// `summarize_run`: queue the generated name and summary of a sealed run
+// (Mission Control mockup 2821-2835; G14; ADR-057).
+//
+// Guards, each with its negative test: org Owner, Admin or Member
+// (`assertOrgRole`, ARCHITECTURE.md §3.2); the run is in the caller's
+// workspace (`not_found`); the run is sealed (`conflict`, `run_not_sealed`);
+// the recording kept bodies (`conflict`, `digest_only`): a summary written
+// from receipts alone would be the placeholder the interface forbids. The
+// model call itself runs in the durable function `run.summarize`
+// (@oxagen/inngest-functions), which writes the three summary columns
+// together.
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import {
+  runSummarize,
+  type RunSummarizeOutput,
+} from "@oxagen/oxagen/contracts/run.summarize";
+import { assertOrgRole } from "@oxagen/iam/org-role";
+import { eventClient } from "./event-client";
+import { recordedGaps, runScope } from "./run.list";
+import {
+  defaultRunReadDeps,
+  resolveRun,
+  type ResolvedRun,
+  type RunReadDeps,
+} from "./lib/run-read";
+
+export const SUMMARIZE_ROLES = ["Owner", "Admin", "Member"] as const;
+
+export const RUN_SUMMARIZE_EVENT = "run/summarize";
+
+export interface RunSummarizeEvent {
+  name: typeof RUN_SUMMARIZE_EVENT;
+  data: {
+    orgId: string;
+    workspaceId: string;
+    runPublicId: string;
+    requestedByUserId: string;
+  };
+}
+
+export type RunSummarizeDeps = RunReadDeps & {
+  dispatch: (event: RunSummarizeEvent) => Promise<void>;
+};
+
+/** The gaps the run's seal recorded: the latest ledger seal's, or the session's. */
+export function sealedGaps(run: ResolvedRun): string[] {
+  return run.source === "ledger"
+    ? recordedGaps(run.record.seal?.completenessGaps)
+    : recordedGaps(run.row.session.completenessGaps);
+}
+
+export function createRunSummarizeHandler(
+  deps: RunSummarizeDeps,
+): CapabilityHandler<typeof runSummarize> {
+  return async (input, ctx): Promise<RunSummarizeOutput> => {
+    await assertOrgRole(ctx, { org: SUMMARIZE_ROLES });
+    const scope = runScope(ctx);
+    const run = await resolveRun(deps, scope, input.runId);
+    if (run.item.status === "live") {
+      throw new HandlerError({ code: "conflict", reason: "run_not_sealed" });
+    }
+    if (sealedGaps(run).includes("digest_only")) {
+      throw new HandlerError({ code: "conflict", reason: "digest_only" });
+    }
+    await deps.dispatch({
+      name: RUN_SUMMARIZE_EVENT,
+      data: {
+        ...scope,
+        runPublicId: input.runId,
+        requestedByUserId: ctx.userId as string,
+      },
+    });
+    return { runId: input.runId, status: "queued" };
+  };
+}
+
+export const runSummarizeHandler = createRunSummarizeHandler({
+  ...defaultRunReadDeps(),
+  dispatch: (event) => eventClient.send(event),
+});

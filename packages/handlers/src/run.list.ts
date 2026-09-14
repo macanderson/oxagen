@@ -28,6 +28,7 @@ import {
   type RunListOutput,
 } from "@oxagen/oxagen/contracts/run.list";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import { isReplayGrade } from "@oxagen/tacho";
 import {
   sumTokenUsageByExecutionStep,
   type TokenUsageByStepRow,
@@ -93,7 +94,7 @@ export function invalidCursor(capability: string): CapabilityError {
 // ---- Queries -------------------------------------------------------------------------
 
 /** What a query needs from a transaction: the select builder. */
-export type QueryDb = Pick<Tx, "select">;
+export type QueryDb = Pick<Tx, "select" | "selectDistinctOn">;
 
 const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
@@ -137,6 +138,10 @@ const ledgerColumns = {
     status: runs.status,
     createdAt: runs.createdAt,
     startedAt: runs.startedAt,
+    name: runs.name,
+    summary: runs.summary,
+    summaryGeneratedAt: runs.summaryGeneratedAt,
+    summaryModel: runs.summaryModel,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -250,16 +255,26 @@ export function ledgerRollupQuery(
     .groupBy(events.runId);
 }
 
-/** The latest attempt seal per run. */
+/**
+ * The latest attempt seal per run: when it sealed, the grade it recorded and
+ * the gaps the grade was computed from (ADR-057). One row per run.
+ */
 export function ledgerSealQuery(
   db: QueryDb,
   scope: RunScope,
   runIds: readonly string[],
 ) {
   return db
-    .select({
+    .selectDistinctOn([seals.runId], {
       runId: seals.runId,
-      sealedAt: sql<Date>`max(${seals.sealedAt})`.mapWith(seals.sealedAt),
+      attemptId: seals.attemptId,
+      sealedAt: seals.sealedAt,
+      replayGrade: seals.replayGrade,
+      completenessGaps: seals.completenessGaps,
+      finalRunSeq: sql<string | null>`${seals.finalRunSeq}::text`,
+      eventCount: seals.eventCount,
+      merkleRoot: seals.merkleRoot,
+      archiveSegmentRef: seals.archiveSegmentRef,
     })
     .from(seals)
     .where(
@@ -269,12 +284,13 @@ export function ledgerSealQuery(
         inArray(seals.runId, [...runIds]),
       ),
     )
-    .groupBy(seals.runId);
+    .orderBy(seals.runId, desc(seals.sealedAt));
 }
 
 const tachoColumns = {
   session: {
     publicId: sessions.publicId,
+    sessionUuid: sessions.sessionUuid,
     agentKey: sessions.agentKey,
     outcome: sessions.outcome,
     numTurns: sessions.numTurns,
@@ -286,6 +302,13 @@ const tachoColumns = {
     hasUnknownModelCost: sessions.hasUnknownModelCost,
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
+    replayGrade: sessions.replayGrade,
+    completenessGaps: sessions.completenessGaps,
+    enforcementTier: sessions.enforcementTier,
+    name: sessions.name,
+    summary: sessions.summary,
+    summaryGeneratedAt: sessions.summaryGeneratedAt,
+    summaryModel: sessions.summaryModel,
   },
   operatorPublicId: schema.principals.publicId,
 };
@@ -338,7 +361,15 @@ export function tachoSessionQuery(
 
 // ---- Records and mapping -------------------------------------------------------------
 
-export type LedgerRunCore = {
+/** The generated summary columns a run row carries (`summarize_run`, G14). */
+export type GeneratedSummaryColumns = {
+  name: string | null;
+  summary: string | null;
+  summaryGeneratedAt: Date | null;
+  summaryModel: string | null;
+};
+
+export type LedgerRunCore = GeneratedSummaryColumns & {
   runId: string;
   publicId: string;
   /** `agent_runs.status` (CHECK: pending, running, completed, failed, cancelled). */
@@ -381,16 +412,31 @@ export const EMPTY_ROLLUP: LedgerEventRollup = {
   opaqueModelCalls: 0,
 };
 
+/** The latest seal of a run, as `ledgerSealQuery` reads it. */
+export type LedgerSeal = {
+  runId: string;
+  attemptId: string;
+  sealedAt: Date;
+  /** Null on a seal written before the recorder graded. */
+  replayGrade: string | null;
+  completenessGaps: unknown;
+  finalRunSeq: string | null;
+  eventCount: number;
+  merkleRoot: string | null;
+  archiveSegmentRef: string | null;
+};
+
 export type LedgerRunRecord = LedgerRunRow & {
   rollup: LedgerEventRollup;
   /** The latest attempt seal; null while the run is open or none was recorded. */
-  sealedAt: Date | null;
+  seal: LedgerSeal | null;
   /** `token_usage` summed for `execution_step_id = agent_runs.id`; null = no row. */
   usage: TokenUsageByStepRow | null;
 };
 
-export type TachoSessionColumns = {
+export type TachoSessionColumns = GeneratedSummaryColumns & {
   publicId: string;
+  sessionUuid: string;
   agentKey: string;
   outcome: string;
   numTurns: number;
@@ -402,6 +448,10 @@ export type TachoSessionColumns = {
   hasUnknownModelCost: boolean | null;
   startedAt: Date;
   sealedAt: Date | null;
+  /** Written by the seal at `agent_stop`; null while the session is open. */
+  replayGrade: string | null;
+  completenessGaps: unknown;
+  enforcementTier: string;
 };
 
 export type TachoSessionRow = {
@@ -454,6 +504,39 @@ export function ledgerRunStatus(status: string): RunItem["status"] {
   return mapped;
 }
 
+/**
+ * The recorded grade, or null: a seal the recorder never graded, an open run,
+ * or a word outside the ladder (a broken row reads as ungraded, never as a
+ * stronger word). Nothing computes a grade on read.
+ */
+export function recordedGrade(grade: string | null): RunItem["replayGrade"] {
+  return isReplayGrade(grade) ? grade : null;
+}
+
+/** The gaps column as a string list; anything else is no gaps. */
+export function recordedGaps(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
+}
+
+/** The generated summary, present only when all three columns were set together. */
+export function generatedSummary(
+  columns: GeneratedSummaryColumns,
+): RunItem["summary"] {
+  if (
+    columns.summary === null ||
+    columns.summaryGeneratedAt === null ||
+    columns.summaryModel === null
+  )
+    return null;
+  return {
+    text: columns.summary,
+    generatedAt: columns.summaryGeneratedAt.toISOString(),
+    model: columns.summaryModel,
+  };
+}
+
 /** Gateway-metered token spend. Absent means not metered, never zero. */
 export function ledgerCost(usage: TokenUsageByStepRow | null): RunItem["cost"] {
   if (!usage) return null;
@@ -484,7 +567,13 @@ export function toLedgerRunItem(record: LedgerRunRecord): RunItem {
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
-      status === "live" ? null : (record.sealedAt?.toISOString() ?? null),
+      status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
+    replayGrade:
+      status === "live"
+        ? null
+        : recordedGrade(record.seal?.replayGrade ?? null),
+    name: run.name,
+    summary: generatedSummary(run),
   };
 }
 
@@ -539,6 +628,9 @@ export function toTachoRunItem(row: TachoSessionRow): RunItem {
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
+    replayGrade: recordedGrade(session.replayGrade),
+    name: session.name,
+    summary: generatedSummary(session),
   };
 }
 
@@ -592,7 +684,7 @@ export type RunQueries = {
   ledgerSeals: (
     scope: RunScope,
     runIds: readonly string[],
-  ) => Promise<Map<string, Date>>;
+  ) => Promise<Map<string, LedgerSeal>>;
   tachoPage: (scope: RunScope, q: PageQuery) => Promise<TachoSessionRow[]>;
   tachoSession: (
     scope: RunScope,
@@ -623,7 +715,7 @@ export const postgresRunQueries: RunQueries = {
   ledgerSeals: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();
     const rows = await withTenantDb((tx) => ledgerSealQuery(tx, scope, runIds));
-    return new Map(rows.map((r) => [r.runId, r.sealedAt]));
+    return new Map(rows.map((r) => [r.runId, r]));
   },
   tachoPage: (scope, q) => withTenantDb((tx) => tachoPageQuery(tx, scope, q)),
   tachoSession: async (scope, publicId) => {
@@ -653,7 +745,7 @@ export async function ledgerEnrichment(
   return (row: LedgerRunRow): LedgerRunRecord => ({
     ...row,
     rollup: rollups.get(row.run.runId) ?? EMPTY_ROLLUP,
-    sealedAt: sealed.get(row.run.runId) ?? null,
+    seal: sealed.get(row.run.runId) ?? null,
     usage: usage.get(row.run.runId) ?? null,
   });
 }

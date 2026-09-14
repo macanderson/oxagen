@@ -20,6 +20,7 @@ import {
   memoryStores,
   OTHER_WORKSPACE,
   SCOPE,
+  seal,
   tachoSession,
   usage,
 } from "./run.test-support";
@@ -49,6 +50,10 @@ describe("list_runs", () => {
             status: "running",
             createdAt: at("2026-09-11T10:00:00.000Z"),
             startedAt: at("2026-09-11T10:30:00.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
           },
         }),
         ledgerRun({ publicId: "arun_x", runId: RUN_B, scope: OTHER_WORKSPACE }),
@@ -137,6 +142,10 @@ describe("list_runs", () => {
             status: "completed",
             createdAt: at("2026-09-11T11:00:00.000Z"),
             startedAt: null,
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
           },
         }),
       ],
@@ -218,6 +227,10 @@ describe("list_runs", () => {
             status: "cancelled",
             createdAt: at("2026-09-11T08:00:00.000Z"),
             startedAt: at("2026-09-11T08:00:00.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
           },
           rollup: {
             frames: 2,
@@ -226,7 +239,10 @@ describe("list_runs", () => {
             turnIndexes: 1,
             opaqueModelCalls: 0,
           },
-          sealedAt: at("2026-09-11T08:10:00.000Z"),
+          seal: seal(RUN_B, {
+            sealedAt: at("2026-09-11T08:10:00.000Z"),
+            replayGrade: "inspect",
+          }),
         }),
       ],
       [],
@@ -240,11 +256,85 @@ describe("list_runs", () => {
         r.steps,
         r.frames,
         r.sealedAt,
+        r.replayGrade,
       ]),
     ).toEqual([
-      ["arun_open", "sealed", null, 7, 9, null],
-      ["arun_done", "halted", 1, 1, 2, "2026-09-11T08:10:00.000Z"],
+      ["arun_open", "sealed", null, 7, 9, null, null],
+      ["arun_done", "halted", 1, 1, 2, "2026-09-11T08:10:00.000Z", "inspect"],
     ]);
+  });
+
+  it("renders the recorded grade and never a word outside the ladder; a live run has none", async () => {
+    const { list } = handlerOver(
+      [
+        ledgerRun({
+          publicId: "arun_broken",
+          runId: RUN_A,
+          seal: seal(RUN_A, { replayGrade: "replay" }),
+        }),
+        ledgerRun({
+          publicId: "arun_ungraded",
+          runId: RUN_B,
+          seal: seal(RUN_B, { replayGrade: null }),
+        }),
+      ],
+      [
+        tachoSession({
+          publicId: "tse_fork",
+          session: { replayGrade: "fork" },
+        }),
+        tachoSession({
+          publicId: "tse_live",
+          session: {
+            outcome: "running",
+            sealedAt: null,
+            replayGrade: null,
+            startedAt: at("2026-09-11T09:01:00.000Z"),
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const byId = Object.fromEntries(out.runs.map((r) => [r.id, r.replayGrade]));
+    expect(byId).toEqual({
+      arun_broken: null,
+      arun_ungraded: null,
+      tse_fork: "fork",
+      tse_live: null,
+    });
+  });
+
+  it("carries the generated summary only when its three columns were set together", async () => {
+    const generatedAt = at("2026-09-11T10:07:00.000Z");
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_named",
+          session: {
+            name: "Review PR 42",
+            summary: "Reviewed the PR and left two comments.",
+            summaryGeneratedAt: generatedAt,
+            summaryModel: "anthropic/claude-haiku-4.5",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_bare",
+          session: { startedAt: at("2026-09-11T09:01:00.000Z") },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const byId = Object.fromEntries(out.runs.map((r) => [r.id, r]));
+    expect(byId["tse_named"]).toMatchObject({
+      name: "Review PR 42",
+      summary: {
+        text: "Reviewed the PR and left two comments.",
+        generatedAt: "2026-09-11T10:07:00.000Z",
+        model: "anthropic/claude-haiku-4.5",
+      },
+    });
+    expect(byId["tse_bare"]).toMatchObject({ name: null, summary: null });
   });
 
   it("answers a live run with no seal, and a run with no events as zero of each", async () => {
@@ -259,8 +349,12 @@ describe("list_runs", () => {
             status: "pending",
             createdAt: at("2026-09-11T10:00:00.000Z"),
             startedAt: null,
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
           },
-          sealedAt: at("2026-09-11T08:10:00.000Z"),
+          seal: seal(RUN_A, { sealedAt: at("2026-09-11T08:10:00.000Z") }),
         }),
       ],
       [
@@ -303,6 +397,10 @@ describe("list_runs", () => {
           // Two ledger runs share an instant with a tacho session: the tie
           // breaks on the public id.
           startedAt: at(`2026-09-11T10:0${i}:00.000Z`),
+          name: null,
+          summary: null,
+          summaryGeneratedAt: null,
+          summaryModel: null,
         },
       }),
     );
@@ -353,6 +451,10 @@ describe("list_runs", () => {
           status: "completed",
           createdAt: at("2026-09-11T10:00:00.000Z"),
           startedAt: at(`2026-09-11T10:0${i}:00.000Z`),
+          name: null,
+          summary: null,
+          summaryGeneratedAt: null,
+          summaryModel: null,
         },
       }),
     );
