@@ -129,7 +129,7 @@ export const jsonContractMixin = () => ({
 // provide globalThis.crypto in modern runtimes.
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /** `length` lowercase hex characters from `crypto.getRandomValues`. */
-export function cryptoRandomHex(length: number): string {
+function cryptoRandomHex(length: number): string {
   const bytes = new Uint8Array(Math.ceil(length / 2));
   globalThis.crypto.getRandomValues(bytes);
   let out = "";
