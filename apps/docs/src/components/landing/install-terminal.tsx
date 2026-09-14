@@ -44,11 +44,5 @@ const STEPS: TerminalStep[] = [
 ];
 
 export function InstallTerminal() {
-  return (
-    <TypewriterTerminal
-      steps={STEPS}
-      title="oxagen — cli install"
-      minHeightClass="min-h-[276px]"
-    />
-  );
+  return <TypewriterTerminal steps={STEPS} title="oxagen — cli install" />;
 }

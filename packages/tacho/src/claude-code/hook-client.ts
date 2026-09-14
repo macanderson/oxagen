@@ -17,11 +17,23 @@ import { type HostFile, readHostFile } from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
+import { type TachoHarness, tachoHarnessSchema } from "../wire";
+
+/** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
+export function harnessFromArgv(argv: readonly string[]): TachoHarness {
+  const index = argv.indexOf("--harness");
+  const value = index >= 0 ? argv[index + 1] : undefined;
+  const parsed = tachoHarnessSchema.safeParse(value);
+  return parsed.success ? parsed.data : "claude-code";
+}
 import { hookInputSchema } from "./hooks";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 
 export interface UnixPostOptions {
-  socketPath: string;
+  /** The daemon's Unix socket; on Windows `loopbackPort` is used instead. */
+  socketPath?: string;
+  /** `127.0.0.1:<port>`, the transport when there is no Unix socket. */
+  loopbackPort?: number;
   path: string;
   headers: Record<string, string>;
   body: string;
@@ -34,12 +46,17 @@ export interface UnixPostResult {
   body: string;
 }
 
-/** POST over a Unix socket with separate connect and response budgets. */
+/**
+ * POST to the daemon with separate connect and response budgets, over the
+ * Unix socket when one is given and over loopback TCP otherwise (Windows).
+ */
 export function postUnix(options: UnixPostOptions): Promise<UnixPostResult> {
   return new Promise((resolve, reject) => {
     const req = request(
       {
-        socketPath: options.socketPath,
+        ...(options.socketPath !== undefined
+          ? { socketPath: options.socketPath }
+          : { host: "127.0.0.1", port: options.loopbackPort }),
         path: options.path,
         method: "POST",
         // One fresh socket per hook: the global agent's keep-alive would hand
@@ -98,6 +115,10 @@ export interface HookRunDeps {
   /** Milliseconds allowed to reach the daemon before deciding locally. */
   connectTimeoutMs?: number;
   readHost?: () => HostFile | undefined;
+  /** Which harness ran this hook (`--harness`); the daemon labels the session. */
+  harness?: TachoHarness;
+  /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
+  platform?: NodeJS.Platform;
 }
 
 export interface HookRunResult {
@@ -282,15 +303,19 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   }
   const env = snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN);
   const post = deps.post ?? postUnix;
+  const harness = deps.harness ?? "claude-code";
+  const useTcp = (deps.platform ?? process.platform) === "win32";
   try {
     const result = await post({
-      socketPath: deps.paths.socket,
+      ...(useTcp
+        ? { loopbackPort: host.port }
+        : { socketPath: deps.paths.socket }),
       path: `/hook/${host.host_enrollment_id}`,
       headers: {
         Authorization: `Bearer ${host.local_token}`,
         "x-tacho-envelope": "1",
       },
-      body: JSON.stringify({ payload: raw, env }),
+      body: JSON.stringify({ payload: raw, env, harness }),
       connectTimeoutMs: deps.connectTimeoutMs ?? 50,
       responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
     });
@@ -316,6 +341,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         received_at: at,
         payload: raw,
         env,
+        harness,
         ...(local.evaluation !== undefined
           ? { evaluation: local.evaluation }
           : {}),

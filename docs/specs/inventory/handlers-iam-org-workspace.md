@@ -9,41 +9,41 @@
 ### Requirement: Authenticated user creates a new organization
 
 <!-- id: organization.create.organizationCreateHandler -->
-<!-- entities: User, Organization, OrgUser, Principal, Role, RoleGrant -->
+<!-- entities: User, Organization, OrgUser, Principal, Role, RoleGrant, Workspace, WorkspaceUser -->
 <!-- enforced: organization.create.organizationCreateHandler() -->
-<!-- test: organization.create.test.ts -->
+<!-- test: org.create.test.ts, org.create.pg.test.ts -->
 
-When an authenticated user submits a valid organization creation request with name, slug, type, and optional billing details, the system SHALL create a new org row, assign the creator as owner, bootstrap IAM (7 system roles, owner principal, owner role assignment, and role grants from every capability's defaultRoles), grant free credits, and seed default workspace resources. Slug MUST be unique across all orgs; duplicate attempts return a friendly error. Business-type orgs persist website/industry/employeeSize; personal orgs leave these fields null. Billing profile is persisted if billingEmail or billingAddress is provided.
+When an authenticated user submits a valid organization creation request with name, slug, type and an optional first workspace, the system SHALL, in one system transaction, create the org row with a server-derived namespace, assign the creator as owner, bootstrap IAM (7 system roles, owner principal, owner role assignment, and role grants from every capability's defaultRoles) and create the first workspace with the creator as owner, its built-in agent, default MCP registry and default environment (`workspace-bootstrap.ts`, shared with `create_workspace`). Nothing billing-shaped is written (ADR-055 §3.9 item 14). Slug MUST be unique across all orgs and MUST NOT be a reserved route segment (`RESERVED_ORG_SLUGS` in the contract); the workspace slug MUST NOT be an org-level route segment (`RESERVED_WORKSPACE_SLUGS`). Business-type orgs persist website/industry/employeeSize; personal orgs leave these fields null.
 
-#### Scenario: Happy path — authenticated user creates personal org
-<!-- test: organization.create.test.ts:returns new org publicId, name, slug, type, ISO createdAt -->
+#### Scenario: Happy path — a signed-in user with no memberships creates an org
+<!-- test: org.create.pg.test.ts:bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row -->
 
-- **WHEN** ctx.userId is set AND input.type === "personal" AND no existing org has input.slug
-- **THEN** insert organizations row (name, slug, type="personal", status="active", website/industry/employeeSize=null), insert orgUsers row (orgId, userId, role="owner"), call bootstrapOrgIAM (upsert 7 system roles, upsert owner principal, assign owner "Owner" role, seed role_grants), call grantFreeCredits(orgId), emit organization.created security event, return {publicId, name, slug, type, createdAt as ISO string}
+- **WHEN** ctx.userId is set AND no existing org has input.slug
+- **THEN** insert organizations row (name, slug, derived namespace, type, status="active"), insert orgUsers row (orgId, userId, role="owner"), call bootstrapOrgIAM on the same transaction, call bootstrapWorkspace on the same transaction (workspaces row, workspaceUsers owner row, qa-chat agent, default registry, default environment), emit organization.created security event, return {publicId, name, slug, type, createdAt as ISO string, workspace: {publicId, slug}}; every billing.* table keyed by org_id has no row for the new org
 
-#### Scenario: Authenticated user creates business org with billing address
-<!-- test: organization.create.test.ts:inserts billing profile with US address — region and country uppercased -->
+#### Scenario: No first workspace named
+<!-- test: org.create.test.ts:creates the Default workspace when the input names none -->
 
-- **WHEN** ctx.userId is set AND input.type === "business" AND input.billingAddress.country === "US" AND all billing fields provided
-- **THEN** insert organizations row (name, slug, type="business", website/industry/employeeSize preserved), insert orgBillingProfiles row (billingEmail, addressLine1/2, city, region uppercased, postalCode, country uppercased, placeId), emit organization.created event, return org details
+- **WHEN** input.workspace is absent
+- **THEN** the contract defaults it to { name: "Default", slug: "default" } and the handler creates that workspace
+
+#### Scenario: Reserved slug
+<!-- test: org.create.test.ts (contract):refuses every reserved org slug at the slug path -->
+
+- **WHEN** input.slug is a top-level route segment (login, api, invite, …) OR input.workspace.slug is an org-level route segment (billing, api-keys, …)
+- **THEN** the contract's input schema refuses it before any handler runs
 
 #### Scenario: Unauthenticated user attempts org creation
-<!-- test: organization.create.test.ts:throws when userId is null -->
+<!-- test: org.create.test.ts:throws when userId is null -->
 
 - **WHEN** ctx.userId is null
 - **THEN** throw Error "organization.create requires an authenticated user"
 
 #### Scenario: Slug collision detected during insert
-<!-- test: organization.create.test.ts:throws friendly error on unique_violation (race condition) -->
+<!-- test: org.create.test.ts:throws a friendly error on unique_violation (race condition path) -->
 
-- **WHEN** unique_violation (code 23505) is raised during org insert (race condition)
-- **THEN** throw Error "slug "{slug}" already in use"
-
-#### Scenario: Free credits grant fails (non-fatal)
-<!-- test: organization.create.test.ts:does not throw when grantFreeCredits fails — org creation still succeeds -->
-
-- **WHEN** grantFreeCredits(orgId) raises an error after org creation transaction commits
-- **THEN** log error but do not fail the handler; org creation and IAM bootstrap succeed; credits grant can be re-applied manually
+- **WHEN** unique_violation (code 23505) is raised during the bootstrap transaction (race condition)
+- **THEN** throw Error "slug "{slug}" already in use"; nothing from the transaction persists
 
 ---
 

@@ -1,4 +1,5 @@
 export * from "./bundle";
+export * from "./codex-writer";
 export * from "./control-client";
 export * from "./device-key";
 export * from "./fs";

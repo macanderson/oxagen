@@ -1,16 +1,20 @@
 name: Bug report
-description: Something is broken in the platform, API, MCP server, or CLI
-labels: ["bug"]
+description: Something that exists behaves wrongly (the triage pass adds kind:defect)
+labels: ["triage"]
 body:
   - type: markdown
     attributes:
       value: |
         **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/macanderson/oxagen/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
+
+        Creators apply exactly one label, `triage` (SCR-005). The triage pass replaces it with one priority label and the descriptive dimensions: `kind:defect`, one or more `area:*`, one `job:*`, one or more `pillar:*`. Do not add those yourself.
+
+        Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
     id: surface
     attributes:
       label: Surface
-      description: Where does the bug occur?
+      description: Where does the defect occur?
       options:
         - Web app (app.oxagen.sh / apps/app)
         - API (api.oxagen.sh / apps/api)
@@ -27,8 +31,8 @@ body:
     id: what-happened
     attributes:
       label: What happened?
-      description: What did you do, what did you expect, and what happened instead?
-      placeholder: Steps to reproduce, expected behavior, actual behavior.
+      description: What did you do, what did you expect, and what happened instead? Name the file paths and how to reproduce.
+      placeholder: Steps to reproduce, expected behavior, actual behavior, file:line.
     validations:
       required: true
   - type: textarea
@@ -44,3 +48,16 @@ body:
       label: Logs / output
       description: For CLI issues, `OXAGEN_CLI_DEBUG=1` + `oxagen logs` excerpts help. Redact anything sensitive.
       render: shell
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of done
+      description: Checklist the closer must verify line-by-line (SCR-003). One issue carries the whole fix; add items rather than filing sub-issues.
+      value: |
+        - [ ] Defect fixed at the named path; the repro no longer reproduces
+        - [ ] Scoped tests added/updated and passing
+        - [ ] Full CI green
+        - [ ] Code comments and docs updated
+        - [ ] Residue fixed in the same PR, or filed with the `triage` label only
+    validations:
+      required: true

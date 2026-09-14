@@ -13,6 +13,7 @@ import { apiKeyCreate } from "./api.key.create";
 import { apiKeyList } from "./api.key.list";
 import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
+import { agentApprovalList } from "./agent.approval.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -380,6 +381,7 @@ export {
   apiKeyList,
   apiKeyRevoke,
   assetUpload,
+  agentApprovalList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -629,6 +631,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyList,
   apiKeyRevoke,
   assetUpload,
+  agentApprovalList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,

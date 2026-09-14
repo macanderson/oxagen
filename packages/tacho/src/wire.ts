@@ -17,7 +17,13 @@ export const hostEnrollmentIdSchema = z
   .regex(/^tch_[a-z0-9]{22}$/, "a host enrollment public id");
 
 export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
-export const tachoHarnessSchema = z.enum(["claude-code"]);
+/**
+ * The harnesses a host can enroll. Codex CLI's hook surface (events, stdin
+ * fields, decision JSON, `hooks.json` shape) mirrors Claude Code's, so it
+ * runs through the same `tacho-hook` with a `--harness codex` tag.
+ */
+export const tachoHarnessSchema = z.enum(["claude-code", "codex"]);
+export type TachoHarness = z.infer<typeof tachoHarnessSchema>;
 export const tachoHostStatusSchema = z.enum([
   "active",
   "paused",

@@ -5,7 +5,8 @@
  * key and credentials. The WAL stays for inspection unless `--purge`.
  */
 import { existsSync, rmSync, unlinkSync } from "node:fs";
-import { readHostFile, writeHostFile } from "../host/host-file";
+import { stripCodexHooks } from "../host/codex-writer";
+import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
 import { stripTachoSettings } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -24,6 +25,62 @@ export interface UnenrollResult {
   settingsChanged: boolean;
   revoked: boolean;
   warnings: string[];
+}
+
+/**
+ * Revoke a host's enrollment on the control plane with the operator's
+ * credentials. Returns true on success; every failure lands in `warnings`
+ * because a host must be able to unenroll offline (the record stays marked
+ * revoked locally until an operator finishes it).
+ */
+export async function revokeOnControlPlane(
+  host: HostFile,
+  options: CredentialOptions & { reason?: string },
+  deps: CliDeps,
+  warnings: string[],
+): Promise<boolean> {
+  const resolved = resolveCredentials(
+    {
+      apiUrl: host.api_url,
+      org: options.org ?? host.org_slug,
+      workspace: options.workspace ?? host.workspace_slug,
+      ...(options.token !== undefined ? { token: options.token } : {}),
+    },
+    deps.env,
+    deps.home,
+  );
+  if ("missing" in resolved) {
+    warnings.push(
+      "no operator token; the host stays active server-side until an operator revokes it (`oxagen login`, then `tacho unenroll` again, or revoke from the fleet page)",
+    );
+    return false;
+  }
+  const { credentials } = resolved;
+  try {
+    const response = await deps.fetch(
+      `${credentials.apiUrl}/v1/${credentials.org}/${credentials.workspace}/tacho/enrollments/revoke`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${credentials.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          hostEnrollmentId: host.host_enrollment_id,
+          reason: options.reason ?? "tacho unenroll",
+        }),
+      },
+    );
+    if (response.ok) return true;
+    warnings.push(
+      `revoke answered ${response.status}: ${(await response.text()).slice(0, 200)}`,
+    );
+  } catch (error) {
+    warnings.push(
+      `revoke failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return false;
 }
 
 export async function unenroll(
@@ -46,6 +103,19 @@ export async function unenroll(
   } else {
     deps.out("      nothing to remove");
   }
+  // Codex hooks are stripped whether or not host.json lists the harness: a
+  // host.json lost mid-way must not leave hooks behind.
+  const codexCurrent = deps.readCodexHooks();
+  if (codexCurrent !== undefined) {
+    const codexStripped = stripCodexHooks(
+      codexCurrent,
+      host?.host_enrollment_id,
+    );
+    if (codexStripped.changed) {
+      deps.writeCodexHooks(codexStripped.settings);
+      deps.out(`      removed from ${deps.paths.codexHooks} too`);
+    }
+  }
 
   deps.out(`[2/4] Stopping the ${deps.serviceManager.kind} service`);
   try {
@@ -64,51 +134,13 @@ export async function unenroll(
     revoked = true;
   } else {
     deps.out(`[3/4] Revoking ${host.host_enrollment_id} on ${host.api_url}`);
-    const resolved = resolveCredentials(
-      {
-        apiUrl: host.api_url,
-        org: options.org ?? host.org_slug,
-        workspace: options.workspace ?? host.workspace_slug,
-        ...(options.token !== undefined ? { token: options.token } : {}),
-      },
-      deps.env,
-      deps.home,
+    revoked = await revokeOnControlPlane(
+      host,
+      { ...options, reason: options.reason ?? "tacho unenroll" },
+      deps,
+      warnings,
     );
-    if ("missing" in resolved) {
-      warnings.push(
-        "no operator token; the host stays active server-side until an operator revokes it (`oxagen login`, then `tacho unenroll` again, or revoke from the fleet page)",
-      );
-    } else {
-      const { credentials } = resolved;
-      try {
-        const response = await deps.fetch(
-          `${credentials.apiUrl}/v1/${credentials.org}/${credentials.workspace}/tacho/enrollments/revoke`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${credentials.token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              hostEnrollmentId: host.host_enrollment_id,
-              reason: options.reason ?? "tacho unenroll",
-            }),
-          },
-        );
-        if (response.ok) {
-          revoked = true;
-          deps.out("      revoked");
-        } else {
-          warnings.push(
-            `revoke answered ${response.status}: ${(await response.text()).slice(0, 200)}`,
-          );
-        }
-      } catch (error) {
-        warnings.push(
-          `revoke failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
+    if (revoked) deps.out("      revoked");
     if (!revoked) {
       writeHostFile(deps.paths.hostFile, {
         ...host,

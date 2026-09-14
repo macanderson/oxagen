@@ -1,9 +1,10 @@
 # Mission Control — build plan
 
 Status: draft, 2026-09-12.
-Source of truth: `~/Documents/Oxagen/Specs/2026-09-11-oxagen-mission-control-spec.md`
-(§14 Mission Control, §16 carry over / leave behind, §17 delivery plan, Appendix A/E/F).
-Reference implementation: `~/Documents/Oxagen/Mockups/mc.html`.
+Source of truth: `docs/specs/mission-control/spec.md`
+(§14 Mission Control, §16 carry over / leave behind, §17 delivery plan, Appendix A/E/F);
+the implementation plan is `docs/specs/mission-control/plan.md`.
+Reference implementation: `mc.html` in https://github.com/macanderson/tmp-oxagen-mockups.
 
 This plan does not restate the spec. It records the decisions the spec left open, the
 measurements that back them, and the order the work happens in.

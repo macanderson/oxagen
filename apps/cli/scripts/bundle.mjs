@@ -92,3 +92,31 @@ chmodSync(outfile, 0o755);
 
 console.log(`\n✔ oxagen standalone bundle written to ${outfile}`);
 console.log("  Run it with:  node " + outfile + " --version");
+
+/**
+ * The single-binary bundle for the desktop app's sidecar and the package
+ * managers: CommonJS (Node SEA requires it) with `import.meta.url` mapped to
+ * a `__filename`-based URL. `tools/sea/compile.mjs` embeds it into `node`.
+ */
+const seaOut = resolve(cliRoot, "dist-standalone/sea/oxagen.cjs");
+await build({
+  entryPoints: [entry],
+  outfile: seaOut,
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  banner: {
+    js: 'const __importMetaUrl = require("node:url").pathToFileURL(__filename).href;',
+  },
+  define: { "import.meta.url": "__importMetaUrl" },
+  plugins: [tsExtensionResolver],
+  loader: { ".node": "copy" },
+  logLevel: "info",
+  metafile: false,
+  legalComments: "none",
+});
+const seaLines = readFileSync(seaOut, "utf8").split("\n");
+while (seaLines.length && seaLines[0].startsWith("#!")) seaLines.shift();
+writeFileSync(seaOut, seaLines.join("\n"));
+console.log(`✔ oxagen single-binary bundle written to ${seaOut}`);

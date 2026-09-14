@@ -3,6 +3,7 @@
  * event, bundle version and age, last ingest, spool depth, unobserved
  * sessions since boot (spec section 5.1).
  */
+import { codexHookPresence } from "../host/codex-writer";
 import { readHostFile } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
 import { Wal } from "../host/wal";
@@ -27,7 +28,13 @@ export interface StatusReport {
     revoked_at: string | null;
     port: number;
     claude_version: string | null;
+    codex_version: string | null;
     wrapper_version: string;
+    /** The slugs the desktop app shows and reassigns against. */
+    org_slug: string;
+    workspace_slug: string;
+    harnesses: string[];
+    platform: string;
   };
   bundle?: {
     version: number;
@@ -44,6 +51,8 @@ export interface StatusReport {
   };
   daemon?: Record<string, unknown> | null;
   hooks?: ReturnType<typeof tachoHookPresence>;
+  /** Present when the host enrolled Codex. */
+  codexHooks?: ReturnType<typeof codexHookPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
 }
 
@@ -67,6 +76,9 @@ export async function status(
       | Record<string, unknown>
       | undefined) ?? null;
   const hooks = tachoHookPresence(deps.readSettings(), host.host_enrollment_id);
+  const codexHooks = host.harnesses.includes("codex")
+    ? codexHookPresence(deps.readCodexHooks(), host.host_enrollment_id)
+    : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
   const report: StatusReport = {
     enrolled: true,
@@ -83,7 +95,12 @@ export async function status(
       revoked_at: host.revoked_at,
       port: host.port,
       claude_version: host.claude_version,
+      codex_version: host.codex_version ?? null,
       wrapper_version: host.wrapper_version,
+      org_slug: host.org_slug,
+      workspace_slug: host.workspace_slug,
+      harnesses: host.harnesses,
+      platform: host.platform,
     },
     bundle: {
       version: host.bundle.version,
@@ -98,6 +115,7 @@ export async function status(
     service: { kind: deps.serviceManager.kind, ...service },
     daemon,
     hooks,
+    ...(codexHooks !== undefined ? { codexHooks } : {}),
     wal: {
       sessions: walStats.sessions,
       unshipped: walStats.unshipped,
@@ -147,6 +165,13 @@ export async function status(
   );
   if (hooks.missing.length > 0)
     deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  if (codexHooks !== undefined) {
+    deps.out(
+      `Codex       ${codexHooks.complete ? "complete" : "INCOMPLETE"}: ${codexHooks.present.length} present, ${codexHooks.missing.length} missing`,
+    );
+    if (codexHooks.missing.length > 0)
+      deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
+  }
   deps.out(
     `WAL         ${walStats.sessions} session files, ${walStats.unshipped} events unshipped${walStats.oldestUnshippedAt !== undefined ? ` (oldest ${walStats.oldestUnshippedAt})` : ""}`,
   );

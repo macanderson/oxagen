@@ -1,0 +1,293 @@
+/*
+ * The desktop app's stylesheet, on the house tokens (@oxagen/ui). Dark-first
+ * on ink; paper when the OS asks for light. Gold is identity (the x in the
+ * wordmark, the eyebrows) and at most one action per screen; every state is
+ * a glyph or a neutral fill, never a hue.
+ */
+@import "@oxagen/ui/styles/fonts/space-grotesk.css";
+@import "@oxagen/ui/styles/house-tokens.css";
+
+:root {
+  color-scheme: dark light;
+  --bg: var(--ox-ink);
+  --panel: var(--ox-panel);
+  --hl: var(--ox-hl);
+  --border: var(--ox-border);
+  --rule: var(--ox-rule);
+  --text: var(--ox-text);
+  --body: var(--ox-text-body);
+  --muted: var(--ox-muted);
+  --dim: var(--ox-dim);
+  --gold: var(--ox-gold);
+  --gold-hover: var(--ox-gold-bright);
+  --gold-text: var(--ox-gold);
+  --danger: #c9584a;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: var(--ox-paper);
+    --panel: var(--ox-paper-panel);
+    --hl: #ece6d9;
+    --border: var(--ox-paper-border);
+    --rule: var(--ox-paper-rule);
+    --text: var(--ox-text-ink);
+    --body: var(--ox-text-ink-body);
+    --muted: var(--ox-muted-ink);
+    --dim: var(--ox-dim-ink);
+    --gold-hover: var(--ox-gold-deep);
+    --gold-text: var(--ox-gold-deep);
+    --danger: #a3402f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--body);
+  font-family: var(--ox-font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  user-select: text;
+  cursor: text;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wordmark {
+  font-weight: var(--ox-weight-logo);
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wordmark .x {
+  color: var(--gold);
+}
+
+.masthead .spacer {
+  flex: 1;
+}
+
+.masthead .version {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  vertical-align: -1px;
+  margin-right: 8px;
+}
+
+.dot.on {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.dot.half {
+  background: linear-gradient(90deg, var(--text) 50%, transparent 50%);
+  border-color: var(--text);
+}
+
+main {
+  padding: 14px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: var(--ox-weight-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+  margin: 0 0 8px;
+}
+
+.headline {
+  font-weight: var(--ox-weight-heading);
+  font-size: 16px;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.sub {
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 16px;
+  row-gap: 5px;
+  margin: 6px 0 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button,
+select {
+  font: inherit;
+  font-weight: var(--ox-weight-ui);
+  border-radius: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--rule);
+  background: var(--hl);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ox-ink);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--gold-hover);
+  border-color: var(--gold-hover);
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: transparent;
+}
+
+button.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding-inline: 6px;
+}
+
+select {
+  padding-right: 28px;
+  min-width: 180px;
+}
+
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--body);
+}
+
+.pill {
+  display: inline-block;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.pill.strong {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.log {
+  margin-top: 10px;
+  max-height: 200px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  color: var(--body);
+}
+
+.log .err {
+  color: var(--danger);
+}
+
+.notice {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  color: var(--body);
+}
+
+.notice.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+a {
+  color: var(--gold-text);
+}

@@ -228,18 +228,16 @@ export function pillarChips(pillars, slugs) {
 }
 
 /**
- * An image with a light and a dark rendering: the dark one is the <img>
- * (the site's declared scheme) and the light one is offered to a viewer who
- * prefers light. When both are the same file there is nothing to choose.
- * @param {{ dark: string, light: string }} image
+ * A generated image. There is one rendering, on ink: the site is ink, and an
+ * ink image reads on a paper ground where a paper image on paper would not,
+ * so nothing is offered to a viewer who prefers light.
+ * @param {string} src
  * @param {{ alt: string, width: number, height: number, lazy?: boolean, priority?: boolean }} o
  */
-export function picture(image, o) {
+export function picture(src, o) {
   const loading = o.lazy ? ' loading="lazy"' : "";
   const priority = o.priority ? ' fetchpriority="high"' : "";
-  const img = `<img src="${esc(image.dark)}" alt="${esc(o.alt)}" width="${o.width}" height="${o.height}"${loading} decoding="async"${priority}>`;
-  if (image.light === image.dark) return img;
-  return `<picture><source srcset="${esc(image.light)}" media="(prefers-color-scheme: light)">${img}</picture>`;
+  return `<img src="${esc(src)}" alt="${esc(o.alt)}" width="${o.width}" height="${o.height}"${loading} decoding="async"${priority}>`;
 }
 
 /**
@@ -343,7 +341,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     title: `${pillar.name} — ${BLOG_TITLE}`,
     description: pillar.description,
     path: urls.pillar(pillar.slug),
-    image: pillar.images.og.dark,
+    image: pillar.images.og,
     imageAlt: pillar.name,
     body,
     wordmark,
@@ -404,7 +402,7 @@ ${html}
     title: `${post.title} — ${BLOG_TITLE}`,
     description: post.description,
     path: urls.post(post.slug),
-    image: post.images.og.dark,
+    image: post.images.og,
     imageAlt: post.title,
     type: "article",
     body,
@@ -425,7 +423,7 @@ ${html}
         url: SITE,
         logo: `${SITE}/assets/brand/oxagen-wordmark.svg`,
       },
-      image: SITE + post.images.og.dark,
+      image: SITE + post.images.og,
       url: SITE + urls.post(post.slug),
       mainEntityOfPage: SITE + urls.post(post.slug),
       keywords: [
