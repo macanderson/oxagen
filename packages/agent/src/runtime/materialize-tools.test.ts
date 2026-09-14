@@ -264,6 +264,8 @@ vi.mock("@oxagen/iam", () => ({
 }));
 
 import { materializeTools, type MaterializeOptions } from "./materialize-tools";
+import { decideCapabilityForBelt } from "./toolbelt";
+import type { RegistryCapability } from "../registry-loader";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import {
   createAgentRunResolution,
@@ -1206,6 +1208,13 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
   beforeEach(() => {
     dbMocks.rowsByTable.clear();
     vi.mocked(resolveAgentRunCapability).mockClear();
+    // The plugin-entitlement suite above leaves its last claim and
+    // entitlement set on the mocks; both sides of the parity test below read
+    // the same two seams, so they are pinned to the builtin baseline here.
+    vi.mocked(pluginForContract).mockReturnValue(undefined);
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
   });
 
   it("Agent Observer: deny-resolved capabilities are never materialized — the model sees no mutation tools", async () => {
@@ -1308,8 +1317,6 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
   it.each(PARITY)(
     "lists exactly the tools the shared belt decision keeps: %s",
     async (_name, scenario) => {
-      const { decideCapabilityForBelt } = await import("./toolbelt");
-      const { getSurfaces, listCapabilities } = await import("@oxagen/oxagen");
       const resolution =
         scenario.agentRun === "observer"
           ? createAgentRunResolution(observerSnapshot())
@@ -1332,22 +1339,27 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
         orgId: CTX.orgId,
         workspaceId: CTX.workspaceId,
       };
-      const decided = listCapabilities().map((cap) => ({
-        cap,
-        decision: decideCapabilityForBelt(cap, {
-          surfaces: getSurfaces(cap),
-          excluded: scenario.opts.excludeCapabilities,
-          allowlist: scenario.opts.allowlist,
-          riskCeiling: scenario.opts.riskCeiling,
-          agentRun,
-          resolution: resolution ?? null,
-          scope,
-          now: new Date(),
-          clientIp: null,
-          emergencyDenies: [],
-          entitledPluginIds: new Set<string>(),
+      // The file's own fixture and a static import of the decision: a
+      // `vi.resetModules()` + `vi.doMock` in an earlier suite must not swap
+      // the registry under one side of the comparison.
+      const decided = (FIXTURE as unknown as RegistryCapability[]).map(
+        (cap) => ({
+          cap,
+          decision: decideCapabilityForBelt(cap, {
+            surfaces: cap.surfaces ?? ["api", "mcp"],
+            excluded: scenario.opts.excludeCapabilities,
+            allowlist: scenario.opts.allowlist,
+            riskCeiling: scenario.opts.riskCeiling,
+            agentRun,
+            resolution: resolution ?? null,
+            scope,
+            now: new Date(),
+            clientIp: null,
+            emergencyDenies: [],
+            entitledPluginIds: new Set<string>(),
+          }),
         }),
-      }));
+      );
       const kept = decided
         .filter((d) => d.decision.outcome !== "deny")
         .map((d) => d.cap.name)

@@ -348,7 +348,11 @@ export async function seedSession(
   });
 }
 
-/** A v2 ledger run of the agent row: the typed identity set the CHECK requires. */
+/**
+ * A v2 ledger run of the agent row: the typed identity set the CHECK requires,
+ * as a `repo_edit` run so the row satisfies the constraint before and after
+ * the general-run relaxation (20260914190000_agent_runs_general_run_identity).
+ */
 export async function seedLedgerRun(
   tenant: SeededTenant,
   agent: SeededAgent,
@@ -365,8 +369,15 @@ export async function seedLedgerRun(
       startedAt,
       createdAt: startedAt,
       specVersion: 2,
-      runKind: "general",
+      runKind: "repo_edit",
       specDigest: digest,
+      repositoryBindingId: crypto.randomUUID(),
+      repositoryProvider: "github",
+      providerRepositoryId: "1",
+      repositoryConnectionId: crypto.randomUUID(),
+      configuredDefaultRef: "main",
+      baseCommitSha: "0".repeat(40),
+      baseTreeSha: "0".repeat(40),
       initiatingPrincipalId: agent.principalId ?? crypto.randomUUID(),
       agentPrincipalId: agent.principalId ?? crypto.randomUUID(),
       agentId: agent.id,
