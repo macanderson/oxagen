@@ -1317,6 +1317,16 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "list_invoices",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_mcp_consents",
       "reads": [],
@@ -2567,7 +2577,7 @@
       "writes": []
     }
   ],
-  "contentHash": "275f82ca96bb8b2d37cdfa7f930c6690478730934c1ec23bb1afb49fe728d9ac",
+  "contentHash": "64edbad4d633c5f6daf080b054b242d690afb577ac9e983d905d94a467bd1900",
   "domains": [
     {
       "name": "agent",
