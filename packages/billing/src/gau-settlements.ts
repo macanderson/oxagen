@@ -11,7 +11,7 @@
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
 import type { GauTerms } from "./pricing";
-import { GAU_REMAINING_SQL, type GauBucketRow } from "./gau-bucket";
+import { gauRemainingSql, type GauBucketRow } from "./gau-bucket";
 
 export type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
 
@@ -55,7 +55,7 @@ export async function claimAutoTopup(
       and(
         eq(schema.gauBuckets.id, bucket.id),
         isNull(schema.gauBuckets.openTopupSettlementId),
-        lte(GAU_REMAINING_SQL, 0),
+        lte(gauRemainingSql(), 0),
       ),
     )
     .returning({ topupSeq: schema.gauBuckets.topupSeq });

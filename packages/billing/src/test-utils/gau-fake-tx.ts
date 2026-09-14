@@ -11,12 +11,12 @@
  * Conditions are the plain objects the test's `drizzle-orm` mock builds
  * (`test-utils/gau-conditions.ts`); a column is matched by identity against
  * the real schema, and the one SQL expression a WHERE carries —
- * `GAU_REMAINING_SQL` — is evaluated by its documented meaning.
+ * `gauRemainingSql()` — is evaluated by its documented meaning.
  */
 
 import { getTableColumns, is, StringChunk, type SQL } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
-import { GAU_REMAINING_SQL, remainingGau } from "../gau-bucket";
+import { gauRemainingSql, remainingGau } from "../gau-bucket";
 import type { Cond } from "./gau-conditions";
 
 type Row = Record<string, unknown>;
@@ -62,7 +62,7 @@ function tableName(table: unknown): "buckets" | "settlements" {
 }
 
 function valueOf(row: Row, col: unknown, keys: Map<unknown, string>): unknown {
-  if (col === GAU_REMAINING_SQL) {
+  if (col === gauRemainingSql()) {
     return remainingGau(row as unknown as Parameters<typeof remainingGau>[0]);
   }
   const key = keys.get(col);

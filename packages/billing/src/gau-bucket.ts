@@ -15,7 +15,7 @@
  * total. The stored figure is never clamped.
  */
 
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql, type SQL } from "drizzle-orm";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { readOrgBillingSettings } from "./billing-settings";
 import {
@@ -136,8 +136,29 @@ export function carriedFrom(prev: GauCounts | null): number {
 /**
  * The remaining balance as SQL, for a statement that must re-check it under
  * the row lock (the auto top-up claim, gau-settlements.ts).
+ *
+ * Built on the first call rather than at module scope. The expression reads
+ * `schema.gauBuckets`, and reading it while this module is being evaluated
+ * makes the import itself throw wherever `@oxagen/database` is mocked without
+ * that table — which is every test in the tree that stubs the schema with the
+ * handful of tables it uses, 300-odd of them. One such file,
+ * `packages/inngest-functions/src/functions/schema.reconcile.handler.test.ts`,
+ * reaches this module transitively through `action-metering.ts` and failed to
+ * collect at all: `TypeError: Cannot read properties of undefined (reading
+ * 'includedGau')`, a suite that never ran rather than a test that failed.
+ * Every other reference to the schema in this package is inside a function,
+ * so nothing else in the import graph pays that cost.
+ *
+ * Memoized, so callers that match the expression by identity
+ * (`test-utils/gau-fake-tx.ts`) still see exactly one instance per module
+ * load, as the former `const` gave them.
  */
-export const GAU_REMAINING_SQL = sql<number>`${schema.gauBuckets.includedGau} + ${schema.gauBuckets.purchasedGau} + ${schema.gauBuckets.carriedGau} - ${schema.gauBuckets.usedGau}`;
+let gauRemainingSqlExpr: SQL<number> | undefined;
+
+export function gauRemainingSql(): SQL<number> {
+  gauRemainingSqlExpr ??= sql<number>`${schema.gauBuckets.includedGau} + ${schema.gauBuckets.purchasedGau} + ${schema.gauBuckets.carriedGau} - ${schema.gauBuckets.usedGau}`;
+  return gauRemainingSqlExpr;
+}
 
 /** The latest bucket that ended before `periodStart`, or null. */
 async function previousBucket(
