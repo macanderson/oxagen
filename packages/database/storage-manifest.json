@@ -78,6 +78,13 @@
       "writes": []
     },
     {
+      "domain": "auth",
+      "name": "authorize_cli",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
@@ -2560,7 +2567,7 @@
       "writes": []
     }
   ],
-  "contentHash": "db34c290ecb4a8f8e5cead4ad8fe1fe6fe26bbf9560a250e20b5905ad54a6c82",
+  "contentHash": "cc7a308639a89eaafa885e3d17717fbf6598a3bfaed209166f05d4be262b6ef1",
   "domains": [
     {
       "name": "agent",
