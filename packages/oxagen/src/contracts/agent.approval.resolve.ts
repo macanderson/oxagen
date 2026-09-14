@@ -12,17 +12,21 @@ import { registerCapability } from "../registry";
  * inside tenant scope. Anything else is refused at the edge instead of reaching
  * Postgres as an invalid uuid literal.
  */
-export const APPROVAL_PUBLIC_ID_PATTERN = /^apr_[0-9a-z]+$/i;
+const PUBLIC_ID = /^apr_[0-9a-z]+$/i;
+const ROW_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// The schema's accept-set is the union of the two patterns `isApprovalPublicId`
+// chooses between, so a value the contract admits always lands in one branch.
 export const approvalIdSchema = z
   .string()
-  .regex(
-    /^(?:apr_[0-9a-z]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  .refine(
+    (value) => PUBLIC_ID.test(value) || ROW_UUID.test(value),
     "approvalId must be a public id (apr_…) or a uuid",
   );
 
 export function isApprovalPublicId(value: string): boolean {
-  return APPROVAL_PUBLIC_ID_PATTERN.test(value);
+  return PUBLIC_ID.test(value);
 }
 
 // `resolve_approval` is the rev1 governed action (apps/app/ARCHITECTURE.md
