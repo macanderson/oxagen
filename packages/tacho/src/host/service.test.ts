@@ -229,6 +229,19 @@ describe("service managers", () => {
       launcherPath: launcher,
     });
     expect(() => failing.install(SPEC)).toThrow(/Create failed.*Access/);
+    // A task that registers but will not start is reported, not swallowed:
+    // the operator sees why the collector is not up.
+    const stuck = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fakeExec({
+        "schtasks /Run": { status: 1, stdout: "", stderr: "ERROR: Disabled" },
+      }).exec,
+      launcherPath: launcher,
+    });
+    expect(() => stuck.install(SPEC)).toThrow(
+      /Run failed \(1\): ERROR: Disabled/,
+    );
     const absent = serviceManagerFor({
       platform: "win32",
       home,

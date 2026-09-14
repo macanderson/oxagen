@@ -42,9 +42,30 @@ describe("paths", () => {
     const defaults = tachoPaths({}, "/home/x");
     expect(defaults.root).toBe("/home/x/.config/oxagen/tacho");
     expect(defaults.claudeSettings).toBe("/home/x/.claude/settings.json");
+    expect(defaults.codexHooks).toBe("/home/x/.codex/hooks.json");
+    expect(defaults.daemonLauncher).toBe(
+      "/home/x/.config/oxagen/tacho/tachod.cmd",
+    );
     expect(oxagenConfigPath("/home/x")).toBe(
       "/home/x/.config/oxagen/config.json",
     );
+  });
+
+  it("honours CODEX_HOME for the Codex hooks file, independent of CLAUDE_CONFIG_DIR", () => {
+    const paths = tachoPaths(
+      { CODEX_HOME: "/codex-elsewhere", CLAUDE_CONFIG_DIR: "/c" },
+      "/home/x",
+    );
+    expect(paths.codexHooks).toBe("/codex-elsewhere/hooks.json");
+    expect(paths.claudeSettings).toBe("/c/settings.json");
+    // The Windows launcher lives with the rest of the host state so
+    // `unenroll` removes it with the directory.
+    const win = tachoPaths(
+      { TACHO_HOME: "C:\\Users\\dev\\.config\\oxagen\\tacho" },
+      "C:\\Users\\dev",
+    );
+    expect(win.daemonLauncher.startsWith(win.root)).toBe(true);
+    expect(win.daemonLauncher.endsWith("tachod.cmd")).toBe(true);
   });
 });
 
