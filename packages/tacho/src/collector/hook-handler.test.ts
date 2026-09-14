@@ -16,7 +16,7 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import { toProtocolTimestamp } from "../timestamp";
-import type { PolicyBundle } from "../wire";
+import type { CommandAcknowledgement, PolicyBundle } from "../wire";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
 import { SessionRegistry } from "./registry";
 
@@ -80,15 +80,14 @@ function harness(
     controlReachable: true,
     ...viewOverrides,
   };
-  const delivered: Array<{ id: string; seq: number }> = [];
+  const acks: CommandAcknowledgement[] = [];
   const deps = {
     registry,
     policy: () => view,
-    onMessageDelivered: (id: string, _uuid: string, seq: number) =>
-      delivered.push({ id, seq }),
+    acknowledge: (ack: CommandAcknowledgement) => acks.push(ack),
     now,
   };
-  return { registry, view, deps, delivered, now };
+  return { registry, view, deps, acks, now };
 }
 
 function chainsOf(events: TachoEvent[]): Map<string, TachoEvent[]> {
@@ -212,7 +211,7 @@ describe("handleHookEvent over the recorded session", () => {
   });
 
   it("blocks prompts and tools for a paused session and delivers operator messages", async () => {
-    const { deps, registry } = harness();
+    const { deps, registry, acks } = harness();
     const fixtures = loadFixtures();
     const start = fixtures[0] as Fixture;
     await handleHookEvent(start.stdin, start.env, deps);
@@ -252,6 +251,7 @@ describe("handleHookEvent over the recorded session", () => {
         requestedMode: null,
         deliveryMode: null,
         degradedReason: null,
+        expiresAt: null,
       },
       {
         id: "cmd_2",
@@ -260,6 +260,7 @@ describe("handleHookEvent over the recorded session", () => {
         requestedMode: "interrupt",
         deliveryMode: "next_step",
         degradedReason: "harness_tier",
+        expiresAt: "2027-01-01T00:00:00.000Z",
       },
     );
     const resumed = await handleHookEvent(prompt.stdin, prompt.env, deps);
@@ -299,12 +300,92 @@ describe("handleHookEvent over the recorded session", () => {
       (resumed.events[1]?.body as { policy_reason_code?: string })
         .policy_reason_code,
     ).toBe("steer_delivered");
+    // Each injected item is acknowledged `applied` with its own frame.
+    expect(acks).toEqual([
+      {
+        command_id: "cmd_1",
+        status: "applied",
+        session_uuid: record.recorder.sessionUuid,
+        applied_at_seq: resumed.events[0]?.seq,
+      },
+      {
+        command_id: "cmd_2",
+        status: "applied",
+        session_uuid: record.recorder.sessionUuid,
+        applied_at_seq: resumed.events[1]?.seq,
+      },
+    ]);
     const open = await handleHookEvent(
       { ...tool.stdin, hook_event_name: "PermissionRequest" },
       tool.env,
       deps,
     );
     expect(open.response).toEqual({});
+  });
+
+  it("drops a queued steer whose expiry passed while it waited: no injection, no frame, a failed ack", async () => {
+    // The sequence the delivery report must stay honest over: a steer is
+    // received while the session is paused, its expiry passes, the session
+    // resumes. The control plane reads the row `expired`; the boundary must
+    // not put the text in front of the model and chain a frame that says
+    // it did.
+    const { deps, registry, acks } = harness();
+    const fixtures = loadFixtures();
+    const start = fixtures[0] as Fixture;
+    await handleHookEvent(start.stdin, start.env, deps);
+    const record = registry.get(String(start.stdin["session_id"]));
+    if (record === undefined) throw new Error("no record");
+    record.control.messages.push(
+      {
+        id: "cmd_stale",
+        text: "Use the staging database.",
+        command: "steer",
+        requestedMode: "next_step",
+        deliveryMode: "next_step",
+        degradedReason: null,
+        expiresAt: "2026-09-10T09:00:00.000Z",
+      },
+      {
+        id: "cmd_live",
+        text: "Wrap up and stop.",
+        command: "message",
+        requestedMode: null,
+        deliveryMode: null,
+        degradedReason: null,
+        expiresAt: "2026-09-10T11:00:00.000Z",
+      },
+    );
+    const prompt = fixtures[2] as Fixture;
+    const outcome = await handleHookEvent(prompt.stdin, prompt.env, deps);
+    expect(outcome.response).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: "Wrap up and stop.",
+      },
+    });
+    const applied = outcome.events.filter(
+      (e) => e.kind === "oxagen:command_applied",
+    );
+    expect(applied.map((e) => e.attrs?.["command.id"])).toEqual(["cmd_live"]);
+    expect(acks).toEqual([
+      {
+        command_id: "cmd_stale",
+        status: "failed",
+        session_uuid: record.recorder.sessionUuid,
+        detail: "expired before a boundary",
+      },
+      {
+        command_id: "cmd_live",
+        status: "applied",
+        session_uuid: record.recorder.sessionUuid,
+        applied_at_seq: applied[0]?.seq,
+      },
+    ]);
+    expect(record.control.messages).toEqual([]);
+    expect(
+      verifyChain(record.recorder.sealedEvents, { expectGenesis: true })
+        .violations,
+    ).toEqual([]);
   });
 
   it("refuses a session on a suspended host and records why", async () => {

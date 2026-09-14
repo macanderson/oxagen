@@ -4,11 +4,7 @@ import {
   type ApprovalRequestRow,
   ApprovalMappingError,
   approvalStatus,
-  CommandDelivery,
-  type ControlCommandRow,
-  commandStatus,
   toApprovalCandidate,
-  toCommandDelivery,
   UNRECORDED_APPROVAL_PATHS,
 } from "./approvals";
 
@@ -39,41 +35,6 @@ function approvalRow(
     resolvedByUserId: null,
     note: null,
     expiresAt: minutes(3),
-    ...over,
-  };
-}
-
-/** A row as tacho.control_commands stores it (dispatch_tacho_command). */
-function commandRow(over: Partial<ControlCommandRow> = {}): ControlCommandRow {
-  return {
-    id: "0192d4a8-7c1e-7a00-8000-0000000cc001",
-    publicId: "tcm_4f8h2k6m0p3r7t1v5x9z2b",
-    createdAt: minutes(-1),
-    updatedAt: minutes(-1),
-    createdByUserId: "0192d4a8-7c1e-7a00-8000-0000000a5e01",
-    updatedByUserId: "0192d4a8-7c1e-7a00-8000-0000000a5e01",
-    orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
-    workspaceId: "0192d4a8-7c1e-7a00-8000-00000000c0de",
-    hostId: "0192d4a8-7c1e-7a00-8000-0000000b0571",
-    sessionId: null,
-    targetKind: "host",
-    targetId: "tch_0123456789abcdefghjkmn",
-    command: "pause",
-    payload: { reason: "budget" },
-    requestedMode: null,
-    deliveryMode: null,
-    degradedReason: null,
-    reason: "budget",
-    issuedByPrincipalId: null,
-    issuedByUserId: "0192d4a8-7c1e-7a00-8000-0000000a5e01",
-    issuedAt: minutes(-1),
-    expiresAt: minutes(59),
-    deliveredAt: null,
-    acknowledgedAt: null,
-    appliedAt: null,
-    appliedAtSeq: null,
-    outcome: "pending",
-    outcomeDetail: null,
     ...over,
   };
 }
@@ -208,112 +169,5 @@ describe("toApprovalCandidate", () => {
     expect(
       Promoted.safeParse(toApprovalCandidate(approvalRow(), ctx)).success,
     ).toBe(true);
-  });
-});
-
-describe("commandStatus (spec §7.4 vocabulary)", () => {
-  it("is queued while pending and unexpired, or pending with no expiry", () => {
-    expect(commandStatus(commandRow(), NOW)).toBe("queued");
-    expect(commandStatus(commandRow({ expiresAt: null }), NOW)).toBe("queued");
-  });
-
-  it("is expired when a pending command outlives its expiry", () => {
-    expect(commandStatus(commandRow({ expiresAt: minutes(-1) }), NOW)).toBe(
-      "expired",
-    );
-  });
-
-  it("is sent once delivered, and received only after the host acknowledges it", () => {
-    expect(
-      commandStatus(
-        commandRow({ outcome: "delivered", deliveredAt: minutes(-1) }),
-        NOW,
-      ),
-    ).toBe("sent");
-    expect(
-      commandStatus(
-        commandRow({ outcome: "delivered", acknowledgedAt: minutes(0) }),
-        NOW,
-      ),
-    ).toBe("received");
-  });
-
-  it.each(["applied", "expired", "failed"] as const)(
-    "reports a terminal %s outcome as it is, whatever the expiry",
-    (outcome) => {
-      expect(
-        commandStatus(commandRow({ outcome, expiresAt: minutes(-5) }), NOW),
-      ).toBe(outcome);
-    },
-  );
-
-  it("never reports acknowledged, draft or cancelled: tacho records none of them", () => {
-    const produced = new Set(
-      (
-        ["pending", "delivered", "applied", "expired", "failed"] as const
-      ).flatMap((outcome) =>
-        [null, minutes(0)].flatMap((acknowledgedAt) =>
-          [null, minutes(-1), minutes(1)].map((expiresAt) =>
-            commandStatus(
-              commandRow({ outcome, acknowledgedAt, expiresAt }),
-              NOW,
-            ),
-          ),
-        ),
-      ),
-    );
-    expect(produced.has("acknowledged")).toBe(false);
-    expect(produced.has("draft")).toBe(false);
-    expect(produced.has("cancelled")).toBe(false);
-  });
-
-  it("refuses an outcome outside the table's CHECK", () => {
-    expect(() => commandStatus(commandRow({ outcome: "lost" }), NOW)).toThrow(
-      ApprovalMappingError,
-    );
-  });
-});
-
-describe("toCommandDelivery", () => {
-  it("parses a real applied row through CommandDelivery", () => {
-    const row = commandRow({
-      outcome: "applied",
-      deliveredAt: minutes(-1),
-      acknowledgedAt: minutes(0),
-      appliedAt: minutes(0),
-      appliedAtSeq: 412,
-      outcomeDetail: "paused at next prompt",
-    });
-    expect(CommandDelivery.parse(toCommandDelivery(row, NOW))).toEqual({
-      id: "tcm_4f8h2k6m0p3r7t1v5x9z2b",
-      command: "pause",
-      status: "applied",
-      issuedAt: "2026-09-12T09:59:00.000Z",
-      expiresAt: "2026-09-12T10:59:00.000Z",
-      deliveredAt: "2026-09-12T09:59:00.000Z",
-      acknowledgedAt: "2026-09-12T10:00:00.000Z",
-      appliedAt: "2026-09-12T10:00:00.000Z",
-      appliedAtSeq: 412,
-      detail: "paused at next prompt",
-    });
-  });
-
-  it("keeps unrecorded instants null", () => {
-    const d = toCommandDelivery(commandRow({ expiresAt: null }), NOW);
-    expect(d).toMatchObject({
-      expiresAt: null,
-      deliveredAt: null,
-      acknowledgedAt: null,
-      appliedAt: null,
-      appliedAtSeq: null,
-      detail: null,
-    });
-    expect(CommandDelivery.safeParse(d).success).toBe(true);
-  });
-
-  it("refuses a command outside TACHO_COMMANDS", () => {
-    expect(() =>
-      toCommandDelivery(commandRow({ command: "steer" }), NOW),
-    ).toThrow(ApprovalMappingError);
   });
 });

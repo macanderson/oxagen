@@ -13,7 +13,12 @@ import {
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { DenyGeneration, PolicyBundle, TachoHarness } from "../wire";
+import type {
+  CommandAcknowledgement,
+  DenyGeneration,
+  PolicyBundle,
+  TachoHarness,
+} from "../wire";
 import {
   type Evaluation,
   evaluatePreToolUse,
@@ -34,12 +39,12 @@ export interface HookHandlerDeps {
   policy: () => PolicyView;
   /** Refresh the bundle synchronously for a stale-bundle `defer`; absent in `tacho-hook`. */
   refreshBundle?: () => Promise<void>;
-  /** Called when a queued operator message is delivered at a boundary. */
-  onMessageDelivered?: (
-    commandId: string,
-    sessionUuid: string,
-    seq: number,
-  ) => void;
+  /**
+   * Called with the acknowledgement for a queued operator message once a
+   * boundary settles it: `applied` with the frame that carries it, or
+   * `failed` for one whose deadline passed while it waited.
+   */
+  acknowledge?: (ack: CommandAcknowledgement) => void;
   now: () => number;
   match?: MatchContext;
 }
@@ -139,6 +144,12 @@ function operatorBlock(
  * requested and the achieved mode, the degradation, and `interrupted`, which
  * the hook adapter can never set. The event's own seq is the frame the
  * control plane records as `applied_at_seq`.
+ *
+ * An item whose deadline passed while it waited (a session paused past a
+ * steer's expiry, then resumed) is dropped here: no injection, no frame, and
+ * a `failed` acknowledgement. The control plane derives `expired` for that
+ * row from the clock (spec §7.4), and the chain must not hold a frame the
+ * report says never landed.
  */
 function drainMessages(
   record: SessionRecord,
@@ -146,7 +157,17 @@ function drainMessages(
   events: TachoEvent[],
 ): string[] {
   const texts: string[] = [];
+  const now = deps.now();
   for (const message of record.control.messages.splice(0)) {
+    if (message.expiresAt !== null && Date.parse(message.expiresAt) < now) {
+      deps.acknowledge?.({
+        command_id: message.id,
+        status: "failed",
+        session_uuid: record.recorder.sessionUuid,
+        detail: "expired before a boundary",
+      });
+      continue;
+    }
     texts.push(message.text);
     const event = record.recorder.sealCollectorEvent(
       "oxagen:command_applied",
@@ -174,11 +195,12 @@ function drainMessages(
       },
     );
     events.push(event);
-    deps.onMessageDelivered?.(
-      message.id,
-      record.recorder.sessionUuid,
-      event.seq,
-    );
+    deps.acknowledge?.({
+      command_id: message.id,
+      status: "applied",
+      session_uuid: record.recorder.sessionUuid,
+      applied_at_seq: event.seq,
+    });
   }
   return texts;
 }

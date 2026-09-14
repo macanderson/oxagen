@@ -4,10 +4,13 @@
 // receives the queued ones with the control envelope.
 //
 // An acknowledgement lands only on a row that has not reached a terminal
-// status: a row Oxagen already cancelled (superseded) or expired stays as it
-// is, and the report keeps what Oxagen recorded. `applied` writes the
-// timestamps a report reads (`acknowledged_at`, `applied_at`) and the frame
-// sequence (`applied_at_seq`) that proves it.
+// status: a row Oxagen already cancelled (superseded) or expired while it
+// was still `queued` stays as it is, and the report keeps what Oxagen
+// recorded. A row that left on the wire is the host's: the sweep never
+// touches it, so an acknowledgement that arrives after the clock passed
+// still lands (`expireCommands` in ./lib/tacho-host.ts). `applied` writes
+// the timestamps a report reads (`acknowledged_at`, `applied_at`) and the
+// frame sequence (`applied_at_seq`) that proves it.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { schema, withTenantDb } from "@oxagen/database";

@@ -2,7 +2,7 @@
 
 The idle-host control poll (`docs/specs/tacho/spec.md` section 7.4; Mission Control spec Appendix E "control channel; headless"): the collector acknowledges the commands it took and applied, in the §7.4 status vocabulary, and receives the queued ones together with the same control envelope every ingest carries. A host with active sessions never needs this; a host between sessions polls it at the bundle interval.
 
-Every poll first expires this host's commands whose expiry passed before they reached a terminal status, then drains the `queued` rows as `sent`, each carrying its `requested_mode`, `delivery_mode`, `degraded_reason` and the operator's `reason`, which the collector shows at the boundary a pause denies. An acknowledgement lands only on a row that is not terminal: a row Oxagen already cancelled (superseded) or expired keeps what Oxagen recorded.
+Every poll first expires this host's `queued` commands whose expiry passed before a poll drained them, then drains the remaining `queued` rows as `sent`, each carrying its `requested_mode`, `delivery_mode`, `degraded_reason` and the operator's `reason`, which the collector shows at the boundary a pause denies. A row that left on the wire is the host's: the sweep never touches it, the collector checks the deadline at receipt and again at the boundary that would inject a steer, and its acknowledgement lands even when it arrives after the clock passed. An acknowledgement lands only on a row that is not terminal: a row Oxagen already cancelled (superseded) or expired while `queued` keeps what Oxagen recorded.
 
 ## Mode
 

@@ -61,17 +61,11 @@ import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import {
   ApprovalContractMismatch,
   type ApprovalStore,
-  COMMAND_IDS_LIMIT,
   createLiveApprovals,
-  createLiveCommandDeliveries,
   dbApprovalStore,
   liveApprovals,
-  liveCommandDeliveries,
 } from "./approvals";
-import type {
-  ApprovalRequestRow,
-  ControlCommandRow,
-} from "./mappers/approvals";
+import type { ApprovalRequestRow } from "./mappers/approvals";
 
 const NOW = new Date("2026-09-12T10:00:00.000Z");
 const clock = () => NOW;
@@ -107,46 +101,12 @@ function approvalRow(
   };
 }
 
-function commandRow(over: Partial<ControlCommandRow> = {}): ControlCommandRow {
-  return {
-    id: "0192d4a8-7c1e-7a00-8000-0000000cc001",
-    publicId: "tcm_4f8h2k6m0p3r7t1v5x9z2b",
-    createdAt: new Date("2026-09-12T09:59:00.000Z"),
-    updatedAt: new Date("2026-09-12T09:59:00.000Z"),
-    createdByUserId: null,
-    updatedByUserId: null,
-    ...SCOPE,
-    hostId: "0192d4a8-7c1e-7a00-8000-0000000b0571",
-    sessionId: null,
-    targetKind: "host",
-    targetId: "tch_0123456789abcdefghjkmn",
-    command: "resume",
-    payload: {},
-    requestedMode: null,
-    deliveryMode: null,
-    degradedReason: null,
-    reason: null,
-    issuedByPrincipalId: null,
-    issuedByUserId: null,
-    issuedAt: new Date("2026-09-12T09:59:00.000Z"),
-    expiresAt: new Date("2026-09-12T10:59:00.000Z"),
-    deliveredAt: new Date("2026-09-12T09:59:30.000Z"),
-    acknowledgedAt: null,
-    appliedAt: null,
-    appliedAtSeq: null,
-    outcome: "delivered",
-    outcomeDetail: null,
-    ...over,
-  };
-}
-
-function fakeStore(
-  approvals: { workspaceSlug: string | null; rows: ApprovalRequestRow[] },
-  commands: ControlCommandRow[] = [],
-) {
+function fakeStore(approvals: {
+  workspaceSlug: string | null;
+  rows: ApprovalRequestRow[];
+}) {
   return {
     openApprovals: vi.fn(() => Promise.resolve(approvals)),
-    commands: vi.fn(() => Promise.resolve(commands)),
   } satisfies ApprovalStore;
 }
 
@@ -374,79 +334,6 @@ describe("liveApprovals.pending", () => {
   });
 });
 
-describe("liveCommandDeliveries", () => {
-  it("maps each command row to its delivery report", async () => {
-    const store = fakeStore({ workspaceSlug: null, rows: [] }, [commandRow()]);
-    const read = createLiveCommandDeliveries(store, clock);
-    await expect(read(SCOPE, ["tcm_4f8h2k6m0p3r7t1v5x9z2b"])).resolves.toEqual({
-      ok: true,
-      value: [
-        {
-          id: "tcm_4f8h2k6m0p3r7t1v5x9z2b",
-          command: "resume",
-          status: "sent",
-          issuedAt: "2026-09-12T09:59:00.000Z",
-          expiresAt: "2026-09-12T10:59:00.000Z",
-          deliveredAt: "2026-09-12T09:59:30.000Z",
-          acknowledgedAt: null,
-          appliedAt: null,
-          appliedAtSeq: null,
-          detail: null,
-        },
-      ],
-    });
-    expect(store.commands).toHaveBeenCalledWith(SCOPE, [
-      "tcm_4f8h2k6m0p3r7t1v5x9z2b",
-    ]);
-  });
-
-  it("answers no ids without reading the store", async () => {
-    const store = fakeStore({ workspaceSlug: null, rows: [] });
-    await expect(
-      createLiveCommandDeliveries(store, clock)(SCOPE, []),
-    ).resolves.toEqual({ ok: true, value: [] });
-    expect(store.commands).not.toHaveBeenCalled();
-  });
-
-  it("refuses ids that are not public ids, or too many of them", async () => {
-    const store = fakeStore({ workspaceSlug: null, rows: [] });
-    const read = createLiveCommandDeliveries(store, clock);
-    const invalid = {
-      ok: false,
-      reason: "error",
-      code: "invalid_command_ids",
-      status: 400,
-    };
-    await expect(read(SCOPE, ["'; drop table"])).resolves.toEqual(invalid);
-    await expect(
-      read(
-        SCOPE,
-        Array.from(
-          { length: COMMAND_IDS_LIMIT + 1 },
-          (_, i) => `tcm_${String(i)}`,
-        ),
-      ),
-    ).resolves.toEqual(invalid);
-    expect(store.commands).not.toHaveBeenCalled();
-  });
-
-  it("refuses an organization-only scope", async () => {
-    const store = fakeStore({ workspaceSlug: null, rows: [] });
-    await expect(
-      createLiveCommandDeliveries(store, clock)(ORG_SCOPE, ["tcm_a"]),
-    ).resolves.toMatchObject({ code: "workspace_required" });
-    await expect(
-      liveCommandDeliveries(ORG_SCOPE, ["tcm_a"]),
-    ).resolves.toMatchObject({ code: "workspace_required" });
-    queue.push([]);
-    await expect(liveCommandDeliveries(SCOPE, ["tcm_a"])).resolves.toEqual({
-      ok: true,
-      value: [],
-    });
-    expect(store.commands).not.toHaveBeenCalled();
-  });
-});
-
 describe("dbApprovalStore", () => {
   it("reads approvals, then the workspace slug, inside the viewer's tenant scope", async () => {
     const row = approvalRow();
@@ -476,16 +363,6 @@ describe("dbApprovalStore", () => {
     await expect(
       dbApprovalStore.openApprovals(SCOPE, NOW),
     ).resolves.toMatchObject({ workspaceSlug: null });
-  });
-
-  it("reads control commands inside the viewer's tenant scope", async () => {
-    const row = commandRow();
-    queue.push([row]);
-    await expect(
-      dbApprovalStore.commands(SCOPE, [row.publicId]),
-    ).resolves.toEqual([row]);
-    expect(reads.map((r) => r.table)).toEqual([schema.tachoControlCommands]);
-    expect(reads[0]?.scope).toMatchObject(SCOPE);
   });
 
   it("refuses to query outside a valid tenant scope", () => {

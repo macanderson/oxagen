@@ -2,7 +2,7 @@
 
 The delivery report for one run (Mission Control spec §7.4, §7.6): every command addressed to it, newest first, with its status in the closed nine-word vocabulary, the mode that was requested and the mode that was achieved, and `appliedAtSeq`, the frame that proves an `applied`. `applied` is the only success status; interfaces group `cancelled`, `expired` and `failed` as undelivered.
 
-The status shown is the recorded one, with one derivation: a command that has not reached a terminal status and whose expiry has passed reads `expired`, which is what the host's next poll writes and what a host that stopped polling never will.
+The status shown is the recorded one, with one derivation: a command that has not reached a terminal status and whose expiry has passed reads `expired`. For a `queued` command that is what the host's next poll writes; for a command the host holds, the derivation stands until the host reports what the boundary did — `applied` with the frame, or `failed` with `expired before a boundary` — so the status shown never contradicts the run's chain.
 
 ## Mode
 

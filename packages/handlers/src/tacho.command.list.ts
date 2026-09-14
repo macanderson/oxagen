@@ -1,8 +1,11 @@
 // `list_commands`: the delivery report for one run (Mission Control spec
 // §7.4, §7.6). Every row addressed to the run, newest first, in the recorded
 // status with one derivation: a row that is not terminal and whose expiry
-// has passed reads `expired`, which is what the host's next poll would write
-// and what a host that stopped polling never will.
+// has passed reads `expired`. The sweep writes it for a `queued` row on the
+// host's next poll; for a row the host holds, this derivation is the only
+// place it appears, and it stands until the host reports what the boundary
+// did (`applied` with the frame, or `failed` because the deadline passed
+// first), so the status shown never contradicts the chain.
 //
 // The run is fenced the way `get_run` fences it: a `tse_…` id resolves only
 // in the caller's workspace, an `arun_…` id through the ledger's RLS and the

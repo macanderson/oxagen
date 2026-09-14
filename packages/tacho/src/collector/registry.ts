@@ -33,7 +33,9 @@ export function contextForHarness(
 /**
  * Prompt content an operator queued for the next boundary: a `message`, or a
  * `steer` with the mode the control plane resolved (spec section 7.3; both
- * modes are recorded on the frame that carries it).
+ * modes are recorded on the frame that carries it). `expiresAt` is the row's
+ * deadline; the boundary that would inject the item checks it first, so an
+ * item the control plane reads as `expired` is never injected.
  */
 export interface QueuedPrompt {
   id: string;
@@ -42,6 +44,7 @@ export interface QueuedPrompt {
   requestedMode: TachoDeliveryMode | null;
   deliveryMode: TachoDeliveryMode | null;
   degradedReason: string | null;
+  expiresAt: string | null;
 }
 
 export interface SessionControl {
@@ -260,12 +263,13 @@ export class SessionRegistry {
           paused: persisted.control.paused,
           cancelled: persisted.control.cancelled,
           // A state file written before steer carried `{ id, text }` only:
-          // a queued message with no mode recorded.
+          // a queued message with no mode and no deadline recorded.
           messages: persisted.control.messages.map((m) => ({
             command: "message",
             requestedMode: null,
             deliveryMode: null,
             degradedReason: null,
+            expiresAt: null,
             ...m,
           })),
         },

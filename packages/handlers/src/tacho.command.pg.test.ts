@@ -1,9 +1,9 @@
 // The run-control path against a real Postgres: dispatch_command writes one
 // row per recipient with the resolved mode, supersedes the earlier queued
-// steer and no other row, fetch_commands expires what the clock passed and
-// drains queued rows as sent with their modes, an acknowledgement lands on an
-// open row and never on a terminal one, and list_commands reads it all back
-// with `expired` derived. Runs wherever DATABASE_URL points at a migrated
+// steer and no other row, fetch_commands expires the queued rows the clock
+// passed and drains the rest as sent with their modes, an acknowledgement
+// lands on an open row (a sent one past its expiry included) and never on a
+// terminal one, and list_commands reads it all back with `expired` derived. Runs wherever DATABASE_URL points at a migrated
 // database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit`; a local run without one is skipped, not red.
 // Every row it writes is removed in afterAll.
@@ -326,8 +326,19 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       appliedAtSeq: null,
     });
 
-    // 5. Expiry: the sent pause is backdated past its expiry; the next poll
-    //    marks it expired, and the report reads the same before the poll.
+    // 5. Expiry follows ownership. A resume is queued and every row of the
+    //    run is backdated past its expiry. Before any poll the report derives
+    //    `expired` for both open rows. A poll with nothing to report (the
+    //    ingest that lands between the host's receipt and its next poll)
+    //    sweeps the queued resume (Oxagen's row, never drained) and leaves
+    //    the sent pause alone (the host's row): the host applied it at
+    //    receipt, acknowledges it on the poll after, past the clock, and the
+    //    acknowledgement lands.
+    const third = await dispatch({
+      target: { kind: "run", id: publicIds.live },
+      command: "resume",
+    });
+    const resumeId = third.commandIds[0] ?? "";
     await withSystemDb((tx) =>
       tx
         .update(schema.tachoControlCommands)
@@ -335,28 +346,59 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         .where(eq(schema.tachoControlCommands.targetId, publicIds.live)),
     );
     const before = await report(publicIds.live);
-    const pauseBefore = before.commands.find((c) => c.command === "pause");
-    expect(pauseBefore?.status).toBe("expired");
-    expect(before.commands.find((c) => c.id === steerId)?.status).toBe(
-      "applied",
+    const statusBefore = new Map(before.commands.map((c) => [c.id, c.status]));
+    expect(statusBefore.get(resumeId)).toBe("expired");
+    expect(before.commands.find((c) => c.command === "pause")?.status).toBe(
+      "expired",
     );
-    await fetch({
+    expect(statusBefore.get(steerId)).toBe("applied");
+    const pauseId =
+      (await rowsFor(publicIds.live)).find((r) => r.command === "pause")
+        ?.publicId ?? "";
+    const swept = await fetch({
       schema: "tacho.commands.v2",
       host_enrollment_id: hostPublicId,
     });
-    const pauseRow = (await rowsFor(publicIds.live)).find(
-      (r) => r.command === "pause",
+    expect(swept.control.commands).toEqual([]);
+    const afterSweep = new Map(
+      (await rowsFor(publicIds.live)).map((r) => [r.publicId, r]),
     );
-    expect(pauseRow?.outcome).toBe("expired");
+    expect(afterSweep.get(resumeId)).toMatchObject({
+      outcome: "expired",
+      deliveredAt: null,
+    });
+    expect(afterSweep.get(pauseId)).toMatchObject({ outcome: "sent" });
+    const late = await fetch({
+      schema: "tacho.commands.v2",
+      host_enrollment_id: hostPublicId,
+      acknowledgements: [
+        { command_id: pauseId, status: "applied", applied_at_seq: 21 },
+      ],
+    });
+    expect(late.acknowledged).toBe(1);
+    expect(late.control.commands).toEqual([]);
+    const afterAckLate = new Map(
+      (await rowsFor(publicIds.live)).map((r) => [r.publicId, r]),
+    );
+    expect(afterAckLate.get(pauseId)).toMatchObject({
+      outcome: "applied",
+      appliedAtSeq: 21,
+    });
+    expect(afterAckLate.get(resumeId)).toMatchObject({ outcome: "expired" });
 
     // 6. The report, newest first, with the achieved mode and the frame.
     const final = await report(publicIds.live);
     expect(final.commands.map((c) => c.command)).toEqual([
+      "resume",
       "steer",
       "pause",
       "steer",
     ]);
     expect(final.commands[0]).toMatchObject({
+      id: resumeId,
+      status: "expired",
+    });
+    expect(final.commands[1]).toMatchObject({
       id: steerId,
       status: "applied",
       requestedMode: "next_step",
@@ -364,6 +406,11 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       appliedAtSeq: 17,
     });
     expect(final.commands[2]).toMatchObject({
+      id: pauseId,
+      status: "applied",
+      appliedAtSeq: 21,
+    });
+    expect(final.commands[3]).toMatchObject({
       id: cancelledId,
       status: "cancelled",
       requestedMode: "interrupt",

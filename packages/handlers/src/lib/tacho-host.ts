@@ -14,18 +14,7 @@ import {
 } from "@oxagen/oxagen/tacho/schemas";
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -196,10 +185,18 @@ export function signBundle(
 }
 
 /**
- * Expire this host's commands whose expiry passed before they reached a
- * terminal status (spec §7.4 `expired`: "the expiry passed with no boundary
- * reached"). Runs on every control poll, so a report is right even when the
- * host never acknowledged.
+ * Expire this host's `queued` commands whose expiry passed before a poll
+ * drained them (spec §7.4 `expired`: "the expiry passed with no boundary
+ * reached"). Runs on every control poll.
+ *
+ * Only `queued` rows are swept: a row is Oxagen's until it leaves on the
+ * wire, and the host's after. The host checks the deadline at receipt and
+ * again at the boundary that would inject a steer, so every acknowledgement
+ * it sends is true of the chain, and it may arrive after the clock passed
+ * (a pause applied at receipt is acknowledged on the next poll; an ingest in
+ * between must not turn that row `expired` and make `fetch_commands` drop
+ * the `applied`). A row the host holds and never acknowledges reads
+ * `expired` from `list_commands`, which derives it at read time.
  */
 export async function expireCommands(
   tx: TachoTx,
@@ -212,9 +209,7 @@ export async function expireCommands(
     .where(
       and(
         eq(schema.tachoControlCommands.hostId, host.id),
-        notInArray(schema.tachoControlCommands.outcome, [
-          ...schema.TACHO_COMMAND_TERMINAL_OUTCOMES,
-        ]),
+        eq(schema.tachoControlCommands.outcome, "queued"),
         lte(schema.tachoControlCommands.expiresAt, now),
       ),
     );

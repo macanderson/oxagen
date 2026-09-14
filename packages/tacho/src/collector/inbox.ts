@@ -143,6 +143,7 @@ async function applyToSession(
         requestedMode: command.requested_mode,
         deliveryMode: command.delivery_mode,
         degradedReason: command.degraded_reason,
+        expiresAt: command.expires_at,
       });
       return { events, status: "received" };
     }

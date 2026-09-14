@@ -6,8 +6,10 @@
  *
  * The status shown is the recorded one, with one derivation: a command that
  * has not reached a terminal status and whose expiry has passed reads
- * `expired`, so a report is right for a host that stopped polling. A console
- * read is never a governed action (ADR-052 exclusion 2): `noBillingGate`.
+ * `expired`, so a report is right for a host that stopped polling; a host
+ * that holds the row settles it with `applied` or `failed` at the boundary.
+ * A console read is never a governed action (ADR-052 exclusion 2):
+ * `noBillingGate`.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";

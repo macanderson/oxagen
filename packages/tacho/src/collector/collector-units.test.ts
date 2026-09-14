@@ -130,6 +130,7 @@ describe("inbox", () => {
           requested_mode: "interrupt",
           delivery_mode: "next_step",
           degraded_reason: "harness_tier",
+          expires_at: "2026-09-10T11:00:00.000Z",
         }),
         command({ id: "r", command: "resume", session_uuid: uuid }),
         command({ id: "k", command: "kill", session_uuid: uuid }),
@@ -201,7 +202,9 @@ describe("inbox", () => {
       requestedMode: "interrupt",
       deliveryMode: "next_step",
       degradedReason: "harness_tier",
+      expiresAt: "2026-09-10T11:00:00.000Z",
     });
+    expect(record.control.messages[0]?.expiresAt).toBeNull();
     expect(kills).toEqual(["4242:SIGKILL", "4242:SIGTERM"]);
     expect(refreshed).toBe(1);
     expect(suspended).toBe("offboarded");
@@ -275,7 +278,22 @@ describe("registry", () => {
     expect(record.sealed).toBe(true);
     expect(never.sealed).toBe(true);
     expect(registry.sweep(() => true, 1)).toEqual([]);
+    // A queued steer keeps its deadline across a daemon restart, so the
+    // boundary after the restart still refuses to inject it past expiry; a
+    // state file written before steer carried `{ id, text }` only.
+    record.control.messages.push({
+      id: "cmd_steer",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "next_step",
+      deliveryMode: "next_step",
+      degradedReason: null,
+      expiresAt: "2026-09-10T11:00:00.000Z",
+    });
     const state = registry.state();
+    const legacy = state.sessions.find((s) => s.harnessSessionId === "sess-1");
+    if (legacy === undefined) throw new Error("no persisted session");
+    legacy.control.messages.push({ id: "cmd_old", text: "wrap up" });
     const restored = new SessionRegistry({
       context: CONTEXT,
       scope: TEST_ENROLLMENT,
@@ -286,6 +304,26 @@ describe("registry", () => {
     expect(back?.recorder.chainCursor).toEqual(record.recorder.chainCursor);
     expect(back?.pid).toBe(4242);
     expect(back?.sealed).toBe(true);
+    expect(back?.control.messages).toEqual([
+      {
+        id: "cmd_steer",
+        text: "use staging",
+        command: "steer",
+        requestedMode: "next_step",
+        deliveryMode: "next_step",
+        degradedReason: null,
+        expiresAt: "2026-09-10T11:00:00.000Z",
+      },
+      {
+        id: "cmd_old",
+        text: "wrap up",
+        command: "message",
+        requestedMode: null,
+        deliveryMode: null,
+        degradedReason: null,
+        expiresAt: null,
+      },
+    ]);
     const continued = back?.recorder.sealCollectorEvent("oxagen:notification", {
       notification_type: "after-restart",
     });
