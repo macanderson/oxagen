@@ -18,11 +18,13 @@
   "dependencies": {
     "@oxagen/agent": "workspace:*",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/github": "workspace:*",
+    "@oxagen/iam": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/notifications": "workspace:*",
