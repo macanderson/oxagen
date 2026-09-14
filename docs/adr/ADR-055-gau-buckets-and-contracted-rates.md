@@ -278,7 +278,11 @@ WL-08 deletes that adapter with the live data layer, and no rev1 port reads
 the contract after it. Retention settles later as an invoice line at a
 contracted per-GB-month rate that the lane which meters per-organisation
 evidence volume adds to `plans` and `contract_terms`.
-`chargeEvidenceRetention`, which had no production caller, is deleted.
+`chargeEvidenceRetention` is still in the tree
+(`packages/billing/src/action-metering.ts:595-629`); it debits credits and
+has no production caller, and WL-25 deletes it with
+`retentionCreditsForGbMonths` (§15). `RETENTION_USD_PER_GB_MONTH` stays,
+for the two handlers above.
 
 ### 13. `create_org` grants no credits
 
