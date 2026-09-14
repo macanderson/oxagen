@@ -2,10 +2,7 @@ import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
-import {
-  type HandlerErrorCode,
-  isHandlerError,
-} from "@oxagen/oxagen/handler-error";
+import { isHandlerError, type HandlerErrorCode } from "@oxagen/oxagen";
 import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
 import type { AppEnv } from "../app";
@@ -29,22 +26,21 @@ interface BillingError extends Error {
   readonly code: BillingErrorCode;
 }
 
-/**
- * A handler's own refusal (@oxagen/oxagen HandlerError): the caller's role,
- * a row outside the caller's tenant, a state that no longer admits the
- * change. The code is the whole contract; the status follows from it.
- */
-const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
-  forbidden: 403,
-  not_found: 404,
-  conflict: 409,
-};
-
 function isBillingError(err: unknown): err is BillingError {
   if (typeof err !== "object" || err === null) return false;
   const code = (err as Record<string, unknown>).code;
   return (BILLING_ERROR_CODES as readonly string[]).includes(code as string);
 }
+
+// A handler's typed refusal (HandlerError, @oxagen/oxagen) reaches this
+// middleware unchanged: the kernel rethrows what a handler throws. Each code is
+// a client-side outcome with its own status; the `reason` sub-code travels in
+// the envelope so a client can tell a last-owner conflict from any other.
+const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
+  forbidden: 403,
+  not_found: 404,
+  conflict: 409,
+};
 
 export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   const requestId = c.get("requestId") ?? "unknown";
@@ -158,7 +154,10 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
       "handler refusal",
     );
     return c.json(
-      { error: { code: err.code, message: err.message }, requestId },
+      {
+        error: { code: err.code, reason: err.reason, message: err.message },
+        requestId,
+      },
       HANDLER_ERROR_STATUS[err.code],
     );
   }

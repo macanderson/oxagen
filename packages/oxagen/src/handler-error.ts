@@ -1,18 +1,20 @@
-/**
- * A refusal a handler makes on its own facts: the caller's role, a row that
- * is not in the caller's tenant, a state that no longer admits the change.
- *
- * `CapabilityError` is the kernel's: it is thrown before a handler runs (IAM,
- * surface, input shape). `HandlerError` is thrown from inside a handler, after
- * the gates, and leaves the kernel unchanged (`kernel.ts` rethrows). Surfaces
- * classify on `code`, never on the message: the API maps `forbidden` → 403,
- * `not_found` → 404, `conflict` → 409, and the app maps the same three codes
- * to its `denied` / `not_found` / `conflict` results.
- *
- * `reason` is a stable machine token for the specific refusal
- * (`approval_expired`, `run_not_found`), so a test asserts the code and the
- * reason and never the prose.
- */
+// HandlerError — the typed refusal a capability handler throws.
+//
+// A handler refuses for one of three reasons: the actor may not do this
+// (forbidden), the thing the input names is not in this tenant (not_found), or
+// the write would leave the tenant in a state the domain forbids (conflict —
+// the last owner, an already-resolved approval). The kernel rethrows what a
+// handler throws (kernel.ts, the catch after the handler call) and records a
+// `forbidden` as an audit deny with the code, so the surface on the other side
+// classifies by `code`: the API middleware maps the three
+// codes to 403, 404 and 409 (apps/api/src/middleware/error.ts) and the app's
+// kernel seam maps them to `denied`, `not_found` and `conflict`
+// (apps/app/ARCHITECTURE.md §3.2). `reason` is the stable machine sub-code a
+// client keys on (`last_owner`, `approval_expired`); `message` is for a human.
+//
+// The class lives in @oxagen/oxagen so packages/handlers and packages/agent
+// both throw the one class without depending on each other.
+
 export const HANDLER_ERROR_CODES = [
   "forbidden",
   "not_found",
@@ -21,26 +23,31 @@ export const HANDLER_ERROR_CODES = [
 export type HandlerErrorCode = (typeof HANDLER_ERROR_CODES)[number];
 
 export class HandlerError extends Error {
-  override readonly name = "HandlerError";
-  constructor(
-    readonly code: HandlerErrorCode,
-    readonly reason: string,
-    message: string = `${code}: ${reason}`,
-  ) {
-    super(message);
+  readonly code: HandlerErrorCode;
+  readonly reason: string;
+
+  constructor(opts: {
+    code: HandlerErrorCode;
+    reason: string;
+    message?: string;
+  }) {
+    super(opts.message ?? `${opts.code}: ${opts.reason}`);
+    this.name = "HandlerError";
+    this.code = opts.code;
+    this.reason = opts.reason;
   }
 }
 
 /**
- * Shape check, not `instanceof`: a surface that loaded a second copy of this
- * module (a test mock, a bundler duplicate) still classifies the refusal.
+ * Shape guard, keyed on `code` and `reason` rather than `instanceof`, so a
+ * surface whose module graph holds a second copy of this file (vitest mocks,
+ * a bundler duplicating a workspace package) still classifies the refusal.
  */
 export function isHandlerError(err: unknown): err is HandlerError {
-  if (typeof err !== "object" || err === null) return false;
-  const { name, code, reason } = err as Record<string, unknown>;
+  if (!(err instanceof Error)) return false;
+  const { code, reason } = err as Partial<HandlerError>;
   return (
-    name === "HandlerError" &&
     typeof reason === "string" &&
-    (HANDLER_ERROR_CODES as readonly unknown[]).includes(code)
+    (HANDLER_ERROR_CODES as readonly string[]).includes(code as string)
   );
 }

@@ -139,7 +139,8 @@ export type RunGetDeps = {
   sleep: (ms: number) => Promise<void>;
 };
 
-const runNotFound = () => new HandlerError("not_found", "run_not_found");
+const runNotFound = () =>
+  new HandlerError({ code: "not_found", reason: "run_not_found" });
 
 export function createRunGetHandler(
   deps: RunGetDeps,

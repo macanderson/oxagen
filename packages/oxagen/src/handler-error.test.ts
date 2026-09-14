@@ -1,34 +1,75 @@
 import { describe, expect, it } from "vitest";
-import { HandlerError, isHandlerError } from "./handler-error";
+import {
+  HANDLER_ERROR_CODES,
+  HandlerError,
+  isHandlerError,
+} from "./handler-error";
 
 describe("HandlerError", () => {
-  it("carries a code and a reason, with a default message built from both", () => {
-    const err = new HandlerError("not_found", "run_not_found");
-    expect(err.code).toBe("not_found");
-    expect(err.reason).toBe("run_not_found");
-    expect(err.message).toBe("not_found: run_not_found");
-    expect(err).toBeInstanceOf(Error);
-    expect(isHandlerError(err)).toBe(true);
-  });
-
-  it("classifies a structurally equal error from another module copy", () => {
-    const copy = Object.assign(new Error("x"), {
-      name: "HandlerError",
+  it("carries the code and reason and is an Error", () => {
+    const err = new HandlerError({
       code: "conflict",
-      reason: "approval_expired",
+      reason: "last_owner",
+      message: "Cannot remove the last org owner.",
     });
-    expect(isHandlerError(copy)).toBe(true);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("HandlerError");
+    expect(err.code).toBe("conflict");
+    expect(err.reason).toBe("last_owner");
+    expect(err.message).toBe("Cannot remove the last org owner.");
   });
 
-  it("refuses an unknown code, a missing reason and a non-error (negative)", () => {
+  it("defaults the message to code and reason", () => {
+    const err = new HandlerError({
+      code: "forbidden",
+      reason: "insufficient_role",
+    });
+    expect(err.message).toBe("forbidden: insufficient_role");
+  });
+
+  it("exposes exactly the three codes the surfaces map", () => {
+    expect([...HANDLER_ERROR_CODES]).toEqual([
+      "forbidden",
+      "not_found",
+      "conflict",
+    ]);
+  });
+});
+
+describe("isHandlerError", () => {
+  it("accepts every code the class can carry", () => {
+    for (const code of HANDLER_ERROR_CODES) {
+      expect(isHandlerError(new HandlerError({ code, reason: "r" }))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("accepts a same-shaped Error from another module instance", () => {
+    const clone = Object.assign(new Error("m"), {
+      code: "not_found",
+      reason: "target_not_member",
+    });
+    expect(isHandlerError(clone)).toBe(true);
+  });
+
+  it("refuses an Error with a foreign code", () => {
+    const other = Object.assign(new Error("m"), {
+      code: "budget_exceeded",
+      reason: "r",
+    });
+    expect(isHandlerError(other)).toBe(false);
+  });
+
+  it("refuses an Error carrying a known code without a reason", () => {
     expect(
-      isHandlerError({ name: "HandlerError", code: "teapot", reason: "x" }),
+      isHandlerError(Object.assign(new Error("m"), { code: "conflict" })),
     ).toBe(false);
-    expect(isHandlerError({ name: "HandlerError", code: "not_found" })).toBe(
-      false,
-    );
-    expect(isHandlerError(new Error("not_found"))).toBe(false);
+  });
+
+  it("refuses a plain Error, a non-Error object and null", () => {
+    expect(isHandlerError(new Error("m"))).toBe(false);
+    expect(isHandlerError({ code: "forbidden", reason: "r" })).toBe(false);
     expect(isHandlerError(null)).toBe(false);
-    expect(isHandlerError("not_found")).toBe(false);
   });
 });

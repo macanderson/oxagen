@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces } from "./types";
+import { isHandlerError, type HandlerErrorCode } from "./handler-error";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
@@ -603,6 +604,17 @@ export class CapabilityError extends Error {
 
 export type KernelSecurityOutcome = "allow" | "deny" | "error";
 
+/**
+ * Every code a failed invoke can name: the kernel's own CapabilityErrorCode,
+ * the two duck-typed denials from packages the kernel does not import, and a
+ * handler's typed refusal (HandlerError).
+ */
+export type KernelFailureCode =
+  | CapabilityErrorCode
+  | "no_tenant_scope"
+  | "budget_exceeded"
+  | HandlerErrorCode;
+
 export interface KernelSecurityEvent {
   capability: string;
   outcome: KernelSecurityOutcome;
@@ -619,10 +631,12 @@ export interface KernelSecurityEvent {
   requestId: string;
   /**
    * The CapabilityErrorCode that caused a deny/error, if any. Includes
-   * "no_tenant_scope" for the fail-closed tenant-scope denial and
-   * "budget_exceeded" for the hard spend-ceiling denial.
+   * "no_tenant_scope" for the fail-closed tenant-scope denial,
+   * "budget_exceeded" for the hard spend-ceiling denial, and a HandlerError
+   * code when the handler refused ("forbidden" is a deny; "not_found" and
+   * "conflict" are errors that name their cause).
    */
-  errorCode: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded" | null;
+  errorCode: KernelFailureCode | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -698,7 +712,7 @@ export interface KernelTraceEvent {
   /** The validated output — present only when status === "ok". */
   output?: unknown;
   /** Failure code when status === "error". */
-  errorCode?: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded";
+  errorCode?: KernelFailureCode;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -1439,16 +1453,25 @@ async function _invokeCoreInner(
             err.code === "budget_exceeded"
           ? ("budget_exceeded" as const)
           : null;
+    // A handler's typed refusal (HandlerError). "forbidden" is a role or scope
+    // decision the handler made, so it joins the audit chain as a deny;
+    // "not_found" and "conflict" stay errors but carry their code so the
+    // trace names the cause.
+    const handlerCode = isHandlerError(err) ? err.code : null;
+    const isDeny =
+      (isCapErr && err.code === "no_handler") ||
+      duckCode !== null ||
+      handlerCode === "forbidden";
+    const failureCode = isCapErr ? err.code : (duckCode ?? handlerCode);
     emitSecurityEvent({
       capability: canonical,
-      outcome:
-        (isCapErr && err.code === "no_handler") || duckCode ? "deny" : "error",
+      outcome: isDeny ? "deny" : "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: isCapErr ? err.code : duckCode,
+      errorCode: failureCode,
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
@@ -1461,7 +1484,7 @@ async function _invokeCoreInner(
       requestId: ctx.requestId,
       messageId: ctx.messageId,
       input: inputResult.data,
-      errorCode: isCapErr ? err.code : (duckCode ?? undefined),
+      errorCode: failureCode ?? undefined,
       durationMs: Date.now() - startMs,
     });
     throw err;

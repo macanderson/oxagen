@@ -5,6 +5,7 @@
  * - errorCode() full status map
  * - errorMiddleware: HTTPException → {error:{code,message},requestId}
  * - ZodError → includes details.issues
+ * - HandlerError → 403 / 404 / 409 by code, reason in the envelope
  * - Unknown error → "internal_error", never leaks raw message
  * - requestId always present
  */
@@ -398,28 +399,69 @@ describe("errorMiddleware CapabilityError", () => {
   });
 });
 
-// ── HandlerError → the status its code names ─────────────────────────────────
+// ── HandlerError → 403 / 404 / 409 ───────────────────────────────────────────
 
 describe("errorMiddleware HandlerError", () => {
-  it.each([
-    ["forbidden", 403],
-    ["not_found", 404],
-    ["conflict", 409],
-  ] as const)("%s → %i with the code on the wire", async (code, expected) => {
-    const { HandlerError } = await import("@oxagen/oxagen/handler-error");
+  it("forbidden → 403 with the reason in the envelope", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
     const { status, body } = await triggerError(
-      new HandlerError(code, "run_not_found"),
+      new HandlerError({
+        code: "forbidden",
+        reason: "insufficient_role",
+        message: "Only org Owners and Admins can remove members",
+      }),
     );
-    expect(status).toBe(expected);
-    expect((body as { error: { code: string } }).error.code).toBe(code);
+    expect(status).toBe(403);
+    const b = body as {
+      error: { code: string; reason: string; message: string };
+    };
+    expect(b.error.code).toBe("forbidden");
+    expect(b.error.reason).toBe("insufficient_role");
+    expect(b.error.message).toBe(
+      "Only org Owners and Admins can remove members",
+    );
   });
 
-  it("a plain Error whose message names a code is still a 500 (negative)", async () => {
-    const { status, body } = await triggerError(new Error("not_found"));
-    expect(status).toBe(500);
-    expect((body as { error: { code: string } }).error.code).toBe(
-      "internal_error",
+  it("not_found → 404", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { status, body } = await triggerError(
+      new HandlerError({ code: "not_found", reason: "target_not_member" }),
     );
+    expect(status).toBe(404);
+    const b = body as { error: { code: string; reason: string } };
+    expect(b.error.code).toBe("not_found");
+    expect(b.error.reason).toBe("target_not_member");
+  });
+
+  it("conflict → 409", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { status, body } = await triggerError(
+      new HandlerError({ code: "conflict", reason: "last_owner" }),
+    );
+    expect(status).toBe(409);
+    const b = body as { error: { code: string; reason: string } };
+    expect(b.error.code).toBe("conflict");
+    expect(b.error.reason).toBe("last_owner");
+  });
+
+  it("every HandlerError code has a status, so a new code cannot fall to 500", async () => {
+    const { HANDLER_ERROR_CODES, HandlerError } = await import(
+      "@oxagen/oxagen"
+    );
+    for (const code of HANDLER_ERROR_CODES) {
+      const { status } = await triggerError(
+        new HandlerError({ code, reason: "r" }),
+      );
+      expect(status, `${code} must not reach the catch-all`).not.toBe(500);
+    }
+  });
+
+  it("always includes requestId", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { body } = await triggerError(
+      new HandlerError({ code: "conflict", reason: "last_owner" }),
+    );
+    expect(typeof (body as { requestId: string }).requestId).toBe("string");
   });
 });
 

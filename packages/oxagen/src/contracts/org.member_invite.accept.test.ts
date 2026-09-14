@@ -48,4 +48,8 @@ describe("org.member.invite.accept capability", () => {
     expect(orgMemberInviteAccept.defaultEffect).toBe("allow");
     expect(orgMemberInviteAccept.agent?.riskLevel).toBe("low");
   });
+
+  it("is never a charge: membership declares noBillingGate (ADR-052 exclusion 2)", () => {
+    expect(orgMemberInviteAccept.noBillingGate).toBe(true);
+  });
 });
