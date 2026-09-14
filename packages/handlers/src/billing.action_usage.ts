@@ -31,7 +31,6 @@ import {
   readActionCounter,
   resolveActionAllowance,
   resolveActionBand,
-  resolveActionMeterMode,
   resolveOrgActionEntitlement,
 } from "@oxagen/billing";
 import { sumTokenUsage } from "@oxagen/telemetry";
@@ -251,7 +250,6 @@ export const billingActionUsageHandler: CapabilityHandler<
       creditsCharged,
       creditsAtFinalBand,
       bandTrueUpCredits,
-      meterMode: resolveActionMeterMode(),
       breakdownRows: byCapability.length,
     },
     "get_action_usage: returned governed-action usage for the entitlement year",
@@ -271,7 +269,9 @@ export const billingActionUsageHandler: CapabilityHandler<
     creditsCharged,
     creditsAtFinalBand,
     bandTrueUpCredits,
-    meterMode: resolveActionMeterMode(),
+    // The meter always charges: the shadow mode left with the credit debit
+    // (ADR-055). The field stays until WL-27 retires this capability.
+    meterMode: "charge",
     modelSpend: {
       reportedCostMicros,
       // Always zero. The line exists rather than being omitted (§4.4).

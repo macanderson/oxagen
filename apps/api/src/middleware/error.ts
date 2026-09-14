@@ -10,9 +10,15 @@ import type { AppEnv } from "../app";
 // Typed error codes we duck-type from @oxagen/billing to avoid a direct dep.
 // Every one of these is a PAYMENT decision, not a server fault, so each maps to
 // 402 Payment Required:
-//   - insufficient_credits — the org's credit balance is empty (metering.ts)
+//   - insufficient_credits — the assistant turn's credit balance is empty
+//                            (metering.ts; the ADR-053 platform-funded path)
 //   - billing_suspended    — the org's subscription is suspended (dunning.ts)
 //   - budget_exceeded      — a spend ceiling was reached (spend-budget.ts)
+//   - gau_exhausted        — the org's month bucket of governed action units
+//                            is empty and auto top-up could not run
+//                            (gau-bucket.ts, ADR-055); carries an optional
+//                            `reason` ("free_no_payment_method") the client
+//                            prints as "add a payment method or wait"
 // The list is a hand-maintained mirror of the throwing classes in
 // @oxagen/billing; BILLING_ERROR_CODES is exported so a test can assert the
 // mirror stays complete rather than discovering a gap as a production 500.
@@ -20,10 +26,13 @@ export const BILLING_ERROR_CODES = [
   "insufficient_credits",
   "billing_suspended",
   "budget_exceeded",
+  "gau_exhausted",
 ] as const;
 type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
 interface BillingError extends Error {
   readonly code: BillingErrorCode;
+  /** A sub-code the client can branch on; only `gau_exhausted` sets one. */
+  readonly reason?: string | null;
 }
 
 function isBillingError(err: unknown): err is BillingError {
@@ -162,14 +171,24 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
     );
   }
 
-  // Billing errors — map to 402 Payment Required.
+  // Billing errors — map to 402 Payment Required. The `reason` sub-code
+  // travels in the envelope when the error carries one, the way a
+  // HandlerError's does.
   if (isBillingError(err)) {
+    const reason = typeof err.reason === "string" ? err.reason : undefined;
     logger.warn(
-      { requestId, code: err.code, message: err.message },
+      { requestId, code: err.code, reason, message: err.message },
       "billing gate",
     );
     return c.json(
-      { error: { code: err.code, message: err.message }, requestId },
+      {
+        error: {
+          code: err.code,
+          message: err.message,
+          ...(reason ? { reason } : {}),
+        },
+        requestId,
+      },
       402,
     );
   }

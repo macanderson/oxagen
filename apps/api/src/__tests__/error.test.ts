@@ -512,15 +512,53 @@ describe("errorMiddleware billing errors", () => {
     );
   });
 
+  // ADR-055: the GAU gate's refusal. A prepaid org whose month bucket is
+  // empty and whose auto top-up could not run is a payment decision.
+  it("GauExhaustedError → 402 with the code and no reason when none is set", async () => {
+    const { GauExhaustedError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new GauExhaustedError({
+        reason: null,
+        remainingGau: -3,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      }),
+    );
+    expect(status).toBe(402);
+    const b = body as { error: { code: string; reason?: string } };
+    expect(b.error.code).toBe("gau_exhausted");
+    expect("reason" in b.error).toBe(false);
+  });
+
+  it("GauExhaustedError carries reason free_no_payment_method in the body when set", async () => {
+    const { GauExhaustedError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new GauExhaustedError({
+        reason: "free_no_payment_method",
+        remainingGau: 0,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      }),
+    );
+    expect(status).toBe(402);
+    const b = body as { error: { code: string; reason?: string } };
+    expect(b.error.code).toBe("gau_exhausted");
+    expect(b.error.reason).toBe("free_no_payment_method");
+  });
+
+  it("BILLING_ERROR_CODES lists gau_exhausted", async () => {
+    const { BILLING_ERROR_CODES } = await import("../middleware/error");
+    expect(BILLING_ERROR_CODES).toContain("gau_exhausted");
+  });
+
   // The middleware's BILLING_ERROR_CODES list is a hand-maintained mirror of the
   // error classes @oxagen/billing throws. This asserts against the REAL classes,
-  // so adding a fourth billing error without mapping it fails here rather than
+  // so adding a fifth billing error without mapping it fails here rather than
   // in production as a 500.
   it("every billing error class @oxagen/billing throws maps to 402", async () => {
     const {
       InsufficientCreditsError,
       BillingSuspendedError,
       BudgetExceededError,
+      GauExhaustedError,
     } = await import("@oxagen/billing");
     const thrown: Error[] = [
       new InsufficientCreditsError(),
@@ -533,6 +571,11 @@ describe("errorMiddleware billing errors", () => {
         limitMicros: 1_000_000n,
         spentMicros: 2_000_000n,
         capability: "send_message",
+      }),
+      new GauExhaustedError({
+        reason: null,
+        remainingGau: 0,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
       }),
     ];
     for (const err of thrown) {
