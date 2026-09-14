@@ -11,7 +11,7 @@
     "build:vite": "vite build",
     "sidecars": "node scripts/sidecars.mjs",
     "bundle": "node scripts/sidecars.mjs && tauri build",
-    "bundle:dmg": "node scripts/sidecars.mjs && tauri build --bundles dmg",
+    "bundle:dmg": "node scripts/sidecars.mjs && tauri build --bundles app dmg",
     "icons": "node scripts/icons.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",

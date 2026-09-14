@@ -55,9 +55,8 @@ env block, so its telemetry events (`PostToolUse`, `SubagentStart`,
 `SubagentStop`, `PreCompact`, `PostCompact`, `SessionEnd`, `Interrupt`) run
 the hook too and there is no OpenTelemetry export. The hook command carries
 `--harness codex`; sessions are labelled `agent.harness = codex`,
-`runtime = custom` (the runtime column is a checked enum without a codex
-member yet). `transcript_path: null` is accepted, and `unenroll` strips the
-Codex hooks whether or not `host.json` still lists the harness.
+`runtime = codex`. `transcript_path: null` is accepted, and `unenroll` strips
+the Codex hooks whether or not `host.json` still lists the harness.
 
 ### Windows
 

@@ -36,10 +36,11 @@ per target. Each job:
    | `x86_64-unknown-linux-gnu` | `Oxagen_<version>_amd64.deb`, `Oxagen-<version>-1.x86_64.rpm`, `Oxagen_<version>_amd64.AppImage` |
    | `x86_64-pc-windows-msvc` | `Oxagen_<version>_x64_en-US.msi`, `Oxagen_<version>_x64-setup.exe` |
 
-3. writes a `<asset>.sha256` next to each staged binary
-   (`tools/packaging/checksums.mjs`, `sha256sum` format) and attaches the
-   binaries and their checksums to the same release, so the formula and the
-   manifest can install the CLIs without the app.
+3. writes a `<asset>.sha256` next to each staged binary and, on the macOS
+   jobs, next to the `.dmg` (`tools/packaging/checksums.mjs`, `sha256sum`
+   format) and attaches the binaries and every checksum to the same release,
+   so the formula and the manifest can install the CLIs without the app and
+   the cask's `# stamp:` digests have a `.sha256` to read.
 
 The version is the lockstep monorepo version (`pnpm release:*` bumps every
 package, `apps/desktop/package.json` included, and `tacho --version` prints

@@ -28,13 +28,13 @@ Package-manager templates (a Homebrew cask for the `.dmg`, a Homebrew formula an
 
 ## First open while builds are unsigned
 
-Code signing runs only when the Apple and Azure signing secrets exist in CI. A build made without them is still installable, but the OS warns once:
+Code signing runs only when the Apple signing secrets exist in CI; Windows builds are not signed yet. A build made without signing is still installable, but the OS warns once:
 
 - **macOS.** The app is ad-hoc signed and Gatekeeper shows "cannot verify" on first open. Open it from the Finder with a right-click (or Control-click) and choose **Open**, or allow it in **System Settings → Privacy & Security** after the first refusal.
 - **Windows.** SmartScreen warns that the publisher is unknown. Choose **More info → Run anyway**.
 - **Linux.** The `.deb`, `.rpm` and `.AppImage` are unsigned and there is no apt or dnf repository yet; install the file directly (`sudo dpkg -i`, `sudo rpm -i`, or `chmod +x` the AppImage and run it).
 
-A release built with the certificates in place is Developer ID signed and notarized on macOS and signed with Azure Trusted Signing on Windows, and opens without a warning.
+A release built with the Apple certificate in place is Developer ID signed and notarized on macOS and opens without a warning there; Windows keeps the SmartScreen prompt until Windows signing is wired into the release workflow.
 
 ## Sign in
 
@@ -84,7 +84,7 @@ with the list you chose. This is the one way to drop a wrapper: `enroll` may add
 | Enforcement | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest and Stop as command hooks; allow or deny with a reason; fail closed | same events, same decision shape |
 | Telemetry | 28 events as `http` hooks straight to the daemon, plus OpenTelemetry export | PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd and Interrupt as command hooks; no OTel |
 | Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` |
-| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = custom` |
+| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` |
 
 ## Put the CLIs on your PATH
 

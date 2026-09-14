@@ -43,7 +43,7 @@ icons` (needs `rsvg-convert`) and committed.
 
 `src/updater.ts` wraps `@tauri-apps/plugin-updater`: **Check for updates** in
 the masthead fetches
-`https://github.com/macanderson/oxagen/releases/latest/download/latest.json`,
+`https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json`,
 and **Install** downloads the bundle for this platform, verifies it against
 the minisign public key in `tauri.conf.json` (`plugins.updater.pubkey`),
 installs it and relaunches; download milestones stream into the Activity
@@ -55,10 +55,16 @@ half is **not** in the repository: it lives at `~/.tauri/oxagen-desktop.key`
 on the machine that generated it, and CI needs it as the
 `TAURI_SIGNING_PRIVATE_KEY` secret (`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can
 stay unset for this key). With the secret, `desktop.yml` signs every bundle
-and attaches `latest.json` to the release; without it, the workflow passes
+(the macOS jobs build `app` alongside `dmg`, since only the `app` target
+yields the `Oxagen.app.tar.gz` + `.sig` the updater installs) and attaches
+`latest.json` to the release; without it, the workflow passes
 `--config src-tauri/tauri.unsigned.conf.json` (`createUpdaterArtifacts:
-false`) so the build still succeeds, and publishes no feed. A release only
-feeds installed apps once it is published and marked latest.
+false`) so the build still succeeds, and publishes no feed. The feed is the
+rolling `desktop-latest` release, not the repository's `/releases/latest`
+(which any platform `v*` release published from a newer commit would take
+over): when a `desktop-v*` release is published, the workflow's `feed` job
+copies its `latest.json` onto `desktop-latest`, so a draft feeds nothing
+until it is published.
 
 Locally, `bundle` / `bundle:dmg` need either
 `TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/oxagen-desktop.key` or the same
