@@ -159,8 +159,10 @@ case $SERVICE in
     # NotBacked. The cutover batch flips APP_DIR once and the deploy follows
     # (implementation plan §6 Q2). Hardcoding @oxagen/app here shipped the
     # rebuild the moment its integration branch reached main (#2894).
-    app_dir=$(node --input-type=module -e \
-      'import { APP_DIR } from "./tools/scripts/lib/app-dir.mjs"; process.stdout.write(APP_DIR)')
+    # app-dir.mjs exists only while the rebuild is on the tree; without it
+    # apps/app is the one app there is (tools/scripts/lib/app-dir.sh).
+    . tools/scripts/lib/app-dir.sh
+    app_dir=$(resolve_app_dir)
     app_pkg=$(node -p "require('./$app_dir/package.json').name")
     log "building $app_pkg from $app_dir (APP_DIR)"
     # The same 5GB heap the CI build uses. Next's own TypeScript pass is off
