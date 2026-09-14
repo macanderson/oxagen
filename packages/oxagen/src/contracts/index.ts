@@ -49,6 +49,12 @@ import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
 import { runList } from "./run.list";
 import { runGet } from "./run.get";
+import { runFrameBodyGet } from "./run.frame_body.get";
+import { runTranscriptGet } from "./run.transcript.get";
+import { runExport } from "./run.export";
+import { runBisect } from "./run.bisect";
+import { runFork } from "./run.fork";
+import { runSummarize } from "./run.summarize";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -442,6 +448,12 @@ export {
   tachoSessionGet,
   runList,
   runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -690,6 +702,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoSessionGet,
   runList,
   runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,

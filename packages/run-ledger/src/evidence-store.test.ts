@@ -7,11 +7,13 @@ import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
 import { createFsAdapter } from "@oxagen/storage";
 import { digestBytes } from "@oxagen/tacho";
 import {
-  createEvidenceBodyStore,
+  createEvidenceStore,
   evidenceBodyKey,
   evidenceBodyRef,
+  evidenceKeyScope,
   parseEvidenceBodyRef,
-} from "./evidence-bodies";
+  parseFrameBodyPlaintext,
+} from "./evidence-store";
 
 const root = mkdtempSync(join(tmpdir(), "evidence-bodies-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -24,7 +26,7 @@ const runId = "33333333-3333-4333-8333-333333333333";
 const kms = createLocalKmsAdapter(randomBytes(32));
 const crypto = { adapter: kms, keyId: "evidence:test:v1" };
 const fs = createFsAdapter(root);
-const store = createEvidenceBodyStore({
+const store = createEvidenceStore({
   storage: fs,
   writeCrypto: () => crypto,
   readCrypto: (keyId) => {
@@ -60,7 +62,21 @@ describe("evidence body store", () => {
 
     const back = await store.getBody(scope, ref);
     expect(new TextDecoder().decode(back.bytes)).toBe('{"prompt":"deploy"}');
+    expect(back.contentType).toBe("application/json");
     expect(digestBytes(back.bytes)).toBe(digest);
+  });
+
+  it("frames the content type with the bytes and refuses a frame it cannot read", () => {
+    expect(() => parseFrameBodyPlaintext(new Uint8Array([0]))).toThrow(
+      /too short/,
+    );
+    expect(() => parseFrameBodyPlaintext(new Uint8Array([0, 9, 1]))).toThrow(
+      /out of range/,
+    );
+    expect(evidenceKeyScope(evidenceBodyKey(scope, "0".repeat(64)))).toEqual(
+      scope,
+    );
+    expect(evidenceKeyScope("privacy-exports/x.zip")).toBeNull();
   });
 
   it("keys a body by its tenant, so another tenant's reference does not resolve", async () => {

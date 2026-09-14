@@ -29,7 +29,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import { insertTachoEvents, type TachoEventInsert } from "@oxagen/telemetry";
 import { and, eq, sql } from "drizzle-orm";
-import { evidenceBodyStore } from "./lib/evidence-bodies";
+import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import {
   type TachoHostRow,
   controlEnvelope,
@@ -439,7 +439,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   }
   const bytesRefs = new Map<string, string>();
   for (const body of retained) {
-    const { ref } = await evidenceBodyStore().put({
+    const { ref } = await evidenceStore().put({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       runId: body.sessionUuid,

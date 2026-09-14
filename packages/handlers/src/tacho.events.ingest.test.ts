@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   bodyPut: vi.fn(),
 }));
 
-vi.mock("./lib/evidence-bodies", () => ({
-  evidenceBodyStore: () => ({ put: mocks.bodyPut }),
+vi.mock("@oxagen/run-ledger/evidence-store", () => ({
+  evidenceStore: () => ({ put: mocks.bodyPut }),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {

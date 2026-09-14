@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FRAME_LIMIT_DEFAULT,
   FRAME_LIMIT_MAX,
+  runFrameSchema,
   runGet,
   WAIT_MS_MAX,
 } from "./run.get";
@@ -60,12 +61,64 @@ describe("get_run contract", () => {
       taskRef: "fix the flaky test",
       startedAt: "2026-09-08T10:06:03.000Z",
       sealedAt: null,
+      replayGrade: null,
+      name: null,
+      summary: null,
     };
-    expect(runGet.output.safeParse({ run, frames: null }).success).toBe(true);
     expect(
       runGet.output.safeParse({ run, frames: { frames: [], cursor: null } })
         .success,
     ).toBe(true);
+    expect(runGet.output.safeParse({ run, frames: null }).success).toBe(false);
     expect(runGet.output.safeParse({ run, frames: [] }).success).toBe(false);
+  });
+
+  it("carries every frame's body reference and never its bytes", () => {
+    const frame = {
+      cursor: "ZjoxMg",
+      seq: "12",
+      type: "tool.call_completed",
+      stage: "tool",
+      observedAt: "2026-09-08T10:06:04.000Z",
+      digest: `sha256:${"0".repeat(64)}`,
+      summary: "read_file completed",
+      body: {
+        digest: `sha256:${"a".repeat(64)}`,
+        bytesRef: "evb:v1:evidence:v1:" + "a".repeat(64),
+        redactions: [
+          {
+            path: "bytes:4-40",
+            reason: "github_token",
+            originalDigest: `sha256:${"b".repeat(64)}`,
+          },
+        ],
+        fidelity: "full",
+      },
+      cost: null,
+    };
+    expect(runFrameSchema.safeParse(frame).success).toBe(true);
+    expect(
+      runFrameSchema.safeParse({
+        ...frame,
+        body: { ...frame.body, bytesRef: null, fidelity: "digest_only" },
+      }).success,
+    ).toBe(true);
+    expect(
+      runFrameSchema.safeParse({
+        ...frame,
+        body: { ...frame.body, bytes: "eyJ9" },
+      }).success,
+    ).toBe(false);
+    expect(
+      runFrameSchema.safeParse({
+        ...frame,
+        body: {
+          ...frame.body,
+          redactions: [{ path: "bytes:0-1", reason: "password" }],
+        },
+      }).success,
+    ).toBe(false);
+    const { body: _dropped, ...withoutBody } = frame;
+    expect(runFrameSchema.safeParse(withoutBody).success).toBe(false);
   });
 });
