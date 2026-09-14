@@ -6,7 +6,7 @@ import type { ShellReadPort } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 import { testFixtureShell } from "@/data/adapters/fixture/testing";
 import { FIXTURE_USER } from "@/server/fixture-session";
-import { loadShellData, workspaceExists } from "./load";
+import { loadShellData } from "./load";
 
 const scope = {
   orgId: FIXTURE_TENANT.orgId,
@@ -74,19 +74,5 @@ describe("loadShellData", () => {
       context: () => Promise.resolve(notBacked("M1", "G15")),
     };
     expect((await loadShellData(notBackedContext, query)).kind).toBe("ok");
-  });
-});
-
-describe("workspaceExists", () => {
-  it("knows the organization's workspaces", async () => {
-    const context = await testFixtureShell().context(scope, FIXTURE_USER.id);
-    expect(workspaceExists({ context }, "core-platform")).toBe(true);
-    expect(workspaceExists({ context }, "nope")).toBe(false);
-  });
-
-  it("does not guess when the context read failed", () => {
-    expect(
-      workspaceExists({ context: readError("x", 501) }, "core-platform"),
-    ).toBe("unknown");
   });
 });

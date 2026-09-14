@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readError } from "@/data/not-backed";
 import type { MfaPolicy } from "./mfa-gate";
 import type { AppSession } from "./session";
 import type {
@@ -10,6 +11,7 @@ import { ORG_ONLY_WS } from "./tenant-scope";
 import {
   canonicalPath,
   isValidSlug,
+  type ResolveViewerDeps,
   resolveViewerWith,
 } from "./viewer-resolution";
 
@@ -141,11 +143,26 @@ describe("resolveViewerWith: refused", () => {
     });
   });
 
-  it("404s an organization member who is not a member of the workspace", async () => {
-    const l = lookups({ isWorkspaceMember: () => Promise.resolve(false) });
-    await expect(resolve(l, "acme", "core-platform")).resolves.toEqual({
-      kind: "not_found",
+  it("404s an organization member who is not a member of the workspace, on the membership lookup alone", async () => {
+    // F3: the workspace guard used to read the organization's workspace list
+    // through the shell port and let a slug through when that read failed.
+    // Resolution takes the session, the tenancy lookups and the clock, so a
+    // failing shell context read has no way in; the decision is the membership row.
+    const l = lookups({
+      isWorkspaceMember: vi.fn(() => Promise.resolve(false)),
     });
+    const deps: ResolveViewerDeps = { session, lookups: l, now };
+    await expect(
+      resolveViewerWith(deps, "acme", "core-platform"),
+    ).resolves.toEqual({ kind: "not_found" });
+    expect(l.workspaceBySlug).toHaveBeenCalledWith(org.id, "core-platform");
+    expect(l.isWorkspaceMember).toHaveBeenCalledWith(ws.id, "u1");
+    const failingShell = {
+      context: () =>
+        Promise.resolve(readError("control_plane_unavailable", 503)),
+    };
+    // @ts-expect-error -- a shell read port is not a dependency of viewer resolution
+    void ((_: ResolveViewerDeps) => 0)({ ...deps, port: failingShell });
   });
 
   it("404s a workspace a lookup returned from another organization", async () => {

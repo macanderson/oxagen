@@ -45,12 +45,3 @@ export async function loadShellData(
     },
   };
 }
-
-/** Whether a workspace slug belongs to the loaded organization. Unknown when the context read failed. */
-export function workspaceExists(
-  data: Pick<ShellData, "context">,
-  ws: string,
-): boolean | "unknown" {
-  if (!data.context.ok) return "unknown";
-  return data.context.value.workspaces.some((w) => w.slug === ws);
-}
