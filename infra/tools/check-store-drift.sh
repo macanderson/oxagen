@@ -48,7 +48,13 @@
 # hands over what it read from Parameter Store:
 #
 #   CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE
-#   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD
+#   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE
+#
+# NEO4J_DATABASE is the one with a fallback (`neo4j`, the default in
+# `packages/config/src/env.ts`), so a caller who misses it gets a plausible
+# answer about the wrong database rather than an error. That is worth naming
+# here: a deployment whose graph is not on the default database, checked by
+# hand without this set, reads as drifted when it is current.
 #
 # Nothing here prints a credential. The failure messages name files and
 # constraints.
