@@ -65,6 +65,7 @@ describe("fetch_commands contract", () => {
             requested_mode: "interrupt",
             delivery_mode: "next_step",
             degraded_reason: "harness_tier",
+            reason: "operator steer",
             issued_at: "2026-09-08T10:00:00.000Z",
             expires_at: null,
           },
@@ -72,5 +73,8 @@ describe("fetch_commands contract", () => {
       },
     });
     expect(output.control.commands[0]?.delivery_mode).toBe("next_step");
+    // The operator's reason rides the envelope in its own field, not under
+    // `payload`: the collector shows it at the boundary a pause denies.
+    expect(output.control.commands[0]?.reason).toBe("operator steer");
   });
 });
