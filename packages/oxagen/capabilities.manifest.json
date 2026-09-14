@@ -3781,9 +3781,26 @@
       }
     },
     {
-      "name": "dispatch_tacho_command",
+      "name": "dispatch_command",
       "file": "tacho.command.dispatch.ts",
-      "domain": "tacho",
+      "domain": "control",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "fetch_commands",
+      "file": "tacho.command.fetch.ts",
+      "domain": "control",
       "mode": "sync",
       "surfaces": [
         "api"
@@ -3796,18 +3813,20 @@
       }
     },
     {
-      "name": "fetch_tacho_commands",
-      "file": "tacho.command.fetch.ts",
-      "domain": "tacho",
+      "name": "list_commands",
+      "file": "tacho.command.list.ts",
+      "domain": "control",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {

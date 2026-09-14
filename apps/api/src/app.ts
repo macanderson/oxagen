@@ -205,6 +205,7 @@ import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest"
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
+import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
 import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
@@ -403,7 +404,10 @@ orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
 // fleet. Session auth with the org role checked in the handlers.
 orgScoped.route("/tacho/enrollments", tachoEnrollmentCreateRoute);
 orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
-orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
+// Run controls (dispatch_command, list_commands): addressed to runs, agents
+// and the workspace rather than to a host, so they sit beside /runs.
+orgScoped.route("/commands", tachoCommandDispatchRoute);
+orgScoped.route("/commands/list", tachoCommandListRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);

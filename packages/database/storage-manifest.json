@@ -474,6 +474,16 @@
       "writes": []
     },
     {
+      "domain": "control",
+      "name": "dispatch_command",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "dispatch_schema_reconcile",
       "reads": [],
@@ -481,15 +491,6 @@
         "api",
         "cli",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "dispatch_tacho_command",
-      "reads": [],
-      "surfaces": [
-        "api"
       ],
       "writes": []
     },
@@ -548,8 +549,8 @@
       "writes": []
     },
     {
-      "domain": "tacho",
-      "name": "fetch_tacho_commands",
+      "domain": "control",
+      "name": "fetch_commands",
       "reads": [],
       "surfaces": [
         "api"
@@ -1211,6 +1212,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "list_commands",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2567,7 +2578,7 @@
       "writes": []
     }
   ],
-  "contentHash": "275f82ca96bb8b2d37cdfa7f930c6690478730934c1ec23bb1afb49fe728d9ac",
+  "contentHash": "44e957d9f4d5a0b8a90240c65fb895bf9e6c905a913e314e4d02794a05c75f7b",
   "domains": [
     {
       "name": "agent",
@@ -14902,7 +14913,7 @@
         },
         {
           "name": "host_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
@@ -14911,6 +14922,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "target_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "target_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "command",
@@ -14923,6 +14946,30 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "requested_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "delivery_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "degraded_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "issued_by_principal_id",

@@ -1,6 +1,10 @@
 # tacho.command.dispatch
 
-Queue a control command for a host or one of its sessions (`docs/specs/tacho/spec.md` section 7.4): `pause`, `resume`, `cancel`, `message`, `revoke`, `refresh_bundle`, `kill`. The host receives it in its next ingest response or command fetch and reports the outcome. Host-level `pause`, `resume`, and `revoke` also change the host's status immediately so the next bundle carries it even if the command is never fetched. Soft effects (deny at the next boundary) are guaranteed while the hooks are installed; process termination (`kill`) is best effort and the outcome is recorded.
+Queue a run control (Mission Control spec §7.3, §7.4, §7.6; ADR-056): `pause`, `resume`, `cancel`, `steer` or `message` for one run, for every live run of an agent, or for every live run in the workspace (`@agents`). One `tacho.control_commands` row is written per recipient run, carried by the host its session belongs to; the collector takes it on its next ingest response or command poll (`fetch_commands`) and reports what became of it. The delivery report is `list_commands`.
+
+`steer` and `message` carry prompt content and a §7.3 delivery mode. The mode is resolved per recipient at dispatch, at or below the one requested: the hook adapter, the one connection point in this tree, injects at the next prompt boundary and cannot stop a call in flight, so `interrupt` lands as `next_step` and the row records `degradedReason: harness_tier`. On a broadcast the requested mode is a ceiling. Both modes are recorded, and the report shows the achieved one. Steering text is evidence, quoted and cited; Oxagen never executes it.
+
+A new command supersedes an earlier `queued` command of the same kind on the same run: the earlier row becomes `cancelled` with `superseded_by:<id>`.
 
 ## Mode
 
@@ -8,29 +12,36 @@ Queue a control command for a host or one of its sessions (`docs/specs/tacho/spe
 
 ## Surface
 
-- API only: `POST /v1/:org_slug/:workspace_slug/tacho/commands`
-- Authentication: session (org Owner or Admin)
-- Capability name: `dispatch_tacho_command`
-- Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads
+- API: `POST /v1/:org_slug/:workspace_slug/commands`
+- MCP: `dispatch_command`
+- Authentication: session; the handler requires org Owner or Admin (`assertOrgRole`, INV-29) — the kernel's IAM check allows everything for a non-enterprise organisation
+- Capability name: `dispatch_command`
+- Not billed (`noBillingGate: true`): a lapsed bucket must never leave an agent unstoppable. IAM default-deny; high sensitivity.
 
 ## Input
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `hostEnrollmentId` | string | yes | |
-| `sessionUuid` | uuid | no | targets one session; must belong to the host |
-| `command` | enum | yes | see above |
-| `payload` | object | no | `message` carries `{ text }`; `pause`/`cancel` may carry `{ reason }` |
-| `expiresInS` | integer | no | 10-86400, default 3600 |
+| `target` | object | yes | `{ kind: "run", id }` with an `arun_…` or `tse_…` id; `{ kind: "agent", id }` with the agent key `list_runs` reports; `{ kind: "workspace", id }` with the caller's workspace id |
+| `command` | enum | yes | `pause`, `resume`, `cancel`, `steer`, `message` |
+| `payload` | object | for `steer` and `message` | `{ text (1–16384 chars), requestedMode }`; refused on the other commands |
+| `payload.requestedMode` | enum | no | `next_step` (default), `interrupt`, `turn_boundary` |
+| `reason` | string | no | 1–512 chars; read by the model on resume, shown on the pause banner |
+| `expiresInMs` | integer | no | 10 000–86 400 000, default 3 600 000 |
 
 ## Output
 
 | Field | Type | Description |
 |---|---|---|
-| `commandId` | string | `tcm_` public id |
-| `outcome` | `pending` | |
-| `issuedAt`, `expiresAt` | string | RFC 3339 |
+| `commandIds` | string[] | one `tcm_…` id per recipient run, in the order written; empty for a broadcast that reached no live run |
+
+## Recipients and refusals
+
+- A direct target that cannot receive is refused, never queued (§7.3): a sealed run is `conflict` / `run_sealed`; an `observe`-tier run is `conflict` / `observe_tier`; a ledger run (`arun_…`) is `conflict` / `no_connection_point` — no producer in this tree appends to `@oxagen/run-ledger` and no run token exists, so there is no boundary to refuse and nothing to revoke.
+- A broadcast reaches every live root session in the workspace (or the agent's). An `observe`-tier recipient is recorded as `failed` with `outcome_detail: observe_tier` so the report is complete (§7.6). Sealed runs are not live and are not enumerated.
+- `not_found`: a run id neither store holds in the caller's workspace, or a workspace id other than the caller's.
+- `forbidden`: the actor holds neither org Owner nor Admin.
 
 ## Honesty
 
-Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): Oxagen can prove what was reported and detect tampering and gaps, and hook-based denial is enforcement at the harness, not at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation.
+Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): the hook adapter denies at the harness, never at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation, and the mode shown is the one recorded as achieved.
