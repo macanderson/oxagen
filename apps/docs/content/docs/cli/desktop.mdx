@@ -1,0 +1,122 @@
+---
+title: Desktop app
+description: Install the Oxagen app — it ships the oxagen CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an organization, and sets or changes the workspace its agents report to.
+---
+
+The Oxagen app puts one machine under Oxagen control. It installs the `oxagen` CLI and the Tacho wrapper for Claude Code and Codex, signs the machine in to an organization, enrolls it against a workspace, and gives you one window to see the connection, move the host to another workspace or org, add or drop a wrapper, sign out, and unenroll.
+
+The app owns no state. Every panel reads the files the CLIs already write (`~/.config/oxagen/config.json`, `~/.config/oxagen/tacho/host.json`, the collector's `/status` on loopback), and every action runs one of the two CLIs bundled inside the app. Whatever you do in the app, you can do from the terminal, and `tacho status` and the app's Connection panel can never disagree.
+
+<Callout type="info">
+The app is a management window, not a wizard. It does not run agents; it records, gates and evidences the Claude Code and Codex sessions that already run on the machine. Hook-based control is `client_attested` — the app's This machine panel says so.
+</Callout>
+
+## Download
+
+One installer per OS from a single Tauri 2 project. Every file is attached to the `Oxagen desktop-v<version>` GitHub release that `.github/workflows/desktop.yml` publishes on a `desktop-v<version>` tag, next to the bare `tacho` and `oxagen` binaries and their `.sha256` files.
+
+| OS | Architecture | File |
+| --- | --- | --- |
+| macOS 12 or newer | Apple silicon | `Oxagen_<version>_aarch64.dmg` |
+| macOS 12 or newer | Intel | `Oxagen_<version>_x64.dmg` |
+| Linux | x86_64 | `Oxagen_<version>_amd64.deb`, `Oxagen-<version>-1.x86_64.rpm`, `Oxagen_<version>_amd64.AppImage` |
+| Windows | x86_64 | `Oxagen_<version>_x64_en-US.msi` (WiX) or `Oxagen_<version>_x64-setup.exe` (NSIS, installs for the current user) |
+
+Both CLIs ship inside the app as single executables — a copy of Node with the CLI bundle embedded — so the machine does not need Node installed. That is why the app is large (about 235 MB unpacked on macOS, about 80 MB as a `.dmg`), and why each OS is built on its own runner: there is no cross-compile.
+
+Package-manager templates (a Homebrew cask for the `.dmg`, a Homebrew formula and a Scoop manifest for the two CLI binaries) live under `tools/packaging/` in the repo. They become live once a tap and a bucket exist; until then, download from the release page.
+
+## First open while builds are unsigned
+
+Code signing runs only when the Apple and Azure signing secrets exist in CI. A build made without them is still installable, but the OS warns once:
+
+- **macOS.** The app is ad-hoc signed and Gatekeeper shows "cannot verify" on first open. Open it from the Finder with a right-click (or Control-click) and choose **Open**, or allow it in **System Settings → Privacy & Security** after the first refusal.
+- **Windows.** SmartScreen warns that the publisher is unknown. Choose **More info → Run anyway**.
+- **Linux.** The `.deb`, `.rpm` and `.AppImage` are unsigned and there is no apt or dnf repository yet; install the file directly (`sudo dpkg -i`, `sudo rpm -i`, or `chmod +x` the AppImage and run it).
+
+A release built with the certificates in place is Developer ID signed and notarized on macOS and signed with Azure Trusted Signing on Windows, and opens without a warning.
+
+## Sign in
+
+Press **Sign in**. The app runs `oxagen login`, which opens your browser; the web app is the org and workspace picker, and the loopback callback returns the session to the CLI, which persists it in `~/.config/oxagen/config.json`. The Account panel then shows the org you signed in to, the CLI's default workspace and the API URL. The token never crosses into the app's webview — the shell attaches it to the two picker calls it makes.
+
+**Switch organization…** is the same flow run again. **Sign out** runs `oxagen logout`.
+
+If a saved session is stale, the first picker call gets a 401, the Account panel says *Session expired*, and the primary button returns to **Sign in**.
+
+## Enroll this machine
+
+With a session in place, pick the org and workspace in the This machine panel and press **Enroll this machine**. The app runs
+
+```bash
+tacho enroll --org <org> --workspace <workspace> --harness claude-code,codex
+```
+
+`enroll` generates an Ed25519 device key, mints a host API key for that workspace, writes `~/.config/oxagen/tacho/host.json`, installs the collector (`tachod`) as a user service — launchd on macOS, a systemd user unit on Linux, a per-user Task Scheduler task on Windows — and merges Tacho's hook entries into each harness's settings without touching an entry it did not write. From then on every Claude Code and Codex session on the machine is chained and shipped, and the panel shows the agent key, the org and workspace the host reports to, the enrollment id, the bundle version, collector uptime, spool depth and last ingest.
+
+The gold button is always the next step: **Sign in** when there is no session, **Enroll this machine** when there is no enrollment, **Reassign** or **Apply** when a picker differs from the host, and nothing otherwise.
+
+## Pick or change the workspace
+
+The Workspace panel lists your orgs and that org's workspaces. Pick a different one and press **Reassign to …**. The app runs
+
+```bash
+tacho reassign --org <org> --workspace <workspace>
+```
+
+The host API key is minted for the workspace at enrollment, so a move is a revoke plus a fresh enrollment, done as one step: revoke the current enrollment, strip the old enrollment's hook groups from both harnesses, and enroll again in the target with the same device key, loopback port and local bearer. The fleet page sees one continuous host.
+
+Two scopes coexist and the app shows both: the org and workspace in `config.json` are the CLI's default for its other commands; the pair in `host.json` is where this machine's sessions land. Reassigning changes the second. The CLI default stays until you run `oxagen login` again.
+
+## Wrappers: Claude Code and Codex
+
+The Wrappers panel shows each harness with its detected version and whether every hook is present. Tick or untick a harness (the list never empties) and press **Apply wrappers**; the app runs
+
+```bash
+tacho reassign --harness claude-code,codex
+```
+
+with the list you chose. This is the one way to drop a wrapper: `enroll` may add a harness on a re-apply but never removes one.
+
+| | Claude Code | Codex CLI |
+| --- | --- | --- |
+| Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) |
+| Enforcement | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest and Stop as command hooks; allow or deny with a reason; fail closed | same events, same decision shape |
+| Telemetry | 28 events as `http` hooks straight to the daemon, plus OpenTelemetry export | PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd and Interrupt as command hooks; no OTel |
+| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` |
+| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = custom` |
+
+## Put the CLIs on your PATH
+
+The Command line panel shows where `oxagen` and `tacho` currently resolve. **Link** puts them on your PATH without elevating:
+
+- macOS and Linux: symlinks in `~/.local/bin` to the binaries inside the app.
+- Windows: `oxagen.cmd` and `tacho.cmd` shims in `%LOCALAPPDATA%\Oxagen\bin`, and that directory is added to your user PATH. Open a new terminal afterwards.
+
+**Remove links** deletes them again; the binaries stay with the app.
+
+Once linked, the terminal and the app share the same files, so `oxagen tacho status` and the panels agree.
+
+## Uninstall
+
+Uninstall in this order; the Uninstall panel walks through it and only offers the second step once the first is done.
+
+1. **Unenroll.** In This machine, choose **Unenroll…** and confirm. The app runs `tacho unenroll`, which strips the hooks from both harnesses, stops and removes the service, revokes the enrollment on the control plane and deletes the host credentials. Tick *also delete the local event log* to add `--purge`, which drops the local WAL, spool and quarantine.
+2. **Remove local data.** Deletes `~/.config/oxagen` — the CLI session and whatever Tacho left behind. Refused while `host.json` still exists.
+3. **The platform uninstaller.** Drag `Oxagen.app` to the Trash on macOS, use *Apps & features* (or the NSIS uninstaller) on Windows, or `apt remove` / `dnf remove` (or delete the AppImage) on Linux.
+
+If you linked the CLIs, press **Remove links** first, or delete the symlinks and shims by hand.
+
+## Managed machines (MDM)
+
+The same installers push through MDM. A post-install script enrolls silently with a platform token instead of a browser sign-in:
+
+```bash
+tacho enroll --token <apiKey> --org <org> --workspace <workspace> --managed --harness claude-code,codex
+```
+
+`--managed` also prints the managed settings document; `tacho enroll --print-managed` renders only that document, which locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`.
+
+## From the terminal instead
+
+Everything above is a CLI command, and the CLIs work without the app: `oxagen login`, `oxagen tacho enroll`, `oxagen tacho status`, `oxagen tacho reassign`, `oxagen tacho unenroll`. See [Installing the CLI](/docs/cli/installation) and [Account setup](/docs/cli/account-setup). A headless Linux server has no browser for `oxagen login`; use the `--token` path there — the app is not meant for servers.
