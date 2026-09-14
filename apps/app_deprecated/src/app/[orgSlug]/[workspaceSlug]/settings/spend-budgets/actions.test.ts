@@ -102,9 +102,9 @@ function orgBudget(
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd: 1000,
-    spentUsd: 250,
-    projectedUsd: 500,
+    limit: { micros: "1000000000", currency: "USD" },
+    spent: { micros: "250000000", currency: "USD" },
+    projected: { micros: "500000000", currency: "USD" },
     ratio: 0.25,
     state: "ok",
     reachedThreshold: 0,
@@ -121,8 +121,8 @@ function workspaceBudget(
     ...orgBudget(),
     scope: "workspace",
     publicId: "bdg_ws1",
-    limitUsd: 100,
-    spentUsd: 96,
+    limit: { micros: "100000000", currency: "USD" },
+    spent: { micros: "96000000", currency: "USD" },
     ratio: 0.96,
     state: "threshold_95",
     reachedThreshold: 95,
@@ -160,7 +160,7 @@ describe("unauthenticated — no session", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 100,
+      limit: { micros: "100000000", currency: "USD" },
     });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe("Member — can read, cannot write", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: { micros: "1000000000", currency: "USD" },
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -227,7 +227,7 @@ describe("non-billing-manager — assertBillingManager denies", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: { micros: "1000000000", currency: "USD" },
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("permission");
@@ -248,7 +248,7 @@ describe("billing manager — can read and write", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: { micros: "1000000000", currency: "USD" },
     });
     expect(result.ok).toBe(true);
   });
@@ -314,8 +314,8 @@ describe("getSpendBudgetsAction — invoke throws", () => {
 describe("setSpendBudgetAction — happy path", () => {
   it("returns {ok:true, budget} and revalidates the spend-budgets path", async () => {
     const updated = workspaceBudget({
-      limitUsd: 200,
-      spentUsd: 96,
+      limit: { micros: "200000000", currency: "USD" },
+      spent: { micros: "96000000", currency: "USD" },
       ratio: 0.48,
       state: "ok",
     });
@@ -325,14 +325,19 @@ describe("setSpendBudgetAction — happy path", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 200,
+      limit: { micros: "200000000", currency: "USD" },
     });
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.budget).toEqual(updated);
     expect(mockInvoke).toHaveBeenCalledWith(
       "set_spend_budget",
-      { scope: "workspace", enabled: true, period: "monthly", limitUsd: 200 },
+      {
+        scope: "workspace",
+        enabled: true,
+        period: "monthly",
+        limit: { micros: "200000000", currency: "USD" },
+      },
       expect.objectContaining({
         orgId: "org-1",
         workspaceId: "ws-1",
@@ -355,7 +360,7 @@ describe("setSpendBudgetAction — happy path", () => {
       enabled: true,
       period: "rolling",
       windowDays: 14,
-      limitUsd: 1000,
+      limit: { micros: "1000000000", currency: "USD" },
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -365,7 +370,7 @@ describe("setSpendBudgetAction — happy path", () => {
         enabled: true,
         period: "rolling",
         windowDays: 14,
-        limitUsd: 1000,
+        limit: { micros: "1000000000", currency: "USD" },
       },
       expect.anything(),
       { surface: "agent" },
@@ -379,7 +384,7 @@ describe("setSpendBudgetAction — happy path", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 100,
+      limit: { micros: "100000000", currency: "USD" },
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -402,7 +407,7 @@ describe("setSpendBudgetAction — invoke throws", () => {
       enabled: true,
       period: "rolling",
       windowDays: null,
-      limitUsd: 1000,
+      limit: { micros: "1000000000", currency: "USD" },
     });
 
     expect(result.ok).toBe(false);

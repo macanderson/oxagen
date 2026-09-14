@@ -29,7 +29,7 @@ vi.mock("./scope-budget-card", () => ({
   }) => (
     <div data-testid={`mock-card-${scope}`}>
       <span data-testid={`mock-card-${scope}-limit`}>
-        {budget?.limitUsd ?? "empty"}
+        {budget?.limit ? Number(budget.limit.micros) / 1_000_000 : "empty"}
       </span>
       <span data-testid={`mock-card-${scope}-can-manage`}>
         {String(canManage)}
@@ -43,9 +43,9 @@ vi.mock("./scope-budget-card", () => ({
             enabled: true,
             period: "monthly",
             windowDays: null,
-            limitUsd: 999,
-            spentUsd: 0,
-            projectedUsd: 0,
+            limit: { micros: "999000000", currency: "USD" },
+            spent: { micros: "0", currency: "USD" },
+            projected: { micros: "0", currency: "USD" },
             ratio: 0,
             state: "ok",
             reachedThreshold: 0,
@@ -74,9 +74,9 @@ function budget(scope: SpendBudgetScope, limitUsd: number): SpendBudgetStatus {
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd,
-    spentUsd: 0,
-    projectedUsd: 0,
+    limit: { micros: String(limitUsd * 1_000_000), currency: "USD" },
+    spent: { micros: "0", currency: "USD" },
+    projected: { micros: "0", currency: "USD" },
     ratio: 0,
     state: "ok",
     reachedThreshold: 0,
@@ -114,9 +114,11 @@ describe("SpendBudgetsPanel", () => {
         canManage={true}
       />,
     );
-    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
+    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent(
+      /^1000$/,
+    );
     expect(screen.getByTestId("mock-card-workspace-limit")).toHaveTextContent(
-      "100",
+      /^100$/,
     );
   });
 
@@ -139,10 +141,12 @@ describe("SpendBudgetsPanel", () => {
     );
 
     expect(screen.getByTestId("mock-card-workspace-limit")).toHaveTextContent(
-      "999",
+      /^999$/,
     );
     // Org scope's original value is unaffected by the workspace-scope save.
-    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
+    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent(
+      /^1000$/,
+    );
   });
 
   it("threads canManage to both scope cards", () => {

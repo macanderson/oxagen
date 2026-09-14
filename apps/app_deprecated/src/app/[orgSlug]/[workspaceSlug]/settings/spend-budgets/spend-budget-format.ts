@@ -9,6 +9,7 @@
  * round-trip server error for the same rule.
  */
 import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
+import type { Money } from "@oxagen/oxagen/money";
 
 export type SpendBudgetPeriod = "monthly" | "rolling";
 export type SpendBudgetScope = "org" | "workspace";
@@ -30,6 +31,34 @@ const USD_FORMATTER = new Intl.NumberFormat("en-US", {
  *  hand-rolled string concatenation. */
 export function formatUsd(amount: number): string {
   return USD_FORMATTER.format(amount);
+}
+
+/**
+ * The wire carries money as integer micro-units in a decimal string
+ * (`{ micros, currency }`, ADR-057 decision 2). This panel edits and shows
+ * dollars, so the conversion happens once at this boundary and nowhere else
+ * in the page.
+ */
+export function moneyToUsd(money: Money): number {
+  return Number(money.micros) / 1_000_000;
+}
+
+/** Money → "$1,234.56". */
+export function formatMoney(money: Money): string {
+  return formatUsd(moneyToUsd(money));
+}
+
+/**
+ * A dollar amount from the form → wire micros. The amount is rendered to six
+ * decimals as a string and the point dropped, so `0.07` is exactly `70000`
+ * micros and no float multiply rounds the value.
+ */
+export function usdToMoney(usd: number): Money {
+  const micros = usd
+    .toFixed(6)
+    .replace(".", "")
+    .replace(/^0+(?=\d)/, "");
+  return { micros, currency: "USD" };
 }
 
 /**
@@ -84,7 +113,7 @@ export function validateWindowDays(
     : null;
 }
 
-/** Mirrors the contract's `limitUsd: z.number().positive()`. */
+/** Mirrors the contract's positive-micros refine on `limit`, in dollars. */
 export function validateLimitUsd(limitUsd: number | null): string | null {
   if (limitUsd == null || !Number.isFinite(limitUsd) || limitUsd <= 0) {
     return "Limit must be a dollar amount greater than $0.";

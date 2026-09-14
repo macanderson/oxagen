@@ -147,9 +147,9 @@ function workspaceBudget(
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd: 100,
-    spentUsd: 25,
-    projectedUsd: 50,
+    limit: { micros: "100000000", currency: "USD" },
+    spent: { micros: "25000000", currency: "USD" },
+    projected: { micros: "50000000", currency: "USD" },
     ratio: 0.25,
     state: "ok",
     reachedThreshold: 0,
@@ -196,7 +196,11 @@ describe("ScopeBudgetCard — empty scope", () => {
 describe("ScopeBudgetCard — monthly save happy path", () => {
   it("calls setSpendBudgetAction with the mapped input and notifies onSaved", async () => {
     const onSaved = vi.fn();
-    const saved = workspaceBudget({ limitUsd: 250, spentUsd: 0, ratio: 0 });
+    const saved = workspaceBudget({
+      limit: { micros: "250000000", currency: "USD" },
+      spent: { micros: "0", currency: "USD" },
+      ratio: 0,
+    });
     mockSetSpendBudgetAction.mockResolvedValue({ ok: true, budget: saved });
 
     render(<ScopeBudgetCard {...baseProps({ onSaved })} />);
@@ -217,7 +221,7 @@ describe("ScopeBudgetCard — monthly save happy path", () => {
       enabled: true,
       period: "monthly",
       windowDays: null,
-      limitUsd: 250,
+      limit: { micros: "250000000", currency: "USD" },
     });
     expect(onSaved).toHaveBeenCalledWith("workspace", saved);
 
@@ -296,7 +300,7 @@ describe("ScopeBudgetCard — rolling period", () => {
       budget: workspaceBudget({
         period: "rolling",
         windowDays: 14,
-        limitUsd: 100,
+        limit: { micros: "100000000", currency: "USD" },
       }),
     });
     await userEvent.type(
@@ -313,7 +317,7 @@ describe("ScopeBudgetCard — rolling period", () => {
       enabled: true,
       period: "rolling",
       windowDays: 14,
-      limitUsd: 100,
+      limit: { micros: "100000000", currency: "USD" },
     });
   });
 });
@@ -321,8 +325,8 @@ describe("ScopeBudgetCard — rolling period", () => {
 describe("ScopeBudgetCard — configured ceiling, exceeded state", () => {
   it("renders the status view plus an unmistakable exceeded alert banner", () => {
     const exceeded = workspaceBudget({
-      limitUsd: 100,
-      spentUsd: 140,
+      limit: { micros: "100000000", currency: "USD" },
+      spent: { micros: "140000000", currency: "USD" },
       ratio: 1.4,
       state: "exceeded",
       reachedThreshold: 100,
@@ -418,7 +422,7 @@ describe("ScopeBudgetCard — disabled ceiling", () => {
       enabled: false,
       state: "exceeded",
       ratio: 1.4,
-      spentUsd: 140,
+      spent: { micros: "140000000", currency: "USD" },
     });
     render(
       <ScopeBudgetCard {...baseProps({ budget: disabledButOverLimit })} />,

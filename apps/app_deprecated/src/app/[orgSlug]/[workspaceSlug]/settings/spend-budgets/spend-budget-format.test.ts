@@ -1,10 +1,34 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatMoney,
   formatUsd,
   formatWindow,
+  moneyToUsd,
+  usdToMoney,
   validateLimitUsd,
   validateWindowDays,
 } from "./spend-budget-format";
+
+describe("money at the boundary", () => {
+  it("moneyToUsd reads micros as dollars", () => {
+    expect(moneyToUsd({ micros: "1234500000", currency: "USD" })).toBe(1234.5);
+  });
+
+  it("formatMoney renders micros as a dollar string", () => {
+    expect(formatMoney({ micros: "500000000", currency: "USD" })).toBe(
+      "$500.00",
+    );
+  });
+
+  it("usdToMoney carries cents to micros without a float multiply", () => {
+    expect(usdToMoney(0.07)).toEqual({ micros: "70000", currency: "USD" });
+    expect(usdToMoney(250)).toEqual({ micros: "250000000", currency: "USD" });
+    expect(usdToMoney(1234.56)).toEqual({
+      micros: "1234560000",
+      currency: "USD",
+    });
+  });
+});
 
 describe("formatUsd", () => {
   it("formats a whole-dollar amount with the standard USD currency format", () => {
