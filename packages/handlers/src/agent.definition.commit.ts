@@ -15,8 +15,12 @@
 //      default ref or the repository's default branch is refused, so the
 //      default branch is never written.
 //   5. GitHub: the branch is created from the default branch when it does
-//      not exist, the file is put on it, and a pull request is opened against
-//      the default branch. Nothing here merges.
+//      not exist, the file is put on it, and the branch's open pull request
+//      against the default branch is reused or, when there is none, opened.
+//      GitHub refuses a second pull request for a head that has one open
+//      (422), so the lookup runs before the file is written: a Save to a
+//      branch already under review must not leave the commit in git with no
+//      version row behind it. Nothing here merges.
 //   6. A new unpublished `agent_versions` row caches the path, digest,
 //      source, commit, branch and pull request. The config column carries
 //      the latest version's config forward so the legacy definition reads
@@ -327,6 +331,12 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       fromBranch: info.defaultBranch,
     });
   }
+  const [existingPr] = await gh.listPullRequests({
+    owner: repository.owner,
+    repo: repository.repo,
+    head: `${repository.owner}:${input.branch}`,
+    state: "open",
+  });
   const path = definitionPathFor(agent.slug);
   const digest = sha256Hex(input.source);
   const message = input.message ?? `Agent definition: ${agent.slug}`;
@@ -338,14 +348,16 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
     message,
     branch: input.branch,
   });
-  const pr = await gh.openPullRequest({
-    owner: repository.owner,
-    repo: repository.repo,
-    title: message,
-    head: input.branch,
-    base: info.defaultBranch,
-    body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
-  });
+  const pr =
+    existingPr ??
+    (await gh.openPullRequest({
+      owner: repository.owner,
+      repo: repository.repo,
+      title: message,
+      head: input.branch,
+      base: info.defaultBranch,
+      body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
+    }));
 
   const version = await withTenantDb(async (tx) => {
     const [inserted] = await tx
@@ -377,7 +389,9 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       branch: input.branch,
       pullRequest: pr.number,
     },
-    "agent.definition.commit: definition committed and pull request opened",
+    existingPr
+      ? "agent.definition.commit: definition committed to the branch's open pull request"
+      : "agent.definition.commit: definition committed and pull request opened",
   );
 
   return {

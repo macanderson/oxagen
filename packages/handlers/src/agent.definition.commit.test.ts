@@ -5,7 +5,9 @@
 // is proven against a real Postgres with the GitHub client replaced by a
 // recorder, so the test asserts what was pushed where: a branch created from
 // the default branch, one file put on that branch, one pull request against
-// the default branch, and never a write to the default branch. Runs where
+// the default branch, and never a write to the default branch. The recorder
+// keeps GitHub's one rule that matters here: a head with an open pull request
+// cannot get a second one (POST /pulls answers 422). Runs where
 // DATABASE_URL is set (CI's `test` job); locally:
 //
 //   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
@@ -26,6 +28,8 @@ import { AGENT_DEFINITION_SCHEMA } from "@oxagen/oxagen/contracts/agent.definiti
 const gh = vi.hoisted(() => ({
   defaultBranch: "main",
   branches: [] as string[],
+  /** Heads with an open pull request, as `owner:branch`. */
+  openHeads: [] as string[],
   calls: [] as { op: string; args: Record<string, unknown> }[],
   client: {
     getRepoInfo: vi.fn(async () => ({ defaultBranch: gh.defaultBranch })),
@@ -41,10 +45,27 @@ const gh = vi.hoisted(() => ({
       gh.calls.push({ op: "putFile", args });
       return { commitSha: "c0ffee01", contentSha: "b10b" };
     }),
-    openPullRequest: vi.fn(async (args: Record<string, unknown>) => {
-      gh.calls.push({ op: "openPullRequest", args });
-      return { number: 42, htmlUrl: "https://github.com/acme/core/pull/42" };
+    listPullRequests: vi.fn(async (args: { head: string; state: string }) => {
+      gh.calls.push({ op: "listPullRequests", args });
+      return gh.openHeads.includes(args.head) && args.state === "open"
+        ? [{ number: 42, htmlUrl: "https://github.com/acme/core/pull/42" }]
+        : [];
     }),
+    openPullRequest: vi.fn(
+      async (
+        args: { owner: string; head: string } & Record<string, unknown>,
+      ) => {
+        gh.calls.push({ op: "openPullRequest", args });
+        const head = `${args.owner}:${args.head}`;
+        if (gh.openHeads.includes(head)) {
+          throw new Error(
+            `GitHub API 422: A pull request already exists for ${head}.`,
+          );
+        }
+        gh.openHeads.push(head);
+        return { number: 42, htmlUrl: "https://github.com/acme/core/pull/42" };
+      },
+    ),
   },
 }));
 
@@ -240,6 +261,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     beforeEach(() => {
       gh.calls.length = 0;
       gh.branches = ["main"];
+      gh.openHeads = [];
       gh.defaultBranch = "main";
     });
 
@@ -269,6 +291,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.digest).toMatch(/^[0-9a-f]{64}$/);
       expect(gh.calls.map((c) => c.op)).toEqual([
         "createBranch",
+        "listPullRequests",
         "putFile",
         "openPullRequest",
       ]);
@@ -277,13 +300,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
         fromBranch: "main",
       });
       expect(gh.calls[1]!.args).toMatchObject({
+        head: "acme:agents/release-bot",
+        state: "open",
+      });
+      expect(gh.calls[2]!.args).toMatchObject({
         owner: "acme",
         repo: "core",
         path: ".oxagen/agents/release-bot.toml",
         branch: "agents/release-bot",
         content: source,
       });
-      expect(gh.calls[2]!.args).toMatchObject({
+      expect(gh.calls[3]!.args).toMatchObject({
         head: "agents/release-bot",
         base: "main",
       });
@@ -307,8 +334,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    it("a second commit to a branch that exists puts the file without creating it, and the version number climbs", async () => {
+    it("a second commit to a branch under review puts the file on it, reuses its open pull request, and the version number climbs", async () => {
       gh.branches.push("agents/release-bot");
+      gh.openHeads.push("acme:agents/release-bot");
       const out = await commit(tenant, {
         agentId: agent.publicId,
         repositoryId: bindingPublicId,
@@ -317,8 +345,33 @@ describe.skipIf(!process.env.DATABASE_URL)(
         message: "tighten the belt",
       });
       expect(out.version).toBe(2);
-      expect(gh.calls.map((c) => c.op)).toEqual(["putFile", "openPullRequest"]);
-      expect(gh.calls[1]!.args).toMatchObject({ title: "tighten the belt" });
+      expect(out.pullRequest).toEqual({
+        number: 42,
+        url: "https://github.com/acme/core/pull/42",
+      });
+      expect(gh.calls.map((c) => c.op)).toEqual([
+        "listPullRequests",
+        "putFile",
+      ]);
+      expect(gh.calls[1]!.args).toMatchObject({ message: "tighten the belt" });
+    });
+
+    it("a branch that exists with no open pull request gets one opened after the file lands", async () => {
+      gh.branches.push("agents/release-bot");
+      const out = await commit(tenant, {
+        agentId: agent.publicId,
+        repositoryId: bindingPublicId,
+        branch: "agents/release-bot",
+        source: SOURCE("release-bot"),
+        message: "reopen after merge",
+      });
+      expect(out.version).toBe(3);
+      expect(gh.calls.map((c) => c.op)).toEqual([
+        "listPullRequests",
+        "putFile",
+        "openPullRequest",
+      ]);
+      expect(gh.calls[2]!.args).toMatchObject({ title: "reopen after merge" });
     });
 
     it("refuses the configured default ref and the repository's default branch without touching GitHub", async () => {
@@ -400,8 +453,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         branch: "agents/x",
         source: SOURCE("release-bot"),
       });
-      expect(gh.calls[1]!.args).toMatchObject({ repo: "docs" });
-      expect(out.version).toBe(3);
+      expect(gh.calls[2]!.args).toMatchObject({ repo: "docs" });
+      expect(out.version).toBe(4);
     });
 
     it("an org Viewer is refused on a tier-free org, before the file is read", async () => {

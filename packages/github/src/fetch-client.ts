@@ -456,6 +456,24 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return { number: data.number, htmlUrl: data.html_url };
   }
 
+  async function listPullRequests(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    state: "open" | "closed" | "all";
+  }): Promise<{ number: number; htmlUrl: string }[]> {
+    const query = new URLSearchParams({
+      head: args.head,
+      state: args.state,
+      per_page: "100",
+    });
+    const data = await request<GHPull[]>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls?${query.toString()}`,
+    );
+    return data.map((pr) => ({ number: pr.number, htmlUrl: pr.html_url }));
+  }
+
   async function getFileContent(args: {
     owner: string;
     repo: string;
@@ -673,6 +691,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     forkRepo,
     createBranch,
     openPullRequest,
+    listPullRequests,
     getFileContent,
     getTree,
     getPullRequest,

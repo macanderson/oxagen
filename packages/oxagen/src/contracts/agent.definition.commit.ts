@@ -6,9 +6,11 @@
 // The definition is the file `.oxagen/agents/<slug>.toml`. This capability
 // commits the text the caller supplies to a branch that is never the
 // repository's default branch, opens a pull request against the default
-// branch, and caches the commit on a new `agent.agent_versions` row (path,
-// digest, source, commit, branch, pull request). The running definition stays
-// what the default branch holds until a person merges the pull request.
+// branch (or reuses the branch's open one, so a redraft lands on the pull
+// request under review), and caches the commit on a new `agent.agent_versions`
+// row (path, digest, source, commit, branch, pull request). The running
+// definition stays what the default branch holds until a person merges the
+// pull request.
 //
 // The handler refuses a file whose `schema` is not `agent-definition/v0.1`
 // or whose `slug` is not the agent's, and a branch that is the default
@@ -40,7 +42,7 @@ export const agentDefinitionCommit = registerCapability({
   name: "commit_agent_definition",
   domain: "agent",
   description:
-    "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it; the default branch is never written.",
+    "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -87,6 +89,7 @@ export const agentDefinitionCommit = registerCapability({
       digest: z.string().regex(/^[0-9a-f]{64}$/),
       commitSha: z.string().min(1),
       branch: z.string().min(1),
+      /** The branch's open pull request against the default branch: opened by this call, or the one already under review. */
       pullRequest: z
         .object({
           number: z.number().int().positive(),
