@@ -39,8 +39,8 @@ Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY
 | `host_enrollment_id` | String | key scope (`thst_`), empty for SDK agents |
 | `agent_key` | String | ADR-024 key of host or agent |
 | `agent_principal_id`, `initiating_principal_id` | String | registry |
-| `runtime` | LC | `claude-code` \| `claude-agent-sdk` \| `custom` \| `stella` |
-| `harness`, `harness_version` | LC, String | `claude-code`, `2.1.263` (OTel `service.version` / init `claude_code_version`) |
+| `runtime` | LC | `claude-code` \| `claude-agent-sdk` \| `custom` \| `stella` \| `proxy` \| `codex` (`TACHO_RUNTIMES`, checked in Postgres) |
+| `harness`, `harness_version` | LC, String | `claude-code` or `codex`, `2.1.263` (OTel `service.version` / init `claude_code_version`) |
 | `wrapper_version` | String | package version |
 | `fidelity` | LC | `sdk` \| `ambient` \| `proxy` |
 | `enforcement_tier` | LC | `gateway` \| `harness` \| `observe` (session-level, denormalised) |

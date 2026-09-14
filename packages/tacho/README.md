@@ -1,11 +1,18 @@
 # @oxagen/tacho
 
 Tacho is the Oxagen wrapper that records, gates, and evidences agents Oxagen
-does not run itself: Claude Code, Claude Agent SDK agents, and custom agents.
-Spec: `docs/specs/tacho/spec.md`. Column contract: `docs/specs/tacho/data-model.md`.
+does not run itself: Claude Code, Codex CLI, Claude Agent SDK agents, and
+custom agents. Spec: `docs/specs/tacho/spec.md`. Column contract:
+`docs/specs/tacho/data-model.md`.
 
 This package is a leaf: no `@oxagen/*` runtime dependency, so it publishes on
-its own with three executables.
+its own with three executables. The one list it shares with the control plane
+by copy rather than import is `TACHO_RUNTIMES` (`src/envelope.ts`), the
+values `agent.runtime` may take; `packages/database/src/schema/tacho.ts` holds
+the same list for the `tacho.sessions.runtime` CHECK, and
+`packages/handlers/src/tacho.runtimes.test.ts` fails if they drift. Each
+harness maps to its own runtime (`contextForHarness` in
+`src/collector/registry.ts`): Claude Code to `claude-code`, Codex to `codex`.
 
 ## Enrolling a machine
 
