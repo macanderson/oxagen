@@ -9,6 +9,7 @@
     "src/i18n/request.ts!"
   ],
   "project": ["src/**/*.{ts,tsx}!"],
+  "playwright": false,
   "ignore": [
     "src/test/**",
     "src/**/*.builders.ts",
