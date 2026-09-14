@@ -2,11 +2,10 @@
 // under `onboarding.errors.*`.
 import { z } from "zod";
 import {
-  NAMESPACE_PATTERN,
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
-  SLUG_PATTERN,
-} from "./agent-key";
+} from "@oxagen/oxagen/contracts/org.create";
+import { NAMESPACE_PATTERN, SLUG_PATTERN } from "./agent-key";
 
 export type OrgFormErrorKey =
   | "orgNameRequired"

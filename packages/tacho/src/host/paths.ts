@@ -2,6 +2,9 @@
  * Where a Tacho host keeps its state (spec section 5.1). Everything lives
  * under one directory so `unenroll` can remove it whole and a test can point
  * `TACHO_HOME` at a scratch directory.
+ *
+ * The same `~/.config/oxagen` root is used on every platform, Windows
+ * included, so `oxagen login` (apps/cli) and the desktop app read one file.
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +16,7 @@ export interface TachoPaths {
   hostFile: string;
   /** Ed25519 device private key, PKCS#8 PEM (0600). */
   deviceKey: string;
-  /** The daemon's Unix socket. */
+  /** The daemon's Unix socket (unused on Windows, where the hook uses TCP). */
   socket: string;
   /** Per-session append-only event logs and the shipped cursor. */
   wal: string;
@@ -31,6 +34,13 @@ export interface TachoPaths {
   claudeSettings: string;
   /** Claude Code's transcript root. */
   claudeProjects: string;
+  /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
+  codexHooks: string;
+  /**
+   * The wrapper script the Windows scheduled task runs (sets the env, then
+   * starts `tachod`). Unused on macOS and Linux, where the unit carries env.
+   */
+  daemonLauncher: string;
 }
 
 export function tachoPaths(
@@ -39,6 +49,7 @@ export function tachoPaths(
 ): TachoPaths {
   const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
   const claudeConfigDir = env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
+  const codexHome = env["CODEX_HOME"] ?? join(home, ".codex");
   return {
     root,
     hostFile: join(root, "host.json"),
@@ -52,6 +63,8 @@ export function tachoPaths(
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),
     claudeProjects: join(claudeConfigDir, "projects"),
+    codexHooks: join(codexHome, "hooks.json"),
+    daemonLauncher: join(root, "tachod.cmd"),
   };
 }
 

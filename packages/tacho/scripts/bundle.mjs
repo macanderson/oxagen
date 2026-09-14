@@ -18,6 +18,9 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const outDir = resolve(root, "dist-standalone");
+const version = JSON.parse(
+  readFileSync(resolve(root, "package.json"), "utf8"),
+).version;
 
 const targets = [
   { name: "tacho", entry: "src/cli/main.ts", minify: false },
@@ -41,7 +44,10 @@ for (const target of targets) {
         "const require = globalThis.require ?? __tacho_createRequire(import.meta.url);",
       ].join("\n"),
     },
-    define: { "process.env.TACHO_BUNDLED": '"1"' },
+    define: {
+      "process.env.TACHO_BUNDLED": '"1"',
+      __TACHO_VERSION__: JSON.stringify(version),
+    },
     logLevel: "info",
     legalComments: "none",
   });
@@ -51,3 +57,31 @@ for (const target of targets) {
   chmodSync(outfile, 0o755);
   console.log(`✔ ${target.name} → ${outfile}`);
 }
+
+/**
+ * The single-binary bundle: one CommonJS file (Node SEA requires CJS) that
+ * `tools/sea/compile.mjs` embeds into a copy of `node`. `import.meta.url`
+ * is rewritten to a `__filename`-based URL so `createRequire` and the
+ * package-relative lookups keep working inside the executable.
+ */
+const seaOut = resolve(outDir, "sea", "tacho.cjs");
+await build({
+  entryPoints: [resolve(root, "src/cli/native.ts")],
+  outfile: seaOut,
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  minify: false,
+  banner: {
+    js: 'const __importMetaUrl = require("node:url").pathToFileURL(__filename).href;',
+  },
+  define: {
+    "process.env.TACHO_BUNDLED": '"1"',
+    "import.meta.url": "__importMetaUrl",
+    __TACHO_VERSION__: JSON.stringify(version),
+  },
+  logLevel: "info",
+  legalComments: "none",
+});
+console.log(`✔ tacho (sea) → ${seaOut}`);

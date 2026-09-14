@@ -25,5 +25,5 @@
     "*.ts",
     "e2e/**/*.ts"
   ],
-  "exclude": ["node_modules", ".next"]
+  "exclude": ["node_modules", ".next", "src/test/arch/probes"]
 }

@@ -20,6 +20,7 @@ const outcomes = {
   verify: { ok: true, detail: "chained" },
   status: { enrolled: true },
   unenroll: { ok: true },
+  reassign: { ok: true, warnings: [] as string[] },
   exportCommand: true,
 };
 vi.mock("@oxagen/tacho/cli", () => ({
@@ -43,15 +44,23 @@ vi.mock("@oxagen/tacho/cli", () => ({
     calls.push({ name: "unenroll", args });
     return outcomes.unenroll;
   },
+  reassign: async (...args: unknown[]) => {
+    calls.push({ name: "reassign", args });
+    return outcomes.reassign;
+  },
   exportCommand: async (...args: unknown[]) => {
     calls.push({ name: "exportCommand", args });
     return outcomes.exportCommand;
   },
+  // The real parser: a comma list of known harness names.
+  parseHarnesses: (value?: string) =>
+    value === undefined ? ["claude-code"] : value.split(","),
 }));
 
 import {
   handleTachoEnroll,
   handleTachoExport,
+  handleTachoReassign,
   handleTachoStatus,
   handleTachoUnenroll,
   handleTachoVerify,
@@ -108,6 +117,12 @@ describe("oxagen tacho", () => {
     });
     expect((calls[0]?.args[1] as { fake: boolean }).fake).toBe(true);
     expect(output()).toContain("Verified: chained");
+    // --harness reaches enroll as a parsed list; absent, it is not passed.
+    await handleTachoEnroll({ harness: "claude-code,codex" }, writer);
+    expect(calls.at(-1)?.args[0]).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+    });
+    expect(calls[0]?.args[0]).not.toHaveProperty("harnesses");
     outcomes.enroll = { ok: false, warnings: [] };
     expect(await handleTachoEnroll({}, writer)).toBe(false);
     outcomes.enroll = { ok: true, warnings: [] };
@@ -135,6 +150,22 @@ describe("oxagen tacho", () => {
       purge: true,
       reason: "laptop retired",
     });
+    expect(
+      await handleTachoReassign(
+        { workspace: "edge", harness: "codex", reason: "moved" },
+        writer,
+      ),
+    ).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({
+      token: "session-token",
+      workspace: "edge",
+      harnesses: ["codex"],
+      reason: "moved",
+    });
+    outcomes.reassign = { ok: false, warnings: [] };
+    expect(await handleTachoReassign({ workspace: "edge" }, writer)).toBe(
+      false,
+    );
     expect(await handleTachoExport({ list: true }, writer)).toBe(true);
     expect(calls.at(-1)?.args[0]).toEqual({ list: true });
     expect(await handleTachoVerify(writer)).toBe(true);

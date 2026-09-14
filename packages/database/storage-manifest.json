@@ -1168,6 +1168,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_approvals",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repo",
       "name": "list_branches",
       "reads": [],
@@ -2540,7 +2550,7 @@
       "writes": []
     }
   ],
-  "contentHash": "75f5455cbfa1c245f429b357c9e6396155d872a444ad0198f731f56e4666b47a",
+  "contentHash": "61324272f39d1f942937c81db35a11cf5ee05f174515ac613fe92af945f6626a",
   "domains": [
     {
       "name": "agent",

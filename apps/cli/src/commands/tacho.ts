@@ -29,7 +29,17 @@ export interface TachoEnrollOptions {
   port?: number;
   service?: boolean;
   force?: boolean;
+  /** `claude-code`, `codex`, or a comma list. */
+  harness?: string;
   verify?: boolean;
+}
+
+export interface TachoReassignOptions {
+  token?: string;
+  org?: string;
+  workspace?: string;
+  harness?: string;
+  reason?: string;
 }
 
 export interface TachoUnenrollOptions {
@@ -72,7 +82,7 @@ export async function handleTachoEnroll(
   opts: TachoEnrollOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { enroll, verify } = await import("@oxagen/tacho/cli");
+  const { enroll, parseHarnesses, verify } = await import("@oxagen/tacho/cli");
   const deps = await tachoDeps(writer);
   const result = await enroll(
     {
@@ -84,6 +94,9 @@ export async function handleTachoEnroll(
       ...(opts.port !== undefined ? { port: opts.port } : {}),
       ...(opts.service !== undefined ? { service: opts.service } : {}),
       ...(opts.force !== undefined ? { force: opts.force } : {}),
+      ...(opts.harness !== undefined
+        ? { harnesses: parseHarnesses(opts.harness) }
+        : {}),
     },
     deps,
   );
@@ -116,6 +129,27 @@ export async function handleTachoUnenroll(
   const { unenroll } = await import("@oxagen/tacho/cli");
   const result = await unenroll(
     { ...tachoCredentials(opts), ...opts },
+    await tachoDeps(writer),
+  );
+  return result.ok;
+}
+
+export async function handleTachoReassign(
+  opts: TachoReassignOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<boolean> {
+  const { parseHarnesses, reassign } = await import("@oxagen/tacho/cli");
+  const credentials = tachoCredentials(opts);
+  const result = await reassign(
+    {
+      ...(credentials.token !== undefined ? { token: credentials.token } : {}),
+      ...(opts.org !== undefined ? { org: opts.org } : {}),
+      ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+      ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+      ...(opts.harness !== undefined
+        ? { harnesses: parseHarnesses(opts.harness) }
+        : {}),
+    },
     await tachoDeps(writer),
   );
   return result.ok;

@@ -1,0 +1,145 @@
+/**
+ * The Codex CLI hooks writer (spec section 13, verified 2026-09-13 against
+ * developers.openai.com/codex/hooks). Codex reads `~/.codex/hooks.json`
+ * whose `hooks` member has Claude Code's group shape, receives the same stdin
+ * fields (`session_id`, `hook_event_name`, `tool_name`, `tool_input`, `cwd`,
+ * `transcript_path`), and honours the same `hookSpecificOutput.
+ * permissionDecision` answer. Two differences drive this module:
+ *
+ *   - only `type: "command"` hooks exist, so the telemetry events that Claude
+ *     Code posts over `http` are command hooks here too (fail open: the hook
+ *     answers `{}` when the daemon is down);
+ *   - there is no env block and no OpenTelemetry export, so the writer
+ *     touches `hooks` only.
+ *
+ * Every entry carries `--harness codex` so the daemon labels the session.
+ */
+import {
+  COMMAND_HOOK_EVENTS,
+  COMMAND_HOOK_TIMEOUTS_S,
+  commandHookEntry,
+  type HookGroup,
+  type HookInstallConfig,
+  isTachoGroup,
+  type SettingsDocument,
+} from "./settings-writer";
+
+/** Codex lifecycle events beyond the five enforcement events. */
+export const CODEX_TELEMETRY_EVENTS = [
+  "PostToolUse",
+  "SubagentStart",
+  "SubagentStop",
+  "PreCompact",
+  "PostCompact",
+  "SessionEnd",
+  "Interrupt",
+] as const;
+
+export const CODEX_HOOK_EVENTS = [
+  ...COMMAND_HOOK_EVENTS,
+  ...CODEX_TELEMETRY_EVENTS,
+] as const;
+
+export type CodexHookEventName = (typeof CODEX_HOOK_EVENTS)[number];
+
+const TELEMETRY_TIMEOUT_S = 5;
+
+/** The hook groups Tacho installs into `hooks.json`, by event. */
+export function codexHookEntries(
+  config: HookInstallConfig,
+): Record<CodexHookEventName, HookGroup[]> {
+  const out = {} as Record<CodexHookEventName, HookGroup[]>;
+  for (const event of COMMAND_HOOK_EVENTS) {
+    out[event] = [
+      {
+        hooks: [
+          commandHookEntry(config, COMMAND_HOOK_TIMEOUTS_S[event], "codex"),
+        ],
+      },
+    ];
+  }
+  for (const event of CODEX_TELEMETRY_EVENTS) {
+    out[event] = [
+      { hooks: [commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex")] },
+    ];
+  }
+  return out;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+export interface CodexMergeResult {
+  settings: SettingsDocument;
+  changed: boolean;
+}
+
+/** Merge Tacho's groups into a `hooks.json` document; foreign groups survive. */
+export function mergeCodexHooks(
+  existing: unknown,
+  config: HookInstallConfig,
+): CodexMergeResult {
+  const settings: SettingsDocument =
+    existing !== null && typeof existing === "object"
+      ? clone(existing as SettingsDocument)
+      : {};
+  const before = JSON.stringify(settings);
+  const hooks = { ...(settings.hooks ?? {}) };
+  for (const [event, groups] of Object.entries(codexHookEntries(config))) {
+    const foreign = (hooks[event] ?? []).filter(
+      (group) => !isTachoGroup(group, config.enrollmentId),
+    );
+    hooks[event] = [...foreign, ...groups];
+  }
+  settings.hooks = hooks;
+  return { settings, changed: JSON.stringify(settings) !== before };
+}
+
+/** Remove Tacho's groups (one enrollment, or any) from a `hooks.json` document. */
+export function stripCodexHooks(
+  existing: unknown,
+  enrollmentId?: string,
+): CodexMergeResult {
+  const settings: SettingsDocument =
+    existing !== null && typeof existing === "object"
+      ? clone(existing as SettingsDocument)
+      : {};
+  const before = JSON.stringify(settings);
+  if (settings.hooks !== undefined) {
+    const hooks: Record<string, HookGroup[]> = {};
+    for (const [event, groups] of Object.entries(settings.hooks)) {
+      const kept = groups.filter((group) => !isTachoGroup(group, enrollmentId));
+      if (kept.length > 0) hooks[event] = kept;
+    }
+    if (Object.keys(hooks).length > 0) settings.hooks = hooks;
+    else delete settings.hooks;
+  }
+  return { settings, changed: JSON.stringify(settings) !== before };
+}
+
+export interface CodexHookPresence {
+  complete: boolean;
+  present: CodexHookEventName[];
+  missing: CodexHookEventName[];
+}
+
+/** Which of Tacho's Codex hooks are installed for this enrollment. */
+export function codexHookPresence(
+  existing: unknown,
+  enrollmentId: string,
+): CodexHookPresence {
+  const settings =
+    existing !== null && typeof existing === "object"
+      ? (existing as SettingsDocument)
+      : {};
+  const present: CodexHookEventName[] = [];
+  const missing: CodexHookEventName[] = [];
+  for (const event of CODEX_HOOK_EVENTS) {
+    const groups = settings.hooks?.[event] ?? [];
+    if (groups.some((group) => isTachoGroup(group, enrollmentId)))
+      present.push(event);
+    else missing.push(event);
+  }
+  return { complete: missing.length === 0, present, missing };
+}

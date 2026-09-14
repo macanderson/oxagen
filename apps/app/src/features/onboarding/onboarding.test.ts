@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import onboardingMessages from "../../../messages/onboarding.json";
+import { RESERVED_ORG_SLUGS } from "@oxagen/oxagen/contracts/org.create";
 import {
   AgentSlug,
   agentKey,
@@ -9,7 +10,6 @@ import {
   sdkSnippet,
   suggestNamespace,
   toSlug,
-  RESERVED_ORG_SLUGS,
 } from "./agent-key";
 import { OrganizationForm } from "./org-form";
 import {

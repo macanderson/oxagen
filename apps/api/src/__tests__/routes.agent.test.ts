@@ -1,6 +1,6 @@
 /**
  * Unit tests for agent route handlers:
- *   agent.approval.resolve, agent.mcp.list, agent.mcp.register,
+ *   agent.approval.list, agent.approval.resolve, agent.mcp.list, agent.mcp.register,
  *   agent.memory.recall, agent.memory.write, agent.tool.list,
  *   agent.definition.* and agent.deploy
  *
@@ -107,6 +107,48 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
   mocks.invoke.mockResolvedValue({ ok: true });
+});
+
+// ── agent.approval.list ─────────────────────────────────────────────────────
+
+describe("agent.approval.list route", () => {
+  const PATH = "/agent/approvals/list";
+
+  it("happy path POST: returns 200 with the page invoke returned", async () => {
+    const invokeResult = { items: [], nextCursor: null };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke once with contract name 'list_approvals', the parsed input and surface 'api'", async () => {
+    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
+    await app.fetch(
+      post(PATH, { runId: "arun_0123456789abcdefghjkmn", limit: 5 }),
+    );
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_approvals");
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({
+      runId: "arun_0123456789abcdefghjkmn",
+      limit: 5,
+    });
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("defaults the page size to 50 when the body omits it", async () => {
+    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
+    await app.fetch(post(PATH, {}));
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({ limit: 50 });
+  });
+
+  it("refuses a page size outside 1..100 and an unknown field before invoke", async () => {
+    const tooBig = await app.fetch(post(PATH, { limit: 101 }));
+    expect(tooBig.status).toBe(400);
+    const unknown = await app.fetch(post(PATH, { status: "pending" }));
+    expect(unknown.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
 });
 
 // ── agent.approval.resolve ──────────────────────────────────────────────────

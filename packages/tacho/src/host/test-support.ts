@@ -74,7 +74,11 @@ export function unsignedBundle(
 export function scratchPaths(): TachoPaths {
   const root = mkdtempSync(join(tmpdir(), "tacho-"));
   return tachoPaths(
-    { TACHO_HOME: join(root, "home"), CLAUDE_CONFIG_DIR: join(root, "claude") },
+    {
+      TACHO_HOME: join(root, "home"),
+      CLAUDE_CONFIG_DIR: join(root, "claude"),
+      CODEX_HOME: join(root, "codex"),
+    },
     root,
   );
 }

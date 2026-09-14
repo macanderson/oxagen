@@ -71,6 +71,8 @@ export default defineConfig([
     "test-results/**",
     "storybook-static/**",
     "next-env.d.ts",
+    // Architecture probes must violate a rule each; src/test/arch judges them.
+    "src/test/arch/probes/**",
   ]),
   js.configs.recommended,
   {

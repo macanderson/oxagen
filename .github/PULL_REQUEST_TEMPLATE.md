@@ -1,6 +1,7 @@
 ## What & Why
 
-<!-- One or two sentences: what this PR does and why. Link the Linear ticket. -->
+<!-- One or two sentences: what this PR does and why. Name each extra fix that
+     rode along (SCR-004) so a reviewer can read them apart. The issue goes below. -->
 
 ## Issue link
 

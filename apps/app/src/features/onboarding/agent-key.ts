@@ -2,7 +2,8 @@
 //   agent key: `org_ns.ws_ns.slug` (ADR-024, spec §3 "Agent", §6.2)
 //   namespace: 2–6 lowercase letters or digits, immutable (App. A `org.organizations.namespace`,
 //              the live `organizations_namespace_check`)
-//   slug:      lowercase letters, digits and hyphens (the `create_org` contract)
+//   slug:      lowercase letters, digits and hyphens (the `create_org` contract, which
+//              also owns the reserved org and workspace slug sets)
 import { z } from "zod";
 import type { SdkLanguage } from "./steps";
 
@@ -11,64 +12,6 @@ export const AGENT_TOKEN_ENV = "OXAGEN_AGENT_TOKEN";
 
 export const NAMESPACE_PATTERN = /^[a-z0-9]{2,6}$/;
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
-
-/** Org-level route segments a workspace slug may not take (plan §4.11: they would shadow /{org}/<segment>). */
-export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
-  "access",
-  "api-keys",
-  "audit",
-  "billing",
-  "developer",
-  "members",
-  "register",
-  "roles",
-  "security",
-  "settings",
-  "workspaces",
-]);
-
-/**
- * Top-level route segments an organization slug may not take: an org at `/{slug}`
- * would lose its root page or its workspaces to the route that owns the segment
- * (`/welcome/core` is a gate step, `/invite/core` an invitation token). The set
- * covers every top-level segment of `src/app` (sign-in flows, the onboarding
- * gate, the CLI and GitHub callbacks, the API), the legacy root routes of
- * apps/app_deprecated that cutover redirects may claim (`account`, `actions`,
- * `onboarding`), and the static and metadata paths the proxy matcher skips. Promote: the `create_org` contract
- * should refuse the same set (B4).
- */
-export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
-  // sign-in flows and invitations
-  "login",
-  "signup",
-  "verify",
-  "two-factor",
-  "forgot-password",
-  "reset-password",
-  "invite",
-  // onboarding gate
-  "welcome",
-  "new-organization",
-  // callbacks and API
-  "api",
-  "cli",
-  "github",
-  // legacy root routes of apps/app_deprecated
-  "account",
-  "actions",
-  "onboarding",
-  // Next internals, static assets and metadata routes the proxy skips
-  "_next",
-  "brand",
-  "favicon",
-  "fonts",
-  "manifest",
-  "pwa",
-  "robots",
-  "sitemap",
-  "social",
-  "spinner",
-]);
 
 /** Lowercase, hyphen-separated, trimmed of edge hyphens, at most `max` characters. */
 export function toSlug(input: string, max = 40): string {

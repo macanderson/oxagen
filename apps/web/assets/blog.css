@@ -48,7 +48,7 @@
   flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   overflow: hidden;
   transition:
     border-color 0.2s,
@@ -60,6 +60,9 @@
 }
 .pillar-card img {
   width: 100%;
+  /* the height attribute is a presentational hint that would pin the box to
+     360px and defeat the ratio; auto lets aspect-ratio set it */
+  height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-bottom: 1px solid var(--line);
@@ -141,7 +144,7 @@
   flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   overflow: hidden;
   transition:
     border-color 0.2s,
@@ -160,16 +163,10 @@
 }
 .post-card-shot img {
   width: 100%;
+  height: auto; /* see .pillar-card img */
   aspect-ratio: 16 / 9;
   object-fit: cover;
   filter: saturate(0.8);
-}
-.post-card-shot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--tex-scan);
-  pointer-events: none;
 }
 .post-card-meta {
   padding: 18px 20px 20px;
@@ -217,13 +214,6 @@
   height: 380px;
   object-fit: cover;
   filter: saturate(0.8);
-}
-.pillar-hero-shot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--tex-scan);
-  pointer-events: none;
 }
 .pillar-hero-copy {
   padding: 44px 0 48px;
@@ -305,12 +295,13 @@
   margin: 40px auto 0;
   width: min(1180px, calc(100% - 40px));
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--panel);
 }
 .post-hero img {
   width: 100%;
+  height: auto; /* see .pillar-card img */
   aspect-ratio: 21 / 9;
   object-fit: cover;
   filter: saturate(0.8);
@@ -339,7 +330,7 @@
   top: calc(var(--nav-h) + 24px);
   padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   background: var(--panel);
 }
 @media (max-width: 960px) {
@@ -434,7 +425,8 @@
   color: var(--ink-2);
 }
 .prose code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.86em;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -447,7 +439,7 @@
   overflow-x: auto;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   font-size: 13.6px;
   line-height: 1.6;
 }
@@ -468,7 +460,7 @@
   overflow-x: auto;
   margin: 1.4em 0;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
 }
 .prose table {
   width: 100%;
@@ -554,7 +546,7 @@
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 3px solid var(--gold);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
 }
 .callout-warn {
   border-left-color: var(--warn);

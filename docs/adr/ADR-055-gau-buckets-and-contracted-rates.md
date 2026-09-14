@@ -264,11 +264,25 @@ and `preview_action_cost` report for quoting.
 ### 12. Tokens and retention are not on the page
 
 `get_subscription.periodUsage` stays a report the app does not render. No
-table, contract or component carries a retention rate in rev1; retention
-settles later as an invoice line at a contracted per-GB-month rate that the
-lane which meters per-organisation evidence volume adds to `plans` and
-`contract_terms`. `chargeEvidenceRetention`, which had no production
-caller, is deleted.
+table carries a retention rate and no app component prints one.
+`get_rate_card` and `get_evidence_retention` keep reporting the published
+`RETENTION_USD_PER_GB_MONTH` constant for their API and MCP callers
+(`billing.action_rate_card.ts:90`, `billing.evidence_retention.ts:119`;
+the latter with `storedGbMeasured: false`, since no job measures
+per-organisation evidence volume). `get_rate_card` has no app caller. The
+audit adapter's `retention` port reads `get_evidence_retention` for
+`RetentionTier` (`apps/app/src/data/adapters/live/audit.ts:349-367`), and
+its mapper `toRetentionTiers` (`mappers/audit.ts:336-354`) carries
+`effectiveRetentionDays` only, so the rate never reaches a view model;
+WL-08 deletes that adapter with the live data layer, and no rev1 port reads
+the contract after it. Retention settles later as an invoice line at a
+contracted per-GB-month rate that the lane which meters per-organisation
+evidence volume adds to `plans` and `contract_terms`.
+`chargeEvidenceRetention` is still in the tree
+(`packages/billing/src/action-metering.ts:595-629`); it debits credits and
+has no production caller, and WL-25 deletes it with
+`retentionCreditsForGbMonths` (§15). `RETENTION_USD_PER_GB_MONTH` stays,
+for the two handlers above.
 
 ### 13. `create_org` grants no credits
 

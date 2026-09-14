@@ -1,0 +1,169 @@
+/**
+ * The app's only two ways to touch the machine: the Rust commands in
+ * src-tauri/src/lib.rs (reads, the two user-scoped API calls, PATH install)
+ * and the bundled `tacho` / `oxagen` sidecars for every action that changes
+ * state. Nothing here keeps state of its own.
+ */
+import { invoke } from "@tauri-apps/api/core";
+import { Command } from "@tauri-apps/plugin-shell";
+
+export interface CliConfigView {
+  path: string;
+  logged_in: boolean;
+  org_slug: string | null;
+  workspace_slug: string | null;
+  api_url: string;
+  app_url: string;
+}
+
+export interface HostView {
+  host_enrollment_id: string;
+  agent_key: string;
+  organization_id: string;
+  workspace_id: string;
+  org_slug: string;
+  workspace_slug: string;
+  api_url: string;
+  host_status: "active" | "paused" | "suspended" | "revoked";
+  port: number;
+  hostname: string;
+  os_user: string;
+  platform: string;
+  harnesses: string[];
+  managed: boolean;
+  claude_version: string | null;
+  claude_execpath: string | null;
+  codex_version?: string | null;
+  codex_execpath?: string | null;
+  wrapper_version: string;
+  hook_command: string;
+  daemon_command: string[];
+  enrolled_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  bundle_fetched_at: string;
+  device_key_fingerprint: string;
+  bundle: { version: number; mode: "observe" | "enforce"; expires_at: string };
+}
+
+export interface DaemonStatus {
+  uptime_s?: number;
+  spool_depth?: number;
+  last_ingest_at?: string | null;
+  last_error?: string | null;
+  sessions?: unknown[];
+  unobserved_sessions?: string[];
+  [key: string]: unknown;
+}
+
+export interface DesktopState {
+  platform: "macos" | "linux" | "windows" | string;
+  arch: string;
+  app_version: string;
+  config: CliConfigView;
+  host: HostView | null;
+  host_path: string;
+  daemon: DaemonStatus | null;
+  log_path: string;
+  sidecar_dir: string | null;
+  oxagen_on_path: string | null;
+  tacho_on_path: string | null;
+  cli_install_dir: string;
+}
+
+export const readState = () => invoke<DesktopState>("desktop_state");
+
+export const apiPost = <T>(path: string, body: unknown) =>
+  invoke<T>("api_post", { path, body });
+
+export interface InstallResult {
+  dir: string;
+  files: string[];
+  on_path: boolean;
+  note: string;
+}
+export const installCli = () => invoke<InstallResult>("install_cli");
+export const uninstallCli = () => invoke<string[]>("uninstall_cli");
+export const removeLocalData = () => invoke<string>("remove_local_data");
+export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
+
+export interface OrgItem {
+  id: string;
+  slug: string;
+  name: string;
+}
+export interface WorkspaceItem {
+  slug: string;
+  name: string;
+  id?: string;
+}
+
+export const listOrganizations = async (): Promise<OrgItem[]> =>
+  (await apiPost<{ organizations: OrgItem[] }>("/v1/user/organizations", {}))
+    .organizations;
+
+export const listWorkspaces = async (
+  orgSlug: string,
+): Promise<WorkspaceItem[]> =>
+  (
+    await apiPost<{ workspaces: WorkspaceItem[] }>("/v1/user/workspaces", {
+      orgSlug,
+    })
+  ).workspaces;
+
+export interface RunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export type Sidecar = "tacho" | "oxagen";
+
+/**
+ * Run a sidecar to completion, streaming lines to `onLine` as they arrive so
+ * a six-step `enroll` reads as progress rather than a spinner.
+ */
+export async function runSidecar(
+  name: Sidecar,
+  args: string[],
+  onLine?: (line: string, stream: "stdout" | "stderr") => void,
+): Promise<RunResult> {
+  const command = Command.sidecar(`binaries/${name}`, args);
+  let stdout = "";
+  let stderr = "";
+  command.stdout.on("data", (line: string) => {
+    stdout += `${line}\n`;
+    onLine?.(line, "stdout");
+  });
+  command.stderr.on("data", (line: string) => {
+    stderr += `${line}\n`;
+    onLine?.(line, "stderr");
+  });
+  return new Promise((resolve, reject) => {
+    command.on("close", (payload: { code: number | null }) =>
+      resolve({ code: payload.code, stdout, stderr }),
+    );
+    command.on("error", (error: unknown) =>
+      reject(error instanceof Error ? error : new Error(String(error))),
+    );
+    command.spawn().catch(reject);
+  });
+}
+
+/** `tacho status --json`, the same document the CLI prints. */
+export interface TachoStatus {
+  enrolled: boolean;
+  hooks?: { complete: boolean; present: string[]; missing: string[] };
+  codexHooks?: { complete: boolean; present: string[]; missing: string[] };
+  service?: { kind: string; installed: boolean; running: boolean };
+  wal?: { sessions: number; unshipped: number };
+}
+
+export async function tachoStatus(): Promise<TachoStatus | null> {
+  const result = await runSidecar("tacho", ["status", "--json"]);
+  try {
+    return JSON.parse(result.stdout) as TachoStatus;
+  } catch {
+    return null;
+  }
+}
