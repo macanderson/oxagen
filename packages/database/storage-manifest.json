@@ -2567,7 +2567,7 @@
       "writes": []
     }
   ],
-  "contentHash": "275f82ca96bb8b2d37cdfa7f930c6690478730934c1ec23bb1afb49fe728d9ac",
+  "contentHash": "00aabe30076a3d4d8b3ce4dd745ab17e0387618fb0506c1b06527c8338a426a7",
   "domains": [
     {
       "name": "agent",
@@ -2662,6 +2662,7 @@
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
         "postgres:billing.spend_budgets",
+        "postgres:billing.spend_counters",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
         "postgres:billing.subscriptions"
@@ -2692,6 +2693,17 @@
         "blob:generated_asset",
         "neo4j:Document",
         "postgres:content.generated_assets"
+      ]
+    },
+    {
+      "name": "cost",
+      "stores": [
+        "postgres"
+      ],
+      "tables": [
+        "postgres:cost.daily_totals",
+        "postgres:cost.price_entries",
+        "postgres:cost.run_totals"
       ]
     },
     {
@@ -2936,6 +2948,7 @@
         "billing",
         "chat",
         "content",
+        "cost",
         "environments",
         "evidence",
         "iam",
@@ -2953,7 +2966,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 114
+      "tableCount": 118
     },
     {
       "domains": [
@@ -9118,6 +9131,53 @@
           "type": "uuid"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "day",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "date"
+        },
+        {
+          "name": "spent_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.spend_counters",
+      "name": "spend_counters",
+      "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "stripe_event_id",
           "nullable": false,
           "primaryKey": false,
@@ -9676,6 +9736,445 @@
       "domain": "content",
       "id": "postgres:content.generated_assets",
       "name": "generated_assets",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "day",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "date"
+        },
+        {
+          "name": "group_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "group_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "runs",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "cost_micros",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_basis",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "proven_micros",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "accepted_micros",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "productive_ratio",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "numeric(9, 8)"
+        },
+        {
+          "name": "tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "rolled_up_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.daily_totals",
+      "name": "daily_totals",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_aliases",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "region",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_class",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "unit",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "micros_per_million",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "effective_from",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "effective_to",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.price_entries",
+      "name": "price_entries",
+      "rls": "org_or_global",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "run_source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "operator_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "task_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "sealed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "turns",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "steps",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "model_calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_calls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "cost_micros",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_basis",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "price_entry_ids",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid[]"
+        },
+        {
+          "name": "cache_hit_rate",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "numeric(9, 8)"
+        },
+        {
+          "name": "tool_definition_tokens",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "context_frame_tokens",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "steering_tokens",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "retries",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "verdict",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "accepted",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "productive_ratio",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "numeric(9, 8)"
+        },
+        {
+          "name": "enforcement_tier",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "replay_grade",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "governed_actions",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "billed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "breakdown",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "rolled_up_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.run_totals",
+      "name": "run_totals",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
