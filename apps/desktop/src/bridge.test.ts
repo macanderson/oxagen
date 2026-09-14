@@ -1,0 +1,197 @@
+/**
+ * The bridge against fakes of the two Tauri modules: every Rust command is
+ * one `invoke`, the picker calls unwrap their envelopes, and a sidecar run
+ * streams lines as they arrive and settles on close or error.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const invoked: Array<{ cmd: string; args: unknown }> = [];
+const answers = new Map<string, unknown>();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string, args?: unknown) => {
+    invoked.push({ cmd, args });
+    return answers.get(cmd);
+  },
+}));
+
+type Listener = (payload: never) => void;
+interface FakeCommand {
+  program: string;
+  args: string[];
+  stdout: { on: (event: string, fn: Listener) => void };
+  stderr: { on: (event: string, fn: Listener) => void };
+  on: (event: string, fn: Listener) => void;
+  spawn: () => Promise<void>;
+  emit: (
+    channel: "stdout" | "stderr" | "close" | "error",
+    payload: unknown,
+  ) => void;
+}
+const spawned: FakeCommand[] = [];
+let spawnFails: Error | undefined;
+vi.mock("@tauri-apps/plugin-shell", () => ({
+  Command: {
+    sidecar: (program: string, args: string[]) => {
+      const listeners = new Map<string, Listener[]>();
+      const on = (channel: string) => (event: string, fn: Listener) => {
+        const key = `${channel}:${event}`;
+        listeners.set(key, [...(listeners.get(key) ?? []), fn]);
+      };
+      const command: FakeCommand = {
+        program,
+        args,
+        stdout: { on: on("stdout") },
+        stderr: { on: on("stderr") },
+        on: on("command"),
+        spawn: async () => {
+          if (spawnFails !== undefined) throw spawnFails;
+        },
+        emit: (channel, payload) => {
+          const key =
+            channel === "stdout" || channel === "stderr"
+              ? `${channel}:data`
+              : `command:${channel}`;
+          for (const fn of listeners.get(key) ?? []) fn(payload as never);
+        },
+      };
+      spawned.push(command);
+      return command;
+    },
+  },
+}));
+
+import {
+  apiPost,
+  installCli,
+  listOrganizations,
+  listWorkspaces,
+  logTail,
+  readState,
+  removeLocalData,
+  runSidecar,
+  tachoStatus,
+  uninstallCli,
+} from "./bridge";
+
+beforeEach(() => {
+  invoked.length = 0;
+  answers.clear();
+  spawned.length = 0;
+  spawnFails = undefined;
+});
+
+describe("Rust commands", () => {
+  it("maps each helper to one invoke with its arguments", async () => {
+    answers.set("desktop_state", { platform: "macos" });
+    answers.set("install_cli", {
+      dir: "/usr/local/bin",
+      files: [],
+      on_path: true,
+      note: "",
+    });
+    answers.set("uninstall_cli", ["/usr/local/bin/oxagen"]);
+    answers.set("remove_local_data", "/Users/dev/.config/oxagen");
+    answers.set("log_tail", "line\n");
+    expect(await readState()).toEqual({ platform: "macos" });
+    expect((await installCli()).on_path).toBe(true);
+    expect(await uninstallCli()).toEqual(["/usr/local/bin/oxagen"]);
+    expect(await removeLocalData()).toBe("/Users/dev/.config/oxagen");
+    expect(await logTail()).toBe("line\n");
+    await logTail(40);
+    expect(invoked).toEqual([
+      { cmd: "desktop_state", args: undefined },
+      { cmd: "install_cli", args: undefined },
+      { cmd: "uninstall_cli", args: undefined },
+      { cmd: "remove_local_data", args: undefined },
+      { cmd: "log_tail", args: { lines: 120 } },
+      { cmd: "log_tail", args: { lines: 40 } },
+    ]);
+  });
+
+  it("posts the two picker calls through Rust and unwraps their envelopes", async () => {
+    answers.set("api_post", {
+      organizations: [{ id: "o1", slug: "acme", name: "Acme" }],
+    });
+    expect(await listOrganizations()).toEqual([
+      { id: "o1", slug: "acme", name: "Acme" },
+    ]);
+    expect(invoked.at(-1)).toEqual({
+      cmd: "api_post",
+      args: { path: "/v1/user/organizations", body: {} },
+    });
+    answers.set("api_post", { workspaces: [{ slug: "core", name: "Core" }] });
+    expect(await listWorkspaces("acme")).toEqual([
+      { slug: "core", name: "Core" },
+    ]);
+    expect(invoked.at(-1)).toEqual({
+      cmd: "api_post",
+      args: { path: "/v1/user/workspaces", body: { orgSlug: "acme" } },
+    });
+    answers.set("api_post", { ok: true });
+    expect(await apiPost("/v1/anything", { a: 1 })).toEqual({ ok: true });
+  });
+});
+
+describe("runSidecar", () => {
+  it("streams lines to the listener as they arrive and resolves with both buffers on close", async () => {
+    const seen: string[] = [];
+    const pending = runSidecar(
+      "tacho",
+      ["enroll", "--org", "acme"],
+      (line, stream) => seen.push(`${stream}:${line}`),
+    );
+    const command = spawned[0];
+    if (command === undefined) throw new Error("no sidecar spawned");
+    expect(command.program).toBe("binaries/tacho");
+    expect(command.args).toEqual(["enroll", "--org", "acme"]);
+    // Let spawn() settle before emitting, as the real plugin does.
+    await Promise.resolve();
+    command.emit("stdout", "[1/6] Minting the device key");
+    command.emit("stderr", "warning: no claude on PATH");
+    command.emit("stdout", "[2/6] Enrolling");
+    expect(seen).toEqual([
+      "stdout:[1/6] Minting the device key",
+      "stderr:warning: no claude on PATH",
+      "stdout:[2/6] Enrolling",
+    ]);
+    command.emit("close", { code: 0 });
+    expect(await pending).toEqual({
+      code: 0,
+      stdout: "[1/6] Minting the device key\n[2/6] Enrolling\n",
+      stderr: "warning: no claude on PATH\n",
+    });
+  });
+
+  it("rejects when the process errors or cannot be spawned, as an Error either way", async () => {
+    const failing = runSidecar("oxagen", ["login"]);
+    await Promise.resolve();
+    spawned[0]?.emit("error", "sidecar not found");
+    await expect(failing).rejects.toThrow("sidecar not found");
+    const typed = runSidecar("oxagen", ["logout"]);
+    await Promise.resolve();
+    spawned[1]?.emit("error", new Error("killed"));
+    await expect(typed).rejects.toThrow("killed");
+    spawnFails = new Error("EACCES");
+    await expect(runSidecar("tacho", ["status"])).rejects.toThrow("EACCES");
+  });
+
+  it("reads tacho status --json off the sidecar and answers null when it printed none", async () => {
+    const ok = tachoStatus();
+    await Promise.resolve();
+    spawned[0]?.emit(
+      "stdout",
+      '{"enrolled": true, "wal": {"sessions": 1, "unshipped": 0}}',
+    );
+    spawned[0]?.emit("close", { code: 0 });
+    expect(spawned[0]?.args).toEqual(["status", "--json"]);
+    expect(await ok).toEqual({
+      enrolled: true,
+      wal: { sessions: 1, unshipped: 0 },
+    });
+    const none = tachoStatus();
+    await Promise.resolve();
+    spawned[1]?.emit("stderr", "tacho: cannot read host.json");
+    spawned[1]?.emit("close", { code: 1 });
+    expect(await none).toBeNull();
+  });
+});

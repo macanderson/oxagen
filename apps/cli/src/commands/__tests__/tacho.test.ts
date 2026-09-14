@@ -123,6 +123,16 @@ describe("oxagen tacho", () => {
       harnesses: ["claude-code", "codex"],
     });
     expect(calls[0]?.args[0]).not.toHaveProperty("harnesses");
+    // The managed-settings flags and an explicit port travel too.
+    await handleTachoEnroll(
+      { managed: true, printManaged: true, port: 47010 },
+      writer,
+    );
+    expect(calls.at(-1)?.args[0]).toMatchObject({
+      managed: true,
+      printManaged: true,
+      port: 47010,
+    });
     outcomes.enroll = { ok: false, warnings: [] };
     expect(await handleTachoEnroll({}, writer)).toBe(false);
     outcomes.enroll = { ok: true, warnings: [] };
@@ -162,6 +172,12 @@ describe("oxagen tacho", () => {
       harnesses: ["codex"],
       reason: "moved",
     });
+    // Moving org too: the flag names the target, and a session without a
+    // token sends none rather than an undefined field.
+    store.token = undefined;
+    await handleTachoReassign({ org: "beta", workspace: "edge" }, writer);
+    expect(calls.at(-1)?.args[0]).toEqual({ org: "beta", workspace: "edge" });
+    store.token = "session-token";
     outcomes.reassign = { ok: false, warnings: [] };
     expect(await handleTachoReassign({ workspace: "edge" }, writer)).toBe(
       false,

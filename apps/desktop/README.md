@@ -26,6 +26,8 @@ pnpm --filter @oxagen/desktop sidecars     # compile tacho + oxagen (Node SEA), 
 pnpm --filter @oxagen/desktop bundle:dmg   # macOS .dmg (tauri build --bundles dmg)
 pnpm --filter @oxagen/desktop bundle       # every bundle the current OS supports
 pnpm --filter @oxagen/desktop dev          # tauri dev against Vite on :1420
+pnpm --filter @oxagen/desktop test:unit    # vitest over src/**/*.test.ts
+pnpm --filter @oxagen/desktop test:coverage  # the same with the 90% ratchet
 ```
 
 Needs Rust (stable) and, on Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev
@@ -39,8 +41,10 @@ icons` (needs `rsvg-convert`) and committed.
 ## Layout
 
 ```
-src/            React UI (app.tsx), the sidecar bridge (bridge.ts), the argv
-                mapping the panels hand to the CLIs (commands.ts, tested)
+src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
+                the Tauri modules faked), the tacho status parser
+                (tacho-status.ts, pure), the argv mapping the panels hand to
+                the CLIs (commands.ts, tested)
 src-tauri/      Rust shell: state reads, the two user-scoped API calls, PATH
                 install, tray; capabilities/default.json scopes the sidecars
 scripts/        sidecars.mjs (stage binaries), icons.mjs

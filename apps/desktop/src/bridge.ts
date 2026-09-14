@@ -6,6 +6,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { Command } from "@tauri-apps/plugin-shell";
+import { parseTachoStatus, type TachoStatus } from "./tacho-status";
 
 export interface CliConfigView {
   path: string;
@@ -150,20 +151,10 @@ export async function runSidecar(
   });
 }
 
-/** `tacho status --json`, the same document the CLI prints. */
-export interface TachoStatus {
-  enrolled: boolean;
-  hooks?: { complete: boolean; present: string[]; missing: string[] };
-  codexHooks?: { complete: boolean; present: string[]; missing: string[] };
-  service?: { kind: string; installed: boolean; running: boolean };
-  wal?: { sessions: number; unshipped: number };
-}
+export type { TachoStatus } from "./tacho-status";
 
+/** `tacho status --json`, the same document the CLI prints; null when the sidecar printed none. */
 export async function tachoStatus(): Promise<TachoStatus | null> {
   const result = await runSidecar("tacho", ["status", "--json"]);
-  try {
-    return JSON.parse(result.stdout) as TachoStatus;
-  } catch {
-    return null;
-  }
+  return parseTachoStatus(result.stdout);
 }
