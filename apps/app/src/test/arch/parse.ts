@@ -298,6 +298,7 @@ const KNOWN_RULES: ReadonlySet<string> = new Set([
   "platform",
   "client",
   "route-guard",
+  "e2e-files",
 ]);
 
 /** The entries of a baseline.json text; throws on a shape or rule prefix no test owns. */
