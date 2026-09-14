@@ -1,24 +1,12 @@
-// What the server hands the client shell: the port's reads, still as `Read<T>`
+// What the server hands the client shell: the port's read, still as `Read<T>`
 // so every client piece renders its own honest state.
+import type { ShellContext } from "@/data/contracts/shell";
 import type { Read } from "@/data/not-backed";
-import type {
-  AccountView,
-  AssistantEngine,
-  CommandRun,
-  NavCounts,
-  NotificationFeed,
-  ShellContext,
-} from "@/data/contracts/shell";
 
 export type ShellData = {
   /** The organization slug from the URL; the fallback name when the context read failed. */
   org: string;
   context: Read<ShellContext>;
-  counts: Read<Record<string, NavCounts>>;
-  notifications: Read<NotificationFeed>;
-  engine: Read<AssistantEngine>;
-  runs: CommandRun[];
-  account: Read<AccountView>;
 };
 
 /**

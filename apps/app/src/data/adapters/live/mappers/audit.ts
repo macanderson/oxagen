@@ -1,8 +1,7 @@
-// Recorded rows → the Audit view models, and the shell's notifications (spec
-// vocabulary). Pure: no I/O.
+// Recorded rows → the Audit view models (spec vocabulary). Pure: no I/O.
 //
 // Each mapper takes what the live audit adapter read — the outputs of the agent
-// tools it invoked (query_audit_log, list_notifications, get_evidence_retention)
+// tools it invoked (query_audit_log, get_evidence_retention)
 // and drizzle rows for the stores no agent tool lists (tacho.incidents,
 // privacy.privacy_erasure_requests, privacy.privacy_export_requests, the IAM
 // decision rows in ClickHouse audit_events) — and returns the view model with
@@ -59,14 +58,6 @@
 //                 is only what is held beyond the included window, so an org
 //                 inside that window would read as storing 0 GB
 //     store, contents ∅ not recorded
-//
-//   Notification ← notification.notifications via list_notifications
-//     id ✅ public_id · kind ✅ kind · title ✅ title · unread ✅ unread · at ✅ created_at
-//     body      ✅ body, ∅ when the producer wrote none
-//     severity  security → critical; approval (requested, approved, denied or
-//               expired: the row does not say which), run, member and system
-//               carry no outcome to draw ∅
-//     runId     ✅ the run public id in deep_link, else ∅ · ref ✅ deep_link
 import type {
   principals,
   privacyErasureRequests,
@@ -76,7 +67,6 @@ import type {
 import { TACHO_INCIDENT_KINDS } from "@oxagen/database/schema";
 import type { AuditLogQueryOutput } from "@oxagen/oxagen/contracts/audit.log.query";
 import type { BillingEvidenceRetentionOutput } from "@oxagen/oxagen/contracts/billing.evidence_retention";
-import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notification.list";
 import type { z } from "zod";
 import {
   type Actor,
@@ -85,8 +75,6 @@ import {
   type ErasureRequest,
   type Incident,
   IncidentKind,
-  type Notification,
-  type NotificationSeverity,
   type RetentionTier,
 } from "@/data/contracts";
 
@@ -175,7 +163,6 @@ export type ExportRow = Pick<
 };
 
 export type RetentionPosture = BillingEvidenceRetentionOutput;
-export type NotificationRow = NotificationsListOutput["notifications"][number];
 
 // ---- Recorded view rows ---------------------------------------------------------
 
@@ -217,9 +204,6 @@ export type RecordedRetentionTier = Nullable<
   RetentionTier,
   "store" | "contents" | "retention" | "volume"
 >;
-
-/** Every notification field is recordable: severity and body are nullable in the view model. */
-export type RecordedNotification = Notification;
 
 // ---- Mappers -------------------------------------------------------------------
 
@@ -353,33 +337,6 @@ export function toRetentionTiers(
   ];
 }
 
-const NOTIFICATION_SEVERITY: Record<
-  NotificationRow["kind"],
-  NotificationSeverity | null
-> = {
-  approval: null,
-  security: "critical",
-  run: null,
-  member: null,
-  system: null,
-};
-
-const RUN_IN_LINK = /(?:^|\/)(run_[A-Za-z0-9]+)(?=[/?#]|$)/;
-
-export function toNotification(row: NotificationRow): RecordedNotification {
-  return {
-    id: row.publicId,
-    kind: row.kind,
-    severity: NOTIFICATION_SEVERITY[row.kind],
-    unread: row.unread,
-    at: row.createdAt,
-    title: row.title,
-    body: row.body,
-    runId: row.deepLink?.match(RUN_IN_LINK)?.[1] ?? null,
-    ref: row.deepLink,
-  };
-}
-
 // ---- What a view model must carry before a method serves live -----------------
 
 /**
@@ -415,7 +372,6 @@ export const UNRECORDED_PATHS = {
   ],
   erasure: ["subject", "requestedById", "status"],
   retention: ["store", "contents", "retention", "volume"],
-  notifications: [],
 } as const;
 
 const PROBE_AT = new Date("2026-09-11T09:14:02.000Z");
@@ -496,19 +452,4 @@ export const RECORDED_PROBES = {
     storedGbMeasured: false,
     creditsChargedThisPeriod: 0,
   }),
-  notifications: (
-    ["system", "approval", "run", "member", "security"] as const
-  ).map((kind) =>
-    toNotification({
-      id: "0192d4a8-7c1e-7a00-8000-000000000001",
-      publicId: "ntf_probe",
-      kind,
-      title: "probe",
-      body: null,
-      deepLink: null,
-      unread: true,
-      archived: false,
-      createdAt: PROBE_AT.toISOString(),
-    }),
-  ),
 } as const;

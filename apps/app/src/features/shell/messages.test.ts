@@ -6,11 +6,7 @@ import { describe, expect, it } from "vitest";
 import en from "../../../messages/en.json";
 import shell from "../../../messages/shell.json";
 import { catalogStems, mergeCatalogs } from "@/i18n/catalogs";
-import { ACTIONS, ASK_QUESTIONS, COMMAND_GROUPS } from "./commands";
-import { NotificationSeverity } from "@/data/contracts/shell";
 import { ORG_NAV, WORKSPACE_NAV } from "./nav";
-import { ACCOUNT_TABS } from "./shell-state";
-import { THEMES } from "./theme";
 
 const messages = shell.shell;
 
@@ -40,28 +36,31 @@ describe("messages/shell.json", () => {
     expect(messages.nav.agents).toBe("Agent IAM");
   });
 
-  it("labels every command group, action and question", () => {
-    for (const g of COMMAND_GROUPS)
-      expect(messages.commands.groups).toHaveProperty(g);
-    for (const a of ACTIONS)
-      expect(messages.commands.actions).toHaveProperty(a);
-    for (const q of ASK_QUESTIONS)
-      expect(messages.commands.questions).toHaveProperty(q);
-  });
-
-  it("labels every account tab and theme", () => {
-    for (const tab of ACCOUNT_TABS)
-      expect(messages.account.tabs).toHaveProperty(tab);
-    for (const theme of THEMES)
-      expect(messages.account.preferences.themes).toHaveProperty(theme);
-  });
-
-  it("covers every notification severity through the enum the icons key on", () => {
-    expect(NotificationSeverity.options).toEqual([
-      "success",
-      "info",
-      "attention",
-      "critical",
+  it("carries no catalog for the chrome rev1 does not render", () => {
+    // Notifications, the assistant, the Account dialog, nav counts and the
+    // command menu's runs, actions and questions (ARCHITECTURE.md §1.2).
+    expect(Object.keys(messages).sort()).toEqual([
+      "commands",
+      "drawer",
+      "loading",
+      "mobileNav",
+      "nav",
+      "sidebar",
+      "skipToContent",
+      "switcher",
+      "topbar",
+      "userMenu",
+    ]);
+    expect(Object.keys(messages.commands).sort()).toEqual([
+      "empty",
+      "footer",
+      "input",
+      "title",
+    ]);
+    expect(Object.keys(messages.sidebar)).not.toContain("countLabel");
+    expect(Object.keys(messages.userMenu).sort()).toEqual([
+      "switchTheme",
+      "themeNow",
     ]);
   });
 });

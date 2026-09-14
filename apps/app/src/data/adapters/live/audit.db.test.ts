@@ -22,7 +22,6 @@ import {
   ErasureRequest,
   Incident,
   IncidentKind,
-  Notification,
   PublicId,
   RetentionTier,
   Severity,
@@ -152,8 +151,6 @@ describe.runIf(enabled)(
           retention: z.string().nullable(),
           volume: z.string().nullable(),
         }),
-        // Severity and body are nullable in the contract: nothing to promote.
-        Notification,
       }) as never;
 
     async function port() {
@@ -278,14 +275,6 @@ describe.runIf(enabled)(
         ok: true,
         value: [{ tier: "bodies", store: null, contents: null }],
       });
-    });
-
-    it("reads the viewer's notifications through list_notifications", async () => {
-      const { notifications } = await asOwner();
-      const read = await notifications(feedScope, FEED_OWNER);
-      expect(read.ok).toBe(true);
-      for (const item of read.ok ? read.value.items : [])
-        expect(Notification.parse(item)).toEqual(item);
     });
   },
 );

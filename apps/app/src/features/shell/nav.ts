@@ -6,7 +6,6 @@
 //
 // The mockup's "Scenarios" item is demo chrome, not one of the ten pages
 // (spec App. F), so it is not here.
-import type { NavCounts } from "@/data/contracts/shell";
 
 export type WorkspaceNavKey =
   | "fleet"
@@ -149,10 +148,6 @@ export function isNavItemCurrent(key: NavKey, pathname: string): boolean {
 export type NavItem = {
   key: NavKey;
   href: string;
-  /** Null when the count is not recorded; the sidebar then shows no count, never a zero. */
-  count: number | null;
-  /** A count that needs attention (pending approvals, open incidents). */
-  hot: boolean;
 };
 
 export type NavSection = {
@@ -166,45 +161,21 @@ export type NavSection = {
  * organization page, or null when the organization has none (the section is
  * then omitted).
  */
-export function sidebarSections(
-  org: string,
-  ws: string | null,
-  counts: NavCounts | null,
-): NavSection[] {
+export function sidebarSections(org: string, ws: string | null): NavSection[] {
   const sections: NavSection[] = [];
-  if (ws !== null) {
-    const countFor = (key: WorkspaceNavKey): Pick<NavItem, "count" | "hot"> => {
-      if (counts === null) return { count: null, hot: false };
-      if (key === "fleet") return { count: counts.pendingApprovals, hot: true };
-      if (key === "agents") return { count: counts.agents, hot: false };
-      if (key === "steering")
-        return { count: counts.openProposals, hot: false };
-      return { count: null, hot: false };
-    };
+  if (ws !== null)
     sections.push({
       key: "workspace",
       items: WORKSPACE_NAV.map((key) => ({
         key,
         href: workspaceHref(org, ws, key),
-        ...countFor(key),
       })),
     });
-  }
   sections.push({
     key: "organization",
-    items: ORG_NAV.map((key) => ({
-      key,
-      href: orgHref(org, key),
-      count: key === "audit" && counts !== null ? counts.openIncidents : null,
-      hot: key === "audit",
-    })),
+    items: ORG_NAV.map((key) => ({ key, href: orgHref(org, key) })),
   });
   return sections;
-}
-
-/** A count worth drawing: recorded and above zero. */
-export function visibleCount(item: NavItem): number | null {
-  return item.count !== null && item.count > 0 ? item.count : null;
 }
 
 export type Crumb =
