@@ -3139,7 +3139,10 @@
       "file": "run.get.ts",
       "domain": "run",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -3153,7 +3156,10 @@
       "file": "run.list.ts",
       "domain": "run",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
