@@ -135,8 +135,17 @@ export async function handleTachoUnenroll(
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
   const { unenroll } = await import("@oxagen/tacho/cli");
+  // Only the token is lent: the revoke targets the org and workspace in
+  // host.json, and the CLI's default pair may name another org (the app's
+  // "also make it the CLI default" is optional, and `oxagen login --org`
+  // rescopes config.json without touching the host), which would 403.
+  const { token } = tachoCredentials(opts);
   const result = await unenroll(
-    { ...tachoCredentials(opts), ...opts },
+    {
+      ...(token !== undefined ? { token } : {}),
+      ...(opts.purge !== undefined ? { purge: opts.purge } : {}),
+      ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+    },
     await tachoDeps(writer),
   );
   return result.ok;

@@ -237,7 +237,7 @@ figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
 <h2><span class="n">4</span>Moving a host between workspaces</h2>
 <p>The host API key is minted for the workspace at enrollment, so a move is a revoke plus a fresh enrollment, not an edit. <code>tacho reassign</code> does it as one step and keeps what makes the host recognisable:</p>
 <ol>
-  <li>Revoke the current enrollment with the operator's session (best effort; an offline host stays marked revoked locally and the fleet page can finish it).</li>
+  <li>Revoke the current enrollment with the operator's session (best effort; an offline host keeps host.json marked retired locally, the next <code>unenroll</code> or <code>reassign</code> asks the control plane again, and the fleet page can finish it).</li>
   <li>Strip the old enrollment's hook groups from <code>~/.claude/settings.json</code> and <code>~/.codex/hooks.json</code>. <code>enroll</code> replaces only groups carrying <em>its</em> enrollment id, so without this step the old ones would survive as foreign entries.</li>
   <li>Enroll again with <code>--force</code> in the target org and workspace, on the same API URL, keeping the Ed25519 device key, the loopback port and the local bearer. The hook command lines change only their enrollment id; the service unit is re-applied unchanged.</li>
 </ol>

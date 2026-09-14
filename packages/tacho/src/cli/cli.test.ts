@@ -38,6 +38,7 @@ import {
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
+import { buildTachoProgram } from "./main";
 import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
@@ -572,10 +573,23 @@ describe("enroll → status → unenroll", () => {
     const first = await unenroll({}, d);
     expect(first.revoked).toBe(false);
     expect(first.warnings[0]).toContain("no operator token");
-    expect(readHostFile(d.paths.hostFile)?.revoked_at).not.toBeNull();
+    const marked = readHostFile(d.paths.hostFile)?.revoked_at;
+    expect(marked).not.toBeNull();
     expect(existsSync(d.paths.wal)).toBe(true);
-    const second = await unenroll({ purge: true }, d);
+    expect(d.requests).toEqual([]);
+    // The local mark means "revoke not done", never "already revoked": a
+    // second run without a token still cannot revoke and keeps host.json.
+    const stillNoToken = await unenroll({}, d);
+    expect(stillNoToken.revoked).toBe(false);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).toBe(marked);
+    // With a token the pending revoke is made, and only then does host.json go.
+    const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
+    ]);
+    expect(d.lines.join("\n")).toContain("Finishing the revoke of");
     expect(existsSync(d.paths.hostFile)).toBe(false);
     expect(existsSync(d.paths.wal)).toBe(false);
     const failing = deps({
@@ -605,7 +619,25 @@ describe("harnesses and reassign", () => {
       "claude-code",
       "codex",
     ]);
-    expect(() => parseHarnesses("cursor")).toThrow();
+    // One line naming the choices, not a ZodError's JSON issues array: both
+    // CLIs print the message verbatim.
+    expect(() => parseHarnesses("cursor")).toThrow(
+      'unknown harness "cursor"; expected one of claude-code, codex',
+    );
+    expect(() => parseHarnesses("claude_code")).toThrow(
+      /unknown harness "claude_code"/,
+    );
+  });
+
+  it("`tacho enroll` passes no harness list unless --harness is given", () => {
+    // A commander default of "claude-code" would make a bare `tacho enroll`
+    // on a Codex-only host add Claude Code hooks; enroll() defaults the
+    // fresh-enrollment case itself.
+    const enrollCommand = buildTachoProgram()
+      .commands.find((c) => c.name() === "enroll")
+      ?.options.find((o) => o.long === "--harness");
+    expect(enrollCommand).toBeDefined();
+    expect(enrollCommand?.defaultValue).toBeUndefined();
   });
 
   it("enrolls Codex next to Claude Code, and unenroll strips both", async () => {
@@ -655,12 +687,31 @@ describe("harnesses and reassign", () => {
     expect(d.lines.join("\n")).toContain("Codex");
 
     // Re-applying without --harness keeps Codex; it never drops a harness.
+    d.requests.length = 0;
     const again = await enroll({ token: "tok" }, d);
     expect(again.ok).toBe(true);
     expect(readHostFile(d.paths.hostFile)?.harnesses).toEqual([
       "claude-code",
       "codex",
     ]);
+    expect(d.requests).toEqual([]);
+    // Nor does naming the harnesses it already hooks re-enroll it.
+    expect(
+      (await enroll({ token: "tok", harnesses: ["codex", "claude-code"] }, d))
+        .ok,
+    ).toBe(true);
+    expect(d.requests).toEqual([]);
+    // A re-apply that names another pair does not move the host; it says so.
+    const elsewhere = await enroll(
+      { token: "tok", org: "beta", workspace: "edge" },
+      d,
+    );
+    expect(elsewhere.ok).toBe(true);
+    expect(elsewhere.warnings.join("\n")).toContain(
+      "reports to acme/core, not beta/edge",
+    );
+    expect(readHostFile(d.paths.hostFile)?.org_slug).toBe("acme");
+    expect(d.requests).toEqual([]);
 
     await unenroll({ token: "tok" }, d);
     const stripped = d.readCodexHooks() as {
@@ -671,6 +722,86 @@ describe("harnesses and reassign", () => {
     ).toEqual(["mine.sh"]);
     expect(Object.keys(stripped.hooks)).toEqual(["PreToolUse"]);
     expect(d.lines.join("\n")).toContain("removed from");
+  });
+
+  it("adds a harness to an enrolled host through a revoke and a fresh enrollment, so the control plane's record follows", async () => {
+    const d = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    const before = readHostFile(d.paths.hostFile);
+    d.requests.length = 0;
+    d.lines.length = 0;
+    // No --force: the addition itself is what re-enrolls. The revoke goes
+    // to the host's own org and workspace whatever the caller passes as a
+    // pair (the CLI's config.json default may name another org).
+    const grown = await enroll(
+      {
+        token: "tok",
+        org: "other",
+        workspace: "elsewhere",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(grown.ok).toBe(true);
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/core/tacho/enrollments/revoke",
+      "https://api.test/v1/acme/core/tacho/enrollments",
+    ]);
+    expect(d.requests[0]?.body).toMatchObject({
+      hostEnrollmentId: TEST_ENROLLMENT,
+      reason: "tacho enroll --harness claude-code,codex",
+    });
+    expect(d.requests[1]?.body).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+    });
+    expect(d.lines.join("\n")).toContain("adding codex to");
+    const after = readHostFile(d.paths.hostFile);
+    expect(after).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+      org_slug: "acme",
+      workspace_slug: "core",
+      port: before?.port,
+      local_token: before?.local_token,
+      device_key_fingerprint: before?.device_key_fingerprint,
+      revoked_at: null,
+      codex_version: "0.104.0",
+    });
+    expect(
+      codexHookPresence(d.readCodexHooks(), TEST_ENROLLMENT).complete,
+    ).toBe(true);
+    // Without a token the addition is refused before anything is revoked.
+    const offline = deps({
+      env: {},
+      home: join(scratchPaths().root, "nohome"),
+    });
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      offline,
+    );
+    offline.requests.length = 0;
+    const refused = await enroll(
+      { harnesses: ["claude-code", "codex"] },
+      offline,
+    );
+    expect(refused.ok).toBe(false);
+    expect(offline.requests).toEqual([]);
+    expect(readHostFile(offline.paths.hostFile)).toMatchObject({
+      harnesses: ["claude-code"],
+      revoked_at: null,
+    });
   });
 
   it("reassigns to another workspace keeping the device key and port", async () => {
@@ -733,11 +864,16 @@ describe("harnesses and reassign", () => {
     expect(codex).not.toContain(TEST_ENROLLMENT);
     expect(codex).toContain(OTHER_ENROLLMENT);
 
-    // Same target is a no-op; not enrolled and no --workspace are errors.
+    // Same target is a no-op; not enrolled, no --workspace, and --org
+    // without --workspace are errors (the current slug is not a workspace
+    // of the other org, or worse, a same-named one nobody chose).
     d.requests.length = 0;
     expect((await reassign({ workspace: "edge" }, d)).ok).toBe(true);
     expect(d.requests).toEqual([]);
     expect((await reassign({ token: "tok" }, d)).ok).toBe(false);
+    expect((await reassign({ token: "tok", org: "other" }, d)).ok).toBe(false);
+    expect(d.errors.at(-1)).toContain("--org other needs --workspace <slug>");
+    expect(d.requests).toEqual([]);
 
     // A harness-only change re-enrolls in place: the one way to drop Codex.
     const dropped = await reassign(
@@ -753,7 +889,7 @@ describe("harnesses and reassign", () => {
     expect(fresh.errors[0]).toContain("Not enrolled");
   });
 
-  it("skips the revoke when the old enrollment is already revoked, and says so when the new enrollment fails", async () => {
+  it("retries a pending revoke before moving, and leaves host.json retired when the new enrollment fails", async () => {
     const d = deps();
     await enroll(
       {
@@ -766,8 +902,8 @@ describe("harnesses and reassign", () => {
     );
     const host = readHostFile(d.paths.hostFile);
     if (host === undefined) throw new Error("not enrolled");
-    // The operator revoked this host from the fleet page already: the
-    // control plane is not asked again, the move goes straight to enroll.
+    // A marked host.json is one whose revoke did not go through (offline
+    // unenroll); the move asks the control plane again before enrolling.
     writeHostFile(d.paths.hostFile, {
       ...host,
       revoked_at: "2026-09-10T11:00:00.000Z",
@@ -776,14 +912,17 @@ describe("harnesses and reassign", () => {
     const moved = await reassign({ token: "tok", workspace: "edge" }, d);
     expect(moved.ok).toBe(true);
     expect(d.lines.join("\n")).toContain(
-      "already revoked at 2026-09-10T11:00:00.000Z",
+      "pending since 2026-09-10T11:00:00.000Z",
     );
     expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/core/tacho/enrollments/revoke",
       "https://api.test/v1/acme/edge/tacho/enrollments",
     ]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).toBeNull();
 
-    // When the create is refused after the revoke went through, the host is
-    // left unenrolled and the message says how to recover.
+    // When the create is refused after the revoke went through, host.json
+    // stays but marked retired: status says so, and the recovery command
+    // enrolls afresh instead of re-applying the revoked enrollment's hooks.
     const refusing = deps();
     await enroll(
       {
@@ -812,10 +951,37 @@ describe("harnesses and reassign", () => {
       "Reassign failed after revoking the old enrollment",
     );
     expect(refusing.errors.at(-1)).toContain(
-      "tacho enroll --org acme --workspace edge",
+      "tacho enroll --force --org acme --workspace edge --api-url https://api.test",
     );
+    const left = readHostFile(refusing.paths.hostFile);
+    expect(left?.host_enrollment_id).toBe(TEST_ENROLLMENT);
+    expect(left?.revoked_at).not.toBeNull();
+    expect(JSON.stringify(refusing.readSettings())).not.toContain(
+      TEST_ENROLLMENT,
+    );
+    // The printed recovery, and the same command without --force, both
+    // take the fresh path: the marked enrollment is never re-applied.
+    refusing.fetch = upstream;
+    refusing.requests.length = 0;
+    const recovered = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "edge",
+        apiUrl: "https://api.test",
+      },
+      refusing,
+    );
+    expect(recovered.ok).toBe(true);
+    expect(refusing.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/edge/tacho/enrollments",
+    ]);
+    expect(readHostFile(refusing.paths.hostFile)).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      workspace_slug: "edge",
+      revoked_at: null,
+    });
   });
-
   it("uses the multi-call binary when compiled and quotes for cmd.exe on Windows", () => {
     const native = runtimeCommands(
       undefined,

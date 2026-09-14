@@ -31,7 +31,14 @@ const outcomes = {
   },
   exportCommand: true,
 };
-vi.mock("@oxagen/tacho/cli", () => ({
+vi.mock("@oxagen/tacho/cli", async () => ({
+  // The real parser: what the operator sees on a typo is its message, so
+  // the mock must not paper over it.
+  parseHarnesses: (
+    await vi.importActual<typeof import("@oxagen/tacho/cli")>(
+      "@oxagen/tacho/cli",
+    )
+  ).parseHarnesses,
   defaultCliDeps: (overrides: Record<string, unknown>) => ({
     fake: true,
     ...overrides,
@@ -60,9 +67,6 @@ vi.mock("@oxagen/tacho/cli", () => ({
     calls.push({ name: "exportCommand", args });
     return outcomes.exportCommand;
   },
-  // The real parser: a comma list of known harness names.
-  parseHarnesses: (value?: string) =>
-    value === undefined ? ["claude-code"] : value.split(","),
 }));
 
 import {
@@ -133,6 +137,22 @@ describe("oxagen tacho", () => {
       harnesses: ["claude-code", "codex"],
     });
     expect(calls[0]?.args[0]).not.toHaveProperty("harnesses");
+    // The real parser trims and dedupes, and an unknown name is one clear
+    // line (the bin's fatal handler prints err.message verbatim) with no
+    // enroll call behind it.
+    await handleTachoEnroll({ harness: " codex, codex " }, writer);
+    expect(calls.at(-1)?.args[0]).toMatchObject({ harnesses: ["codex"] });
+    const before = calls.length;
+    await expect(
+      handleTachoEnroll({ harness: "cursor" }, writer),
+    ).rejects.toThrow(
+      'unknown harness "cursor"; expected one of claude-code, codex',
+    );
+    expect(calls.length).toBe(before);
+    await expect(
+      handleTachoReassign({ harness: "claude_code" }, writer),
+    ).rejects.toThrow(/unknown harness "claude_code"/);
+    expect(calls.length).toBe(before);
     // The managed-settings flags and an explicit port travel too.
     await handleTachoEnroll(
       { managed: true, printManaged: true, port: 47010 },
@@ -163,13 +183,18 @@ describe("oxagen tacho", () => {
         writer,
       ),
     ).toBe(true);
-    expect(calls.at(-1)?.args[0]).toMatchObject({
+    // Only the token is lent to unenroll: the revoke goes to the org and
+    // workspace in host.json, never to the CLI's default pair, which may
+    // name another org and would 403 the revoke.
+    expect(calls.at(-1)?.args[0]).toEqual({
       token: "session-token",
-      org: "acme",
-      workspace: "core",
       purge: true,
       reason: "laptop retired",
     });
+    store.token = undefined;
+    expect(await handleTachoUnenroll({}, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({});
+    store.token = "session-token";
     expect(
       await handleTachoReassign(
         { workspace: "edge", harness: "codex", reason: "moved" },
@@ -221,16 +246,21 @@ describe("oxagen tacho", () => {
     expect(configWrites).toEqual([{ orgSlug: "other", workspaceSlug: "edge" }]);
     expect(output()).toContain("CLI default is now other/edge");
 
-    // The org the host keeps when --org is omitted is what gets written, so
-    // the default can never point at an org the host does not report to.
+    // The pair written is the one the host reports (from host.json, via
+    // result.to), not the flags or the CLI's saved default: here config.json
+    // says acme, no --org is passed, and the host was enrolled in beta, so
+    // beta/edge is what lands. A write built from the flags or getOrgId()
+    // would put acme there — an org the host does not report to.
     configWrites.length = 0;
     outcomes.reassign = {
       ok: true,
       warnings: [],
-      to: { org: "acme", workspace: "edge" },
+      to: { org: "beta", workspace: "edge" },
     };
     await handleTachoReassign({ workspace: "edge", default: true }, writer);
-    expect(configWrites).toEqual([{ orgSlug: "acme", workspaceSlug: "edge" }]);
+    expect(configWrites).toEqual([{ orgSlug: "beta", workspaceSlug: "edge" }]);
+    expect(JSON.stringify(configWrites)).not.toContain("acme");
+    expect(output()).toContain("CLI default is now beta/edge");
 
     // A failed reassign leaves the default where it was.
     configWrites.length = 0;

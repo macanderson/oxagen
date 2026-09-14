@@ -306,6 +306,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       home,
       exec,
       launcherPath: paths.daemonLauncher,
+      pidPath: paths.pid,
     }),
     out: (line) => process.stdout.write(`${line}\n`),
     err: (line) => process.stderr.write(`${line}\n`),

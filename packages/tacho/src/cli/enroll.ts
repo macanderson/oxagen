@@ -30,6 +30,7 @@ import {
   type CredentialOptions,
   resolveCredentials,
 } from "./deps";
+import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
   managed?: boolean;
@@ -44,14 +45,26 @@ export interface EnrollOptions extends CredentialOptions {
   harnesses?: TachoHarness[];
 }
 
-/** Parse a `--harness` flag (`claude-code`, `codex`, or a comma list). */
+/**
+ * Parse a `--harness` flag (`claude-code`, `codex`, or a comma list). An
+ * unknown name is a one-line error naming the choices, not a ZodError
+ * (whose message is the JSON issues array) — both CLIs print it verbatim.
+ */
 export function parseHarnesses(value: string | undefined): TachoHarness[] {
   if (value === undefined || value.trim().length === 0) return ["claude-code"];
   const names = value
     .split(",")
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
-  const parsed = names.map((name) => tachoHarnessSchema.parse(name));
+  const parsed = names.map((name) => {
+    const result = tachoHarnessSchema.safeParse(name);
+    if (!result.success) {
+      throw new Error(
+        `unknown harness "${name}"; expected one of ${tachoHarnessSchema.options.join(", ")}`,
+      );
+    }
+    return result.data;
+  });
   return [...new Set(parsed)];
 }
 
@@ -122,30 +135,54 @@ export async function enroll(
   const existing = readHostFile(deps.paths.hostFile);
   let host: HostFile;
   let harnesses: TachoHarness[] = options.harnesses ?? ["claude-code"];
-  if (
+  const live =
     existing !== undefined &&
     existing.revoked_at === null &&
-    options.force !== true
-  ) {
+    options.force !== true;
+  // Harnesses named on a live enrollment that it does not hook yet. Adding
+  // one is a change to the control plane's host record (`tacho.hosts.
+  // harnesses`), which only an enrollment writes, so it goes through a
+  // revoke and a fresh enrollment — the same path `reassign --harness`
+  // takes — rather than a local re-apply that the fleet page never sees.
+  const added: TachoHarness[] = live
+    ? (options.harnesses ?? []).filter(
+        (harness) => !existing.harnesses.includes(harness),
+      )
+    : [];
+  if (live && added.length === 0) {
     deps.out(
       `Already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}); re-applying settings and service. Pass --force to enroll again.`,
     );
-    // Re-applying may add a harness (`--harness claude-code,codex` on an
-    // enrolled host) but never silently drops one the host already hooks.
-    harnesses = [
-      ...new Set([
-        ...(existing.harnesses as TachoHarness[]),
-        ...(options.harnesses ?? []),
-      ]),
-    ];
-    host =
-      harnesses.length === existing.harnesses.length
-        ? existing
-        : { ...existing, harnesses };
-    if (host !== existing) writeHostFile(deps.paths.hostFile, host);
+    // The flags (or the CLI's config.json default) may name another pair;
+    // a re-apply never moves the host, so say so instead of ignoring them.
+    const wantsOrg = options.org ?? existing.org_slug;
+    const wantsWorkspace = options.workspace ?? existing.workspace_slug;
+    if (
+      wantsOrg !== existing.org_slug ||
+      wantsWorkspace !== existing.workspace_slug
+    ) {
+      warnings.push(
+        `this host reports to ${existing.org_slug}/${existing.workspace_slug}, not ${wantsOrg}/${wantsWorkspace}; run \`tacho reassign --org ${wantsOrg} --workspace ${wantsWorkspace}\` to move it, or pass --force to enroll again`,
+      );
+    }
+    harnesses = existing.harnesses as TachoHarness[];
+    host = existing;
   } else {
     step(1, "Authenticating with Oxagen");
-    const resolved = resolveCredentials(options, deps.env, deps.home);
+    // A harness addition stays in the host's own org and workspace: the
+    // token may come from flags, env or config.json, the pair may not.
+    const resolved = resolveCredentials(
+      live
+        ? {
+            ...options,
+            org: existing.org_slug,
+            workspace: existing.workspace_slug,
+            apiUrl: options.apiUrl ?? existing.api_url,
+          }
+        : options,
+      deps.env,
+      deps.home,
+    );
     if ("missing" in resolved) {
       deps.err(
         `Not logged in. Provide ${resolved.missing.join(", ")} or run \`oxagen login\` first.`,
@@ -153,6 +190,26 @@ export async function enroll(
       return { ok: false, warnings };
     }
     const { credentials } = resolved;
+    const managed =
+      options.managed === true ||
+      options.printManaged === true ||
+      (live && existing.managed);
+    if (live) {
+      harnesses = [...(existing.harnesses as TachoHarness[]), ...added];
+      deps.out(
+        `      adding ${added.join(", ")} to ${existing.agent_key}: revoking ${existing.host_enrollment_id} and enrolling again for ${harnesses.join(", ")} so the control plane's host record follows (device key, port and local token kept)`,
+      );
+      await revokeAndMark(
+        existing,
+        {
+          token: credentials.token,
+          reason: `tacho enroll --harness ${harnesses.join(",")}`,
+        },
+        deps,
+        warnings,
+      );
+      stripEnrollmentHooks(existing, deps);
+    }
 
     step(2, `Generating the host device key at ${deps.paths.deviceKey}`);
     ensureDir(deps.paths.root);
@@ -186,7 +243,7 @@ export async function enroll(
         ...(deps.env["SHELL"] !== undefined
           ? { shell: deps.env["SHELL"] }
           : {}),
-        managed: options.managed === true || options.printManaged === true,
+        managed: managed,
         validityDays: options.validityDays ?? 180,
       });
     } catch (error) {
@@ -249,7 +306,7 @@ export async function enroll(
       os_user: deps.osUser,
       platform: deps.platform as HostFile["platform"],
       harnesses,
-      managed: options.managed === true || options.printManaged === true,
+      managed: managed,
       claude_version: claude.version ?? null,
       claude_execpath: claude.path ?? null,
       ...(harnesses.includes("codex")
