@@ -232,7 +232,9 @@ export function resolveInternal(
   if (ASSET_EXTENSIONS.some((ext) => specifier.endsWith(ext))) return null;
   let logical: string;
   if (specifier.startsWith("@/")) {
-    logical = specifier.slice(2);
+    // Normalized like a relative specifier: `@/features/a/../b/x` is
+    // `features/b/x`, the module tsc resolves, and is judged under that row.
+    logical = path.posix.normalize(specifier.slice(2));
   } else if (specifier.startsWith(".")) {
     const fromDir = path.posix.dirname(fromFile.replace(/^src\//, ""));
     logical = path.posix.normalize(path.posix.join(fromDir, specifier));

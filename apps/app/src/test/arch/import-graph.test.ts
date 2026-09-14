@@ -244,6 +244,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/ui/helpers.ts", expect: null },
   ],
   "outside-src.ts": [{ at: "src/features/fleet/reads.ts", expect: "layer" }],
+  // A dot segment inside the alias resolves past the importer's own row; the
+  // harness judges the normalized path, as it does for a relative specifier.
+  "alias-dot-segments-feature.ts": [
+    { at: "src/features/fleet/reads.ts", expect: "layer" },
+  ],
+  "alias-dot-segments-data.ts": [
+    { at: "src/server/kernel.ts", expect: "layer" },
+  ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },
   ],
