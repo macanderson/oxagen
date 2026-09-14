@@ -3,19 +3,76 @@
  * resolveGauEntitlement (ADR-055 §3).
  *
  * The fake tx answers by the table it is asked to read from, so the tests do
- * not depend on the order the resolver issues its three selects in. Every
- * `where` argument is recorded so a test can assert which tables were read —
- * the resolver must never touch `org.organizations` (plan_type is not a leg).
+ * not depend on the order the resolver issues its three selects in, and it
+ * evaluates the effective-window WHERE on `contract_terms` (the drizzle
+ * operators are mocked to plain objects), so "expired" and "future end" are
+ * tested against the statement's own conditions. Every table read is
+ * recorded so a test can assert the resolver never touches
+ * `org.organizations` (plan_type is not a leg).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getTableColumns } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+
+type Cond =
+  | { op: "eq" | "lte" | "gt"; col: unknown; val: unknown }
+  | { op: "isNull"; col: unknown }
+  | { op: "and" | "or"; conds: Cond[] }
+  | { op: "inArray"; col: unknown; vals: unknown[] };
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    eq: (col: unknown, val: unknown): Cond => ({ op: "eq", col, val }),
+    lte: (col: unknown, val: unknown): Cond => ({ op: "lte", col, val }),
+    gt: (col: unknown, val: unknown): Cond => ({ op: "gt", col, val }),
+    isNull: (col: unknown): Cond => ({ op: "isNull", col }),
+    and: (...conds: Cond[]): Cond => ({ op: "and", conds }),
+    or: (...conds: Cond[]): Cond => ({ op: "or", conds }),
+    inArray: (col: unknown, vals: unknown[]): Cond => ({
+      op: "inArray",
+      col,
+      vals,
+    }),
+    desc: (col: unknown) => ({ _desc: col }),
+  };
+});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
+
+const termsKeys = new Map<unknown, string>(
+  Object.entries(getTableColumns(schema.contractTerms)).map(([k, c]) => [c, k]),
+);
+
+function num(v: unknown): number {
+  return v instanceof Date ? v.getTime() : (v as number);
+}
+
+/** Evaluate a mocked condition against a contract_terms row. */
+function matches(row: Record<string, unknown>, cond: Cond): boolean {
+  switch (cond.op) {
+    case "and":
+      return cond.conds.every((c) => matches(row, c));
+    case "or":
+      return cond.conds.some((c) => matches(row, c));
+    case "inArray":
+      return cond.vals.includes(row[termsKeys.get(cond.col)!]);
+    case "isNull":
+      return row[termsKeys.get(cond.col)!] === null;
+    case "eq":
+      return row[termsKeys.get(cond.col)!] === cond.val;
+    case "lte":
+      return num(row[termsKeys.get(cond.col)!]) <= num(cond.val);
+    case "gt":
+      return num(row[termsKeys.get(cond.col)!]) > num(cond.val);
+  }
+}
 
 const { resolveContractTerms, resolveGauEntitlement, FREE_PLAN_SLUG } =
   await import("./contract-terms");
@@ -44,6 +101,7 @@ const SCALE_SUB = {
 };
 
 const NEGOTIATED = {
+  orgId: "org-1",
   agreementRef: "MSA-2026-017",
   currency: "usd",
   ratePerGauMicros: 4_000n,
@@ -72,17 +130,25 @@ function makeTx(rows: Rows) {
       from: (table: unknown) => {
         tablesRead.push(table);
         let joined = false;
+        let where: Cond | null = null;
         const chain = {
           innerJoin: (joinTable: unknown) => {
             tablesRead.push(joinTable);
             joined = true;
             return chain;
           },
-          where: () => chain,
+          where: (cond: Cond) => {
+            where = cond;
+            return chain;
+          },
           orderBy: () => chain,
           limit: () => {
             if (table === schema.contractTerms)
-              return Promise.resolve(rows.contractTerms);
+              return Promise.resolve(
+                (rows.contractTerms as Record<string, unknown>[]).filter(
+                  (r) => where === null || matches(r, where),
+                ),
+              );
             if (table === schema.subscriptions && joined)
               return Promise.resolve(rows.entitled);
             if (table === schema.plans) return Promise.resolve(rows.free);
@@ -143,9 +209,12 @@ describe("resolveContractTerms — which row answers", () => {
   });
 
   it("an expired negotiated row falls back to the entitled plan's published terms", async () => {
-    // The query filters expired rows out (effective_to <= now), so the fake
-    // returns none for contract_terms; the assertion is on the fallback.
-    setup({ contractTerms: [], entitled: [SCALE_SUB] });
+    setup({
+      contractTerms: [
+        { ...NEGOTIATED, effectiveTo: new Date("2026-09-01T00:00:00.000Z") },
+      ],
+      entitled: [SCALE_SUB],
+    });
     const terms = await resolveContractTerms("org-1", NOW);
     expect(terms).toEqual({
       source: "published_tier",
@@ -155,6 +224,23 @@ describe("resolveContractTerms — which row answers", () => {
       blockSizeGau: 5_000,
       includedGauPerMonth: 300_000,
     });
+  });
+
+  it("a negotiated row that has not started yet does not answer", async () => {
+    setup({
+      contractTerms: [
+        { ...NEGOTIATED, effectiveFrom: new Date("2026-10-01T00:00:00.000Z") },
+      ],
+      entitled: [SCALE_SUB],
+    });
+    const terms = await resolveContractTerms("org-1", NOW);
+    expect(terms.source).toBe("published_tier");
+  });
+
+  it("another org's negotiated row never answers for this org", async () => {
+    setup({ contractTerms: [{ ...NEGOTIATED, orgId: "org-2" }] });
+    const terms = await resolveContractTerms("org-1", NOW);
+    expect(terms.source).toBe("published_tier");
   });
 
   it("a plan change is reflected on the next call — nothing is cached", async () => {
