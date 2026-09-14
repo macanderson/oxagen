@@ -284,7 +284,7 @@ figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
 pnpm --filter @oxagen/desktop bundle:dmg   # macOS: tauri build --bundles dmg
 pnpm --filter @oxagen/desktop bundle       # every bundle the current OS supports
 pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420</code></pre>
-<p><code>.github/workflows/desktop.yml</code> runs on a <code>desktop-v*</code> tag or by hand: one job per target (<code>macos-14</code> arm64, <code>macos-13</code> x64, <code>ubuntu-22.04</code>, <code>windows-latest</code>), each staging its own sidecars, building with <code>tauri-action</code>, uploading the bundles as artifacts and, on a tag, attaching them to a draft GitHub release.</p>
+<p><code>.github/workflows/desktop.yml</code> runs on a <code>desktop-v*</code> tag or by hand: one job per target (<code>macos-14</code> arm64, <code>macos-13</code> x64, <code>ubuntu-22.04</code>, <code>windows-latest</code>), each staging its own sidecars, building with <code>tauri-action</code>, uploading the bundles as artifacts and, on a tag, attaching them to a draft GitHub release together with the bare <code>tacho</code> and <code>oxagen</code> binaries and a <code>.sha256</code> per file. The Homebrew cask and formula and the Scoop manifest under <code>tools/packaging/</code> install from those assets; they are templates until a tap and a bucket exist, and <code>tools/packaging/stamp.mjs</code> fills their version and digests from the release. The user-facing install guide is <code>apps/docs/content/docs/cli/desktop.mdx</code>.</p>
 <div class="tw">
 <table>
 <thead><tr><th>Platform</th><th>Signing</th><th>Secrets (skipped when absent)</th></tr></thead>
@@ -326,8 +326,11 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420</code>
 <tr><td><code>packages/tacho/src/host/service.ts</code></td><td>launchd, systemd, and the new Task Scheduler manager</td></tr>
 <tr><td><code>packages/tacho/src/cli/native.ts</code>, <code>collector/run.ts</code>, <code>claude-code/hook-process.ts</code></td><td>the multi-call binary's entry and the two process bodies</td></tr>
 <tr><td><code>tools/sea/compile.mjs</code></td><td>bundle → single executable</td></tr>
-<tr><td><code>.github/workflows/desktop.yml</code></td><td>the four-target release matrix</td></tr>
+<tr><td><code>.github/workflows/desktop.yml</code></td><td>the four-target release matrix; also checksums the bare <code>tacho</code> and <code>oxagen</code> binaries and attaches them to the release next to the bundles</td></tr>
 <tr><td><code>apps/cli/src/commands/tacho.ts</code></td><td><code>oxagen tacho reassign</code>, <code>--harness</code> on enroll</td></tr>
+<tr><td><code>tools/packaging/</code></td><td>package-manager templates until a tap and a bucket exist: <code>homebrew/oxagen.rb</code> (cask for the <code>.dmg</code>), <code>homebrew/tacho.rb</code> (formula for the bare binaries), <code>scoop/oxagen.json</code>; <code>checksums.mjs</code> and <code>stamp.mjs</code> (tested in <code>tools/scripts/packaging.test.ts</code>) and a README with the release flow</td></tr>
+<tr><td><code>apps/docs/content/docs/cli/desktop.mdx</code></td><td>the user-facing Desktop app page: download per OS, first open while unsigned, sign in, enroll, workspace, wrappers, PATH, uninstall order, MDM</td></tr>
+<tr><td><code>packages/tacho/README.md</code>, <code>apps/desktop/README.md</code></td><td>the package READMEs: the compiled multi-call binary, Codex, Windows, reassign; the app's build and layout</td></tr>
 </tbody>
 </table>
 </div>
