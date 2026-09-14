@@ -4,7 +4,13 @@
  * foreign entry intact (acceptance 1, 18); status and export read what is
  * there; verify drives a fake `claude`.
  */
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -14,7 +20,7 @@ import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
 import { oxagenConfigPath, tachoPaths } from "../host/paths";
-import type { ServiceManager, ServiceSpec } from "../host/service";
+import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
   scratchPaths,
@@ -289,14 +295,22 @@ describe("credentials", () => {
       "/usr/bin/node",
     );
     expect(dev.binDir.endsWith("/bin")).toBe(true);
-    expect(claudeFacts(() => ({ status: 1, stdout: "", stderr: "" }))).toEqual(
-      {},
-    );
+    const bare = { HOME: "/nonexistent", SHELL: "/bin/sh" };
     expect(
-      claudeFacts((_c, args) =>
-        args[0] === "-lc"
-          ? { status: 0, stdout: "/x/claude\n", stderr: "" }
-          : { status: 0, stdout: "1.2.3\n", stderr: "" },
+      claudeFacts(
+        () => ({ status: 1, stdout: "", stderr: "" }),
+        "darwin",
+        bare,
+      ),
+    ).toEqual({});
+    expect(
+      claudeFacts(
+        (_c, args) =>
+          args[0] === "-lc"
+            ? { status: 0, stdout: "/x/claude\n", stderr: "" }
+            : { status: 0, stdout: "1.2.3\n", stderr: "" },
+        "darwin",
+        bare,
       ),
     ).toEqual({ path: "/x/claude", version: "1.2.3" });
   });
@@ -1108,6 +1122,72 @@ describe("harnesses and reassign", () => {
         "win32",
       ),
     ).toEqual({ path: "C:\\npm\\codex.cmd", version: "0.104.0" });
+  });
+
+  it("finds a harness through the login shell, then sh, then the install dirs, and never past a dead probe", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-home-"));
+    const env = { HOME: home, SHELL: "/bin/zsh" };
+    const calls: string[] = [];
+    const answering =
+      (found: Record<string, string>) =>
+      (command: string, args: string[]): ReturnType<Exec> => {
+        calls.push(`${command} ${args[0] ?? ""}`);
+        if (args[args.length - 1] === "--version")
+          return { status: 0, stdout: "9.9.9\n", stderr: "" };
+        const probe = found[command];
+        return probe === undefined
+          ? { status: 1, stdout: "", stderr: "" }
+          : { status: 0, stdout: `${probe}\n`, stderr: "" };
+      };
+    // The user's login shell wins (.zprofile, where Homebrew and nvm put
+    // their PATH lines).
+    expect(
+      harnessFacts(
+        answering({ "/bin/zsh": "/Users/dev/.local/bin/claude" }),
+        "claude",
+        "darwin",
+        env,
+      ),
+    ).toEqual({ path: "/Users/dev/.local/bin/claude", version: "9.9.9" });
+    expect(calls[0]).toBe("/bin/zsh -lc");
+    // Then sh -lc.
+    calls.length = 0;
+    expect(
+      harnessFacts(
+        answering({ sh: "/opt/homebrew/bin/codex" }),
+        "codex",
+        "darwin",
+        env,
+      ),
+    ).toEqual({ path: "/opt/homebrew/bin/codex", version: "9.9.9" });
+    expect(calls.slice(0, 2)).toEqual(["/bin/zsh -lc", "sh -lc"]);
+    // Then the well-known directories, checked on disk.
+    mkdirSync(join(home, ".local", "bin"), { recursive: true });
+    writeFileSync(join(home, ".local", "bin", "claude"), "");
+    expect(harnessFacts(answering({}), "claude", "darwin", env)).toEqual({
+      path: join(home, ".local", "bin", "claude"),
+      version: "9.9.9",
+    });
+    // Nothing anywhere: not found, no --version call.
+    calls.length = 0;
+    expect(harnessFacts(answering({}), "codex", "darwin", env)).toEqual({});
+    expect(calls.some((c) => c.endsWith("--version"))).toBe(false);
+    // A probe that timed out (status null) reads as not found, not as a hang.
+    expect(
+      harnessFacts(
+        () => ({ status: null, stdout: "", stderr: "timed out" }),
+        "codex",
+        "darwin",
+        env,
+      ),
+    ).toEqual({});
+    // /bin/sh as the login shell is not asked twice.
+    calls.length = 0;
+    harnessFacts(answering({}), "codex", "darwin", {
+      HOME: home,
+      SHELL: "/bin/sh",
+    });
+    expect(calls.filter((c) => c.startsWith("sh "))).toHaveLength(1);
   });
 });
 

@@ -177,6 +177,33 @@ describe("runSidecar", () => {
     await expect(runSidecar("tacho", ["status"])).rejects.toThrow("EACCES");
   });
 
+  it("gives a bounded probe a deadline instead of waiting on a close that never comes", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = runSidecar("tacho", ["detect", "--json"], undefined, {
+        timeoutMs: 5_000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      spawned[0]?.emit("stdout", "{");
+      vi.advanceTimersByTime(5_001);
+      await expect(pending).rejects.toThrow(
+        "tacho detect --json did not finish within 5s",
+      );
+      // A close inside the deadline clears it and resolves normally.
+      const quick = runSidecar("tacho", ["status", "--json"], undefined, {
+        timeoutMs: 5_000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      spawned[1]?.emit("close", { code: 0 });
+      expect(await quick).toEqual({ code: 0, stdout: "", stderr: "" });
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads tacho status --json off the sidecar and answers null when it printed none", async () => {
     const ok = tachoStatus();
     await Promise.resolve();

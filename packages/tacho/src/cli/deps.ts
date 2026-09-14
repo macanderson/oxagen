@@ -250,34 +250,108 @@ export interface CliDeps {
   wrapperVersion: string;
 }
 
+/** Nothing the CLI shells out to for a fact may take longer than this. */
+export const EXEC_TIMEOUT_MS = 10_000;
+
 function realExec(command: string, args: string[]): ReturnType<Exec> {
-  const result = spawnSync(command, args, { encoding: "utf8" });
+  // stdin is closed, never inherited: a probe must not wait on the parent
+  // (the desktop app keeps its sidecar's stdin pipe open for the process
+  // lifetime), and the timeout turns a shell profile that prompts or hangs
+  // into "not found" instead of a scan that never ends.
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: EXEC_TIMEOUT_MS,
+  });
   return {
-    status: result.status,
+    status: result.error !== undefined ? null : result.status,
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stderr: result.stderr || (result.error?.message ?? ""),
   };
 }
 
 /**
- * Find a harness executable on PATH and read its version. `sh -lc` on POSIX
- * so a login-shell PATH (nvm, Homebrew) is honoured; `where` on Windows,
- * whose first line is the first match.
+ * Where the harness installers put their binaries, checked directly when
+ * no shell reports them. The desktop app launches from Finder with the bare
+ * system PATH, and Claude Code adds its `~/.local/bin` line to `.zshrc`,
+ * which no non-interactive shell reads.
+ */
+export function wellKnownBinDirs(
+  home: string,
+  platform: NodeJS.Platform,
+  env: Record<string, string | undefined> = {},
+): string[] {
+  if (platform === "win32") {
+    const appData = env["APPDATA"] ?? `${home}\\AppData\\Roaming`;
+    const local = env["LOCALAPPDATA"] ?? `${home}\\AppData\\Local`;
+    return [
+      `${appData}\\npm`,
+      `${local}\\Programs\\claude`,
+      `${home}\\.local\\bin`,
+      `${home}\\.codex\\bin`,
+    ];
+  }
+  return [
+    `${home}/.local/bin`,
+    `${home}/.claude/local`,
+    `${home}/.codex/bin`,
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    `${home}/.npm-global/bin`,
+    `${home}/.volta/bin`,
+    `${home}/.bun/bin`,
+  ];
+}
+
+function firstLine(result: ReturnType<Exec>): string | undefined {
+  if (result.status !== 0) return undefined;
+  const line = (
+    result.stdout.split(/\r?\n/).find((l) => l.trim().length > 0) ?? ""
+  ).trim();
+  return line.length > 0 ? line : undefined;
+}
+
+/**
+ * Find a harness executable and read its version. On POSIX the lookup asks
+ * the user's own login shell (`$SHELL -lc`: `.zprofile` / `.bash_profile`,
+ * where Homebrew and nvm put their PATH lines), then `sh -lc`, then the
+ * well-known install directories on disk (`~/.local/bin`, where Claude Code
+ * lives and whose PATH line sits in `.zshrc`); `where` on Windows. Never an
+ * interactive shell: `-i` runs prompt frameworks and completion setup that
+ * take seconds or wait on a terminal. Every probe runs under
+ * `EXEC_TIMEOUT_MS` with stdin closed (see `realExec`).
  */
 export function harnessFacts(
   exec: Exec,
   name: string,
   platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+  home: string = env["HOME"] ?? env["USERPROFILE"] ?? "",
 ): HarnessFacts {
-  const which =
-    platform === "win32"
-      ? exec("where", [name])
-      : exec("sh", ["-lc", `command -v ${name}`]);
-  const path =
-    which.status === 0
-      ? (which.stdout.split(/\r?\n/)[0] ?? "").trim()
-      : undefined;
-  if (path === undefined || path.length === 0) return {};
+  let path: string | undefined;
+  if (platform === "win32") {
+    path = firstLine(exec("where", [name]));
+  } else {
+    const shell = env["SHELL"];
+    if (shell !== undefined && shell.length > 0 && shell !== "/bin/sh")
+      path = firstLine(exec(shell, ["-lc", `command -v ${name}`]));
+    path ??= firstLine(exec("sh", ["-lc", `command -v ${name}`]));
+  }
+  if (path === undefined) {
+    const sep = platform === "win32" ? "\\" : "/";
+    const names =
+      platform === "win32" ? [`${name}.exe`, `${name}.cmd`] : [name];
+    outer: for (const dir of wellKnownBinDirs(home, platform, env)) {
+      for (const file of names) {
+        const candidate = `${dir}${sep}${file}`;
+        if (existsSync(candidate)) {
+          path = candidate;
+          break outer;
+        }
+      }
+    }
+  }
+  if (path === undefined) return {};
   const version = exec(path, ["--version"]);
   const match = /(\d+\.\d+\.\d+)/.exec(version.stdout);
   return { path, ...(match?.[1] !== undefined ? { version: match[1] } : {}) };
@@ -286,8 +360,10 @@ export function harnessFacts(
 export function claudeFacts(
   exec: Exec,
   platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+  home?: string,
 ): ClaudeFacts {
-  return harnessFacts(exec, "claude", platform);
+  return harnessFacts(exec, "claude", platform, env, home);
 }
 
 export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
@@ -362,8 +438,8 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         `${JSON.stringify(document, null, 2)}\n`,
         0o644,
       ),
-    claude: () => claudeFacts(exec, platform),
-    codex: () => harnessFacts(exec, "codex", platform),
+    claude: () => claudeFacts(exec, platform, env, home),
+    codex: () => harnessFacts(exec, "codex", platform, env, home),
     runtime: runtimeCommands(undefined, env, undefined, platform),
     daemonGet,
     findFreePort: () =>

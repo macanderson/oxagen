@@ -140,6 +140,7 @@ export async function runSidecar(
   name: Sidecar,
   args: string[],
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
+  options: { timeoutMs?: number } = {},
 ): Promise<RunResult> {
   const command = Command.sidecar(`binaries/${name}`, args);
   let stdout = "";
@@ -153,13 +154,38 @@ export async function runSidecar(
     onLine?.(line, "stderr");
   });
   return new Promise((resolve, reject) => {
+    // A read-only probe (detect, status) gets a deadline: if the child never
+    // reports close, the UI must fail with a message rather than wait.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle =
+      <T>(fn: (v: T) => void) =>
+      (v: T) => {
+        if (timer !== undefined) clearTimeout(timer);
+        fn(v);
+      };
+    const done = settle(resolve);
+    const fail = settle(reject);
     command.on("close", (payload: { code: number | null }) =>
-      resolve({ code: payload.code, stdout, stderr }),
+      done({ code: payload.code, stdout, stderr }),
     );
     command.on("error", (error: unknown) =>
-      reject(error instanceof Error ? error : new Error(String(error))),
+      fail(error instanceof Error ? error : new Error(String(error))),
     );
-    command.spawn().catch(reject);
+    command
+      .spawn()
+      .then((child) => {
+        if (options.timeoutMs !== undefined) {
+          timer = setTimeout(() => {
+            void Promise.resolve(child?.kill?.()).catch(() => undefined);
+            fail(
+              new Error(
+                `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
+              ),
+            );
+          }, options.timeoutMs);
+        }
+      })
+      .catch(fail);
   });
 }
 
@@ -174,7 +200,9 @@ export type { TachoStatus } from "./tacho-status";
  * Null is reserved for a clean run that printed nothing.
  */
 export async function tachoStatus(): Promise<TachoStatus | null> {
-  const result = await runSidecar("tacho", ["status", "--json"]);
+  const result = await runSidecar("tacho", ["status", "--json"], undefined, {
+    timeoutMs: 20_000,
+  });
   const status = parseTachoStatus(result.stdout);
   if (status !== null) return status;
   const detail = result.stderr.trim();
@@ -199,8 +227,13 @@ export interface DetectReport {
   harnesses: DetectedHarness[];
 }
 
+/** Two login-shell probes plus two `--version` calls, each bounded to 10 s in tacho. */
+const DETECT_TIMEOUT_MS = 45_000;
+
 export async function detectHarnesses(): Promise<DetectReport | null> {
-  const result = await runSidecar("tacho", ["detect", "--json"]);
+  const result = await runSidecar("tacho", ["detect", "--json"], undefined, {
+    timeoutMs: DETECT_TIMEOUT_MS,
+  });
   return parseDetect(result.stdout);
 }
 

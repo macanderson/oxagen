@@ -239,31 +239,33 @@ export function App() {
     outcomeSeen,
   });
 
-  // Step 3 opens with a scan of the machine.
+  // Step 3 opens with a scan of the machine. One scan at a time, tracked in
+  // a ref: putting `detecting` in the dependency list made setDetecting(true)
+  // re-run the effect, whose cleanup then discarded the result and left the
+  // step on "Scanning…" for good. The scan's own timeout (tacho's exec
+  // budget) bounds it; a result is always applied.
+  const scanRef = useRef(false);
   useEffect(() => {
-    if (firstRun !== true || step !== 3 || detected !== null || detecting)
-      return;
-    let cancelled = false;
+    if (firstRun !== true || step !== 3 || detected !== null) return;
+    if (scanRef.current) return;
+    scanRef.current = true;
     setDetecting(true);
     detectHarnesses()
       .then((report) => {
-        if (cancelled) return;
         setDetected(report ?? { enrolled: false, harnesses: [] });
         if (report) setRegistration(defaultRegistration(report.harnesses));
       })
       .catch((e: unknown) => {
-        if (!cancelled)
-          setError(
-            `Could not scan for agents: ${e instanceof Error ? e.message : String(e)}`,
-          );
+        setDetected({ enrolled: false, harnesses: [] });
+        setError(
+          `Could not scan for agents: ${e instanceof Error ? e.message : String(e)}`,
+        );
       })
       .finally(() => {
-        if (!cancelled) setDetecting(false);
+        scanRef.current = false;
+        setDetecting(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [firstRun, step, detected, detecting]);
+  }, [firstRun, step, detected]);
 
   async function act(
     name: string,
