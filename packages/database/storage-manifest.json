@@ -944,6 +944,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "get_schema_registry",
       "reads": [],
@@ -1428,6 +1438,16 @@
       "surfaces": [
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "list_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "writes": []
@@ -2520,7 +2540,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b8208eac3af29ef990a7bdb360de69a3d1c5d287d524b219a5843565d1d1a179",
+  "contentHash": "75f5455cbfa1c245f429b357c9e6396155d872a444ad0198f731f56e4666b47a",
   "domains": [
     {
       "name": "agent",

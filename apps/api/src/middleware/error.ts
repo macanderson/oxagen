@@ -2,6 +2,10 @@ import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import {
+  type HandlerErrorCode,
+  isHandlerError,
+} from "@oxagen/oxagen/handler-error";
 import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
 import type { AppEnv } from "../app";
@@ -24,6 +28,17 @@ type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
 interface BillingError extends Error {
   readonly code: BillingErrorCode;
 }
+
+/**
+ * A handler's own refusal (@oxagen/oxagen HandlerError): the caller's role,
+ * a row outside the caller's tenant, a state that no longer admits the
+ * change. The code is the whole contract; the status follows from it.
+ */
+const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
+  forbidden: 403,
+  not_found: 404,
+  conflict: 409,
+};
 
 function isBillingError(err: unknown): err is BillingError {
   if (typeof err !== "object" || err === null) return false;
@@ -135,6 +150,17 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
       );
     }
     // invalid_output → 500 (server bug)
+  }
+
+  if (isHandlerError(err)) {
+    logger.warn(
+      { requestId, code: err.code, reason: err.reason, message: err.message },
+      "handler refusal",
+    );
+    return c.json(
+      { error: { code: err.code, message: err.message }, requestId },
+      HANDLER_ERROR_STATUS[err.code],
+    );
   }
 
   // Billing errors — map to 402 Payment Required.
