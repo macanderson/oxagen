@@ -637,6 +637,10 @@ export function buildProgram(): Command {
       "Only print the managed settings document; do not write user settings",
     )
     .option("--force", "Enroll again even if already enrolled")
+    .option(
+      "--harness <list>",
+      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+    )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(
       async (opts: {
@@ -648,10 +652,40 @@ export function buildProgram(): Command {
         managed?: boolean;
         printManaged?: boolean;
         force?: boolean;
+        harness?: string;
         verify?: boolean;
       }) => {
         const { handleTachoEnroll } = await import("./commands/tacho.js");
         if (!(await handleTachoEnroll(opts))) process.exitCode = 1;
+      },
+    );
+
+  tacho
+    .command("reassign")
+    .description(
+      "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
+    )
+    .option("--workspace <slug>", "Workspace slug to report to")
+    .option("--org <slug>", "Organization slug (default: the current one)")
+    .option(
+      "--token <apiKey>",
+      "Platform API token (default: the logged-in session)",
+    )
+    .option(
+      "--harness <list>",
+      "Replace the harness list (default: keep the current one)",
+    )
+    .option("--reason <text>", "Reason recorded with the revoke")
+    .action(
+      async (opts: {
+        token?: string;
+        org?: string;
+        workspace?: string;
+        harness?: string;
+        reason?: string;
+      }) => {
+        const { handleTachoReassign } = await import("./commands/tacho.js");
+        if (!(await handleTachoReassign(opts))) process.exitCode = 1;
       },
     );
 

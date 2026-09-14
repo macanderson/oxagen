@@ -20,6 +20,7 @@ export default [
   "packages/*/vitest.config.ts",
   "apps/api/vitest.config.ts",
   "apps/cli/vitest.config.ts",
+  "apps/desktop/vitest.config.ts",
   "apps/mcp/vitest.config.ts",
   "tools/*/vitest.config.ts",
 ];

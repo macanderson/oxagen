@@ -189,7 +189,7 @@ is unambiguous.
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` jobs: `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets` which files Linear tickets for parity gaps); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `pnpm gate` mirrors the checks and test jobs. Other workflows: `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml`, `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` jobs: `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `pnpm gate` mirrors the checks and test jobs. Other workflows: `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 **Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
@@ -296,8 +296,11 @@ macanderson org repos.
   the PR (a maintainer decision, a rig or spend, or work larger than the
   session), and only when fixing it moves stability, reliability,
   maintainability, innovation, efficiency, or performance. Apply ONLY the
-  `triage` label.
+  `triage` label. One issue carries one full change as a DoD checklist —
+  no sub-issues, parents or epics; the tracker is GitHub issues and the
+  label scheme is in CLAUDE.md "Issues and labels".
 - **[SCR-005](docs/scr/SCR-005-triage-separation-of-duties.md) — Triage
-  separation of duties:** Never apply priority (`P0`–`P3`) or size labels —
-  a dedicated triage agent owns sizing and priority; a guard workflow
-  strips creator-applied priorities.
+  separation of duties:** Never apply priority (`P0`–`P4`), size or the
+  descriptive `kind:` / `area:` / `job:` / `pillar:` / `needs:` labels — the
+  triage identity owns them; a guard workflow strips creator-applied
+  priorities.

@@ -9,7 +9,12 @@
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
    in a rule or a page.
    Gold is identity and action only — never a state. States are pass/fail.
-   No gradients. Corners are 2px. Depth comes from texture and hairlines.
+   Treatment follows docs.oxagen.sh (apps/docs, on @oxagen/ui): corners are
+   rounded on the docs scale (--r / --r-lg / --r-xl), the ONE gradient is the
+   kit's sheen and it lands only on headline accents and the primary action,
+   and backdrops are soft — a lattice that fades out, the hex constellation
+   from the logomark, an ember glow — never a hard-stop texture. Depth comes
+   from hairlines and a lit shadow under the windows.
    ========================================================================== */
 
 :root {
@@ -65,28 +70,57 @@
   --add-bg: var(--st-diff-add);
   --del-bg: var(--st-diff-del);
 
-  --r: 2px;
+  /* ---- corners: the docs site's scale, so a button here and a button on
+     docs.oxagen.sh are the same shape. --r is @oxagen/ui's --ui-radius
+     (0.5rem); the larger steps are Tailwind's xl / 2xl, which the docs pages
+     put on windows and frames. ---- */
+  --r: 8px; /* controls: buttons, inputs, chips, menu rows */
+  --r-lg: 12px; /* windows: the terminal, cards, panels */
+  --r-xl: 16px; /* frames: card grids, the demo box */
+  --r-pill: 999px; /* the eyebrow pill, tags */
   --nav-h: 60px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* ---- textures: hard-stop patterns, never a fade ---- */
+  /* ---- the metal in motion: the kit's sheen, deep → metal → highlight. The
+     one gradient the house allows, laid the way @oxagen/ui lays it
+     (--brand-gradient / .lp-grad-text on docs.oxagen.sh). Headline accents
+     and the primary button take it; a mark is always one colour. ---- */
+  --ember-a: var(--st-gold-ink);
+  --ember-b: var(--st-gold);
+  --ember-c: var(--st-gold-bright);
+  --grad-ember: linear-gradient(
+    100deg,
+    var(--ember-a) 0%,
+    var(--ember-b) 46%,
+    var(--ember-c) 100%
+  );
+
+  /* ---- backdrops: soft, never hard-stop.
+     --tex-grid is the docs landing page's lattice (.lp-grid): a 46px grid at
+     7% of the ink, masked to fade out radially wherever it is used.
+     --tex-hex is the hex constellation abstracted from the logomark — the
+     same nineteen cells, at the same places, as @oxagen/ui's <HexField>, so
+     this site and docs.oxagen.sh sit on one field. It is an image, so the
+     paper and the gold sheen are written into it; they are the kit's own
+     values (--st-paper-text, --st-gold-ink / --st-gold / --st-gold-bright).
+     --tex-orb is the ember light behind the hero (.lp-orb). ---- */
   --tex-grid:
-    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 34px),
-    repeating-linear-gradient(0deg, var(--line) 0 1px, transparent 1px 34px);
-  --tex-scan: repeating-linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.028) 0 1px,
-    transparent 1px 3px
-  );
-  --tex-hatch: repeating-linear-gradient(
-    45deg,
-    var(--line) 0 1px,
-    transparent 1px 7px
-  );
-  --tex-rule: repeating-linear-gradient(
-    90deg,
-    var(--rule) 0 6px,
-    transparent 6px 12px
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--ink) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ink) 7%, transparent) 1px,
+      transparent 1px
+    );
+  --tex-hex: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238B5E1A'/><stop offset='.5' stop-color='%23D6962C'/><stop offset='1' stop-color='%23F1C364'/></linearGradient></defs><g fill='none' stroke='%23F2EEE5' stroke-opacity='.14' stroke-width='1'><polygon points='90.0 80.0 116.0 95.0 116.0 125.0 90.0 140.0 64.0 125.0 64.0 95.0'/><polygon points='150.0 180.0 176.0 195.0 176.0 225.0 150.0 240.0 124.0 225.0 124.0 195.0'/><polygon points='90.0 280.0 116.0 295.0 116.0 325.0 90.0 340.0 64.0 325.0 64.0 295.0'/><polygon points='210.0 80.0 236.0 95.0 236.0 125.0 210.0 140.0 184.0 125.0 184.0 95.0'/><polygon points='210.0 280.0 236.0 295.0 236.0 325.0 210.0 340.0 184.0 325.0 184.0 295.0'/><polygon points='270.0 180.0 296.0 195.0 296.0 225.0 270.0 240.0 244.0 225.0 244.0 195.0'/><polygon points='270.0 380.0 296.0 395.0 296.0 425.0 270.0 440.0 244.0 425.0 244.0 395.0'/><polygon points='330.0 80.0 356.0 95.0 356.0 125.0 330.0 140.0 304.0 125.0 304.0 95.0'/><polygon points='1110.0 98.0 1137.7 114.0 1137.7 146.0 1110.0 162.0 1082.3 146.0 1082.3 114.0'/><polygon points='1110.0 298.0 1137.7 314.0 1137.7 346.0 1110.0 362.0 1082.3 346.0 1082.3 314.0'/><polygon points='990.0 98.0 1017.7 114.0 1017.7 146.0 990.0 162.0 962.3 146.0 962.3 114.0'/><polygon points='930.0 198.0 957.7 214.0 957.7 246.0 930.0 262.0 902.3 246.0 902.3 214.0'/><polygon points='930.0 398.0 957.7 414.0 957.7 446.0 930.0 462.0 902.3 446.0 902.3 414.0'/><polygon points='1050.0 398.0 1077.7 414.0 1077.7 446.0 1050.0 462.0 1022.3 446.0 1022.3 414.0'/><polygon points='600.0 18.0 619.1 29.0 619.1 51.0 600.0 62.0 580.9 51.0 580.9 29.0'/><polygon points='540.0 518.0 559.1 529.0 559.1 551.0 540.0 562.0 520.9 551.0 520.9 529.0'/></g><g fill='url(%23g)' opacity='.45'><polygon points='1050.0 198.0 1077.7 214.0 1077.7 246.0 1050.0 262.0 1022.3 246.0 1022.3 214.0'/><polygon points='990.0 298.0 1017.7 314.0 1017.7 346.0 990.0 362.0 962.3 346.0 962.3 314.0'/><polygon points='660.0 518.0 679.1 529.0 679.1 551.0 660.0 562.0 640.9 551.0 640.9 529.0'/></g></svg>");
+  --tex-orb: radial-gradient(
+    ellipse 410px 260px at 50% 14%,
+    color-mix(in srgb, var(--ember-b) 34%, transparent) 0%,
+    color-mix(in srgb, var(--ember-c) 14%, transparent) 40%,
+    transparent 70%
   );
 }
 
@@ -214,7 +248,7 @@ hr {
 }
 :focus-visible {
   outline: 2px solid var(--gold);
-  outline-offset: 3px;
+  outline-offset: 2px;
   border-radius: var(--r);
 }
 .skip {
@@ -240,63 +274,123 @@ hr {
   clip-path: inset(50%);
 }
 
-/* ============ texture surfaces ============
-   Texture always sits *under* a solid panel, never behind body copy, so
-   contrast is a property of the layout rather than of an opacity guess. */
+/* ============ backdrops ============
+   The docs landing page's layered background, as three classes:
+     .tex       the lattice alone, fading out radially (.lp-grid)
+     .tex-hex   the hero: lattice + the hex constellation + the ember glow
+     .tex-field an alt section: the constellation alone, quieter
+   A backdrop always sits *under* the section's content and never behind body
+   copy at full strength, so contrast is a property of the layout rather than
+   of an opacity guess. */
 .tex {
   position: relative;
   isolation: isolate;
 }
-.tex::before {
+.tex::before,
+.tex::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
+}
+.tex::before {
   background-image: var(--tex-grid);
+  background-size: 46px 46px;
   background-position: center;
-  opacity: 0.5;
-  -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 38%,
+    #000 0%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
 }
-.tex-hatch::before {
-  background-image: var(--tex-hatch);
-  opacity: 0.55;
+.tex::after {
+  content: none;
 }
-.tex-hex::before {
-  background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'>\
-<g fill='none' stroke='%2326262C' stroke-width='1'>\
-<path d='M28 1 55 16.5 55 47.5 28 63 1 47.5 1 16.5Z'/>\
-<path d='M28 49.5 55 65 55 96 28 111.5 1 96 1 65Z'/>\
-</g></svg>");
-  background-size: 56px 97px;
+/* the hero: the constellation floats over the lattice, lit from behind */
+.tex-hex::after {
+  content: "";
+  background-image: var(--tex-hex), var(--tex-orb);
+  background-size: cover, auto;
+  background-position: center, center;
+  background-repeat: no-repeat;
   opacity: 0.7;
+  animation: glow 9s ease-in-out infinite;
 }
-/* section rules that read as a machine part, not a hairline */
+/* an alt section: no lattice, no light, only the field, quieter */
+.tex-field::before {
+  content: none;
+}
+.tex-field::after {
+  content: "";
+  background-image: var(--tex-hex);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.4;
+}
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+/* a section rule that reads as a lit hairline (.lp-hairline), not a tape */
 .rule-tape {
-  height: 5px;
-  background-image: var(--tex-rule);
-  opacity: 0.8;
+  height: 1px;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ember-b) 55%, transparent),
+    transparent
+  );
 }
 
-/* ============ eyebrow / section head ============ */
-.eyebrow {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  font-weight: 560;
-  letter-spacing: 0.24em;
+/* ============ the sheen on type ============
+   A headline's accent word takes the gradient (docs: .lp-grad-text). Only in
+   a heading — inline .gold elsewhere stays the flat metal, because a mark and
+   a link are one colour. */
+h1 .gold,
+h2 .gold,
+.grad-text {
+  background-image: var(--grad-ember);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============ eyebrow / section head ============
+   The docs .ox-eyebrow: the house face, not a mono; muted, not gold — the
+   gold is saved for the headline's accent word. In a hero it sits in a pill
+   (docs: rounded-full border bg-card/60 backdrop-blur). The .sec-head form
+   is listed so it outranks `.sec-head p`, which sets the lede's size. */
+.eyebrow,
+.sec-head .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--ink-3);
   display: inline-flex;
   align-items: center;
   gap: 10px;
 }
-.eyebrow::before {
-  content: "";
-  width: 20px;
-  height: 2px;
-  background: var(--gold);
+.hero .eyebrow,
+.blog-hero .eyebrow,
+.eyebrow-pill {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .sec {
   padding: 96px 0;
@@ -330,7 +424,7 @@ hr {
   gap: 9px;
   padding: 12px 22px;
   border-radius: var(--r);
-  font-weight: 620;
+  font-weight: 600;
   font-size: 15px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -341,28 +435,30 @@ hr {
     background-color 0.16s,
     color 0.16s;
 }
+/* the one action per screen carries the sheen (docs: .lp-grad-surface) */
 .btn-primary {
-  background: var(--gold);
+  background-color: var(--gold);
+  background-image: var(--grad-ember);
   color: var(--ground);
-  border-color: var(--gold);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .btn-primary:hover {
-  background: var(--gold-hi);
-  border-color: var(--gold-hi);
-  transform: translateY(-1px);
+  transform: scale(1.02);
 }
 .btn-primary:active {
-  transform: translateY(0);
+  transform: scale(1);
 }
+/* glass over the backdrop, a hairline that warms on hover */
 .btn-ghost {
-  border-color: var(--rule);
-  color: var(--ink-2);
-  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .btn-ghost:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  color: var(--ink);
 }
 .btn-sm {
   padding: 8px 15px;
@@ -492,7 +588,7 @@ hr {
   z-index: 110;
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   padding: 6px;
   display: grid;
   gap: 2px;
@@ -533,6 +629,7 @@ hr {
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
+  border-radius: var(--r);
   color: var(--gold);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -663,15 +760,19 @@ hr {
 }
 
 /* ============ application window ============
-   The chrome around every rendering. Square-shouldered on purpose: this is a
-   terminal, not a phone. */
+   The chrome around every rendering: the docs terminal (.lp-term on
+   docs.oxagen.sh) — a rounded window with a light edge along its top and a
+   shadow lit by the ember beneath it. */
 .app {
   margin: 0;
   background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: var(--r);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-lg);
   overflow: hidden;
-  box-shadow: 0 26px 70px -34px rgba(0, 0, 0, 0.9);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
+    0 18px 50px -30px rgba(0, 0, 0, 0.7);
 }
 .app-bar {
   display: flex;
@@ -685,17 +786,25 @@ hr {
   color: var(--muted);
 }
 .app-bar .tl {
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--line);
   flex: none;
 }
+/* the three lights are the window's, not the palette's: the docs terminal
+   draws them in macOS's own colours, so they are written here once */
+.app-bar .tl:nth-child(1) {
+  background: #ff5f57;
+}
+.app-bar .tl:nth-child(2) {
+  background: #febc2e;
+}
 .app-bar .tl:nth-child(3) {
+  background: #28c840;
   margin-right: 6px;
 }
 .app-bar .tl.live {
-  background: var(--gold);
   animation: pulse 2.2s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -726,13 +835,6 @@ hr {
   height: auto;
 }
 /* a slow sweep, the only motion over the rendering itself */
-.app-view::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--tex-scan);
-}
 .app-sweep {
   position: absolute;
   left: 0;
@@ -826,15 +928,18 @@ figcaption b {
 /* ============ terminal (typed, no image) ============ */
 .term {
   background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: var(--r);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-lg);
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   line-height: 1.75;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 26px 70px -34px rgba(0, 0, 0, 0.9);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
+    0 18px 50px -30px rgba(0, 0, 0, 0.7);
 }
 .term-body {
   padding: 16px 18px;
@@ -891,9 +996,10 @@ figcaption b {
 }
 .card {
   position: relative;
+  isolation: isolate;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   padding: 24px;
   overflow: hidden;
   transition:
@@ -901,20 +1007,23 @@ figcaption b {
     transform 0.2s var(--ease);
 }
 .card:hover {
-  border-color: var(--rule);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
   transform: translateY(-2px);
 }
-.card:hover::before {
-  opacity: 1;
-}
+/* on hover the constellation surfaces through the card (docs: HexField at
+   opacity-30 on group-hover), under the copy */
 .card::before {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  background: var(--gold);
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--tex-hex) center / cover no-repeat;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.5s;
+}
+.card:hover::before {
+  opacity: 0.3;
 }
 .card h3 {
   font-size: 18px;
@@ -976,7 +1085,7 @@ figcaption b {
   display: grid;
   gap: 0;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   background: var(--panel);
 }
 .spec > div {
@@ -1018,7 +1127,7 @@ figcaption b {
 /* ============ deck — the tab strip, borrowed from the TUI ============ */
 .deck {
   border: 1px solid var(--rule);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   background: var(--panel);
   overflow: hidden;
 }
@@ -1077,10 +1186,13 @@ figcaption b {
 .panel {
   background: var(--ground);
   border: 1px solid var(--rule);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  box-shadow: 0 26px 70px -34px rgba(0, 0, 0, 0.9);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
+    0 18px 50px -30px rgba(0, 0, 0, 0.7);
 }
 .panel-bar {
   display: flex;
@@ -1127,6 +1239,7 @@ figcaption b {
   height: 6px;
   background: var(--raised);
   border: 1px solid var(--line);
+  border-radius: var(--r-pill);
   overflow: hidden;
 }
 .meter .fill {
@@ -1272,7 +1385,7 @@ figcaption b {
 .step {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   padding: 24px;
 }
 .step-num {
@@ -1289,6 +1402,7 @@ figcaption b {
   content: "";
   width: 7px;
   height: 7px;
+  border-radius: 50%;
   background: var(--gold);
 }
 .step h3 {
@@ -1371,10 +1485,16 @@ figcaption b {
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 15px 18px;
+  transition: border-color 0.14s;
+}
+.install:hover {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
 }
 .install code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1509,7 +1629,7 @@ figcaption b {
   max-width: 520px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   padding: 24px;
 }
 .unlocked .ok-line {
@@ -1675,6 +1795,10 @@ footer {
   }
   .app-sweep {
     display: none;
+  }
+  .tex-hex::after {
+    animation: none;
+    opacity: 0.7;
   }
   .js .reveal {
     opacity: 1;

@@ -20,12 +20,9 @@ import {
 } from "./html.mjs";
 
 const imagesFor = (base) => ({
-  og: { dark: `${base}/og-dark.png`, light: `${base}/og-light.png` },
-  banner: {
-    dark: `${base}/banner-dark.png`,
-    light: `${base}/banner-light.png`,
-  },
-  thumb: { dark: `${base}/thumb-dark.png`, light: `${base}/thumb-light.png` },
+  og: `${base}/og.png`,
+  banner: `${base}/banner.png`,
+  thumb: `${base}/thumb.png`,
 });
 const pillars = [
   {
@@ -92,22 +89,29 @@ describe("helpers", () => {
     );
   });
 
-  it("offers the light rendering to a light-scheme viewer, dark by default", () => {
+  it("is one <img> on ink, with no light-scheme alternative to offer", () => {
     expect(
-      picture(
-        { dark: "/d.png", light: "/l.png" },
-        { alt: 'A "shot"', width: 800, height: 450, lazy: true },
-      ),
+      picture("/d.png", {
+        alt: 'A "shot"',
+        width: 800,
+        height: 450,
+        lazy: true,
+      }),
     ).toBe(
-      '<picture><source srcset="/l.png" media="(prefers-color-scheme: light)"><img src="/d.png" alt="A &quot;shot&quot;" width="800" height="450" loading="lazy" decoding="async"></picture>',
+      '<img src="/d.png" alt="A &quot;shot&quot;" width="800" height="450" loading="lazy" decoding="async">',
     );
     expect(
-      picture(
-        { dark: "/same.jpg", light: "/same.jpg" },
-        { alt: "", width: 1600, height: 900, priority: true },
-      ),
+      picture("/own.jpg", {
+        alt: "",
+        width: 1600,
+        height: 900,
+        priority: true,
+      }),
     ).toBe(
-      '<img src="/same.jpg" alt="" width="1600" height="900" decoding="async" fetchpriority="high">',
+      '<img src="/own.jpg" alt="" width="1600" height="900" decoding="async" fetchpriority="high">',
+    );
+    expect(picture("/d.png", { alt: "", width: 1, height: 1 })).not.toContain(
+      "<picture",
     );
   });
 
@@ -180,7 +184,7 @@ describe("pages", () => {
       '<time datetime="2026-09-09">September 9, 2026</time> · 5 min read',
     );
     expect(card).toContain(
-      '<picture><source srcset="/blog/my-post/thumb-light.png" media="(prefers-color-scheme: light)"><img src="/blog/my-post/thumb-dark.png" alt="" width="800" height="450" loading="lazy"',
+      '<img src="/blog/my-post/thumb.png" alt="" width="800" height="450" loading="lazy"',
     );
   });
 
@@ -189,13 +193,13 @@ describe("pages", () => {
       pillars,
       posts: [post],
       wordmark,
-      image: "/blog/og-dark.png",
+      image: "/blog/og.png",
     });
     expect(html).toContain(
-      '<meta property="og:image" content="https://oxagen.sh/blog/og-dark.png">',
+      '<meta property="og:image" content="https://oxagen.sh/blog/og.png">',
     );
     expect(html).toContain(
-      '<source srcset="/blog/pillars/alpha/thumb-light.png" media="(prefers-color-scheme: light)"><img src="/blog/pillars/alpha/thumb-dark.png" alt="" width="640" height="360"',
+      '<img src="/blog/pillars/alpha/thumb.png" alt="" width="640" height="360"',
     );
     expect(html).toContain(
       `<title>${BLOG_TITLE} — the science of ontologies, agents, and self-improving systems</title>`,
@@ -223,10 +227,10 @@ describe("pages", () => {
       'href="/blog/pillars/alpha">Alpha</a>\n      </nav>',
     );
     expect(withPosts).toContain(
-      '<div class="pillar-hero-shot"><picture><source srcset="/blog/pillars/alpha/banner-light.png" media="(prefers-color-scheme: light)"><img src="/blog/pillars/alpha/banner-dark.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high"></picture></div>',
+      '<div class="pillar-hero-shot"><img src="/blog/pillars/alpha/banner.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high"></div>',
     );
     expect(withPosts).toContain(
-      '<meta property="og:image" content="https://oxagen.sh/blog/pillars/alpha/og-dark.png">',
+      '<meta property="og:image" content="https://oxagen.sh/blog/pillars/alpha/og.png">',
     );
     expect(withPosts).not.toContain("credit");
     const empty = pillarPage({
@@ -276,17 +280,15 @@ describe("pages", () => {
     expect(html).toContain('"@type": "BlogPosting"');
     expect(html).toContain('"wordCount": 1200');
     expect(html).toContain(
-      '<figure class="post-hero">\n        <picture><source srcset="/blog/my-post/banner-light.png" media="(prefers-color-scheme: light)"><img src="/blog/my-post/banner-dark.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high"></picture>',
+      '<figure class="post-hero">\n        <img src="/blog/my-post/banner.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high">',
     );
     expect(html).toContain(
-      '<meta property="og:image" content="https://oxagen.sh/blog/my-post/og-dark.png">',
+      '<meta property="og:image" content="https://oxagen.sh/blog/my-post/og.png">',
     );
     expect(html).toContain(
       '<meta property="og:image:alt" content="Title &lt;&quot;quoted&quot;&gt;">',
     );
-    expect(html).toContain(
-      '"image": "https://oxagen.sh/blog/my-post/og-dark.png"',
-    );
+    expect(html).toContain('"image": "https://oxagen.sh/blog/my-post/og.png"');
   });
 
   it("postPage omits the TOC with fewer than two sections and shows a post's own image plainly", () => {
@@ -295,10 +297,7 @@ describe("pages", () => {
         ...post,
         image: "/own.jpg",
         tags: [],
-        images: {
-          ...post.images,
-          banner: { dark: "/own.jpg", light: "/own.jpg" },
-        },
+        images: { ...post.images, banner: "/own.jpg" },
       },
       html: "",
       headings: [{ depth: 2, id: "one", text: "One" }],

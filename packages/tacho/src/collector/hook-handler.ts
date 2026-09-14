@@ -13,7 +13,7 @@ import {
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { DenyGeneration, PolicyBundle } from "../wire";
+import type { DenyGeneration, PolicyBundle, TachoHarness } from "../wire";
 import {
   type Evaluation,
   evaluatePreToolUse,
@@ -166,11 +166,13 @@ export async function handleHookEvent(
   env: Record<string, string | undefined>,
   deps: HookHandlerDeps,
   replay?: HookReplay,
+  harness?: TachoHarness,
 ): Promise<HookOutcome> {
   const input = hookInputSchema.parse(raw);
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
   const { record } = deps.registry.ensure(input.session_id, {
     ambient: false,
+    ...(harness !== undefined ? { harness } : {}),
     ...(input.transcript_path !== undefined
       ? { transcriptPath: input.transcript_path }
       : {}),

@@ -9,6 +9,26 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
+import type { TachoHarness } from "../wire";
+
+/**
+ * The recorder context for a session's harness. The daemon's context is
+ * Claude Code's; a Codex session keeps every other fact and relabels the
+ * agent. `runtime` is the control plane's checked enum (`claude-code`,
+ * `claude-agent-sdk`, `custom`, `stella`, `proxy`), so Codex ships as
+ * `custom` until that enum gains a `codex` member; `harness` is free text
+ * and carries the honest name.
+ */
+export function contextForHarness(
+  context: ClaudeCodeContext,
+  harness: TachoHarness | undefined,
+): ClaudeCodeContext {
+  if (harness === undefined || harness === "claude-code") return context;
+  return {
+    ...context,
+    agent: { ...context.agent, harness, runtime: "custom" },
+  };
+}
 
 export interface SessionControl {
   paused: string | null;
@@ -21,6 +41,8 @@ export interface SessionFacts {
   transcriptPath?: string;
   cwd?: string;
   pid?: number;
+  /** Which harness runs the session; fixed at first sight, Claude Code by default. */
+  harness?: TachoHarness;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -113,7 +135,7 @@ export class SessionRegistry {
     const record: SessionRecord = {
       harnessSessionId,
       recorder: new SessionRecorder({
-        context: this.options.context,
+        context: contextForHarness(this.options.context, facts.harness),
         harnessSessionId,
         scope: this.options.scope,
       }),
@@ -123,6 +145,7 @@ export class SessionRegistry {
       sealed: false,
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
+      ...(facts.harness !== undefined ? { harness: facts.harness } : {}),
       ...(facts.transcriptPath !== undefined
         ? { transcriptPath: facts.transcriptPath }
         : {}),
@@ -197,6 +220,7 @@ export class SessionRegistry {
         sealed: record.sealed,
         lastCheckpointSeq: record.lastCheckpointSeq,
         ambient: record.ambient,
+        ...(record.harness !== undefined ? { harness: record.harness } : {}),
         ...(record.transcriptPath !== undefined
           ? { transcriptPath: record.transcriptPath }
           : {}),
@@ -211,7 +235,7 @@ export class SessionRegistry {
       this.sessions.set(persisted.harnessSessionId, {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
-          context: this.options.context,
+          context: contextForHarness(this.options.context, persisted.harness),
           harnessSessionId: persisted.harnessSessionId,
           scope: this.options.scope,
           restore: persisted.recorder,
@@ -222,6 +246,9 @@ export class SessionRegistry {
         sealed: persisted.sealed,
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
+        ...(persisted.harness !== undefined
+          ? { harness: persisted.harness }
+          : {}),
         ...(persisted.transcriptPath !== undefined
           ? { transcriptPath: persisted.transcriptPath }
           : {}),

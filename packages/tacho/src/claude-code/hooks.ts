@@ -19,7 +19,11 @@ export const hookInputSchema = z
   .object({
     session_id: z.string(),
     hook_event_name: z.string(),
-    transcript_path: z.string().optional(),
+    // Codex sends `null` when there is no transcript; Claude Code omits it.
+    transcript_path: z.preprocess(
+      (value) => (value === null ? undefined : value),
+      z.string().optional(),
+    ),
     cwd: z.string().optional(),
     prompt_id: z.string().optional(),
     permission_mode: z.string().optional(),

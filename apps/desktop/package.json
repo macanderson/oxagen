@@ -1,0 +1,38 @@
+{
+  "name": "@oxagen/desktop",
+  "version": "2.1.1",
+  "private": true,
+  "description": "The Oxagen desktop app: installs the CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an org, and lets the operator pick or change the workspace the host reports to. Spec: docs/specs/oxagen-desktop/spec.html.",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:vite": "vite",
+    "build": "vite build",
+    "build:vite": "vite build",
+    "sidecars": "node scripts/sidecars.mjs",
+    "bundle": "node scripts/sidecars.mjs && tauri build",
+    "bundle:dmg": "node scripts/sidecars.mjs && tauri build --bundles dmg",
+    "icons": "node scripts/icons.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@oxagen/ui": "workspace:*",
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-opener": "2.5.5",
+    "@tauri-apps/plugin-shell": "2.3.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "6.0.3",
+    "vite": "6.4.3",
+    "vitest": "2.1.9"
+  }
+}

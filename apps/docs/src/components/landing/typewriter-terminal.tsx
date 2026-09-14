@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /**
  * TypewriterTerminal — an animated macOS-style terminal that types each
@@ -11,6 +11,13 @@ import { useEffect, useState } from "react";
  * The blinking caret follows the cursor while typing and rests at a fresh
  * prompt when idle. Honours `prefers-reduced-motion`: reduced-motion users get
  * the fully-rendered transcript with no typing animation.
+ *
+ * The window never changes height. The complete transcript is rendered once
+ * as an invisible sizing ghost (`visibility: hidden` keeps its layout box) in
+ * the same grid cell as the live lines, so the panel is always exactly as tall
+ * as its fullest frame — at every viewport width, for any `steps` — and the
+ * page below it never bounces as lines stream in or the loop resets. A pixel
+ * `min-height` cannot do this: long lines wrap differently at each width.
  */
 
 type Line = {
@@ -28,27 +35,61 @@ export interface TerminalStep {
 let _id = 0;
 const nextId = () => ++_id;
 
+/**
+ * Every line the animation will ever show, in order. Ids are positional
+ * rather than drawn from the module counter so the server-rendered sizing
+ * ghost hydrates with the same keys the client computes.
+ */
 function fullTranscript(steps: TerminalStep[]): Line[] {
   const lines: Line[] = [];
   for (const s of steps) {
-    lines.push({ id: nextId(), kind: "cmd", text: s.cmd });
+    lines.push({ id: lines.length, kind: "cmd", text: s.cmd });
     for (const o of s.out)
-      lines.push({ id: nextId(), kind: o.kind, text: o.text });
+      lines.push({ id: lines.length, kind: o.kind, text: o.text });
   }
-  lines.push({ id: nextId(), kind: "cmd", text: "", caret: true });
+  lines.push({ id: lines.length, kind: "cmd", text: "", caret: true });
   return lines;
+}
+
+function TranscriptLines({ lines }: { lines: Line[] }) {
+  return lines.map((l) =>
+    l.kind === "cmd" ? (
+      <div key={l.id} className="lp-line flex items-start gap-2">
+        <span className="select-none text-[var(--_ember-b,#D6962C)]">$</span>
+        <span className="break-all">
+          {l.text}
+          {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}
+        </span>
+      </div>
+    ) : (
+      <div
+        key={l.id}
+        className={
+          "lp-line break-all pl-4 " +
+          (l.kind === "ok"
+            ? "text-[#38d39f]"
+            : l.kind === "dim"
+              ? "text-white/40"
+              : "text-white/70")
+        }
+      >
+        {l.text}
+      </div>
+    ),
+  );
 }
 
 export function TypewriterTerminal({
   steps,
   title,
-  minHeightClass = "min-h-[244px]",
 }: {
   steps: TerminalStep[];
   title: string;
-  minHeightClass?: string;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
+  // The tallest frame the animation ever reaches: every command, every output
+  // line, and the resting prompt. Sizes the panel; never shown.
+  const ghost = useMemo(() => fullTranscript(steps), [steps]);
 
   useEffect(() => {
     const reduce =
@@ -134,35 +175,18 @@ export function TypewriterTerminal({
         </span>
       </div>
 
-      {/* transcript */}
-      <div className={`${minHeightClass} space-y-1 px-4 py-4 text-white/85`}>
-        {lines.map((l) =>
-          l.kind === "cmd" ? (
-            <div key={l.id} className="lp-line flex items-start gap-2">
-              <span className="select-none text-[var(--_ember-b,#D6962C)]">
-                $
-              </span>
-              <span className="break-all">
-                {l.text}
-                {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}
-              </span>
-            </div>
-          ) : (
-            <div
-              key={l.id}
-              className={
-                "lp-line break-all pl-4 " +
-                (l.kind === "ok"
-                  ? "text-[#38d39f]"
-                  : l.kind === "dim"
-                    ? "text-white/40"
-                    : "text-white/70")
-              }
-            >
-              {l.text}
-            </div>
-          ),
-        )}
+      {/* transcript — ghost and live lines share one grid cell; the ghost
+          sets the height, the live lines paint over it. */}
+      <div className="grid px-4 py-4 text-white/85">
+        <div
+          aria-hidden
+          className="invisible col-start-1 row-start-1 space-y-1"
+        >
+          <TranscriptLines lines={ghost} />
+        </div>
+        <div className="col-start-1 row-start-1 space-y-1">
+          <TranscriptLines lines={lines} />
+        </div>
       </div>
     </div>
   );
