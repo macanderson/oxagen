@@ -263,7 +263,7 @@ vi.mock("@oxagen/iam", () => ({
   emitAudit: iamMocks.emitAudit,
 }));
 
-import { materializeTools } from "./materialize-tools";
+import { materializeTools, type MaterializeOptions } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import {
   createAgentRunResolution,
@@ -1276,6 +1276,97 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
     expect(vi.mocked(resolveAgentRunCapability)).not.toHaveBeenCalled();
   });
+
+  // Toolbelt parity (#2956, ADR-057): `get_agent_toolbelt` reports the belt
+  // by calling `decideCapabilityForBelt` over the registry; the runtime's
+  // listing must be exactly the tools that function does not deny, on every
+  // gate the runtime applies — surface, exclusion, allowlist, risk ceiling,
+  // the cached delegation ceiling and its fail-closed branch.
+  type ParityScenario = {
+    agentRun: null | "observer" | "contributor" | "unresolved";
+    opts: Pick<
+      MaterializeOptions,
+      "allowlist" | "excludeCapabilities" | "riskCeiling"
+    >;
+  };
+  const PARITY: [string, ParityScenario][] = [
+    ["no agent run, no narrowing", { agentRun: null, opts: {} }],
+    ["allowlist", { agentRun: null, opts: { allowlist: new Set(["capB"]) } }],
+    [
+      "exclusion",
+      { agentRun: null, opts: { excludeCapabilities: new Set(["capA"]) } },
+    ],
+    ["risk ceiling", { agentRun: null, opts: { riskCeiling: "low" } }],
+    ["observer ceiling", { agentRun: "observer", opts: {} }],
+    ["contributor ceiling", { agentRun: "contributor", opts: {} }],
+    [
+      "contributor ceiling under a risk ceiling",
+      { agentRun: "contributor", opts: { riskCeiling: "medium" } },
+    ],
+    ["agent run without a resolution", { agentRun: "unresolved", opts: {} }],
+  ];
+  it.each(PARITY)(
+    "lists exactly the tools the shared belt decision keeps: %s",
+    async (_name, scenario) => {
+      const { decideCapabilityForBelt } = await import("./toolbelt");
+      const { getSurfaces, listCapabilities } = await import("@oxagen/oxagen");
+      const resolution =
+        scenario.agentRun === "observer"
+          ? createAgentRunResolution(observerSnapshot())
+          : scenario.agentRun === "contributor"
+            ? createAgentRunResolution(contributorSnapshot())
+            : undefined;
+      const agentRun =
+        scenario.agentRun === null ? null : makeAgentRun(resolution);
+      const ctx = agentRun === null ? CTX : ctxWith(agentRun);
+      const { tools, governance, nameMap } = await materializeTools(
+        ctx,
+        scenario.opts,
+      );
+      const listed = Object.keys(tools)
+        .map((alias) => nameMap[alias] ?? alias)
+        .sort();
+
+      const scope = {
+        kind: "workspace" as const,
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+      };
+      const decided = listCapabilities().map((cap) => ({
+        cap,
+        decision: decideCapabilityForBelt(cap, {
+          surfaces: getSurfaces(cap),
+          excluded: scenario.opts.excludeCapabilities,
+          allowlist: scenario.opts.allowlist,
+          riskCeiling: scenario.opts.riskCeiling,
+          agentRun,
+          resolution: resolution ?? null,
+          scope,
+          now: new Date(),
+          clientIp: null,
+          emergencyDenies: [],
+          entitledPluginIds: new Set<string>(),
+        }),
+      }));
+      const kept = decided
+        .filter((d) => d.decision.outcome !== "deny")
+        .map((d) => d.cap.name)
+        .sort();
+      expect(listed).toEqual(kept);
+      // The declared governance per tool is the decision's own risk and
+      // read-only facts, so the record and the engine read one source.
+      for (const { cap, decision } of decided) {
+        if (decision.outcome === "deny") continue;
+        const alias =
+          Object.entries(nameMap).find(([, n]) => n === cap.name)?.[0] ??
+          cap.name;
+        expect(governance[alias]).toMatchObject({
+          riskLevel: decision.riskLevel,
+          readOnly: decision.readOnly,
+        });
+      }
+    },
+  );
 });
 
 // ── Agent RBAC Phase 4a: MCP rule enforcement (spec §3.7) ────────────────────

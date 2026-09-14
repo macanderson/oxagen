@@ -48,7 +48,10 @@ async function credentialsFor(
         sql`${schema.apiKeys.scope}->>'agent_id' = ${agentPublicId}`,
       ),
     )
-    .orderBy(desc(schema.apiKeys.createdAt));
+    .orderBy(
+      sql`${schema.apiKeys.deletedAt} is not null`,
+      desc(schema.apiKeys.createdAt),
+    );
   return rows.map((r) => ({
     id: r.publicId,
     name: r.name,
