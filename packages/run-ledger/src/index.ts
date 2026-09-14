@@ -11,7 +11,7 @@
  */
 export { type PlatformSurface } from "./surface";
 
-// Frame bodies and the seal's replay evidence (ADR-057): the body and archive
+// Frame bodies and the seal's replay evidence (ADR-058): the body and archive
 // store seams the recorder writes through, and the pure grading helpers.
 export {
   prepareFrameBody,
@@ -34,7 +34,7 @@ export {
 } from "./frame-body";
 
 // One frame shape for a run from either store, and the pure reads over it:
-// the bisect alignment and the transcript fold (ADR-057).
+// the bisect alignment and the transcript fold (ADR-058).
 export {
   ledgerFrame,
   ledgerFrameSummary,

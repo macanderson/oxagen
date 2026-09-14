@@ -1,6 +1,6 @@
 /**
  * `oxagen run export <run-id>` — CLI parity surface for `export_run`
- * (Mission Control spec §14.1; ADR-057).
+ * (Mission Control spec §14.1; ADR-058).
  *
  * Queues the signed, offline-verifiable evidence bundle for one sealed run
  * and prints the export id the job was queued under. The bundle is built off

@@ -133,7 +133,7 @@ export async function readDenyGeneration(
 export type BundleRetention = PolicyBundle["retention"];
 
 /**
- * The workspace's fidelity setting (ADR-057 decision 2): the mode and content
+ * The workspace's fidelity setting (ADR-058 decision 2): the mode and content
  * classes of its latest `evidence.retention_policy_versions` row. A workspace
  * that has pinned no policy retains bodies of every class; `digest_only` is
  * the opt-down a policy row records, and every run in that workspace grades

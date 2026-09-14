@@ -1,6 +1,6 @@
 # run.get
 
-The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1.2, §3.5; ADR-057). The header is the same row `list_runs` returns. Frames are the run's V2 events for a ledger run, cursored on the run's own `run_seq`, and the session's hash-chained events in ClickHouse `tacho_events` for a wrapped run, cursored on its dense `seq`; both sit behind an opaque cursor this capability owns. Each frame carries its body reference (spec §8.2 `content`) and never its bytes; `get_run_frame_body` reads those on demand.
+The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1.2, §3.5; ADR-058). The header is the same row `list_runs` returns. Frames are the run's V2 events for a ledger run, cursored on the run's own `run_seq`, and the session's hash-chained events in ClickHouse `tacho_events` for a wrapped run, cursored on its dense `seq`; both sit behind an opaque cursor this capability owns. Each frame carries its body reference (spec §8.2 `content`) and never its bytes; `get_run_frame_body` reads those on demand.
 
 ## Mode
 

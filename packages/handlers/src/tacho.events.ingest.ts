@@ -13,7 +13,7 @@
 // per-model rollups, files touched, and commands run in Postgres; the host's
 // liveness; and the control envelope in the response.
 //
-// Bodies (ADR-057): a batch may ship the bytes a frame's `content.digest`
+// Bodies (ADR-058): a batch may ship the bytes a frame's `content.digest`
 // names. The control plane verifies each body against the chain and the
 // platform's redaction detectors (lib/tacho-replay.ts), refuses the workspace
 // has opted down to digest_only, writes the accepted bytes through the

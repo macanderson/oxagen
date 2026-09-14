@@ -1,4 +1,4 @@
-// tacho-replay.ts — the pure half of the wrapped-agent recorder (ADR-057):
+// tacho-replay.ts — the pure half of the wrapped-agent recorder (ADR-058):
 // which shipped bodies the control plane accepts, and the replay grade a
 // session seals with.
 //

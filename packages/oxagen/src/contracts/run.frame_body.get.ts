@@ -1,6 +1,6 @@
 /**
  * `get_run_frame_body`: the content one frame is about (Mission Control spec
- * §8.2, §8.4 `view`; ADR-057).
+ * §8.2, §8.4 `view`; ADR-058).
  *
  * `get_run` carries every frame's body reference and never its bytes (§3.5:
  * bodies are fetched on demand, never streamed). This capability reads one

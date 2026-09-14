@@ -1,5 +1,5 @@
 // evidence.run-export.ts — builds the signed evidence bundle `export_run`
-// queued (Mission Control spec §13.4; App. E; ADR-057).
+// queued (Mission Control spec §13.4; App. E; ADR-058).
 //
 // Triggered by `evidence/run-export.build`. The handler inserted the
 // `evidence.run_exports` row as `queued` before dispatching. Steps:

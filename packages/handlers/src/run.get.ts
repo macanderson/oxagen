@@ -5,7 +5,7 @@
 // run's V2 events cursored on the run's decimal `run_seq`, or the wrapped
 // session's hash-chained events cursored on its dense `seq`, both behind an
 // opaque cursor this handler owns. Each frame carries its body reference and
-// never its bytes (ADR-057; `get_run_frame_body` reads those on demand) and
+// never its bytes (ADR-058; `get_run_frame_body` reads those on demand) and
 // its own cost record when it carried one.
 //
 // `waitMs` is the handler-side long poll (ARCHITECTURE.md §3.5): with no event

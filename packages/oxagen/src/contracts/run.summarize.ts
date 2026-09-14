@@ -1,6 +1,6 @@
 /**
  * `summarize_run`: the generated name and summary of a sealed run (Mission
- * Control mockup 2821-2835; plan gap G14; ADR-057).
+ * Control mockup 2821-2835; plan gap G14; ADR-058).
  *
  * A fast-tier model reads the run's transcript and writes what changed. The
  * result is stored on the run with the model id and the instant it was

@@ -1,6 +1,6 @@
 # run.transcript.get
 
-One run read as a transcript at one of three zoom levels (Mission Control spec §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-057). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
+One run read as a transcript at one of three zoom levels (Mission Control spec §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-058). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
 
 ## Mode
 

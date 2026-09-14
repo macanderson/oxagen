@@ -1,6 +1,6 @@
 /**
  * `fork_run`: a new attempt that replays a recording up to a frame and runs
- * live from there (Mission Control spec §8.4 `fork`; ADR-057 decision 3).
+ * live from there (Mission Control spec §8.4 `fork`; ADR-058 decision 3).
  *
  * Frames 0–N replay from the recording; the next model call runs live; tool
  * results after N are served from the recorded cassette when the input

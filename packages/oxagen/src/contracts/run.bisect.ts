@@ -1,6 +1,6 @@
 /**
  * `bisect_runs`: the first frame at which two runs diverge (Mission Control
- * spec §8.4 "bisect between any two runs of the same task"; ADR-057).
+ * spec §8.4 "bisect between any two runs of the same task"; ADR-058).
  *
  * Both runs are read as their frames, in sequence, and each frame is reduced
  * to a bisect key: its kind, then the identity of what it did — the tool and

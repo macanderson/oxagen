@@ -64,6 +64,9 @@ function attempt(over: Partial<AttemptRecord> = {}): AttemptRecord {
       completenessGaps: [],
       merkleRoot: DIGEST,
       archiveSegmentRef: "evidence/o/w/segments/a/x.ndjson.zst",
+      modelCalls: 1,
+      toolCalls: 1,
+      turns: 1,
     },
     ...over,
   };

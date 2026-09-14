@@ -2136,7 +2136,7 @@ describe("read side", () => {
   });
 });
 
-// ── Frame bodies and the seal's replay evidence (ADR-057) ────────────────────
+// ── Frame bodies and the seal's replay evidence (ADR-058) ────────────────────
 
 const enc = new TextEncoder();
 
@@ -2437,7 +2437,7 @@ describe("sealAttempt: replay evidence", () => {
   });
 });
 
-// ── Compaction (spec §13.3; ADR-057) ─────────────────────────────────────────
+// ── Compaction (spec §13.3; ADR-058) ─────────────────────────────────────────
 
 describe("the seal's rollup", () => {
   const modelRow = (seq: number, turn: number | null) => ({

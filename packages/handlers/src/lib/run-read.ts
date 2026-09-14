@@ -1,5 +1,5 @@
 // run-read.ts — resolving a run in the caller's workspace and reading its
-// frames from the store that recorded it (ADR-057).
+// frames from the store that recorded it (ADR-058).
 //
 // `arun_…` is an evidence-ledger run: the header row comes from
 // `agent.agent_runs` with its identity joins and its latest seal, the frames

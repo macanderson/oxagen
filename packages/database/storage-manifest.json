@@ -3077,7 +3077,7 @@
       "meta": {
         "access": "private",
         "assetKinds": "evidence_body",
-        "description": "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<sha256>; agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the reference (ADR-057).",
+        "description": "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<sha256>; agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the reference (ADR-058).",
         "driver": "vercel-blob",
         "referencedBy": "postgres:agent.agent_run_events,postgres:tacho.sessions"
       },
@@ -3092,7 +3092,7 @@
       "meta": {
         "access": "private",
         "assetKinds": "evidence_export,evidence_segment",
-        "description": "Per-seal archive segments (frame envelopes as zstd NDJSON, written once at seal) and export bundles; the seal's archive_segment_ref and run_exports.bundle_ref hold the reference (ADR-057).",
+        "description": "Per-seal archive segments (frame envelopes as zstd NDJSON, written once at seal) and export bundles; the seal's archive_segment_ref and run_exports.bundle_ref hold the reference (ADR-058).",
         "driver": "vercel-blob",
         "referencedBy": "postgres:agent.agent_run_attempt_seals,postgres:evidence.run_exports"
       },

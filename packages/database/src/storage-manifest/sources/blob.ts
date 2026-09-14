@@ -94,7 +94,7 @@ export const BLOB_ASSETS: readonly BlobAssetSpec[] = [
       "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, " +
       "envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<sha256>; " +
       "agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the " +
-      "reference (ADR-057).",
+      "reference (ADR-058).",
   },
   {
     kind: "evidence_segment",
@@ -107,7 +107,7 @@ export const BLOB_ASSETS: readonly BlobAssetSpec[] = [
     description:
       "Per-seal archive segments (frame envelopes as zstd NDJSON, written " +
       "once at seal) and export bundles; the seal's archive_segment_ref and " +
-      "run_exports.bundle_ref hold the reference (ADR-057).",
+      "run_exports.bundle_ref hold the reference (ADR-058).",
   },
 ];
 

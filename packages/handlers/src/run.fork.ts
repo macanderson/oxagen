@@ -1,5 +1,5 @@
 // `fork_run`: a new attempt that replays the recording up to a frame
-// (Mission Control spec §8.4 `fork`; ADR-057 decision 3).
+// (Mission Control spec §8.4 `fork`; ADR-058 decision 3).
 //
 // Guards, in order, each with its negative test:
 //   1. Role: org Owner, Admin or Member (`assertOrgRole`, ARCHITECTURE.md

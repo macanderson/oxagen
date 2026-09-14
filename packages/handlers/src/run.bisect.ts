@@ -1,5 +1,5 @@
 // `bisect_runs`: the first frame at which two recordings diverge (Mission
-// Control spec §8.4; ADR-057).
+// Control spec §8.4; ADR-058).
 //
 // Both runs are resolved in the caller's workspace and read in full through
 // the run reader (lib/run-read.ts); the alignment itself is the pure

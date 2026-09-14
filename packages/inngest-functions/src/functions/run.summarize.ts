@@ -1,5 +1,5 @@
 // run.summarize.ts — writes the generated name and summary `summarize_run`
-// queued (Mission Control mockup 2821-2835; G14; ADR-057).
+// queued (Mission Control mockup 2821-2835; G14; ADR-058).
 //
 // Triggered by `run/summarize`. The handler already refused a live run and a
 // digest_only recording. The job reads the run's frames in its tenant scope,

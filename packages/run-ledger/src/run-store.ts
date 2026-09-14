@@ -424,7 +424,7 @@ export interface AttemptSealRecord {
   finalEventDigest: string | null;
   eventStreamDigest: string;
   sealedAt: Date;
-  /** Null on a seal written before the recorder graded (ADR-057). */
+  /** Null on a seal written before the recorder graded (ADR-058). */
   replayGrade: string | null;
   completenessGaps: string[];
   merkleRoot: string | null;

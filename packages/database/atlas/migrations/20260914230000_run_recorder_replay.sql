@@ -1,4 +1,4 @@
--- Run recorder and replay (#2952, ADR-057): frame bodies, the replay grade,
+-- Run recorder and replay (#2952, ADR-058): frame bodies, the replay grade,
 -- the archive segment, fork provenance, the generated summary, and the export
 -- job. Expand-only: every column is nullable or defaulted, every CHECK admits
 -- the rows that exist, and no privilege changes.
@@ -27,7 +27,7 @@
 --
 -- The workspace's fidelity setting is the retention policy version a run pins
 -- (evidence.retention_policy_versions.mode = 'digest_only'); no new setting
--- column exists (ADR-057 decision 2).
+-- column exists (ADR-058 decision 2).
 
 -- ── 1. Frame bodies on the event log ─────────────────────────────────────────
 ALTER TABLE "agent"."agent_run_events"

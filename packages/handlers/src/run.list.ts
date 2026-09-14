@@ -256,7 +256,7 @@ export function ledgerRollupQuery(
 }
 
 /**
- * The rollup of a run's compacted attempts (spec §13.3; ADR-057): attempts
+ * The rollup of a run's compacted attempts (spec §13.3; ADR-058): attempts
  * whose hot frames compaction removed keep their counts on the seal. Summed
  * per run over the seals with no rows left in the event log, so a run that is
  * half compacted counts every frame exactly once when this is added to
@@ -321,7 +321,7 @@ export function addCompactedRollup(
 
 /**
  * The latest attempt seal per run: when it sealed, the grade it recorded and
- * the gaps the grade was computed from (ADR-057). One row per run.
+ * the gaps the grade was computed from (ADR-058). One row per run.
  */
 export function ledgerSealQuery(
   db: QueryDb,

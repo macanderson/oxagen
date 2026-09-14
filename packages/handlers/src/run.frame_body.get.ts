@@ -1,4 +1,4 @@
-// `get_run_frame_body`: one frame's redacted body, read on demand (ADR-057).
+// `get_run_frame_body`: one frame's redacted body, read on demand (ADR-058).
 //
 // The frame is located through the run reader (lib/run-read.ts), so the
 // tenant fence is the one every read of a recording uses. A frame that

@@ -1,6 +1,6 @@
 /**
  * Frame bodies and the seal's replay evidence for the run ledger
- * (Mission Control spec §8.2, §8.3, §8.4, §13; ADR-057).
+ * (Mission Control spec §8.2, §8.3, §8.4, §13; ADR-058).
  *
  * A producer may hand the ledger the content a frame is about (the prompt,
  * the model response, the tool input and output) next to the frame's

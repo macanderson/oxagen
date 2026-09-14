@@ -17,7 +17,7 @@ export interface TachoEventInsert {
   /** The control plane recomputed the hash and the link to the prior row. */
   chainVerified: boolean;
   /**
-   * Where the control plane wrote the frame's body (ADR-057). Server-owned:
+   * Where the control plane wrote the frame's body (ADR-058). Server-owned:
    * the envelope's own `content.bytes_ref`, if a producer set one, names a
    * producer-side location and is replaced by this.
    */
@@ -68,7 +68,7 @@ export async function insertTachoEvents(
 
 // ── The read seam ────────────────────────────────────────────────────────────
 
-/** One wrapped-agent frame as the Run page reads it (ADR-057, G6). */
+/** One wrapped-agent frame as the Run page reads it (ADR-058, G6). */
 export interface TachoFrameRow {
   seq: number;
   ts: string;

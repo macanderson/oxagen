@@ -666,7 +666,7 @@ describe("ingest_tacho_events", () => {
   });
 });
 
-// ── Bodies and the seal (ADR-057) ────────────────────────────────────────────
+// ── Bodies and the seal (ADR-058) ────────────────────────────────────────────
 
 const TOOL_OUTPUT = '{"stdout":"hi\\n"}';
 

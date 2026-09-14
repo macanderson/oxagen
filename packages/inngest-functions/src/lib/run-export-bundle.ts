@@ -1,5 +1,5 @@
 // run-export-bundle.ts — the signed, offline-verifiable bundle `export_run`
-// produces (Mission Control spec §13.4; App. E; ADR-057). Pure: the segments
+// produces (Mission Control spec §13.4; App. E; ADR-058). Pure: the segments
 // and the attester key come from the caller.
 //
 //   manifest.json     the run, its sealed attempts and their seal figures

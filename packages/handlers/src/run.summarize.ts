@@ -1,5 +1,5 @@
 // `summarize_run`: queue the generated name and summary of a sealed run
-// (Mission Control mockup 2821-2835; G14; ADR-057).
+// (Mission Control mockup 2821-2835; G14; ADR-058).
 //
 // Guards, each with its negative test: org Owner, Admin or Member
 // (`assertOrgRole`, ARCHITECTURE.md §3.2); the run is in the caller's

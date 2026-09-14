@@ -368,7 +368,7 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // ── Generated summary (Mission Control mockup 2821-2835; G14; ADR-057) ──
+    // ── Generated summary (Mission Control mockup 2821-2835; G14; ADR-058) ──
     // Written by `summarize_run`: a light-tier model reads the frames and
     // writes what changed. Labelled generated wherever it renders and never
     // standing in for the record; the three summary columns are set together
@@ -638,7 +638,7 @@ export const agentRunEvents = agentSchema.table(
     // redactions applied, and `fidelity`: `full` when the bytes were retained,
     // `digest_only` when the run's pinned retention policy kept the digest
     // alone (a completeness gap the seal grades `inspect`) or the frame
-    // carried no content. ADR-057.
+    // carried no content. ADR-058.
     bodyRef: text("body_ref"),
     bodyDigest: text("body_digest"),
     bodyBytes: integer("body_bytes"),
@@ -778,7 +778,7 @@ export const agentRunAttempts = agentSchema.table(
     // run-global sequence the successor branches from. Frames up to it replay
     // from the recording; the next model call runs live. Always paired with
     // the restore tuple, since a fork resumes the attempt that recorded the
-    // frame. ADR-057.
+    // frame. ADR-058.
     forkedFromRunSeq: bigint("forked_from_run_seq", { mode: "number" }),
   },
   (t) => ({
@@ -850,7 +850,7 @@ export const agentRunAttemptSeals = agentSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
-    // ── Replay (Mission Control spec §8.3, §8.4, §13.3; ADR-057) ─────────────
+    // ── Replay (Mission Control spec §8.3, §8.4, §13.3; ADR-058) ─────────────
     // The grade computed at seal from the completeness gaps: the strongest
     // verb a reader can apply to the recording. Never raised afterwards; the
     // row is immutable. Null only on a seal written before the recorder

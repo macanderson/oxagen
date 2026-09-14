@@ -1,6 +1,6 @@
 /**
  * One frame shape for a run from either store (Mission Control spec §8.2;
- * ADR-057), and the pure reads over it: the transcript fold at three zoom
+ * ADR-058), and the pure reads over it: the transcript fold at three zoom
  * levels (§14) and the bisect alignment (§8.4).
  *
  * The evidence ledger records a run's frames as V2 events

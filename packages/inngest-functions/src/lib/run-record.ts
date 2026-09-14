@@ -1,4 +1,4 @@
-// run-record.ts — a run's record as the durable jobs read it (ADR-057): the
+// run-record.ts — a run's record as the durable jobs read it (ADR-058): the
 // seal figures and the frames, from the store that recorded the run, inside
 // the run's tenant scope.
 //

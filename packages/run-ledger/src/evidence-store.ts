@@ -1,5 +1,5 @@
 // evidence-store.ts — where frame bodies, archive segments and export bundles
-// live (Mission Control spec §8.2, §13.3, §13.4; ADR-057).
+// live (Mission Control spec §8.2, §13.3, §13.4; ADR-058).
 //
 // Every object is written through @oxagen/storage under a key that names the
 // organisation and workspace first, so the tenant is the path and a

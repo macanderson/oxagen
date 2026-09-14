@@ -1,7 +1,7 @@
 /**
  * `export_run`: the signed, verifiable bundle for one sealed run (Mission
  * Control spec §13.4 "Exports produce a verifiable bundle: segments,
- * attestations, key ids, and a verifier script"; App. E; ADR-057).
+ * attestations, key ids, and a verifier script"; App. E; ADR-058).
  *
  * The capability queues an export job and answers its id; the bundle is
  * built off the request path from the run's frames (as NDJSON), its Merkle

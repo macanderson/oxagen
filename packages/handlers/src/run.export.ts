@@ -1,5 +1,5 @@
 // `export_run`: queue the signed evidence bundle for one sealed run (Mission
-// Control spec §13.4, App. E; ADR-057).
+// Control spec §13.4, App. E; ADR-058).
 //
 // Guards, each with its negative test: org Owner or Admin (`assertOrgRole`,
 // ARCHITECTURE.md §3.2); the run is in the caller's workspace (`not_found`);

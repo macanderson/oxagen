@@ -134,7 +134,7 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 96 as of evidence.run_exports (ADR-057, #2952). Was 95 as of
+    // 96 as of evidence.run_exports (ADR-058, #2952). Was 95 as of
     // billing.contract_terms, billing.gau_buckets and
     // billing.gau_settlements (ADR-055, WL-24). Was 92 as of
     // billing.governed_action_counters (ADR-052). An earlier note read "97 as

@@ -1,7 +1,7 @@
 /**
  * `get_run_transcript`: one run read as a transcript at one of three zoom
  * levels (Mission Control spec §14 "the transcript at three zoom levels
- * (turns, steps, everything)"; ADR-057).
+ * (turns, steps, everything)"; ADR-058).
  *
  * The transcript is derived on the server from the frames and the bodies the
  * recorder kept; nothing here is stored. Each entry names the frame that

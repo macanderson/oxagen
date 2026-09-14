@@ -1,5 +1,5 @@
 // `get_run_transcript`: a run read as a transcript at one zoom level
-// (Mission Control spec §14; ADR-057).
+// (Mission Control spec §14; ADR-058).
 //
 // The frames come from the run reader (lib/run-read.ts) and fold into
 // entries with the pure `foldTranscript` (@oxagen/run-ledger). Each entry's

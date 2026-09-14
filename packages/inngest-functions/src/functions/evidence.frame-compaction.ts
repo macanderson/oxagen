@@ -1,5 +1,5 @@
 // evidence.frame-compaction.ts — the monthly compaction of the evidence
-// ledger's hot frames (Mission Control spec §13.3; ADR-057).
+// ledger's hot frames (Mission Control spec §13.3; ADR-058).
 //
 // Frames stay in `agent.agent_run_events` for the hot window (thirteen
 // months from the seal, spec §13.2) and are then removed; the seal keeps
