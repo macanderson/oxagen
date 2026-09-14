@@ -12,6 +12,7 @@
     "./kernel": "./src/kernel.ts",
     "./handler-error": "./src/handler-error.ts",
     "./money": "./src/money.ts",
+    "./agent-credential": "./src/agent-credential.ts",
     "./agent-schema": "./src/agent-schema.ts",
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",

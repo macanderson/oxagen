@@ -8,10 +8,7 @@ import {
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
-import {
-  resolveAgentRunCapability,
-  type AgentRunIAMResolution,
-} from "@oxagen/oxagen/iam";
+import { type AgentRunIAMResolution } from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
@@ -29,6 +26,7 @@ import {
   type ContributedRawTool,
 } from "./plugin-type";
 import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
+import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
 // Side-effect imports register the plugin-type contributors.
 import "./plugin-types/mcp";
 import "./plugin-types/file-mcp";
@@ -216,17 +214,6 @@ export function toModelToolName(capabilityName: string): string {
     .slice(0, MODEL_TOOL_NAME_MAX);
 }
 
-const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
-
-function passesRisk(
-  cap: AnyCapability,
-  ceiling?: MaterializeOptions["riskCeiling"],
-): boolean {
-  if (!ceiling) return true;
-  const capRisk = cap.agent?.riskLevel ?? "low";
-  return (RISK_ORDER[capRisk] ?? 0) <= (RISK_ORDER[ceiling] ?? 0);
-}
-
 /**
  * Concurrency class for the turn loop's dispatch: a capability classified
  * MUTATING serializes; everything else may run alongside other calls in the
@@ -251,6 +238,8 @@ export function isMutatingCapability(cap: AnyCapability): boolean {
 // itself enforces scope from CapabilityContext).
 // Default TTL must stay in sync with approval.ts DEFAULT_TTL_MS (5 min).
 const APPROVAL_TTL_MS = 5 * 60 * 1000;
+/** The entitled set for a contract no plugin claims: the gate never consults it. */
+const NO_PLUGINS: ReadonlySet<string> = new Set();
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
 
@@ -364,53 +353,59 @@ export async function materializeTools(
   };
   const agentRunNow = new Date();
 
-  for (const cap of all) {
-    if (!getSurfaces(cap).includes("agent")) continue;
-    if (opts.excludeCapabilities?.has(cap.name)) continue;
-    if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
-    if (!passesRisk(cap, opts.riskCeiling)) continue;
-    // Agent RBAC (spec §3.5): resolve this capability against the run's cached
-    // resolution and drop it on DENY. The memo written here
-    // (resolution.byCapability) is the memo the kernel hits at invoke time —
-    // the two layers provably share one decision per capability per run.
-    if (agentRunFailClosed) continue;
-    if (agentRunResolution !== null) {
-      const perms = resolveAgentRunCapability(agentRun!, agentRunResolution, {
-        capability: cap.name,
-        scope: agentRunScope,
-        // Same fallback as the kernel's IAM seam (kernel.ts): a capability
-        // without an explicit defaultEffect defaults to "deny".
-        defaultEffect: cap.defaultEffect ?? "deny",
-        now: agentRunNow,
-        clientIp: ctx.clientIp ?? null,
-      });
-      if (perms.outcome === "deny") continue;
-    }
-    // Entitlement filter: if this capability is claimed by a plugin, verify the
-    // org has that plugin installed and enabled. Lazily fetch the entitled set
-    // on first plugin-claimed contract to avoid DB round-trips when no plugin
-    // capabilities are present.
-    const plugin = pluginForContract(cap.name);
-    if (plugin) {
-      if (!entitlementFetchFailed && entitledPluginIds === null) {
-        try {
-          entitledPluginIds = await listEntitledCapabilityPluginIds(
-            ctx.orgId,
-            ctx.workspaceId,
-          );
-        } catch (err) {
-          logger.warn(
-            { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-            "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)",
-          );
-          entitlementFetchFailed = true;
-        }
+  // Entitlement filter: if a capability is claimed by a plugin, the org must
+  // have that plugin installed and enabled. Lazily fetch the entitled set on
+  // the first plugin-claimed contract to avoid DB round-trips when no plugin
+  // capabilities are present; a failed fetch excludes every plugin-claimed
+  // tool (fail-closed).
+  const entitledPluginIdsFor = async (
+    cap: AnyCapability,
+  ): Promise<ReadonlySet<string> | "unavailable"> => {
+    if (!pluginForContract(cap.name)) return NO_PLUGINS;
+    if (!entitlementFetchFailed && entitledPluginIds === null) {
+      try {
+        entitledPluginIds = await listEntitledCapabilityPluginIds(
+          ctx.orgId,
+          ctx.workspaceId,
+        );
+      } catch (err) {
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)",
+        );
+        entitlementFetchFailed = true;
       }
-      // Fail-closed: if fetch threw, exclude all plugin-claimed tools.
-      if (entitlementFetchFailed || !entitledPluginIds!.has(plugin.id))
-        continue;
     }
-    const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
+    return entitlementFetchFailed || entitledPluginIds === null
+      ? "unavailable"
+      : entitledPluginIds;
+  };
+
+  for (const cap of all) {
+    // One decision per tool, shared with `get_agent_toolbelt` (toolbelt.ts):
+    // surface, exclusion, allowlist, risk ceiling, the run's cached
+    // delegation-ceiling resolution (spec §3.5 — the memo written on
+    // resolution.byCapability is the memo the kernel hits at invoke time),
+    // then entitlement. Emergency denies are not read here: the kernel
+    // enforces them on every invoke, and the listing never has (the console
+    // read passes the active rows so its record says which tools are cut).
+    const decision = decideCapabilityForBelt(cap, {
+      surfaces: getSurfaces(cap),
+      excluded: opts.excludeCapabilities,
+      allowlist: opts.allowlist,
+      riskCeiling: opts.riskCeiling,
+      agentRun: agentRun?.principalKind === "agent" ? agentRun : null,
+      resolution: agentRunResolution,
+      scope: agentRunScope,
+      now: agentRunNow,
+      clientIp: ctx.clientIp ?? null,
+      emergencyDenies: [],
+      entitledPluginIds: await entitledPluginIdsFor(cap),
+    });
+    if (decision.outcome === "deny") continue;
+    const riskLevel = decision.riskLevel;
+    // The approval gate in `execute` below is the contract's own flag; a
+    // resolver `pending_approval` is the kernel's to hold at invoke time.
     const requiresApproval = cap.agent?.requiresApproval === true;
     const alias = register(
       cap.name,
@@ -597,13 +592,16 @@ export async function materializeTools(
       // its resolution must never expose external tools either.
       if (agentRunFailClosed) continue;
       // DENY tools are never registered — the model cannot see or call them.
+      // The same decision `get_agent_toolbelt` prints (toolbelt.ts); consent
+      // is resolved at call time below, so the listing passes none.
       if (
         agentRunMcpScope !== undefined &&
-        decideMcpToolEffect(
-          agentRunMcpScope,
-          capturedServerName,
-          capturedToolName,
-        ) === "deny"
+        decideMcpToolForBelt(capturedServerName, capturedToolName, {
+          mcpScope: agentRunMcpScope,
+          consent: null,
+          decide: (server, tool) =>
+            decideMcpToolEffect(agentRunMcpScope, server, tool),
+        }).outcome === "deny"
       ) {
         logger.info(
           {

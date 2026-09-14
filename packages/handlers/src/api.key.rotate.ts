@@ -19,6 +19,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
+import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 
 export const apiKeyRotateHandler: CapabilityHandler<
@@ -93,6 +94,18 @@ export const apiKeyRotateHandler: CapabilityHandler<
         "rotate_api_key",
         "authz_denied",
         "Forbidden: enrolled Tacho host keys require operator rotation",
+      );
+    }
+
+    if (requestsReservedAgentCredentialPurpose(oldKey.scope)) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        "api.key.rotate: rejected — reserved agent credential purpose",
+      );
+      throw new CapabilityError(
+        "rotate_api_key",
+        "authz_denied",
+        "Forbidden: agent credentials rotate through rotate_agent_credential",
       );
     }
 
