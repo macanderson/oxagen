@@ -3,6 +3,8 @@
 // store that keeps the CommandStore contract. The role gate runs against a
 // faked tenant transaction the way the CLI authorize test fakes it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { schema } from "@oxagen/database";
@@ -40,24 +42,37 @@ const OPERATOR: CapabilityContext = {
   messageId: null,
 };
 
-/** The role query `assertOrgRole` runs, answered by table. */
-function tenant(roleName: string | null) {
+const dialect = new PgDialect();
+
+/**
+ * The role queries `assertOrgRole` runs, answered by the table read and the
+ * scope the WHERE pinned: an org-wide assignment has `workspace_id is null`,
+ * a workspace assignment carries the id.
+ */
+function tenant(orgRole: string | null, workspaceRole: string | null = null) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(
       fn({
         select: () => ({
           from: (table: unknown) => {
+            let lastWhere: SQL | null = null;
             const chain = {
               innerJoin: () => chain,
-              where: () => chain,
-              limit: () =>
-                Promise.resolve(
-                  table === schema.principals
-                    ? [{ id: "prn_1" }]
-                    : roleName
-                      ? [{ roleName }]
-                      : [],
-                ),
+              where: (cond: SQL) => {
+                lastWhere = cond;
+                return chain;
+              },
+              limit: () => {
+                if (table === schema.principals)
+                  return Promise.resolve([{ id: "prn_1" }]);
+                const pinsWorkspace = lastWhere
+                  ? /"workspace_id" = \$/.test(
+                      dialect.sqlToQuery(lastWhere).sql,
+                    )
+                  : false;
+                const name = pinsWorkspace ? workspaceRole : orgRole;
+                return Promise.resolve(name ? [{ roleName: name }] : []);
+              },
             };
             return chain;
           },
@@ -202,20 +217,43 @@ describe("addressOf", () => {
 });
 
 describe("dispatch_command — role gate", () => {
-  it("refuses a Member and a context with no user (negative)", async () => {
-    tenant("Member");
+  it.each(["Owner", "Admin"])("an org %s dispatches", async (role) => {
+    tenant(role);
     const store = new MemoryStore([session()]);
-    await expect(
-      handlerOver(store)(
+    const { commandIds } = await handlerOver(store)(
+      parse({ target: { kind: "run", id: RUN }, command: "pause" }),
+      OPERATOR,
+    );
+    expect(commandIds).toHaveLength(1);
+  });
+
+  it.each(["Owner", "Member"])(
+    "a workspace %s with no qualifying org role dispatches in the run's workspace",
+    async (role) => {
+      tenant("Member", role);
+      const store = new MemoryStore([session()]);
+      const { commandIds } = await handlerOver(store)(
         parse({ target: { kind: "run", id: RUN }, command: "pause" }),
         OPERATOR,
-      ),
-    ).rejects.toSatisfy(forbidden);
+      );
+      expect(commandIds).toHaveLength(1);
+    },
+  );
+
+  it("refuses an org Member with no workspace role, a workspace Viewer, and a context with no user (negative)", async () => {
+    const store = new MemoryStore([session()]);
+    const input = parse({ target: { kind: "run", id: RUN }, command: "pause" });
+    tenant("Member");
+    await expect(handlerOver(store)(input, OPERATOR)).rejects.toSatisfy(
+      forbidden,
+    );
+    tenant("Member", "Viewer");
+    await expect(handlerOver(store)(input, OPERATOR)).rejects.toSatisfy(
+      forbidden,
+    );
+    tenant("Owner", "Owner");
     await expect(
-      handlerOver(store)(
-        parse({ target: { kind: "run", id: RUN }, command: "pause" }),
-        { ...OPERATOR, userId: null },
-      ),
+      handlerOver(store)(input, { ...OPERATOR, userId: null }),
     ).rejects.toSatisfy(forbidden);
     expect(store.rows).toEqual([]);
   });

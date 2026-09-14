@@ -9,7 +9,7 @@ const RUN = "tse_0123456789abcdefghjkmn";
 const WORKSPACE = "00000000-0000-4000-8000-000000000002";
 
 describe("dispatch_command contract", () => {
-  it("is the Appendix E name, a write, never refused for lack of GAUs, and org Owner/Admin only", () => {
+  it("is the Appendix E name, a write, never refused for lack of GAUs, held by org Owner/Admin and workspace Owner/Member", () => {
     expect(tachoCommandDispatch.name).toBe("dispatch_command");
     expect(tachoCommandDispatch.mutates).toBe(true);
     expect(tachoCommandDispatch.noBillingGate).toBe(true);
@@ -17,7 +17,7 @@ describe("dispatch_command contract", () => {
     expect(tachoCommandDispatch.defaultEffect).toBe("deny");
     expect(tachoCommandDispatch.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
-      workspace: {},
+      workspace: { Owner: "allow", Member: "allow" },
     });
     expect(tachoCommandDispatch.agent).toEqual({
       requiresApproval: false,

@@ -120,7 +120,7 @@ export const tachoCommandDispatch = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: {},
+    workspace: { Owner: "allow", Member: "allow" },
   },
   agent: { requiresApproval: false, riskLevel: "medium", category: "control" },
   input: dispatchCommandInputSchema,

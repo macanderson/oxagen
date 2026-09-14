@@ -202,7 +202,13 @@ export function createDispatchCommandHandler(
   deps: DispatchCommandDeps,
 ): CapabilityHandler<typeof tachoCommandDispatch> {
   return async (input, ctx): Promise<DispatchCommandOutput> => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
+    // Org Owners and Admins control any run; a workspace Owner or Member
+    // controls the runs of the workspace the call is scoped to, which is the
+    // scope every recipient is resolved in (INV-29).
+    await assertOrgRole(ctx, {
+      org: ["Owner", "Admin"],
+      workspace: ["Owner", "Member"],
+    });
     const scope = runScope(ctx);
     const now = deps.now();
     const expiresAt = new Date(now.getTime() + input.expiresInMs);

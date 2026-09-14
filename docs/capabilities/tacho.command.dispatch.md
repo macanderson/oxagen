@@ -14,7 +14,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 
 - API: `POST /v1/:org_slug/:workspace_slug/commands`
 - MCP: `dispatch_command`
-- Authentication: session; the handler requires org Owner or Admin (`assertOrgRole`, INV-29) — the kernel's IAM check allows everything for a non-enterprise organisation
+- Authentication: session; the handler requires org Owner or Admin, or workspace Owner or Member on the workspace the call is scoped to (`assertOrgRole`, INV-29) — the kernel's IAM check allows everything for a non-enterprise organisation
 - Capability name: `dispatch_command`
 - Not billed (`noBillingGate: true`): a lapsed bucket must never leave an agent unstoppable. IAM default-deny; high sensitivity.
 
@@ -40,7 +40,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 - A direct target that cannot receive is refused, never queued (§7.3): a sealed run is `conflict` / `run_sealed`; an `observe`-tier run is `conflict` / `observe_tier`; a ledger run (`arun_…`) is `conflict` / `no_connection_point` — no producer in this tree appends to `@oxagen/run-ledger` and no run token exists, so there is no boundary to refuse and nothing to revoke.
 - A broadcast reaches every live root session in the workspace (or the agent's). An `observe`-tier recipient is recorded as `failed` with `outcome_detail: observe_tier` so the report is complete (§7.6). Sealed runs are not live and are not enumerated.
 - `not_found`: a run id neither store holds in the caller's workspace, or a workspace id other than the caller's.
-- `forbidden`: the actor holds neither org Owner nor Admin.
+- `forbidden`: the actor holds none of org Owner, org Admin, workspace Owner or workspace Member.
 
 ## Honesty
 

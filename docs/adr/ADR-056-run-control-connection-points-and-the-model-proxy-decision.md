@@ -98,8 +98,12 @@ every command that reached it with one predicate.
 
 `dispatch_command` carries `steer` and `message` from an operator to one
 run, to every live run of an agent, or to every live run in the workspace.
-The `@agents` broadcast is held by org Owners and Admins, checked in the
-handler (`assertOrgRole`, INV-29). Agent-to-agent messages (§7.6 "an
+Dispatch is held by org Owners and Admins for any run, and by a workspace
+Owner or Member for the runs of the workspace the call is scoped to,
+checked in the handler (`assertOrgRole` with the workspace leg, INV-29).
+The issue's "a Member can steer a run of an agent they operate" resolves to
+the workspace role: every recipient is resolved inside the caller's
+workspace, and no narrower operator-to-agent relation is recorded. Agent-to-agent messages (§7.6 "an
 agent's message enters as quoted evidence with the sender named") wait for
 `send_message` and the taint marking of §6.7; the delivery queue they will
 use is this table with `command = message`.
@@ -144,11 +148,6 @@ that stopped polling.
   a ledger run with the `no_connection_point` copy; a delivery report and a
   steer dialog can be built on `list_commands` and `dispatch_command`
   (issue #2953, app half).
-- A workspace Member cannot dispatch in this revision. The issue's "a
-  Member can steer a run of an agent they operate" needs a workspace-role
-  resolver that `assertOrgRole` does not carry and an operator match against
-  the run's initiating principal; the contract's `defaultRoles.workspace`
-  stays empty so the docs promise only what the handler enforces.
 - The model proxy, when scoped, adds a connection point that resolves
   `interrupt` in full, sets `interrupted` and `interrupted_step`, and
   produces `irreversible_tool_in_flight`. Nothing in this decision needs to
