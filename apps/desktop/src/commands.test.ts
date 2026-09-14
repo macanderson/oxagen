@@ -41,18 +41,23 @@ describe("sidecar argv", () => {
       target: false,
       harness: false,
     });
-    expect(reassignArgs(HOST, { ...NONE, workspace: "edge" })).toEqual([
-      "reassign",
-      "--workspace",
-      "edge",
-    ]);
+    expect(reassignArgs(HOST, { ...NONE, workspace: "edge" })).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--workspace", "edge"],
+    });
     expect(
       reassignArgs(HOST, { org: "other", workspace: "main", harnesses: null }),
-    ).toEqual(["reassign", "--org", "other", "--workspace", "main"]);
+    ).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--org", "other", "--workspace", "main"],
+    });
     // Harness-only change: no --workspace, so tacho re-enrolls in place.
     expect(
       reassignArgs(HOST, { ...NONE, harnesses: ["claude-code", "codex"] }),
-    ).toEqual(["reassign", "--harness", "claude-code,codex"]);
+    ).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--harness", "claude-code,codex"],
+    });
     // Picking the current values is not a change.
     expect(
       pendingChange(HOST, {
@@ -65,6 +70,42 @@ describe("sidecar argv", () => {
     expect(pendingChange(null, { ...NONE, workspace: "edge" })).toEqual({
       target: false,
       harness: false,
+    });
+  });
+
+  it("reassigns through the oxagen sidecar with --default when the CLI default should follow", () => {
+    // config.json is the CLI's file, so making the new pair the CLI default
+    // means running the same reassign as `oxagen tacho reassign … --default`.
+    expect(
+      reassignArgs(
+        HOST,
+        { org: "other", workspace: "main", harnesses: null },
+        true,
+      ),
+    ).toEqual({
+      sidecar: "oxagen",
+      args: [
+        "tacho",
+        "reassign",
+        "--org",
+        "other",
+        "--workspace",
+        "main",
+        "--default",
+      ],
+    });
+    // A harness-only apply still goes through oxagen when asked: the pair
+    // written is the host's current one, so config.json lands in step.
+    expect(reassignArgs(HOST, { ...NONE, harnesses: ["codex"] }, true)).toEqual(
+      {
+        sidecar: "oxagen",
+        args: ["tacho", "reassign", "--harness", "codex", "--default"],
+      },
+    );
+    // Explicit false is the plain tacho form.
+    expect(reassignArgs(HOST, { ...NONE, workspace: "edge" }, false)).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--workspace", "edge"],
     });
   });
 

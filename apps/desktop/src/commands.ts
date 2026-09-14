@@ -51,11 +51,26 @@ export function enrollArgs(picks: Picks): string[] {
   ];
 }
 
-/** `tacho reassign` carrying only what differs from the host. */
-export function reassignArgs(host: HostTarget, picks: Picks): string[] {
+/** A sidecar and the argv to hand it. */
+export interface SidecarCall {
+  sidecar: "tacho" | "oxagen";
+  args: string[];
+}
+
+/**
+ * `tacho reassign` carrying only what differs from the host. With
+ * `alsoDefault`, the same command runs through the `oxagen` sidecar as
+ * `oxagen tacho reassign … --default`, which also writes the new pair into
+ * `config.json`; `config.json` is the CLI's file, so `tacho` alone cannot.
+ */
+export function reassignArgs(
+  host: HostTarget,
+  picks: Picks,
+  alsoDefault = false,
+): SidecarCall {
   const change = pendingChange(host, picks);
   const org = picks.org ?? host.org_slug;
-  return [
+  const args = [
     "reassign",
     ...(org !== host.org_slug ? ["--org", org] : []),
     ...(change.target
@@ -65,6 +80,9 @@ export function reassignArgs(host: HostTarget, picks: Picks): string[] {
       ? ["--harness", picks.harnesses.join(",")]
       : []),
   ];
+  return alsoDefault
+    ? { sidecar: "oxagen", args: ["tacho", ...args, "--default"] }
+    : { sidecar: "tacho", args };
 }
 
 /** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */

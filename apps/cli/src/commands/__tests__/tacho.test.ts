@@ -7,11 +7,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureWriter } from "../../lib/capture-writer.js";
 
 const store: { token?: string; org?: string; ws?: string } = {};
+const configWrites: Array<Record<string, unknown>> = [];
 vi.mock("../../lib/config.js", () => ({
   getToken: () => store.token,
   getOrgId: () => store.org,
   getWorkspaceId: () => store.ws,
   getApiUrl: () => "https://api.test",
+  writeConfig: (patch: Record<string, unknown>) => {
+    configWrites.push(patch);
+  },
 }));
 
 const calls: Array<{ name: string; args: unknown[] }> = [];
@@ -20,7 +24,11 @@ const outcomes = {
   verify: { ok: true, detail: "chained" },
   status: { enrolled: true },
   unenroll: { ok: true },
-  reassign: { ok: true, warnings: [] as string[] },
+  reassign: {
+    ok: true,
+    warnings: [] as string[],
+    to: undefined as { org: string; workspace: string } | undefined,
+  },
   exportCommand: true,
 };
 vi.mock("@oxagen/tacho/cli", () => ({
@@ -70,12 +78,14 @@ import {
 describe("oxagen tacho", () => {
   beforeEach(() => {
     calls.length = 0;
+    configWrites.length = 0;
     store.token = "session-token";
     store.org = "acme";
     store.ws = "core";
     outcomes.enroll = { ok: true, warnings: [] };
     outcomes.verify = { ok: true, detail: "chained" };
     outcomes.status = { enrolled: true };
+    outcomes.reassign = { ok: true, warnings: [], to: undefined };
   });
 
   it("lends the logged-in credentials and lets flags override them", () => {
@@ -162,10 +172,12 @@ describe("oxagen tacho", () => {
       harnesses: ["codex"],
       reason: "moved",
     });
-    outcomes.reassign = { ok: false, warnings: [] };
+    outcomes.reassign = { ok: false, warnings: [], to: undefined };
     expect(await handleTachoReassign({ workspace: "edge" }, writer)).toBe(
       false,
     );
+    // Without --default the CLI's own config is never touched.
+    expect(configWrites).toEqual([]);
     expect(await handleTachoExport({ list: true }, writer)).toBe(true);
     expect(calls.at(-1)?.args[0]).toEqual({ list: true });
     expect(await handleTachoVerify(writer)).toBe(true);
@@ -173,5 +185,43 @@ describe("oxagen tacho", () => {
     outcomes.verify = { ok: false, detail: "daemon down" };
     expect(await handleTachoVerify(writer)).toBe(false);
     expect(output()).toContain("FAILED: daemon down");
+  });
+
+  it("reassign --default writes the host's new pair into config.json, and only after success", async () => {
+    const { writer, output } = captureWriter();
+    outcomes.reassign = {
+      ok: true,
+      warnings: [],
+      to: { org: "other", workspace: "edge" },
+    };
+    expect(
+      await handleTachoReassign(
+        { org: "other", workspace: "edge", default: true },
+        writer,
+      ),
+    ).toBe(true);
+    // The flag never reaches @oxagen/tacho: config.json is the CLI's file.
+    expect(calls.at(-1)?.args[0]).not.toHaveProperty("default");
+    expect(configWrites).toEqual([{ orgSlug: "other", workspaceSlug: "edge" }]);
+    expect(output()).toContain("CLI default is now other/edge");
+
+    // The org the host keeps when --org is omitted is what gets written, so
+    // the default can never point at an org the host does not report to.
+    configWrites.length = 0;
+    outcomes.reassign = {
+      ok: true,
+      warnings: [],
+      to: { org: "acme", workspace: "edge" },
+    };
+    await handleTachoReassign({ workspace: "edge", default: true }, writer);
+    expect(configWrites).toEqual([{ orgSlug: "acme", workspaceSlug: "edge" }]);
+
+    // A failed reassign leaves the default where it was.
+    configWrites.length = 0;
+    outcomes.reassign = { ok: false, warnings: [], to: undefined };
+    expect(
+      await handleTachoReassign({ workspace: "edge", default: true }, writer),
+    ).toBe(false);
+    expect(configWrites).toEqual([]);
   });
 });

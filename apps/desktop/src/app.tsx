@@ -225,12 +225,21 @@ export function App() {
       resetPicks();
       setNotice("This machine now reports to Oxagen.");
     });
-  const apply = () =>
-    host &&
-    act("apply", "tacho", reassignArgs(host, picks), () => {
+  // "also make it the CLI default": the reassign runs as `oxagen tacho
+  // reassign … --default` so config.json's pair follows host.json's.
+  const [alsoDefault, setAlsoDefault] = useState(true);
+  const apply = () => {
+    if (!host) return;
+    const call = reassignArgs(host, picks, alsoDefault);
+    return act("apply", call.sidecar, call.args, () => {
       resetPicks();
-      setNotice("Reassigned; the device key was kept.");
+      setNotice(
+        alsoDefault
+          ? "Reassigned; the device key was kept and the CLI default follows."
+          : "Reassigned; the device key was kept.",
+      );
     });
+  };
   const unenroll = () =>
     act("unenroll", "tacho", unenrollArgs(purge), () => {
       setNotice(
@@ -713,6 +722,15 @@ export function App() {
               <button type="button" className="quiet" onClick={resetPicks}>
                 Reset
               </button>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={alsoDefault}
+                  onChange={(e) => setAlsoDefault(e.target.checked)}
+                  disabled={busy !== null}
+                />
+                also make it the CLI default
+              </label>
             </div>
           )}
         </section>

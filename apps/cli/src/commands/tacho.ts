@@ -4,6 +4,7 @@
  *
  *   oxagen tacho enroll     enroll this host: device key, host API key, tachod service, hooks
  *   oxagen tacho status     enrollment, daemon, hooks, bundle, spool
+ *   oxagen tacho reassign   move the host to another workspace; --default moves the CLI default too
  *   oxagen tacho unenroll   remove hooks and service, revoke, delete the host key
  *   oxagen tacho export     a session from the local WAL (tacho | trace | otlp)
  *   oxagen tacho verify     one headless Claude Code turn, confirmed chained
@@ -17,6 +18,7 @@ import {
   getOrgId,
   getToken,
   getWorkspaceId,
+  writeConfig,
 } from "../lib/config.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -40,6 +42,12 @@ export interface TachoReassignOptions {
   workspace?: string;
   harness?: string;
   reason?: string;
+  /**
+   * `--default`: after a successful reassign, also make the host's new org
+   * and workspace the CLI's default pair in config.json. The CLI owns that
+   * file; @oxagen/tacho only ever writes host.json.
+   */
+  default?: boolean;
 }
 
 export interface TachoUnenrollOptions {
@@ -152,7 +160,17 @@ export async function handleTachoReassign(
     },
     await tachoDeps(writer),
   );
-  return result.ok;
+  if (!result.ok) return false;
+  if (opts.default === true && result.to !== undefined) {
+    writeConfig({
+      orgSlug: result.to.org,
+      workspaceSlug: result.to.workspace,
+    });
+    writer.write(
+      `CLI default is now ${result.to.org}/${result.to.workspace} (config.json).`,
+    );
+  }
+  return true;
 }
 
 export async function handleTachoExport(

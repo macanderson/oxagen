@@ -12,6 +12,12 @@
  * the command exits with an error. Pass --no-browser to force the token-prompt
  * flow even on an interactive TTY.
  *
+ * Rescope: `oxagen login --org <slug> --workspace <slug>` with no --token and a
+ * saved session re-uses that token — validates it with the whoami probe, runs
+ * the shared linker on the given slugs, and rewrites the default pair in
+ * config.json. No browser, no prompt. This is how `tacho reassign --default`
+ * and the desktop app keep the CLI default in step with the host.
+ *
  * Validation endpoint (token flow): GET /v1/auth/whoami
  *   - Requires a valid Bearer API key (auth middleware validates the key).
  *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
@@ -166,12 +172,22 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     // Fall through to auth flow if not logged in.
   }
 
+  // ── Rescope: --org / --workspace over the saved session ─────────────────────
+  // A scope flag with no --token and a saved token means "change the CLI's
+  // default pair", not "sign in again": the saved token is re-validated and
+  // the picker runs on the given slugs. Nothing saved → the normal flows.
+  const rescope =
+    !opts.token &&
+    (opts.org !== undefined || opts.workspace !== undefined) &&
+    config.token !== undefined;
+
   // ── Browser-based PKCE flow (default for interactive TTY) ───────────────────
   // Use browser flow when:
   //   - we are on an interactive TTY, AND
   //   - the caller has not provided a token directly (--token), AND
-  //   - --no-browser has not been passed (opts.browser === false).
-  const useBrowser = isTTY && !opts.token && opts.browser !== false;
+  //   - --no-browser has not been passed (opts.browser === false), AND
+  //   - this is not a rescope of the saved session.
+  const useBrowser = isTTY && !opts.token && opts.browser !== false && !rescope;
 
   if (useBrowser) {
     try {
@@ -216,7 +232,11 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   }
 
   // ── Validate token against the platform ─────────────────────────────────────
-  process.stdout.write(`\nAuthenticating against ${apiUrl}...\n`);
+  process.stdout.write(
+    rescope
+      ? `\nRe-using the saved session against ${apiUrl}...\n`
+      : `\nAuthenticating against ${apiUrl}...\n`,
+  );
   const probe = await validatePlatformToken(token, apiUrl);
 
   switch (probe.kind) {
@@ -266,11 +286,15 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     workspaceSlug = account.workspaceSlug;
   } catch (err) {
     // Picker failures must not leave a partial config (token but no scope).
-    writeConfig({
-      token: undefined,
-      orgSlug: undefined,
-      workspaceSlug: undefined,
-    });
+    // A rescope already has a complete session on disk, and a mistyped slug
+    // must not sign the user out — leave that config untouched.
+    if (!rescope) {
+      writeConfig({
+        token: undefined,
+        orgSlug: undefined,
+        workspaceSlug: undefined,
+      });
+    }
     // The token already validated — surface the real picker error rather than
     // a misleading "token invalid" message.
     process.stderr.write(

@@ -14,7 +14,7 @@ collector's `/status` on loopback) and every action runs a sidecar:
 |---|---|---|
 | Account | `config.json` | `oxagen login` (browser PKCE), `oxagen logout` |
 | This machine | `host.json`, daemon `/status`, `tacho status --json` | `tacho enroll --harness …`, `tacho unenroll [--purge]` |
-| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `tacho reassign --org … --workspace …` |
+| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `tacho reassign --org … --workspace …`; `oxagen tacho reassign … --default` when the CLI default should follow |
 | Wrappers | `host.harnesses`, hook presence per harness | `tacho reassign --harness …` |
 | Command line | PATH | symlinks (macOS/Linux) or `.cmd` shims + user PATH (Windows) |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
