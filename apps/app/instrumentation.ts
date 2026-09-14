@@ -10,7 +10,7 @@
 // bootstrap specification.
 //
 // The Next.js instrumentation file must live at the root of the app
-// (next to next.config.mjs), NOT under src/. The `experimental.instrumentationHook`
+// (next to next.config.ts), NOT under src/. The `experimental.instrumentationHook`
 // flag is not required in Next.js 15+; the file is auto-discovered.
 //
 // IMPORTANT: Only import from packages that are safe to load at process start
@@ -22,7 +22,7 @@
 /**
  * Next.js `onRequestError` hook — invoked for every uncaught server-side error
  * (route handlers, RSC, server actions). This is the official capture point for
- * apps/app's server runtime. Fire-and-forget via captureError(): records the
+ * apps/app's server runtime (carried over from apps/app_deprecated). Fire-and-forget via captureError(): records the
  * error to the ClickHouse error stream and (when ALERT_WEBHOOK_URL is set) fans
  * a Slack-compatible alert. Node runtime only — captureError pulls in the
  * ClickHouse client which is Node-only. See OXA observability audit item.
@@ -72,6 +72,15 @@ export async function register(): Promise<void> {
       const { createRequire } = await import("module");
       (globalThis as unknown as Record<string, unknown>).require =
         createRequire(import.meta.url);
+    }
+    // Fixture mode (dev, Storybook, e2e) reads no store, so it skips the store
+    // bootstraps below and runs without Postgres. A production build never takes
+    // this branch: NODE_ENV is inlined as "production" at build time.
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.MC_DATA === "fixture"
+    ) {
+      return;
     }
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
     const { bootstrapBillingRuntime } = await import("@oxagen/billing");

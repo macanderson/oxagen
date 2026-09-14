@@ -171,15 +171,35 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
   });
 
-  it("seeds the default environment after workspace creation", async () => {
-    const { seedWorkspaceDefaultEnvironment } = await import(
-      "./workspace-environment-seed"
-    );
+  it("seeds the built-in agent, the default registry and the default environment on the creating transaction", async () => {
+    const [
+      { bootstrapWorkspaceAgents },
+      { seedWorkspaceDefaultRegistry },
+      { seedWorkspaceDefaultEnvironment },
+    ] = await Promise.all([
+      import("./workspace-agents"),
+      import("./workspace-registry-seed"),
+      import("./workspace-environment-seed"),
+    ]);
     await workspaceCreateHandler({ name: "Env Ws", slug: "env-ws" }, CTX);
-    expect(seedWorkspaceDefaultEnvironment).toHaveBeenCalledWith({
-      orgId: CTX.orgId,
-      workspaceId: "internal_ws_id",
-    });
+    const seeded = { orgId: CTX.orgId, workspaceId: "internal_ws_id" };
+    expect(bootstrapWorkspaceAgents).toHaveBeenCalledWith(
+      expect.objectContaining({ ...seeded, userId: CTX.userId }),
+    );
+    expect(seedWorkspaceDefaultRegistry).toHaveBeenCalledWith(
+      expect.objectContaining(seeded),
+    );
+    expect(seedWorkspaceDefaultEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining(seeded),
+    );
+    // Every seed rides the same transaction as the workspace row.
+    const txs = [
+      vi.mocked(bootstrapWorkspaceAgents).mock.calls[0]?.[0]?.tx,
+      vi.mocked(seedWorkspaceDefaultRegistry).mock.calls[0]?.[0]?.tx,
+      vi.mocked(seedWorkspaceDefaultEnvironment).mock.calls[0]?.[0]?.tx,
+    ];
+    expect(txs[0]).toBeDefined();
+    expect(new Set(txs).size).toBe(1);
   });
 
   it("throws when the transaction insert returns no row", async () => {

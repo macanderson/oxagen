@@ -217,7 +217,9 @@
         "STORAGE_DRIVER",
         "STORAGE_FS_ROOT",
         "BLOB_READ_WRITE_TOKEN",
-        "PLAYWRIGHT_BASE_URL"
+        "PLAYWRIGHT_BASE_URL",
+        "E2E_PORT",
+        "MC_DATA"
       ],
       "passThroughEnv": ["CI", "PLAYWRIGHT_BROWSERS_PATH"]
     },

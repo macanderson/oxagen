@@ -53,6 +53,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_memory_citations: () => import("./agent.memory_citation.list"),
   get_citation_stats: () => import("./agent.memory_citation.stats"),
   resolve_approval: () => import("./agent.approval.resolve"),
+  list_approvals: () => import("./agent.approval.list"),
   list_executions: () => import("./agent.execution.list"),
   get_execution_trace: () => import("./agent.trace.get"),
   debug_execution: () => import("./agent.debug.trace"),

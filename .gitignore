@@ -197,6 +197,11 @@ Icon?
 # key) — transient per-run artifacts, one of which holds live credentials
 .ultraudit-*
 
+# tools/scripts/package-for-node.sh output (built in CI; local dry runs leave it behind)
+dist-deploy/
+.deploy-app/
+.deploy-mcp/
+
 # Compiled single-binary sidecars (tools/sea/compile.mjs)
 **/dist-bin/
 apps/desktop/src-tauri/binaries/

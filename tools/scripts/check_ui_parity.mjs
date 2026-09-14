@@ -39,6 +39,7 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { APP_DIR } from "./lib/app-dir.mjs";
 
 const ARGS = new Set(process.argv.slice(2));
 const JSON_MODE = ARGS.has("--json");
@@ -47,9 +48,9 @@ const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
-const REGISTRY = join(ROOT, "apps/app/capability-ui-map.json");
-const BASELINE = join(ROOT, "apps/app/capability-ui-parity-baseline.json");
-const APP_SRC = join(ROOT, "apps/app/src");
+const REGISTRY = join(ROOT, APP_DIR, "capability-ui-map.json");
+const BASELINE = join(ROOT, APP_DIR, "capability-ui-parity-baseline.json");
+const APP_SRC = join(ROOT, APP_DIR, "src");
 
 // ── Contract parsing (kept byte-compatible with check_manifest.mjs) ──────────
 function readCapabilities() {

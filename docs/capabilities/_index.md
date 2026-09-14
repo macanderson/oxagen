@@ -9,14 +9,15 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**225 capabilities across 34 domains.**
+**228 capabilities across 35 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (48)
+## Agent (49)
 
+- [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
 - [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
@@ -69,6 +70,7 @@ Capabilities granted to an agent as a set have a page of their own:
 ## Api (3)
 
 - [api.key.create](api.key.create.md) — Create a new API key scoped to the requesting org; the raw key is shown once and never retrievable
+- [api.key.list](api.key.list.md) — List the API keys in scope with their metadata; never returns a key's secret or its hash
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
 
@@ -259,6 +261,11 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
+## Run (2)
+
+- [run.get](run.get.md) — Read one run's header and, for an evidence-ledger run, one page of its frames from an opaque cursor, optionally waiting for a new frame; a wrapped-agent run answers its header with frames: null
+- [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+
 ## Schema (23)
 
 - [schema.chat](schema.chat.md) — AI iterative builder turn: takes conversation and draft, returns assistant message and proposed mutations
@@ -336,7 +343,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
-- [workspace.member.list](workspace.member.list.md) — List members of a workspace
+- [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members
 - [workspace.model_settings.read](workspace.model_settings.read.md) — Read the workspace-level model defaults for text/image/video tiers
 - [workspace.model_settings.write](workspace.model_settings.write.md) — Update the workspace-level model defaults (partial update); Owner/Admin only
 - [workspace.settings.read](workspace.settings.read.md) — Read the workspace's general settings: name, slug, description

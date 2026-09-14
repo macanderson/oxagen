@@ -80,7 +80,6 @@
     "eslint-config-next": "16.2.7",
     "inngest-cli": "1.30.0",
     "lefthook": "latest",
-    "playwright": "^1.61.0",
     "postject": "1.0.0-alpha.6",
     "tsx": "4.22.3",
     "turbo": "2.9.18",

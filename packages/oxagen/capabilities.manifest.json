@@ -1,6 +1,23 @@
 {
   "capabilities": [
     {
+      "name": "list_approvals",
+      "file": "agent.approval.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "resolve_approval",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -915,6 +932,19 @@
         "mcp": true,
         "unit": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_api_keys",
+      "file": "api.key.list.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
       }
     },
     {
@@ -2245,7 +2275,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -3114,6 +3144,40 @@
         "api": true,
         "mcp": true,
         "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run",
+      "file": "run.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_runs",
+      "file": "run.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -4062,14 +4126,14 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
     {
-      "name": "list_workspace_members",
+      "name": "list_members",
       "file": "workspace.member.list.ts",
-      "domain": "workspace",
+      "domain": "org",
       "mode": "sync",
       "surfaces": [
         "api",
