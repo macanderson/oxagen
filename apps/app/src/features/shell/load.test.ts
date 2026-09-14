@@ -1,56 +1,87 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { liveShell } from "@/data/adapters/live/shell";
-import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { notBacked, readError } from "@/data/not-backed";
 import type { ShellReadPort } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { testFixtureShell } from "@/data/adapters/fixture/testing";
-import { FIXTURE_USER } from "@/server/fixture-session";
 import { loadShellData } from "./load";
 
+const USER_ID = "usr_marcusbell";
 const scope = {
-  orgId: FIXTURE_TENANT.orgId,
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
-const query = { org: "acme", scope, userId: FIXTURE_USER.id };
+const query = { org: "acme", scope, userId: USER_ID };
+
+const METHODS = [
+  "context",
+  "navCounts",
+  "notifications",
+  "people",
+  "assistantEngine",
+  "recentRuns",
+  "account",
+] as const;
+
+type Method = (typeof METHODS)[number];
+
+/** A port whose every read fails the same way, with each call recorded by method name. */
+function failingPort(): {
+  port: ShellReadPort;
+  calls: Record<Method, unknown[][]>;
+} {
+  const calls: Record<Method, unknown[][]> = {
+    context: [],
+    navCounts: [],
+    notifications: [],
+    people: [],
+    assistantEngine: [],
+    recentRuns: [],
+    account: [],
+  };
+  const method =
+    (name: Method) =>
+    (...args: unknown[]) => {
+      calls[name].push(args);
+      return Promise.resolve(readError("control_plane_unavailable", 503));
+    };
+  return {
+    port: {
+      context: method("context"),
+      navCounts: method("navCounts"),
+      notifications: method("notifications"),
+      people: method("people"),
+      assistantEngine: method("assistantEngine"),
+      recentRuns: method("recentRuns"),
+      account: method("account"),
+    },
+    calls,
+  };
+}
 
 describe("loadShellData", () => {
-  it("loads every read for a member's organization, asking each once with the viewer's scope", async () => {
-    const port = testFixtureShell();
-    const spies = Object.fromEntries(
-      Object.keys(port).map((k) => [
-        k,
-        vi.spyOn(port, k as keyof ShellReadPort),
-      ]),
-    );
+  it("asks every read once with the viewer's scope, and never reads people", async () => {
+    const { port, calls } = failingPort();
     const load = await loadShellData(port, query);
     expect(load.kind).toBe("ok");
     if (load.kind !== "ok") return;
     expect(load.data.org).toBe("acme");
-    expect(load.data.context.ok).toBe(true);
-    expect(load.data.runs.length).toBeGreaterThan(0);
-    expect(spies.people).not.toHaveBeenCalled();
-    for (const [name, spy] of Object.entries(spies)) {
+    expect(load.data.runs).toEqual([]);
+    expect(calls.people).toEqual([]);
+    for (const name of METHODS) {
       if (name === "people") continue;
-      expect(spy, name).toHaveBeenCalledTimes(1);
-      expect(spy.mock.calls[0]?.[0], name).toEqual(scope);
+      expect(calls[name], name).toHaveLength(1);
+      expect(calls[name][0]?.[0], name).toEqual(scope);
     }
-    expect(spies.account).toHaveBeenCalledWith(scope, FIXTURE_USER.id);
+    expect(calls.context[0]).toEqual([scope, USER_ID]);
+    expect(calls.account[0]).toEqual([scope, USER_ID]);
   });
 
-  it("is not found when the organization read is a 404", async () => {
-    expect(
-      await loadShellData(testFixtureShell(), {
-        ...query,
-        scope: { ...scope, orgId: "7f1c2a9e-0000-4000-8000-000000000000" },
-      }),
-    ).toEqual({ kind: "not_found" });
-    expect(
-      await loadShellData(testFixtureShell(), {
-        ...query,
-        userId: "usr_someoneelse",
-      }),
-    ).toEqual({ kind: "not_found" });
+  it("is not found when the organization read is a 404 (negative)", async () => {
+    const port: ShellReadPort = {
+      ...failingPort().port,
+      context: () => Promise.resolve(readError("org_not_found", 404)),
+    };
+    expect(await loadShellData(port, query)).toEqual({ kind: "not_found" });
   });
 
   it("keeps any other context failure as a failure the shell renders, not a 404", async () => {

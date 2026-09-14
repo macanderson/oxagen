@@ -130,12 +130,23 @@ const ALLOWED: Record<
   i18n: (_from, target) => under(target, "i18n"),
 };
 
+/**
+ * INV-22: a module that exists for tests. No §2 row admits an edge to one, so
+ * the `features` row's same-feature grant and the `server` row's own-directory
+ * grant stop at `shell.builders` and `viewer.testing`. Test files are not
+ * judged as importers (parse.ts `isTestOnly`), which is what leaves them free
+ * to import these.
+ */
+export const testOnlyTarget = (target: string): boolean =>
+  /\.builders$/.test(target) || target === "server/viewer.testing";
+
 /** INV-07: does the §2 row of `from` admit an internal edge to `target`? */
 export function layerAllows(
   from: Importer,
   target: string,
   edge: ImportEdge,
 ): boolean {
+  if (testOnlyTarget(target)) return false;
   const layer = layerOf(from.file);
   return layer !== null && ALLOWED[layer](from, target, edge);
 }

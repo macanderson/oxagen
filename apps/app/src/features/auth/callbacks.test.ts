@@ -68,15 +68,6 @@ function form(fields: Record<string, string>): FormData {
   for (const [k, v] of Object.entries(fields)) f.set(k, v);
   return f;
 }
-function fixtureMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "fixture");
-}
-function liveMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "live");
-}
-
 beforeEach(() => {
   filters.length = 0;
   for (const table of Object.values(query))
@@ -147,7 +138,6 @@ describe("CLI authorize parameters", () => {
   });
 
   it("loads scopes from the user's memberships only", async () => {
-    liveMode();
     query.orgUsers.findMany.mockResolvedValue([{ orgId: "o1" }]);
     query.workspaceUsers.findMany.mockResolvedValue([{ workspaceId: "w1" }]);
     query.organizations.findMany.mockResolvedValue([
@@ -165,8 +155,6 @@ describe("CLI authorize parameters", () => {
     ]);
     query.orgUsers.findMany.mockResolvedValue([]);
     expect(await cli.loadCliScopes("u1")).toEqual([]);
-    fixtureMode();
-    expect((await cli.loadCliScopes("u1"))[0]?.slug).toBe("acme");
   });
 });
 
@@ -190,7 +178,6 @@ describe("approveCliAuth", () => {
   }
 
   it("sends a signed-out person to log in", async () => {
-    liveMode();
     getAuthUser.mockResolvedValue(null);
     await expect(approveCliAuth(null, form(approve))).rejects.toThrow(
       "NEXT_REDIRECT /login",
@@ -198,7 +185,6 @@ describe("approveCliAuth", () => {
   });
 
   it("re-validates every parameter", async () => {
-    liveMode();
     getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
     expect(
       await approveCliAuth(
@@ -211,13 +197,8 @@ describe("approveCliAuth", () => {
     ).toEqual({ error: "notFound" });
   });
 
-  it("refuses in fixture mode, a workspace the user is not a member of, and a user who cannot manage keys", async () => {
+  it("refuses a workspace the user is not a member of, and a user who cannot manage keys", async () => {
     getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
-    fixtureMode();
-    expect(await approveCliAuth(null, form(approve))).toEqual({
-      error: "fixture",
-    });
-    liveMode();
     memberOfAcme();
     expect(
       await approveCliAuth(
@@ -233,7 +214,6 @@ describe("approveCliAuth", () => {
   });
 
   it("mints a code bound to the scope and challenge, then redirects to the loopback listener", async () => {
-    liveMode();
     getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
     memberOfAcme();
     actorCanManageApiKeys.mockResolvedValue(true);
@@ -254,7 +234,6 @@ describe("approveCliAuth", () => {
   });
 
   it("reports a failure to mint as failed", async () => {
-    liveMode();
     getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
     memberOfAcme();
     actorCanManageApiKeys.mockResolvedValue(true);
@@ -325,17 +304,8 @@ describe("GitHub setup landing", () => {
     expect(github.parseInstallationId(undefined)).toBeUndefined();
   });
 
-  it("fixture queries land in the fixture workspace", async () => {
-    fixtureMode();
-    const q = githubSetupQueries();
-    expect(await github.resolveGithubSetupTarget("u1", "123", q)).toBe(
-      "/acme/core-platform/ontology/repositories?github_installed=1",
-    );
-  });
-
   it("live · matches an installation only in the user's orgs, most recent first", async () => {
-    liveMode();
-    const q = githubSetupQueries();
+    const q = githubSetupQueries;
     query.orgUsers.findMany.mockResolvedValue([{ orgId: "o1" }]);
     query.sourceConnections.findMany.mockResolvedValue([
       {
@@ -374,8 +344,7 @@ describe("GitHub setup landing", () => {
   });
 
   it("live · the most recent membership skips a deleted org", async () => {
-    liveMode();
-    const q = githubSetupQueries();
+    const q = githubSetupQueries;
     query.orgUsers.findMany.mockResolvedValue([
       { orgId: "o-deleted" },
       { orgId: "o1" },

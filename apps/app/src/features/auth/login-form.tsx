@@ -1,12 +1,11 @@
 "use client";
 // Log in (mockup `obLogin` @ mc-baseline-w1). Validates in the browser, then
-// signs in through Better Auth, or through the fixture action in fixture mode.
-// The destination is the sanitised `next` the page passed down.
+// signs in through Better Auth. The destination is the sanitised `next` the
+// page passed down.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { signInFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveSignIn, rememberPendingNext } from "./client-auth";
 import { withNext } from "./safe-next";
@@ -18,15 +17,10 @@ import { formText } from "./form-text";
 
 export type LoginFormProps = {
   next: string;
-  fixture: boolean;
   initialOutcome?: AuthOutcomeKey | null;
 };
 
-export function LoginForm({
-  next,
-  fixture,
-  initialOutcome = null,
-}: LoginFormProps) {
+export function LoginForm({ next, initialOutcome = null }: LoginFormProps) {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errors, setErrors] = useState<FieldErrors<"email" | "password">>({});
@@ -51,17 +45,6 @@ export function LoginForm({
     setErrors({});
     setPending(true);
     try {
-      if (fixture) {
-        const result = await signInFixture({ ...parsed.data, next });
-        if (!result.ok) {
-          setErrors(result.fields ?? {});
-          setOutcome(result.outcome ?? null);
-          return;
-        }
-        router.replace(result.to);
-        router.refresh();
-        return;
-      }
       rememberPendingNext(next);
       const result = await liveSignIn(parsed.data);
       if (!result.ok) {

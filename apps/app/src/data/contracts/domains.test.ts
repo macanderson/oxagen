@@ -9,16 +9,28 @@ import { Frame, RunRow, TranscriptEntry } from "./runs";
 import { FindingFix } from "./spend";
 import { LineageId } from "./steering";
 import { KillSwitch } from "./tools";
-import { seed } from "../adapters/fixture/seed";
 
-const first = <T>(items: readonly T[]): T => {
-  const item = items[0];
-  if (item === undefined) throw new Error("the seed has rows here");
-  return item;
-};
+const usd = (micros: string) => ({ micros, currency: "USD" });
 
 describe("runs", () => {
-  const row = RunRow.parse(first(seed.runs));
+  const row = RunRow.parse({
+    id: "run_01K5RS7M2E8FJ3QW",
+    name: null,
+    agentKey: "acme.core.release-manager",
+    operatorId: "usr_marcusbell",
+    workspaceSlug: "core-platform",
+    status: "live",
+    turns: 3,
+    steps: 12,
+    frames: 40,
+    cost: usd("4130000"),
+    tier: "harness",
+    grade: "inspect",
+    verdict: "unverified",
+    taskRef: "#412",
+    startedAt: "2026-09-11T09:14:02.000Z",
+    sealedAt: null,
+  });
 
   it("rejects the mockup's vocabulary on a run row (negative)", () => {
     expect(RunRow.safeParse({ ...row, grade: "full" }).success).toBe(false);
@@ -87,7 +99,33 @@ describe("runs", () => {
 
 describe("governance", () => {
   it("requires the four hops of an approval chain (negative)", () => {
-    const approval = ApprovalItem.parse(first(seed.approvals));
+    const approval = ApprovalItem.parse({
+      id: "apr_01K5RT0001",
+      runId: "run_01K5RS7M2E8FJ3QW",
+      workspaceSlug: "core-platform",
+      status: "pending",
+      chain: {
+        operatorId: "usr_marcusbell",
+        agentKey: "acme.core.release-manager",
+        action: "github_open_pr@1.2",
+        trigger: { kind: "policy", ref: "pol_01", detail: "writes to main" },
+      },
+      risk: "high",
+      sideEffect: "write",
+      egress: "third_party",
+      amount: null,
+      counterparty: null,
+      mandateId: null,
+      policyVersionId: null,
+      inputDigest: "sha256:ab12",
+      tainted: null,
+      tier: "harness",
+      requestedAt: "2026-09-11T09:20:00.000Z",
+      expiresAt: "2026-09-11T10:20:00.000Z",
+      approvers: { roles: ["owner"], eligiblePersonIds: [], excluded: [] },
+      rules: null,
+      taintSources: null,
+    });
     const { trigger: _trigger, ...threeHops } = approval.chain;
     expect(
       ApprovalItem.safeParse({ ...approval, chain: threeHops }).success,
@@ -98,7 +136,37 @@ describe("governance", () => {
   });
 
   it("refuses a mandate with no consequence or no tool (negative)", () => {
-    const mandate = Mandate.parse(first(seed.mandates));
+    const mandate = Mandate.parse({
+      id: "mnd_01K5RT0001",
+      agentKey: "acme.core.release-manager",
+      grantedById: "usr_marcusbell",
+      roleAtGrant: "owner",
+      secondApproverId: null,
+      twoPerson: false,
+      consequenceTags: ["moves_money"],
+      limits: {
+        perCall: usd("50000000"),
+        perPeriod: usd("500000000"),
+        period: "monthly",
+        callsPerDay: null,
+      },
+      usage: {
+        settled: usd("0"),
+        reserved: usd("0"),
+        remaining: usd("500000000"),
+      },
+      counterparties: { allow: [], deny: [] },
+      tools: ["stripe_refund@*"],
+      approval: {
+        humanAbove: usd("10000000"),
+        alwaysHumanFor: [],
+        approvers: ["owner"],
+      },
+      purpose: "refunds under the support policy",
+      validFrom: "2026-09-01",
+      validTo: "2026-12-31",
+      status: "active",
+    });
     expect(Mandate.safeParse({ ...mandate, consequenceTags: [] }).success).toBe(
       false,
     );
@@ -106,7 +174,23 @@ describe("governance", () => {
   });
 
   it("gives every kill switch a public id and a spec level (negative)", () => {
-    const sw = KillSwitch.parse(first(seed.killSwitches));
+    const sw = KillSwitch.parse({
+      id: "ksw_01K5RT0001",
+      level: "class",
+      target: "moves_money",
+      on: false,
+      headline: true,
+      flippedById: null,
+      flippedAt: null,
+      reason: null,
+      blastRadius: {
+        agents: null,
+        toolVersions: null,
+        mandates: null,
+        runsInFlight: null,
+        grants24h: null,
+      },
+    });
     expect(KillSwitch.safeParse({ ...sw, id: "ks_cls_funds" }).success).toBe(
       false,
     );
@@ -116,7 +200,14 @@ describe("governance", () => {
   });
 
   it("only accepts definitions under .oxagen/agents (negative)", () => {
-    const definition = AgentDefinition.parse(first(seed.definitions));
+    const definition = AgentDefinition.parse({
+      agentKey: "acme.core.release-manager",
+      path: ".oxagen/agents/release-manager.toml",
+      digest: "sha256:ab12",
+      commitSha: "0a1b2c3d4e5",
+      source: "[agent]\nname = 'release-manager'",
+      branches: [],
+    });
     expect(
       AgentDefinition.safeParse({
         ...definition,

@@ -1,28 +1,26 @@
 // shellSource: the viewer gate first, then the one data source's shell port.
-// Which adapter dataSource() selects (and that production never selects the
-// fixture) is src/data/source.test.ts's to prove; this file proves the shell
-// reads through it and reads nothing for a refused organization.
+// This file proves the shell reads through dataSource() and reads nothing for
+// a refused organization.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { FIXTURE_USER } from "@/server/fixture-session";
 
 const requireViewer = vi.fn();
 vi.mock("@/server/scope", () => ({ requireViewer }));
 const shellPort = { context: vi.fn() };
-const dataSource = vi.fn(() => Promise.resolve({ shell: shellPort }));
+const dataSource = vi.fn(() => ({ shell: shellPort }));
 vi.mock("@/data/source", () => ({ dataSource }));
 
 const { shellSource } = await import("./source");
 
+const USER_ID = "usr_marcusbell";
 const scope = {
-  orgId: FIXTURE_TENANT.orgId,
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
 
 beforeEach(() => {
   requireViewer.mockReset();
-  requireViewer.mockResolvedValue({ userId: FIXTURE_USER.id, scope });
+  requireViewer.mockResolvedValue({ userId: USER_ID, scope });
   dataSource.mockClear();
 });
 
@@ -31,7 +29,7 @@ describe("shellSource", () => {
     expect(await shellSource("acme")).toEqual({
       port: shellPort,
       scope,
-      userId: FIXTURE_USER.id,
+      userId: USER_ID,
     });
     expect(requireViewer).toHaveBeenCalledWith("acme");
     expect(dataSource).toHaveBeenCalledTimes(1);

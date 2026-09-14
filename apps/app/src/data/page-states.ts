@@ -3,9 +3,8 @@
 // member without access is denied on. The codes and permissions are the
 // mockup's (mc.html @ mc-baseline-w1, each page's errorState/deniedState).
 //
-// The one table: the fixture adapter's `mc_state` switch returns these, and
-// `PageState` (src/ui/page-state.tsx) falls back to them when a failed read
-// names no code or permission of its own.
+// The one table: `PageState` (src/ui/page-state.tsx) falls back to it when a
+// failed read names no code or permission of its own.
 
 export const PAGE_KEYS = [
   "home",
@@ -96,7 +95,3 @@ export const PAGE_FAILURES = {
     permission: "org.read",
   },
 } as const satisfies Record<PageKey, PageFailure>;
-
-export function isPageKey(value: string): value is PageKey {
-  return (PAGE_KEYS as readonly string[]).includes(value);
-}

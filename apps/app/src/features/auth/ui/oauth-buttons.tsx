@@ -1,7 +1,6 @@
 "use client";
 // Social sign-in through Better Auth. The destination is the sanitised `next`,
-// which Better Auth also checks against its trusted origins. Hidden in fixture
-// mode: there is no provider to round-trip through.
+// which Better Auth also checks against its trusted origins.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { buttonSecondary } from "@/ui/control-styles";

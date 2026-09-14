@@ -18,7 +18,7 @@ export type ShellSource = {
 export async function shellSource(org: string): Promise<ShellSource> {
   const viewer = await requireViewer(org);
   return {
-    port: (await dataSource()).shell,
+    port: dataSource().shell,
     scope: viewer.scope,
     userId: viewer.userId,
   };

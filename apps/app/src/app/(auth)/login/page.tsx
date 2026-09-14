@@ -16,7 +16,6 @@ import {
   AuthSkeleton,
 } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
-import { isFixtureMode } from "@/server/fixture-session";
 
 export default function LoginPage(props: PageProps<"/login">) {
   return (
@@ -35,7 +34,6 @@ async function Login({
   // Only a same-origin relative path survives; anything else lands on "/".
   const next = sanitizeNext(firstParam(params.next));
   const t = await getTranslations("auth");
-  const fixture = isFixtureMode();
   return (
     <AuthColumn>
       <AuthHeading
@@ -44,8 +42,8 @@ async function Login({
         lead={t("login.lead")}
       />
       <div className="flex flex-col gap-4">
-        {fixture ? null : <OAuthButtons callbackURL={next} />}
-        <LoginForm next={next} fixture={fixture} />
+        <OAuthButtons callbackURL={next} />
+        <LoginForm next={next} />
       </div>
       <AuthFooter>
         {t("login.newHere")}{" "}

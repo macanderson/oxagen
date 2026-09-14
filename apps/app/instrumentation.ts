@@ -73,15 +73,6 @@ export async function register(): Promise<void> {
       (globalThis as unknown as Record<string, unknown>).require =
         createRequire(import.meta.url);
     }
-    // Fixture mode (dev, Storybook, e2e) reads no store, so it skips the store
-    // bootstraps below and runs without Postgres. A production build never takes
-    // this branch: NODE_ENV is inlined as "production" at build time.
-    if (
-      process.env.NODE_ENV !== "production" &&
-      process.env.MC_DATA === "fixture"
-    ) {
-      return;
-    }
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
     const { bootstrapBillingRuntime } = await import("@oxagen/billing");
     const { bootstrapEntitlementRuntime } = await import("@oxagen/plugins");

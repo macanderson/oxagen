@@ -14,11 +14,6 @@ import {
   isLoopbackRedirectUri,
   isValidCodeChallenge,
 } from "@oxagen/auth/cli-auth";
-import { isFixtureMode } from "@/server/fixture-session";
-import {
-  FIXTURE_HOME_WORKSPACE as FIXTURE_WORKSPACE,
-  FIXTURE_ORG,
-} from "@/server/fixture-tenancy";
 import { firstParam } from "./safe-next";
 
 export type CliAuthorizeParams = {
@@ -104,22 +99,6 @@ export function groupScopes(
 
 /** The orgs and member workspaces a user can authorize the CLI against. */
 export async function loadCliScopes(userId: string): Promise<OrgOption[]> {
-  if (isFixtureMode()) {
-    return [
-      {
-        id: "org_fixture_acme",
-        slug: FIXTURE_ORG.slug,
-        name: FIXTURE_ORG.name,
-        workspaces: [
-          {
-            id: "wrk_fixture_core",
-            slug: FIXTURE_WORKSPACE.slug,
-            name: FIXTURE_WORKSPACE.name,
-          },
-        ],
-      },
-    ];
-  }
   const { withSystemDb } = await import("@oxagen/database");
   // tenancy: unscoped seam (cross-tenant identity resolution before a scope exists;
   // every row is filtered to the signed-in user's own memberships)

@@ -13,10 +13,10 @@ import {
   vi,
 } from "vitest";
 import shellMessages from "../../../messages/shell.json";
-import { testFixtureShell } from "@/data/adapters/fixture/testing";
-import { FIXTURE_TENANT } from "@/data/fixture-tenant";
+import { readError } from "@/data/not-backed";
+import type { ShellReadPort } from "@/data/ports";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { FIXTURE_USER } from "@/server/fixture-session";
+import { SHELL_ORG_ID, SHELL_VIEWER, shellData } from "./shell.builders";
 import type { ShellSource } from "./source";
 
 const source = vi.hoisted(() => ({ current: null as ShellSource | null }));
@@ -56,13 +56,32 @@ vi.mock("next-intl/server", () => ({
 }));
 
 const ORG_SCOPE = {
-  orgId: FIXTURE_TENANT.orgId,
+  orgId: SHELL_ORG_ID,
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
-const fixtureSource = (): ShellSource => ({
-  port: testFixtureShell(),
+
+/** A port serving the built shell reads to the built viewer, and a 404 context to anyone else. */
+function builtPort(): ShellReadPort {
+  const data = shellData();
+  return {
+    context: (_scope, userId) =>
+      Promise.resolve(
+        userId === SHELL_VIEWER.id
+          ? data.context
+          : readError("org_not_found", 404),
+      ),
+    navCounts: () => Promise.resolve(data.counts),
+    notifications: () => Promise.resolve(data.notifications),
+    people: () => Promise.resolve(readError("people_not_read", 501)),
+    assistantEngine: () => Promise.resolve(data.engine),
+    recentRuns: () => Promise.resolve({ ok: true, value: data.runs }),
+    account: () => Promise.resolve(data.account),
+  };
+}
+const builtSource = (): ShellSource => ({
+  port: builtPort(),
   scope: ORG_SCOPE,
-  userId: FIXTURE_USER.id,
+  userId: SHELL_VIEWER.id,
 });
 
 // The first import of the chrome pulls the whole shell graph through jsdom. On
@@ -73,7 +92,7 @@ beforeAll(async () => {
 }, 30_000);
 
 beforeEach(() => {
-  source.current = fixtureSource();
+  source.current = builtSource();
 });
 afterEach(() => {
   cleanup();
@@ -101,7 +120,7 @@ describe("ShellChrome", () => {
 
   it("is not found when the organization read is a 404 for this viewer", async () => {
     source.current = {
-      port: testFixtureShell(),
+      port: builtPort(),
       scope: ORG_SCOPE,
       userId: "usr_someoneelse",
     };

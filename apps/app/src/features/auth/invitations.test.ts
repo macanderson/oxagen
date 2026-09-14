@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_USER } from "@/server/fixture-session";
 import { describeQuery } from "./test-query";
 
 const query = {
@@ -63,15 +62,6 @@ const liveRow = {
   expiresAt: new Date("2099-01-01T00:00:00Z"),
 };
 
-function fixtureMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "fixture");
-}
-function liveMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "live");
-}
-
 beforeEach(() => {
   filters.length = 0;
   for (const table of Object.values(query)) table.findFirst.mockReset();
@@ -82,7 +72,6 @@ beforeEach(() => {
 
 describe("loadInvitation", () => {
   it("refuses a malformed token without a lookup", async () => {
-    liveMode();
     expect(await loadInvitation("../../etc")).toEqual({
       ok: false,
       reason: "error",
@@ -92,15 +81,7 @@ describe("loadInvitation", () => {
     expect(query.invitations.findFirst).not.toHaveBeenCalled();
   });
 
-  it("serves fixture invitations in fixture mode", async () => {
-    fixtureMode();
-    const read = await loadInvitation("invi_acme_pending");
-    expect(read.ok && read.value.email).toBe(FIXTURE_USER.email);
-    expect((await loadInvitation("invi_nope")).ok).toBe(false);
-  });
-
   it("maps a live row to the view model, the stored role to the spec's lowercase enum", async () => {
-    liveMode();
     query.invitations.findFirst.mockResolvedValue(liveRow);
     query.organizations.findFirst.mockResolvedValue({
       name: "Acme Robotics",
@@ -129,7 +110,6 @@ describe("loadInvitation", () => {
   });
 
   it("reads a missing invitation or organization as not found, and an unreadable row as an error", async () => {
-    liveMode();
     query.invitations.findFirst.mockResolvedValueOnce(undefined);
     expect((await loadInvitation("invi_gone")).ok).toBe(false);
     query.invitations.findFirst.mockResolvedValueOnce(liveRow);
@@ -158,52 +138,48 @@ describe("loadInvitation", () => {
 });
 
 describe("accept and decline", () => {
-  it("fixture · accept lands in the org without writing; decline goes home", async () => {
-    fixtureMode();
+  it("re-runs the page's decision: unknown, closed, signed out and wrong account are refused, and nothing is written", async () => {
     getAuthUser.mockResolvedValue({
-      id: FIXTURE_USER.id,
-      email: FIXTURE_USER.email,
-      name: FIXTURE_USER.name,
+      id: "u-priya",
+      email: "priya@acme.example",
+      name: "Priya",
     });
-    expect(await acceptInvitation("invi_acme_pending")).toEqual({
-      ok: true,
-      to: "/acme",
+    query.organizations.findFirst.mockResolvedValue({
+      name: "Acme Robotics",
+      slug: "acme",
     });
-    expect(await declineInvitation("invi_acme_pending")).toEqual({
-      ok: true,
-      to: "/",
-    });
-    expect(invokeTool).not.toHaveBeenCalled();
-  });
-
-  it("re-runs the page's decision: unknown, closed, signed out and wrong account are refused", async () => {
-    fixtureMode();
-    getAuthUser.mockResolvedValue({
-      id: FIXTURE_USER.id,
-      email: FIXTURE_USER.email,
-      name: FIXTURE_USER.name,
-    });
+    query.users.findFirst.mockResolvedValue(undefined);
+    query.invitations.findFirst.mockResolvedValueOnce(undefined);
     expect(await acceptInvitation("invi_nope")).toEqual({
       ok: false,
       reason: "not_found",
     });
-    expect(await acceptInvitation("invi_acme_accepted")).toEqual({
+    query.invitations.findFirst.mockResolvedValueOnce({
+      ...liveRow,
+      status: "accepted",
+    });
+    expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "closed",
     });
-    expect(await acceptInvitation("invi_acme_other")).toEqual({
+    query.invitations.findFirst.mockResolvedValueOnce({
+      ...liveRow,
+      email: "someone.else@acme.example",
+    });
+    expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "wrong_account",
     });
     getAuthUser.mockResolvedValue(null);
-    expect(await acceptInvitation("invi_acme_pending")).toEqual({
+    query.invitations.findFirst.mockResolvedValueOnce(liveRow);
+    expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "sign_in",
     });
+    expect(invokeTool).not.toHaveBeenCalled();
   });
 
-  it("live · accepts through the kernel in the invitation's org scope", async () => {
-    liveMode();
+  it("accepts through the kernel in the invitation's org scope", async () => {
     getAuthUser.mockResolvedValue({
       id: "u-priya",
       email: "priya@acme.example",
@@ -241,8 +217,7 @@ describe("accept and decline", () => {
     );
   });
 
-  it("live · a kernel failure is logged and reported, not thrown", async () => {
-    liveMode();
+  it("a kernel failure is logged and reported, not thrown", async () => {
     getAuthUser.mockResolvedValue({
       id: "u-priya",
       email: "priya@acme.example",
@@ -262,8 +237,7 @@ describe("accept and decline", () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
-  it("live · an invitation that vanished between read and write is not found", async () => {
-    liveMode();
+  it("an invitation that vanished between read and write is not found", async () => {
     getAuthUser.mockResolvedValue({
       id: "u-priya",
       email: "priya@acme.example",

@@ -6,7 +6,6 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { signUpFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveSignUp } from "./client-auth";
 import { AFTER_SIGNUP } from "./routes";
@@ -24,13 +23,7 @@ import { formText } from "./form-text";
 
 type SignupField = "name" | "email" | "password";
 
-export function SignupForm({
-  fixture,
-  next = AFTER_SIGNUP,
-}: {
-  fixture: boolean;
-  next?: string;
-}) {
+export function SignupForm({ next = AFTER_SIGNUP }: { next?: string }) {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errors, setErrors] = useState<FieldErrors<SignupField>>({});
@@ -54,17 +47,6 @@ export function SignupForm({
     setErrors({});
     setPending(true);
     try {
-      if (fixture) {
-        const result = await signUpFixture({ ...parsed.data, next });
-        if (!result.ok) {
-          setErrors(result.fields ?? {});
-          setOutcome(result.outcome ?? null);
-          return;
-        }
-        router.replace(result.to);
-        router.refresh();
-        return;
-      }
       const result = await liveSignUp(parsed.data);
       if (!result.ok) {
         setOutcome(result.outcome);

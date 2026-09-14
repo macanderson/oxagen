@@ -337,7 +337,7 @@ type Schema = typeof import("@oxagen/database")["schema"];
 
 /**
  * Enter the tenant scope, then one RLS-scoped transaction. The store packages
- * load lazily so fixture mode, which has no Postgres, never imports them.
+ * load lazily, at the first call.
  */
 async function inTenant<T>(
   scope: Scope,

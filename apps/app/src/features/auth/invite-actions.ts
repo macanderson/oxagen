@@ -5,7 +5,6 @@
 // `accept_member_invite` / `decline_member_invite` agent tool through the kernel.
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
-import { isFixtureMode } from "@/server/fixture-session";
 import { invokeTool } from "@/server/invoke";
 import type { Viewer } from "@/server/scope";
 import { ORG_ONLY_WS } from "@/server/tenant-scope";
@@ -17,13 +16,7 @@ export type InviteActionResult =
   | { ok: true; to: string }
   | {
       ok: false;
-      reason:
-        | "not_found"
-        | "closed"
-        | "sign_in"
-        | "wrong_account"
-        | "fixture"
-        | "failed";
+      reason: "not_found" | "closed" | "sign_in" | "wrong_account" | "failed";
     };
 
 type Decision = "accept" | "decline";
@@ -43,13 +36,6 @@ async function decide(
     return { ok: false, reason: "sign_in" };
   if (verdict.kind === "wrong-account")
     return { ok: false, reason: "wrong_account" };
-
-  // Fixture mode shows the flow but writes nothing: accepting lands on the fixture org.
-  if (isFixtureMode()) {
-    return decision === "accept"
-      ? { ok: true, to: `/${read.value.orgSlug}` }
-      : { ok: true, to: "/" };
-  }
 
   try {
     const { withSystemDb } = await import("@oxagen/database");

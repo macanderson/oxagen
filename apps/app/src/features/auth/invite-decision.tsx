@@ -69,9 +69,7 @@ export function InviteDecision({
   return (
     <div className="flex flex-col gap-3">
       {failure ? (
-        <FormAlert testId="invite-failure">
-          {failure === "fixture" ? t("unavailable") : t("failed")}
-        </FormAlert>
+        <FormAlert testId="invite-failure">{t("failed")}</FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button

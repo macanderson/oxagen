@@ -88,7 +88,7 @@ export const SpendByTool = z.object({
 });
 export type SpendByTool = z.infer<typeof SpendByTool>;
 
-export const WasteCause = z.enum([
+const WasteCause = z.enum([
   "unproven_outcome",
   "cache_misses",
   "retry_loops",
@@ -96,7 +96,6 @@ export const WasteCause = z.enum([
   "idle_while_parked",
   "halted_early",
 ]);
-export type WasteCause = z.infer<typeof WasteCause>;
 
 export const BadgeTone = z.enum([
   "critical",
@@ -127,12 +126,11 @@ export const WasteReport = z.object({
 export type WasteReport = z.infer<typeof WasteReport>;
 
 /** One cross-cut row in a drill. `key` is null for rows that are not themselves drillable. */
-export const SpendSlice = z.object({
+const SpendSlice = z.object({
   key: z.string().nullable(),
   label: z.string(),
   spend: Money,
 });
-export type SpendSlice = z.infer<typeof SpendSlice>;
 
 export const DrillKind = z.enum(["operator", "agent", "tool"]);
 export type DrillKind = z.infer<typeof DrillKind>;

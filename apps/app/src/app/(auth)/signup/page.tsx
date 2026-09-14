@@ -17,7 +17,6 @@ import {
   AuthSkeleton,
 } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
-import { isFixtureMode } from "@/server/fixture-session";
 
 export default function SignupPage(props: PageProps<"/signup">) {
   return (
@@ -35,7 +34,6 @@ async function Signup({
   const params = await searchParams;
   const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
   const t = await getTranslations("auth");
-  const fixture = isFixtureMode();
   return (
     <AuthColumn>
       <AuthHeading
@@ -44,8 +42,8 @@ async function Signup({
         lead={t("signup.lead")}
       />
       <div className="flex flex-col gap-4">
-        {fixture ? null : <OAuthButtons callbackURL={next} />}
-        <SignupForm fixture={fixture} next={next} />
+        <OAuthButtons callbackURL={next} />
+        <SignupForm next={next} />
       </div>
       <AuthFooter>
         {t("signup.haveAccount")}{" "}

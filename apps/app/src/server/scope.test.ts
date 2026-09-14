@@ -36,10 +36,9 @@ vi.mock("./viewer-resolution", async (importOriginal) => ({
   resolveViewerWith: resolveMock,
 }));
 
-import { fixtureTenancyLookups } from "./fixture-tenancy";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { liveTenancyLookups } from "./tenancy-lookups";
-import { requestUrl, requireViewer, tenancyLookups } from "./scope";
+import { requestUrl, requireViewer } from "./scope";
 
 const viewer = { userId: "u1" };
 const resolves = (r: ViewerResolution | { kind: "ok"; viewer: unknown }) =>
@@ -51,29 +50,8 @@ beforeEach(() => {
   getSessionMock.mockResolvedValue(null);
 });
 
-describe("tenancyLookups", () => {
-  it("uses the fixture lookups only in fixture mode outside production", () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "fixture");
-    expect(tenancyLookups()).toBe(fixtureTenancyLookups);
-  });
-
-  it("is unreachable in production: MC_DATA=fixture still reads the database", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("MC_DATA", "fixture");
-    expect(tenancyLookups()).toBe(liveTenancyLookups);
-  });
-
-  it("reads the database when the live source is selected in development", () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "live");
-    expect(tenancyLookups()).toBe(liveTenancyLookups);
-  });
-});
-
 describe("requireViewer", () => {
-  it("hands the session and the selected lookups to the resolver, and returns the viewer", async () => {
-    vi.stubEnv("NODE_ENV", "production");
+  it("hands the session and the database lookups to the resolver, and returns the viewer", async () => {
     const session = { user: { id: "u1" } };
     getSessionMock.mockResolvedValue(session);
     resolves({ kind: "ok", viewer });

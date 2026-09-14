@@ -5,10 +5,6 @@
 // real session and membership check is `requireViewer` in every layout and page.
 // Appendix F legacy redirects are added at cutover (plan §4.11, Batch 5).
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  FIXTURE_SESSION_COOKIE,
-  readFixtureSession,
-} from "@/server/fixture-session";
 
 /**
  * Reachable without a session: the sign-in flows, invitations, the auth API and
@@ -33,16 +29,12 @@ export function isPublicPath(pathname: string): boolean {
 
 /**
  * Better Auth names its cookie `<prefix>.session_token`, with a `__Secure-`
- * prefix over HTTPS; match any non-empty `*session_token`. In fixture mode the
- * dev-only fixture session cookie also counts (never in a production build).
+ * prefix over HTTPS; match any non-empty `*session_token`.
  */
 export function hasSessionCookie(req: NextRequest): boolean {
-  const cookies = req.cookies.getAll();
-  if (cookies.some((c) => c.name.endsWith("session_token") && c.value !== ""))
-    return true;
-  return (
-    readFixtureSession(req.cookies.get(FIXTURE_SESSION_COOKIE)?.value) !== null
-  );
+  return req.cookies
+    .getAll()
+    .some((c) => c.name.endsWith("session_token") && c.value !== "");
 }
 
 export function proxy(req: NextRequest): NextResponse {

@@ -96,11 +96,6 @@ const form = {
 };
 const user = { id: "u-owner", email: "priya@acme.example", name: "Priya" };
 
-function mode(m: "fixture" | "live") {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", m);
-}
-
 beforeEach(() => {
   inserted.length = 0;
   failInsert = null;
@@ -118,15 +113,13 @@ beforeEach(() => {
 
 describe("createOrganizationAction", () => {
   it("sends a signed-out person to log in", async () => {
-    mode("fixture");
     getAuthUser.mockResolvedValue(null);
     await expect(createOrganizationAction(form)).rejects.toThrow(
       "NEXT_REDIRECT /login?next=%2Fwelcome",
     );
   });
 
-  it("re-validates every field", async () => {
-    mode("fixture");
+  it("re-validates every field, writing nothing (negative)", async () => {
     expect(
       await createOrganizationAction({
         ...form,
@@ -140,36 +133,26 @@ describe("createOrganizationAction", () => {
         workspaceSlug: "workspaceSlugReserved",
       },
     });
+    expect(inserted).toHaveLength(0);
   });
 
-  it("refuses an organization address that is a top-level route", async () => {
-    mode("fixture");
+  it("refuses an organization address that is a top-level route, writing nothing (negative)", async () => {
     for (const slug of ["welcome", "login", "api"])
       expect(await createOrganizationAction({ ...form, slug })).toEqual({
         ok: false,
         fields: { slug: "slugReserved" },
       });
-  });
-
-  it("fixture · moves on to wrap in the fixture org, writing nothing", async () => {
-    mode("fixture");
-    expect(await createOrganizationAction(form)).toEqual({
-      ok: true,
-      to: "/welcome/wrap?org=acme&ws=core-platform",
-    });
     expect(inserted).toHaveLength(0);
   });
 
-  it("live · creates the tenant and moves on to its wrap step", async () => {
-    mode("live");
+  it("creates the tenant and moves on to its wrap step", async () => {
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
       to: "/welcome/wrap?org=acme&ws=core-platform",
     });
   });
 
-  it("live · maps a taken address, a taken namespace, a contract refusal and a failure", async () => {
-    mode("live");
+  it("maps a taken address, a taken namespace, a contract refusal and a failure", async () => {
     failInsert = Object.assign(new Error("unique"), {
       constraint: "organizations_slug_idx",
     });
@@ -199,7 +182,6 @@ describe("createOrganizationAction", () => {
 
 describe("createOrganization", () => {
   it("re-checks reserved addresses before any write, so a crafted call cannot skip the form", async () => {
-    mode("live");
     for (const slug of ["welcome", "login", "api"])
       expect(await createOrganization("u-owner", { ...form, slug })).toEqual({
         ok: false,
@@ -215,7 +197,6 @@ describe("createOrganization", () => {
   });
 
   it("writes the org with the chosen namespace, both owner memberships and the workspace, then bootstraps IAM and agents", async () => {
-    mode("live");
     const result = await createOrganization("u-owner", form);
     expect(result).toEqual({
       ok: true,
@@ -258,7 +239,6 @@ describe("createOrganization", () => {
   });
 
   it("a failed seed is logged and does not fail sign-up", async () => {
-    mode("live");
     seedEnvironment.mockRejectedValue(new Error("seed"));
     expect((await createOrganization("u-owner", form)).ok).toBe(true);
     expect(logger.error).toHaveBeenCalledTimes(1);

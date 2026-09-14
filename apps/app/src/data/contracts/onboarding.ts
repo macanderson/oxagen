@@ -6,8 +6,7 @@ import { z } from "zod";
 import { EnforcementTier, Instant, Slug } from "./common";
 
 /** A namespace segment of an agent key (`acme` in `acme.core.release-manager`). */
-export const Namespace = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
-export type Namespace = z.infer<typeof Namespace>;
+const Namespace = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
 
 /** The organization and workspace namespaces agent keys are minted in. */
 export const FlowNamespaces = z.object({
