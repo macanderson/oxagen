@@ -5,13 +5,15 @@
  * there; verify drives a fake `claude`.
  */
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
-import { oxagenConfigPath } from "../host/paths";
+import { oxagenConfigPath, tachoPaths } from "../host/paths";
 import type { ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
@@ -27,6 +29,7 @@ import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
 import {
   type CliDeps,
   claudeFacts,
+  defaultCliDeps,
   harnessFacts,
   resolveCredentials,
   runtimeCommands,
@@ -749,6 +752,69 @@ describe("harnesses and reassign", () => {
     expect(fresh.errors[0]).toContain("Not enrolled");
   });
 
+  it("skips the revoke when the old enrollment is already revoked, and says so when the new enrollment fails", async () => {
+    const d = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    const host = readHostFile(d.paths.hostFile);
+    if (host === undefined) throw new Error("not enrolled");
+    // The operator revoked this host from the fleet page already: the
+    // control plane is not asked again, the move goes straight to enroll.
+    writeHostFile(d.paths.hostFile, {
+      ...host,
+      revoked_at: "2026-09-10T11:00:00.000Z",
+    });
+    d.requests.length = 0;
+    const moved = await reassign({ token: "tok", workspace: "edge" }, d);
+    expect(moved.ok).toBe(true);
+    expect(d.lines.join("\n")).toContain(
+      "already revoked at 2026-09-10T11:00:00.000Z",
+    );
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/edge/tacho/enrollments",
+    ]);
+
+    // When the create is refused after the revoke went through, the host is
+    // left unenrolled and the message says how to recover.
+    const refusing = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      refusing,
+    );
+    const upstream = refusing.fetch;
+    refusing.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments"))
+        return { ok: false, status: 403, text: async () => "workspace closed" };
+      return upstream(url, init);
+    };
+    refusing.lines.length = 0;
+    const failed = await reassign(
+      { token: "tok", workspace: "edge" },
+      refusing,
+    );
+    expect(failed.ok).toBe(false);
+    expect(failed.from?.enrollmentId).toBe(TEST_ENROLLMENT);
+    expect(failed.to).toBeUndefined();
+    expect(refusing.errors.at(-1)).toContain(
+      "Reassign failed after revoking the old enrollment",
+    );
+    expect(refusing.errors.at(-1)).toContain(
+      "tacho enroll --org acme --workspace edge",
+    );
+  });
+
   it("uses the multi-call binary when compiled and quotes for cmd.exe on Windows", () => {
     const native = runtimeCommands(
       undefined,
@@ -924,5 +990,114 @@ describe("export and verify", () => {
     expect((await verify({ timeoutMs: 10_000 }, unsealed)).detail).toContain(
       "SessionEnd never arrived",
     );
+  });
+});
+
+describe("defaultCliDeps", () => {
+  it("binds the ports to a scratch home: settings and hooks files, harness lookups, the service manager and the local port", async () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-home-"));
+    const env = {
+      TACHO_HOME: join(home, "tacho"),
+      CODEX_HOME: join(home, "codex"),
+    };
+    const calls: string[] = [];
+    const d = defaultCliDeps({
+      env,
+      home,
+      platform: "linux",
+      exec: (command, args) => {
+        calls.push([command, ...args].join(" "));
+        if (command === "sh")
+          return { status: 0, stdout: "/opt/bin/tool\n", stderr: "" };
+        return { status: 0, stdout: "tool 9.8.7\n", stderr: "" };
+      },
+    });
+    expect(d.paths).toEqual(tachoPaths(env, home));
+    expect(d.home).toBe(home);
+    expect(d.platform).toBe("linux");
+    expect(d.serviceManager.kind).toBe("systemd");
+    expect(d.serviceManager.unitPath.startsWith(home)).toBe(true);
+    // Absent files read as undefined; a write creates the parent directory
+    // and the next read returns the document.
+    expect(d.readSettings()).toBeUndefined();
+    expect(d.readCodexHooks()).toBeUndefined();
+    d.writeSettings({ hooks: {} });
+    d.writeCodexHooks({ hooks: { SessionStart: [] } });
+    expect(d.readSettings()).toEqual({ hooks: {} });
+    expect(d.readCodexHooks()).toEqual({ hooks: { SessionStart: [] } });
+    expect(existsSync(join(home, "codex", "hooks.json"))).toBe(true);
+    // Both harness lookups go through the injected exec.
+    expect(d.claude()).toEqual({ path: "/opt/bin/tool", version: "9.8.7" });
+    expect(d.codex()).toEqual({ path: "/opt/bin/tool", version: "9.8.7" });
+    expect(calls).toContain("sh -lc command -v claude");
+    expect(calls).toContain("sh -lc command -v codex");
+    expect(d.runtime.daemonCommand).toHaveLength(2);
+    expect(typeof d.hostname).toBe("string");
+    expect(typeof d.osUser).toBe("string");
+    expect(d.nodeVersion).toBe(process.version);
+    expect(d.wrapperVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(d.randomToken()).toMatch(/^[0-9a-f]{48}$/);
+    expect(d.randomToken()).not.toBe(d.randomToken());
+    const port = await d.findFreePort();
+    expect(port).toBeGreaterThan(0);
+    expect(port).toBeLessThan(65536);
+    const started = Date.now();
+    await d.sleep(5);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4);
+    // Overrides win over the defaults they replace.
+    const lines: string[] = [];
+    const custom = defaultCliDeps({
+      env,
+      home,
+      out: (line) => lines.push(line),
+    });
+    custom.out("hello");
+    expect(lines).toEqual(["hello"]);
+  });
+
+  it("GETs the daemon on loopback with the local bearer, and answers undefined when unenrolled, unreachable, or not JSON", async () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-home-"));
+    const env = { TACHO_HOME: join(home, "tacho") };
+    const d = defaultCliDeps({ env, home, platform: "linux" });
+    // Not enrolled: no host file, no request.
+    expect(await d.daemonGet("/status")).toBeUndefined();
+    const seen: Array<{ url: string; authorization: string | undefined }> = [];
+    const server = createServer((req, res) => {
+      seen.push({
+        url: req.url ?? "",
+        authorization: req.headers.authorization,
+      });
+      if (req.url === "/status") {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ uptime_s: 12, spool_depth: 0 }));
+      } else {
+        res.end("not json");
+      }
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const port = (server.address() as AddressInfo).port;
+    const signer = bundleSigner();
+    const host = {
+      ...testHostFile(signer, signer.sign(unsignedBundle())),
+      port,
+    };
+    writeHostFile(d.paths.hostFile, host);
+    try {
+      expect(await d.daemonGet("/status")).toEqual({
+        uptime_s: 12,
+        spool_depth: 0,
+      });
+      expect(seen[0]).toEqual({
+        url: "/status",
+        authorization: `Bearer ${host.local_token}`,
+      });
+      expect(await d.daemonGet("/sessions")).toBeUndefined();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    // The port is closed now: a refused connection is "no daemon", not an error.
+    expect(await d.daemonGet("/status")).toBeUndefined();
   });
 });
