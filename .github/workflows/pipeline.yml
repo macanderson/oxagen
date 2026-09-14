@@ -471,11 +471,26 @@ jobs:
           # empty TURBO_FILTER (push to main) it starts from every package.
           pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
 
+      # The Build step is filtered, so on a pull request that leaves
+      # @oxagen/app outside the affected set (apps/api-only, tools-only,
+      # docs-only) it produces no apps/app/.next, and `turbo run test:e2e`
+      # below runs nothing. The sentinel scan and the e2e seed serve that
+      # suite alone, so they run on the same condition. `next build` writes
+      # .next/BUILD_ID once the bundle has compiled, turbo restores it with
+      # the rest of `.next/**` on a cache hit, and a failed build has already
+      # ended the job at the step above, so the file's presence here means
+      # apps/app was in the affected set. Push to main and nightly build
+      # apps/app every time; there the scan keeps failing on a missing build
+      # (scan-build-sentinels.mjs exits 2).
+      - name: Record whether apps/app was built
+        run: echo "APP_BUILT=$([ -f apps/app/.next/BUILD_ID ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+
       # INV-22: the production bundle carries no seed or demo data. A Node walk
       # over .next/server and .next/static of the build the step above produced
       # — the same .next the webServer serves — for the seeded owner's domain
       # and the demo-seed name; a hit fails the job and names the file.
       - name: Scan the build for sentinels
+        if: env.APP_BUILT == '1'
         working-directory: apps/app
         run: node scripts/scan-build-sentinels.mjs
 
@@ -494,6 +509,7 @@ jobs:
       # before Playwright starts. Run directly (not through turbo) so the
       # job's env reaches it whole.
       - name: Seed e2e
+        if: env.APP_BUILT == '1'
         run: pnpm --filter @oxagen/app seed:e2e
 
       # One shard: the suite is three tests (INV-20), and the login project
