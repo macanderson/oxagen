@@ -70,17 +70,47 @@ export const TACHO_COMMANDS = [
   "pause",
   "resume",
   "cancel",
+  "steer",
   "message",
   "revoke",
   "refresh_bundle",
   "kill",
 ] as const;
+/**
+ * The closed command-status vocabulary of the Mission Control spec §7.4,
+ * shared by commands and messages. `applied` is the only success status;
+ * `cancelled`, `expired` and `failed` are the three undelivered endings.
+ */
 export const TACHO_COMMAND_OUTCOMES = [
-  "pending",
-  "delivered",
+  "draft",
+  "queued",
+  "sent",
+  "received",
+  "acknowledged",
   "applied",
+  "cancelled",
   "expired",
   "failed",
+] as const;
+/** The statuses a command cannot leave. */
+export const TACHO_COMMAND_TERMINAL_OUTCOMES = [
+  "applied",
+  "cancelled",
+  "expired",
+  "failed",
+] as const;
+/**
+ * What a command row is addressed to: the host that carries it, or the run
+ * it steers. A broadcast (`@agents`, `@<agent>`) is resolved to one row per
+ * recipient run at dispatch, so no row is addressed to an agent or a
+ * workspace; the address travels in `payload.address`.
+ */
+export const TACHO_COMMAND_TARGET_KINDS = ["host", "run"] as const;
+/** Spec §7.3 delivery modes: which model request a steer rides. */
+export const TACHO_DELIVERY_MODES = [
+  "next_step",
+  "interrupt",
+  "turn_boundary",
 ] as const;
 export const TACHO_INCIDENT_KINDS = [
   "unobserved_session",
@@ -540,17 +570,29 @@ export const tachoSessionCommands = tachoSchema.table(
 );
 
 // ── control_commands ─────────────────────────────────────────────────────────
-// Oxagen -> host commands (data-model 3.6, spec section 7.4).
+// Oxagen -> agent commands (data-model 3.6, spec section 7.4; Mission Control
+// spec §7.3, §7.4 and Appendix A.6). One row per recipient: a host, or one
+// run. `outcome` carries the §7.4 status vocabulary; `requested_mode` and
+// `delivery_mode` are recorded separately so a report shows the mode that
+// was achieved, never the one that was asked for.
 export const tachoControlCommands = tachoSchema.table(
   "control_commands",
   {
     ...idMixin("tcm"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    hostId: uuid("host_id").notNull(),
+    /** The host that carries the command; null for a run with no host. */
+    hostId: uuid("host_id"),
     sessionId: uuid("session_id"),
+    targetKind: text("target_kind").notNull(),
+    /** The recipient's public id: `tch_…` for a host, `tse_…`/`arun_…` for a run. */
+    targetId: text("target_id").notNull(),
     command: text("command").notNull(),
     payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    requestedMode: text("requested_mode"),
+    deliveryMode: text("delivery_mode"),
+    degradedReason: text("degraded_reason"),
+    reason: text("reason"),
     issuedByPrincipalId: uuid("issued_by_principal_id"),
     issuedByUserId: uuid("issued_by_user_id"),
     issuedAt: ts("issued_at").notNull().defaultNow(),
@@ -559,7 +601,7 @@ export const tachoControlCommands = tachoSchema.table(
     acknowledgedAt: ts("acknowledged_at"),
     appliedAt: ts("applied_at"),
     appliedAtSeq: bigint("applied_at_seq", { mode: "number" }),
-    outcome: text("outcome").notNull().default("pending"),
+    outcome: text("outcome").notNull().default("queued"),
     outcomeDetail: text("outcome_detail"),
   },
   (t) => ({
@@ -569,6 +611,13 @@ export const tachoControlCommands = tachoSchema.table(
       t.issuedAt,
     ),
     orgIdx: index("tacho_control_commands_org_idx").on(t.orgId, t.workspaceId),
+    targetIdx: index("tacho_control_commands_target_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.targetKind,
+      t.targetId,
+      t.issuedAt,
+    ),
     commandCheck: check(
       "tacho_control_commands_command_check",
       sql`${t.command} IN (${sql.raw(inList(TACHO_COMMANDS))})`,
@@ -576,6 +625,18 @@ export const tachoControlCommands = tachoSchema.table(
     outcomeCheck: check(
       "tacho_control_commands_outcome_check",
       sql`${t.outcome} IN (${sql.raw(inList(TACHO_COMMAND_OUTCOMES))})`,
+    ),
+    targetKindCheck: check(
+      "tacho_control_commands_target_kind_check",
+      sql`${t.targetKind} IN (${sql.raw(inList(TACHO_COMMAND_TARGET_KINDS))})`,
+    ),
+    requestedModeCheck: check(
+      "tacho_control_commands_requested_mode_check",
+      sql`${t.requestedMode} IS NULL OR ${t.requestedMode} IN (${sql.raw(inList(TACHO_DELIVERY_MODES))})`,
+    ),
+    deliveryModeCheck: check(
+      "tacho_control_commands_delivery_mode_check",
+      sql`${t.deliveryMode} IS NULL OR ${t.deliveryMode} IN (${sql.raw(inList(TACHO_DELIVERY_MODES))})`,
     ),
   }),
 );
