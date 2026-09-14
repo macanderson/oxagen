@@ -221,7 +221,7 @@ function toInvoiceItem(row: InvoiceRow): InvoiceItem {
 // ---- Dependencies ---------------------------------------------------------------------
 
 /** The read the handler makes. Runs inside the kernel's tenant scope. */
-export type InvoiceQueries = {
+type InvoiceQueries = {
   page: (orgId: string, q: PageQuery) => Promise<InvoiceRow[]>;
 };
 
