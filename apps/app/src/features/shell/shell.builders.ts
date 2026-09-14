@@ -117,7 +117,7 @@ const notifications: Notification[] = [
   ),
 ];
 
-export const ENGINE_UP: AssistantEngine = {
+const ENGINE_UP: AssistantEngine = {
   status: "up",
   model: "glm-flash",
   version: "0.31.4",
