@@ -1,0 +1,392 @@
+// agent.definition.commit.ts — write an agent's definition of record to the
+// workspace repository and open the pull request that publishes it (MC spec
+// §6.2, §10.2; ADR-057 decision 1; #2956).
+//
+// Flow:
+//   1. Principal and role gate — a signed-in org Owner, Admin or Member
+//      (assertOrgRole, INV-29).
+//   2. The agent, in this workspace; a retired agent accepts no definition.
+//   3. The file: `schema` must be the canonical schema and `slug` the
+//      agent's; the `tools` it names are checked against the committer's own
+//      grants for an enterprise organization (the delegation ceiling of
+//      spec §6.2: a person can grant an agent no more than they hold).
+//   4. The repository: the binding named by `repositoryId`, or the
+//      workspace's one binding; a branch equal to the binding's configured
+//      default ref or the repository's default branch is refused, so the
+//      default branch is never written.
+//   5. GitHub: the branch is created from the default branch when it does
+//      not exist, the file is put on it, and a pull request is opened against
+//      the default branch. Nothing here merges.
+//   6. A new unpublished `agent_versions` row caches the path, digest,
+//      source, commit, branch and pull request. The config column carries
+//      the latest version's config forward so the legacy definition reads
+//      keep parsing.
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { resolveAgentIdentity } from "@oxagen/agent/handlers/_agent-identity";
+import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
+import { createGitHubClient } from "@oxagen/github";
+import { fetchAgentRunAuthz } from "@oxagen/iam";
+import { assertOrgRole } from "@oxagen/iam/org-role";
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import { getCapability, HandlerError } from "@oxagen/oxagen";
+import {
+  AGENT_DEFINITION_DIR,
+  AGENT_DEFINITION_SCHEMA,
+  agentDefinitionCommit,
+} from "@oxagen/oxagen/contracts/agent.definition.commit";
+import { resolve as resolveIam } from "@oxagen/oxagen/iam";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { assertNotRetired } from "./lib/agent-identity";
+import { resolveGitHubToken } from "./lib/github-token";
+import { logger } from "./logger";
+import { sha256Hex } from "./registry-digest";
+
+export const AGENT_DEFINITION_ROLES = ["Owner", "Admin", "Member"] as const;
+
+/**
+ * The top-level `key = "value"` string of a TOML subset (spec §6.2's file
+ * shape), or null. Only the fields this handler checks are read; the file's
+ * full validation is the repository's own check on the pull request.
+ */
+export function readTopLevelString(source: string, key: string): string | null {
+  for (const line of source.split(/\r?\n/)) {
+    if (/^\s*\[/.test(line)) break;
+    const m = new RegExp(
+      `^\\s*${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*(#.*)?$`,
+    ).exec(line);
+    if (m) return m[1] ?? null;
+  }
+  return null;
+}
+
+/** The strings of a top-level `key = [ "a", "b" ]` array, across lines, or []. */
+export function readTopLevelStringArray(source: string, key: string): string[] {
+  const head = new RegExp(`^\\s*${key}\\s*=\\s*\\[`, "m").exec(source);
+  if (!head) return [];
+  // Stop at the first top-level table header, so a `tools` key inside
+  // `[harness.x]` is not read as the definition's belt.
+  const prefix = source.slice(0, head.index);
+  if (/^\s*\[/m.test(prefix)) return [];
+  const rest = source.slice(head.index + head[0].length);
+  const close = rest.indexOf("]");
+  if (close < 0) return [];
+  const body = rest.slice(0, close);
+  return [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1] ?? "");
+}
+
+export function definitionPathFor(slug: string): string {
+  return `${AGENT_DEFINITION_DIR}/${slug}.toml`;
+}
+
+/** The capability names a `tools` list names outright: registered contracts, never globs or MCP tools. */
+export function capabilityToolsOf(tools: readonly string[]): string[] {
+  return tools.filter(
+    (t) =>
+      !t.includes("*") && !t.includes("__") && getCapability(t) !== undefined,
+  );
+}
+
+interface RepositoryTarget {
+  bindingPublicId: string;
+  owner: string;
+  repo: string;
+  configuredDefaultRef: string;
+}
+
+async function resolveRepository(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  repositoryId: string | undefined,
+): Promise<RepositoryTarget> {
+  const heads = await tx
+    .select({
+      currentBindingId: schema.repositoryBindingHeads.currentBindingId,
+    })
+    .from(schema.repositoryBindingHeads)
+    .where(
+      and(
+        eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+        eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+      ),
+    );
+  if (heads.length === 0) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "no_repository",
+      message: "This workspace binds no repository to commit the definition to",
+    });
+  }
+  const bindings = await tx
+    .select({
+      publicId: schema.repositoryBindings.publicId,
+      owner: schema.repositoryBindings.providerOwner,
+      name: schema.repositoryBindings.providerName,
+      configuredDefaultRef: schema.repositoryBindings.configuredDefaultRef,
+    })
+    .from(schema.repositoryBindings)
+    .where(
+      inArray(
+        schema.repositoryBindings.id,
+        heads.map((h) => h.currentBindingId),
+      ),
+    );
+  const chosen =
+    repositoryId === undefined
+      ? bindings.length === 1
+        ? bindings[0]
+        : undefined
+      : bindings.find((b) => b.publicId === repositoryId);
+  if (!chosen) {
+    throw new HandlerError({
+      code: repositoryId === undefined ? "conflict" : "not_found",
+      reason:
+        repositoryId === undefined
+          ? "repository_ambiguous"
+          : "repository_not_found",
+      message:
+        repositoryId === undefined
+          ? "This workspace binds more than one repository; name one with repositoryId"
+          : `No repository binding "${repositoryId}" in this workspace`,
+    });
+  }
+  return {
+    bindingPublicId: chosen.publicId,
+    owner: chosen.owner,
+    repo: chosen.name,
+    configuredDefaultRef: chosen.configuredDefaultRef,
+  };
+}
+
+/**
+ * The delegation ceiling on the definition's tools: every capability the
+ * file names resolves to allow or approval for the committer's own human
+ * principal. Below enterprise the kernel's IAM allows every capability to
+ * every member (packages/iam/src/check-iam.ts), so the check is skipped
+ * exactly where `assign_agent_role` skips it.
+ */
+async function assertToolsWithinCeiling(
+  tx: Tx,
+  ctx: { orgId: string; workspaceId: string; userId: string },
+  tools: readonly string[],
+  now: Date,
+): Promise<void> {
+  if (tools.length === 0) return;
+  const [human] = await tx
+    .select({ id: schema.principals.id })
+    .from(schema.principals)
+    .where(
+      and(
+        eq(schema.principals.orgId, ctx.orgId),
+        eq(schema.principals.parentUserId, ctx.userId),
+        eq(schema.principals.kind, "human"),
+        eq(schema.principals.status, "active"),
+      ),
+    )
+    .limit(1);
+  if (!human) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "delegation_ceiling",
+      message: "The committer has no active principal to grant from",
+    });
+  }
+  const snapshot = await fetchAgentRunAuthz({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    agentPrincipalId: human.id,
+    humanPrincipalId: null,
+    now,
+  });
+  const exceeded = tools.filter(
+    (capability) =>
+      resolveIam({
+        principal: {
+          id: human.id,
+          kind: "human",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+        capability,
+        scope: {
+          kind: "workspace",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+        grants: snapshot.grants,
+        roles: snapshot.roles,
+        roleGrants: snapshot.roleGrants,
+        policies: snapshot.policies,
+        defaultEffect: getCapability(capability)?.defaultEffect ?? "deny",
+        now,
+      }).outcome === "deny",
+  );
+  if (exceeded.length > 0) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "delegation_ceiling",
+      message: `The definition names tools you do not hold: ${exceeded.join(", ")}`,
+    });
+  }
+}
+
+export const agentDefinitionCommitHandler: CapabilityHandler<
+  typeof agentDefinitionCommit
+> = async (input, ctx) => {
+  if (!ctx.userId) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "no_principal",
+      message: "commit_agent_definition requires a signed-in user",
+    });
+  }
+  const userId = ctx.userId;
+  await assertOrgRole(ctx, { org: [...AGENT_DEFINITION_ROLES] });
+
+  const now = new Date();
+  const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+
+  const fileSchema = readTopLevelString(input.source, "schema");
+  if (fileSchema !== AGENT_DEFINITION_SCHEMA) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "definition_schema",
+      message: `The definition must declare schema = "${AGENT_DEFINITION_SCHEMA}"`,
+    });
+  }
+
+  const prepared = await withTenantDb(async (tx) => {
+    const agent = await resolveAgentIdentity(tx, input.agentId, scope);
+    if (!agent) {
+      throw new HandlerError({
+        code: "not_found",
+        reason: "agent_not_found",
+        message: `No agent "${input.agentId}" in this workspace`,
+      });
+    }
+    assertNotRetired(agent);
+    const fileSlug = readTopLevelString(input.source, "slug");
+    if (fileSlug !== agent.slug) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "definition_slug",
+        message: `The definition's slug must be "${agent.slug}"`,
+      });
+    }
+    const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
+    if (canAccessACL(tier)) {
+      await assertToolsWithinCeiling(
+        tx,
+        { ...scope, userId },
+        capabilityToolsOf(readTopLevelStringArray(input.source, "tools")),
+        now,
+      );
+    }
+    const repository = await resolveRepository(tx, scope, input.repositoryId);
+    if (input.branch === repository.configuredDefaultRef) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "branch_is_default",
+        message: `"${input.branch}" is the repository's production branch; commit to another branch`,
+      });
+    }
+    const [latest] = await tx
+      .select({
+        version: schema.agentVersions.version,
+        config: schema.agentVersions.config,
+      })
+      .from(schema.agentVersions)
+      .where(eq(schema.agentVersions.agentId, agent.id))
+      .orderBy(desc(schema.agentVersions.version))
+      .limit(1);
+    return { agent, repository, latest };
+  });
+
+  const { agent, repository } = prepared;
+  const token = await resolveGitHubToken(ctx);
+  const gh = createGitHubClient({ token });
+  const info = await gh.getRepoInfo({
+    owner: repository.owner,
+    repo: repository.repo,
+  });
+  if (input.branch === info.defaultBranch) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "branch_is_default",
+      message: `"${input.branch}" is the repository's default branch; commit to another branch`,
+    });
+  }
+  const branches = await gh.listBranches({
+    owner: repository.owner,
+    repo: repository.repo,
+  });
+  if (!branches.some((b) => b.name === input.branch)) {
+    await gh.createBranch({
+      owner: repository.owner,
+      repo: repository.repo,
+      branch: input.branch,
+      fromBranch: info.defaultBranch,
+    });
+  }
+  const path = definitionPathFor(agent.slug);
+  const digest = sha256Hex(input.source);
+  const message = input.message ?? `Agent definition: ${agent.slug}`;
+  const commit = await gh.putFile({
+    owner: repository.owner,
+    repo: repository.repo,
+    path,
+    content: input.source,
+    message,
+    branch: input.branch,
+  });
+  const pr = await gh.openPullRequest({
+    owner: repository.owner,
+    repo: repository.repo,
+    title: message,
+    head: input.branch,
+    base: info.defaultBranch,
+    body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
+  });
+
+  const version = await withTenantDb(async (tx) => {
+    const [inserted] = await tx
+      .insert(schema.agentVersions)
+      .values({
+        agentId: agent.id,
+        version: (prepared.latest?.version ?? 0) + 1,
+        isPublished: false,
+        checksum: null,
+        config: prepared.latest?.config ?? {},
+        createdByUserId: userId,
+        definitionPath: path,
+        definitionDigest: digest,
+        definitionSource: input.source,
+        commitSha: commit.commitSha,
+        branch: input.branch,
+        pullRequestUrl: pr.htmlUrl,
+      })
+      .returning({ version: schema.agentVersions.version });
+    if (!inserted) throw new Error("agent_versions insert returned no row");
+    return inserted.version;
+  });
+
+  logger.info(
+    {
+      orgId: ctx.orgId,
+      agentId: agent.publicId,
+      repository: `${repository.owner}/${repository.repo}`,
+      branch: input.branch,
+      pullRequest: pr.number,
+    },
+    "agent.definition.commit: definition committed and pull request opened",
+  );
+
+  return {
+    agentId: agent.publicId,
+    version,
+    path,
+    digest,
+    commitSha: commit.commitSha,
+    branch: input.branch,
+    pullRequest: { number: pr.number, url: pr.htmlUrl },
+  };
+};

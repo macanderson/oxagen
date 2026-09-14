@@ -1,0 +1,82 @@
+// agent.suspend.ts — suspend or resume an agent identity (MC spec §6.2,
+// #2956). Role gate: org Owner or Admin (INV-29). The principal's status is
+// the one write; a retired agent is refused with `conflict`, and a
+// suspend of a suspended agent (or a resume of an active one) answers the
+// current state without a write.
+import { schema, withTenantDb } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
+import { assertOrgRole } from "@oxagen/iam/org-role";
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen";
+import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
+import { eq } from "drizzle-orm";
+import { AGENT_IDENTITY_ROLES } from "./agent.register";
+import { assertNotRetired, requireAgentIdentity } from "./lib/agent-identity";
+import { logger } from "./logger";
+
+export const agentSuspendHandler: CapabilityHandler<
+  typeof agentSuspend
+> = async (input, ctx) => {
+  if (!ctx.userId) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "no_principal",
+      message: "suspend_agent requires a signed-in user",
+    });
+  }
+  const userId = ctx.userId;
+  await assertOrgRole(ctx, { org: [...AGENT_IDENTITY_ROLES] });
+
+  const now = new Date();
+  const target = input.suspended ? "suspended" : "active";
+  const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  const result = await withTenantDb(async (tx) => {
+    const agent = await requireAgentIdentity(tx, input.agentId, scope);
+    assertNotRetired(agent);
+    if (!agent.principalId) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "agent_principal_missing",
+        message: `Agent "${agent.slug}" has no delegated principal`,
+      });
+    }
+    if (agent.principalStatus === target) {
+      return { agent, changed: false };
+    }
+    await tx
+      .update(schema.principals)
+      .set({
+        status: target,
+        updatedAt: now,
+        updatedByUserId: userId,
+        ...(input.reason !== undefined
+          ? { metadata: { suspend_reason: input.reason } }
+          : {}),
+      })
+      .where(eq(schema.principals.id, agent.principalId));
+    return { agent, changed: true };
+  });
+
+  if (result.changed) {
+    emitSecurityEvent({
+      eventType: input.suspended ? "agent.suspended" : "agent.resumed",
+      actorUserId: userId,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      capability: agentSuspend.name,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
+    logger.info(
+      { orgId: ctx.orgId, agentId: result.agent.publicId, status: target },
+      "agent.suspend: principal status changed",
+    );
+  }
+  return {
+    agentId: result.agent.publicId,
+    status: target,
+    changedAt: now.toISOString(),
+  };
+};
