@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const src = fileURLToPath(new URL("./src", import.meta.url));
 
@@ -22,6 +22,8 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // Architecture probes are inputs to src/test/arch, never suites of their own.
+    exclude: [...configDefaults.exclude, "src/test/arch/probes/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts", "src/**/*.tsx"],
