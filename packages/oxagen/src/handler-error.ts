@@ -4,8 +4,9 @@
 // (forbidden), the thing the input names is not in this tenant (not_found), or
 // the write would leave the tenant in a state the domain forbids (conflict —
 // the last owner, an already-resolved approval). The kernel rethrows what a
-// handler throws (kernel.ts, the catch after the handler call), so the surface
-// on the other side classifies by `code`: the API middleware maps the three
+// handler throws (kernel.ts, the catch after the handler call) and records a
+// `forbidden` as an audit deny with the code, so the surface on the other side
+// classifies by `code`: the API middleware maps the three
 // codes to 403, 404 and 409 (apps/api/src/middleware/error.ts) and the app's
 // kernel seam maps them to `denied`, `not_found` and `conflict`
 // (apps/app/ARCHITECTURE.md §3.2). `reason` is the stable machine sub-code a
