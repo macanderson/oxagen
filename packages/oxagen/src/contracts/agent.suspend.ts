@@ -15,8 +15,8 @@ export const agentSuspend = registerCapability({
   description:
     "Suspend or resume an agent identity: a suspended principal fails every run token at its next call; resuming restores it without re-issuing anything.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

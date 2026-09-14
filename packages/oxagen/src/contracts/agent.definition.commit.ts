@@ -42,8 +42,8 @@ export const agentDefinitionCommit = registerCapability({
   description:
     "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it; the default branch is never written.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

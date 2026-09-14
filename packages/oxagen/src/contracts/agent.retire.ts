@@ -16,8 +16,8 @@ export const agentRetire = registerCapability({
   description:
     "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

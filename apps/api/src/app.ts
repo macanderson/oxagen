@@ -213,6 +213,15 @@ import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
+import { agentListRoute } from "./routes/v1/agent.list";
+import { agentGetRoute } from "./routes/v1/agent.get";
+import { agentRegisterRoute } from "./routes/v1/agent.register";
+import { agentCredentialRotateRoute } from "./routes/v1/agent.credential.rotate";
+import { agentSuspendRoute } from "./routes/v1/agent.suspend";
+import { agentRetireRoute } from "./routes/v1/agent.retire";
+import { agentDefinitionCommitRoute } from "./routes/v1/agent.definition.commit";
+import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
+import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 
 export type AppEnv = {
   Variables: {
@@ -521,6 +530,20 @@ orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
+// Agent identity (MC spec §6.2, #2956): the identities table, one identity
+// with its credentials, roles, hosts and definition of record, the identity
+// writes (register, rotate, suspend, retire), the definition commit and the
+// computed belt. Session auth; the org role is checked in each write handler.
+orgScoped.route("/agents/get", agentGetRoute);
+orgScoped.route("/agents/register", agentRegisterRoute);
+orgScoped.route("/agents/credential/rotate", agentCredentialRotateRoute);
+orgScoped.route("/agents/suspend", agentSuspendRoute);
+orgScoped.route("/agents/retire", agentRetireRoute);
+orgScoped.route("/agents/definition/commit", agentDefinitionCommitRoute);
+orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
+orgScoped.route("/agents", agentListRoute);
+// Tamper and integrity incidents on the workspace's hosts.
+orgScoped.route("/tacho/incidents", tachoIncidentListRoute);
 // Verified-Outcome Market Router governance + inspection.
 orgScoped.route("/router/policy/set", routerPolicySetRoute);
 orgScoped.route("/router/policy", routerPolicyGetRoute);

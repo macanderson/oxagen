@@ -17,8 +17,8 @@ export const agentCredentialRotate = registerCapability({
   description:
     "Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
