@@ -1,8 +1,8 @@
 // agent.retire.ts — retire an agent identity (MC spec §6.2, App. E; #2956).
 // Role gate: org Owner or Admin (INV-29). One transaction archives the
 // agent row, suspends the principal, soft-deletes every live credential and
-// revokes every live host (its key retired and a `revoke` command queued,
-// the same three writes `revoke_tacho_enrollment` makes). Nothing is
+// revokes every live host through the writes `revoke_tacho_enrollment`
+// shares (lib/tacho-host-revoke.ts). Nothing is
 // deleted: runs keep the agent's key and principal. Retiring a retired
 // agent answers the recorded retirement without a write.
 import { schema, withTenantDb } from "@oxagen/database";
@@ -18,9 +18,8 @@ import {
   requireAgentIdentity,
   revokeAgentCredentials,
 } from "./lib/agent-identity";
+import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
 import { logger } from "./logger";
-
-const REVOKE_COMMAND_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   input,
@@ -95,36 +94,12 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
           ),
         );
       for (const host of live) {
-        await tx
-          .update(schema.tachoHosts)
-          .set({
-            status: "revoked",
-            revokedAt: now,
-            revokeReason: reason,
-            updatedAt: now,
-            updatedByUserId: userId,
-          })
-          .where(eq(schema.tachoHosts.id, host.id));
-        await tx
-          .update(schema.apiKeys)
-          .set({
-            deletedAt: now,
-            deletedByUserId: userId,
-            updatedAt: now,
-            updatedByUserId: userId,
-          })
-          .where(eq(schema.apiKeys.id, host.apiKeyId));
-        await tx.insert(schema.tachoControlCommands).values({
+        await revokeHostEnrollment(tx, host, {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
-          hostId: host.id,
-          command: "revoke",
-          payload: { reason },
-          issuedByUserId: userId,
-          issuedAt: now,
-          expiresAt: new Date(now.getTime() + REVOKE_COMMAND_TTL_MS),
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          userId,
+          reason,
+          now,
         });
       }
       hosts = live.length;
