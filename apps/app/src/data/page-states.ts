@@ -18,8 +18,6 @@ export const PAGE_KEYS = [
   "ontology",
   "steering",
   "spend",
-  "register",
-  "welcome",
   "organization",
   "roles",
   "apiKeys",
@@ -74,9 +72,6 @@ export const PAGE_FAILURES = {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
   },
-  // Register an agent and the onboarding gate: the enrollment read path.
-  register: { error: IAM_DOWN, permission: "agent.register" },
-  welcome: { error: CONTROL_PLANE_DOWN, permission: "org.create" },
   organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   roles: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   apiKeys: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },

@@ -15,12 +15,7 @@ export type WorkspaceNavKey =
   | "steering"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
-export type NavKey =
-  | WorkspaceNavKey
-  | OrgNavKey
-  | "apiKeys"
-  | "roles"
-  | "register";
+export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys" | "roles";
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
@@ -83,11 +78,10 @@ export function orgHref(org: string, key: NavKey): string {
 export function workspaceHref(
   org: string,
   ws: string,
-  key: WorkspaceNavKey | "register",
+  key: WorkspaceNavKey,
 ): string {
   const base = `/${enc(org)}/${enc(ws)}`;
   if (key === "fleet") return base;
-  if (key === "register") return `${base}/register`;
   return `${base}/${WORKSPACE_SEGMENT[key]}`;
 }
 
@@ -129,7 +123,6 @@ export function currentNavKey(pathname: string): NavKey | null {
     return orgSegmentKey(head);
   }
   if (head === undefined || head === "runs") return "fleet";
-  if (head === "register") return "register";
   const found = (
     Object.entries(WORKSPACE_SEGMENT) as [WorkspaceNavKey, string][]
   ).find(([, segment]) => segment === head);
@@ -224,9 +217,6 @@ export function breadcrumbs(
         if (sub === "mandates" && subId !== undefined)
           out.push({ kind: "id", text: subId, href: null });
       }
-      break;
-    case "register":
-      out.push({ kind: "nav", key: "register", href: null });
       break;
     default: {
       const key = currentNavKey(pathname);

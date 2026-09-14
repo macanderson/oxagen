@@ -22,7 +22,6 @@ import type {
   Connection,
   ContextWindow,
   DataPlane,
-  DetectedRepository,
   DrillKind,
   EmbeddingIndex,
   EncryptionKey,
@@ -30,13 +29,9 @@ import type {
   Finding,
   FindingEvidence,
   FindingFix,
-  FirstFrameScript,
-  FlowNamespaces,
   Frame,
   Incident,
-  InstallerOffer,
   Invitation,
-  InvitationView,
   Invoice,
   KillSwitch,
   LegalHold,
@@ -46,7 +41,6 @@ import type {
   Meter,
   ModelFunding,
   ObservedSchemaProposal,
-  OnboardingGate,
   OntologyClass,
   OntologyVersion,
   Organization,
@@ -220,37 +214,6 @@ export interface ShellReadPort {
   context(scope: Scope, userId: string): R<ShellContext>;
 }
 
-/** Which of the two flows that share the onboarding screens is reading. */
-export type OnboardingFlow = "gate" | "register";
-
-/**
- * The onboarding gate and Register an agent (spec §4.4). Organizations,
- * workspaces and invitations are backed today; the gate state, the one-click
- * installer, the first frame and the detected repository wait on G15 (M1).
- */
-export interface OnboardingReadPort {
-  /** The namespaces agent keys are minted in, by the ids `requireViewer` admitted. `error` 404 when gone. */
-  namespaces(scope: Scope): R<FlowNamespaces>;
-  /**
-   * The invitation behind one public token. Unscoped on purpose: the invitee
-   * is not a member of the organization yet, so the token is the capability.
-   */
-  invitation(token: string): R<InvitationView>;
-  /** Where the gate stands. `scope` is null before the organization exists. */
-  gate(flow: OnboardingFlow, scope: Scope | null): R<OnboardingGate>;
-  installerOffer(scope: Scope, flow: OnboardingFlow): R<InstallerOffer>;
-  firstFrameScript(
-    scope: Scope,
-    q: {
-      flow: OnboardingFlow;
-      agentKey: string;
-      harness: string;
-      operator: string;
-    },
-  ): R<FirstFrameScript>;
-  detectedRepository(scope: Scope): R<DetectedRepository>;
-}
-
 /** One field per port. The only object a page gets from `dataSource()`. */
 export interface DataSource {
   runs: RunReadPort;
@@ -265,7 +228,6 @@ export interface DataSource {
   billing: BillingReadPort;
   audit: AuditReadPort;
   shell: ShellReadPort;
-  onboarding: OnboardingReadPort;
 }
 
 export type PortName = keyof DataSource;

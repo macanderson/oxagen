@@ -90,11 +90,7 @@ export async function InvitationBody({
       className={`${panel} flex flex-col gap-4 p-5 sm:p-6`}
     >
       <p className="text-sm text-foreground">
-        <span className="font-semibold">
-          {invitation.inviterName
-            ? t("invitedBy", { inviter: invitation.inviterName })
-            : t("invitedByUnknown")}
-        </span>{" "}
+        <span className="font-semibold">{t("invited")}</span>{" "}
         <span className="text-muted-foreground">
           {t("invitedOn", { date: date(invitation.invitedAt) })}
         </span>

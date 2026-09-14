@@ -26,26 +26,11 @@ vi.mock("./cli-actions", () => cliActions);
 const SERVER_SYNC = new Set<unknown>();
 
 const { InvitationBody, InvitationNotFound } = await import("./invite-view");
-const {
-  AuthColumn,
-  AuthFooter,
-  AuthHeading,
-  AuthShell,
-  AuthSkeleton,
-  Brandmark,
-} = await import("@/ui/auth-shell");
+const { AuthColumn, AuthFooter, AuthHeading, AuthShell, AuthSkeleton } =
+  await import("@/ui/auth-shell");
 const { OutcomePanel } = await import("@/ui/form-feedback");
 const { CliConsentForm } = await import("./cli-consent-form");
-const { GateShell, GateSkeleton, StepHeading } = await import(
-  "../onboarding/ui/gate-shell"
-);
-for (const component of [
-  AuthShell,
-  AuthColumn,
-  AuthHeading,
-  AuthFooter,
-  StepHeading,
-])
+for (const component of [AuthShell, AuthColumn, AuthHeading, AuthFooter])
   SERVER_SYNC.add(component);
 
 /** Resolve server components in a tree so the result renders synchronously. */
@@ -83,7 +68,6 @@ const invitation = {
   email: "marcus.bell@acme.example",
   role: "compliance" as const,
   status: "pending" as const,
-  inviterName: "Priya Raman",
   invitedAt: "2026-09-11T09:00:00.000Z",
   expiresAt: null,
 };
@@ -94,7 +78,7 @@ describe("InvitationBody", () => {
       <InvitationBody invitation={invitation} decision={{ kind: "accept" }} />,
     );
     expect(screen.getByTestId("invite-card")).toHaveTextContent(
-      "Priya Raman invited you",
+      "You were invited on 2026-09-11",
     );
     expect(screen.getByText("compliance")).toBeInTheDocument();
     expect(screen.getByText("Does not expire")).toBeInTheDocument();
@@ -112,7 +96,6 @@ describe("InvitationBody", () => {
       <InvitationBody
         invitation={{
           ...invitation,
-          inviterName: null,
           expiresAt: "2026-09-18T09:00:00.000Z",
         }}
         decision={{ kind: "sign-in" }}
@@ -182,7 +165,6 @@ describe("auth frame", () => {
       screen.getByRole("heading", { level: 1, name: "Title" }),
     ).toBeInTheDocument();
     expect(screen.getByText("aside")).toBeInTheDocument();
-    await renderServer(<Brandmark />);
   });
 
   it("skeleton and outcome tones", async () => {
@@ -265,88 +247,5 @@ describe("CliConsentForm", () => {
       screen.getByText("No workspaces in this organization."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
-  });
-});
-
-describe("GateShell", () => {
-  it("gate · a main landmark, done steps link back, the current step is marked", async () => {
-    await renderServer(
-      <GateShell
-        mode="gate"
-        step="run"
-        email="m@acme.example"
-        links={{ org: "acme", ws: "core-platform", choice: null }}
-      >
-        <StepHeading index={2} total={3} title="Start a run" lead="Lead" />
-      </GateShell>,
-    );
-    expect(screen.getByRole("main")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Done: Name the organization" }),
-    ).toHaveAttribute("href", "/welcome");
-    expect(
-      screen.getByRole("link", { name: "Done: Wrap an agent" }),
-    ).toHaveAttribute("href", "/welcome/wrap?org=acme&ws=core-platform");
-    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Cancel" })).toBeNull();
-  });
-
-  it("register · inside the org shell: one main, no second brand bar, cancel beside the stepper", async () => {
-    await renderServer(
-      <GateShell
-        mode="register"
-        step="wrap"
-        email={null}
-        cancelHref="/acme/core-platform"
-        links={{
-          org: "acme",
-          ws: "core-platform",
-          choice: { agent: "perf-watch", harness: "custom", tier: "complex" },
-        }}
-      >
-        <p>child</p>
-      </GateShell>,
-    );
-    expect(screen.getByRole("main")).toBeInTheDocument();
-    expect(screen.queryByRole("banner")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Oxagen home" })).toBeNull();
-    expect(
-      screen.getByRole("navigation", { name: "Register an agent" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute(
-      "href",
-      "/acme/core-platform",
-    );
-    expect(
-      screen.getByRole("link", { name: "Done: Name the agent" }),
-    ).toHaveAttribute("href", "/acme/core-platform/register");
-  });
-
-  it("hiddenTitle · names a heading-less state with the current step", async () => {
-    await renderServer(
-      <GateShell mode="gate" step="wrap" email={null} links={null} hiddenTitle>
-        <p>denied</p>
-      </GateShell>,
-    );
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Wrap an agent" }),
-    ).toBeInTheDocument();
-  });
-
-  it("without hiddenTitle the shell adds no heading of its own", async () => {
-    await renderServer(
-      <GateShell mode="gate" step="wrap" email={null} links={null}>
-        <p>child</p>
-      </GateShell>,
-    );
-    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
-  });
-
-  it("skeleton", async () => {
-    await renderServer(<GateSkeleton />);
-    expect(screen.getByTestId("page-state-loading")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Loading this step…" }),
-    ).toBeInTheDocument();
   });
 });

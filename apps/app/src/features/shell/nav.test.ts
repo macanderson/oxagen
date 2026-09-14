@@ -65,7 +65,6 @@ describe("currentNavKey and isNavItemCurrent", () => {
     ["/acme/core-platform/ontology", "ontology"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
-    ["/acme/core-platform/register", "register"],
   ])("%s → %s", (path, key) => {
     expect(currentNavKey(path)).toBe(key);
   });
@@ -94,9 +93,7 @@ describe("hrefs", () => {
     expect(workspaceHref("acme", "core-platform", "agents")).toBe(
       "/acme/core-platform/agents",
     );
-    expect(workspaceHref("acme", "a b", "register")).toBe(
-      "/acme/a%20b/register",
-    );
+    expect(workspaceHref("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(orgHref("acme", "organization")).toBe("/acme");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
     expect(orgHref("acme", "roles")).toBe("/acme/roles");
@@ -185,11 +182,6 @@ describe("breadcrumbs", () => {
     ).toEqual({
       kind: "nav",
       key: "tools",
-      href: null,
-    });
-    expect(breadcrumbs("/acme/core-platform/register", names).at(-1)).toEqual({
-      kind: "nav",
-      key: "register",
       href: null,
     });
   });

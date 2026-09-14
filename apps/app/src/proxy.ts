@@ -12,8 +12,8 @@ import { type NextRequest, NextResponse } from "next/server";
  * person holds only Better Auth's short-lived two-factor cookie. The CLI and
  * GitHub callbacks are public so an invalid CLI request renders its error
  * without a detour, and each sends a signed-out visitor to /login itself with
- * the exact request as `next`. The onboarding gate (/welcome, /new-organization)
- * and Register an agent are not public.
+ * the exact request as `next`. Organization creation (/new-organization) is not
+ * public.
  */
 export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/,

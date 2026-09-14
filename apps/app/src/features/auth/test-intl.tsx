@@ -1,4 +1,4 @@
-// Test support for the sign-in and onboarding components: the real catalogs,
+// Test support for the sign-in and organization-creation components: the real catalogs,
 // a client provider, and a server `getTranslations` stand-in that formats ICU
 // arguments the simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";

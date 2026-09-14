@@ -1,13 +1,16 @@
-// Tenancy lookups: slug → organization / workspace, membership, and the MFA
-// inputs. Ported from apps/app_deprecated/src/lib/resolve-org.ts and the org
-// layout's MFA read. These return data and never throw navigation interrupts;
-// `resolveViewer` (scope.ts) decides what a miss means.
+// System lookups (ARCHITECTURE.md §3.7): slug → organization / workspace,
+// membership, the MFA inputs, and the invitation behind a public token. Ported
+// from apps/app_deprecated/src/lib/resolve-org.ts and the org layout's MFA
+// read. These return data and never throw navigation interrupts; `resolveViewer`
+// (scope.ts) decides what a miss means.
 //
 // tenancy: unscoped seam. These run BEFORE a tenant scope exists: they produce
-// the orgId/workspaceId that callers then pass to runInTenantScope. withSystemDb
-// bypasses RLS deliberately. Tables read: org.organizations, org.org_slug_history,
-// org.org_users, workspace.workspaces, workspace.workspace_slug_history,
-// workspace.workspace_users, auth.users, security.org_security_policy.
+// the orgId/workspaceId that callers then pass to runInTenantScope, or name the
+// organization an invitee is not yet a member of. withSystemDb bypasses RLS
+// deliberately. Tables read (INV-05): org.organizations, org.org_slug_history,
+// org.org_users, org.invitations, workspace.workspaces,
+// workspace.workspace_slug_history, workspace.workspace_users, auth.users
+// (columns id and two_factor_enabled), security.org_security_policy.
 import "server-only";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
@@ -28,7 +31,26 @@ type WorkspaceRecord = {
   name: string;
 };
 
-export type TenancyLookups = {
+/**
+ * One invitation by its public token, with the organization it names. The
+ * token is the capability: the visitor holds no membership in the org yet, so
+ * this is read before any tenant scope exists. `role` and `status` are the
+ * stored strings (`org.invitations.role` is Title-cased); the caller maps them.
+ */
+export type InvitationRecord = {
+  /** The row uuid, for the write that accepts or declines it. */
+  invitationId: string;
+  orgId: string;
+  orgName: string;
+  orgSlug: string;
+  email: string;
+  role: string;
+  status: string;
+  invitedAt: Date;
+  expiresAt: Date | null;
+};
+
+export type SystemLookups = {
   /** The organization whose current slug is `slug`. */
   readonly orgBySlug: (slug: string) => Promise<OrgRecord | null>;
   /** The organization a redirect-enabled historical slug points at (most recent rename wins). */
@@ -52,6 +74,10 @@ export type TenancyLookups = {
   /** The organization's MFA policy, or null when it has none. */
   readonly mfaPolicy: (orgId: string) => Promise<MfaPolicy | null>;
   readonly twoFactorEnabled: (userId: string) => Promise<boolean>;
+  /** The invitation behind `token` (`invitations.public_id`), or null when none or its organization is gone. */
+  readonly invitationByToken: (
+    token: string,
+  ) => Promise<InvitationRecord | null>;
 };
 
 function toOrg(row: typeof schema.organizations.$inferSelect): OrgRecord {
@@ -81,7 +107,7 @@ async function orgById(orgId: string): Promise<OrgRecord | null> {
   return rows[0] ? toOrg(rows[0]) : null;
 }
 
-export const liveTenancyLookups: TenancyLookups = {
+export const systemLookups: SystemLookups = {
   async orgBySlug(slug) {
     const rows = await withSystemDb((tx) =>
       tx
@@ -221,5 +247,38 @@ export const liveTenancyLookups: TenancyLookups = {
         .limit(1),
     );
     return rows[0]?.enabled ?? false;
+  },
+
+  async invitationByToken(token) {
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.invitations.id,
+          orgId: schema.invitations.orgId,
+          email: schema.invitations.email,
+          role: schema.invitations.role,
+          status: schema.invitations.status,
+          createdAt: schema.invitations.createdAt,
+          expiresAt: schema.invitations.expiresAt,
+        })
+        .from(schema.invitations)
+        .where(eq(schema.invitations.publicId, token))
+        .limit(1),
+    );
+    const invitation = rows[0];
+    if (!invitation) return null;
+    const org = await orgById(invitation.orgId);
+    if (!org) return null;
+    return {
+      invitationId: invitation.id,
+      orgId: invitation.orgId,
+      orgName: org.name,
+      orgSlug: org.slug,
+      email: invitation.email,
+      role: invitation.role,
+      status: invitation.status,
+      invitedAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+    };
   },
 };
