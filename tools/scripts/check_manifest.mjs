@@ -22,6 +22,7 @@
 import { readdirSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { APP_DIR } from "./lib/app-dir.mjs";
 
 const ARGS = new Set(process.argv.slice(2));
 const JSON_MODE = ARGS.has("--json");
@@ -133,6 +134,24 @@ function writeContractBarrel(files) {
 }
 
 /**
+ * Whether `manifest` differs from the manifest text already on disk by
+ * content. The file is committed in Biome's format (arrays inline) and this
+ * script serialises with JSON.stringify (arrays one element per line); writing
+ * on every run left a formatting-only diff across the whole file after each
+ * `pnpm check:manifest`. A file that does not parse counts as changed, so a
+ * corrupt manifest is rewritten.
+ */
+export function manifestContentChanged(currentText, manifest) {
+  let current;
+  try {
+    current = JSON.parse(currentText);
+  } catch {
+    return true;
+  }
+  return JSON.stringify(current) !== JSON.stringify(manifest);
+}
+
+/**
  * Returns true when the given layer is satisfied for a capability.
  *
  * The "mcp" layer is satisfied by TWO conditions both being true:
@@ -202,7 +221,7 @@ function layerSatisfied(layer, capName, capSurfaces, fileStem) {
     // layers[] buys no real coverage.
     schema: [join(ROOT, "packages/database/src/schema")],
     unit: stems.map((s) => join(CAP_DIR, `${s}.test.ts`)),
-    e2e: [join(ROOT, `apps/app/e2e/${slug}.spec.ts`)],
+    e2e: [join(ROOT, APP_DIR, "e2e", `${slug}.spec.ts`)],
     docs: stems.map((s) => join(ROOT, `docs/capabilities/${s}.md`)),
     marketing: [join(ROOT, "apps/website")],
   };
@@ -321,8 +340,17 @@ function main() {
     });
   }
 
-  writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + "\n");
-  info(`Wrote ${MANIFEST} with ${manifest.capabilities.length} capabilities.`);
+  const current = existsSync(MANIFEST) ? readFileSync(MANIFEST, "utf8") : "";
+  if (manifestContentChanged(current, manifest)) {
+    writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + "\n");
+    info(
+      `Wrote ${MANIFEST} with ${manifest.capabilities.length} capabilities.`,
+    );
+  } else {
+    info(
+      `${MANIFEST} is current (${manifest.capabilities.length} capabilities).`,
+    );
+  }
 
   const gaps = Object.entries(gapsByCap).map(([capability, missing]) => ({
     capability,

@@ -162,7 +162,7 @@ lives in Neo4j). Tables defined in <code>packages/database/src/schema/billing.ts
 <p>Declared/validated in <code>packages/config/src/registry.ts</code> + <code>env.ts</code>.</p>
 <table>
 <tr><th>Var</th><th>Where</th><th>Notes</th></tr>
-<tr><td><code>STRIPE_SECRET_KEY</code></td><td>api, app (server)</td><td><code>sk_live</code> in prod, <code>sk_test</code> in preview/dev. Used only inside <code>stripe-provider.ts</code>.</td></tr>
+<tr><td><code>STRIPE_SECRET_KEY</code></td><td>api, app (server)</td><td><code>sk_test</code> everywhere — production included — until the maintainer cuts production over to live keys (see <code>docs/ops/stripe-sandbox-mode.md</code>). Used only inside <code>stripe-provider.ts</code>.</td></tr>
 <tr><td><code>STRIPE_PUBLISHABLE_KEY</code></td><td>api, app (server)</td><td><code>pk_*</code>. Server-side reference.</td></tr>
 <tr><td><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code></td><td>app (browser)</td><td>Inlined into the client bundle so <strong>Stripe Elements</strong> can init (add/change card).</td></tr>
 <tr><td><code>STRIPE_WEBHOOK_SECRET</code></td><td>api (must match the endpoint)</td><td><code>whsec_*</code> signing secret of the registered webhook endpoint. Verifies every inbound event.</td></tr>

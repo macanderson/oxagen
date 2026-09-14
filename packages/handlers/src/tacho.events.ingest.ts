@@ -18,7 +18,7 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import { insertTachoEvents } from "@oxagen/telemetry";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   type TachoHostRow,
   controlEnvelope,
@@ -195,10 +195,35 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
   }
 }
 
+/**
+ * The human principal behind the host's enrollment: the row IAM resolves for
+ * the host's API key (its creator, `packages/iam/src/fetch-authz.ts`) and the
+ * operator the Run header prints (spec section 5.2: the human at the keyboard
+ * is the `initiating_principal`). A host row with no recorded enroller, or an
+ * enroller with no principal in this organization, attributes to nobody.
+ */
+async function enrollingPrincipalId(
+  tx: Tx,
+  ctx: Scope,
+  host: TachoHostRow,
+): Promise<string | null> {
+  if (!host.createdByUserId) return null;
+  const principal = await tx.query.principals.findFirst({
+    where: and(
+      eq(schema.principals.orgId, ctx.orgId),
+      eq(schema.principals.parentUserId, host.createdByUserId),
+      eq(schema.principals.kind, "human"),
+    ),
+    columns: { id: true },
+  });
+  return principal?.id ?? null;
+}
+
 /** The insert values for a session row seen for the first time. */
 function genesisRow(
   host: TachoHostRow,
-  ctx: { orgId: string; workspaceId: string },
+  ctx: Scope,
+  initiatingPrincipalId: string | null,
   events: TachoEvent[],
   now: Date,
 ) {
@@ -216,6 +241,7 @@ function genesisRow(
     harnessSessionId: first.session_id,
     hostId: host.id,
     agentKey: first.agent.agent_key,
+    initiatingPrincipalId,
     rootSessionUuid: first.root_session_uuid,
     parentSessionUuid: first.parent_session_uuid ?? null,
     subagentId: subagent?.subagent_id ?? null,
@@ -403,6 +429,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }> = [];
     const verified = new Map<string, boolean>();
     let newSessions = 0;
+    // Resolved on the first genesis row of the batch; every session a host
+    // opens has the same operator, and a batch of continuations never asks.
+    let initiatingPrincipalId: string | null | undefined;
 
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
@@ -529,7 +558,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .where(eq(schema.tachoSessions.id, existing.id));
       } else {
         newSessions += 1;
-        const row = genesisRow(host, ctx, events, now);
+        if (initiatingPrincipalId === undefined)
+          initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
+        const row = genesisRow(host, ctx, initiatingPrincipalId, events, now);
         await tx
           .insert(schema.tachoSessions)
           .values({

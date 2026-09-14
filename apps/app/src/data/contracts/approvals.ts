@@ -1,0 +1,99 @@
+// The approvals queue: a panel on Fleet and a strip on Run (spec §7.5, §14).
+import { z } from "zod";
+import {
+  AgentKey,
+  Digest,
+  EgressClass,
+  EnforcementTier,
+  Instant,
+  Money,
+  PublicId,
+  Risk,
+  SideEffect,
+  Slug,
+  ToolVersionRef,
+} from "./common";
+
+/** Pending until a person (or an auto-approval rule) resolves it; `control.approvals.decision`. */
+export const ApprovalStatus = z.enum([
+  "pending",
+  "approved",
+  "denied",
+  "expired",
+]);
+export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
+
+/** What a rule contributed to the decision. */
+export const RuleVerdict = z.enum(["allow", "approve", "constrain", "deny"]);
+export type RuleVerdict = z.infer<typeof RuleVerdict>;
+
+/** The rule that raised the call to a human: the fourth hop of the chain. */
+export const ApprovalTrigger = z.object({
+  kind: z.enum(["mandate", "role_grant", "taint", "policy"]),
+  /** The mandate, grant or rule id the trigger names. */
+  ref: z.string(),
+  detail: z.string(),
+});
+export type ApprovalTrigger = z.infer<typeof ApprovalTrigger>;
+
+export const ApprovalItem = z.object({
+  id: PublicId,
+  runId: PublicId,
+  workspaceSlug: Slug,
+  status: ApprovalStatus,
+  /** The four-hop chain: who asked, which agent, which action, which rule. */
+  chain: z.object({
+    operatorId: PublicId,
+    agentKey: AgentKey,
+    action: ToolVersionRef,
+    /**
+     * The fourth hop. Null when the store did not record which rule raised the
+     * call: rule evaluations (G2) and mandates (G1) are not recorded at M0.
+     */
+    trigger: ApprovalTrigger.nullable(),
+  }),
+  risk: Risk,
+  sideEffect: SideEffect,
+  egress: EgressClass,
+  /** The measured amount, when the tool declares one. */
+  amount: Money.nullable(),
+  /** The measured counterparty, when the tool declares one (like `amount`). */
+  counterparty: z.string().nullable(),
+  mandateId: PublicId.nullable(),
+  // Null means not recorded, never a guessed value: the live adapter wires
+  // `approvals.pending` at M0, before the stores below exist (plan §3.1).
+  /** The policy version that decided the call. Null until the policy store lands (G2). */
+  policyVersionId: PublicId.nullable(),
+  inputDigest: Digest,
+  /**
+   * Whether untrusted content reached the call's arguments. Null until taint
+   * tracking is recorded (§3.1 "rules, taint, mandate ❌"): `false` would be a
+   * trust badge stronger than anything the gateway wrote.
+   */
+  tainted: z.boolean().nullable(),
+  tier: EnforcementTier,
+  requestedAt: Instant,
+  expiresAt: Instant,
+  approvers: z.object({
+    roles: z.array(z.string()),
+    eligiblePersonIds: z.array(PublicId),
+    /** People excluded from resolving this one, with the rule that excludes them. */
+    excluded: z.array(z.object({ personId: PublicId, rule: z.string() })),
+  }),
+  /** The rules that contributed to the decision. Null until rule evaluations are recorded (G2). */
+  rules: z
+    .array(z.object({ id: z.string(), verdict: RuleVerdict, text: z.string() }))
+    .nullable(),
+  /** Where the taint came from. Null when taint is not recorded (see `tainted`); empty means recorded and clean. */
+  taintSources: z
+    .array(
+      z.object({
+        frameSeq: z.number().int().nonnegative(),
+        tool: ToolVersionRef,
+        path: z.string(),
+        note: z.string(),
+      }),
+    )
+    .nullable(),
+});
+export type ApprovalItem = z.infer<typeof ApprovalItem>;

@@ -1,0 +1,52 @@
+# api.key.list
+
+**Capability:** `list_api_keys`
+**Domain:** api_key
+**Mode:** sync
+**Scope:** org + workspace (the tenant scope the caller enters)
+**Surfaces:** api, mcp
+**Mutates:** no
+**Billing gate:** skipped (`noBillingGate: true`; a console read is never a governed action, ADR-052 exclusion 2)
+
+## Intent
+
+List the API keys in the caller's tenant scope with the metadata an API keys page shows. Each item carries the public id, name, prefix, creation time, last use, expiry and revocation time. Revoked keys are included with their `revokedAt`; a live key has `revokedAt: null`.
+
+The output never carries a key's secret or its hash. The raw key is returned once by `create_api_key` and never stored; the SHA-256 hash stays in the row. The contract test walks the output schema and refuses any field whose name matches `/secret|hash|key$/`, and the handler selects its columns by name so `key_hash` is never read.
+
+## Input
+
+None (an empty object).
+
+## Output
+
+| Field | Type | Notes |
+|---|---|---|
+| `items[].publicId` | `string` | The `aky_*` public identifier. |
+| `items[].name` | `string` | The label given at creation. |
+| `items[].prefix` | `string` | The fixed leading window of the raw key, for recognition. |
+| `items[].createdAt` | `string` | ISO-8601 creation timestamp. |
+| `items[].lastUsedAt` | `string \| null` | ISO-8601 timestamp of the last request, or null when the key has not been used. |
+| `items[].expiresAt` | `string \| null` | ISO-8601 expiry, or null for a non-expiring key. |
+| `items[].revokedAt` | `string \| null` | ISO-8601 revocation timestamp, or null for a live key. |
+
+Items are ordered newest first.
+
+## Roles
+
+Org Owner, Org Admin. The handler checks the role; the kernel's IAM check allows every capability for a non-enterprise org.
+
+## Side effects
+
+None. Read-only; audit-exempt (the lifecycle writes `create_api_key`, `revoke_api_key` and `rotate_api_key` each emit their own `api_key.*` event).
+
+## Surfaces
+
+- `GET /api/v1/{org}/{ws}/api-keys`
+- MCP tool `list_api_keys`
+
+## Errors
+
+| code | meaning |
+|---|---|
+| `authz_denied` | No authenticated principal, no org or workspace scope, or the caller is not an org Owner or Admin. |

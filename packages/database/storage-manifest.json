@@ -944,6 +944,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "get_schema_registry",
       "reads": [],
@@ -1158,6 +1168,26 @@
       "writes": []
     },
     {
+      "domain": "api_key",
+      "name": "list_api_keys",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "list_approvals",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repo",
       "name": "list_branches",
       "reads": [],
@@ -1302,6 +1332,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "list_members",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_memories",
       "reads": [],
@@ -1423,6 +1463,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "list_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "list_schema_versions",
       "reads": [],
@@ -1480,16 +1530,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "list_workspace_members",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2520,7 +2560,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e4021b98ed843b21b1c6ded7a1d16b98fe0d795905dfaac237f05b312e368564",
+  "contentHash": "db34c290ecb4a8f8e5cead4ad8fe1fe6fe26bbf9560a250e20b5905ad54a6c82",
   "domains": [
     {
       "name": "agent",

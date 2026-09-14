@@ -1,0 +1,251 @@
+{
+  "shell": {
+    "skipToContent": "Skip to content",
+    "loading": "Loading Mission Control",
+    "sidebar": {
+      "label": "Sidebar",
+      "navLabel": "Main",
+      "sections": {
+        "workspace": "Workspace",
+        "organization": "Organization"
+      },
+      "countLabel": "{count, plural, one {# item} other {# items}}",
+      "attentionLabel": "{count, plural, one {# needs attention} other {# need attention}}",
+      "footer": "{agents, plural, =0 {No agents} one {# agent} other {# agents}} · {plane, select, shared {shared plane} dedicated {dedicated plane} other {{plane} plane}}",
+      "footerPlaneOnly": "{plane, select, shared {shared plane} dedicated {dedicated plane} other {{plane} plane}}"
+    },
+    "nav": {
+      "fleet": "Fleet",
+      "agents": "Agent IAM",
+      "tools": "Tools",
+      "ontology": "Ontology",
+      "steering": "Steering",
+      "spend": "Spend",
+      "organization": "Organization",
+      "billing": "Billing",
+      "audit": "Audit",
+      "apiKeys": "API keys",
+      "roles": "Roles",
+      "register": "Register an agent"
+    },
+    "switcher": {
+      "org": {
+        "trigger": "Switch organization, current {name}",
+        "title": "Switch organization",
+        "search": "Search organizations",
+        "current": "current",
+        "detail": "{slug} · {plan}",
+        "detailNoPlan": "{slug}",
+        "note": "An organization owns a Neo4j database, a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane.",
+        "empty": "No organization matches that search."
+      },
+      "ws": {
+        "trigger": "Switch workspace, current {name}",
+        "title": "Switch workspace",
+        "current": "current",
+        "detail": "{repo} · {branch}",
+        "agents": "{count, plural, =0 {no agents} one {# agent} other {# agents}}",
+        "noRepo": "no main repo linked",
+        "none": "This organization has no workspaces yet.",
+        "manage": "Workspaces are created on the Organization page."
+      },
+      "close": "Close"
+    },
+    "topbar": {
+      "label": "Top bar",
+      "menu": "Open navigation",
+      "breadcrumbs": "Breadcrumb",
+      "search": "Search or run an action",
+      "searchShortcut": "⌘K",
+      "notifications": "{count, plural, =0 {Notifications} one {Notifications, # unread} other {Notifications, # unread}}",
+      "assistant": "Assistant",
+      "account": "Account menu for {name}",
+      "accountUnknown": "Account menu"
+    },
+    "userMenu": {
+      "account": "Account",
+      "preferences": "Preferences",
+      "security": "Security and sessions",
+      "privacy": "Privacy and data",
+      "switchTheme": "Switch theme",
+      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}"
+    },
+    "commands": {
+      "title": "Command menu",
+      "input": "Search runs, agents, tools, records, or run an action",
+      "empty": "Nothing matches “{query}”.",
+      "groups": {
+        "go": "Go",
+        "runs": "Runs",
+        "actions": "Actions: each opens the page where it runs as a governed action",
+        "ask": "Ask the graph"
+      },
+      "actions": {
+        "steerFleet": "Steer the fleet",
+        "registerAgent": "Register an agent",
+        "openContextPr": "Open a Context PR",
+        "grantMandate": "Grant a mandate",
+        "createRole": "Create a role",
+        "createAutoRule": "Create an auto-approval rule",
+        "flipKillSwitch": "Flip a kill switch",
+        "simulatePolicy": "Simulate a policy version",
+        "exportBundle": "Export a signed bundle",
+        "createApiKey": "Create an API key"
+      },
+      "questions": {
+        "enterpriseTickets": "Which customers on an enterprise contract raised a ticket this quarter?",
+        "releaseNotesCalls": "What does releaseNotes() call?",
+        "triageWrites": "Which tables does acme.core.triage write?"
+      },
+      "footer": {
+        "move": "move",
+        "open": "open",
+        "close": "close",
+        "contract": "every action here is the same contract the screens use"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "unread": "{count, plural, =0 {All read} one {# unread} other {# unread}}",
+      "unreadMarker": "Unread",
+      "footer": "list_notifications · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "empty": {
+        "title": "No notifications",
+        "body": "Approvals, budget breaches, proven runs and Context PRs appear here as they happen."
+      },
+      "error": {
+        "title": "Notifications could not load",
+        "body": "Error {code} (HTTP {status}). The rest of Mission Control still works."
+      },
+      "notBacked": {
+        "title": "Notifications are not recorded yet",
+        "body": "They arrive with milestone {milestone} (backend gap {gap}).",
+        "bodyMilestoneOnly": "They arrive with milestone {milestone}.",
+        "bodyNotWired": "The notification store exists, but Mission Control does not read it yet."
+      },
+      "denied": {
+        "title": "You cannot see notifications here",
+        "body": "This needs the {permission} permission."
+      },
+      "openRun": "Open {run}"
+    },
+    "assistant": {
+      "label": "Assistant",
+      "launcher": "Assistant",
+      "close": "Close the assistant",
+      "ready": "{model} · ready",
+      "engineDown": "engine down",
+      "badge": "every turn is a run of its own",
+      "intro": {
+        "title": "Ask about a run, or change something",
+        "body": "The assistant acts through the same governed actions these screens use. It holds no authority and no credentials, and each of its turns is recorded and metered as a run."
+      },
+      "composer": {
+        "label": "Message the assistant",
+        "placeholder": "Ask about a run, or change something",
+        "pending": "Sending a turn arrives with the engine connection (stella serve, ADR-053). Until then the assistant only reports its health here."
+      },
+      "down": {
+        "title": "The Stella engine is not answering",
+        "body": "stella serve returned {status} from the engine container. The engine is a required service; nothing falls back to an in-process loop, so the assistant says so by name rather than degrading quietly.",
+        "unwired": "The engine health read failed with {code} (HTTP {status}). The engine is a required service; nothing falls back to an in-process loop, so the assistant says so by name rather than degrading quietly.",
+        "retry": "Retry",
+        "meta": "engine {version} · last healthy {at}",
+        "metaUnknown": "engine version not reported · last healthy time not recorded",
+        "composerPlaceholder": "Unavailable while the engine is down"
+      }
+    },
+    "mobileNav": {
+      "label": "Mobile",
+      "more": "More"
+    },
+    "drawer": {
+      "title": "Navigation",
+      "close": "Close navigation"
+    },
+    "account": {
+      "title": "Account",
+      "close": "Close",
+      "tabs": {
+        "profile": "Profile",
+        "preferences": "Preferences",
+        "security": "Security",
+        "privacy": "Privacy"
+      },
+      "footer": "Profile and preference changes run as set_preferences, a governed action audited like any other, once that write is wired. Today only the theme changes here, and it is stored on this device.",
+      "unavailable": {
+        "title": "Your account could not load",
+        "body": "Error {code} (HTTP {status}). Theme still works, because it is stored on this device."
+      },
+      "profile": {
+        "verified": "{email} · verified {date}",
+        "unverified": "{email} · not verified",
+        "displayName": "Display name",
+        "email": "Email",
+        "managedBy": "Managed by {provider} through SCIM.",
+        "roles": "Roles",
+        "principal": "principal",
+        "principalValue": "{id} · kind human",
+        "rolesHint": "A role is changed on the Organization page by someone who holds set_member_role, never here. This is where you see what you hold."
+      },
+      "preferences": {
+        "locale": "Locale",
+        "localeHint": "Dates, numbers and currencies format to this. Prose the models generate is generated in this locale and recorded on the frame. Machine-readable fields in records, receipts and exports are never translated.",
+        "locales": {
+          "en-US": "English (United States)",
+          "de": "Deutsch (Series A)",
+          "ja": "日本語 (Series A)"
+        },
+        "currency": "Display currency",
+        "currencyHint": "Display only. The value of record stays the provider's billing currency, and every converted number carries its rate and source.",
+        "currencies": {
+          "USD": "USD, US dollar",
+          "EUR": "EUR (Series A)"
+        },
+        "timeZone": "Time zone",
+        "theme": "Theme",
+        "themeHint": "Stored on this device.",
+        "themes": {
+          "system": "Match the system",
+          "dark": "Ink",
+          "light": "Paper"
+        }
+      },
+      "security": {
+        "signIn": "Sign-in",
+        "provider": "provider",
+        "providerValue": "{provider}{password, select, false { · password sign-in disabled by the organization} other {}}",
+        "providerLocal": "Email and password",
+        "twoFactor": "Two-factor",
+        "factor": {
+          "totp": "Authenticator app",
+          "passkey": "Passkey"
+        },
+        "totpEnrolled": "TOTP, added {date}. {remaining, plural, one {# recovery code unused} other {# recovery codes unused}}.",
+        "passkeyEnrolled": "Added {date}.",
+        "notEnrolled": "Not set up.",
+        "passkeyHint": "A passkey replaces the password, not the second factor.",
+        "sessions": "Active sessions",
+        "thisDevice": "this device",
+        "sessionsHint": "Revoking a session ends it at the next request. It does not touch an agent credential or a run token; those are revoked on the Agents page, and that is what makes a halt stick."
+      },
+      "privacy": {
+        "export": "Export",
+        "exportHint": "A signed bundle: archive segments, attestations, key ids and a verifier script, so an auditor can check the chain offline without trusting Oxagen. It runs as export_data, a governed action with third-party egress.",
+        "erasure": "Erasure",
+        "erasureHint": "Erasure is crypto-shredding: bodies attributable to a person are encrypted under a per-subject key, and erasure destroys the key and writes a tombstone frame holding the digests that remain. The chain stays intact and verifiable; the content is unrecoverable. It cannot be undone, and it needs an org owner.",
+        "kept": "What is kept, and for how long",
+        "frameBodies": "frame bodies",
+        "frameBodiesValue": "{years, plural, one {# year} other {# years}} from the seal · write-once · per-organization key",
+        "notRecorded": "not recorded",
+        "runLedger": "run ledger",
+        "runLedgerValue": "forever: run, seal, attestation, frame digests and costs",
+        "dataPlane": "data plane",
+        "dataPlaneValue": "{plane, select, shared {shared} dedicated {dedicated} other {{plane}}}{region, select, none {} other { · {region}}}",
+        "legalHolds": "legal holds",
+        "legalHoldsValue": "{count, plural, =0 {none on your activity} one {# on your activity} other {# on your activity}}",
+        "requestsHint": "Exports and erasure requests are made from the Audit page, where each one is recorded."
+      }
+    }
+  }
+}
