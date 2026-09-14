@@ -137,16 +137,17 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 98 as of billing.spend_counters, cost.price_entries, cost.run_totals
-    // and cost.daily_totals (ADR-060, G2962) over WL-27's 94, which dropped
-    // billing.governed_action_counters with the annual meter it counted. Was
-    // 95 as of billing.contract_terms, billing.gau_buckets and
+    // 100 as of tools.mandates and tools.mandate_ledger (ADR-059, G2957) over
+    // G2962's 98, which added billing.spend_counters, cost.price_entries,
+    // cost.run_totals and cost.daily_totals (ADR-060) over WL-27's 94, which
+    // dropped billing.governed_action_counters with the annual meter it
+    // counted. Was 95 as of billing.contract_terms, billing.gau_buckets and
     // billing.gau_settlements (ADR-055, WL-24), and 92 before those. An
     // earlier note read "97 as of org.model_credentials" while the assertion
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(98);
+    expect(POLICY_MANIFEST.length).toBe(100);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

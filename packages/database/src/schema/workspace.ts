@@ -46,6 +46,13 @@ export const workspaces = workspaceSchema.table(
     // merges it atomically via jsonb `||`.
     promptConfig: jsonb("prompt_config").notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
+    // Consequence tag → the IAM org role names that may grant, change or
+    // revoke a mandate for that consequence (ADR-059 decision 1). Overrides
+    // only: a tag with no entry takes DEFAULT_CONSEQUENCE_ROLES from
+    // @oxagen/oxagen/mandates/schemas. Written by update_workspace_settings.
+    consequenceRoles: jsonb("consequence_roles")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     // Workspace-level text model defaults. NULL means the workspace sets no
     // default and the user's own preference (or the system default) applies. An
     // explicit value overrides user preferences for all members. Image/video
