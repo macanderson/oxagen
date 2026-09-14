@@ -46,7 +46,7 @@ import { and, desc, eq, lt, ne, or, type SQL, sql } from "drizzle-orm";
 // ---- Cursor -------------------------------------------------------------------------
 
 /** Where a page ended: the last row's mirror creation instant and row id. */
-export type InvoiceCursor = { at: string; id: string };
+type InvoiceCursor = { at: string; id: string };
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -82,7 +82,7 @@ export function decodeInvoiceCursor(raw: string): InvoiceCursor | null {
 // ---- Query ----------------------------------------------------------------------------
 
 /** What the query needs from a transaction: the select builder. */
-export type QueryDb = Pick<Tx, "select">;
+type QueryDb = Pick<Tx, "select">;
 
 export type PageQuery = { cursor: InvoiceCursor | null; limit: number };
 
@@ -187,7 +187,7 @@ export function invoiceKind(settlementKind: string | null): InvoiceKind {
 }
 
 /** The mirrored status; the query excludes drafts, so any other word is a broken row. */
-export function invoiceStatus(status: string): InvoiceItem["status"] {
+function invoiceStatus(status: string): InvoiceItem["status"] {
   const parsed = invoiceStatusSchema.safeParse(status);
   if (!parsed.success)
     throw new RangeError(`invoice status outside the list: ${status}`);
@@ -203,7 +203,7 @@ export function centsToMicros(cents: number): string {
   return (BigInt(cents) * 10_000n).toString();
 }
 
-export function toInvoiceItem(row: InvoiceRow): InvoiceItem {
+function toInvoiceItem(row: InvoiceRow): InvoiceItem {
   return {
     publicId: row.publicId,
     number: row.number,
