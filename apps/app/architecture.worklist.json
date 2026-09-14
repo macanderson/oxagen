@@ -28,7 +28,7 @@
     },
     {
       "page": "Shell (org layout)",
-      "ships": "Sidebar with 10 links, org and workspace switchers, user menu (sign out, theme), ⌘K over static routes, MobileNav (component-tested at a 400 px container). Between WL-08 and WL-11 the switchers show the current org/workspace from the layout's viewer with no list.",
+      "ships": "Sidebar with 9 links (no Ontology), org and workspace switchers, user menu (sign out, theme), ⌘K over static routes, MobileNav (component-tested at a 400 px container). Between WL-08 and WL-11 the switchers show the current org/workspace from the layout's viewer with no list.",
       "backing": "shell.context = kernelRead(list_orgs) + kernelRead(list_workspaces), implemented in WL-11 as the kernel seam's first production caller",
       "notRecordedOnly": [
         "Not rendered at all: notifications, assistant flyout, Account dialog, nav counts, recent runs"
@@ -76,12 +76,6 @@
       "ships": "PageHeader + one NotRecorded state",
       "backing": "none in rev1 (no emergency-deny contract; registry blocked by #2915 and structural nulls)",
       "notRecordedOnly": ["tools"]
-    },
-    {
-      "page": "Ontology /{org}/{ws}/ontology (pages.ontology)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1",
-      "notRecordedOnly": ["ontology"]
     },
     {
       "page": "Steering /{org}/{ws}/steering (pages.steering)",
@@ -135,7 +129,7 @@
     },
     {
       "name": "Not recorded (one state for unbacked slices)",
-      "contract": "UNRECORDED: Record<UnrecordedKey, {gap: `G${number}`|null}> as const with exactly seven keys: agents, tools, ontology, steering, spend, audit (whole pages) and run.frames_wrapped (the one in-page row). <NotRecorded section={UnrecordedKey}/> renders catalog prose with the gap only as a data-gap attribute. Every other unbacked in-page slice renders nothing: no row, no prose, no port method, no view model, no adapter.",
+      "contract": "UNRECORDED: Record<UnrecordedKey, {gap: `G${number}`|null}> as const with exactly six keys: agents, tools, steering, spend, audit (whole pages) and run.frames_wrapped (the one in-page row). <NotRecorded section={UnrecordedKey}/> renders catalog prose with the gap only as a data-gap attribute. Every other unbacked in-page slice renders nothing: no row, no prose, no port method, no view model, no adapter.",
       "module": "apps/app/src/data/unrecorded.ts + apps/app/src/ui/not-recorded.tsx"
     },
     {
@@ -258,7 +252,7 @@
     {
       "id": "INV-18",
       "statement": "An unbacked page is exactly one UNRECORDED row rendered only by <NotRecorded>; an unbacked in-page slice renders nothing, except run.frames_wrapped.",
-      "enforcement": "Architecture test src/test/arch/unrecorded.test.ts (every row rendered by a route; every section literal in the table; the table has exactly the seven §3.6 keys; no contract or port symbol shares a row key)."
+      "enforcement": "Architecture test src/test/arch/unrecorded.test.ts (every row rendered by a route; every section literal in the table; the table has exactly the six §3.6 keys; no contract or port symbol shares a row key)."
     },
     {
       "id": "INV-19",
@@ -339,7 +333,7 @@
     },
     {
       "id": "page-load",
-      "journey": "page-load.spec.ts, one test — `test(\"every rev1 page loads with its title\", …)` — iterating REV1_ROUTES from e2e/routes.ts with test.step(r.path, …) per entry (21 steps after WL-33), so the suite is exactly three tests. Each entry is {path, auth: 'anonymous'|'owner', query?, expect: {title} | {redirectTo}}: anonymous entries (/login, /signup, /verify, /two-factor, /forgot-password, /reset-password, /invite/e2e-no-such-token) use a fresh context; owner entries use the saved storage state. A title step visits the route with its query and asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key), reading messages/en.json; /invite/[token] is visited with an unknown token and asserts pages.invitationNotFound; /cli/authorize carries a valid PKCE query built in routes.ts (redirect_uri=http://127.0.0.1:53682/callback, state, code_challenge=base64url(sha256(verifier)), code_challenge_method=S256); /{org}/{ws}/runs/{run} uses the seeded run id; / asserts it landed on /e2e-org/core (expect.redirectTo, admitted for that path only). INV-20's arch test keeps REV1_ROUTES equal to the page.tsx files.",
+      "journey": "page-load.spec.ts, one test — `test(\"every rev1 page loads with its title\", …)` — iterating REV1_ROUTES from e2e/routes.ts with test.step(r.path, …) per entry (20 steps after WL-33), so the suite is exactly three tests. Each entry is {path, auth: 'anonymous'|'owner', query?, expect: {title} | {redirectTo}}: anonymous entries (/login, /signup, /verify, /two-factor, /forgot-password, /reset-password, /invite/e2e-no-such-token) use a fresh context; owner entries use the saved storage state. A title step visits the route with its query and asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key), reading messages/en.json; /invite/[token] is visited with an unknown token and asserts pages.invitationNotFound; /cli/authorize carries a valid PKCE query built in routes.ts (redirect_uri=http://127.0.0.1:53682/callback, state, code_challenge=base64url(sha256(verifier)), code_challenge_method=S256); /{org}/{ws}/runs/{run} uses the seeded run id; / asserts it landed on /e2e-org/core (expect.redirectTo, admitted for that path only). INV-20's arch test keeps REV1_ROUTES equal to the page.tsx files.",
       "proves": "Every rev1 page renders for a real session with the right name, from the root title template and the page's catalog key, so a new page cannot ship without a title or skip the smoke"
     }
   ],
@@ -505,7 +499,7 @@
     },
     {
       "id": "WL-08",
-      "title": "Delete the unbound data layer: non-rev1 ports, contracts, live adapters (incl. the shell.context stub), mappers, DB tests, backing table, not_backed; add the seven-row UNRECORDED table and NotRecorded; switchers render the current org/ws from the viewer",
+      "title": "Delete the unbound data layer: non-rev1 ports, contracts, live adapters (incl. the shell.context stub), mappers, DB tests, backing table, not_backed; add the six-row UNRECORDED table and NotRecorded; switchers render the current org/ws from the viewer",
       "kind": "delete",
       "paths": [
         "apps/app/src/data/adapters/live",
@@ -529,7 +523,7 @@
         "apps/app/src/test/arch/unrecorded.test.ts"
       ],
       "dependsOn": ["WL-06", "WL-07"],
-      "acceptance": "ports.ts declares an empty DataSource (no shell.context: today's implementation is the stub at live/shell.ts:11-12 returning notBackedFor, and nothing in src/ calls list_orgs or list_workspaces except live/org.ts:42,283, deleted here); features/shell/source.ts:21 and the switchers no longer call it and render the current org and workspace from the layout's viewer (viewer-resolution.ts:20-28) with no list. Read<T> is ok | denied | error with no not_backed variant; PageKey and PAGE_FAILURES live in src/data/read.ts. rg for notBacked(, notBackedFor, BACKING, not_backed and liveCommandDeliveries under apps/app/src returns nothing. No *.pg.test.ts or *.db.test.ts remains in apps/app. UNRECORDED has exactly agents, tools, ontology, steering, spend, audit and run.frames_wrapped; every placeholder route renders <NotRecorded section=…> and unrecorded.test.ts passes; Fleet, Run, People, API keys and Billing render <PageHeader> with their title and no body until their page PR (WL-34…WL-38), never a NotRecorded row. The stream route is removed and 404s until WL-35. tsc passes; every remaining route renders. knip baseline shrinks.",
+      "acceptance": "ports.ts declares an empty DataSource (no shell.context: today's implementation is the stub at live/shell.ts:11-12 returning notBackedFor, and nothing in src/ calls list_orgs or list_workspaces except live/org.ts:42,283, deleted here); features/shell/source.ts:21 and the switchers no longer call it and render the current org and workspace from the layout's viewer (viewer-resolution.ts:20-28) with no list. Read<T> is ok | denied | error with no not_backed variant; PageKey and PAGE_FAILURES live in src/data/read.ts. rg for notBacked(, notBackedFor, BACKING, not_backed and liveCommandDeliveries under apps/app/src returns nothing. No *.pg.test.ts or *.db.test.ts remains in apps/app. UNRECORDED has exactly agents, tools, steering, spend, audit and run.frames_wrapped (no ontology: the page leaves rev1 scope, decision log 2026-09-14); every placeholder route renders <NotRecorded section=…> and unrecorded.test.ts passes; Fleet, Run, People, API keys and Billing render <PageHeader> with their title and no body until their page PR (WL-34…WL-38), never a NotRecorded row. The stream route is removed and 404s until WL-35. tsc passes; every remaining route renders. knip baseline shrinks.",
       "estimateLinesDelta": -26000
     },
     {
@@ -1076,15 +1070,19 @@
         "apps/app/src/features/shell/switchers.tsx",
         "apps/app/src/features/shell/switchers.test.tsx",
         "apps/app/src/features/shell/mobile-nav.test.tsx",
-        "apps/app/src/features/shell/load.ts"
+        "apps/app/src/features/shell/load.ts",
+        "apps/app/src/features/shell/nav.ts",
+        "apps/app/src/features/shell/nav-icons.tsx",
+        "apps/app/src/features/shell/commands.ts",
+        "apps/app/messages/shell.json"
       ],
       "dependsOn": ["WL-11", "WL-13"],
-      "acceptance": "The switchers render the org and workspace lists from DataSource.shell.context (implemented in WL-11) and component tests cover ok, denied and error states with expectNoAxe. src/app/page.tsx is one line delegating to the landing: requireUser() → pretenant.orgs(ctx) → first org by membership → pretenant.workspaces(ctx, orgSlug) → redirectTo(routes.fleet(org, firstWorkspace)) or routes.newOrganization(); landing.test.ts covers no org, one org, an org with no workspace → redirectTo(routes.people(org)), and a denied read → the error page. MobileNav is component-tested at a 400 px container. port-callers.test.ts (pretenant has exactly landing.ts and cli-consent.ts as callers) and live-adapters.test.ts pass.",
+      "acceptance": "The switchers render the org and workspace lists from DataSource.shell.context (implemented in WL-11) and component tests cover ok, denied and error states with expectNoAxe. src/app/page.tsx is one line delegating to the landing: requireUser() → pretenant.orgs(ctx) → first org by membership → pretenant.workspaces(ctx, orgSlug) → redirectTo(routes.fleet(org, firstWorkspace)) or routes.newOrganization(); landing.test.ts covers no org, one org, an org with no workspace → redirectTo(routes.people(org)), and a denied read → the error page. MobileNav is component-tested at a 400 px container. port-callers.test.ts (pretenant has exactly landing.ts and cli-consent.ts as callers) and live-adapters.test.ts pass. The sidebar renders exactly 9 links: nav.ts has no ontology key, nav-icons.tsx no icon for it, shell.json no ontology label, and commands.ts no graph-question commands (they opened Ontology's graph tab); nav.test.ts, commands.test.ts and shell-client.test.tsx assert the 9-link set and no /{org}/{ws}/ontology href.",
       "estimateLinesDelta": 220
     },
     {
       "id": "WL-33",
-      "title": "Route pruning, NotRecorded pages and per-page titles: root title template, generateMetadata + PageHeader from one catalog key per route (two keys on the invite page); vitest route exclusion removed",
+      "title": "Route pruning, NotRecorded pages and per-page titles: root title template, generateMetadata + PageHeader from one catalog key per route (two keys on the invite page); vitest route exclusion removed; no Ontology page",
       "kind": "build",
       "paths": [
         "apps/app/src/app/layout.tsx",
@@ -1105,7 +1103,7 @@
         "apps/app/vitest.config.ts"
       ],
       "dependsOn": ["WL-10", "WL-13", "WL-32"],
-      "acceptance": "`fd page.tsx apps/app/src/app` lists exactly the 21 §1.2 route files: no [[...tab]], [[...drill]], agents/[agent] or roles. layout.tsx sets metadata.title = {default: t('app.name'), template: '%s · Oxagen'}; every page.tsx except src/app/page.tsx exports generateMetadata returning {title: t(<pages.key>)} and renders <PageHeader title={t(<pages.key>)}> from the same key; /invite/[token] uses pages.invitation when the token resolves and pages.invitationNotFound otherwise, in both generateMetadata and the heading; a unit test per page renders it and asserts the h1 and metadata agree (the invite page in both states; /cli/authorize with and without a valid PKCE query). Each [org] page calls requireViewer; route-guard, unrecorded and route-thin tests pass. vitest.config.ts:34-42 route exclusion removed and the 90% threshold holds.",
+      "acceptance": "`fd page.tsx apps/app/src/app` lists exactly the 20 §1.2 route files: no [[...tab]], [[...drill]], agents/[agent], roles or ontology. apps/app/src/app/[org]/[ws]/ontology/** is deleted outright (no NotRecorded page; decision log 2026-09-14), messages/en.json has no pages.ontology key and the unrecorded catalog has no ontology prose. layout.tsx sets metadata.title = {default: t('app.name'), template: '%s · Oxagen'}; every page.tsx except src/app/page.tsx exports generateMetadata returning {title: t(<pages.key>)} and renders <PageHeader title={t(<pages.key>)}> from the same key; /invite/[token] uses pages.invitation when the token resolves and pages.invitationNotFound otherwise, in both generateMetadata and the heading; a unit test per page renders it and asserts the h1 and metadata agree (the invite page in both states; /cli/authorize with and without a valid PKCE query). Each [org] page calls requireViewer; route-guard, unrecorded and route-thin tests pass. vitest.config.ts:34-42 route exclusion removed and the 90% threshold holds.",
       "estimateLinesDelta": -150
     },
     {
@@ -1347,7 +1345,7 @@
         "apps/app/package.json"
       ],
       "dependsOn": ["WL-46", "WL-35", "WL-37", "WL-38"],
-      "acceptance": "REV1_ROUTES has one entry per page.tsx (21) of shape {path, auth, query?, expect: {title} | {redirectTo}}: '/' → {redirectTo: '/e2e-org/core'}; '/invite/e2e-no-such-token' anonymous → pages.invitationNotFound; '/cli/authorize' owner with a PKCE query built in routes.ts from a fixed verifier (redirect_uri http://127.0.0.1:53682/callback, state, code_challenge = base64url(sha256(verifier)), code_challenge_method S256; cli-authorize.ts:53-67); the Run route uses the seeded run id; every other entry a pages.* key. page-load.spec.ts declares exactly one test() that iterates REV1_ROUTES with test.step(r.path, …): a title step asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key) from messages/en.json; the redirect step asserts the final URL. `playwright test --list` over the three files reports exactly 3 tests. e2e-files.test.ts fails when a page.tsx is missing from REV1_ROUTES, when redirectTo is used on any path but '/', and when a title key is absent from the catalog (each mutation recorded in the PR). All steps pass in CI on the first attempt. apps/app/package.json's test:e2e script drops --pass-with-no-tests (package.json:19), so `playwright test` with a testMatch that matches nothing exits non-zero (mutation recorded in the PR).",
+      "acceptance": "REV1_ROUTES has one entry per page.tsx (20; no /{org}/{ws}/ontology) of shape {path, auth, query?, expect: {title} | {redirectTo}}: '/' → {redirectTo: '/e2e-org/core'}; '/invite/e2e-no-such-token' anonymous → pages.invitationNotFound; '/cli/authorize' owner with a PKCE query built in routes.ts from a fixed verifier (redirect_uri http://127.0.0.1:53682/callback, state, code_challenge = base64url(sha256(verifier)), code_challenge_method S256; cli-authorize.ts:53-67); the Run route uses the seeded run id; every other entry a pages.* key. page-load.spec.ts declares exactly one test() that iterates REV1_ROUTES with test.step(r.path, …): a title step asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key) from messages/en.json; the redirect step asserts the final URL. `playwright test --list` over the three files reports exactly 3 tests. e2e-files.test.ts fails when a page.tsx is missing from REV1_ROUTES, when redirectTo is used on any path but '/', and when a title key is absent from the catalog (each mutation recorded in the PR). All steps pass in CI on the first attempt. apps/app/package.json's test:e2e script drops --pass-with-no-tests (package.json:19), so `playwright test` with a testMatch that matches nothing exits non-zero (mutation recorded in the PR).",
       "estimateLinesDelta": 170
     },
     {
@@ -1376,7 +1374,7 @@
         "apps/app/src/proxy.test.ts"
       ],
       "dependsOn": ["WL-33"],
-      "acceptance": "The unit test reads the table and asserts each target is a §1.2 route with status 308, including /{org}/billing/governed-actions → /{org}/billing, /{org}/billing/usage → /{org}/billing, /{org}/{ws}/sessions, /{org}/members and /{org}/developer/tokens. Dropping one row fails the test (mutation recorded in the PR). proxy.ts uses responseRedirect from shared/navigation.ts (INV-13).",
+      "acceptance": "The unit test reads the table and asserts each target is a §1.2 route with status 308, including /{org}/billing/governed-actions → /{org}/billing, /{org}/billing/usage → /{org}/billing, /{org}/{ws}/sessions, /{org}/members and /{org}/developer/tokens, and the rows Appendix F sent to Ontology retargeted: /{org}/{ws}/knowledge, knowledge/graph, knowledge/graph/[nodeId], knowledge/ontology, knowledge/sources, knowledge/sources/connect and /{org}/{ws}/settings/github → /{org}/{ws} (Fleet); knowledge/memory → /{org}/{ws}/steering unchanged; no row targets /{org}/{ws}/ontology. Dropping one row fails the test (mutation recorded in the PR). proxy.ts uses responseRedirect from shared/navigation.ts (INV-13).",
       "estimateLinesDelta": 260
     },
     {
