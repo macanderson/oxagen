@@ -3,16 +3,18 @@
  * `@oxagen/app` written into the script, the Mission Control rebuild reached
  * app.oxagen.sh the moment its integration branch merged (#2894), while the
  * parity gates still pointed at apps/app_deprecated. One source of truth for
- * "which app is the app", read by the gates and by the deploy alike.
+ * "which app is the app", read by the gates and by the deploy alike — and
+ * when that source is not on the tree (no rebuild in flight), apps/app.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { APP_DIR } from "./lib/app-dir.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, "..", "..");
 const script = readFileSync(join(here, "package-for-node.sh"), "utf8");
+const appDirModule = join(here, "lib", "app-dir.mjs");
 
 /** The `app)` arm of the service switch, comments removed. */
 function appArm(source: string): string {
@@ -30,20 +32,27 @@ function appArm(source: string): string {
 describe("package-for-node.sh app", () => {
   const arm = appArm(script);
 
-  it("resolves the app to ship from APP_DIR", () => {
-    expect(arm).toMatch(/app-dir\.mjs/);
+  it("resolves the app to ship from APP_DIR when the rebuild's app-dir.mjs is on the tree", () => {
+    expect(arm).toMatch(/-f tools\/scripts\/lib\/app-dir\.mjs/);
     expect(arm).toMatch(/APP_DIR/);
   });
 
-  it("names no app package or directory by hand", () => {
+  it("falls back to apps/app when app-dir.mjs is absent", () => {
+    expect(arm).toMatch(/else\s+app_dir=apps\/app\s/);
+  });
+
+  it("names no app package by hand", () => {
     expect(arm).not.toMatch(/--filter\s+@oxagen\/app\b/);
     expect(arm).not.toMatch(/--filter\s+@oxagen\/app-deprecated\b/);
     expect(arm).not.toMatch(/assemble_next\s+apps\//);
   });
 
-  it("APP_DIR names a workspace package whose build can be standalone", () => {
+  it("the directory it resolves to is a workspace package with a next build", async () => {
+    const appDir = existsSync(appDirModule)
+      ? ((await import(appDirModule)) as { APP_DIR: string }).APP_DIR
+      : "apps/app";
     const pkg = JSON.parse(
-      readFileSync(join(here, "..", "..", APP_DIR, "package.json"), "utf8"),
+      readFileSync(join(root, appDir, "package.json"), "utf8"),
     ) as { name: string; scripts: Record<string, string> };
     expect(pkg.name).toMatch(/^@oxagen\/app/);
     expect(pkg.scripts.build).toMatch(/next build/);
