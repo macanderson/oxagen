@@ -24,6 +24,7 @@ import {
   resolveInternal,
   ruleOf,
   type SourceText,
+  WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
 /** Rule ids as they appear in baseline.json. */
@@ -78,16 +79,20 @@ describe("import graph", () => {
     expect(ts.version).toMatch(/^6\.0\./);
   });
 
-  it("today's violations are exactly the baseline", () => {
-    const actual = productionFiles().flatMap((file) =>
-      violationsOf(readSource(file)),
-    );
-    const diff = diffBaseline(actual, baselineEntries(RULES));
-    expect(diff, describeDiff(diff, actual)).toEqual({
-      unexpected: [],
-      stale: [],
-    });
-  });
+  it(
+    "today's violations are exactly the baseline",
+    () => {
+      const actual = productionFiles().flatMap((file) =>
+        violationsOf(readSource(file)),
+      );
+      const diff = diffBaseline(actual, baselineEntries(RULES));
+      expect(diff, describeDiff(diff, actual)).toEqual({
+        unexpected: [],
+        stale: [],
+      });
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("fails when a violating import is deleted but its baseline entry stays", () => {
     const file = "src/ui/probe.ts";
