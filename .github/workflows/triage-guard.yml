@@ -23,22 +23,35 @@ jobs:
             const issue = context.payload.issue;
             const P = /^P[0-4]$/;
             const allowed = process.env.TRIAGE_LOGINS.split(/\s+/);
+            const trusted = allowed.includes(context.payload.sender.login);
             const names = issue.labels.map(l => (typeof l === 'string' ? l : l.name));
-            if (context.payload.action === 'opened'
-                && !names.includes('triage')
-                && !names.some(n => P.test(n))) {
-              await github.rest.issues.addLabels({
-                ...context.repo, issue_number: issue.number, labels: ['triage'] });
+            const rm = (name) => github.rest.issues.removeLabel({
+              ...context.repo, issue_number: issue.number, name }).catch(() => {});
+            const add = (labels) => github.rest.issues.addLabels({
+              ...context.repo, issue_number: issue.number, labels });
+            const requeue = () => github.rest.issues.createComment({
+              ...context.repo, issue_number: issue.number,
+              body: 'Priority labels are assigned only by the triage agent (SCR-005). Re-queued as `triage`.' });
+            if (context.payload.action === 'opened') {
+              // A creation-time P-label is not a queued state unless the
+              // opener is the triage identity: strip it, then queue.
+              const pAtOpen = names.filter(n => P.test(n));
+              if (!trusted && pAtOpen.length) {
+                for (const n of pAtOpen) await rm(n);
+                if (!names.includes('triage')) await add(['triage']);
+                await requeue();
+              } else if (!names.includes('triage') && !pAtOpen.length) {
+                await add(['triage']);
+              }
             }
-            if (context.payload.action === 'labeled'
-                && P.test(context.payload.label.name)
-                && !allowed.includes(context.payload.sender.login)) {
-              await github.rest.issues.removeLabel({
-                ...context.repo, issue_number: issue.number,
-                name: context.payload.label.name });
-              await github.rest.issues.addLabels({
-                ...context.repo, issue_number: issue.number, labels: ['triage'] });
-              await github.rest.issues.createComment({
-                ...context.repo, issue_number: issue.number,
-                body: 'Priority labels are assigned only by the triage agent (SCR-005). Re-queued as `triage`.' });
+            if (context.payload.action === 'labeled' && P.test(context.payload.label.name)) {
+              if (!trusted) {
+                await rm(context.payload.label.name);
+                if (!names.includes('triage')) await add(['triage']);
+                await requeue();
+              } else if (names.includes('triage')) {
+                // The triage identity replaced the queue label with a
+                // priority: never both (SCR-005 invariant).
+                await rm('triage');
+              }
             }
