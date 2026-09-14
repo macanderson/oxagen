@@ -244,20 +244,61 @@ describe("handleHookEvent over the recorded session", () => {
       hookSpecificOutput: { decision: { behavior: "deny" } },
     });
     record.control.paused = null;
-    record.control.messages.push({ id: "cmd_1", text: "Wrap up and stop." });
+    record.control.messages.push(
+      {
+        id: "cmd_1",
+        text: "Wrap up and stop.",
+        command: "message",
+        requestedMode: null,
+        deliveryMode: null,
+        degradedReason: null,
+      },
+      {
+        id: "cmd_2",
+        text: "Use the staging database.",
+        command: "steer",
+        requestedMode: "interrupt",
+        deliveryMode: "next_step",
+        degradedReason: "harness_tier",
+      },
+    );
     const resumed = await handleHookEvent(prompt.stdin, prompt.env, deps);
     expect(resumed.response).toEqual({
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit",
-        additionalContext: "Wrap up and stop.",
+        additionalContext: "Wrap up and stop.\n\nUse the staging database.",
       },
     });
     expect(resumed.events.map((e) => e.kind)).toEqual(
-      ["oxagen:command_applied", "turn_end", "turn_start"].filter((k) =>
-        resumed.events.some((e) => e.kind === k),
-      ),
+      [
+        "oxagen:command_applied",
+        "oxagen:command_applied",
+        "turn_end",
+        "turn_start",
+      ].filter((k) => resumed.events.some((e) => e.kind === k)),
     );
-    expect(resumed.events[0]?.attrs?.["command.id"]).toBe("cmd_1");
+    expect(resumed.events[0]?.attrs).toMatchObject({
+      "command.id": "cmd_1",
+      "command.name": "message",
+      "command.interrupted": "0",
+    });
+    expect(resumed.events[0]?.attrs).not.toHaveProperty(
+      "command.requested_mode",
+    );
+    // The control.steer frame (spec §8.2) in the wrapper vocabulary: both
+    // modes, the degradation, and never interrupted at the hook adapter.
+    expect(resumed.events[1]?.attrs).toMatchObject({
+      "command.id": "cmd_2",
+      "command.name": "steer",
+      "command.requested_mode": "interrupt",
+      "command.delivery_mode": "next_step",
+      "command.degraded_reason": "harness_tier",
+      "command.interrupted": "0",
+    });
+    expect(
+      (resumed.events[1]?.body as { policy_reason_code?: string })
+        .policy_reason_code,
+    ).toBe("steer_delivered");
     const open = await handleHookEvent(
       { ...tool.stdin, hook_event_name: "PermissionRequest" },
       tool.env,

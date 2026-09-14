@@ -425,7 +425,7 @@ export async function startDaemon(
         onMessageDelivered: (commandId, sessionUuid, seq) => {
           pendingAcks.push({
             command_id: commandId,
-            outcome: "applied",
+            status: "applied",
             session_uuid: sessionUuid,
             applied_at_seq: seq,
           });

@@ -68,6 +68,9 @@ function command(overrides: Partial<DeliveredCommand>): DeliveredCommand {
     command: "pause",
     session_uuid: null,
     payload: {},
+    requested_mode: null,
+    delivery_mode: null,
+    degraded_reason: null,
     issued_at: "2026-09-10T10:00:00.000Z",
     expires_at: null,
     ...overrides,
@@ -118,6 +121,15 @@ describe("inbox", () => {
           session_uuid: uuid,
           payload: {},
         }),
+        command({
+          id: "st",
+          command: "steer",
+          session_uuid: uuid,
+          payload: { text: "use staging" },
+          requested_mode: "interrupt",
+          delivery_mode: "next_step",
+          degraded_reason: "harness_tier",
+        }),
         command({ id: "r", command: "resume", session_uuid: uuid }),
         command({ id: "k", command: "kill", session_uuid: uuid }),
         command({ id: "c", command: "cancel", session_uuid: uuid }),
@@ -150,30 +162,43 @@ describe("inbox", () => {
       deps,
     );
     const acks = Object.fromEntries(
-      result.acknowledgements.map((a) => [a.command_id, a.outcome]),
+      result.acknowledgements.map((a) => [a.command_id, a.status]),
     );
     expect(acks).toEqual({
       p: "applied",
-      m: "delivered",
+      m: "received",
       m0: "failed",
+      st: "received",
       r: "applied",
       k: "applied",
       c: "applied",
       rb: "failed",
-      x: "expired",
+      x: "failed",
       nf: "failed",
       hrb: "applied",
-      hm: "delivered",
+      hm: "received",
       hp: "applied",
       hrv: "applied",
       bad: "failed",
     });
+    expect(
+      result.acknowledgements.find((a) => a.command_id === "x")?.detail,
+    ).toMatch(/expired/);
     expect(record.control.paused).toBe("operator pause");
     expect(record.control.cancelled).toBe("operator cancel");
     expect(record.control.messages.map((m) => m.text)).toEqual([
       "wrap up",
+      "use staging",
       "all hands",
     ]);
+    expect(record.control.messages[1]).toEqual({
+      id: "st",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+    });
     expect(kills).toEqual(["4242:SIGKILL", "4242:SIGTERM"]);
     expect(refreshed).toBe(1);
     expect(suspended).toBe("offboarded");

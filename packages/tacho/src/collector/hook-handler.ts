@@ -132,6 +132,14 @@ function operatorBlock(
   return undefined;
 }
 
+/**
+ * Inject the queued prompt content at this boundary and chain one
+ * `oxagen:command_applied` per item: the `control.steer` frame of the
+ * Mission Control spec (§8.2) in the wrapper vocabulary, carrying the
+ * requested and the achieved mode, the degradation, and `interrupted`, which
+ * the hook adapter can never set. The event's own seq is the frame the
+ * control plane records as `applied_at_seq`.
+ */
 function drainMessages(
   record: SessionRecord,
   deps: HookHandlerDeps,
@@ -145,10 +153,25 @@ function drainMessages(
       {
         policy_decision: "allow",
         policy_source: "human",
-        policy_reason_code: "message_delivered",
+        policy_reason_code: `${message.command}_delivered`,
         policy_reason_digest: digestText(message.text),
       },
-      { attrs: { "command.id": message.id, "command.name": "message" } },
+      {
+        attrs: {
+          "command.id": message.id,
+          "command.name": message.command,
+          "command.interrupted": "0",
+          ...(message.requestedMode !== null
+            ? { "command.requested_mode": message.requestedMode }
+            : {}),
+          ...(message.deliveryMode !== null
+            ? { "command.delivery_mode": message.deliveryMode }
+            : {}),
+          ...(message.degradedReason !== null
+            ? { "command.degraded_reason": message.degradedReason }
+            : {}),
+        },
+      },
     );
     events.push(event);
     deps.onMessageDelivered?.(

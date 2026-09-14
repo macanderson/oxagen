@@ -14,7 +14,18 @@ import {
 } from "@oxagen/oxagen/tacho/schemas";
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -184,16 +195,64 @@ export function signBundle(
   return { ...unsigned, signature: signer.sign(unsigned) };
 }
 
-/** Pending commands for a host, marked delivered as they leave. */
+/**
+ * Expire this host's commands whose expiry passed before they reached a
+ * terminal status (spec §7.4 `expired`: "the expiry passed with no boundary
+ * reached"). Runs on every control poll, so a report is right even when the
+ * host never acknowledged.
+ */
+export async function expireCommands(
+  tx: TachoTx,
+  host: TachoHostRow,
+  now: Date,
+): Promise<void> {
+  await tx
+    .update(schema.tachoControlCommands)
+    .set({ outcome: "expired", updatedAt: now })
+    .where(
+      and(
+        eq(schema.tachoControlCommands.hostId, host.id),
+        notInArray(schema.tachoControlCommands.outcome, [
+          ...schema.TACHO_COMMAND_TERMINAL_OUTCOMES,
+        ]),
+        lte(schema.tachoControlCommands.expiresAt, now),
+      ),
+    );
+}
+
+type ControlCommandRow = typeof schema.tachoControlCommands.$inferSelect;
+type DeliveredCommand = ControlEnvelope["commands"][number];
+
+/** A queued row as the wire carries it (spec section 7.4). */
+export function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
+  const payload = (row.payload as Record<string, unknown>) ?? {};
+  return {
+    id: row.publicId,
+    command: row.command as DeliveredCommand["command"],
+    session_uuid:
+      typeof payload["session_uuid"] === "string"
+        ? (payload["session_uuid"] as string)
+        : null,
+    payload,
+    requested_mode: row.requestedMode as DeliveredCommand["requested_mode"],
+    delivery_mode: row.deliveryMode as DeliveredCommand["delivery_mode"],
+    degraded_reason: row.degradedReason,
+    issued_at: row.issuedAt.toISOString(),
+    expires_at: row.expiresAt?.toISOString() ?? null,
+  };
+}
+
+/** Queued commands for a host, marked `sent` as they leave. */
 export async function drainCommands(
   tx: TachoTx,
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope["commands"]> {
+  await expireCommands(tx, host, now);
   const rows = (await tx.query.tachoControlCommands.findMany({
     where: and(
       eq(schema.tachoControlCommands.hostId, host.id),
-      eq(schema.tachoControlCommands.outcome, "pending"),
+      eq(schema.tachoControlCommands.outcome, "queued"),
       or(
         isNull(schema.tachoControlCommands.expiresAt),
         gt(schema.tachoControlCommands.expiresAt, now),
@@ -201,28 +260,19 @@ export async function drainCommands(
     ),
     orderBy: [asc(schema.tachoControlCommands.issuedAt)],
     limit: 100,
-  })) as Array<
-    typeof schema.tachoControlCommands.$inferSelect & {
-      sessionUuid?: string | null;
-    }
-  >;
-  const delivered: ControlEnvelope["commands"] = [];
-  for (const row of rows) {
+  })) as ControlCommandRow[];
+  if (rows.length > 0) {
     await tx
       .update(schema.tachoControlCommands)
-      .set({ outcome: "delivered", deliveredAt: now, updatedAt: now })
-      .where(eq(schema.tachoControlCommands.id, row.id));
-    delivered.push({
-      id: row.publicId,
-      command: row.command as ControlEnvelope["commands"][number]["command"],
-      session_uuid:
-        (row.payload as { session_uuid?: string } | null)?.session_uuid ?? null,
-      payload: (row.payload as Record<string, unknown>) ?? {},
-      issued_at: row.issuedAt.toISOString(),
-      expires_at: row.expiresAt?.toISOString() ?? null,
-    });
+      .set({ outcome: "sent", deliveredAt: now, updatedAt: now })
+      .where(
+        inArray(
+          schema.tachoControlCommands.id,
+          rows.map((row) => row.id),
+        ),
+      );
   }
-  return delivered;
+  return rows.map(toDeliveredCommand);
 }
 
 /** The control envelope every machine response carries (spec section 7.4). */

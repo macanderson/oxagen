@@ -3,7 +3,10 @@
  * in the registry (so the next hook boundary honours it), is chained as
  * `oxagen:command_applied` on the session it touched (or the daemon's own
  * chain for host-level commands), and is acknowledged back to the control
- * plane with the seq that recorded it.
+ * plane in the closed status vocabulary: `applied` with the seq that
+ * recorded it, `received` for prompt content queued for the next boundary
+ * (the hook that injects it acknowledges `applied` then), or `failed` with
+ * the reason.
  */
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -93,7 +96,7 @@ async function applyToSession(
   deps: InboxDeps,
 ): Promise<{
   events: TachoEvent[];
-  outcome: CommandAcknowledgement["outcome"];
+  status: CommandAcknowledgement["status"];
   detail?: string;
 }> {
   const events: TachoEvent[] = [];
@@ -101,43 +104,51 @@ async function applyToSession(
     case "pause":
       record.control.paused = reasonOf(command);
       events.push(applied(record.recorder, command, "session_paused"));
-      return { events, outcome: "applied" };
+      return { events, status: "applied" };
     case "resume":
       record.control.paused = null;
       events.push(applied(record.recorder, command, "session_resumed"));
-      return { events, outcome: "applied" };
+      return { events, status: "applied" };
     case "cancel": {
       record.control.cancelled = reasonOf(command);
       events.push(applied(record.recorder, command, "session_cancelled"));
       events.push(killAttempt(record, command, "SIGTERM", deps));
-      return { events, outcome: "applied" };
+      return { events, status: "applied" };
     }
     case "kill": {
       record.control.cancelled = reasonOf(command);
       events.push(applied(record.recorder, command, "session_killed"));
       events.push(killAttempt(record, command, "SIGKILL", deps));
-      return { events, outcome: "applied" };
+      return { events, status: "applied" };
     }
-    case "message": {
+    case "message":
+    case "steer": {
       const text = textOf(command);
       if (text.length === 0)
         return {
           events,
-          outcome: "failed",
-          detail: "message payload has no text",
+          status: "failed",
+          detail: `${command.command} payload has no text`,
         };
-      record.control.messages.push({ id: command.id, text });
-      return { events, outcome: "delivered" };
+      record.control.messages.push({
+        id: command.id,
+        text,
+        command: command.command,
+        requestedMode: command.requested_mode,
+        deliveryMode: command.delivery_mode,
+        degradedReason: command.degraded_reason,
+      });
+      return { events, status: "received" };
     }
     case "refresh_bundle":
     case "revoke":
       return {
         events,
-        outcome: "failed",
+        status: "failed",
         detail: `${command.command} is a host command`,
       };
     default:
-      return { events, outcome: "failed", detail: "unknown command" };
+      return { events, status: "failed", detail: "unknown command" };
   }
 }
 
@@ -151,7 +162,13 @@ export async function applyCommands(
   const now = deps.now();
   for (const command of commands) {
     if (command.expires_at !== null && Date.parse(command.expires_at) < now) {
-      acknowledgements.push({ command_id: command.id, outcome: "expired" });
+      // `expired` is the control plane's word; the host reports that it
+      // could not apply a command whose expiry had already passed.
+      acknowledgements.push({
+        command_id: command.id,
+        status: "failed",
+        detail: "expired before the host could apply it",
+      });
       continue;
     }
     if (command.session_uuid !== null) {
@@ -159,7 +176,7 @@ export async function applyCommands(
       if (record === undefined) {
         acknowledgements.push({
           command_id: command.id,
-          outcome: "failed",
+          status: "failed",
           detail: "session not on this host",
         });
         continue;
@@ -169,7 +186,7 @@ export async function applyCommands(
       const last = result.events[result.events.length - 1];
       acknowledgements.push({
         command_id: command.id,
-        outcome: result.outcome,
+        status: result.status,
         session_uuid: record.recorder.sessionUuid,
         ...(last !== undefined ? { applied_at_seq: last.seq } : {}),
         ...(result.detail !== undefined ? { detail: result.detail } : {}),
@@ -184,7 +201,7 @@ export async function applyCommands(
         events.push(event);
         acknowledgements.push({
           command_id: command.id,
-          outcome: "applied",
+          status: "applied",
           applied_at_seq: event.seq,
         });
         break;
@@ -195,7 +212,7 @@ export async function applyCommands(
         events.push(event);
         acknowledgements.push({
           command_id: command.id,
-          outcome: "applied",
+          status: "applied",
           applied_at_seq: event.seq,
         });
         break;
@@ -204,14 +221,15 @@ export async function applyCommands(
       case "resume":
       case "cancel":
       case "kill":
-      case "message": {
+      case "message":
+      case "steer": {
         let last: TachoEvent | undefined;
-        let outcome: CommandAcknowledgement["outcome"] = "applied";
+        let status: CommandAcknowledgement["status"] = "applied";
         for (const record of deps.registry.live()) {
           const result = await applyToSession(record, command, deps);
           events.push(...result.events);
           last = result.events[result.events.length - 1] ?? last;
-          if (result.outcome === "delivered") outcome = "delivered";
+          if (result.status === "received") status = "received";
         }
         const hostEvent = applied(
           deps.hostRecorder(),
@@ -221,7 +239,7 @@ export async function applyCommands(
         events.push(hostEvent);
         acknowledgements.push({
           command_id: command.id,
-          outcome,
+          status,
           applied_at_seq: (last ?? hostEvent).seq,
         });
         break;
@@ -229,7 +247,7 @@ export async function applyCommands(
       default:
         acknowledgements.push({
           command_id: command.id,
-          outcome: "failed",
+          status: "failed",
           detail: "unknown command",
         });
     }
