@@ -306,7 +306,10 @@ jobs:
       # the API throws 500 on POST /connections without a valid AES-256 key.
       INGESTION_CRYPTO_PROVIDER: env
       INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
-      E2E_TEST: "1"
+      # The exact string "true": packages/auth (auth.ts, local-env.ts) relaxes
+      # email verification and secure cookies on that value only, and the
+      # seed's sign-in self-check runs under the same value.
+      E2E_TEST: "true"
 
     steps:
       - uses: actions/checkout@v5
@@ -332,6 +335,14 @@ jobs:
         run: pnpm --filter @oxagen/app exec playwright install chromium
       - name: Build app (playwright.config webServer runs `pnpm start` in CI)
         run: pnpm turbo run build --filter=@oxagen/app
+      # INV-22: the build the webServer serves carries no seed or demo data.
+      - name: Scan the build for sentinels
+        working-directory: apps/app
+        run: node scripts/scan-build-sentinels.mjs
+      # The e2e seed (ARCHITECTURE.md §5), with its sign-in self-check; a
+      # failure fails the job before Playwright starts.
+      - name: Seed e2e
+        run: pnpm --filter @oxagen/app seed:e2e
       - name: E2e suite
         env:
           # Trace EVERY attempt, keeping only the failures. The default
