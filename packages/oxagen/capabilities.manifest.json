@@ -37,6 +37,23 @@
       }
     },
     {
+      "name": "rotate_agent_credential",
+      "file": "agent.credential.rotate.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "debug_execution",
       "file": "agent.debug.trace.ts",
       "domain": "agent",
@@ -51,6 +68,23 @@
         "api": true,
         "mcp": true,
         "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "commit_agent_definition",
+      "file": "agent.definition.commit.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },
@@ -332,6 +366,41 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_agent",
+      "file": "agent.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_agents",
+      "file": "agent.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },
@@ -807,6 +876,41 @@
       }
     },
     {
+      "name": "register_agent",
+      "file": "agent.register.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "retire_agent",
+      "file": "agent.retire.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "assign_agent_role",
       "file": "agent.role.assign.ts",
       "domain": "agent",
@@ -879,6 +983,23 @@
       }
     },
     {
+      "name": "suspend_agent",
+      "file": "agent.suspend.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "list_agent_tools",
       "file": "agent.tool.list.ts",
       "domain": "agent",
@@ -894,6 +1015,23 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_agent_toolbelt",
+      "file": "agent.toolbelt.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },
@@ -3867,6 +4005,23 @@
         "schema": true,
         "api": true,
         "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_incidents",
+      "file": "tacho.incident.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },

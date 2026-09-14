@@ -1,0 +1,51 @@
+# agent.suspend
+
+**Capability:** `suspend_agent`
+**Domain:** agent
+**Mode:** sync
+**Scope:** org + workspace
+**Surfaces:** api, mcp
+**Mutates:** yes
+**Billing gate:** skipped (`noBillingGate: true`; a governance write on the identity)
+
+## Intent
+
+Stop an agent identity without retiring it (MC spec §6.2; #2956). The principal's status becomes `suspended`, which invalidates every run token at its next call: the one-second revocation the identity half exists for. Credentials, roles and hosts stay as they are, so a resume (`suspended: false`) is one status write back to `active`. Suspending a suspended agent, or resuming an active one, answers the current state without a write.
+
+## Input
+
+| Field | Type | Notes |
+|---|---|---|
+| `agentId` | `string` | `agt_…` or slug. |
+| `suspended` | `boolean` | Default true; false resumes. |
+| `reason` | `string?` | Up to 512 chars, recorded on the principal. |
+
+## Output
+
+| Field | Type | Notes |
+|---|---|---|
+| `agentId` | `string` | |
+| `status` | `"suspended" \| "active"` | |
+| `changedAt` | `string` | ISO-8601. |
+
+## Roles
+
+Org Owner or Admin, checked by the handler (INV-29).
+
+## Side effects
+
+- Postgres: `iam.principals.status` on the agent's principal.
+- Security event `agent.suspended` or `agent.resumed` when the status changed.
+
+## Surfaces
+
+- `POST /api/v1/{org}/{ws}/agents/suspend`
+- MCP tool `suspend_agent`
+
+## Errors
+
+| code | meaning |
+|---|---|
+| `forbidden` | No signed-in user, or not an org Owner or Admin. |
+| `not_found` | No live agent with that id or slug (`agent_not_found`). |
+| `conflict` | The agent is retired (`agent_retired`) or has no delegated principal (`agent_principal_missing`). |

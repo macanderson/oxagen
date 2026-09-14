@@ -1,0 +1,72 @@
+{
+  "name": "retire_agent",
+  "domain": "agent",
+  "description": "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "identity"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "reason": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "retired"
+      },
+      "revokedCredentials": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "revokedHosts": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "retiredAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "agentId",
+      "status",
+      "revokedCredentials",
+      "revokedHosts",
+      "retiredAt"
+    ],
+    "additionalProperties": false
+  }
+}

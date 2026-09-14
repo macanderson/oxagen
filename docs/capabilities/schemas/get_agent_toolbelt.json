@@ -1,0 +1,262 @@
+{
+  "name": "get_agent_toolbelt",
+  "domain": "agent",
+  "description": "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "searchable"
+        ]
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "agentKey": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "computedAt": {
+        "type": "string"
+      },
+      "basis": {
+        "type": "object",
+        "properties": {
+          "humanCeiling": {
+            "type": "string",
+            "enum": [
+              "caller",
+              "sentinel"
+            ]
+          },
+          "roleGrants": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "denyGeneration": {
+            "type": "object",
+            "properties": {
+              "org": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workspace": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "org",
+              "workspace"
+            ],
+            "additionalProperties": false
+          },
+          "killSwitches": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "humanCeiling",
+          "roleGrants",
+          "denyGeneration",
+          "killSwitches"
+        ],
+        "additionalProperties": false
+      },
+      "presentation": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "searchable"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sentToModel": {
+            "type": "string",
+            "enum": [
+              "definitions",
+              "meta_tools"
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "limit",
+          "sentToModel"
+        ],
+        "additionalProperties": false
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "capability",
+                "mcp"
+              ]
+            },
+            "server": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "riskLevel": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "require_approval"
+              ]
+            },
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "readOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "server",
+            "category",
+            "riskLevel",
+            "decision",
+            "rule",
+            "readOnly"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "cannotSee": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "capability",
+                "mcp"
+              ]
+            },
+            "server": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "server",
+            "rule"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "agentId",
+      "agentKey",
+      "computedAt",
+      "basis",
+      "presentation",
+      "tools",
+      "cannotSee"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 228,
+  "generatedCount": 246,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -86,6 +86,14 @@
       "consumes": []
     },
     {
+      "name": "authorize_cli",
+      "domain": "auth",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "bind_agent_environment",
       "domain": "agent",
       "surfaces": [
@@ -138,6 +146,17 @@
       "domain": "reference",
       "surfaces": [
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "commit_agent_definition",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -602,6 +621,30 @@
       "consumes": []
     },
     {
+      "name": "get_action_usage",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_agent",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_agent_def",
       "domain": "agent",
       "surfaces": [
@@ -620,6 +663,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_agent_toolbelt",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -735,6 +789,18 @@
     {
       "name": "get_environment",
       "domain": "environment",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_evidence_retention",
+      "domain": "billing",
       "surfaces": [
         "api",
         "mcp",
@@ -952,6 +1018,18 @@
       "consumes": []
     },
     {
+      "name": "get_rate_card",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_reconcile_status",
       "domain": "schema",
       "surfaces": [
@@ -994,6 +1072,17 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1234,6 +1323,39 @@
       "consumes": []
     },
     {
+      "name": "list_agents",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_api_keys",
+      "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_approvals",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_branches",
       "domain": "repo",
       "surfaces": [
@@ -1356,6 +1478,17 @@
       "consumes": []
     },
     {
+      "name": "list_incidents",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_integrations",
       "domain": "integration",
       "surfaces": [
@@ -1387,6 +1520,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_members",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1527,6 +1671,17 @@
       "consumes": []
     },
     {
+      "name": "list_runs",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_schema_versions",
       "domain": "schema",
       "surfaces": [
@@ -1589,17 +1744,6 @@
       "surfaces": [
         "api",
         "agent",
-        "mcp"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "list_workspace_members",
-      "domain": "workspace",
-      "surfaces": [
-        "api",
         "mcp"
       ],
       "component": null,
@@ -1685,6 +1829,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "preview_action_cost",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1867,6 +2023,18 @@
       "consumes": []
     },
     {
+      "name": "register_agent",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "register_mcp_server",
       "domain": "agent",
       "surfaces": [
@@ -1961,6 +2129,17 @@
       "consumes": []
     },
     {
+      "name": "retire_agent",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reveal_secret",
       "domain": "secret",
       "surfaces": [
@@ -2024,6 +2203,17 @@
       "domain": "tacho",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "rotate_agent_credential",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2348,6 +2538,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "suspend_agent",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
