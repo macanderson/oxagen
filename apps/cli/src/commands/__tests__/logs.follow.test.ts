@@ -67,6 +67,28 @@ afterEach(async () => {
 
 afterAll(() => rmSync(HOME, { recursive: true, force: true }));
 
+/**
+ * Poll until `predicate` holds. Every wait in this file is on work the command
+ * does asynchronously (a `readDebugLog` per drain), so a fixed sleep is a bet
+ * on the machine rather than an assertion about the code: on a loaded CI runner
+ * the 10ms one here expired mid-drain and the suite asserted on an empty stdout.
+ * The timeout throws naming what it waited for, so a genuine hang still fails
+ * with the reason instead of an `expected undefined to be defined`.
+ */
+async function waitUntil(
+  predicate: () => boolean,
+  what: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
+    }
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 describe("oxagen logs --follow", () => {
   it("prints a message and returns when the file cannot be watched", async () => {
     watchMock.mockImplementation(() => {
@@ -101,17 +123,26 @@ describe("oxagen logs --follow", () => {
     }) as typeof process.on);
 
     const running = handleLogs({ follow: true });
-    // Let the pre-follow tail + baseline read settle before appending anything.
-    for (let i = 0; i < 50 && listener === undefined; i += 1) {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    expect(listener).toBeDefined();
+    // The command computes its `seen` baseline before it calls `watch`, so a
+    // defined listener is the signal that the pre-follow tail and the baseline
+    // read are both done and an append now counts as new.
+    await waitUntil(() => listener !== undefined, "follow mode to start watching");
 
     await debugLog("turn", "after.follow");
     listener!();
     // Two watch events for one append must collapse into one drain, not print twice.
     listener!();
-    await new Promise((r) => setTimeout(r, 10));
+    await waitUntil(() => out.includes("after.follow"), "the drain to print the new entry");
+    // The second event queued a trailing re-read. Wait for stdout to stay
+    // unchanged across consecutive polls so a double print is caught here
+    // rather than raced past by the assertion below.
+    let previous = "";
+    let settled = 0;
+    await waitUntil(() => {
+      settled = previous === out ? settled + 1 : 0;
+      previous = out;
+      return settled >= 3;
+    }, "stdout to go quiet after the drain");
 
     expect(stops.length).toBeGreaterThan(0);
     stops[0]!();
