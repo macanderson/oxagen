@@ -264,11 +264,16 @@ and `preview_action_cost` report for quoting.
 ### 12. Tokens and retention are not on the page
 
 `get_subscription.periodUsage` stays a report the app does not render. No
-table, contract or component carries a retention rate in rev1; retention
-settles later as an invoice line at a contracted per-GB-month rate that the
-lane which meters per-organisation evidence volume adds to `plans` and
-`contract_terms`. `chargeEvidenceRetention`, which had no production
-caller, is deleted.
+table carries a retention rate and no app component prints one.
+`get_rate_card` and `get_evidence_retention` keep reporting the published
+`RETENTION_USD_PER_GB_MONTH` constant for their API and MCP callers
+(`billing.action_rate_card.ts:90`, `billing.evidence_retention.ts:119`;
+the latter with `storedGbMeasured: false`, since no job measures
+per-organisation evidence volume), and both stay unbound in the app.
+Retention settles later as an invoice line at a contracted per-GB-month
+rate that the lane which meters per-organisation evidence volume adds to
+`plans` and `contract_terms`. `chargeEvidenceRetention`, which had no
+production caller, is deleted.
 
 ### 13. `create_org` grants no credits
 
