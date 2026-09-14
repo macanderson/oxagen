@@ -5,7 +5,8 @@
 // `defaultRoles` is documentation for Free, Build and Scale orgs. A handler
 // whose contract restricts roles calls `assertOrgRole` and refuses with
 // `HandlerError { code: "forbidden" }` when the actor holds none of the named
-// org roles (apps/app/ARCHITECTURE.md §3.2, INV-29). The class lives in
+// org roles, and none of the named workspace roles when the handler names
+// those too (apps/app/ARCHITECTURE.md §3.2, INV-29). The class lives in
 // @oxagen/oxagen so the API middleware maps it to 403 and the app's kernel
 // seam to `denied` without either depending on this package.
 //
@@ -14,9 +15,71 @@
 // can run the same check. `packages/handlers/src/lib/api-key-authz.ts`
 // re-exports `resolveActorOrgRole` for its existing callers.
 
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
+
+/** Which assignments a role lookup reads: org-wide, or one workspace's. */
+type RoleScope =
+  | { readonly kind: "org" }
+  | { readonly kind: "workspace"; readonly workspaceId: string };
+
+async function findActivePrincipalId(
+  tx: Tx,
+  orgId: string,
+  userId: string,
+): Promise<string | null> {
+  const [principalRow] = await tx
+    .select({ id: schema.principals.id })
+    .from(schema.principals)
+    .where(
+      and(
+        eq(schema.principals.orgId, orgId),
+        eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.kind, "human"),
+        eq(schema.principals.status, "active"),
+      ),
+    )
+    .limit(1);
+  return principalRow?.id ?? null;
+}
+
+/**
+ * ONE unexpired role name assigned to `principalId` in `scope`, or null. An
+ * org-wide assignment has `workspace_id IS NULL` and an org-scoped role; a
+ * workspace assignment carries the workspace id and a workspace-scoped role.
+ */
+async function findAssignedRole(
+  tx: Tx,
+  principalId: string,
+  orgId: string,
+  scope: RoleScope,
+): Promise<string | null> {
+  const [praRow] = await tx
+    .select({ roleName: schema.roles.name })
+    .from(schema.principalRoleAssignments)
+    .innerJoin(
+      schema.roles,
+      eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+    )
+    .where(
+      and(
+        eq(schema.principalRoleAssignments.principalId, principalId),
+        eq(schema.principalRoleAssignments.orgId, orgId),
+        eq(schema.roles.scopeKind, scope.kind),
+        scope.kind === "org"
+          ? isNull(schema.principalRoleAssignments.workspaceId)
+          : eq(schema.principalRoleAssignments.workspaceId, scope.workspaceId),
+        isNull(schema.principalRoleAssignments.deletedAt),
+        or(
+          isNull(schema.principalRoleAssignments.expiresAt),
+          gt(schema.principalRoleAssignments.expiresAt, new Date()),
+        ),
+      ),
+    )
+    .limit(1);
+  return praRow?.roleName ?? null;
+}
 
 /**
  * Resolve ONE of the acting user's org-scoped role names, or null when they
@@ -43,69 +106,63 @@ export async function resolveActorOrgRole(
   userId: string,
 ): Promise<string | null> {
   return withTenantDb(async (tx) => {
-    const [principalRow] = await tx
-      .select({ id: schema.principals.id })
-      .from(schema.principals)
-      .where(
-        and(
-          eq(schema.principals.orgId, orgId),
-          eq(schema.principals.parentUserId, userId),
-          eq(schema.principals.kind, "human"),
-          eq(schema.principals.status, "active"),
-        ),
-      )
-      .limit(1);
+    const principalId = await findActivePrincipalId(tx, orgId, userId);
+    if (principalId === null) return null;
+    return findAssignedRole(tx, principalId, orgId, { kind: "org" });
+  });
+}
 
-    if (!principalRow) return null;
-
-    const [praRow] = await tx
-      .select({ roleName: schema.roles.name })
-      .from(schema.principalRoleAssignments)
-      .innerJoin(
-        schema.roles,
-        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
-      )
-      .where(
-        and(
-          eq(schema.principalRoleAssignments.principalId, principalRow.id),
-          eq(schema.principalRoleAssignments.orgId, orgId),
-          eq(schema.roles.scopeKind, "org"),
-          isNull(schema.principalRoleAssignments.workspaceId),
-          isNull(schema.principalRoleAssignments.deletedAt),
-          or(
-            isNull(schema.principalRoleAssignments.expiresAt),
-            gt(schema.principalRoleAssignments.expiresAt, new Date()),
-          ),
-        ),
-      )
-      .limit(1);
-
-    return praRow?.roleName ?? null;
+/**
+ * The same lookup for the user's role in one workspace of the org: the first
+ * unexpired workspace-scoped assignment on that workspace, or null. Carries
+ * the non-determinism `resolveActorOrgRole` documents.
+ */
+export async function resolveActorWorkspaceRole(
+  orgId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<string | null> {
+  return withTenantDb(async (tx) => {
+    const principalId = await findActivePrincipalId(tx, orgId, userId);
+    if (principalId === null) return null;
+    return findAssignedRole(tx, principalId, orgId, {
+      kind: "workspace",
+      workspaceId,
+    });
   });
 }
 
 /** The fields of a `CapabilityContext` the role gate reads. */
 export interface OrgRoleActor {
   readonly orgId: string;
+  /** The workspace the call is scoped to; read only when `workspace` roles are required. */
+  readonly workspaceId?: string;
   readonly userId: string | null;
 }
 
-/** The org roles a handler accepts, by IAM role name (`iam.roles.name`). */
+/** The roles a handler accepts, by IAM role name (`iam.roles.name`). */
 export interface OrgRoleRequirement {
+  /** Org-wide roles that satisfy the gate. */
   readonly org: readonly string[];
+  /** Roles on `ctx.workspaceId` that satisfy it as well; absent for org-only gates. */
+  readonly workspace?: readonly string[];
 }
 
 /**
- * Refuse unless the signed-in user holds one of `required.org` in `ctx.orgId`.
+ * Refuse unless the signed-in user holds one of `required.org` in `ctx.orgId`,
+ * or — when the handler names `required.workspace` — one of those roles on
+ * `ctx.workspaceId`.
  *
- * Org roles are assigned to human principals (`iam.principals.parent_user_id`
+ * Roles are assigned to human principals (`iam.principals.parent_user_id`
  * with `kind = 'human'`), so the gate resolves `ctx.userId` and nothing else.
  * A context with no user — an API-key call, or none — is refused with reason
  * `no_principal` before any query: the kernel's enterprise IAM path is where
  * an API key authorizes as its creator (fetch-authz.ts), and this gate makes
  * no such mapping. Reason `org_role_required` covers a user with no active
- * principal, no org-scoped role, or a role outside the set. Returns the role
- * that satisfied the check so a handler can record it.
+ * principal, no qualifying role, or a role outside both sets. The workspace
+ * leg runs only after the org leg failed, and only when the context names a
+ * workspace. Returns the role name that satisfied the check so a handler can
+ * record it.
  */
 export async function assertOrgRole(
   ctx: OrgRoleActor,
@@ -118,13 +175,27 @@ export async function assertOrgRole(
       message: "No signed-in user on the request",
     });
   }
-  const role = await resolveActorOrgRole(ctx.orgId, ctx.userId);
-  if (role === null || !required.org.includes(role)) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "org_role_required",
-      message: `Requires one of the org roles ${required.org.join(", ")}`,
-    });
+  const orgRole = await resolveActorOrgRole(ctx.orgId, ctx.userId);
+  if (orgRole !== null && required.org.includes(orgRole)) return orgRole;
+
+  if (required.workspace && ctx.workspaceId) {
+    const wsRole = await resolveActorWorkspaceRole(
+      ctx.orgId,
+      ctx.workspaceId,
+      ctx.userId,
+    );
+    if (wsRole !== null && required.workspace.includes(wsRole)) return wsRole;
   }
-  return role;
+
+  const accepted = [
+    `org roles ${required.org.join(", ")}`,
+    ...(required.workspace
+      ? [`workspace roles ${required.workspace.join(", ")}`]
+      : []),
+  ].join(" or ");
+  throw new HandlerError({
+    code: "forbidden",
+    reason: "org_role_required",
+    message: `Requires one of the ${accepted}`,
+  });
 }
