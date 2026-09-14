@@ -31,10 +31,7 @@ describe("isPublicPath", () => {
     "/loginx",
     "/invite",
     "/api/mc/acme/core-platform/stream",
-    "/welcome",
-    "/welcome/wrap",
     "/new-organization",
-    "/acme/core-platform/register",
     "/cli/authorizex",
     "/github/setupx",
   ])("%s is gated", (path) => {
@@ -58,13 +55,11 @@ describe("proxy", () => {
     );
   });
 
-  it("sends a signed-out onboarding visit to /login and back to the same step", () => {
-    const res = proxy(request("/welcome/wrap?org=acme&ws=core-platform"));
+  it("sends a signed-out organization-creation visit to /login and back", () => {
+    const res = proxy(request("/new-organization"));
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.pathname).toBe("/login");
-    expect(location.searchParams.get("next")).toBe(
-      "/welcome/wrap?org=acme&ws=core-platform",
-    );
+    expect(location.searchParams.get("next")).toBe("/new-organization");
   });
 
   it("does not add next= for the root path", () => {

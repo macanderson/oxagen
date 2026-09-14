@@ -9,7 +9,6 @@ const base: InvitationView = {
   email: "marcus.bell@acme.example",
   role: "member",
   status: "pending",
-  inviterName: "Priya Raman",
   invitedAt: "2026-09-11T09:00:00.000Z",
   expiresAt: "2026-09-18T09:00:00.000Z",
 };

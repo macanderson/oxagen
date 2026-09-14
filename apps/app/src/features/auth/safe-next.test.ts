@@ -52,7 +52,9 @@ describe("sanitizeNext", () => {
   });
 
   it("returns the caller's fallback when refusing", () => {
-    expect(sanitizeNext("//evil.example", "/welcome")).toBe("/welcome");
+    expect(sanitizeNext("//evil.example", "/new-organization")).toBe(
+      "/new-organization",
+    );
   });
 });
 

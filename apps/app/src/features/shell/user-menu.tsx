@@ -1,29 +1,19 @@
 "use client";
-// The account menu behind the avatar (mockup `userMenu()`): the four Account
-// dialog tabs and the theme switch.
+// The user menu behind the avatar (mockup `userMenu()`): who is signed in and
+// the theme switch.
 import { Menu } from "@base-ui/react/menu";
 import { useTranslations } from "next-intl";
 import { initials } from "./format";
 import type { ShellData } from "./shell-data";
-import { type AccountTab, useShellState } from "./shell-state";
+import { useShellState } from "./shell-state";
 import { nextTheme } from "./theme";
-
-const ITEMS: readonly {
-  tab: AccountTab;
-  key: "account" | "preferences" | "security" | "privacy";
-}[] = [
-  { tab: "profile", key: "account" },
-  { tab: "preferences", key: "preferences" },
-  { tab: "security", key: "security" },
-  { tab: "privacy", key: "privacy" },
-];
 
 const itemClass =
   "flex cursor-pointer select-none items-center gap-2 rounded-sm px-2.5 py-1.5 text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg";
 
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
-  const { openAccount, theme, setTheme } = useShellState();
+  const { theme, setTheme } = useShellState();
   const viewer = data.context.ok ? data.context.value.viewer : null;
   return (
     <Menu.Root>
@@ -31,8 +21,8 @@ export function UserMenu({ data }: { data: ShellData }) {
         data-testid="user-menu-trigger"
         aria-label={
           viewer === null
-            ? t("topbar.accountUnknown")
-            : t("topbar.account", { name: viewer.name })
+            ? t("topbar.userMenuUnknown")
+            : t("topbar.userMenu", { name: viewer.name })
         }
         className="grid size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
@@ -49,20 +39,6 @@ export function UserMenu({ data }: { data: ShellData }) {
                 <p className="text-xs text-muted-foreground">{viewer.email}</p>
               </div>
             )}
-            <div className="py-1">
-              {ITEMS.map(({ tab, key }) => (
-                <Menu.Item
-                  key={tab}
-                  className={itemClass}
-                  onClick={() => {
-                    openAccount(tab);
-                  }}
-                >
-                  {t(`userMenu.${key}`)}
-                </Menu.Item>
-              ))}
-            </div>
-            <Menu.Separator className="-mx-1 my-1 h-px bg-menu-separator" />
             <Menu.Item
               className={itemClass}
               closeOnClick={false}

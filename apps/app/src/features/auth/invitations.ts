@@ -1,11 +1,12 @@
 // Read one invitation by its public token for /invite/[token], through the
-// onboarding read port: the live adapter reads `org.invitations` by public id
-// (src/data/adapters/live/onboarding.ts). The token's shape is checked here,
-// before any read.
+// system lookups seam (src/server/tenancy-lookups.ts): the visitor holds no
+// membership in the invitation's org yet, so the token is the capability and
+// the page shows only what the invitation email already disclosed. The token's
+// shape is checked here, before any read.
 import "server-only";
-import type { InvitationView } from "@/data/contracts/invitations";
-import { type Read, readError } from "@/data/not-backed";
-import { dataSource } from "@/data/source";
+import { InvitationView, toOrgRole } from "@/data/contracts/invitations";
+import { type Read, readError, readOk } from "@/data/not-backed";
+import { type InvitationRecord, systemLookups } from "@/server/tenancy-lookups";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -15,9 +16,31 @@ export function isInvitationToken(token: string): boolean {
   return TOKEN_PATTERN.test(token);
 }
 
+/** The stored row as the page's view model; a row outside the enums is unreadable, never guessed at. */
+export function toInvitationView(
+  token: string,
+  record: InvitationRecord,
+): Read<InvitationView> {
+  const parsed = InvitationView.safeParse({
+    token,
+    orgName: record.orgName,
+    orgSlug: record.orgSlug,
+    email: record.email,
+    role: toOrgRole(record.role),
+    status: record.status,
+    invitedAt: record.invitedAt.toISOString(),
+    expiresAt: record.expiresAt ? record.expiresAt.toISOString() : null,
+  });
+  return parsed.success
+    ? readOk(parsed.data)
+    : readError("invitation_unreadable", 500);
+}
+
 export async function loadInvitation(
   token: string,
 ): Promise<Read<InvitationView>> {
   if (!isInvitationToken(token)) return readError(INVITATION_NOT_FOUND, 404);
-  return dataSource().onboarding.invitation(token);
+  const record = await systemLookups.invitationByToken(token);
+  if (!record) return readError(INVITATION_NOT_FOUND, 404);
+  return toInvitationView(token, record);
 }

@@ -196,7 +196,7 @@ describe("SignupForm", () => {
     renderWithIntl(<SignupForm />);
     await fill();
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/welcome");
+      expect(router.replace).toHaveBeenCalledWith("/new-organization");
     });
   });
 
@@ -405,7 +405,9 @@ describe("ResetPasswordForm", () => {
 describe("VerifyPanel", () => {
   it("announces a spent link, validates the address and confirms a resend neutrally", async () => {
     actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
-    renderWithIntl(<VerifyPanel email={null} expired next="/welcome" />);
+    renderWithIntl(
+      <VerifyPanel email={null} expired next="/new-organization" />,
+    );
     expect(screen.getByTestId("verify-expired")).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: "Send a new link" }),
@@ -421,13 +423,17 @@ describe("VerifyPanel", () => {
     expect(await screen.findByTestId("verify-resent")).toBeInTheDocument();
     expect(actions.resendVerification).toHaveBeenCalledWith({
       email: "marcus.bell@acme.example",
-      next: "/welcome",
+      next: "/new-organization",
     });
   });
 
   it("prefills the address it was given", () => {
     renderWithIntl(
-      <VerifyPanel email="m@acme.example" expired={false} next="/welcome" />,
+      <VerifyPanel
+        email="m@acme.example"
+        expired={false}
+        next="/new-organization"
+      />,
     );
     expect(screen.getByLabelText("Work email")).toHaveValue("m@acme.example");
     expect(screen.queryByTestId("verify-expired")).toBeNull();

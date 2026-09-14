@@ -30,8 +30,7 @@ export const Organization = z.object({
 });
 export type Organization = z.infer<typeof Organization>;
 
-export const MfaFactor = z.enum(["passkey", "totp"]);
-export type MfaFactor = z.infer<typeof MfaFactor>;
+const MfaFactor = z.enum(["passkey", "totp"]);
 
 export const Member = z.object({
   personId: PublicId,
