@@ -250,7 +250,10 @@ describe("get_spend input", () => {
 });
 
 describe("set_budget input", () => {
-  const base = { enabled: true, limitUsd: 250 };
+  const base = {
+    enabled: true,
+    limit: { micros: "250000000", currency: "USD" },
+  };
 
   it("accepts an org monthly ceiling and defaults mode to hard", () => {
     const parsed = setBudget.input.safeParse({
