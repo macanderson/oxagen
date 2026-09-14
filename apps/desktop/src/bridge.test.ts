@@ -190,11 +190,27 @@ describe("runSidecar", () => {
       enrolled: true,
       wal: { sessions: 1, unshipped: 0 },
     });
+    // A clean run that printed nothing is null; a run that failed or wrote
+    // to stderr without a document is an error the panel must show.
     const none = tachoStatus();
     await Promise.resolve();
-    spawned[1]?.emit("stderr", "tacho: cannot read host.json");
-    spawned[1]?.emit("close", { code: 1 });
+    spawned[1]?.emit("close", { code: 0 });
     expect(await none).toBeNull();
+    const failed = tachoStatus();
+    await Promise.resolve();
+    spawned[2]?.emit("stderr", "tacho: cannot read host.json");
+    spawned[2]?.emit("close", { code: 1 });
+    await expect(failed).rejects.toThrow("tacho: cannot read host.json");
+    const silent = tachoStatus();
+    await Promise.resolve();
+    spawned[3]?.emit("close", { code: 2 });
+    await expect(silent).rejects.toThrow("tacho status exited 2");
+    // Not enrolled: the document is printed with exit 1 and is still read.
+    const notEnrolled = tachoStatus();
+    await Promise.resolve();
+    spawned[4]?.emit("stdout", '{"enrolled": false}');
+    spawned[4]?.emit("close", { code: 1 });
+    expect(await notEnrolled).toEqual({ enrolled: false });
   });
 });
 

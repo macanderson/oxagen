@@ -26,6 +26,30 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return [...a].sort().join(",") === [...b].sort().join(",");
 }
 
+/**
+ * `oxagen login --browser`: the PKCE flow forced open. The sidecar runs with
+ * piped stdio, so a bare `login` would refuse (no TTY, no token) or, with a
+ * session saved, print it and exit 0 without re-authenticating; the flag
+ * makes both Sign in and Switch organization the browser flow.
+ */
+export function loginArgs(): string[] {
+  return ["login", "--browser"];
+}
+
+/**
+ * An org change is only a change once a workspace in that org is picked:
+ * the previous org's workspace slug means nothing in the new one, and a
+ * same-named slug there is a workspace the operator never chose.
+ */
+export function needsWorkspacePick(
+  currentOrg: string | null,
+  picks: Pick<Picks, "org" | "workspace">,
+): boolean {
+  return (
+    picks.org !== null && picks.org !== currentOrg && picks.workspace === null
+  );
+}
+
 /** What the Workspace and Wrappers panels would change on the host. */
 export function pendingChange(
   host: HostTarget | null,
@@ -33,15 +57,22 @@ export function pendingChange(
 ): { target: boolean; harness: boolean } {
   if (host === null) return { target: false, harness: false };
   const target =
-    (picks.org !== null && picks.org !== host.org_slug) ||
-    (picks.workspace !== null && picks.workspace !== host.workspace_slug);
+    !needsWorkspacePick(host.org_slug, picks) &&
+    ((picks.org !== null && picks.org !== host.org_slug) ||
+      (picks.workspace !== null && picks.workspace !== host.workspace_slug));
   const harness =
     picks.harnesses !== null && !sameSet(picks.harnesses, host.harnesses);
   return { target, harness };
 }
 
-/** `tacho enroll` for a machine that is not enrolled yet. */
+/**
+ * `tacho enroll` for a machine that is not enrolled yet. `--org` never
+ * travels without `--workspace`: tacho would fill the workspace from the
+ * CLI's config.json, which names the previously signed-in org's workspace.
+ */
 export function enrollArgs(picks: Picks): string[] {
+  if (picks.org !== null && picks.workspace === null)
+    throw new Error(`pick a workspace in ${picks.org} first`);
   return [
     "enroll",
     ...(picks.org ? ["--org", picks.org] : []),
@@ -68,6 +99,8 @@ export function reassignArgs(
   picks: Picks,
   alsoDefault = false,
 ): SidecarCall {
+  if (needsWorkspacePick(host.org_slug, picks))
+    throw new Error(`pick a workspace in ${picks.org} first`);
   const change = pendingChange(host, picks);
   const org = picks.org ?? host.org_slug;
   const args = [

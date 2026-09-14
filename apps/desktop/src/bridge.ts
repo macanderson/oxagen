@@ -153,10 +153,24 @@ export async function runSidecar(
 
 export type { TachoStatus } from "./tacho-status";
 
-/** `tacho status --json`, the same document the CLI prints; null when the sidecar printed none. */
+/**
+ * `tacho status --json`, the same document the CLI prints. `status` exits 1
+ * when the machine is not enrolled but still prints the document, so the
+ * exit code alone means nothing; a run that printed no document and either
+ * failed or wrote to stderr (a host.json this build cannot parse, a service
+ * probe that threw) is an error the caller must show, not a silent null.
+ * Null is reserved for a clean run that printed nothing.
+ */
 export async function tachoStatus(): Promise<TachoStatus | null> {
   const result = await runSidecar("tacho", ["status", "--json"]);
-  return parseTachoStatus(result.stdout);
+  const status = parseTachoStatus(result.stdout);
+  if (status !== null) return status;
+  const detail = result.stderr.trim();
+  if (detail !== "" || result.code !== 0)
+    throw new Error(
+      detail || `tacho status exited ${result.code ?? "?"} without a document`,
+    );
+  return null;
 }
 
 /** `tacho detect --json`: which harnesses the machine has and which are hooked. */

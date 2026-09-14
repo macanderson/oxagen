@@ -764,6 +764,10 @@ export function buildProgram(): Command {
       "--workspace <slug>",
       "Workspace slug; with a saved session and no --token, rescopes the default without a browser",
     )
+    .option(
+      "--browser",
+      "Open the browser even without a TTY, and even when a session is saved (what the desktop app runs)",
+    )
     .option("--no-browser", "Prompt for token instead of opening the browser")
     .action(
       async (opts: {

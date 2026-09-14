@@ -505,6 +505,98 @@ describe("handleLogin — rescope (--org/--workspace, no --token, saved session)
   });
 });
 
+// ── handleLogin --browser: the desktop app's Sign in / Switch organization ───
+
+describe("handleLogin — --browser forces the PKCE flow off a TTY", () => {
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    // The desktop app spawns `oxagen login --browser` through a piped
+    // sidecar: stdin is never a TTY there.
+    origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: false,
+      configurable: true,
+      writable: true,
+    });
+    mockBrowserLogin.mockReset();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: origIsTTY,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it("opens the browser with no TTY and no saved session, and persists the result", async () => {
+    mockReadConfig.mockReturnValue({});
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_pkce",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+    });
+
+    await handleLogin({ browser: true });
+
+    expect(mockBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: "tok_pkce",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+      appUrl: "https://app.oxagen.sh",
+    });
+    expect(stdout).toContain("Logged in to Oxagen");
+    expect(stderr).not.toContain("No token provided");
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("replaces a saved session instead of reporting it (Switch organization)", async () => {
+    mockGetToken.mockReturnValue("tok_saved");
+    mockReadConfig.mockReturnValue({
+      token: "tok_saved",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+    });
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_other",
+      orgSlug: "beta",
+      workspaceSlug: "edge",
+    });
+
+    await handleLogin({ browser: true });
+
+    expect(mockBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(stdout).not.toContain("Run `oxagen logout`");
+    expect(mockWriteConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "tok_other", orgSlug: "beta" }),
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed browser flow as exit 1 without touching config", async () => {
+    mockReadConfig.mockReturnValue({});
+    mockBrowserLogin.mockRejectedValue(new Error("cancelled"));
+
+    await handleLogin({ browser: true });
+
+    expect(stderr).toContain("cancelled");
+    expect(process.exitCode).toBe(1);
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it("a bare login off a TTY still refuses: the flag is the only way in", async () => {
+    mockReadConfig.mockReturnValue({});
+
+    await handleLogin({});
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(stderr).toContain("No token provided");
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 // ── runBrowserLogin — the UI-agnostic core the REPL's Ink /login panel uses ─
 
 describe("runBrowserLogin", () => {

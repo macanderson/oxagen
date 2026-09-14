@@ -6,6 +6,8 @@ import {
   missionControlUrl,
   wizardStep,
   enrollArgs,
+  loginArgs,
+  needsWorkspacePick,
   pendingChange,
   primaryAction,
   reassignArgs,
@@ -21,8 +23,19 @@ const HOST = {
 const NONE = { org: null, workspace: null, harnesses: null };
 
 describe("sidecar argv", () => {
+  it("signs in with the browser flow forced, since the sidecar has no TTY", () => {
+    // A bare `login` in a piped child refuses without a token and, with a
+    // session saved, prints it and exits 0; only --browser reaches PKCE.
+    expect(loginArgs()).toEqual(["login", "--browser"]);
+  });
+
   it("enrolls with the picked org, workspace, and harness list", () => {
     expect(enrollArgs(NONE)).toEqual(["enroll", "--harness", "claude-code"]);
+    // An org without a workspace never reaches tacho: it would fill the
+    // workspace from config.json, the previous org's.
+    expect(() =>
+      enrollArgs({ org: "other", workspace: null, harnesses: null }),
+    ).toThrow(/pick a workspace in other/);
     expect(
       enrollArgs({
         org: "acme",
@@ -72,6 +85,38 @@ describe("sidecar argv", () => {
     ).toEqual({ target: false, harness: false });
     // Not enrolled: nothing is pending.
     expect(pendingChange(null, { ...NONE, workspace: "edge" })).toEqual({
+      target: false,
+      harness: false,
+    });
+  });
+
+  it("treats an org change as incomplete until a workspace in it is picked", () => {
+    // Resetting the workspace on an org change leaves the host's slug as the
+    // only candidate, and it names a workspace of the old org: no argv until
+    // the operator picks one in the new org.
+    const orgOnly = { org: "other", workspace: null, harnesses: null };
+    expect(needsWorkspacePick("acme", orgOnly)).toBe(true);
+    expect(needsWorkspacePick("acme", { org: "acme", workspace: null })).toBe(
+      false,
+    );
+    expect(needsWorkspacePick("acme", { org: "other", workspace: "x" })).toBe(
+      false,
+    );
+    expect(needsWorkspacePick(null, { org: "other", workspace: null })).toBe(
+      true,
+    );
+    expect(pendingChange(HOST, orgOnly)).toEqual({
+      target: false,
+      harness: false,
+    });
+    expect(() => reassignArgs(HOST, orgOnly)).toThrow(
+      /pick a workspace in other/,
+    );
+    expect(() => reassignArgs(HOST, orgOnly, true)).toThrow(
+      /pick a workspace in other/,
+    );
+    // Picking the host's own org back is not an org change.
+    expect(pendingChange(HOST, { ...orgOnly, org: "acme" })).toEqual({
       target: false,
       harness: false,
     });

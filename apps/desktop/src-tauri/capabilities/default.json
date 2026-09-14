@@ -9,6 +9,10 @@
     "core:window:allow-set-focus",
     "opener:default",
     {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$HOME/.config/oxagen/**" }]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "binaries/tacho", "sidecar": true, "args": true },

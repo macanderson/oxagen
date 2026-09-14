@@ -15,7 +15,7 @@
  * The app owns no state: it reads what the CLIs wrote and runs a sidecar
  * for every change (see bridge.ts); the argv it builds is in commands.ts.
  */
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -44,7 +44,9 @@ import {
   enrollArgs,
   HARNESS_LABEL,
   type Harness,
+  loginArgs,
   missionControlUrl,
+  needsWorkspacePick,
   pendingChange,
   reassignArgs,
   unenrollArgs,
@@ -80,6 +82,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  // Bumped after every sign-in so the org listing runs again: config.json's
+  // `logged_in` is presence-only and stays true across an expired session
+  // being replaced, so the boolean alone never re-triggers the listing.
+  const [sessionEpoch, setSessionEpoch] = useState(0);
   const [orgs, setOrgs] = useState<OrgItem[] | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[] | null>(null);
   const [pickedOrg, setPickedOrg] = useState<string | null>(null);
@@ -90,6 +96,9 @@ export function App() {
     offered: Update | null;
   }>({ caption: null, offered: null });
   const pollRef = useRef<number | null>(null);
+  // The last `tacho status` failure shown, so a failure that repeats on
+  // every poll is reported once rather than re-raised every 20 s.
+  const statusErrorRef = useRef<string | null>(null);
 
   // Wizard-only state. `firstRun` is fixed at launch: an enrolled machine
   // never sees the wizard, a fresh one stays in it until Finish.
@@ -114,8 +123,22 @@ export function App() {
       const next = await readState();
       setState(next);
       setFirstRun((prev) => (prev === null ? next.host === null : prev));
-      if (withHooks && next.host) setTacho(await tachoStatus());
       if (!next.host) setTacho(null);
+      else if (withHooks) {
+        try {
+          setTacho(await tachoStatus());
+          statusErrorRef.current = null;
+        } catch (e) {
+          // Hook presence, service state and WAL figures are now unknown;
+          // say so once, and keep the rest of the panel reading the files.
+          setTacho(null);
+          const text = `tacho status failed: ${e instanceof Error ? e.message : String(e)}`;
+          if (statusErrorRef.current !== text) {
+            statusErrorRef.current = text;
+            setError(text);
+          }
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -138,13 +161,22 @@ export function App() {
   const configToken = state?.config.logged_in ?? false;
   const loggedIn = configToken && !sessionExpired;
   const daemonUp = state?.daemon != null;
-  const orgForPicker =
-    pickedOrg ?? host?.org_slug ?? state?.config.org_slug ?? null;
-  const workspaceTarget =
-    pickedWorkspace ??
-    host?.workspace_slug ??
-    state?.config.workspace_slug ??
-    null;
+  // The org and workspace the pickers show: the pick, else what the host
+  // reports to, else the CLI default. Once another org is picked, the
+  // workspace is only what was picked in it — the previous org's slug is not
+  // a workspace there.
+  const currentOrg = host?.org_slug ?? state?.config.org_slug ?? null;
+  const orgForPicker = pickedOrg ?? currentOrg;
+  const workspacePending = needsWorkspacePick(currentOrg, {
+    org: pickedOrg,
+    workspace: pickedWorkspace,
+  });
+  const workspaceTarget = workspacePending
+    ? null
+    : (pickedWorkspace ??
+      host?.workspace_slug ??
+      state?.config.workspace_slug ??
+      null);
 
   // A token in config.json is "signed in" until the control plane says
   // otherwise; a 401 from the first user-scoped call marks the session dead.
@@ -175,7 +207,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [configToken]);
+  }, [configToken, sessionEpoch]);
   useEffect(() => {
     if (!loggedIn || !orgForPicker) {
       setWorkspaces(null);
@@ -267,8 +299,17 @@ export function App() {
     }
   }
 
+  // `oxagen login --browser` replaces whatever session config.json holds,
+  // so a sign-in after a 401 (or a Switch organization) starts the pickers
+  // over from the new session rather than keeping the dead one's verdict.
   const signIn = () =>
-    act("signin", "oxagen", ["login"], () => setNotice("Signed in."));
+    act("signin", "oxagen", loginArgs(), () => {
+      setSessionExpired(false);
+      setSessionEpoch((n) => n + 1);
+      setPickedOrg(null);
+      setPickedWorkspace(null);
+      setNotice("Signed in.");
+    });
   const signOut = () =>
     act("signout", "oxagen", ["logout"], () => {
       setOrgs(null);
@@ -281,14 +322,21 @@ export function App() {
   const register = () => {
     const chosen = registration ?? [];
     setOutcome(null);
-    return act(
-      "enroll",
-      "tacho",
-      enrollArgs({
+    let args: string[];
+    try {
+      args = enrollArgs({
         org: orgForPicker,
         workspace: workspaceTarget,
         harnesses: chosen,
-      }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    return act(
+      "enroll",
+      "tacho",
+      args,
       () => {
         setOutcome({
           ok: true,
@@ -352,11 +400,17 @@ export function App() {
 
   const applyWorkspace = () => {
     if (!host) return;
-    const call = reassignArgs(
-      host,
-      { org: pickedOrg, workspace: pickedWorkspace, harnesses: null },
-      alsoDefault,
-    );
+    let call: ReturnType<typeof reassignArgs>;
+    try {
+      call = reassignArgs(
+        host,
+        { org: pickedOrg, workspace: pickedWorkspace, harnesses: null },
+        alsoDefault,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
     return act("apply", call.sidecar, call.args, () => {
       setPickedOrg(null);
       setPickedWorkspace(null);
@@ -433,6 +487,25 @@ export function App() {
   }
   async function showLog() {
     setTail(await logTail(120));
+  }
+  /**
+   * Open the collector log in the system handler. `open_path` is scoped to
+   * `~/.config/oxagen` in capabilities/default.json; a log elsewhere (a
+   * `TACHO_HOME` override) falls back to revealing it in the file manager,
+   * which the opener permits for any path.
+   */
+  async function openLog(path: string) {
+    try {
+      await openPath(path);
+    } catch (first) {
+      try {
+        await revealItemInDir(path);
+      } catch (second) {
+        setError(
+          `Could not open ${path}: ${second instanceof Error ? second.message : String(second)} (${first instanceof Error ? first.message : String(first)})`,
+        );
+      }
+    }
   }
 
   async function doCheckUpdate() {
@@ -533,6 +606,7 @@ export function App() {
       onChange={(e) => setPickedWorkspace(e.target.value)}
       disabled={busy !== null || workspaces === null}
     >
+      {workspaceTarget === null && <option value="">Pick a workspace…</option>}
       {(workspaces ?? []).map((w) => (
         <option key={w.slug} value={w.slug}>
           {w.name} ({w.slug})
@@ -569,7 +643,7 @@ export function App() {
           <button
             type="button"
             className="quiet"
-            onClick={() => state && void openPath(state.log_path)}
+            onClick={() => state && void openLog(state.log_path)}
           >
             Open {state?.log_path}
           </button>
@@ -1092,18 +1166,23 @@ export function App() {
           {orgPicker}
           {workspacePicker}
           {!loggedIn && <span className="pill">sign in to change</span>}
+          {loggedIn && workspacePending && (
+            <span className="pill">pick a workspace in {orgForPicker}</span>
+          )}
         </div>
-        {change.target && (
+        {(change.target || workspacePending) && (
           <div className="row">
             <button
               type="button"
               className="primary"
               onClick={applyWorkspace}
-              disabled={busy !== null || !loggedIn}
+              disabled={busy !== null || !loggedIn || workspacePending}
             >
               {busy === "apply"
                 ? "Applying…"
-                : `Reassign to ${orgForPicker}/${workspaceTarget}`}
+                : workspacePending
+                  ? `Reassign to ${orgForPicker}/…`
+                  : `Reassign to ${orgForPicker}/${workspaceTarget}`}
             </button>
             <label className="check">
               <input

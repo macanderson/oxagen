@@ -12,6 +12,13 @@
  * the command exits with an error. Pass --no-browser to force the token-prompt
  * flow even on an interactive TTY.
  *
+ * `--browser` is the opposite override: open the browser even when stdin is
+ * not a TTY, and even when a session is already saved. It exists for the
+ * desktop app, which runs `oxagen login --browser` from a piped sidecar for
+ * both "Sign in" and "Switch organization" — a bare `login` there would
+ * either refuse (no TTY, no token) or print the saved session and exit 0
+ * without re-authenticating.
+ *
  * Rescope: `oxagen login --org <slug> --workspace <slug>` with no --token and a
  * saved session re-uses that token — validates it with the whoami probe, runs
  * the shared linker on the given slugs, and rewrites the default pair in
@@ -40,8 +47,9 @@ export interface LoginOptions {
   org?: string;
   workspace?: string;
   /**
-   * `false` when --no-browser is passed; `true` (default) otherwise.
-   * Commander sets this to false when the user passes `--no-browser`.
+   * `false` when --no-browser is passed, `true` when --browser is passed,
+   * undefined otherwise (the TTY decides). `true` forces the PKCE flow: no
+   * TTY needed, and a saved session is replaced rather than reported.
    */
   browser?: boolean;
 }
@@ -155,8 +163,10 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   const isTTY = process.stdin.isTTY ?? false;
   const config = readConfig();
 
-  // No credentials provided → show current session status if already logged in.
-  if (!opts.token && !opts.org && !opts.workspace) {
+  // No credentials provided → show current session status if already logged
+  // in. `--browser` is an explicit request to sign in again (the desktop
+  // app's Switch organization), so it skips this and opens the browser.
+  if (!opts.token && !opts.org && !opts.workspace && opts.browser !== true) {
     const token = getToken();
     const orgSlug = config.orgSlug;
     const workspaceSlug = config.workspaceSlug;
@@ -183,11 +193,15 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
 
   // ── Browser-based PKCE flow (default for interactive TTY) ───────────────────
   // Use browser flow when:
-  //   - we are on an interactive TTY, AND
+  //   - we are on an interactive TTY or --browser was passed, AND
   //   - the caller has not provided a token directly (--token), AND
   //   - --no-browser has not been passed (opts.browser === false), AND
   //   - this is not a rescope of the saved session.
-  const useBrowser = isTTY && !opts.token && opts.browser !== false && !rescope;
+  const useBrowser =
+    (isTTY || opts.browser === true) &&
+    !opts.token &&
+    opts.browser !== false &&
+    !rescope;
 
   if (useBrowser) {
     try {
