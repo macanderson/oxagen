@@ -13,11 +13,16 @@ import type { SQL } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
+  withSystemDb: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  return {
+    ...real,
+    withTenantDb: mocks.withTenantDb,
+    withSystemDb: mocks.withSystemDb,
+  };
 });
 
 import { makeWithTenantDbMock } from "@oxagen/database";
@@ -55,6 +60,9 @@ import {
   buildListRunAttemptsSql,
   buildListAttemptIdentitySql,
   buildReadAttemptEventsSinceSql,
+  buildListCompactedSealsSql,
+  buildCompactSealedAttemptsSql,
+  framesFromSegment,
   type AttemptEventStateRow,
   type AttemptRow,
   type LockedAttemptRow,
@@ -64,8 +72,17 @@ import {
   type RunSummaryRow,
   type RunV2IdentityRow,
 } from "./run-store";
-import { NO_BODY } from "./frame-body";
-import { digestBytes, readArchiveSegment } from "@oxagen/tacho";
+import {
+  archiveFrameOf,
+  deriveSealRollup,
+  NO_BODY,
+  readArchiveFrame,
+} from "./frame-body";
+import {
+  buildArchiveSegment,
+  digestBytes,
+  readArchiveSegment,
+} from "@oxagen/tacho";
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
@@ -278,15 +295,21 @@ function fakeBodyStore() {
 /** A fake archive store: records the segment and answers a ref. */
 function fakeArchiveStore() {
   const segments: Array<{ digest: string; bytes: Uint8Array }> = [];
+  const refOf = (digest: string) => `evidence/segment/${digest.slice(7)}`;
   return {
     segments,
     store: {
       putSegment: vi.fn(
         async (input: { digest: string; bytes: Uint8Array }) => {
           segments.push(input);
-          return { ref: `evidence/segment/${input.digest.slice(7)}` };
+          return { ref: refOf(input.digest) };
         },
       ),
+      getSegment: vi.fn(async (ref: string) => {
+        const found = segments.find((s) => refOf(s.digest) === ref);
+        if (!found) throw new Error(`no segment at ${ref}`);
+        return found.bytes;
+      }),
     },
   };
 }
@@ -334,6 +357,7 @@ function durableRow(
     payload_inline: prepared.payload,
     encrypted_payload_ref: prepared.encryptedPayloadRef,
     observed_at: prepared.observedAt,
+    created_at: "2026-09-11T10:00:00.500Z",
     body_ref: null,
     body_digest: null,
     body_bytes: null,
@@ -496,6 +520,9 @@ describe("mapAttemptRow", () => {
     completeness_gaps: null,
     merkle_root: null,
     archive_segment_ref: null,
+    model_calls: null,
+    tool_calls: null,
+    turns: null,
   };
 
   it("projects an open attempt with no seal and no provenance", () => {
@@ -1162,6 +1189,9 @@ describe("SQL builders", () => {
         completenessGaps: ["tool_bodies"],
         merkleRoot: SHA_1,
         archiveSegmentRef: "evidence/segment/abc",
+        modelCalls: 0,
+        toolCalls: 1,
+        turns: 0,
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
@@ -2404,5 +2434,265 @@ describe("sealAttempt: replay evidence", () => {
       }),
     ).rejects.toThrow(/no archive store/);
     expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+  });
+});
+
+// ── Compaction (spec §13.3; ADR-057) ─────────────────────────────────────────
+
+describe("the seal's rollup", () => {
+  const modelRow = (seq: number, turn: number | null) => ({
+    ...durableRow(
+      prepareAttemptEvent({
+        attemptSeq: seq,
+        eventType: "model.call_completed",
+        observedAt: OBSERVED_AT,
+        payload: {
+          model_call_id: `mc_${seq}`,
+          turn_index: turn ?? 0,
+          provider: "anthropic",
+          model: "claude-sonnet-4-5",
+          model_policy_decision_ref: "azd_0123456789abcdef",
+          model_config_digest: SHA_1,
+          system_instruction_digest: SHA_1,
+          message_sequence_digest: SHA_1,
+          tool_schema_digest: SHA_1,
+          ordered_frame_use_digest: SHA_1,
+          outcome: "completed",
+        },
+      }),
+      `event-${seq}`,
+      String(seq),
+    ),
+    ...(turn === null
+      ? { payload_inline: null, encrypted_payload_ref: "evb_x" }
+      : {}),
+  });
+
+  it("counts model calls, tool calls and distinct turns from the rows", () => {
+    const rows = [
+      modelRow(1, 0),
+      durableRow(prepareAttemptEvent(toolEvent(2)), "event-2", "2"),
+      modelRow(3, 0),
+      modelRow(4, 1),
+    ];
+    expect(deriveSealRollup(rows)).toEqual({
+      modelCalls: 3,
+      toolCalls: 1,
+      turns: 2,
+    });
+    expect(deriveSealRollup([])).toEqual({
+      modelCalls: 0,
+      toolCalls: 0,
+      turns: 0,
+    });
+  });
+
+  it("answers turns as null when one model call's payload is encrypted (negative)", () => {
+    expect(deriveSealRollup([modelRow(1, 0), modelRow(2, null)])).toEqual({
+      modelCalls: 2,
+      toolCalls: 0,
+      turns: null,
+    });
+  });
+
+  it("writes the rollup on the seal", async () => {
+    const prepared = [
+      prepareAttemptEvent(toolEvent(1)),
+      prepareAttemptEvent(terminalEvent(2)),
+    ];
+    const rows = prepared.map((p, i) =>
+      durableRow(p, `event-${i + 1}`, String(i + 5)),
+    );
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.sql).toContain("model_calls, tool_calls, turns");
+    // One tool call, no model call, zero turns.
+    expect(seal?.params.slice(-3)).toEqual([0, 1, 0]);
+  });
+});
+
+describe("the archive envelope", () => {
+  it("round-trips every row field through the segment, identity and instants included", () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const row = {
+      ...durableRow(prepared, "0192d4a8-7c1e-7a00-8000-0000000000e1", "7"),
+      body_ref: "evb:v1:test:abc",
+      body_digest: SHA_1,
+      body_bytes: 3,
+      redactions: [
+        { path: "bytes:0-1", reason: "jwt", original_digest: SHA_1 },
+      ],
+      fidelity: "full",
+    };
+    const back = readArchiveFrame(archiveFrameOf(row).envelope);
+    expect(back).toEqual({ ...row, observed_at: row.observed_at });
+  });
+
+  it("refuses a line that is not a frame (negative)", () => {
+    expect(readArchiveFrame({ hello: "world" })).toBeNull();
+    expect(readArchiveFrame("frame")).toBeNull();
+    expect(readArchiveFrame({ event_id: "x", content: {} })).toBeNull();
+  });
+});
+
+describe("compaction", () => {
+  const seal = {
+    attempt_id: UUID_ATTEMPT,
+    attempt_public_id: "arat_0123456789abcdefghjkmn",
+    archive_segment_ref: "evidence/segment/abc",
+    final_run_seq: "6",
+  };
+
+  function segmentOf(rows: AttemptEventStateRow[]): Uint8Array {
+    return buildArchiveSegment(rows.map(archiveFrameOf)).bytes;
+  }
+
+  it("deletes through the SECURITY DEFINER function with the cutoff, never the seal", async () => {
+    const executed: Array<{ sql: string; params: unknown[] }> = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn({
+          execute: (query: unknown) => {
+            const compiled = compile(query as SQL);
+            executed.push(compiled);
+            return Promise.resolve([{ removed: "42" }]);
+          },
+        }),
+    );
+    const removed = await createPostgresRunStore().compactSealedAttempts(
+      new Date("2025-08-01T00:00:00.000Z"),
+    );
+    expect(removed).toBe(42);
+    expect(executed[0]?.sql).toContain(
+      "SELECT agent.compact_sealed_attempt_events(",
+    );
+    expect(executed[0]?.params).toEqual(["2025-08-01T00:00:00.000Z"]);
+    expect(executed[0]?.sql).not.toMatch(/DELETE|agent_run_attempt_seals/);
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("names, in the compacted-seals query, only sealed attempts with a segment and no hot rows past the cursor", () => {
+    const { sql: text, params } = compile(
+      buildListCompactedSealsSql(UUID_RUN, "4"),
+    );
+    expect(text).toContain("archive_segment_ref IS NOT NULL");
+    expect(text).toContain("final_run_seq > ");
+    expect(text).toContain("NOT EXISTS");
+    expect(params).toEqual([UUID_RUN, "4"]);
+    expect(compile(buildCompactSealedAttemptsSql(new Date(0))).params).toEqual([
+      "1970-01-01T00:00:00.000Z",
+    ]);
+  });
+
+  it("reads a compacted attempt's frames from its segment, past the cursor, in order, with every field the hot row carried", async () => {
+    const prepared = [
+      prepareAttemptEvent(toolEvent(1)),
+      prepareAttemptEvent(toolEvent(2, "call_2")),
+      prepareAttemptEvent(terminalEvent(3)),
+    ];
+    const rows = prepared.map((p, i) => ({
+      ...durableRow(
+        p,
+        `0192d4a8-7c1e-7a00-8000-00000000000${i + 1}`,
+        String(i + 4),
+      ),
+      body_digest: i === 0 ? SHA_1 : null,
+      body_bytes: i === 0 ? 3 : null,
+      redactions: i === 0 ? [] : null,
+    }));
+    const frames = framesFromSegment(seal, segmentOf(rows), "4");
+    expect(frames.map((f) => f.runSeq)).toEqual(["5", "6"]);
+    expect(frames[0]).toMatchObject({
+      eventId: "0192d4a8-7c1e-7a00-8000-000000000002",
+      attemptId: UUID_ATTEMPT,
+      attemptPublicId: "arat_0123456789abcdefghjkmn",
+      eventType: "tool.call_completed",
+      eventDigest: prepared[1]!.eventDigest,
+      body: NO_BODY,
+    });
+    expect(frames[0]?.observedAt.toISOString()).toBe(OBSERVED_AT);
+    expect(frames[0]?.recordedAt.toISOString()).toBe(
+      "2026-09-11T10:00:00.500Z",
+    );
+    expect(framesFromSegment(seal, segmentOf(rows), "0")[0]?.body).toEqual({
+      bodyRef: null,
+      bodyDigest: SHA_1,
+      bodyBytes: 3,
+      redactions: [],
+      fidelity: "digest_only",
+    });
+  });
+
+  it("refuses a segment holding a line that is not a frame (negative)", () => {
+    const bad = buildArchiveSegment([
+      { digest: SHA_1 as `sha256:${string}`, envelope: { not: "a frame" } },
+    ]).bytes;
+    expect(() => framesFromSegment(seal, bad, "0")).toThrow(RunStoreStateError);
+  });
+
+  it("readAttemptEventsSince merges compacted frames ahead of hot rows and pages across both", async () => {
+    const prepared = [
+      prepareAttemptEvent(toolEvent(1)),
+      prepareAttemptEvent(terminalEvent(2)),
+    ];
+    const compactedRows = prepared.map((p, i) =>
+      durableRow(
+        p,
+        `0192d4a8-7c1e-7a00-8000-00000000000${i + 1}`,
+        String(i + 1),
+      ),
+    );
+    const archive = fakeArchiveStore();
+    const { ref } = await archive.store.putSegment({
+      digest: digestBytes(segmentOf(compactedRows)),
+      bytes: segmentOf(compactedRows),
+    });
+    const hot = prepareAttemptEvent(toolEvent(1, "call_hot"));
+    const hotRow = {
+      ...durableRow(hot, "0192d4a8-7c1e-7a00-8000-0000000000aa", "3"),
+      attempt_id: "0192d4a8-7c1e-7a00-8000-0000000000b2",
+      attempt_public_id: "arat_hothothothothothotho",
+    };
+    // The compacted-seals query also names the event table (NOT EXISTS), so
+    // it is routed first.
+    const { tx } = makeRoutingTx([
+      {
+        match: /NOT EXISTS/,
+        rows: [{ ...seal, archive_segment_ref: ref, final_run_seq: "2" }],
+      },
+      { match: /FROM agent\.agent_run_events e/, rows: [hotRow] },
+    ]);
+    useTx(tx);
+    const store = createPostgresRunStore({ archive: archive.store });
+    const all = await store.readAttemptEventsSince(UUID_RUN, "0", 10);
+    expect(all.map((e) => [e.runSeq, e.attemptPublicId])).toEqual([
+      ["1", "arat_0123456789abcdefghjkmn"],
+      ["2", "arat_0123456789abcdefghjkmn"],
+      ["3", "arat_hothothothothothotho"],
+    ]);
+    const page = await store.readAttemptEventsSince(UUID_RUN, "0", 2);
+    expect(page.map((e) => e.runSeq)).toEqual(["1", "2"]);
+  });
+
+  it("readAttemptEventsSince fails rather than answers a shorter run when a compacted attempt has no archive store (negative)", async () => {
+    const { tx } = makeRoutingTx([
+      { match: /NOT EXISTS/, rows: [seal] },
+      { match: /FROM agent\.agent_run_events e/, rows: [] },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().readAttemptEventsSince(UUID_RUN, "0", 10),
+    ).rejects.toThrow(RunStoreStateError);
   });
 });

@@ -867,8 +867,20 @@ export const agentRunAttemptSeals = agentSchema.table(
     // storage key a compacted run reads from.
     merkleRoot: text("merkle_root"),
     archiveSegmentRef: text("archive_segment_ref"),
+    // The seal's rollup (spec §13.3): model calls, tool calls and distinct
+    // turns folded from the rows at seal, so a run keeps its counts once
+    // compaction (agent.compact_sealed_attempt_events) has removed its hot
+    // frames. `turns` is null when a model call's payload was encrypted,
+    // because the turn index travels inside it.
+    modelCalls: integer("model_calls"),
+    toolCalls: integer("tool_calls"),
+    turns: integer("turns"),
   },
   (t) => ({
+    rollupCheck: check(
+      "agent_run_attempt_seals_rollup_check",
+      sql`(${t.modelCalls} IS NULL OR ${t.modelCalls} >= 0) AND (${t.toolCalls} IS NULL OR ${t.toolCalls} >= 0) AND (${t.turns} IS NULL OR ${t.turns} >= 0) AND (${t.replayGrade} IS NULL) = (${t.modelCalls} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.toolCalls} IS NULL)`,
+    ),
     // An attempt seals exactly once — this uniqueness is what makes the
     // seal/grant/obligation transaction idempotent under duplicate sweeps.
     attemptUniq: uniqueIndex("agent_run_attempt_seals_attempt_uq").on(

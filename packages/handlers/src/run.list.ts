@@ -256,6 +256,70 @@ export function ledgerRollupQuery(
 }
 
 /**
+ * The rollup of a run's compacted attempts (spec §13.3; ADR-057): attempts
+ * whose hot frames compaction removed keep their counts on the seal. Summed
+ * per run over the seals with no rows left in the event log, so a run that is
+ * half compacted counts every frame exactly once when this is added to
+ * `ledgerRollupQuery`. `opaqueTurns` is true when any such seal could not
+ * count turns (an encrypted model call hid its turn index).
+ */
+export function ledgerCompactedRollupQuery(
+  db: QueryDb,
+  scope: RunScope,
+  runIds: readonly string[],
+) {
+  return db
+    .select({
+      runId: seals.runId,
+      frames: sql<number>`coalesce(sum(${seals.eventCount}), 0)::int`.mapWith(
+        Number,
+      ),
+      modelCalls:
+        sql<number>`coalesce(sum(${seals.modelCalls}), 0)::int`.mapWith(Number),
+      toolCalls: sql<number>`coalesce(sum(${seals.toolCalls}), 0)::int`.mapWith(
+        Number,
+      ),
+      turns: sql<number>`coalesce(sum(${seals.turns}), 0)::int`.mapWith(Number),
+      opaqueTurns: sql<boolean>`bool_or(${seals.turns} is null)`,
+    })
+    .from(seals)
+    .where(
+      and(
+        eq(seals.orgId, scope.orgId),
+        eq(seals.workspaceId, scope.workspaceId),
+        inArray(seals.runId, [...runIds]),
+        sql`${seals.archiveSegmentRef} is not null`,
+        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId})`,
+      ),
+    )
+    .groupBy(seals.runId);
+}
+
+/** The event-log rollup plus the compacted seals' rollup, per run. */
+export function addCompactedRollup(
+  hot: LedgerEventRollup | undefined,
+  compacted:
+    | {
+        frames: number;
+        modelCalls: number;
+        toolCalls: number;
+        turns: number;
+        opaqueTurns: boolean;
+      }
+    | undefined,
+): LedgerEventRollup | undefined {
+  if (!compacted) return hot;
+  const base = hot ?? EMPTY_ROLLUP;
+  return {
+    frames: base.frames + compacted.frames,
+    modelCalls: base.modelCalls + compacted.modelCalls,
+    toolCalls: base.toolCalls + compacted.toolCalls,
+    turnIndexes: base.turnIndexes + compacted.turns,
+    opaqueModelCalls: base.opaqueModelCalls + (compacted.opaqueTurns ? 1 : 0),
+  };
+}
+
+/**
  * The latest attempt seal per run: when it sealed, the grade it recorded and
  * the gaps the grade was computed from (ADR-057). One row per run.
  */
@@ -707,10 +771,20 @@ export const postgresRunQueries: RunQueries = {
   },
   ledgerRollups: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();
-    const rows = await withTenantDb((tx) =>
-      ledgerRollupQuery(tx, scope, runIds),
-    );
-    return new Map(rows.map(({ runId, ...rollup }) => [runId, rollup]));
+    const [rows, compacted] = await withTenantDb(async (tx) => [
+      await ledgerRollupQuery(tx, scope, runIds),
+      await ledgerCompactedRollupQuery(tx, scope, runIds),
+    ]);
+    const hot = new Map(rows.map(({ runId, ...rollup }) => [runId, rollup]));
+    const out = new Map<string, LedgerEventRollup>();
+    for (const runId of runIds) {
+      const rollup = addCompactedRollup(
+        hot.get(runId),
+        compacted.find((c) => c.runId === runId),
+      );
+      if (rollup) out.set(runId, rollup);
+    }
+    return out;
   },
   ledgerSeals: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();

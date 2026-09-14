@@ -72,7 +72,11 @@ export async function insertTachoEvents(
 export interface TachoFrameRow {
   seq: number;
   ts: string;
+  /** The envelope's ULID. */
+  eventId: string;
   kind: string;
+  /** The chain link to the frame before (spec §8.3). */
+  prevHash: string;
   hash: string;
   /** Empty when the frame carried no content. */
   contentDigest: string;
@@ -96,7 +100,9 @@ export interface TachoFrameRow {
 interface RawTachoFrameRow {
   seq: string | number;
   ts: string;
+  event_id: string;
   kind: string;
+  prev_hash: string;
   hash: string;
   content_digest: string;
   bytes_ref: string;
@@ -126,7 +132,7 @@ export async function selectTachoEvents(args: {
   const res = await chSelect<RawTachoFrameRow>({
     query: `
       SELECT
-        seq, toString(ts) AS ts, kind, hash, content_digest, bytes_ref,
+        seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
         redactions, body, tool_name, tool_status, tool_use_id, model, provider,
         policy_decision, cost_usd_micros, turn_seq
       FROM ${TACHO_EVENTS_TABLE} FINAL
@@ -146,7 +152,9 @@ export async function selectTachoEvents(args: {
   return res.data.map((r) => ({
     seq: Number(r.seq),
     ts: r.ts,
+    eventId: r.event_id,
     kind: r.kind,
+    prevHash: r.prev_hash,
     hash: r.hash,
     contentDigest: r.content_digest,
     bytesRef: r.bytes_ref,

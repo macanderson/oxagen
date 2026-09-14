@@ -146,7 +146,9 @@ describe("selectTachoEvents", () => {
         {
           seq: "3",
           ts: "2026-09-08 10:06:03.000",
+          event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
           kind: "tool_call",
+          prev_hash: "sha256:" + "a".repeat(64),
           hash: "sha256:" + "b".repeat(64),
           content_digest: "sha256:" + "c".repeat(64),
           bytes_ref: "",
@@ -172,7 +174,9 @@ describe("selectTachoEvents", () => {
       {
         seq: 3,
         ts: "2026-09-08 10:06:03.000",
+        eventId: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
         kind: "tool_call",
+        prevHash: "sha256:" + "a".repeat(64),
         hash: "sha256:" + "b".repeat(64),
         contentDigest: "sha256:" + "c".repeat(64),
         bytesRef: "",

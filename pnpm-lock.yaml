@@ -1438,6 +1438,9 @@ importers:
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

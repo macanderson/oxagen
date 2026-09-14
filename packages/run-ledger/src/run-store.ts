@@ -61,20 +61,26 @@
  * through `makeWithTenantDbMock`).
  */
 import { sql, type SQL } from "drizzle-orm";
-import { withTenantDb, type Tx } from "@oxagen/database";
-import { buildArchiveSegment, type Redaction } from "@oxagen/tacho";
+import { withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
+import {
+  buildArchiveSegment,
+  readArchiveSegment,
+  type Redaction,
+} from "@oxagen/tacho";
 import type { PlatformSurface } from "./surface";
 import {
   type AttemptEventBodyInput,
   archiveFrameOf,
   bodyRetainedByPolicy,
   deriveCompletenessGaps,
+  deriveSealRollup,
   digestOnlyColumns,
   type FrameBodyColumns,
   gradeSealedAttempt,
   NO_BODY,
   type PreparedFrameBody,
   prepareFrameBody,
+  readArchiveFrame,
   retainedColumns,
   type RetentionPolicyBinding,
   type RunArchiveStore,
@@ -281,6 +287,14 @@ export interface AttemptEventReadRecord {
   body: FrameBodyColumns;
 }
 
+/** The generated summary as `summarize_run` writes it. */
+export interface GeneratedRunSummary {
+  name: string;
+  summary: string;
+  model: string;
+  generatedAt: Date;
+}
+
 /** Terminal statuses an attempt seal may carry. */
 export const ATTEMPT_TERMINAL_STATUSES = [
   "completed",
@@ -415,6 +429,11 @@ export interface AttemptSealRecord {
   completenessGaps: string[];
   merkleRoot: string | null;
   archiveSegmentRef: string | null;
+  /** The seal's rollup; null on a seal written before the recorder. */
+  modelCalls: number | null;
+  toolCalls: number | null;
+  /** Null when an encrypted model call hid its turn index. */
+  turns: number | null;
 }
 
 // ── The store surface ────────────────────────────────────────────────────────
@@ -464,12 +483,34 @@ export interface RunStore {
   /** The attempt's folded position in its own stream, read from the log. */
   readAttemptState(attemptId: string): Promise<AttemptEventState>;
 
-  /** Resumable event read, cursored on the decimal `run_seq`. */
+  /**
+   * Resumable event read, cursored on the decimal `run_seq`. An attempt
+   * compaction has removed from the hot table is read from its archive
+   * segment (spec §13.3), so a reader sees the same frames either way.
+   */
   readAttemptEventsSince(
     runId: string,
     afterRunSeq: string,
     limit?: number,
   ): Promise<AttemptEventReadRecord[]>;
+
+  /**
+   * Compaction (spec §13.3): remove the hot frames of every attempt whose
+   * seal is older than `before` and names an archive segment. The seal keeps
+   * `event_count`, `merkle_root`, `archive_segment_ref` and the rollup; the
+   * frames stay readable from the segment. Cross-tenant, for the monthly job;
+   * the delete itself is the SECURITY DEFINER function the migration owns,
+   * because the app role holds no DELETE on the event log. Answers the rows
+   * removed.
+   */
+  compactSealedAttempts(before: Date): Promise<number>;
+
+  /**
+   * Write the generated summary (`summarize_run`, G14): the three columns
+   * are set together so a summary always names the model and the instant
+   * that produced it. Tenant-scoped; answers whether a row was written.
+   */
+  setRunSummary(runId: string, summary: GeneratedRunSummary): Promise<boolean>;
 
   /**
    * The finalization handle for a sealed attempt — the grant and obligation the
@@ -655,7 +696,13 @@ export interface AttemptRow {
   completeness_gaps: unknown | null;
   merkle_root: string | null;
   archive_segment_ref: string | null;
+  model_calls: number | string | null;
+  tool_calls: number | string | null;
+  turns: number | string | null;
 }
+
+const intOrNull = (v: number | string | null | undefined): number | null =>
+  v === null || v === undefined ? null : Number(v);
 
 /** The gaps column as a string array; anything else is an empty list. */
 function gapsOf(value: unknown): string[] {
@@ -708,6 +755,9 @@ export function mapAttemptRow(row: AttemptRow): AttemptRecord {
             completenessGaps: gapsOf(row.completeness_gaps),
             merkleRoot: row.merkle_root ?? null,
             archiveSegmentRef: row.archive_segment_ref ?? null,
+            modelCalls: intOrNull(row.model_calls),
+            toolCalls: intOrNull(row.tool_calls),
+            turns: intOrNull(row.turns),
           }
         : null,
   };
@@ -1278,7 +1328,7 @@ export function buildSelectAttemptEventStateSql(attemptId: string): SQL {
     SELECT
       id, attempt_seq, run_seq::text AS run_seq,
       event_schema_version, event_type, stage, payload_digest, event_digest,
-      payload_inline, encrypted_payload_ref, observed_at,
+      payload_inline, encrypted_payload_ref, observed_at, created_at,
       body_ref, body_digest, body_bytes, redactions, fidelity
     FROM agent.agent_run_events
     WHERE event_record_version = 2
@@ -1370,6 +1420,9 @@ export interface InsertSealInput {
   completenessGaps: readonly string[];
   merkleRoot: string;
   archiveSegmentRef: string;
+  modelCalls: number;
+  toolCalls: number;
+  turns: number | null;
 }
 
 /**
@@ -1385,7 +1438,8 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       org_id, workspace_id, run_id, attempt_id, terminal_status, reason_code,
       event_count, final_run_seq, final_attempt_seq, final_event_digest,
       event_stream_digest, sealer_kind, sealer_worker_id,
-      replay_grade, completeness_gaps, merkle_root, archive_segment_ref
+      replay_grade, completeness_gaps, merkle_root, archive_segment_ref,
+      model_calls, tool_calls, turns
     )
     VALUES (
       ${input.orgId}::uuid,
@@ -1404,7 +1458,10 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.replayGrade},
       ${JSON.stringify(input.completenessGaps)}::jsonb,
       ${input.merkleRoot},
-      ${input.archiveSegmentRef}
+      ${input.archiveSegmentRef},
+      ${input.modelCalls},
+      ${input.toolCalls},
+      ${input.turns}
     )
     RETURNING id
   `;
@@ -1455,7 +1512,8 @@ export function buildListRunAttemptsSql(runId: string): SQL {
       s.id AS seal_id, s.terminal_status, s.reason_code, s.event_count,
       s.final_run_seq::text AS final_run_seq, s.final_attempt_seq,
       s.final_event_digest, s.event_stream_digest, s.sealed_at,
-      s.replay_grade, s.completeness_gaps, s.merkle_root, s.archive_segment_ref
+      s.replay_grade, s.completeness_gaps, s.merkle_root, s.archive_segment_ref,
+      s.model_calls, s.tool_calls, s.turns
     FROM agent.agent_run_attempts a
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
     WHERE a.run_id = ${runId}::uuid
@@ -1485,6 +1543,92 @@ export function buildReadAttemptEventsSinceSql(
     ORDER BY e.run_seq ASC
     LIMIT ${limit}
   `;
+}
+
+/**
+ * The sealed attempts of a run whose frames past `afterRunSeq` are no longer
+ * in the hot table: they were compacted, and are read from their segment.
+ */
+export function buildListCompactedSealsSql(
+  runId: string,
+  afterRunSeq: string,
+): SQL {
+  return sql`
+    SELECT
+      s.attempt_id, a.public_id AS attempt_public_id,
+      s.archive_segment_ref, s.final_run_seq::text AS final_run_seq
+    FROM agent.agent_run_attempt_seals s
+    JOIN agent.agent_run_attempts a ON a.id = s.attempt_id
+    WHERE s.run_id = ${runId}::uuid
+      AND s.archive_segment_ref IS NOT NULL
+      AND s.final_run_seq > ${afterRunSeq}::bigint
+      AND NOT EXISTS (
+        SELECT 1 FROM agent.agent_run_events e
+        WHERE e.attempt_id = s.attempt_id
+      )
+    ORDER BY s.final_run_seq ASC
+  `;
+}
+
+export interface CompactedSealRow {
+  attempt_id: string;
+  attempt_public_id: string;
+  archive_segment_ref: string;
+  final_run_seq: string;
+}
+
+export function buildSetRunSummarySql(
+  runId: string,
+  summary: GeneratedRunSummary,
+): SQL {
+  return sql`
+    UPDATE agent.agent_runs SET
+      name = ${summary.name},
+      summary = ${summary.summary},
+      summary_model = ${summary.model},
+      summary_generated_at = ${summary.generatedAt.toISOString()}::timestamptz,
+      updated_at = now()
+    WHERE id = ${runId}::uuid
+    RETURNING id
+  `;
+}
+
+/** The compaction call; the rule lives in the function's WHERE clause. */
+export function buildCompactSealedAttemptsSql(before: Date): SQL {
+  return sql`SELECT agent.compact_sealed_attempt_events(${before.toISOString()}::timestamptz) AS removed`;
+}
+
+/**
+ * A compacted attempt's frames past `afterRunSeq`, read back from its
+ * segment. A line the segment holds that is not a frame of ours fails the
+ * read: a segment is the same bytes the seal wrote, and one that does not
+ * parse is a broken record, never a shorter one.
+ */
+export function framesFromSegment(
+  seal: CompactedSealRow,
+  segment: Uint8Array,
+  afterRunSeq: string,
+): AttemptEventReadRecord[] {
+  const after = BigInt(afterRunSeq);
+  const out: AttemptEventReadRecord[] = [];
+  for (const envelope of readArchiveSegment(segment)) {
+    const row = readArchiveFrame(envelope);
+    if (!row) {
+      throw new RunStoreStateError(
+        `archive segment ${seal.archive_segment_ref} holds a line that is not a frame`,
+      );
+    }
+    if (BigInt(row.run_seq) <= after) continue;
+    out.push(
+      mapAttemptEventReadRow({
+        ...row,
+        attempt_id: seal.attempt_id,
+        attempt_public_id: seal.attempt_public_id,
+        run_seq: String(row.run_seq),
+      }),
+    );
+  }
+  return out;
 }
 
 /** Driver-typed row behind `AttemptEventReadRecord`. */
@@ -1747,6 +1891,7 @@ async function sealAttemptInTx(
     terminalStatus: input.terminalStatus,
   });
   const replayGrade = gradeSealedAttempt(completenessGaps);
+  const rollup = deriveSealRollup(input.rows);
   const segment = buildArchiveSegment(input.rows.map(archiveFrameOf));
   const { ref: archiveSegmentRef } = await input.archive.putSegment({
     orgId: attempt.org_id,
@@ -1775,6 +1920,9 @@ async function sealAttemptInTx(
       completenessGaps,
       merkleRoot: segment.merkleRoot,
       archiveSegmentRef,
+      modelCalls: rollup.modelCalls,
+      toolCalls: rollup.toolCalls,
+      turns: rollup.turns,
     }),
   )) as unknown as Array<{ id: string }>;
   const seal = sealRows[0];
@@ -2167,12 +2315,54 @@ export function createPostgresRunStore(
       });
     },
 
-    async readAttemptEventsSince(runId, afterRunSeq, limit) {
-      return withTenantDb(async (tx: Tx) => {
+    async readAttemptEventsSince(
+      runId,
+      afterRunSeq,
+      limit = DEFAULT_READ_EVENTS_LIMIT,
+    ) {
+      const { hot, compacted } = await withTenantDb(async (tx: Tx) => {
         const rows = (await tx.execute(
           buildReadAttemptEventsSinceSql(runId, afterRunSeq, limit),
         )) as unknown as AttemptEventReadRow[];
-        return rows.map(mapAttemptEventReadRow);
+        const seals = (await tx.execute(
+          buildListCompactedSealsSql(runId, afterRunSeq),
+        )) as unknown as CompactedSealRow[];
+        return { hot: rows.map(mapAttemptEventReadRow), compacted: seals };
+      });
+      if (compacted.length === 0) return hot;
+      if (!archive) {
+        throw new RunStoreStateError(
+          `run ${runId} has compacted attempts but the ledger has no archive store`,
+        );
+      }
+      // Compacted attempts sealed before any attempt still in the hot table,
+      // so their frames sort ahead; the page is the first `limit` of both.
+      const restored: AttemptEventReadRecord[] = [];
+      for (const seal of compacted) {
+        const bytes = await archive.getSegment(seal.archive_segment_ref);
+        restored.push(...framesFromSegment(seal, bytes, afterRunSeq));
+        if (restored.length >= limit) break;
+      }
+      return [...restored, ...hot]
+        .sort((a, b) => (BigInt(a.runSeq) < BigInt(b.runSeq) ? -1 : 1))
+        .slice(0, limit);
+    },
+
+    async setRunSummary(runId, summary) {
+      return withTenantDb(async (tx: Tx) => {
+        const rows = (await tx.execute(
+          buildSetRunSummarySql(runId, summary),
+        )) as unknown as Array<{ id: string }>;
+        return rows.length > 0;
+      });
+    },
+
+    async compactSealedAttempts(before) {
+      return withSystemDb(async (tx: Tx) => {
+        const rows = (await tx.execute(
+          buildCompactSealedAttemptsSql(before),
+        )) as unknown as Array<{ removed: number | string }>;
+        return Number(rows[0]?.removed ?? 0);
       });
     },
 

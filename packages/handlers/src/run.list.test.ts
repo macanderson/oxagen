@@ -4,8 +4,10 @@ import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { describe, expect, it } from "vitest";
 import {
+  addCompactedRollup,
   createRunListHandler,
   decodeRunCursor,
+  ledgerCompactedRollupQuery,
   encodeRunCursor,
   ledgerPageQuery,
   ledgerRollupQuery,
@@ -511,6 +513,10 @@ describe("list_runs queries name the tenant", () => {
     ["ledgerPageQuery", ledgerPageQuery(db, SCOPE, page).toSQL()],
     ["ledgerIdentityQuery", ledgerIdentityQuery(db, SCOPE, RUN).toSQL()],
     ["ledgerRollupQuery", ledgerRollupQuery(db, SCOPE, [RUN]).toSQL()],
+    [
+      "ledgerCompactedRollupQuery",
+      ledgerCompactedRollupQuery(db, SCOPE, [RUN]).toSQL(),
+    ],
     ["ledgerSealQuery", ledgerSealQuery(db, SCOPE, [RUN]).toSQL()],
     ["tachoPageQuery", tachoPageQuery(db, SCOPE, page).toSQL()],
     ["tachoSessionQuery", tachoSessionQuery(db, SCOPE, "tse_a").toSQL()],
@@ -527,6 +533,63 @@ describe("list_runs queries name the tenant", () => {
     const query = ledgerPageQuery(db, OTHER_WORKSPACE, page).toSQL();
     expect(query.params).not.toContain(SCOPE.workspaceId);
     expect(query.params).toContain(OTHER_WORKSPACE.workspaceId);
+  });
+
+  it("reads the latest seal per run, and the compacted rollup only from seals with a segment and no hot rows", () => {
+    const latest = ledgerSealQuery(db, SCOPE, [RUN]).toSQL();
+    expect(latest.sql).toMatch(
+      /select distinct on \("agent"\."agent_run_attempt_seals"\."run_id"\)/i,
+    );
+    expect(latest.sql).toMatch(
+      /order by "agent"\."agent_run_attempt_seals"\."run_id", "agent"\."agent_run_attempt_seals"\."sealed_at" desc/i,
+    );
+    const compacted = ledgerCompactedRollupQuery(db, SCOPE, [RUN]).toSQL();
+    expect(compacted.sql).toMatch(/"archive_segment_ref" is not null/);
+    expect(compacted.sql).toMatch(
+      /not exists \(select 1 from "agent"\."agent_run_events"/,
+    );
+  });
+
+  it("adds a compacted rollup to the hot one, frame for frame, and hides turns an encrypted call hid", () => {
+    const hot = {
+      frames: 2,
+      modelCalls: 1,
+      toolCalls: 1,
+      turnIndexes: 1,
+      opaqueModelCalls: 0,
+    };
+    expect(addCompactedRollup(hot, undefined)).toBe(hot);
+    expect(addCompactedRollup(undefined, undefined)).toBeUndefined();
+    expect(
+      addCompactedRollup(hot, {
+        frames: 5,
+        modelCalls: 2,
+        toolCalls: 2,
+        turns: 2,
+        opaqueTurns: false,
+      }),
+    ).toEqual({
+      frames: 7,
+      modelCalls: 3,
+      toolCalls: 3,
+      turnIndexes: 3,
+      opaqueModelCalls: 0,
+    });
+    expect(
+      addCompactedRollup(undefined, {
+        frames: 5,
+        modelCalls: 2,
+        toolCalls: 2,
+        turns: 0,
+        opaqueTurns: true,
+      }),
+    ).toEqual({
+      frames: 5,
+      modelCalls: 2,
+      toolCalls: 2,
+      turnIndexes: 0,
+      opaqueModelCalls: 1,
+    });
   });
 
   it("lists V2 ledger runs and root sessions only", () => {

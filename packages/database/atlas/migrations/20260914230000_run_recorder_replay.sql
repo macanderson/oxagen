@@ -17,6 +17,13 @@
 --   6. evidence.run_exports: the export job export_run queues, with forced
 --      tenant RLS in the manifest's shape (packages/database/src/
 --      tenant-policy.manifest.ts) and the app role's grants.
+--   7. agent.agent_run_attempt_seals gains the seal's rollup (model_calls,
+--      tool_calls, turns): the counts the run keeps once compaction has
+--      removed its hot frames (spec §13.3), and the SECURITY DEFINER function
+--      agent.compact_sealed_attempt_events(before) that removes them. The
+--      event log stays append-only for the app role: the function is the one
+--      path that deletes, and it deletes only the frames of a seal older than
+--      the cutoff whose archive segment holds the same bytes.
 --
 -- The workspace's fidelity setting is the retention policy version a run pins
 -- (evidence.retention_policy_versions.mode = 'digest_only'); no new setting
@@ -56,6 +63,20 @@ ALTER TABLE "agent"."agent_run_attempt_seals"
     AND (("replay_grade" IS NULL) = ("archive_segment_ref" IS NULL))
     AND ("merkle_root" IS NULL OR "merkle_root" ~ '^sha256:[0-9a-f]{64}$')
     AND jsonb_typeof("completeness_gaps") = 'array'
+  );
+
+ALTER TABLE "agent"."agent_run_attempt_seals"
+  ADD COLUMN "model_calls" integer NULL,
+  ADD COLUMN "tool_calls" integer NULL,
+  ADD COLUMN "turns" integer NULL;
+
+ALTER TABLE "agent"."agent_run_attempt_seals"
+  ADD CONSTRAINT "agent_run_attempt_seals_rollup_check" CHECK (
+    ("model_calls" IS NULL OR "model_calls" >= 0)
+    AND ("tool_calls" IS NULL OR "tool_calls" >= 0)
+    AND ("turns" IS NULL OR "turns" >= 0)
+    AND (("replay_grade" IS NULL) = ("model_calls" IS NULL))
+    AND (("replay_grade" IS NULL) = ("tool_calls" IS NULL))
   );
 
 -- ── 3. Generated summary ─────────────────────────────────────────────────────
@@ -166,6 +187,42 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') THEN
     EXECUTE 'GRANT SELECT, INSERT, UPDATE ON evidence.run_exports TO oxagen_app';
     EXECUTE 'REVOKE DELETE ON evidence.run_exports FROM oxagen_app';
+  END IF;
+END
+$$;
+
+-- ── 7. Compaction ────────────────────────────────────────────────────────────
+-- Removes the hot frames of every attempt whose seal is older than `before`
+-- and names an archive segment (the same bytes, written at seal). The seal
+-- keeps event_count, merkle_root, archive_segment_ref and the rollup; reads of
+-- a compacted attempt come from the segment. SECURITY DEFINER because the
+-- app role has no DELETE on the event log and keeps none: this function is the
+-- one path, and the rule is in its WHERE clause.
+CREATE OR REPLACE FUNCTION agent.compact_sealed_attempt_events(before timestamptz)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  removed integer;
+BEGIN
+  DELETE FROM agent.agent_run_events e
+  USING agent.agent_run_attempt_seals s
+  WHERE s.attempt_id = e.attempt_id
+    AND s.sealed_at < before
+    AND s.archive_segment_ref IS NOT NULL
+    AND s.merkle_root IS NOT NULL;
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  RETURN removed;
+END
+$$;
+
+REVOKE ALL ON FUNCTION agent.compact_sealed_attempt_events(timestamptz) FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION agent.compact_sealed_attempt_events(timestamptz) TO oxagen_app';
   END IF;
 END
 $$;

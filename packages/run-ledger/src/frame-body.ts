@@ -108,7 +108,7 @@ export interface RunBodyStore {
   }): Promise<{ ref: string }>;
 }
 
-/** Where a seal's archive segment is written once. */
+/** Where a seal's archive segment is written once, and read back from. */
 export interface RunArchiveStore {
   putSegment(input: {
     orgId: string;
@@ -118,6 +118,8 @@ export interface RunArchiveStore {
     digest: string;
     bytes: Uint8Array;
   }): Promise<{ ref: string }>;
+  /** The segment bytes a seal's `archive_segment_ref` names. */
+  getSegment(ref: string): Promise<Uint8Array>;
 }
 
 /** The body columns for a body the policy keeps as a digest alone. */
@@ -149,6 +151,7 @@ export function retainedColumns(
 
 /** The durable event row as the seal reads it back. */
 export interface SealedFrameRow {
+  id: string;
   attempt_seq: number | string;
   run_seq: number | string;
   event_schema_version: string;
@@ -159,6 +162,7 @@ export interface SealedFrameRow {
   payload_inline: unknown | null;
   encrypted_payload_ref: string | null;
   observed_at: string | Date;
+  created_at: string | Date;
   body_ref: string | null;
   body_digest: string | null;
   body_bytes: number | string | null;
@@ -167,6 +171,40 @@ export interface SealedFrameRow {
 }
 
 const TOOL_CALL_EVENT = "tool.call_completed";
+const MODEL_CALL_EVENT = "model.call_completed";
+
+/**
+ * The seal's rollup (spec §13.3): what the run keeps of its counts once
+ * compaction has removed the hot frames. A step is one model call or one
+ * tool call; a turn is a distinct `turn_index` among model calls, which
+ * travels only in an inline payload, so one encrypted model call hides the
+ * turn count and `turns` is null.
+ */
+export interface SealRollup {
+  modelCalls: number;
+  toolCalls: number;
+  turns: number | null;
+}
+
+export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
+  let modelCalls = 0;
+  let toolCalls = 0;
+  let opaque = false;
+  const turns = new Set<string>();
+  for (const row of rows) {
+    if (row.event_type === TOOL_CALL_EVENT) toolCalls += 1;
+    if (row.event_type !== MODEL_CALL_EVENT) continue;
+    modelCalls += 1;
+    const payload = row.payload_inline;
+    const turn =
+      typeof payload === "object" && payload !== null
+        ? (payload as Record<string, unknown>)["turn_index"]
+        : undefined;
+    if (turn === undefined || turn === null) opaque = true;
+    else turns.add(String(turn));
+  }
+  return { modelCalls, toolCalls, turns: opaque ? null : turns.size };
+}
 
 /**
  * The completeness gaps a sealed attempt carries, from its rows and its
@@ -221,9 +259,16 @@ export function gradeSealedAttempt(gaps: readonly string[]): ReplayGrade {
   });
 }
 
-/** One durable row as the archive segment writes it: everything but bytes. */
+const iso = (value: string | Date): string =>
+  value instanceof Date ? value.toISOString() : value;
+
+/**
+ * One durable row as the archive segment writes it: everything but bytes.
+ * `readArchiveFrame` is its inverse; a compacted attempt is read from these.
+ */
 export function archiveFrameOf(row: SealedFrameRow): ArchiveFrame {
   const envelope: JsonValue = {
+    event_id: row.id,
     attempt_seq: Number(row.attempt_seq),
     run_seq: String(row.run_seq),
     event_schema_version: row.event_schema_version,
@@ -233,10 +278,8 @@ export function archiveFrameOf(row: SealedFrameRow): ArchiveFrame {
     event_digest: row.event_digest,
     payload_inline: (row.payload_inline ?? null) as JsonValue,
     encrypted_payload_ref: row.encrypted_payload_ref,
-    observed_at:
-      row.observed_at instanceof Date
-        ? row.observed_at.toISOString()
-        : row.observed_at,
+    observed_at: iso(row.observed_at),
+    recorded_at: iso(row.created_at),
     content: {
       digest: row.body_digest,
       bytes_ref: row.body_ref,
@@ -246,4 +289,67 @@ export function archiveFrameOf(row: SealedFrameRow): ArchiveFrame {
     },
   };
   return { digest: row.event_digest as ArchiveFrame["digest"], envelope };
+}
+
+/**
+ * The envelope back into the row shape, or null for a line that is not one
+ * of ours. Every field the segment wrote is read back; nothing is defaulted.
+ */
+export function readArchiveFrame(envelope: JsonValue): SealedFrameRow | null {
+  if (
+    typeof envelope !== "object" ||
+    envelope === null ||
+    Array.isArray(envelope)
+  )
+    return null;
+  const e = envelope as Record<string, JsonValue | undefined>;
+  const content = e["content"];
+  if (typeof content !== "object" || content === null || Array.isArray(content))
+    return null;
+  const c = content as Record<string, JsonValue | undefined>;
+  const str = (v: JsonValue | undefined): string | null =>
+    typeof v === "string" ? v : null;
+  const id = str(e["event_id"]);
+  const runSeq = str(e["run_seq"]);
+  const eventType = str(e["event_type"]);
+  const stage = str(e["stage"]);
+  const schemaVersion = str(e["event_schema_version"]);
+  const payloadDigest = str(e["payload_digest"]);
+  const eventDigest = str(e["event_digest"]);
+  const observedAt = str(e["observed_at"]);
+  const recordedAt = str(e["recorded_at"]);
+  const fidelity = str(c["fidelity"]);
+  if (
+    id === null ||
+    runSeq === null ||
+    eventType === null ||
+    stage === null ||
+    schemaVersion === null ||
+    payloadDigest === null ||
+    eventDigest === null ||
+    observedAt === null ||
+    recordedAt === null ||
+    fidelity === null ||
+    typeof e["attempt_seq"] !== "number"
+  )
+    return null;
+  return {
+    id,
+    attempt_seq: e["attempt_seq"],
+    run_seq: runSeq,
+    event_schema_version: schemaVersion,
+    event_type: eventType,
+    stage,
+    payload_digest: payloadDigest,
+    event_digest: eventDigest,
+    payload_inline: e["payload_inline"] ?? null,
+    encrypted_payload_ref: str(e["encrypted_payload_ref"]),
+    observed_at: observedAt,
+    created_at: recordedAt,
+    body_ref: str(c["bytes_ref"]),
+    body_digest: str(c["digest"]),
+    body_bytes: typeof c["bytes"] === "number" ? c["bytes"] : null,
+    redactions: c["redactions"] ?? null,
+    fidelity,
+  };
 }

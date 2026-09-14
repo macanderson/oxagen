@@ -875,9 +875,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Inngest",
     description:
       "Ed25519 private key (PKCS#8 PEM, newlines as \\n) this deployment signs Tacho policy " +
-      "bundles with (get_tacho_bundle). The matching public key travels to each host at " +
-      "enrollment so tacho-hook verifies a cached bundle offline and fails closed on one it " +
-      "cannot verify. Unset means enrollment and bundle capabilities refuse.",
+      "bundles with (get_tacho_bundle) and attests run exports with (export_run, ADR-057). " +
+      "The matching public key travels to each host at enrollment so tacho-hook verifies a " +
+      "cached bundle offline and fails closed on one it cannot verify, and into every export " +
+      "bundle so its verifier runs offline. Unset means enrollment, bundle and export refuse.",
     secret: true,
     clientExposed: false,
     services: [],

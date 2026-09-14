@@ -354,7 +354,9 @@ export function tachoRow(
   return {
     seq,
     ts: `2026-09-11 09:00:${String(seq % 60).padStart(2, "0")}.000`,
+    eventId: `evt_${String(seq).padStart(26, "0")}`,
     kind: "tool_call",
+    prevHash: `sha256:${String(Math.max(seq - 1, 0)).padStart(64, "0")}`,
     hash: `sha256:${String(seq).padStart(64, "0")}`,
     contentDigest: "",
     bytesRef: "",

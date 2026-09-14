@@ -17,8 +17,10 @@ export {
   prepareFrameBody,
   bodyRetainedByPolicy,
   deriveCompletenessGaps,
+  deriveSealRollup,
   gradeSealedAttempt,
   archiveFrameOf,
+  readArchiveFrame,
   NO_BODY,
   type AttemptEventBodyInput,
   type PreparedFrameBody,
@@ -28,6 +30,7 @@ export {
   type RunBodyStore,
   type RunArchiveStore,
   type SealedFrameRow,
+  type SealRollup,
 } from "./frame-body";
 
 // One frame shape for a run from either store, and the pure reads over it:
@@ -88,6 +91,12 @@ export {
   buildListRunAttemptsSql,
   buildListAttemptIdentitySql,
   buildReadAttemptEventsSinceSql,
+  buildListCompactedSealsSql,
+  buildCompactSealedAttemptsSql,
+  buildSetRunSummarySql,
+  framesFromSegment,
+  type GeneratedRunSummary,
+  type CompactedSealRow,
   type RunStore,
   type RunStoreOptions,
   type RunSecurityEventSink,
