@@ -154,6 +154,65 @@ fn sidecar_dir() -> Option<PathBuf> {
         .and_then(|p| p.parent().map(Path::to_path_buf))
 }
 
+/// Whether a directory exists only for this launch: an AppImage's squashfs
+/// mount (`/tmp/.mount_*`, or the `APPIMAGE` variable the runtime sets), a
+/// mounted disk image (`/Volumes/*`), or App Translocation (a quarantined
+/// app opened where it was downloaded). `tacho enroll` bakes the sidecar's
+/// directory into the hook commands and the service unit, and PATH links
+/// point into it, so nothing durable may reference such a directory.
+fn is_transient_dir(dir: &Path, appimage_env: bool) -> bool {
+    let text = dir.to_string_lossy().replace('\\', "/");
+    text.starts_with("/tmp/.mount_")
+        || text.contains("/AppTranslocation/")
+        || text.starts_with("/Volumes/")
+        || appimage_env
+}
+
+fn sidecar_dir_is_transient() -> bool {
+    sidecar_dir()
+        .map(|dir| is_transient_dir(&dir, std::env::var_os("APPIMAGE").is_some()))
+        .unwrap_or(false)
+}
+
+/// A per-user directory the app copies the sidecars into when it runs from
+/// a transient one: `~/Library/Application Support/oxagen/bin` on macOS,
+/// `~/.local/share/oxagen/bin` on Linux. Windows installs are never
+/// transient (the shims embed the Program Files path).
+fn durable_bin_dir() -> PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("oxagen")
+        .join("bin")
+}
+
+fn has_both_sidecars(dir: &Path) -> bool {
+    ["oxagen", "tacho"].iter().all(|name| dir.join(exe(name)).is_file())
+}
+
+/// The directory `tacho` should derive its hook and daemon commands from:
+/// the sidecar directory when it lasts, else the durable copy when one
+/// exists, else nothing (enrolling is refused by tacho itself until
+/// `install_cli` makes the copy or the app is moved).
+fn bin_dir() -> Option<PathBuf> {
+    let sidecars = sidecar_dir()?;
+    if !sidecar_dir_is_transient() {
+        return Some(sidecars);
+    }
+    let durable = durable_bin_dir();
+    has_both_sidecars(&durable).then_some(durable)
+}
+
+/// Point every sidecar the app spawns at the durable copy (they inherit the
+/// app's environment): with `TACHO_BIN_DIR` set, `tacho` writes that path
+/// into hooks and the service unit instead of its own transient one.
+fn export_bin_dir() {
+    if sidecar_dir_is_transient() {
+        if let Some(dir) = bin_dir() {
+            std::env::set_var("TACHO_BIN_DIR", dir);
+        }
+    }
+}
+
 fn on_path(name: &str) -> Option<String> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
@@ -182,6 +241,13 @@ struct DesktopState {
     daemon: Option<Value>,
     log_path: String,
     sidecar_dir: Option<String>,
+    /// The sidecar directory is gone after this launch (AppImage mount,
+    /// mounted .dmg, App Translocation); see `is_transient_dir`.
+    sidecar_transient: bool,
+    /// The directory hooks and the service may reference: the sidecar
+    /// directory, or the durable copy `install_cli` made; None while the
+    /// app runs from a transient directory with no copy yet.
+    bin_dir: Option<String>,
     oxagen_on_path: Option<String>,
     tacho_on_path: Option<String>,
     cli_install_dir: String,
@@ -204,17 +270,31 @@ fn desktop_state(app: tauri::AppHandle) -> DesktopState {
         daemon,
         log_path: root.join("tachod.log").display().to_string(),
         sidecar_dir: sidecar_dir().map(|p| p.display().to_string()),
+        sidecar_transient: sidecar_dir_is_transient(),
+        bin_dir: bin_dir().map(|p| p.display().to_string()),
         oxagen_on_path: on_path("oxagen"),
         tacho_on_path: on_path("tacho"),
         cli_install_dir: cli_install_dir().display().to_string(),
     }
 }
 
+/// The only control-plane routes the webview may reach, by exact match. A
+/// prefix check on the raw string is not a route check: `ureq` parses the
+/// URL with the `url` crate, which resolves `..` and `%2e%2e` segments
+/// before the request line is built, so `/v1/user/../../v1/<org>/...` would
+/// have passed `starts_with("/v1/user/")` and reached an org-scoped route
+/// with the session token.
+const USER_ROUTES: [&str; 2] = ["/v1/user/organizations", "/v1/user/workspaces"];
+
+fn is_user_route(path: &str) -> bool {
+    USER_ROUTES.contains(&path)
+}
+
 /// POST to a user-scoped control-plane route with the CLI's session token.
-/// Only `/v1/user/*` is reachable from the app: that is all the pickers need.
+/// Only the two picker routes in `USER_ROUTES` are reachable from the app.
 #[tauri::command]
 fn api_post(path: String, body: Value) -> Result<Value, String> {
-    if !path.starts_with("/v1/user/") {
+    if !is_user_route(&path) {
         return Err(format!("{path} is not a user-scoped route"));
     }
     let (config, token) = cli_config();
@@ -260,19 +340,59 @@ struct InstallResult {
     note: String,
 }
 
+/// Copy the two sidecars out of a transient directory into `durable_bin_dir`
+/// so links, hooks and the service unit have a path that outlives this
+/// launch. Returns the directory the links should target.
+#[cfg(not(windows))]
+fn keep_sidecars(sidecars: &Path) -> Result<PathBuf, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let durable = durable_bin_dir();
+    fs::create_dir_all(&durable)
+        .map_err(|e| format!("cannot create {}: {e}", durable.display()))?;
+    for name in ["oxagen", "tacho"] {
+        let from = sidecars.join(exe(name));
+        let to = durable.join(exe(name));
+        // Copy beside, then rename: a running daemon keeps its old inode
+        // and the link never points at a half-written file.
+        let staging = durable.join(format!(".{}.tmp", exe(name)));
+        fs::copy(&from, &staging)
+            .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))?;
+        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))?;
+        fs::rename(&staging, &to)
+            .map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))?;
+    }
+    Ok(durable)
+}
+
 /// Put `oxagen` and `tacho` on PATH: symlinks to the sidecars on macOS and
 /// Linux, `.cmd` shims plus a user-PATH entry on Windows. Never elevates.
+/// When the app runs from a directory that is gone after this launch, the
+/// sidecars are first copied to a durable one and the links point there.
 #[tauri::command]
 fn install_cli() -> Result<InstallResult, String> {
-    let sidecars = sidecar_dir().ok_or("cannot locate the bundled binaries")?;
+    let bundled = sidecar_dir().ok_or("cannot locate the bundled binaries")?;
+    for name in ["oxagen", "tacho"] {
+        let target = bundled.join(exe(name));
+        if !target.is_file() {
+            return Err(format!("bundled {} is missing at {}", name, target.display()));
+        }
+    }
+    #[cfg(not(windows))]
+    let sidecars = if sidecar_dir_is_transient() {
+        let kept = keep_sidecars(&bundled)?;
+        export_bin_dir();
+        kept
+    } else {
+        bundled
+    };
+    #[cfg(windows)]
+    let sidecars = bundled;
     let dir = cli_install_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let mut files = Vec::new();
     for name in ["oxagen", "tacho"] {
         let target = sidecars.join(exe(name));
-        if !target.is_file() {
-            return Err(format!("bundled {} is missing at {}", name, target.display()));
-        }
         #[cfg(windows)]
         {
             let shim = dir.join(format!("{name}.cmd"));
@@ -311,14 +431,19 @@ fn install_cli() -> Result<InstallResult, String> {
     })
 }
 
+/// The PowerShell that appends a directory to the user PATH. The directory
+/// travels out-of-band in `$env:OXAGEN_BIN`, never spliced into the script:
+/// `%LOCALAPPDATA%` carries the user name, and `O'Brien` is a legal one
+/// whose apostrophe would end a single-quoted literal and fail the parse.
+#[allow(dead_code)]
+const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if(($p -split ';') -notcontains $d){ [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $d), 'User') }";
+
 #[cfg(windows)]
 fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
     // setx truncates at 1024 characters; the .NET API does not.
-    let script = format!(
-        "$p=[Environment]::GetEnvironmentVariable('Path','User'); if(($p -split ';') -notcontains '{dir}'){{ [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';{dir}'), 'User') }}"
-    );
     let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .args(["-NoProfile", "-NonInteractive", "-Command", ADD_TO_USER_PATH_PS])
+        .env("OXAGEN_BIN", dir)
         .status()
         .map_err(|e| e.to_string())?;
     if status.success() {
@@ -374,6 +499,10 @@ fn log_tail(lines: usize) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before any sidecar is spawned: a durable copy from an earlier
+    // "Link into PATH" is what tacho must write into hooks when the app
+    // runs from an AppImage or a mounted .dmg.
+    export_bin_dir();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
@@ -414,4 +543,48 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Oxagen desktop app");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_two_picker_routes_are_user_routes() {
+        assert!(is_user_route("/v1/user/organizations"));
+        assert!(is_user_route("/v1/user/workspaces"));
+        // What a prefix check let through: dot-segments the URL parser
+        // resolves before the request line is built, and their encodings.
+        assert!(!is_user_route("/v1/user/../../v1/acme/core/tacho/enrollments"));
+        assert!(!is_user_route("/v1/user/%2e%2e/%2e%2e/v1/acme/core/tacho/enrollments"));
+        assert!(!is_user_route("/v1/user//organizations"));
+        assert!(!is_user_route("/v1/user/organizations?x=1"));
+        assert!(!is_user_route("/v1/user/organizations#f"));
+        assert!(!is_user_route("/v1/user/"));
+        assert!(!is_user_route("/v1/acme/core/tacho/enrollments"));
+    }
+
+    #[test]
+    fn transient_directories_are_the_per_launch_ones() {
+        let t = |p: &str| is_transient_dir(Path::new(p), false);
+        assert!(t("/tmp/.mount_OxagenAb12Cd/usr/bin"));
+        assert!(t("/Volumes/Oxagen/Oxagen.app/Contents/MacOS"));
+        assert!(t(
+            "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS"
+        ));
+        assert!(is_transient_dir(Path::new("/usr/lib/oxagen"), true));
+        assert!(!t("/Applications/Oxagen.app/Contents/MacOS"));
+        assert!(!t("/usr/lib/oxagen"));
+        assert!(!t("C:\\Program Files\\Oxagen"));
+        assert!(!t("/home/dev/.local/share/oxagen/bin"));
+    }
+
+    #[test]
+    fn the_path_script_reads_the_directory_from_the_environment() {
+        // No user-derived text is spliced into the script, so a directory
+        // with an apostrophe cannot end a literal.
+        assert!(ADD_TO_USER_PATH_PS.contains("$env:OXAGEN_BIN"));
+        assert!(!ADD_TO_USER_PATH_PS.contains("{dir}"));
+        assert!(!ADD_TO_USER_PATH_PS.contains("{}"));
+    }
 }

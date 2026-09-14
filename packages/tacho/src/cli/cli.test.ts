@@ -34,6 +34,7 @@ import {
   resolveCredentials,
   runtimeCommands,
   shellQuote,
+  transientBinDir,
 } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
@@ -982,6 +983,76 @@ describe("harnesses and reassign", () => {
       revoked_at: null,
     });
   });
+  it("refuses to enroll from a directory that is gone after this launch", async () => {
+    // The exec paths an AppImage, a mounted .dmg and App Translocation give.
+    expect(transientBinDir("/tmp/.mount_OxagenAb12Cd/usr/bin", {})).toBe(
+      "an AppImage mount",
+    );
+    expect(
+      transientBinDir("/Volumes/Oxagen/Oxagen.app/Contents/MacOS", {}),
+    ).toBe("a mounted disk image");
+    expect(
+      transientBinDir(
+        "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS",
+        {},
+      ),
+    ).toContain("App Translocation");
+    expect(
+      transientBinDir("/usr/lib/oxagen", {
+        APPIMAGE: "/home/dev/Oxagen.AppImage",
+      }),
+    ).toBe("an AppImage mount");
+    // A permanent TACHO_BIN_DIR wins over the APPIMAGE variable the app
+    // inherits; a permanent install is never flagged.
+    expect(
+      transientBinDir("/home/dev/.local/share/oxagen/bin", {
+        APPIMAGE: "/home/dev/Oxagen.AppImage",
+        TACHO_BIN_DIR: "/home/dev/.local/share/oxagen/bin",
+      }),
+    ).toBeUndefined();
+    expect(
+      transientBinDir("/Applications/Oxagen.app/Contents/MacOS", {}),
+    ).toBeUndefined();
+    expect(transientBinDir("/opt/homebrew/bin", {})).toBeUndefined();
+    const mounted = runtimeCommands(
+      undefined,
+      {},
+      "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho",
+      "darwin",
+      true,
+    );
+    expect(mounted.transient).toBe("a mounted disk image");
+    expect(
+      runtimeCommands(
+        undefined,
+        {},
+        "/Applications/Oxagen.app/Contents/MacOS/tacho",
+        "darwin",
+        true,
+      ),
+    ).not.toHaveProperty("transient");
+
+    // enroll refuses before any request or key is minted, and says how out.
+    const d = deps({ runtime: { ...mounted, binDir: mounted.binDir } });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(result.ok).toBe(false);
+    expect(d.requests).toEqual([]);
+    expect(existsSync(d.paths.hostFile)).toBe(false);
+    expect(existsSync(d.paths.deviceKey)).toBe(false);
+    expect(d.errors.at(-1)).toContain("a mounted disk image");
+    expect(d.errors.at(-1)).toContain("Move Oxagen to /Applications");
+    // Not enrolled, so status still reads the machine as it is.
+    expect((await status({ json: true }, d)).enrolled).toBe(false);
+  });
+
   it("uses the multi-call binary when compiled and quotes for cmd.exe on Windows", () => {
     const native = runtimeCommands(
       undefined,

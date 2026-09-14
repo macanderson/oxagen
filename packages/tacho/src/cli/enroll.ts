@@ -168,6 +168,20 @@ export async function enroll(
     harnesses = existing.harnesses as TachoHarness[];
     host = existing;
   } else {
+    // The hook command and the service unit carry this binary's directory
+    // verbatim; refuse before anything is revoked or minted when that
+    // directory is gone after this launch (an AppImage mount, a mounted
+    // .dmg, App Translocation). Step 6's health probe would pass while the
+    // mount is up and every hook would fail to spawn afterwards.
+    if (deps.runtime.transient !== undefined) {
+      deps.err(
+        `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed; hooks and the service written from here would stop working. ` +
+          (deps.platform === "darwin"
+            ? "Move Oxagen to /Applications (or run the app's Link into PATH, which keeps a copy of the tools) and enroll again, or point TACHO_BIN_DIR at a permanent copy of tacho."
+            : "Install the package (.deb/.rpm) or run the app's Link into PATH, which keeps a copy of the tools, and enroll again; or point TACHO_BIN_DIR at a permanent copy of tacho."),
+      );
+      return { ok: false, warnings };
+    }
     step(1, "Authenticating with Oxagen");
     // A harness addition stays in the host's own org and workspace: the
     // token may come from flags, env or config.json, the pair may not.

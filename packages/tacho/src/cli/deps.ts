@@ -95,6 +95,34 @@ export interface RuntimeCommands {
   daemonCommand: string[];
   /** Where the executables live, for `status`. */
   binDir: string;
+  /**
+   * Set when `binDir` exists only for this launch — see `transientBinDir`.
+   * `enroll` refuses rather than bake it into the hooks and the service.
+   */
+  transient?: string;
+}
+
+/**
+ * Why `binDir` will not survive the running process, or undefined when it
+ * will. A per-launch AppImage mount (`/tmp/.mount_*`, `APPIMAGE` set), a
+ * macOS disk image (`/Volumes/*`) and an App-Translocated app (a
+ * quarantined bundle opened where it was downloaded) all give the sidecar
+ * an exec path that is gone when the app quits — a hook command or a
+ * service `ExecStart` pointing there fails to spawn from then on, while
+ * host.json and the fleet page still say enrolled.
+ */
+export function transientBinDir(
+  binDir: string,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const posixDir = binDir.replace(/\\/g, "/");
+  if (posixDir.startsWith("/tmp/.mount_")) return "an AppImage mount";
+  if (/\/AppTranslocation\//.test(posixDir))
+    return "App Translocation (the app was opened where it was downloaded)";
+  if (posixDir.startsWith("/Volumes/")) return "a mounted disk image";
+  if (env["TACHO_BIN_DIR"] === undefined && env["APPIMAGE"] !== undefined)
+    return "an AppImage mount";
+  return undefined;
 }
 
 export function shellQuote(
@@ -164,17 +192,21 @@ export function runtimeCommands(
   const nativeLayout =
     native ||
     (existsSync(nativeTacho) && !existsSync(P.join(binDir, "tachod.mjs")));
+  const transient = transientBinDir(binDir, env);
+  const flagged = transient !== undefined ? { transient } : {};
   if (nativeLayout) {
     return {
       hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
       daemonCommand: [nativeTacho, "daemon"],
       binDir,
+      ...flagged,
     };
   }
   return {
     hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
     daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
     binDir,
+    ...flagged,
   };
 }
 

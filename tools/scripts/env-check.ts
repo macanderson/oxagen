@@ -123,6 +123,11 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "TACHO_BUNDLED",
   "TACHO_BIN_DIR",
   "TACHO_HOME",
+  // Set by the AppImage runtime on every process the image starts; tacho
+  // reads it to know its exec path is a per-launch mount and refuse to bake
+  // that path into hooks (packages/tacho/src/cli/deps.ts). Never an
+  // operator's variable.
+  "APPIMAGE",
   // Claude Code sets these in the session and hook processes it spawns; the
   // tacho collector and the session-summary script read what it left. They are
   // that tool's contract, not anything an operator configures here.

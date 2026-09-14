@@ -67,6 +67,18 @@ export interface DesktopState {
   daemon: DaemonStatus | null;
   log_path: string;
   sidecar_dir: string | null;
+  /**
+   * The sidecar directory is gone after this launch (an AppImage mount, a
+   * mounted .dmg, App Translocation): nothing durable may reference it.
+   */
+  sidecar_transient: boolean;
+  /**
+   * The directory hooks and the service may reference: the sidecar
+   * directory, or the durable copy "Link into PATH" made; null while the app
+   * runs from a transient directory with no copy yet (tacho refuses to
+   * enroll until there is one).
+   */
+  bin_dir: string | null;
   oxagen_on_path: string | null;
   tacho_on_path: string | null;
   cli_install_dir: string;

@@ -571,6 +571,16 @@ export function App() {
       : state?.platform === "windows"
         ? "Remove Oxagen from Settings › Apps to finish."
         : "Remove the package (apt/dnf) or delete the AppImage to finish.";
+  // Running from a directory that is gone after this launch (an AppImage
+  // mount, a mounted .dmg, App Translocation) with no durable copy of the
+  // tools yet: hooks and the service written now would stop working when
+  // the app quits, so tacho refuses; "Keep the tools" makes the copy.
+  const toolsTransient =
+    state?.sidecar_transient === true && state.bin_dir === null;
+  const keepToolsHint =
+    state?.platform === "macos"
+      ? "Oxagen is running from the disk image (or where it was downloaded). Move it to Applications and open it again, or keep a copy of the tools."
+      : "Oxagen is running from the AppImage mount. Install the .deb or .rpm, or keep a copy of the tools.";
   const dotClass = !host
     ? ""
     : daemonUp && host.host_status === "active"
@@ -816,6 +826,19 @@ export function App() {
                       <code>npm i -g @openai/codex</code>), then rescan.
                     </div>
                   )}
+                {toolsTransient && (
+                  <div className="notice">
+                    {keepToolsHint}{" "}
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={doInstallCli}
+                      disabled={busy !== null}
+                    >
+                      {busy === "cli" ? "Copying…" : "Keep the tools"}
+                    </button>
+                  </div>
+                )}
                 <div className="row">
                   <button
                     type="button"
@@ -824,6 +847,7 @@ export function App() {
                     disabled={
                       busy !== null ||
                       detecting ||
+                      toolsTransient ||
                       (registration ?? []).length === 0
                     }
                   >
