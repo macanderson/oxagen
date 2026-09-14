@@ -1,8 +1,10 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Each lookup issues one to two sequential queries. The fake transaction pops a
-// scripted result per query, and records the table each query read.
-const { queue, tables, withSystemDbMock } = vi.hoisted(() => {
+// scripted result per query, and records the table each query read. `where`
+// is exposed so a test can pin the predicate a lookup keys on.
+const { queue, tables, where, withSystemDbMock } = vi.hoisted(() => {
   const queue: unknown[][] = [];
   const tables: unknown[] = [];
   const limit = vi.fn(() => Promise.resolve(queue.shift() ?? []));
@@ -16,7 +18,7 @@ const { queue, tables, withSystemDbMock } = vi.hoisted(() => {
   const withSystemDbMock = vi.fn((fn: (t: typeof tx) => Promise<unknown>) =>
     fn(tx),
   );
-  return { queue, tables, withSystemDbMock };
+  return { queue, tables, where, withSystemDbMock };
 });
 
 vi.mock("@oxagen/database", async () => ({
@@ -176,6 +178,11 @@ describe("systemLookups", () => {
         expiresAt: invitationRow.expiresAt,
       });
       expect(tables).toEqual([schema.invitations, schema.organizations]);
+      // The public token is the capability: the read keys on publicId alone.
+      expect(where).toHaveBeenNthCalledWith(
+        1,
+        eq(schema.invitations.publicId, "invi_live"),
+      );
     });
 
     it("returns null for an unknown token without reading the organization", async () => {
