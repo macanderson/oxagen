@@ -101,9 +101,7 @@ describe("billing.action_usage contract", () => {
 
   it("keeps the model-spend line with its deliberate zero rather than allowing it to be dropped", () => {
     const { modelSpend: _dropped, ...withoutModelSpend } = validOutput;
-    expect(() =>
-      billingActionUsage.output.parse(withoutModelSpend),
-    ).toThrow();
+    expect(() => billingActionUsage.output.parse(withoutModelSpend)).toThrow();
     expect(
       billingActionUsage.output.parse(validOutput).modelSpend.chargedCredits,
     ).toBe(0);

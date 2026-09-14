@@ -14,7 +14,8 @@ import {
 } from "@oxagen/oxagen/tacho/schemas";
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
+import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -31,6 +32,7 @@ export interface TachoTx {
       findMany: (args: unknown) => Promise<unknown>;
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
+    retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
   };
   update: (table: unknown) => {
     set: (values: Record<string, unknown>) => {
@@ -127,10 +129,41 @@ export async function readDenyGeneration(
   return { org, workspace };
 }
 
+/** The bundle's retention clause: what the host may retain and ship. */
+export type BundleRetention = PolicyBundle["retention"];
+
+/**
+ * The workspace's fidelity setting (ADR-057 decision 2): the mode and content
+ * classes of its latest `evidence.retention_policy_versions` row. A workspace
+ * that has pinned no policy retains bodies of every class; `digest_only` is
+ * the opt-down a policy row records, and every run in that workspace grades
+ * `inspect`.
+ */
+export async function readWorkspaceRetention(
+  tx: TachoTx,
+  orgId: string,
+  workspaceId: string,
+): Promise<BundleRetention> {
+  const row = (await tx.query.retentionPolicyVersions.findFirst({
+    where: and(
+      eq(schema.retentionPolicyVersions.orgId, orgId),
+      eq(schema.retentionPolicyVersions.workspaceId, workspaceId),
+    ),
+    orderBy: [desc(schema.retentionPolicyVersions.version)],
+    columns: { mode: true, retainedContentClasses: true },
+  })) as { mode: string; retainedContentClasses: string[] } | undefined;
+  if (!row) {
+    return { mode: "content_exact", classes: [...RETENTION_CONTENT_CLASSES] };
+  }
+  if (row.mode === "digest_only") return { mode: "digest_only", classes: [] };
+  return { mode: "content_exact", classes: [...row.retainedContentClasses] };
+}
+
 /** The unsigned bundle for a host at this moment (spec section 7.1). */
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
+  retention: BundleRetention,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
   const status = tachoHostStatusSchema.parse(host.status);
@@ -149,7 +182,7 @@ export function unsignedBundle(
     tools: {} as PolicyBundle["tools"],
     budget: { mode: "observed" as const },
     context: { system: null },
-    retention: { mode: "digest_only" as const, classes: [] as string[] },
+    retention,
     mode,
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
@@ -232,12 +265,11 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope> {
-  const denyGeneration = await readDenyGeneration(
-    tx,
-    ctx.orgId,
-    ctx.workspaceId,
-  );
-  const bundle = unsignedBundle(host, denyGeneration, now);
+  const [denyGeneration, retention] = await Promise.all([
+    readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
+    readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+  ]);
+  const bundle = unsignedBundle(host, denyGeneration, retention, now);
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
     host_status: tachoHostStatusSchema.parse(host.status),

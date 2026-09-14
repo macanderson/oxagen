@@ -5,6 +5,7 @@
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
 import type { TokenUsageByStepRow } from "@oxagen/telemetry";
+import { NO_BODY } from "@oxagen/run-ledger";
 import {
   type LedgerEventRollup,
   type LedgerRunRow,
@@ -279,6 +280,7 @@ export function event(
     encryptedPayloadRef: null,
     observedAt: new Date(`2026-09-11T10:00:0${runSeq % 10}.000Z`),
     recordedAt: new Date(`2026-09-11T10:00:0${runSeq % 10}.500Z`),
+    body: NO_BODY,
     ...over,
   };
 }

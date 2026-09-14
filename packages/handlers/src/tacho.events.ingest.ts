@@ -12,20 +12,39 @@
 // What lands: every event in ClickHouse `tacho_events`; the session rows,
 // per-model rollups, files touched, and commands run in Postgres; the host's
 // liveness; and the control envelope in the response.
+//
+// Bodies (ADR-057): a batch may ship the bytes a frame's `content.digest`
+// names. The control plane verifies each body against the chain and the
+// platform's redaction detectors (lib/tacho-replay.ts), refuses the workspace
+// has opted down to digest_only, writes the accepted bytes through the
+// evidence body store before any row references them, and stamps the object
+// reference on the ClickHouse row. Each session counts the frames that
+// carried a digest and the bodies retained; the `agent_stop` seal grades the
+// session from those counts, the chain verdict and the host's own gaps, and
+// writes `replay_grade` and `completeness_gaps` on the session row.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
-import { insertTachoEvents } from "@oxagen/telemetry";
+import { insertTachoEvents, type TachoEventInsert } from "@oxagen/telemetry";
 import { and, eq, sql } from "drizzle-orm";
+import { evidenceBodyStore } from "./lib/evidence-bodies";
 import {
   type TachoHostRow,
   controlEnvelope,
+  readWorkspaceRetention,
   resolveEnrolledHost,
   tachoDenied,
   touchHost,
 } from "./lib/tacho-host";
+import {
+  type BodyRejection,
+  countContentFrames,
+  sealTachoSession,
+  verifyBatchBodies,
+  type VerifiedBody,
+} from "./lib/tacho-replay";
 import { logger } from "./logger";
 
 type Body = Record<string, unknown>;
@@ -400,6 +419,44 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   const now = new Date();
   const capability = "ingest_tacho_events";
 
+  // Bodies first: verified against the chain, then written content-addressed
+  // before any row references them. A rejected body leaves its frame without
+  // one; the seal records the gap.
+  const verified = verifyBatchBodies(input.events, input.bodies);
+  const retention = await withTenantDb((tx) =>
+    readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+  );
+  const bodyRejections: BodyRejection[] = [...verified.rejected];
+  const retained: VerifiedBody[] = [];
+  if (retention.mode === "digest_only") {
+    for (const body of verified.accepted)
+      bodyRejections.push({
+        event_id_idem: body.eventIdIdem,
+        reason: "retention_digest_only",
+      });
+  } else {
+    retained.push(...verified.accepted);
+  }
+  const bytesRefs = new Map<string, string>();
+  for (const body of retained) {
+    const { ref } = await evidenceBodyStore().put({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      runId: body.sessionUuid,
+      digest: body.digest,
+      contentType: body.contentType,
+      bytes: body.bytes,
+    });
+    bytesRefs.set(body.eventIdIdem, ref);
+  }
+  const bodyFramesBySession = new Map<string, number>();
+  for (const body of retained) {
+    bodyFramesBySession.set(
+      body.sessionUuid,
+      (bodyFramesBySession.get(body.sessionUuid) ?? 0) + 1,
+    );
+  }
+
   const result = await withTenantDb(async (tx) => {
     const host = await resolveEnrolledHost(
       capability,
@@ -445,6 +502,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           lastHash: true,
           chainVerified: true,
           hostId: true,
+          telemetryGapCount: true,
+          contentFrames: true,
+          bodyFrames: true,
+          enforcementTier: true,
         },
       });
       if (existing && existing.hostId !== host.id) {
@@ -496,11 +557,33 @@ export const tachoEventsIngestHandler: CapabilityHandler<
 
       const delta = emptyDelta();
       for (const event of events) foldDelta(delta, event);
+      const contentFrames = countContentFrames(events);
+      const bodyFrames = bodyFramesBySession.get(sessionUuid) ?? 0;
       const terminal = terminalPatch(events, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
           totalCostMicrosAuthoritative?: number;
         };
+      if (terminal["sealedAt"] !== undefined) {
+        const seal = sealTachoSession({
+          hostGaps: Array.isArray(terminalColumns["completenessGaps"])
+            ? (terminalColumns["completenessGaps"] as string[])
+            : [],
+          chainVerified: ok,
+          unobservedTail: terminalColumns["unobservedTail"] === true,
+          telemetryGapCount:
+            (existing?.telemetryGapCount ?? 0) + delta.telemetryGapCount,
+          retentionMode: retention.mode,
+          contentFrames: (existing?.contentFrames ?? 0) + contentFrames,
+          bodyFrames: (existing?.bodyFrames ?? 0) + bodyFrames,
+          enforcementTier:
+            existing?.enforcementTier ??
+            first.agent.enforcement_tier ??
+            (host.mode === "enforce" ? "harness" : "observe"),
+        });
+        terminalColumns["completenessGaps"] = seal.completenessGaps;
+        terminalColumns["replayGrade"] = seal.replayGrade;
+      }
       const lastContext = last.context ?? {};
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
@@ -531,6 +614,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         policyDecisions: sql`${schema.tachoSessions.policyDecisions} + ${delta.policyDecisions}`,
         policyDenies: sql`${schema.tachoSessions.policyDenies} + ${delta.policyDenies}`,
         telemetryGapCount: sql`${schema.tachoSessions.telemetryGapCount} + ${delta.telemetryGapCount}`,
+        contentFrames: sql`${schema.tachoSessions.contentFrames} + ${contentFrames}`,
+        bodyFrames: sql`${schema.tachoSessions.bodyFrames} + ${bodyFrames}`,
         filesRead: sql`${schema.tachoSessions.filesRead} + ${delta.filesRead}`,
         filesWritten: sql`${schema.tachoSessions.filesWritten} + ${delta.filesWritten}`,
         filesDeleted: sql`${schema.tachoSessions.filesDeleted} + ${delta.filesDeleted}`,
@@ -607,10 +692,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     return { chainBreaks, verified, control };
   });
 
-  const inserts = input.events.map((event) => ({
-    event,
-    chainVerified: result.verified.get(event.session_uuid) ?? false,
-  }));
+  const inserts: TachoEventInsert[] = input.events.map((event) => {
+    const bytesRef = bytesRefs.get(event.event_id_idem);
+    return {
+      event,
+      chainVerified: result.verified.get(event.session_uuid) ?? false,
+      ...(bytesRef === undefined ? {} : { bytesRef }),
+    };
+  });
   try {
     await insertTachoEvents(inserts);
   } catch (err) {
@@ -630,6 +719,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     accepted: input.events.length,
     event_ids: input.events.map((event) => event.event_id_idem),
     chain_breaks: result.chainBreaks,
+    body_rejections: bodyRejections,
     control: result.control,
   };
 };

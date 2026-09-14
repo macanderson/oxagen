@@ -13,6 +13,11 @@ const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
   withTenantDb: vi.fn(),
   loggerError: vi.fn(),
+  bodyPut: vi.fn(),
+}));
+
+vi.mock("./lib/evidence-bodies", () => ({
+  evidenceBodyStore: () => ({ put: mocks.bodyPut }),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -29,6 +34,7 @@ vi.mock("./logger", () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn() },
 }));
 
+import { digestBytes } from "@oxagen/tacho";
 import { foldDelta, tachoEventsIngestHandler } from "./tacho.events.ingest";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
@@ -154,6 +160,10 @@ interface FakeDb {
   commands: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
+  /** The workspace's latest retention policy row; none by default. */
+  retentionPolicy:
+    | { mode: string; retainedContentClasses: string[] }
+    | undefined;
 }
 
 function fakeDb(): FakeDb {
@@ -198,6 +208,7 @@ function fakeDb(): FakeDb {
       },
     ],
     updates: [],
+    retentionPolicy: undefined,
   };
 }
 
@@ -241,6 +252,9 @@ function wire(db: FakeDb): void {
           tachoControlCommands: {
             findMany: async () =>
               db.controlCommands.filter((c) => c["outcome"] === "pending"),
+          },
+          retentionPolicyVersions: {
+            findFirst: async () => db.retentionPolicy,
           },
         },
         insert: (table: unknown) => ({
@@ -291,6 +305,9 @@ function wire(db: FakeDb): void {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
+  mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
+    ref: `evb:v1:test:${input.digest.slice(7)}`,
+  }));
 });
 
 describe("ingest_tacho_events", () => {
@@ -646,5 +663,167 @@ describe("ingest_tacho_events", () => {
       telemetryGapCount: 1,
       numModelSwitches: 1,
     });
+  });
+});
+
+// ── Bodies and the seal (ADR-057) ────────────────────────────────────────────
+
+const TOOL_OUTPUT = '{"stdout":"hi\\n"}';
+
+/** A short session whose tool_call chains a content digest for TOOL_OUTPUT. */
+function sessionWithContent(): TachoEvent[] {
+  let cursor: ChainCursor = GENESIS_CURSOR;
+  const out: TachoEvent[] = [];
+  for (const draft of [
+    unsealed("agent_start", { session_start_source: "startup" }),
+    {
+      ...unsealed("tool_call", {
+        tool_name: "Bash",
+        tool_use_id: "toolu_1",
+        tool_status: "ok",
+        effect_kind: "command",
+        tool_target: "echo hi",
+      }),
+      content: { digest: digestBytes(TOOL_OUTPUT), redactions: [] },
+    } as UnsealedTachoEvent,
+    unsealed("agent_stop", {
+      session_outcome: "completed",
+      session_end_reason: "other",
+    }),
+  ]) {
+    const sealed = sealEvent(draft, cursor);
+    cursor = sealed.next;
+    out.push(sealed.event);
+  }
+  return out;
+}
+
+function batch(events: TachoEvent[], bodies?: unknown[]) {
+  return {
+    schema: "tacho.batch.v1" as const,
+    host_enrollment_id: HOST_PUBLIC,
+    events,
+    ...(bodies ? { bodies } : {}),
+  } as Parameters<typeof tachoEventsIngestHandler>[0];
+}
+
+function bodyFor(event: TachoEvent, text = TOOL_OUTPUT) {
+  return {
+    event_id_idem: event.event_id_idem,
+    content_type: "application/json",
+    bytes_base64: Buffer.from(text).toString("base64"),
+  };
+}
+
+describe("ingest_tacho_events: bodies and the seal", () => {
+  it("writes a verified body before the row, stamps its reference, and seals view", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = sessionWithContent();
+    const toolCall = events[1] as TachoEvent;
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(toolCall)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([]);
+    expect(mocks.bodyPut).toHaveBeenCalledOnce();
+    expect(mocks.bodyPut.mock.calls[0]?.[0]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      workspaceId: CONTEXT.workspaceId,
+      runId: SESSION,
+      digest: digestBytes(TOOL_OUTPUT),
+      contentType: "application/json",
+    });
+    // The body landed before the ClickHouse append.
+    expect(mocks.bodyPut.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.insertTachoEvents.mock.invocationCallOrder[0] as number,
+    );
+    const inserts = mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
+      event: TachoEvent;
+      bytesRef?: string;
+    }>;
+    expect(inserts.find((i) => i.event === toolCall)?.bytesRef).toBe(
+      `evb:v1:test:${digestBytes(TOOL_OUTPUT).slice(7)}`,
+    );
+    expect(inserts.filter((i) => i.bytesRef !== undefined)).toHaveLength(1);
+    const row = db.sessions.get(SESSION);
+    // Every content frame has its body on an observe-tier host: view.
+    expect(row).toMatchObject({ replayGrade: "view", completenessGaps: [] });
+  });
+
+  it("seals inspect with body_missing when a content frame arrives without its body", async () => {
+    const db = fakeDb();
+    wire(db);
+    const output = await tachoEventsIngestHandler(
+      batch(sessionWithContent()),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([]);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "inspect",
+      completenessGaps: ["body_missing"],
+    });
+  });
+
+  it("refuses every body under a digest_only workspace and seals with the digest_only gap", async () => {
+    const db = fakeDb();
+    db.retentionPolicy = { mode: "digest_only", retainedContentClasses: [] };
+    wire(db);
+    const events = sessionWithContent();
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([
+      {
+        event_id_idem: (events[1] as TachoEvent).event_id_idem,
+        reason: "retention_digest_only",
+      },
+    ]);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "inspect",
+      completenessGaps: ["digest_only"],
+    });
+  });
+
+  it("refuses a body whose bytes do not hash to the chained digest, and one carrying a credential", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = sessionWithContent();
+    const toolCall = events[1] as TachoEvent;
+    const output = await tachoEventsIngestHandler(
+      batch(events, [
+        bodyFor(toolCall, '{"stdout":"tampered"}'),
+        bodyFor(events[0] as TachoEvent),
+      ]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([
+      { event_id_idem: toolCall.event_id_idem, reason: "digest_mismatch" },
+      {
+        event_id_idem: (events[0] as TachoEvent).event_id_idem,
+        reason: "no_content_digest",
+      },
+    ]);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+    expect(db.sessions.get(SESSION)?.["replayGrade"]).toBe("inspect");
+  });
+
+  it("seals inspect with chain_break when the chain does not verify", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = sessionWithContent();
+    const forged = events.map((event, i) =>
+      i === 1 ? { ...event, hash: `sha256:${"f".repeat(64)}` } : event,
+    ) as TachoEvent[];
+    await tachoEventsIngestHandler(
+      batch(forged, [bodyFor(forged[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    const gaps = db.sessions.get(SESSION)?.["completenessGaps"] as string[];
+    expect(gaps).toContain("chain_break");
+    expect(db.sessions.get(SESSION)?.["replayGrade"]).toBe("inspect");
   });
 });

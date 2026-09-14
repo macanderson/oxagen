@@ -28,7 +28,11 @@ const validOutput = {
     },
   ],
   tiers: [
-    { tier: "free" as const, includedActionsAnnual: 25_000, retentionMonths: 1 },
+    {
+      tier: "free" as const,
+      includedActionsAnnual: 25_000,
+      retentionMonths: 1,
+    },
     {
       tier: "enterprise" as const,
       includedActionsAnnual: null,
@@ -38,7 +42,8 @@ const validOutput = {
   retention: { includedMonths: 12, usdPerGbMonth: 0.08, optIn: true as const },
   modelTokens: {
     usdPerToken: 0 as const,
-    explanation: "Reported in full, charged at zero — your key paid the vendor.",
+    explanation:
+      "Reported in full, charged at zero — your key paid the vendor.",
   },
   yourTier: "scale" as const,
   yourIncludedActionsAnnual: 1_500_000,
@@ -106,9 +111,7 @@ describe("billing.action_rate_card contract", () => {
     expect(() =>
       billingActionRateCard.output.parse({
         ...validOutput,
-        tiers: [
-          { tier: "free", includedActionsAnnual: 0, retentionMonths: 0 },
-        ],
+        tiers: [{ tier: "free", includedActionsAnnual: 0, retentionMonths: 0 }],
       }),
     ).toThrow();
   });

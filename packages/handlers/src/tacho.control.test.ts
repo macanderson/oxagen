@@ -232,6 +232,7 @@ function wire(db: Fake): void {
           authorizationDenyGenerations: {
             findMany: async () => [{ workspaceId: null, generation: 1 }],
           },
+          retentionPolicyVersions: { findFirst: async () => undefined },
           tachoControlCommands: {
             findMany: async () =>
               db.commands.filter((c) => c["outcome"] === "pending"),
