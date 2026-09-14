@@ -6,9 +6,7 @@
 // milestone M1): the gate state itself, the one-click installer with its
 // embedded single-use token, the first frame arriving from a freshly wrapped
 // agent, and the repository the installer saw. The live source answers those
-// NotBacked, and the screens say so instead of pretending to wait. In dev and
-// e2e the fixture source serves the mockup's gate, and its `mc_state` switch
-// walks the loading, error and denied states through these same reads.
+// NotBacked, and the screens say so instead of pretending to wait.
 import "server-only";
 import type {
   DetectedRepository,
@@ -39,9 +37,7 @@ export async function loadViewerFlowScope(
 ): Promise<Read<ResolvedFlow>> {
   const { ws } = viewer;
   if (!ws) return readError(SCOPE_NOT_FOUND, 404);
-  const namespaces = await (await dataSource()).onboarding.namespaces(
-    viewer.scope,
-  );
+  const namespaces = await dataSource().onboarding.namespaces(viewer.scope);
   if (!namespaces.ok) return readError(SCOPE_NOT_FOUND, 404);
   return readOk({
     org: {
@@ -76,14 +72,14 @@ export async function loadGate(
   flow: OnboardingFlow,
   scope: Scope | null,
 ): Promise<Read<OnboardingGate>> {
-  return (await dataSource()).onboarding.gate(flow, scope);
+  return dataSource().onboarding.gate(flow, scope);
 }
 
 export async function loadInstallerOffer(
   flow: OnboardingFlow,
   scope: ResolvedFlow,
 ): Promise<Read<InstallerOffer>> {
-  return (await dataSource()).onboarding.installerOffer(scope.tenant, flow);
+  return dataSource().onboarding.installerOffer(scope.tenant, flow);
 }
 
 export async function loadFirstFrameScript(
@@ -92,7 +88,7 @@ export async function loadFirstFrameScript(
   agentKey: string,
   harness: string,
 ): Promise<Read<FirstFrameScript>> {
-  return (await dataSource()).onboarding.firstFrameScript(scope.tenant, {
+  return dataSource().onboarding.firstFrameScript(scope.tenant, {
     flow,
     agentKey,
     harness,
@@ -103,5 +99,5 @@ export async function loadFirstFrameScript(
 export async function loadDetectedRepository(
   scope: ResolvedFlow,
 ): Promise<Read<DetectedRepository>> {
-  return (await dataSource()).onboarding.detectedRepository(scope.tenant);
+  return dataSource().onboarding.detectedRepository(scope.tenant);
 }

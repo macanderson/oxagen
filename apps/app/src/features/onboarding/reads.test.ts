@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { describeQuery } from "../auth/test-query";
 
-const cookieJar = new Map<string, string>();
 const wheres: string[] = [];
 const findOrg = vi.fn<(o: unknown) => unknown>();
 const findWorkspace = vi.fn<(o: unknown) => unknown>();
@@ -39,11 +37,6 @@ vi.mock("next/server", async (importOriginal) => ({
   connection: () => Promise.resolve(),
 }));
 vi.mock("next/headers", () => ({
-  cookies: () =>
-    Promise.resolve({
-      get: (name: string) =>
-        cookieJar.has(name) ? { value: cookieJar.get(name) } : undefined,
-    }),
   headers: () => Promise.resolve(new Headers()),
 }));
 // Only the onboarding port is under test: the real live source loads every live
@@ -86,7 +79,7 @@ const sessionUser = {
 
 /** Priya: a member of Acme, and of core-platform unless a test says otherwise. */
 function stubLiveTenancy() {
-  getSession.mockResolvedValue({ source: "better-auth", user: sessionUser });
+  getSession.mockResolvedValue({ user: sessionUser });
   lookups.orgBySlug.mockImplementation((slug: string) =>
     Promise.resolve(
       slug === "acme"
@@ -109,18 +102,8 @@ function stubLiveTenancy() {
   lookups.twoFactorEnabled.mockResolvedValue(false);
 }
 
-function fixtureMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "fixture");
-}
-function liveMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "live");
-}
-
 beforeEach(() => {
   wheres.length = 0;
-  cookieJar.clear();
   findOrg.mockReset();
   findWorkspace.mockReset();
   getSession.mockReset();
@@ -135,29 +118,7 @@ const NOT_FOUND = {
 };
 
 describe("loadFlowScope", () => {
-  it("serves the fixture org and workspace to the fixture operator, and nothing else, in fixture mode", async () => {
-    fixtureMode();
-    getSession.mockResolvedValue({
-      source: "fixture",
-      user: {
-        id: "usr_marcusbell",
-        email: "marcus.bell@acme.example",
-        name: "Marcus Bell",
-        image: null,
-      },
-    });
-    const hit = await reads.loadFlowScope("acme", "core-platform");
-    expect(hit.ok && hit.value.org.namespace).toBe("acme");
-    expect(hit.ok && hit.value.operator.name).toBe("Marcus Bell");
-    expect(await reads.loadFlowScope("globex", "core-platform")).toEqual(
-      NOT_FOUND,
-    );
-    // Marcus is an Acme member but not a finops member.
-    expect(await reads.loadFlowScope("acme", "finops")).toEqual(NOT_FOUND);
-  });
-
   it("resolves a workspace the user is a member of, reading namespaces by the admitted ids", async () => {
-    liveMode();
     stubLiveTenancy();
     findOrg.mockResolvedValue({ namespace: "acme" });
     findWorkspace.mockResolvedValue({ namespace: "core" });
@@ -179,7 +140,6 @@ describe("loadFlowScope", () => {
   });
 
   it("an org member with no workspace_users row is not found, and no namespace is read", async () => {
-    liveMode();
     stubLiveTenancy();
     lookups.isWorkspaceMember.mockResolvedValue(false);
     expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
@@ -190,7 +150,6 @@ describe("loadFlowScope", () => {
   });
 
   it("a non-member of the org is not found before the workspace is looked up", async () => {
-    liveMode();
     stubLiveTenancy();
     lookups.orgRole.mockResolvedValue(null);
     expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
@@ -201,7 +160,6 @@ describe("loadFlowScope", () => {
   });
 
   it("signed out, MFA overdue, or a historical slug all read as not found, never as a throw", async () => {
-    liveMode();
     stubLiveTenancy();
     getSession.mockResolvedValue(null);
     expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
@@ -233,7 +191,6 @@ describe("loadFlowScope", () => {
   });
 
   it("a workspace whose organization was deleted since is not found", async () => {
-    liveMode();
     stubLiveTenancy();
     findOrg.mockResolvedValue(undefined);
     expect(await reads.loadFlowScope("acme", "core-platform")).toEqual(
@@ -243,7 +200,6 @@ describe("loadFlowScope", () => {
   });
 
   it("an organization-level viewer has no workspace to register into", async () => {
-    liveMode();
     const read = await reads.loadViewerFlowScope({
       userId: "user-1",
       user: sessionUser,
@@ -265,10 +221,7 @@ describe("unbacked reads", () => {
     org: { slug: "acme", name: "Acme", namespace: "acme" },
     ws: { slug: "core-platform", name: "Core platform", namespace: "core" },
     operator: { name: "Marcus Bell", email: "m@a.co" },
-    tenant: {
-      orgId: FIXTURE_TENANT.orgId,
-      workspaceId: FIXTURE_TENANT.workspaces["core-platform"],
-    },
+    tenant: { orgId: ORG_ID, workspaceId: WS_ID },
   };
   const notBackedG15 = {
     ok: false,
@@ -277,8 +230,7 @@ describe("unbacked reads", () => {
     gap: "G15",
   };
 
-  it("return NotBacked G15 outside fixture mode, never fixture data", async () => {
-    liveMode();
+  it("return NotBacked G15", async () => {
     expect(await reads.loadInstallerOffer("gate", flow)).toEqual(notBackedG15);
     expect(
       await reads.loadFirstFrameScript(
@@ -289,58 +241,6 @@ describe("unbacked reads", () => {
       ),
     ).toEqual(notBackedG15);
     expect(await reads.loadDetectedRepository(flow)).toEqual(notBackedG15);
-    expect(await reads.loadGate("gate", null)).toEqual(notBackedG15);
-  });
-
-  it("serve the scripted first frame in fixture mode, filled in for the agent being wrapped", async () => {
-    fixtureMode();
-    const read = await reads.loadFirstFrameScript(
-      "gate",
-      flow,
-      "acme.core.perf-watch",
-      "claude-code",
-    );
-    expect(read.ok && read.value.log.at(-1)?.firstFrame).toBe(true);
-    expect(read.ok && read.value.frames[1]?.body).toContain(
-      "acme.core.perf-watch",
-    );
-    expect(read.ok && read.value.frames[1]?.body).toContain("Marcus Bell");
-    expect(read.ok && read.value.frames[0]?.body).not.toContain("{harness}");
-  });
-
-  it("walk the gate's states through the mc_state switch in fixture mode", async () => {
-    fixtureMode();
-    cookieJar.set("mc_state", "denied");
-    expect(await reads.loadGate("gate", null)).toEqual({
-      ok: false,
-      reason: "denied",
-      permission: "org.create",
-    });
-    expect(await reads.loadGate("register", flow.tenant)).toEqual({
-      ok: false,
-      reason: "denied",
-      permission: "agent.register",
-    });
-    cookieJar.set("mc_state", "welcome:error");
-    expect(
-      await reads.loadFirstFrameScript("gate", flow, "acme.core.x", "stella"),
-    ).toMatchObject({ ok: false, reason: "error" });
-    // Register is its own page: the gate's error leaves it loaded.
-    expect(
-      (
-        await reads.loadFirstFrameScript(
-          "register",
-          flow,
-          "acme.core.x",
-          "stella",
-        )
-      ).ok,
-    ).toBe(true);
-  });
-
-  it("ignore the switch outside fixture mode (negative)", async () => {
-    liveMode();
-    cookieJar.set("mc_state", "denied");
     expect(await reads.loadGate("gate", null)).toEqual(notBackedG15);
   });
 });

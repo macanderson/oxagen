@@ -15,11 +15,9 @@ import { headers } from "next/headers";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
-import { isFixtureMode } from "./fixture-session";
-import { fixtureTenancyLookups } from "./fixture-tenancy";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
-import { liveTenancyLookups, type TenancyLookups } from "./tenancy-lookups";
+import { liveTenancyLookups } from "./tenancy-lookups";
 import {
   canonicalPath,
   resolveViewerWith,
@@ -29,11 +27,6 @@ import {
 
 export { ORG_ONLY_WS, type Scope } from "./tenant-scope";
 export type { Viewer, ViewerResolution } from "./viewer-resolution";
-
-/** The fixture lookups in dev/e2e fixture mode; the database otherwise, always in production. */
-export function tenancyLookups(): TenancyLookups {
-  return isFixtureMode() ? fixtureTenancyLookups : liveTenancyLookups;
-}
 
 /** Resolve without throwing a navigation interrupt: route handlers map the result to a Response. */
 export const resolveViewer = cache(
@@ -45,7 +38,7 @@ export const resolveViewer = cache(
     // error; connection() defers it to the request.
     await connection();
     return resolveViewerWith(
-      { session, lookups: tenancyLookups(), now: new Date() },
+      { session, lookups: liveTenancyLookups, now: new Date() },
       orgSlug,
       wsSlug,
     );

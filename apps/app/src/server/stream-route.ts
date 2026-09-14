@@ -12,7 +12,6 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { AppError } from "./errors";
-import { isFixtureMode } from "./fixture-session";
 import {
   SSE_HEADERS,
   type StreamTimings,
@@ -75,7 +74,7 @@ export function viewerFailureResponse(
 
 export type StreamRouteDeps = {
   resolveViewer: (org: string, ws: string) => Promise<ViewerResolution>;
-  feeds: () => Promise<StreamFeeds>;
+  feeds: () => StreamFeeds;
   onError?: (error: unknown) => void | Promise<void>;
   /** Test seam for the stream timings; production uses STREAM_DEFAULTS. */
   timings?: Partial<StreamTimings>;
@@ -108,12 +107,12 @@ export async function handleStreamRequest(
     throw error;
   }
 
-  const feeds = await deps.feeds();
+  const feeds = deps.feeds();
   const { scope } = viewer;
   // The body is pulled by the response writer after this handler returns, i.e.
   // outside the request's async context, where `cookies()` throws. Every poll
   // runs in the context captured here, so a read sees this request's cookies
-  // (the fixture `mc_state` switch included) for the life of the stream.
+  // for the life of the stream.
   const inRequest = AsyncLocalStorage.snapshot();
   const body = createCursorStream({
     ...deps.timings,
@@ -135,14 +134,9 @@ export async function handleStreamRequest(
 
 /**
  * Report a read that threw mid-stream. The route catches it to send an error
- * state, so onRequestError never sees it; this is its capture point. Telemetry
- * is imported lazily: fixture mode has no ClickHouse to write to.
+ * state, so onRequestError never sees it; this is its capture point.
  */
 export async function reportStreamError(error: unknown): Promise<void> {
-  if (isFixtureMode()) {
-    console.error("mc stream read failed", error);
-    return;
-  }
   try {
     const { captureError } = await import("@oxagen/telemetry");
     captureError({

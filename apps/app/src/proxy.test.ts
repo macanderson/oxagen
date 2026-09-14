@@ -1,14 +1,6 @@
 import { NextRequest } from "next/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  FIXTURE_SESSION_COOKIE,
-  FIXTURE_SESSION_VALUE,
-} from "@/server/fixture-session";
+import { describe, expect, it } from "vitest";
 import { isPublicPath, proxy } from "./proxy";
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 function request(path: string, cookie?: string): NextRequest {
   return new NextRequest(new URL(path, "http://localhost:3000"), {
@@ -99,15 +91,10 @@ describe("proxy", () => {
     );
   });
 
-  it("accepts the fixture session only in fixture mode outside production", () => {
-    const cookie = `${FIXTURE_SESSION_COOKIE}=${FIXTURE_SESSION_VALUE}`;
-    vi.stubEnv("MC_DATA", "fixture");
-    vi.stubEnv("NODE_ENV", "development");
+  it("redirects a cookie that is not a session token (negative)", () => {
     expect(
-      proxy(request("/acme/core-platform", cookie)).headers.get("location"),
-    ).toBeNull();
-
-    vi.stubEnv("NODE_ENV", "production");
-    expect(proxy(request("/acme/core-platform", cookie)).status).toBe(307);
+      proxy(request("/acme/core-platform", "theme=dark; operator=marcus"))
+        .status,
+    ).toBe(307);
   });
 });

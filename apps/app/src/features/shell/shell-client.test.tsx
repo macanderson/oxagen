@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The client shell against the fixture reads: the sidebar, top bar, switchers,
+// The client shell against built shell reads: the sidebar, top bar, switchers,
 // command menu, notifications, Account dialog, assistant flyout and
 // <MobileNav>, driven the way an operator drives them.
 import {
@@ -24,15 +24,18 @@ import {
 } from "vitest";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
-import { denied, notBacked, readError, readOk } from "@/data/not-backed";
-import type { ShellSwitches } from "@/data/adapters/fixture/state";
-import { testFixtureShell } from "@/data/adapters/fixture/testing";
+import {
+  NO_GAP,
+  denied,
+  notBacked,
+  readError,
+  readOk,
+} from "@/data/not-backed";
 import { liveShell } from "@/data/adapters/live/shell";
-import { FIXTURE_TENANT } from "@/data/fixture-tenant";
 import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { FIXTURE_USER } from "@/server/fixture-session";
 import { loadShellData } from "./load";
 import { MobileNav } from "./mobile-nav";
+import { ENGINE_DOWN, SHELL_ORG_ID, shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
@@ -112,19 +115,9 @@ afterEach(() => {
 });
 
 const ORG_SCOPE = {
-  orgId: FIXTURE_TENANT.orgId,
+  orgId: SHELL_ORG_ID,
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
-
-async function fixtureData(switches?: ShellSwitches): Promise<ShellData> {
-  const load = await loadShellData(testFixtureShell(switches), {
-    org: "acme",
-    scope: ORG_SCOPE,
-    userId: FIXTURE_USER.id,
-  });
-  if (load.kind !== "ok") throw new Error("fixture organization not found");
-  return load.data;
-}
 
 function renderShell(data: ShellData) {
   return render(
@@ -140,8 +133,8 @@ function renderShell(data: ShellData) {
 }
 
 describe("sidebar", () => {
-  it("renders the baseline sections with Agent IAM naming, counts and the current page", async () => {
-    renderShell(await fixtureData());
+  it("renders the baseline sections with Agent IAM naming, counts and the current page", () => {
+    renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
     const links = within(main).getAllByRole("link");
@@ -163,7 +156,7 @@ describe("sidebar", () => {
       "aria-current",
       "page",
     );
-    // The count is the seed's pending approvals in core-platform, what Fleet lists.
+    // The count is the pending approvals in core-platform, what Fleet lists.
     expect(within(main).getByRole("link", { name: /Fleet/ })).toHaveTextContent(
       "1 needs attention",
     );
@@ -172,9 +165,9 @@ describe("sidebar", () => {
     ).toBeInTheDocument();
   });
 
-  it("points the workspace section at the first workspace on an organization page", async () => {
+  it("points the workspace section at the first workspace on an organization page", () => {
     nav.pathname = "/acme/billing";
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
     expect(within(main).getByRole("link", { name: /Billing/ })).toHaveAttribute(
       "aria-current",
@@ -208,7 +201,7 @@ describe("sidebar", () => {
 describe("switchers", () => {
   it("lists workspaces and links each to its Fleet", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     await user.click(
       screen.getByRole("button", {
         name: "Switch workspace, current Core platform",
@@ -233,7 +226,7 @@ describe("switchers", () => {
 
   it("searches organizations", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     await user.click(
       screen.getByRole("button", {
         name: "Switch organization, current Acme Robotics",
@@ -257,9 +250,9 @@ describe("switchers", () => {
 });
 
 describe("top bar", () => {
-  it("shows breadcrumbs for the current page", async () => {
+  it("shows breadcrumbs for the current page", () => {
     nav.pathname = "/acme/core-platform/runs/run_01K5RS7M2E8FJ3QW";
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(
       within(crumbs).getByRole("link", { name: "Acme Robotics" }),
@@ -278,7 +271,7 @@ describe("top bar", () => {
 describe("command menu", () => {
   it("opens with ⌘K, filters, moves with the arrows and navigates on Enter", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     await user.keyboard("{Meta>}k{/Meta}");
     const menu = await screen.findByTestId("command-menu");
     const input = within(menu).getByRole("combobox", { name: /Search runs/ });
@@ -298,7 +291,7 @@ describe("command menu", () => {
 
   it("opens from the search button, says when nothing matches, and opens a clicked run", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     await user.click(
       screen.getByRole("button", { name: "Search or run an action" }),
     );
@@ -327,7 +320,7 @@ describe("command menu", () => {
 describe("notifications", () => {
   it("lists notifications newest first with the unread count", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const trigger = screen.getByTestId("notifications-trigger");
     expect(trigger).toHaveAccessibleName("Notifications, 3 unread");
     await user.click(trigger);
@@ -342,12 +335,22 @@ describe("notifications", () => {
   });
 
   it.each([
-    ["empty", "notifications-empty", "No notifications"],
-    ["error", "notifications-error", "notification_store_unavailable"],
-    ["not_backed", "notifications-not_backed", "does not read it yet"],
-  ] as const)("renders the %s state", async (state, testId, text) => {
+    ["empty", readOk({ items: [] }), "notifications-empty", "No notifications"],
+    [
+      "error",
+      readError("notification_store_unavailable", 503),
+      "notifications-error",
+      "notification_store_unavailable",
+    ],
+    [
+      "not_backed",
+      notBacked("M0", NO_GAP),
+      "notifications-not_backed",
+      "does not read it yet",
+    ],
+  ] as const)("renders the %s state", async (_state, read, testId, text) => {
     const user = userEvent.setup();
-    renderShell(await fixtureData({ engine: "up", notifications: state }));
+    renderShell(shellData({ notifications: read }));
     await user.click(screen.getByTestId("notifications-trigger"));
     expect(await screen.findByTestId(testId)).toHaveTextContent(text);
   });
@@ -355,7 +358,7 @@ describe("notifications", () => {
   it("draws a recorded row with no severity and no body as a plain bell, never a guessed tone", async () => {
     const user = userEvent.setup();
     const data = {
-      ...(await fixtureData()),
+      ...shellData(),
       notifications: readOk({
         items: [
           {
@@ -389,7 +392,7 @@ describe("notifications", () => {
   it("renders the denied state", async () => {
     const user = userEvent.setup();
     const data = {
-      ...(await fixtureData()),
+      ...shellData(),
       notifications: denied("notification.list"),
     };
     renderShell(data);
@@ -403,7 +406,7 @@ describe("notifications", () => {
 describe("assistant flyout", () => {
   it("is inert until the sidebar launcher flies it out, and Escape closes it", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const flyout = screen.getByTestId("assistant-flyout");
     expect(flyout).toHaveAttribute("inert");
     const launcher = screen.getByTestId("assistant-launcher");
@@ -424,7 +427,7 @@ describe("assistant flyout", () => {
 
   it("shows the engine-down state from the port, with a retry that re-reads", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData({ engine: "down", notifications: "loaded" }));
+    renderShell(shellData({ engine: readOk(ENGINE_DOWN) }));
     expect(screen.getByTestId("assistant-launcher")).toHaveTextContent(
       "engine down",
     );
@@ -452,7 +455,7 @@ describe("assistant flyout", () => {
   it("names a failed health read as down, never ready", async () => {
     const user = userEvent.setup();
     const data = {
-      ...(await fixtureData()),
+      ...shellData(),
       engine: readError("shell_assistant_engine_not_wired", 501),
     };
     renderShell(data);
@@ -468,7 +471,7 @@ describe("assistant flyout", () => {
 describe("account menu and dialog", () => {
   it("opens each tab from the user menu", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     await user.click(
       screen.getByRole("button", { name: "Account menu for Marcus Bell" }),
     );
@@ -513,7 +516,7 @@ describe("account menu and dialog", () => {
 
   it("switches theme from the menu: light, dark, system", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const menuTrigger = screen.getByRole("button", {
       name: "Account menu for Marcus Bell",
     });
@@ -529,7 +532,7 @@ describe("account menu and dialog", () => {
   it("opens from ?dialog=account&tab=…, and says so when the account cannot load", async () => {
     nav.search = "dialog=account&tab=privacy";
     const data = {
-      ...(await fixtureData()),
+      ...shellData(),
       account: readError("shell_account_not_wired", 501),
     };
     renderShell(data);
@@ -564,7 +567,7 @@ describe("account menu and dialog", () => {
 describe("phone navigation", () => {
   it("offers the bottom bar and opens the drawer from More and from the menu button", async () => {
     const user = userEvent.setup();
-    renderShell(await fixtureData());
+    renderShell(shellData());
     const bar = screen.getByTestId("mobile-nav");
     expect(
       within(bar)
@@ -617,9 +620,9 @@ describe("phone navigation", () => {
 });
 
 describe("readOk guard", () => {
-  it("renders the shell for a context without workspaces", async () => {
-    const data = await fixtureData();
-    if (!data.context.ok) throw new Error("fixture context failed");
+  it("renders the shell for a context without workspaces", () => {
+    const data = shellData();
+    if (!data.context.ok) throw new Error("built context failed");
     renderShell({
       ...data,
       context: readOk({ ...data.context.value, workspaces: [] }),

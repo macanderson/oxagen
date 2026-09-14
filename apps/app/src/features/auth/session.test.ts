@@ -12,7 +12,6 @@ beforeEach(() => {
 describe("getAuthUser", () => {
   it("narrows the session to the person these flows show", async () => {
     getSession.mockResolvedValue({
-      source: "better-auth",
       user: {
         id: "u1",
         email: "priya@acme.example",
@@ -29,7 +28,6 @@ describe("getAuthUser", () => {
 
   it("reads a nameless account as an empty name", async () => {
     getSession.mockResolvedValue({
-      source: "fixture",
       user: { id: "u2", email: "m@acme.example", name: null, image: null },
     });
     await expect(getAuthUser()).resolves.toEqual({

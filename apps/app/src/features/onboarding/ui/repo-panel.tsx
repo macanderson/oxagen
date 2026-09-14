@@ -2,7 +2,7 @@
 // Gate step 3's second card: the repository the installer read from the git
 // remote of the directory it ran in (spec §4.4). One click binds it as the main
 // repo; skipping leaves the workspace provisional for 14 days.
-// Fixture only: outside fixture mode the page renders NotBacked (G15) instead.
+// Today the read is NotBacked (G15) and the page renders that state instead.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {

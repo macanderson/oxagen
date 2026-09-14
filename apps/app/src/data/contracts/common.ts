@@ -1,6 +1,5 @@
 // Shared view-model enums and scalars, in the spec's vocabulary (spec App. A),
-// never the mockup's strings. The fixture adapter maps mockup values onto these
-// once; every page, port and adapter reads these names.
+// never the mockup's strings. Every page, port and adapter reads these names.
 import { z } from "zod";
 
 /** A public id: a lowercase kind prefix, an underscore, then a base-62 body (`run_01K5RS…`). */

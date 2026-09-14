@@ -80,12 +80,11 @@ export const Incident = z.object({
 export type Incident = z.infer<typeof Incident>;
 
 /** One labelled fact on a receipt. `key` is stable; the label comes from the catalog. */
-export const ReceiptFact = z.object({
+const ReceiptFact = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
   value: z.string(),
   mono: z.boolean(),
 });
-export type ReceiptFact = z.infer<typeof ReceiptFact>;
 
 export const Receipt = z.object({
   id: PublicId,

@@ -82,19 +82,10 @@ describe("handleAuthRequest", () => {
     );
     expect(d.emitSecurityEvent).not.toHaveBeenCalled();
   });
-
-  it("answers 404 in fixture mode without loading Better Auth", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "fixture");
-    const res = await handleAuthRequest(post("/sign-in/email"));
-    expect(res.status).toBe(404);
-  });
 });
 
-describe("handleAuthRequest outside fixture mode", () => {
+describe("handleAuthRequest without deps", () => {
   it("loads Better Auth and the security emitter itself", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "live");
     const res = await handleAuthRequest(
       post("/sign-in/social", { "x-real-ip": "198.51.100.7" }),
     );

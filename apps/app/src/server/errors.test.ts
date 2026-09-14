@@ -4,9 +4,7 @@ import {
   CAPABILITY_ERROR_STATUS,
   CacheTagScopeError,
   ContractOutputMismatch,
-  FixtureWriteRefused,
   InvalidStreamCursor,
-  ToolInputInvalid,
   ToolNotRegistered,
   toActionFailure,
 } from "./errors";
@@ -31,9 +29,7 @@ function capabilityError(
 
 describe("AppError subclasses", () => {
   it.each([
-    [new FixtureWriteRefused("resolve_approval"), "fixture_write_refused", 409],
     [new ToolNotRegistered("resolve_approval"), "tool_not_registered", 500],
-    [new ToolInputInvalid("resolve_approval", []), "tool_input_invalid", 422],
     [
       new ContractOutputMismatch("resolve_approval", [{ path: ["x"] }]),
       "contract_output_mismatch",
@@ -49,10 +45,10 @@ describe("AppError subclasses", () => {
     expect(err.name).not.toBe("Error");
   });
 
-  it("names the refused tool without leaking input", () => {
-    const err = new FixtureWriteRefused("resolve_approval");
+  it("names the unregistered tool", () => {
+    const err = new ToolNotRegistered("resolve_approval");
     expect(err.tool).toBe("resolve_approval");
-    expect(err.message).toContain("fixture data source");
+    expect(err.message).toContain("resolve_approval");
   });
 
   it("keeps the schema issues on an output mismatch", () => {
@@ -63,10 +59,10 @@ describe("AppError subclasses", () => {
 
 describe("toActionFailure", () => {
   it("maps an AppError to its code and status", () => {
-    expect(toActionFailure(new FixtureWriteRefused("t"))).toEqual({
+    expect(toActionFailure(new ToolNotRegistered("t"))).toEqual({
       ok: false,
-      code: "fixture_write_refused",
-      status: 409,
+      code: "tool_not_registered",
+      status: 500,
     });
   });
 

@@ -1,7 +1,7 @@
 // Read one invitation by its public token for /invite/[token], through the
 // onboarding read port: the live adapter reads `org.invitations` by public id
-// (src/data/adapters/live/onboarding.ts), the fixture adapter the seed's one
-// invitation per state. The token's shape is checked here, before any read.
+// (src/data/adapters/live/onboarding.ts). The token's shape is checked here,
+// before any read.
 import "server-only";
 import type { InvitationView } from "@/data/contracts/invitations";
 import { type Read, readError } from "@/data/not-backed";
@@ -19,5 +19,5 @@ export async function loadInvitation(
   token: string,
 ): Promise<Read<InvitationView>> {
   if (!isInvitationToken(token)) return readError(INVITATION_NOT_FOUND, 404);
-  return (await dataSource()).onboarding.invitation(token);
+  return dataSource().onboarding.invitation(token);
 }

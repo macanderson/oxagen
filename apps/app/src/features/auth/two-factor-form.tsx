@@ -6,7 +6,6 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { verifyTwoFactorFixture } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import { liveVerifyTwoFactor, takePendingNext } from "./client-auth";
 import { DEFAULT_NEXT, sanitizeNext } from "./safe-next";
@@ -18,13 +17,7 @@ import { formText } from "./form-text";
 
 type Method = "totp" | "backup";
 
-export function TwoFactorForm({
-  next,
-  fixture,
-}: {
-  next: string;
-  fixture: boolean;
-}) {
+export function TwoFactorForm({ next }: { next: string }) {
   const t = useTranslations("auth");
   const router = useRouter();
   const [method, setMethod] = useState<Method>("totp");
@@ -51,14 +44,12 @@ export function TwoFactorForm({
       // A live sign-in that stopped here may have lost ?next= to Better Auth's own redirect.
       const destination =
         next !== DEFAULT_NEXT ? next : sanitizeNext(takePendingNext());
-      const result = fixture
-        ? await verifyTwoFactorFixture({ ...parsed.data, next: destination })
-        : await liveVerifyTwoFactor(parsed.data);
+      const result = await liveVerifyTwoFactor(parsed.data);
       if (!result.ok) {
-        setOutcome(result.outcome ?? "codeWrong");
+        setOutcome(result.outcome);
         return;
       }
-      router.replace("to" in result ? result.to : destination);
+      router.replace(destination);
       router.refresh();
     } catch {
       setOutcome("unavailable");

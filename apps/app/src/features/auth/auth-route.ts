@@ -3,11 +3,8 @@
 // route calls it directly (the app does not depend on better-auth itself).
 //
 // A failed or rate-limited sign-in attempt emits `auth.sign_in_failed` (SOC 2
-// CC6: brute-force lockouts must be auditable). Fixture mode has no Better Auth
-// to talk to, so the route answers 404 there instead of loading an auth server
-// whose env the fixture dev server does not carry.
+// CC6: brute-force lockouts must be auditable).
 import "server-only";
-import { isFixtureMode } from "@/server/fixture-session";
 
 /** Security events before a session exists carry the org sentinel (packages/auth/src/auth.ts). */
 export const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
@@ -68,7 +65,6 @@ export async function handleAuthRequest(
   request: Request,
   deps?: AuthRouteDeps,
 ): Promise<Response> {
-  if (!deps && isFixtureMode()) return new Response(null, { status: 404 });
   const { handler, emitSecurityEvent } = deps ?? (await loadDeps());
   const response = await handler(request);
   if (

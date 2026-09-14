@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_FAILURES, PAGE_KEYS, isPageKey } from "./page-states";
+import { PAGE_FAILURES, PAGE_KEYS } from "./page-states";
 
 describe("page failures (plan §2.1)", () => {
   it("covers every page key and nothing else", () => {
@@ -36,13 +36,5 @@ describe("page failures (plan §2.1)", () => {
   it("names the onboarding permissions the gate and Register deny on", () => {
     expect(PAGE_FAILURES.welcome.permission).toBe("org.create");
     expect(PAGE_FAILURES.register.permission).toBe("agent.register");
-  });
-
-  it("recognises page keys and rejects anything else (negative)", () => {
-    expect(isPageKey("fleet")).toBe(true);
-    expect(isPageKey("welcome")).toBe(true);
-    expect(isPageKey("dashboard")).toBe(false);
-    expect(isPageKey("sessions")).toBe(false);
-    expect(isPageKey("")).toBe(false);
   });
 });

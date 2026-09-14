@@ -67,9 +67,6 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "PLAYWRIGHT_BASE_URL",
   // apps/app e2e: the port Playwright starts `next dev` on (default 3000).
   "E2E_PORT",
-  // apps/app data source selector. "fixture" serves the typed mockup seed and
-  // enables the dev-only fixture session; both are ignored by production builds.
-  "MC_DATA",
   // Set automatically by the Vitest runner; used to keep CLI turn assembly
   // (workspace MCP fetch) hermetic in unit tests. Never a deployed var.
   "VITEST",

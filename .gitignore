@@ -38,7 +38,6 @@ packages/database/drizzle/.meta
 test-results
 playwright-report
 **/__tests__/screenshots/
-**/e2e/screenshots/
 
 # Editors
 .idea

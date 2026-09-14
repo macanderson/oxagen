@@ -4,20 +4,7 @@
 // filter is the security boundary — it can never land someone in a workspace of
 // an org they are not a member of.
 import "server-only";
-import { isFixtureMode } from "@/server/fixture-session";
-import {
-  FIXTURE_HOME_WORKSPACE as FIXTURE_WORKSPACE,
-  FIXTURE_ORG,
-} from "@/server/fixture-tenancy";
 import type { GithubSetupQueries, GithubSetupTargetRow } from "./github-setup";
-
-const fixtureQueries: GithubSetupQueries = {
-  matchInstallation: () => Promise.resolve([]),
-  mostRecentMembership: () =>
-    Promise.resolve([
-      { orgSlug: FIXTURE_ORG.slug, workspaceSlug: FIXTURE_WORKSPACE.slug },
-    ]),
-};
 
 function installationOf(deliveryConfig: unknown): string | null {
   if (deliveryConfig === null || typeof deliveryConfig !== "object")
@@ -28,7 +15,7 @@ function installationOf(deliveryConfig: unknown): string | null {
     : null;
 }
 
-const liveQueries: GithubSetupQueries = {
+export const githubSetupQueries: GithubSetupQueries = {
   async matchInstallation(userId, installationId) {
     const { withSystemDb } = await import("@oxagen/database");
     // tenancy: unscoped seam (pre-scope landing; rows filtered to the user's memberships)
@@ -102,7 +89,3 @@ const liveQueries: GithubSetupQueries = {
     });
   },
 };
-
-export function githubSetupQueries(): GithubSetupQueries {
-  return isFixtureMode() ? fixtureQueries : liveQueries;
-}

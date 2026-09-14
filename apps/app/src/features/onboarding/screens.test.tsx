@@ -1,6 +1,6 @@
 // The flow screens are async Server Components; these tests call them and walk
 // the element tree they return, which exercises every branch (step, session,
-// state switch, scope, backed or NotBacked read) without an RSC renderer.
+// scope, backed or NotBacked read) without an RSC renderer.
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "../auth/test-intl";
@@ -23,28 +23,65 @@ vi.mock("next-intl/server", () => ({
 
 const getAuthUser = vi.fn();
 vi.mock("../auth/session", () => ({ getAuthUser }));
-// requireViewer/resolveViewer run for real. The session is the fixture operator,
-// and the "live" lookups are the fixture seed's, so both modes admit Marcus to
-// acme/core-platform and refuse acme/finops (an org member, not a workspace member).
+// requireViewer/resolveViewer run for real over stubbed tenancy lookups: Marcus
+// is an Acme member who belongs to core-platform and not to finops, and
+// "platform" is core-platform's historical slug.
 const getSession = vi.fn();
 vi.mock("@/server/session", () => ({ getSession }));
-vi.mock("@/server/tenancy-lookups", async () => ({
-  liveTenancyLookups: (await import("@/server/fixture-tenancy"))
-    .fixtureTenancyLookups,
+const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
+const WS_ID = "7a000000-0000-4000-8000-0000000000b1";
+const FINOPS_ID = "7a000000-0000-4000-8000-0000000000b2";
+const org = {
+  id: ORG_ID,
+  publicId: "org_a",
+  slug: "acme",
+  name: "Acme Robotics",
+};
+const workspaces = [
+  {
+    id: WS_ID,
+    publicId: "wks_c",
+    orgId: ORG_ID,
+    slug: "core-platform",
+    name: "Core platform",
+  },
+  {
+    id: FINOPS_ID,
+    publicId: "wks_f",
+    orgId: ORG_ID,
+    slug: "finops",
+    name: "FinOps",
+  },
+];
+vi.mock("@/server/tenancy-lookups", () => ({
+  liveTenancyLookups: {
+    orgBySlug: (slug: string) => Promise.resolve(slug === "acme" ? org : null),
+    orgBySlugHistory: () => Promise.resolve(null),
+    workspaceBySlug: (orgId: string, slug: string) =>
+      Promise.resolve(
+        workspaces.find((w) => w.orgId === orgId && w.slug === slug) ?? null,
+      ),
+    workspaceBySlugHistory: (orgId: string, slug: string) =>
+      Promise.resolve(
+        slug === "platform" && orgId === ORG_ID ? workspaces[0] : null,
+      ),
+    orgRole: (orgId: string, userId: string) =>
+      Promise.resolve(
+        orgId === ORG_ID && userId === "usr_marcusbell" ? "member" : null,
+      ),
+    isWorkspaceMember: (workspaceId: string, userId: string) =>
+      Promise.resolve(workspaceId === WS_ID && userId === "usr_marcusbell"),
+    mfaPolicy: () => Promise.resolve(null),
+    twoFactorEnabled: () => Promise.resolve(false),
+  },
 }));
 
-const cookieJar = new Map<string, string>();
 // requireViewer defers its clock read behind connection(), which needs a request scope.
 vi.mock("next/server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/server")>()),
   connection: () => Promise.resolve(),
 }));
 vi.mock("next/headers", () => ({
-  cookies: () =>
-    Promise.resolve({
-      get: (n: string) =>
-        cookieJar.has(n) ? { value: cookieJar.get(n) } : undefined,
-    }),
   headers: () => Promise.resolve(new Headers()),
 }));
 const liveTx = {
@@ -85,7 +122,6 @@ const { GateShell } = await import("./ui/gate-shell");
 const { OrganizationForm } = await import("./ui/organization-form");
 const { NameAgentForm } = await import("./ui/name-agent-form");
 const { FirstFramePanel } = await import("./ui/first-frame-panel");
-const { RepoPanel } = await import("./ui/repo-panel");
 const { PageState } = await import("@/ui/page-state");
 
 const user = {
@@ -138,44 +174,11 @@ function register(
   });
 }
 
-/**
- * The loading state holds the flow's gate read (the route's Suspense shows the
- * skeleton meanwhile), then resolves loaded: nothing renders while it holds.
- */
-async function heldWhileLoading(
-  render: () => Promise<ReactNode>,
-): Promise<ReactNode> {
-  vi.useFakeTimers();
-  try {
-    let settled = false;
-    const pending = render().then((tree) => {
-      settled = true;
-      return tree;
-    });
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(15_000);
-    return await pending;
-  } finally {
-    vi.useRealTimers();
-  }
-}
-
-function fixtureMode() {
-  vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("MC_DATA", "fixture");
-}
-
 beforeEach(() => {
-  cookieJar.clear();
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue(user);
   getSession.mockReset();
-  getSession.mockResolvedValue({
-    source: "fixture",
-    user: { ...user, image: null },
-  });
-  fixtureMode();
+  getSession.mockResolvedValue({ user: { ...user, image: null } });
 });
 
 describe("WelcomeScreen", () => {
@@ -201,21 +204,6 @@ describe("WelcomeScreen", () => {
     );
   });
 
-  it("honours the loading and denied switches", async () => {
-    cookieJar.set("mc_state", "loading");
-    const loaded = await heldWhileLoading(() => welcome(undefined));
-    expect(find(loaded, OrganizationForm)).toBeDefined();
-    cookieJar.set("mc_state", "denied");
-    const deniedTree = await welcome(undefined);
-    expect(find(deniedTree, GateShell)?.props.hiddenTitle).toBe(true);
-    const denied = find(deniedTree, PageState);
-    expect(denied?.props.result).toEqual({
-      ok: false,
-      reason: "denied",
-      permission: "org.create",
-    });
-  });
-
   it("asks for step 1 when a later step has no org in the URL, and for an org the user cannot see", async () => {
     const missing = elements(await welcome(["wrap"]));
     expect(missing.some((e) => e.props.kind === "missing")).toBe(true);
@@ -227,14 +215,9 @@ describe("WelcomeScreen", () => {
       await welcome(["run"], { org: "acme", ws: "finops" }),
     );
     expect(notMember.some((e) => e.props.kind === "not-found")).toBe(true);
-    vi.stubEnv("MC_DATA", "live");
-    const liveNotMember = elements(
-      await welcome(["wrap"], { org: "acme", ws: "finops" }),
-    );
-    expect(liveNotMember.some((e) => e.props.kind === "not-found")).toBe(true);
   });
 
-  it("wrap and run read the fixture scope; run shows the first frame and the repository", async () => {
+  it("wrap and run read the scope; run carries the agent choice", async () => {
     const wrapTree = await welcome(["wrap"], {
       org: "acme",
       ws: "core-platform",
@@ -285,10 +268,6 @@ describe("RegisterScreen", () => {
     await expect(register(undefined, {}, "acme", "finops")).rejects.toThrow(
       "NEXT_NOT_FOUND",
     );
-    vi.stubEnv("MC_DATA", "live");
-    await expect(register(["wrap"], {}, "acme", "finops")).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
   });
 
   it("a historical workspace slug redirects to the canonical register URL", async () => {
@@ -310,18 +289,6 @@ describe("RegisterScreen", () => {
       elements(tree).some((e) => e.props.testId === "register-choice-missing"),
     ).toBe(true);
     expect(find(tree, GateShell)?.props.hiddenTitle).toBe(true);
-  });
-
-  it("denied names agent.register on the workspace; loading renders the skeleton", async () => {
-    cookieJar.set("mc_state", "denied");
-    expect(find(await register(undefined), PageState)?.props.result).toEqual({
-      ok: false,
-      reason: "denied",
-      permission: "agent.register on core-platform",
-    });
-    cookieJar.set("mc_state", "loading");
-    const loaded = await heldWhileLoading(() => register(undefined));
-    expect(find(loaded, NameAgentForm)).toBeDefined();
   });
 
   it("wrap and run carry the choice", async () => {
@@ -362,44 +329,7 @@ describe("the run and wrap steps", () => {
     return (step.type as (p: unknown) => Promise<ReactNode>)(step.props);
   }
 
-  it("fixture · the first-frame island and the detected repository", async () => {
-    const tree = await runStepElement({ org: "acme", ws: "core-platform" });
-    expect(find(tree, FirstFramePanel)?.props).toMatchObject({
-      mode: "gate",
-      openHref: "/acme/core-platform",
-      agentKey: "acme.core.claude-code",
-    });
-    expect(find(tree, RepoPanel)).toBeDefined();
-  });
-
-  it("fixture · an error reading the first frame says the collector cannot reach the proxy, and offers checking again", async () => {
-    cookieJar.set("mc_state", "error");
-    const tree = await runStepElement({ org: "acme", ws: "core-platform" });
-    expect(
-      elements(tree).some((e) => e.props.testId === "first-frame-error"),
-    ).toBe(true);
-    const registerTree = await runStepElement(
-      { agent: "perf-watch", harness: "custom", tier: "complex" },
-      "register",
-    );
-    expect(
-      elements(registerTree).some(
-        (e) => e.props.testId === "first-frame-error",
-      ),
-    ).toBe(true);
-  });
-
-  it("an unrecorded gate state never keeps anyone out: not_backed and error still render step 1", async () => {
-    cookieJar.set("mc_state", "welcome:not_backed");
-    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
-    cookieJar.set("mc_state", "welcome:error");
-    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
-    vi.stubEnv("MC_DATA", "live");
-    expect(find(await welcome(undefined), OrganizationForm)).toBeDefined();
-  });
-
-  it("live · the first frame and the repository are NotBacked (G15), with a way on to Fleet", async () => {
-    vi.stubEnv("MC_DATA", "live");
+  it("the first frame and the repository are NotBacked (G15), with a way on to Fleet", async () => {
     const tree = await runStepElement({ org: "acme", ws: "core-platform" });
     expect(find(tree, FirstFramePanel)).toBeUndefined();
     expect(find(tree, PageState)?.props.result).toEqual({
@@ -413,8 +343,7 @@ describe("the run and wrap steps", () => {
     ).toBe(true);
   });
 
-  it("live · the wrap step renders the installer's NotBacked notice", async () => {
-    vi.stubEnv("MC_DATA", "live");
+  it("the wrap step renders the installer's NotBacked notice", async () => {
     const tree = await welcome(["wrap"], { org: "acme", ws: "core-platform" });
     const step = elements(tree).find((e) => e.props.runPath === "/welcome/run");
     if (!step || typeof step.type !== "function")
@@ -429,19 +358,5 @@ describe("the run and wrap steps", () => {
     expect(
       find(panel?.props.installerNotice as ReactNode, PageState),
     ).toBeDefined();
-  });
-
-  it("wrap step · passes the backed installer through", async () => {
-    const tree = await welcome(["wrap"], { org: "acme", ws: "core-platform" });
-    const step = elements(tree).find((e) => e.props.runPath === "/welcome/run");
-    if (!step || typeof step.type !== "function")
-      throw new Error("wrap step not found");
-    const rendered = await (step.type as (p: unknown) => Promise<ReactNode>)(
-      step.props,
-    );
-    const panel = elements(rendered).find(
-      (e) => e.props.agentKey === "acme.core.claude-code",
-    );
-    expect(panel?.props.installer).not.toBeNull();
   });
 });

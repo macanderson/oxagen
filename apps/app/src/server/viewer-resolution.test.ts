@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/not-backed";
 import type { MfaPolicy } from "./mfa-gate";
 import type { AppSession } from "./session";
-import type {
-  OrgRecord,
-  TenancyLookups,
-  WorkspaceRecord,
-} from "./tenancy-lookups";
+import type { TenancyLookups } from "./tenancy-lookups";
 import { ORG_ONLY_WS } from "./tenant-scope";
 import {
   canonicalPath,
@@ -14,6 +10,11 @@ import {
   type ResolveViewerDeps,
   resolveViewerWith,
 } from "./viewer-resolution";
+
+type OrgRecord = NonNullable<Awaited<ReturnType<TenancyLookups["orgBySlug"]>>>;
+type WorkspaceRecord = NonNullable<
+  Awaited<ReturnType<TenancyLookups["workspaceBySlug"]>>
+>;
 
 const org: OrgRecord = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -29,7 +30,6 @@ const ws: WorkspaceRecord = {
   name: "Core platform",
 };
 const session: AppSession = {
-  source: "better-auth",
   user: { id: "u1", email: "m@acme.example", name: "Marcus", image: null },
 };
 const now = new Date("2026-09-12T12:00:00Z");

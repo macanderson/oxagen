@@ -22,7 +22,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const target = await resolveGithubSetupTarget(
     user.id,
     installationId,
-    githubSetupQueries(),
+    githubSetupQueries,
   );
   return NextResponse.redirect(new URL(target, request.url));
 }

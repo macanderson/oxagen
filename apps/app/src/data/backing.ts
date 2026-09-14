@@ -7,8 +7,7 @@
 //   none    — no store today (§3 ❌); the milestone and gap that will back it.
 //
 // The live adapter returns `notBacked(milestone, gap)` from this table until
-// its lane wires the method; the fixture adapter's `not_backed` state returns
-// the same value, so e2e sees what production would show.
+// its lane wires the method.
 import {
   type GapId,
   type Milestone,
@@ -32,7 +31,7 @@ export type LiveLane =
   | "A9"
   | "A10";
 
-export type Backing = {
+type Backing = {
   page: PageKey;
   store: StoreStatus;
   lane: LiveLane;
@@ -229,7 +228,7 @@ export const BACKING = {
   },
 } as const satisfies BackingTable;
 
-export function backingOf<P extends PortName>(
+function backingOf<P extends PortName>(
   port: P,
   method: MethodName<P>,
 ): Backing {

@@ -21,7 +21,12 @@ export default defineConfig({
     unstubEnvs: true,
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      // The Next instrumentation hook sits at the app root beside its test.
+      "instrumentation.test.ts",
+    ],
     // Architecture probes are inputs to src/test/arch, never suites of their own.
     exclude: [...configDefaults.exclude, "src/test/arch/probes/**"],
     coverage: {

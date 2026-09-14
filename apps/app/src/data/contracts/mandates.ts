@@ -54,7 +54,7 @@ export const Mandate = z.object({
 });
 export type Mandate = z.infer<typeof Mandate>;
 
-export const MandateLedgerEntry = z.object({
+const MandateLedgerEntry = z.object({
   mandateId: PublicId,
   at: Instant,
   tool: ToolVersionRef,
@@ -67,7 +67,6 @@ export const MandateLedgerEntry = z.object({
   receiptId: PublicId.nullable(),
   periodKey: z.string(),
 });
-export type MandateLedgerEntry = z.infer<typeof MandateLedgerEntry>;
 
 export const MandateDetail = z.object({
   mandate: Mandate,

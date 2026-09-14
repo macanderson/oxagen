@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BACKING, allMethods, backingOf, notBackedFor } from "./backing";
+import { BACKING, allMethods, notBackedFor } from "./backing";
 import { NO_GAP } from "./not-backed";
 import { PAGE_KEYS } from "./page-states";
 
@@ -62,7 +62,7 @@ describe("the backing table (plan §3 as data)", () => {
   });
 
   it("builds the not-backed read from the table", () => {
-    expect(backingOf("runs", "contextWindow").gap).toBe("G10");
+    expect(BACKING.runs.contextWindow.gap).toBe("G10");
     expect(notBackedFor("runs", "contextWindow")).toEqual({
       ok: false,
       reason: "not_backed",

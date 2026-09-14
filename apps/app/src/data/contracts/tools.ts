@@ -41,13 +41,12 @@ export const ToolServer = z.object({
 });
 export type ToolServer = z.infer<typeof ToolServer>;
 
-export const DownscopeMethod = z.enum([
+const DownscopeMethod = z.enum([
   "token_exchange",
   "session_policy",
   "restricted_key",
   "none",
 ]);
-export type DownscopeMethod = z.infer<typeof DownscopeMethod>;
 
 /** `tools.connections.kind`. */
 export const ConnectionKind = z.enum([

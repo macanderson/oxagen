@@ -3,7 +3,6 @@
 // for the invariants. Approve mints a single-use code bound to the chosen scope
 // and the CLI's PKCE challenge, then sends the browser to the loopback listener.
 import { redirect } from "next/navigation";
-import { isFixtureMode } from "@/server/fixture-session";
 import { authorizeParamErrors, loadCliScopes } from "./cli-authorize";
 import { ORG_ONLY_WS } from "@/server/tenant-scope";
 import { getAuthUser } from "./session";
@@ -12,7 +11,6 @@ export type CliErrorKey =
   | "notMember"
   | "notPermitted"
   | "notFound"
-  | "fixture"
   | "failed"
   | "invalid";
 
@@ -41,7 +39,6 @@ export async function approveCliAuth(
   const orgSlug = field(form, "org_slug");
   const workspaceSlug = field(form, "workspace_slug");
   if (!orgSlug || !workspaceSlug) return { error: "notFound" };
-  if (isFixtureMode()) return { error: "fixture" };
 
   // Resolve the selection against the user's own memberships: an id the client
   // did not get from us, or a workspace they are not a member of, never resolves.

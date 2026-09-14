@@ -101,7 +101,6 @@ export interface RunReadPort {
    * Frames after `afterSeq` (exclusive), oldest first. `"0"` reads a recorded
    * run from its start: the ledger's `run_seq` begins at 1
    * (`agent_runs.next_run_seq`), which is also the SSE route's default cursor.
-   * The mockup-derived fixture numbers its frames from 0, so it accepts `"-1"`.
    */
   framesSince(
     scope: Scope,

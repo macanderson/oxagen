@@ -8,9 +8,6 @@ const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const actions = {
-  signInFixture: vi.fn(),
-  signUpFixture: vi.fn(),
-  verifyTwoFactorFixture: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
   resendVerification: vi.fn(),
@@ -64,7 +61,7 @@ afterEach(() => {
 
 describe("LoginForm", () => {
   it("shows a message under each empty field and calls nothing", async () => {
-    renderWithIntl(<LoginForm next="/" fixture />);
+    renderWithIntl(<LoginForm next="/" />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(screen.getByText("Enter your work email.")).toBeInTheDocument();
     expect(screen.getByLabelText("Work email")).toHaveAttribute(
@@ -74,39 +71,15 @@ describe("LoginForm", () => {
     expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
       "Enter your work email.",
     );
-    expect(actions.signInFixture).not.toHaveBeenCalled();
+    expect(live.liveSignIn).not.toHaveBeenCalled();
   });
 
-  it("fixture · signs in and replaces the page with the action's destination", async () => {
-    actions.signInFixture.mockResolvedValue({
-      ok: true,
-      to: "/acme/core-platform",
-    });
-    renderWithIntl(<LoginForm next="/acme/core-platform" fixture />);
-    await userEvent.type(
-      screen.getByLabelText("Work email"),
-      "marcus.bell@acme.example",
-    );
-    await userEvent.type(screen.getByLabelText("Password"), "mission-control");
-    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
-    await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform");
-    });
-    expect(actions.signInFixture).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "marcus.bell@acme.example",
-        next: "/acme/core-platform",
-        rememberMe: true,
-      }),
-    );
-  });
-
-  it("fixture · announces wrong credentials", async () => {
-    actions.signInFixture.mockResolvedValue({
+  it("announces wrong credentials", async () => {
+    live.liveSignIn.mockResolvedValue({
       ok: false,
       outcome: "wrongCredentials",
     });
-    renderWithIntl(<LoginForm next="/" fixture />);
+    renderWithIntl(<LoginForm next="/" />);
     await userEvent.type(
       screen.getByLabelText("Work email"),
       "marcus.bell@acme.example",
@@ -116,12 +89,19 @@ describe("LoginForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Email or password is wrong",
     );
+    expect(live.liveSignIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "marcus.bell@acme.example",
+        password: "nope",
+        rememberMe: true,
+      }),
+    );
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("live · a second factor continues at /two-factor carrying next, and remembers it", async () => {
+  it("a second factor continues at /two-factor carrying next, and remembers it", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: true });
-    renderWithIntl(<LoginForm next="/acme" fixture={false} />);
+    renderWithIntl(<LoginForm next="/acme" />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -131,12 +111,12 @@ describe("LoginForm", () => {
     expect(live.rememberPendingNext).toHaveBeenCalledWith("/acme");
   });
 
-  it("live · an unverified email goes to verify", async () => {
+  it("an unverified email goes to verify", async () => {
     live.liveSignIn.mockResolvedValue({
       ok: false,
       outcome: "emailNotVerified",
     });
-    renderWithIntl(<LoginForm next="/" fixture={false} />);
+    renderWithIntl(<LoginForm next="/" />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -145,9 +125,9 @@ describe("LoginForm", () => {
     });
   });
 
-  it("live · a thrown client error reads as unavailable", async () => {
+  it("a thrown client error reads as unavailable", async () => {
     live.liveSignIn.mockRejectedValue(new Error("network"));
-    renderWithIntl(<LoginForm next="/" fixture={false} />);
+    renderWithIntl(<LoginForm next="/" />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -156,9 +136,9 @@ describe("LoginForm", () => {
     );
   });
 
-  it("live · a plain success goes to next", async () => {
+  it("a plain success goes to next", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: false });
-    renderWithIntl(<LoginForm next="/acme" fixture={false} />);
+    renderWithIntl(<LoginForm next="/acme" />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -182,14 +162,14 @@ describe("SignupForm", () => {
   }
 
   it("validates the password length", async () => {
-    renderWithIntl(<SignupForm fixture />);
+    renderWithIntl(<SignupForm />);
     await fill("short");
     expect(screen.getByText("Use at least 8 characters.")).toBeInTheDocument();
-    expect(actions.signUpFixture).not.toHaveBeenCalled();
+    expect(live.liveSignUp).not.toHaveBeenCalled();
   });
 
   it("toggles the password between hidden and shown", async () => {
-    renderWithIntl(<SignupForm fixture />);
+    renderWithIntl(<SignupForm />);
     const input = screen.getByLabelText("Password");
     expect(input).toHaveAttribute("type", "password");
     await userEvent.click(screen.getByRole("button", { name: "Show" }));
@@ -200,30 +180,9 @@ describe("SignupForm", () => {
     );
   });
 
-  it("fixture · goes where the action says", async () => {
-    actions.signUpFixture.mockResolvedValue({ ok: true, to: "/welcome" });
-    renderWithIntl(<SignupForm fixture />);
-    await fill();
-    await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/welcome");
-    });
-  });
-
-  it("fixture · shows server-side field errors and outcomes", async () => {
-    actions.signUpFixture.mockResolvedValue({
-      ok: false,
-      outcome: "alreadyRegistered",
-    });
-    renderWithIntl(<SignupForm fixture />);
-    await fill();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That email is already registered",
-    );
-  });
-
-  it("live · a deployment that requires verification sends the new account to verify", async () => {
+  it("a deployment that requires verification sends the new account to verify", async () => {
     live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: true });
-    renderWithIntl(<SignupForm fixture={false} next="/invite/invi_1" />);
+    renderWithIntl(<SignupForm next="/invite/invi_1" />);
     await fill();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
@@ -232,18 +191,18 @@ describe("SignupForm", () => {
     });
   });
 
-  it("live · otherwise straight to next", async () => {
+  it("otherwise straight to next", async () => {
     live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: false });
-    renderWithIntl(<SignupForm fixture={false} />);
+    renderWithIntl(<SignupForm />);
     await fill();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/welcome");
     });
   });
 
-  it("live · a refusal is announced", async () => {
+  it("a refusal is announced", async () => {
     live.liveSignUp.mockResolvedValue({ ok: false, outcome: "rateLimited" });
-    renderWithIntl(<SignupForm fixture={false} />);
+    renderWithIntl(<SignupForm />);
     await fill();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Too many attempts",
@@ -253,7 +212,7 @@ describe("SignupForm", () => {
 
 describe("TwoFactorForm", () => {
   it("validates six digits", async () => {
-    renderWithIntl(<TwoFactorForm next="/" fixture />);
+    renderWithIntl(<TwoFactorForm next="/" />);
     await userEvent.type(screen.getByLabelText("Authentication code"), "123");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     expect(
@@ -261,12 +220,12 @@ describe("TwoFactorForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("fixture · a wrong code is announced; a good one goes to next", async () => {
-    actions.verifyTwoFactorFixture.mockResolvedValueOnce({
+  it("a wrong code is announced; a good one goes to next", async () => {
+    live.liveVerifyTwoFactor.mockResolvedValueOnce({
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next="/acme" fixture />);
+    renderWithIntl(<TwoFactorForm next="/acme" />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "000000",
@@ -276,10 +235,7 @@ describe("TwoFactorForm", () => {
       "That code is wrong",
     );
 
-    actions.verifyTwoFactorFixture.mockResolvedValueOnce({
-      ok: true,
-      to: "/acme",
-    });
+    live.liveVerifyTwoFactor.mockResolvedValueOnce({ ok: true });
     await userEvent.clear(screen.getByLabelText("Authentication code"));
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
@@ -291,10 +247,10 @@ describe("TwoFactorForm", () => {
     });
   });
 
-  it("live · resumes at the destination remembered before Better Auth's redirect", async () => {
+  it("resumes at the destination remembered before Better Auth's redirect", async () => {
     live.takePendingNext.mockReturnValue("/acme/core-platform");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next="/" fixture={false} />);
+    renderWithIntl(<TwoFactorForm next="/" />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "602914",
@@ -305,10 +261,10 @@ describe("TwoFactorForm", () => {
     });
   });
 
-  it("live · ignores a remembered destination that is not same-origin", async () => {
+  it("ignores a remembered destination that is not same-origin", async () => {
     live.takePendingNext.mockReturnValue("//evil.example");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next="/" fixture={false} />);
+    renderWithIntl(<TwoFactorForm next="/" />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "602914",
@@ -324,7 +280,7 @@ describe("TwoFactorForm", () => {
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next="/" fixture={false} />);
+    renderWithIntl(<TwoFactorForm next="/" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Use a recovery code instead" }),
     );
@@ -503,14 +459,14 @@ describe("InviteDecision", () => {
   it("a refused decision is announced", async () => {
     inviteActions.acceptInvitation.mockResolvedValueOnce({
       ok: false,
-      reason: "fixture",
+      reason: "failed",
     });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Accept invitation" }),
     );
     expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
-      "fixture mode",
+      "could not be accepted",
     );
     inviteActions.acceptInvitation.mockRejectedValueOnce(new Error("boom"));
     await userEvent.click(

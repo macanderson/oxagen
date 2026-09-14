@@ -5,8 +5,8 @@
 // automatically after a short countdown or at once from the button. There is no
 // Done button: the frame is the completion.
 //
-// The script comes from the read port; outside fixture mode it is NotBacked (G15)
-// and the page renders that state instead of this island.
+// The script comes from the read port; today it is NotBacked (G15) and the
+// page renders that state instead of this island.
 import Link from "next/link";
 
 import { useRouter } from "next/navigation";

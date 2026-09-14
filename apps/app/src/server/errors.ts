@@ -10,9 +10,7 @@
 // toast.
 
 export type AppErrorCode =
-  | "fixture_write_refused"
   | "tool_not_registered"
-  | "tool_input_invalid"
   | "contract_output_mismatch"
   | "invalid_stream_cursor"
   | "cache_tag_scope";
@@ -20,26 +18,6 @@ export type AppErrorCode =
 export abstract class AppError extends Error {
   abstract readonly code: AppErrorCode;
   abstract readonly status: number;
-}
-
-/**
- * A write attempted while the app runs on the fixture data source.
- *
- * Fixture mode (MC_DATA=fixture, never in a production build) skips the IAM,
- * billing, entitlement and decision-rules bootstraps in instrumentation.ts,
- * because it has no Postgres. A kernel `invoke()` there would run with no IAM
- * runtime and fall open, so the write seam refuses before the kernel is reached.
- */
-export class FixtureWriteRefused extends AppError {
-  readonly code = "fixture_write_refused";
-  readonly status = 409;
-
-  constructor(readonly tool: string) {
-    super(
-      `agent tool "${tool}" was not invoked: the app is running on the fixture data source, where the kernel's IAM gate is not bootstrapped`,
-    );
-    this.name = "FixtureWriteRefused";
-  }
 }
 
 /** The contract handed to invokeTool is not registered with the kernel. */
@@ -50,25 +28,6 @@ export class ToolNotRegistered extends AppError {
   constructor(readonly tool: string) {
     super(`agent tool not registered: ${tool}`);
     this.name = "ToolNotRegistered";
-  }
-}
-
-/**
- * Input a tool's contract rejects, caught by the fixture write path the same
- * way the kernel's `invalid_input` catches it on the live path.
- */
-export class ToolInputInvalid extends AppError {
-  readonly code = "tool_input_invalid";
-  readonly status = 422;
-
-  constructor(
-    readonly tool: string,
-    readonly issues: readonly unknown[],
-  ) {
-    super(
-      `input for agent tool "${tool}" does not match its contract (${String(issues.length)} issue(s))`,
-    );
-    this.name = "ToolInputInvalid";
   }
 }
 

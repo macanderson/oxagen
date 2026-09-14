@@ -4,12 +4,11 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { backingOf } from "@/data/backing";
+import { BACKING } from "@/data/backing";
 import {
   Connection,
   Count,
   ConnectionKind,
-  DownscopeMethod,
   Day,
   EgressClass,
   ConsequenceTag,
@@ -212,7 +211,7 @@ const WIDENED = {
     consequenceTags: z.array(ConsequenceTag).nullable(),
     credential: z.object({
       connectionKind: ConnectionKind.nullable(),
-      downscope: DownscopeMethod.nullable(),
+      downscope: Connection.shape.downscope.nullable(),
     }),
     beltCount: Count.nullable(),
     calls30d: Count.nullable(),
@@ -225,7 +224,7 @@ const WIDENED = {
     reviewOn: Day.nullable(),
     grants30d: Count.nullable(),
     status: Connection.shape.status.nullable(),
-    downscope: DownscopeMethod.nullable(),
+    downscope: Connection.shape.downscope.nullable(),
   }),
   KillSwitch: KillSwitch.extend({ level: KillSwitch.shape.level.nullable() }),
 } as unknown as NonNullable<LiveToolsDeps["views"]>;
@@ -675,7 +674,7 @@ describe("live tools port", () => {
       async (method) => {
         seedAll();
         const res = await port()[method](SCOPE);
-        const { milestone, gap } = backingOf("tools", method);
+        const { milestone, gap } = BACKING.tools[method];
         expect(res).toEqual({
           ok: false,
           reason: "not_backed",
@@ -959,7 +958,7 @@ describe("live tools port", () => {
     "autoApprovalRules",
     "assurance",
   ] as const)("%s names its milestone and gap", async (method) => {
-    const { milestone, gap } = backingOf("tools", method);
+    const { milestone, gap } = BACKING.tools[method];
     await expect(liveTools[method](SCOPE, "pol_1")).resolves.toEqual({
       ok: false,
       reason: "not_backed",

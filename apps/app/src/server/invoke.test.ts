@@ -1,13 +1,8 @@
 import type { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { getScope } from "@oxagen/tenancy";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import {
-  ContractOutputMismatch,
-  FixtureWriteRefused,
-  ToolInputInvalid,
-  ToolNotRegistered,
-} from "./errors";
+import { ContractOutputMismatch, ToolNotRegistered } from "./errors";
 import type { Viewer } from "./viewer-resolution";
 
 const { invokeMock, getCapabilityMock, registry } = vi.hoisted(() => ({
@@ -33,11 +28,7 @@ vi.mock("@oxagen/oxagen", () => ({
   getCapability: getCapabilityMock,
 }));
 
-import {
-  invokeTool,
-  setFixtureWriteAdapter,
-  type ToolContract,
-} from "./invoke";
+import { invokeTool, type ToolContract } from "./invoke";
 
 // Compile-time proof that a real registered contract (zod 3.25, from
 // @oxagen/oxagen) fits the structural seam the app (zod 4) calls through.
@@ -84,76 +75,8 @@ beforeEach(() => {
   getCapabilityMock.mockReset();
   getCapabilityMock.mockReturnValue({ name: "resolve_approval" });
 });
-afterEach(() => {
-  setFixtureWriteAdapter(null);
-});
 
-// Fixture mode runs first: the handler registry import is memoized per module,
-// so "never loads the handler registry" must run before any live-path test.
-describe("invokeTool: fixture mode never reaches the kernel", () => {
-  beforeEach(() => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("MC_DATA", "fixture");
-  });
-
-  it("throws FixtureWriteRefused when no fixture write adapter is registered", async () => {
-    await expect(invokeTool(viewer, resolveApproval, input)).rejects.toThrow(
-      FixtureWriteRefused,
-    );
-    expect(invokeMock).not.toHaveBeenCalled();
-    expect(getCapabilityMock).not.toHaveBeenCalled();
-  });
-
-  it("never loads the handler registry", async () => {
-    setFixtureWriteAdapter(() =>
-      Promise.resolve({ id: "apr_1", status: "approved" }),
-    );
-    await invokeTool(viewer, resolveApproval, input);
-    expect(registry.loaded).toBe(false);
-  });
-
-  it("records the call through the fixture adapter and parses its result", async () => {
-    const adapter = vi.fn(() =>
-      Promise.resolve({ id: "apr_1", status: "approved", recorded: true }),
-    );
-    setFixtureWriteAdapter(adapter);
-    await expect(invokeTool(viewer, resolveApproval, input)).resolves.toEqual({
-      id: "apr_1",
-      status: "approved",
-    });
-    expect(adapter).toHaveBeenCalledWith({
-      tool: "resolve_approval",
-      input,
-      userId: viewer.userId,
-      scope: viewer.scope,
-    });
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it("rejects input the contract rejects, before the adapter sees it", async () => {
-    const adapter = vi.fn();
-    setFixtureWriteAdapter(adapter);
-    const bad = { approvalId: "", decision: "approved" as const };
-    await expect(invokeTool(viewer, resolveApproval, bad)).rejects.toThrow(
-      ToolInputInvalid,
-    );
-    expect(adapter).not.toHaveBeenCalled();
-  });
-
-  it("throws ContractOutputMismatch when the adapter returns the wrong shape", async () => {
-    setFixtureWriteAdapter(() => Promise.resolve({ nope: true }));
-    await expect(invokeTool(viewer, resolveApproval, input)).rejects.toThrow(
-      ContractOutputMismatch,
-    );
-  });
-});
-
-describe("invokeTool: live kernel path", () => {
-  beforeEach(() => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("MC_DATA", "");
-  });
-
+describe("invokeTool", () => {
   it("a real contract type fits the seam", () => {
     expect(realContractFits).toBe(true);
   });
@@ -228,15 +151,5 @@ describe("invokeTool: live kernel path", () => {
     await expect(invokeTool(viewer, resolveApproval, input)).rejects.toBe(
       denied,
     );
-  });
-
-  it("ignores a registered fixture adapter in production, even with MC_DATA=fixture", async () => {
-    vi.stubEnv("MC_DATA", "fixture");
-    const adapter = vi.fn();
-    setFixtureWriteAdapter(adapter);
-    invokeMock.mockResolvedValue({ id: "apr_1", status: "approved" });
-    await invokeTool(viewer, resolveApproval, input);
-    expect(adapter).not.toHaveBeenCalled();
-    expect(invokeMock).toHaveBeenCalledOnce();
   });
 });

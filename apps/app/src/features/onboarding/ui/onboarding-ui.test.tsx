@@ -11,11 +11,45 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IntlProvider } from "../../auth/test-intl";
-import { firstFrameFor } from "@/data/adapters/fixture";
-import { seed } from "@/data/adapters/fixture/seed";
+import type {
+  DetectedRepository,
+  FirstFrameScript,
+  InstallerOffer,
+} from "@/data/contracts/onboarding";
 
-const FIXTURE_INSTALLER = seed.onboarding.installer;
-const FIXTURE_REPOSITORY = seed.onboarding.repository;
+const INSTALLER: InstallerOffer = {
+  token: "enr_01K5RTEST",
+  tokenExpiresInMinutes: 15,
+  host: "https://app.oxagen.sh",
+  builds: {
+    macos: {
+      file: "Oxagen-Agent-2.4.0.pkg",
+      size: "38 MB",
+      signature: "Developer ID",
+      digest: "sha256:0a",
+    },
+    windows: {
+      file: "Oxagen-Agent-2.4.0.msi",
+      size: "41 MB",
+      signature: "Authenticode",
+      digest: "sha256:0b",
+    },
+    linux: {
+      file: "oxagen-agent_2.4.0_amd64.deb",
+      size: "36 MB",
+      signature: "GPG",
+      digest: "sha256:0c",
+    },
+  },
+  sdkCredentialMasked: "oxa_sk_····1234",
+};
+const REPOSITORY: DetectedRepository = {
+  fullName: "acme/platform",
+  remote: "git@github.com:acme/platform.git",
+  directory: "~/src/platform",
+  branch: "main",
+  provisionalDays: 14,
+};
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -48,7 +82,7 @@ describe("WrapPanel", () => {
     agentKey: "acme.core.perf-watch",
     initialMethod: "claude-code" as const,
     initialHarness: "claude-code" as const,
-    installer: FIXTURE_INSTALLER,
+    installer: INSTALLER,
     runPath: "/welcome/run",
     runQuery: { org: "acme", ws: "core-platform" },
     backHref: "/welcome",
@@ -60,15 +94,13 @@ describe("WrapPanel", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText(FIXTURE_INSTALLER.token)).toBeInTheDocument();
+    expect(screen.getByText(INSTALLER.token)).toBeInTheDocument();
     expect(screen.getByTestId("wrap-download")).toHaveAttribute(
       "href",
       "/welcome/run?org=acme&ws=core-platform&harness=claude-code",
     );
     expect(
-      screen.getByText(
-        `oxagen agent enroll --token ${FIXTURE_INSTALLER.token}`,
-      ),
+      screen.getByText(`oxagen agent enroll --token ${INSTALLER.token}`),
     ).toBeInTheDocument();
   });
 
@@ -168,11 +200,24 @@ describe("WrapPanel", () => {
 });
 
 describe("FirstFramePanel", () => {
-  const script = firstFrameFor(seed.onboarding.firstFrame, {
-    agentKey: "acme.core.perf-watch",
-    harness: "claude-code",
-    operator: "Marcus Bell",
-  });
+  const script: FirstFrameScript = {
+    host: "https://app.oxagen.sh",
+    log: [
+      { at: "00:00", text: "Connecting to https://app.oxagen.sh" },
+      { at: "00:01", text: "Enrolled acme.core.perf-watch" },
+      { at: "00:02", text: "First frame received", firstFrame: true },
+    ],
+    frames: [
+      {
+        seq: "1",
+        at: "2026-09-11T09:14:02Z",
+        kind: "agent.start",
+        body: "acme.core.perf-watch started by Marcus Bell",
+      },
+    ],
+    tier: "harness",
+    paceMs: 400,
+  };
 
   it("waits line by line, flips to connected on the first frame, then opens Fleet", () => {
     vi.useFakeTimers();
@@ -231,9 +276,9 @@ describe("FirstFramePanel", () => {
 
 describe("RepoPanel", () => {
   it("binds the detected repository, or leaves the workspace provisional and binds later", async () => {
-    renderWithIntl(<RepoPanel repo={FIXTURE_REPOSITORY} />);
+    renderWithIntl(<RepoPanel repo={REPOSITORY} />);
     expect(screen.getByTestId("repo-detected")).toHaveTextContent(
-      FIXTURE_REPOSITORY.remote,
+      REPOSITORY.remote,
     );
     await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByTestId("repo-skipped")).toHaveTextContent("14 days");
@@ -244,7 +289,7 @@ describe("RepoPanel", () => {
   });
 
   it("binds in one click", async () => {
-    renderWithIntl(<RepoPanel repo={FIXTURE_REPOSITORY} />);
+    renderWithIntl(<RepoPanel repo={REPOSITORY} />);
     await userEvent.click(
       screen.getByRole("button", {
         name: "Bind acme/platform as the main repo",

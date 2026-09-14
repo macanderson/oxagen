@@ -1,10 +1,7 @@
 "use server";
-// Gate step 1's write. Fixture mode validates and moves on to the fixture org
-// without writing anything; live mode creates the tenant (create-organization.ts).
+// Gate step 1's write: creates the tenant (create-organization.ts).
 import { redirect } from "next/navigation";
-import { isFixtureMode } from "@/server/fixture-session";
 import { getAuthUser } from "../auth/session";
-import { FIXTURE_HOME_WORKSPACE, FIXTURE_ORG } from "@/server/fixture-tenancy";
 import {
   OrganizationForm,
   type OrganizationField,
@@ -39,12 +36,6 @@ export async function createOrganizationAction(
     }
     return { ok: false, fields };
   }
-
-  if (isFixtureMode())
-    return {
-      ok: true,
-      to: wrapStep(FIXTURE_ORG.slug, FIXTURE_HOME_WORKSPACE.slug),
-    };
 
   const { createOrganization } = await import("./create-organization");
   const result = await createOrganization(user.id, parsed.data);

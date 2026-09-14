@@ -13,7 +13,6 @@ import {
   ConnectionKind,
   Count,
   Day,
-  DownscopeMethod,
   KillSwitch,
   ToolServer,
   ToolVersion,
@@ -54,7 +53,7 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
       consequenceTags: ToolVersion.shape.consequenceTags.nullable(),
       credential: z.object({
         connectionKind: ConnectionKind.nullable(),
-        downscope: DownscopeMethod.nullable(),
+        downscope: Connection.shape.downscope.nullable(),
       }),
       beltCount: Count.nullable(),
       calls30d: Count.nullable(),
@@ -67,7 +66,7 @@ describe.skipIf(!enabled)("live tools adapter against Postgres", async () => {
       reviewOn: Day.nullable(),
       grants30d: Count.nullable(),
       status: Connection.shape.status.nullable(),
-      downscope: DownscopeMethod.nullable(),
+      downscope: Connection.shape.downscope.nullable(),
     }),
     KillSwitch,
   } as unknown as NonNullable<Parameters<typeof createLiveTools>[0]["views"]>;

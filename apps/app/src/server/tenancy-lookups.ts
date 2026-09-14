@@ -13,14 +13,14 @@ import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import type { MfaPolicy } from "./mfa-gate";
 
-export type OrgRecord = {
+type OrgRecord = {
   id: string;
   publicId: string;
   slug: string;
   name: string;
 };
 
-export type WorkspaceRecord = {
+type WorkspaceRecord = {
   id: string;
   publicId: string;
   orgId: string;
