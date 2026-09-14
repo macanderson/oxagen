@@ -382,8 +382,19 @@ neo4j_declared_names "$REPO/packages/ontology/src/schema.cypher" \
 # single statement this check could never succeed at all, and the job would have
 # been permanently red on "could not be read" — the state that teaches people to
 # stop reading it.
+#
+# `-d` names the database, because SHOW CONSTRAINTS and SHOW INDEXES are scoped
+# to one and cypher-shell otherwise reads whichever the connection defaults to.
+# The platform does not use that default by construction: every ontology query
+# runs against NEO4J_DATABASE (`packages/ontology/src/client.ts`, `session()`),
+# and `store-migrate.yml` reads that parameter before applying schema.cypher.
+# Without this the check asks a different database than the one the applier
+# writes to, and answers "0 present" about a database nothing migrates — a
+# false report of an empty production graph, which is the one direction a drift
+# check must never be wrong in.
 neo_cypher() {
-  cypher-shell -a "$NEO4J_URI" --format plain --non-interactive "$1"
+  cypher-shell -a "$NEO4J_URI" -d "${NEO4J_DATABASE:-neo4j}" \
+    --format plain --non-interactive "$1"
 }
 
 if ! command -v cypher-shell >/dev/null 2>&1; then
