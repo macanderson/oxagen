@@ -77,9 +77,10 @@ GAU, 1,000-GAU blocks): every published tier is 5,000 micros per GAU ($5 per
 5,000 / 50,000 / 300,000 included GAUs a month on Free / Build / Scale at
 $0 / $199 / $999 a month; Enterprise is a committed annual agreement on its
 `contract_terms` row at $2.50 – $3.00 per 1,000 for 5M or more a year, on
-invoice billing. Free is a hard stop at exhaustion (no card, no auto
-top-up); Build and Scale auto top-up at list; Scale and Enterprise may be
-approved for invoice billing. The figures are spec-owned
+invoice billing. Free stops at exhaustion until the organisation saves a
+card or the next month opens (the 2026-09-14 line under §6); Build and
+Scale auto top-up at list; Scale and Enterprise may be approved for invoice
+billing. The figures are spec-owned
 (`docs/specs/governed-action-metering.md` §4.1, §4.2, §4.6) and this ADR
 cites them without restating them elsewhere.
 
@@ -177,8 +178,32 @@ rate:
 Only when auto top-up cannot run, because it is disabled, no payment method
 is saved, or the one attempt of the episode did not pay, is the next
 governed action refused by the gate with `gau_exhausted` (HTTP 402). The
-gate never charges. Every tier, including Free, may buy a block: a block
-is a unit purchase at the organisation's contracted rate.
+gate never charges. Every tier with a saved payment method may buy a block:
+a block is a unit purchase at the organisation's contracted rate, and the
+Checkout that buys it saves the card it collects, so the first purchase is
+also how a tier without a saved card gets one.
+
+**2026-09-14 — Free saves a card or waits for the next month.** The
+maintainer's decision, verbatim: "they should be required to save a card
+after they burn through free tier once or they must wait for the next
+month." The rule: a Free org that exhausts its monthly allowance (5,000
+GAU) is refused further governed actions (`gau_exhausted` / 402) until
+either (a) the next monthly period opens a new allowance, or (b) the org
+saves a payment method. Saving a card is the gate, not a purchase: once a
+card is on file, the org behaves like a prepaid org — auto top-up (enabled
+by default, `auto_topup_blocks = 1`) charges the saved card for a 5,000-GAU
+block at the list rate and consumption continues; manual block purchase
+through Checkout is also available. A Free org with no saved card cannot
+auto top-up: `assertGauAvailable` refuses it with `gau_exhausted` and
+`reason: "free_no_payment_method"`, and the exhausted state on the billing
+page and in the approval dialog says "Add a payment method to keep
+governing this month, or your allowance renews on <date>". The first block
+purchase (Checkout with `setup_future_usage: "off_session"`, offered to a
+Free org with no card because it is the card-saving path) or a SetupIntent
+(`createPaymentMethodSetupIntent`, `packages/billing/src/payment-methods.ts`)
+saves the card as the default payment method. This replaces the "hard stop:
+no card, no auto top-up" of the 2026-09-14 rates line under §2 and the
+Free-tier half of the saved-cards consequence below.
 
 ### 7. Invoice billing: consumption is never capped; overage is invoiced at period end or at `invoice_gau_max`
 
@@ -384,10 +409,13 @@ an invoice and accrual restarts.
   billing figure is a GAU count.
 - Concurrent governed actions serialise on the bucket row; the boundary is
   exact under concurrency and the stored `remaining` may be negative.
-- A prepaid organisation cannot auto top-up until it has bought a block once,
-  because the Checkout is the only card capture in rev1; an invoice-billed
+- A prepaid organisation cannot auto top-up until it has saved a card — in
+  rev1 through the Checkout of its first block purchase, the only card
+  capture the app offers (`createPaymentMethodSetupIntent` is the package
+  helper a card form would use). For a Free organisation that is the rule of
+  §6 (2026-09-14): save a card or wait for the next month. An invoice-billed
   organisation has no way to save a card in rev1, so its invoices are
-  `send_invoice` with 30-day terms. Both are open questions for the
+  `send_invoice` with 30-day terms; that half stays an open question for the
   maintainer.
 - The Mission Control spec's per-run model (§12.1), `included_runs` (A.8),
   the Appendix E billing rows and the "billing.invoices is gone" row of

@@ -78,7 +78,7 @@ priced from `ACTION_RATE_BANDS` and debited from a cents credit balance by
 | `packages/billing/src/billing-settings.ts` | `readOrgBillingSettings(orgId)`: the org's billing mode (`approved_for_invoice_billing`, `invoice_gau_max`) and auto top-up preferences (`auto_topup_enabled`, `auto_topup_blocks`); column defaults for an org with no row, never an insert. |
 | `packages/billing/src/action-metering.ts` | `recordGovernedAction` debits the bucket, runs the auto top-up (prepaid) or the interim-invoice threshold (invoice billing), and never throws. |
 | `packages/billing/src/gau-settlements.ts` | `billing.gau_settlements`: every block purchase, auto top-up, interim and period-close charge as a Stripe Invoice, with `paid` the only terminal state. |
-| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses a prepaid org at `remaining ≤ 0` (`gau_exhausted`, 402) and a suspended org in either mode; never an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
+| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses a prepaid org at `remaining ≤ 0` (`gau_exhausted`, 402; for a Free org with no default payment method the error carries `reason: "free_no_payment_method"`) and a suspended org in either mode; never an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
 | `packages/inngest-functions/src/functions/billing.gau-close.ts` | Hourly, per org: closes ended months (period-close invoice in invoice mode) and resumes settlements Stripe never answered. |
 
 ---
@@ -160,7 +160,7 @@ organisation. v1 rates, set by the maintainer 2026-09-14:
 
 | Tier | Platform | Included GAUs / month | Rate per GAU | Block size | Currency | Evidence retention | Past the allowance |
 |---|---|---|---|---|---|---|---|
-| `free` | $0 | 5,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 30 days | hard stop: no card, no auto top-up |
+| `free` | $0 | 5,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 30 days | refused until the org saves a card or the next month opens; with a saved card, auto top-up at list |
 | `build` | $199 / mo | 50,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list |
 | `scale` | $999 / mo | 300,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list; invoice billing eligible |
 | `enterprise` | committed annual, negotiated | negotiated (`billing.contract_terms`) | negotiated: $2.50 – $3.00 per 1,000 at ≥ 5M / year | negotiated | USD | 12 months, extensible | invoice billing |
@@ -178,11 +178,25 @@ four figures at once. `(rate_per_gau_micros × block_size_gau)` must be a
 whole number of cents (a CHECK on both tables), so a block prices without
 rounding: 5,000 micros × 5,000 GAU = $25.00.
 
-`free` is a hard stop: the Free plan has no saved card and auto top-up is off,
-so when its bucket reaches `remaining ≤ 0` the next governed action is refused
-with `gau_exhausted` until the month rolls over or the organisation upgrades.
-The paid tiers auto top-up at the list rate; `scale` and `enterprise` may be
-approved for invoice billing.
+**Free saves a card or waits (maintainer, 2026-09-14).** A Free org that
+exhausts its monthly allowance (5,000 GAU) is refused further governed actions
+(`gau_exhausted` / 402) until either (a) the next monthly period opens a new
+allowance, or (b) the org saves a payment method. Saving a card is the gate,
+not a purchase: once a card is on file, the org behaves like a prepaid org —
+auto top-up (enabled by default, `auto_topup_blocks = 1`) charges the saved
+card for a 5,000-GAU block at the list rate and consumption continues; manual
+block purchase through Checkout is also available. A Free org with no saved
+card cannot auto top-up; the refusal carries `reason: "free_no_payment_method"`,
+and the exhausted state on the billing page and in the approval dialog says
+"Add a payment method to keep governing this month, or your allowance renews
+on <date>". The first block purchase (Checkout collects the card with
+`setup_future_usage: "off_session"`, so the purchase is itself a card-saving
+path and is offered to a Free org with no card) or a SetupIntent
+(`createPaymentMethodSetupIntent`, `packages/billing/src/payment-methods.ts`)
+saves the card as the default payment method. The maintainer's words: "they
+should be required to save a card after they burn through free tier once or
+they must wait for the next month." The paid tiers auto top-up at the list
+rate; `scale` and `enterprise` may be approved for invoice billing.
 
 The previous figures, for the record: the per-year table this section first
 carried (25k / 250k / 1.5M a year at $0 / $500 / $2,500 a month) and the
@@ -196,7 +210,10 @@ Beyond the allowance:
   block size at the contracted rate, through Checkout or by auto top-up when
   the bucket reaches `remaining ≤ 0` (`auto_topup_blocks` blocks charged to
   the saved card, at most one automatic attempt per exhaustion episode). Only
-  when auto top-up cannot run is the next governed action refused.
+  when auto top-up cannot run is the next governed action refused. A Free org
+  is prepaid with no saved card until its first Checkout or SetupIntent saves
+  one, so it is refused at exhaustion until it saves a card or the month
+  renews (the dated rule above).
 - **Invoice billing** (`approved_for_invoice_billing`, set by a platform
   operator): consumption is never capped; overage is invoiced at the
   contracted rate at period end, or as an interim invoice for exactly
@@ -268,8 +285,11 @@ customer; nothing on the page or the invoice comes from the §4.1 band.
   per GAU, which is within the estimate.
 - Retention beyond 12 months bills per GB-month (§4.3, ADR-052); it is not
   folded into the GAU rate.
-- Free is a hard stop with no card on file: the tier is for evaluation, and
-  its 5,000 GAU a month is roughly 60 – 165 coding runs.
+- Free stops at exhaustion until the org saves a card or the next month
+  opens: the tier is for evaluation, and its 5,000 GAU a month is roughly
+  60 – 165 coding runs. Saving a card, not upgrading, is what lets a Free org
+  keep going in the same month; from then on it is a prepaid org on Free's
+  published terms.
 
 ---
 
@@ -286,7 +306,8 @@ only when no enclosing `invoke()` frame is present.
 
 **Amended 2026-09-13 (ADR-055).** The recorder (`recordGovernedAction`) debits
 the organisation's current month bucket through `ensureCurrentBucket(tx, …)`,
-one upsert per invocation; then, for a prepaid org at `remaining ≤ 0`, claims
+one upsert per invocation; then, for a prepaid org at `remaining ≤ 0` with a
+saved default payment method (a Free org has none until it saves one), claims
 and runs at most one auto top-up per exhaustion episode; for an invoice-billed
 org whose uninvoiced overage has reached `invoice_gau_max`, claims and cuts the
 interim invoice. Every claim commits before the first Stripe call, and the
@@ -340,7 +361,8 @@ plus GAUs bought in unit quantities at the customer's contracted rate. An org
 that reaches its allowance buys blocks (or auto top-up buys them), or, when a
 platform operator has approved it for invoice billing, keeps running and is
 invoiced for the overage. There is no ad-hoc dollar purchase on the
-governed-action path.
+governed-action path. A Free org with no saved card is refused at exhaustion
+until it saves one or the next month opens (§4.2, 2026-09-14).
 
 ### 5.6 Surfaces
 
