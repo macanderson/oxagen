@@ -52,8 +52,10 @@ vi.mock("@oxagen/handlers/iam-provision", () => ({ bootstrapOrgIAM }));
 vi.mock("@oxagen/handlers/workspace-agents", () => ({
   bootstrapWorkspaceAgents,
 }));
-const grantFreeCredits = vi.fn();
-vi.mock("@oxagen/billing", () => ({ grantFreeCredits }));
+// Nothing billing-shaped is written at creation: loading the package is the defect.
+vi.mock("@oxagen/billing", () => {
+  throw new Error("createOrganization must not load @oxagen/billing");
+});
 const seedRegistry = vi.fn();
 const seedEnvironment = vi.fn();
 vi.mock("@oxagen/handlers/workspace-registry-seed", () => ({
@@ -108,7 +110,6 @@ beforeEach(() => {
     logger.error,
     bootstrapOrgIAM,
     bootstrapWorkspaceAgents,
-    grantFreeCredits,
     seedRegistry,
     seedEnvironment,
   ])
@@ -252,17 +253,15 @@ describe("createOrganization", () => {
     expect(bootstrapWorkspaceAgents).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "workspaces-id" }),
     );
-    expect(grantFreeCredits).toHaveBeenCalledWith("organizations-id");
     expect(seedRegistry).toHaveBeenCalledOnce();
     expect(seedEnvironment).toHaveBeenCalledOnce();
   });
 
-  it("a failed credit grant or seed is logged and does not fail sign-up", async () => {
+  it("a failed seed is logged and does not fail sign-up", async () => {
     mode("live");
-    grantFreeCredits.mockRejectedValue(new Error("stripe"));
     seedEnvironment.mockRejectedValue(new Error("seed"));
     expect((await createOrganization("u-owner", form)).ok).toBe(true);
-    expect(logger.error).toHaveBeenCalledTimes(2);
+    expect(logger.error).toHaveBeenCalledTimes(1);
     expect(seedRegistry).toHaveBeenCalledOnce();
   });
 });

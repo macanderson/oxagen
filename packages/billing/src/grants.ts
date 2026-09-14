@@ -140,8 +140,11 @@ const FREE_SIGNUP_CREDITS = 500n; // 500 credits = $5.00
 
 /**
  * Grant 500 non-expiring free credits to a newly-created org.
- * Called immediately after org creation so the org can start using the
- * platform without a payment method.
+ * The one caller is the deprecated app's onboarding action
+ * (apps/app_deprecated/src/app/(onboarding)/new-organization/actions.ts),
+ * which serves production until cutover; the `create_org` capability writes
+ * nothing billing-shaped (ADR-055 §3.9 item 14), so this function leaves with
+ * that app.
  *
  * Idempotency is enforced atomically via INSERT … ON CONFLICT DO NOTHING
  * on the credit_ledger unique key (org_id, reason, reference_type,
@@ -152,7 +155,7 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
   let granted = false;
 
   // tenancy: system bypass via withSystemDb. grantFreeCredits runs immediately
-  // after org creation (onboarding action + organizationCreateHandler), where
+  // after org creation (the deprecated onboarding action), where
   // there is NO active tenant scope yet — the org-creation transaction is itself
   // a system-level write, and the orgId is supplied explicitly. Using
   // withTenantDb here throws TenantScopeError ("no_tenant_scope") under enforced

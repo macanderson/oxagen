@@ -6,8 +6,9 @@
 // having one derived, and names the first workspace instead of getting
 // "Default". The org row, the owner membership, the workspace, its owner
 // membership, IAM bootstrap and the built-in agents share one transaction, so a
-// partial tenant cannot exist. Credits and workspace seeds run after it and are
-// recoverable, so their failure never fails sign-up.
+// partial tenant cannot exist. The workspace seeds run after it and are
+// recoverable, so their failure never fails sign-up. Nothing billing-shaped is
+// written: a new org's credit balance starts at zero (ADR-055 §3.9 item 14).
 //
 // withSystemDb is deliberate: no tenant exists yet, so no scope can be entered;
 // this call is what creates the first tenant identity.
@@ -170,10 +171,6 @@ async function afterCreate(
   logger: Logger,
 ): Promise<void> {
   const steps: Array<[string, () => Promise<unknown>]> = [
-    [
-      "grantFreeCredits",
-      async () => (await import("@oxagen/billing")).grantFreeCredits(orgId),
-    ],
     [
       "seedWorkspaceDefaultRegistrySystem",
       async () =>
