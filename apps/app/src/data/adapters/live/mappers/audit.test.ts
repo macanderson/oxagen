@@ -8,7 +8,6 @@ import {
   ErasureRequest,
   Incident,
   IncidentKind,
-  Notification,
   PublicId,
   RetentionTier,
   Severity,
@@ -19,7 +18,6 @@ import {
   type ErasureRow,
   type ExportRow,
   type IncidentRow,
-  type NotificationRow,
   RECORDED_PROBES,
   type RetentionPosture,
   rejectedPaths,
@@ -29,7 +27,6 @@ import {
   toAuditEvent,
   toErasureRequest,
   toIncident,
-  toNotification,
   toRetentionTiers,
   UNRECORDED_PATHS,
 } from "./audit";
@@ -72,8 +69,6 @@ const PROMOTED = {
     retention: z.string().nullable(),
     volume: z.string().nullable(),
   }),
-  // Severity and body are nullable in the contract: nothing left to promote.
-  Notification,
 };
 
 const CURRENT = {
@@ -82,7 +77,6 @@ const CURRENT = {
   exports: ArchiveExport,
   erasure: ErasureRequest,
   retention: RetentionTier,
-  notifications: Notification,
 } as const;
 const PROMOTED_BY_METHOD = {
   events: PROMOTED.AuditEvent,
@@ -90,7 +84,6 @@ const PROMOTED_BY_METHOD = {
   exports: PROMOTED.ArchiveExport,
   erasure: PROMOTED.ErasureRequest,
   retention: PROMOTED.RetentionTier,
-  notifications: PROMOTED.Notification,
 } as const;
 
 // A real row from the local stack: security.security_events for a
@@ -164,18 +157,6 @@ const POSTURE: RetentionPosture = {
   storedGbBeyondIncluded: 12.5,
   storedGbMeasured: true,
   creditsChargedThisPeriod: 3,
-};
-
-const NOTIFICATION: NotificationRow = {
-  id: "0192d4a8-7c1e-7a00-8000-0000000000a1",
-  publicId: "ntf_1b3d5f7h9k1m3p5r7t9v1x",
-  kind: "approval",
-  title: "release-manager is waiting on an approval",
-  body: "github__create_release@2 needs a decision.",
-  deepLink: "/acme/core-platform/runs/run_01K5RS8Q2M/approvals",
-  unread: true,
-  archived: false,
-  createdAt: "2026-09-11T09:14:02.000Z",
 };
 
 describe("toActor", () => {
@@ -487,56 +468,6 @@ describe("toRetentionTiers", () => {
         volume: null,
       },
     ]);
-  });
-});
-
-describe("toNotification", () => {
-  it("maps an approval notification and finds its run in the deep link", () => {
-    const n = toNotification(NOTIFICATION);
-    expect(n).toEqual({
-      id: "ntf_1b3d5f7h9k1m3p5r7t9v1x",
-      kind: "approval",
-      severity: null,
-      unread: true,
-      at: "2026-09-11T09:14:02.000Z",
-      title: "release-manager is waiting on an approval",
-      body: "github__create_release@2 needs a decision.",
-      runId: "run_01K5RS8Q2M",
-      ref: "/acme/core-platform/runs/run_01K5RS8Q2M/approvals",
-    });
-    expect(Notification.parse(n)).toEqual(n);
-  });
-
-  it.each([
-    // An approval row does not say requested, approved, denied or expired.
-    ["approval", null],
-    ["security", "critical"],
-    ["run", null],
-    ["member", null],
-    ["system", null],
-  ] as const)(
-    "draws kind %s at severity %s, never a guessed one",
-    (kind, severity) => {
-      const n = toNotification({ ...NOTIFICATION, kind });
-      expect(n.severity).toBe(severity);
-      expect(Notification.parse(n)).toEqual(n);
-    },
-  );
-
-  it.each([
-    ["run_01K5RS8Q2M", "run_01K5RS8Q2M"],
-    ["/a/b/runs/run_01K5RS8Q2M?frame=3", "run_01K5RS8Q2M"],
-    ["/a/b/runs/run_01K5RS8Q2M#chain", "run_01K5RS8Q2M"],
-    ["/a/b/xrun_01K5RS8Q2M", null],
-    ["/a/b/runs/run_01K5-RS8", null],
-    ["/settings/mcp", null],
-    [null, null],
-  ] as const)("reads the run in %s as %s", (deepLink, runId) => {
-    expect(toNotification({ ...NOTIFICATION, deepLink }).runId).toBe(runId);
-  });
-
-  it("keeps a missing body null", () => {
-    expect(toNotification({ ...NOTIFICATION, body: null }).body).toBeNull();
   });
 });
 

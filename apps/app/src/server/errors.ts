@@ -12,8 +12,7 @@
 export type AppErrorCode =
   | "tool_not_registered"
   | "contract_output_mismatch"
-  | "invalid_stream_cursor"
-  | "cache_tag_scope";
+  | "invalid_stream_cursor";
 
 export abstract class AppError extends Error {
   abstract readonly code: AppErrorCode;
@@ -58,17 +57,6 @@ export class InvalidStreamCursor extends AppError {
   constructor(readonly cursor: string) {
     super(`stream cursor must be a non-negative decimal sequence`);
     this.name = "InvalidStreamCursor";
-  }
-}
-
-/** A cache tag built from a scope that cannot own it (see cache-tags.ts). */
-export class CacheTagScopeError extends AppError {
-  readonly code = "cache_tag_scope";
-  readonly status = 500;
-
-  constructor(message: string) {
-    super(message);
-    this.name = "CacheTagScopeError";
   }
 }
 

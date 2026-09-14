@@ -9,7 +9,6 @@ import {
   ErasureRequest,
   Incident,
   IncidentKind,
-  Notification,
   PublicId,
   RetentionTier,
   Severity,
@@ -23,7 +22,6 @@ import {
   type ErasureRow,
   type ExportRow,
   type IncidentRow,
-  type NotificationRow,
   type RetentionPosture,
   type SecurityEventRow,
 } from "./mappers/audit";
@@ -136,13 +134,10 @@ import {
   AuditContractMismatch,
   type AuditStores,
   type AuditViews,
-  CONTRACT_VIEWS,
   createLiveAudit,
   EVENTS_LIMIT,
   liveAudit,
   liveAuditStores,
-  liveNotifications,
-  NOTIFICATIONS_LIMIT,
   ROWS_LIMIT,
 } from "./audit";
 
@@ -192,8 +187,6 @@ const PROMOTED = {
     retention: z.string().nullable(),
     volume: z.string().nullable(),
   }),
-  // Severity and body are nullable in the contract: nothing left to promote.
-  Notification,
 } as unknown as AuditViews;
 
 // Real rows from the local stack (security.security_events, the audit_events
@@ -288,18 +281,6 @@ const POSTURE: RetentionPosture = {
   storedGbMeasured: false,
   creditsChargedThisPeriod: 0,
 };
-const NOTIFICATION: NotificationRow = {
-  id: "0192d4a8-7c1e-7a00-8000-0000000000a1",
-  publicId: "ntf_1b3d5f7h9k1m3p5r7t9v1x",
-  kind: "approval",
-  title: "release-manager is waiting on an approval",
-  body: "github__create_release@2 needs a decision.",
-  deepLink: "/acme/core-platform/runs/run_01K5RS8Q2M",
-  unread: true,
-  archived: false,
-  createdAt: "2026-09-11T09:14:02.000Z",
-};
-
 type ToolCall = { tool: string; input: unknown; permission: string };
 
 type StoreMocks = { [K in keyof AuditStores]: Mock };
@@ -717,125 +698,6 @@ describe("the storeless audit methods", () => {
       milestone,
       gap,
     });
-  });
-});
-
-describe("shell.notifications", () => {
-  it("reads list_notifications as the viewer and serves the feed live", async () => {
-    const { stores, tools, calls } = fakeStores();
-    tools.set(
-      "list_notifications",
-      readOk({ notifications: [NOTIFICATION], unreadCount: 1 }),
-    );
-    const { notifications } = createLiveAudit({ stores });
-    await expect(notifications(SCOPE, VIEWER)).resolves.toEqual(
-      readOk({
-        items: [
-          {
-            id: "ntf_1b3d5f7h9k1m3p5r7t9v1x",
-            kind: "approval",
-            severity: null,
-            unread: true,
-            at: "2026-09-11T09:14:02.000Z",
-            title: "release-manager is waiting on an approval",
-            body: "github__create_release@2 needs a decision.",
-            runId: "run_01K5RS8Q2M",
-            ref: "/acme/core-platform/runs/run_01K5RS8Q2M",
-          },
-        ],
-      }),
-    );
-    expect(calls).toEqual([
-      {
-        tool: "list_notifications",
-        input: { unreadOnly: false, limit: NOTIFICATIONS_LIMIT },
-        permission: "org.read",
-      },
-    ]);
-  });
-
-  it("carries a stored kind with no outcome at a null severity and body, never a guessed one", async () => {
-    const { stores, tools } = fakeStores();
-    tools.set(
-      "list_notifications",
-      readOk({
-        notifications: [
-          { ...NOTIFICATION, kind: "security" },
-          { ...NOTIFICATION, kind: "run", body: null },
-        ],
-        unreadCount: 2,
-      }),
-    );
-    await expect(
-      createLiveAudit({ stores }).notifications(SCOPE, VIEWER),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: {
-        items: [
-          { kind: "security", severity: "critical" },
-          { kind: "run", severity: null, body: null },
-        ],
-      },
-    });
-  });
-
-  it("reports a refusal on a recorded path as a mapping bug, never as not backed", async () => {
-    const { stores, tools } = fakeStores();
-    tools.set(
-      "list_notifications",
-      readOk({
-        notifications: [{ ...NOTIFICATION, kind: "run" }],
-        unreadCount: 1,
-      }),
-    );
-    const report = vi.fn<(error: unknown, context: string) => void>();
-    const strict = {
-      ...CONTRACT_VIEWS,
-      Notification: Notification.extend({
-        severity: Notification.shape.severity.unwrap(),
-      }),
-    } as unknown as AuditViews;
-    await expect(
-      createLiveAudit({ stores, views: strict, report }).notifications(
-        SCOPE,
-        VIEWER,
-      ),
-    ).resolves.toEqual(readError("contract_output_mismatch", 502));
-    expect(report).toHaveBeenCalledWith(
-      expect.objectContaining({ method: "notifications", paths: ["severity"] }),
-      "audit.notifications",
-    );
-  });
-
-  it("denies without a session or for a user who is not the signed-in viewer, and names the shell's store on failure", async () => {
-    const none = fakeStores({ viewerId: vi.fn(() => Promise.resolve(null)) });
-    await expect(
-      createLiveAudit({ stores: none.stores }).notifications(SCOPE, VIEWER),
-    ).resolves.toEqual(denied("org.read"));
-
-    const other = fakeStores();
-    await expect(
-      createLiveAudit({ stores: other.stores }).notifications(
-        SCOPE,
-        "someone-else",
-      ),
-    ).resolves.toEqual(denied("org.read"));
-    expect(other.calls).toEqual([]);
-
-    const broken = fakeStores({
-      readTool: vi.fn(() => Promise.reject(new Error("pool exhausted"))),
-    });
-    const report = vi.fn<(error: unknown, context: string) => void>();
-    await expect(
-      createLiveAudit({ stores: broken.stores, report }).notifications(
-        SCOPE,
-        VIEWER,
-      ),
-    ).resolves.toEqual(readError("notification_store_unavailable", 503));
-    expect(report).toHaveBeenCalledWith(
-      expect.any(Error),
-      "shell.notifications",
-    );
   });
 });
 
@@ -1282,10 +1144,9 @@ describe("the live source wiring", () => {
   // The first import of ./index pulls every live adapter through the module
   // graph. With the whole suite running in parallel that alone has exceeded the
   // default 5s test budget on a loaded machine, so the import carries its own.
-  it("serves the audit port and the shell's notifications from this adapter", async () => {
+  it("serves the audit port from this adapter", async () => {
     const { liveSource } = await import("./index");
     expect(liveSource.audit).toBe(liveAudit);
-    expect(liveSource.shell).toHaveProperty("notifications", liveNotifications);
   }, 30_000);
 
   it("reports a store failure to telemetry and returns the page's error", async () => {

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   AppError,
   CAPABILITY_ERROR_STATUS,
-  CacheTagScopeError,
   ContractOutputMismatch,
   InvalidStreamCursor,
   ToolNotRegistered,
@@ -36,7 +35,6 @@ describe("AppError subclasses", () => {
       502,
     ],
     [new InvalidStreamCursor("abc"), "invalid_stream_cursor", 400],
-    [new CacheTagScopeError("bad"), "cache_tag_scope", 500],
   ] as const)("%s carries a stable code and status", (err, code, status) => {
     expect(err).toBeInstanceOf(AppError);
     expect(err).toBeInstanceOf(Error);

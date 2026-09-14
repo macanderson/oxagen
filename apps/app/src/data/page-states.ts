@@ -88,10 +88,8 @@ export const PAGE_FAILURES = {
     error: { code: "audit_store_unavailable", status: 503 },
     permission: "org.auditor",
   },
-  // The shell has no page of its own in the mockup; its reads fail with the
-  // notification store and need only organization membership.
-  shell: {
-    error: { code: "notification_store_unavailable", status: 503 },
-    permission: "org.read",
-  },
+  // The shell has no page of its own in the mockup; its one read (the
+  // organization context) fails with the control plane and needs only
+  // organization membership.
+  shell: { error: CONTROL_PLANE_DOWN, permission: "org.read" },
 } as const satisfies Record<PageKey, PageFailure>;

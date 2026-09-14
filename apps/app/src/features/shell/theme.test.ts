@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyTheme,
   nextTheme,
-  parseTheme,
   readThemeCookie,
   resolveTheme,
   THEME_SCRIPT,
@@ -25,11 +24,11 @@ afterEach(() => {
 
 describe("theme values", () => {
   it("accepts the three themes and defaults anything else to system", () => {
-    expect(parseTheme("light")).toBe("light");
-    expect(parseTheme("dark")).toBe("dark");
-    expect(parseTheme("system")).toBe("system");
-    expect(parseTheme("sepia")).toBe("system");
-    expect(parseTheme(undefined)).toBe("system");
+    expect(readThemeCookie("theme=light")).toBe("light");
+    expect(readThemeCookie("theme=dark")).toBe("dark");
+    expect(readThemeCookie("theme=system")).toBe("system");
+    expect(readThemeCookie("theme=sepia")).toBe("system");
+    expect(readThemeCookie("")).toBe("system");
   });
 
   it("resolves system against the OS preference", () => {

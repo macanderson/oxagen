@@ -1,8 +1,8 @@
-// The live audit adapter (Batch 3 lane A10: audit + shell): Audit events,
-// incidents, exports, erasure and retention, and the shell's notifications.
+// The live audit adapter (Batch 3 lane A10): Audit events, incidents, exports,
+// erasure and retention.
 //
 // Reads that exist as agent tools go through the kernel as the signed-in person
-// (query_audit_log, get_evidence_retention, list_notifications), so IAM decides
+// (query_audit_log, get_evidence_retention), so IAM decides
 // and audits them exactly as on the API. The stores no agent tool lists
 // (tacho.incidents, privacy.privacy_erasure_requests,
 // privacy.privacy_export_requests, auth.users and iam.principals for names) are
@@ -28,7 +28,6 @@ import {
 } from "@oxagen/oxagen";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
-import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -38,12 +37,11 @@ import {
   AuditEvent,
   ErasureRequest,
   Incident,
-  Notification,
   RetentionTier,
 } from "@/data/contracts";
 import { denied, type Read, readError, readOk } from "@/data/not-backed";
 import { PAGE_FAILURES } from "@/data/page-states";
-import type { AuditReadPort, ShellReadPort } from "@/data/ports";
+import type { AuditReadPort } from "@/data/ports";
 import type { Scope } from "@/data/scope";
 import type { ToolContract } from "@/server/invoke";
 import { getSession } from "@/server/session";
@@ -60,7 +58,6 @@ import {
   toAuditEvent,
   toErasureRequest,
   toIncident,
-  toNotification,
   toRetentionTiers,
   UNRECORDED_PATHS,
 } from "./mappers/audit";
@@ -69,8 +66,6 @@ import {
 export const EVENTS_LIMIT = 200;
 /** The newest incidents, erasure and export requests one read returns. */
 export const ROWS_LIMIT = 500;
-/** The newest notifications the bell reads (list_notifications' cap is 100). */
-export const NOTIFICATIONS_LIMIT = 50;
 
 /**
  * Organization roles that may read the audit stores no agent tool guards.
@@ -83,7 +78,6 @@ export const AUDIT_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 const AUDIT = PAGE_FAILURES.audit;
-const SHELL = PAGE_FAILURES.shell;
 /** The mapped value broke its view model on a recorded path: never hand the page a shape it did not promise. */
 const MISMATCH = readError("contract_output_mismatch", 502);
 
@@ -127,7 +121,6 @@ export type AuditViews = {
   ArchiveExport: z.ZodType<ArchiveExport>;
   ErasureRequest: z.ZodType<ErasureRequest>;
   RetentionTier: z.ZodType<RetentionTier>;
-  Notification: z.ZodType<Notification>;
 };
 
 export const CONTRACT_VIEWS: AuditViews = {
@@ -136,7 +129,6 @@ export const CONTRACT_VIEWS: AuditViews = {
   ArchiveExport,
   ErasureRequest,
   RetentionTier,
-  Notification,
 };
 
 /** One invocation to join: security_events' request id, capability and workspace. */
@@ -174,10 +166,7 @@ export function createLiveAudit({
   stores,
   views = CONTRACT_VIEWS,
   report = () => undefined,
-}: LiveAuditDeps): {
-  audit: AuditReadPort;
-  notifications: ShellReadPort["notifications"];
-} {
+}: LiveAuditDeps): { audit: AuditReadPort } {
   /**
    * Parse rows through a view model: live when they fit, not-backed when they
    * miss only what the store does not record, an error on anything else.
@@ -371,30 +360,7 @@ export function createLiveAudit({
       Promise.resolve(notBackedFor("audit", "assuranceHistory")),
   };
 
-  const notifications: ShellReadPort["notifications"] = (scope, userId) =>
-    guarded("shell.notifications", SHELL.error, async () => {
-      // The feed is the session's own: a user id that is not the signed-in
-      // viewer's never reads someone else's notifications.
-      const viewer = await stores.viewerId();
-      if (!viewer || viewer !== userId) return denied(SHELL.permission);
-      const feed = await stores.readTool(
-        scope,
-        userId,
-        notificationsList,
-        { unreadOnly: false, limit: NOTIFICATIONS_LIMIT },
-        SHELL.permission,
-      );
-      if (!feed.ok) return feed;
-      const items = settle(
-        "notifications",
-        () => notBackedFor("shell", "notifications"),
-        views.Notification,
-        feed.value.notifications.map(toNotification),
-      );
-      return items.ok ? readOk({ items: items.value }) : items;
-    });
-
-  return { audit, notifications };
+  return { audit };
 }
 
 // ---- The real stores -------------------------------------------------------------
@@ -771,7 +737,3 @@ const live = createLiveAudit({
 });
 
 export const liveAudit: AuditReadPort = live.audit;
-
-/** The shell's notification bell. Registered on the shell port in ./index.ts. */
-export const liveNotifications: ShellReadPort["notifications"] =
-  live.notifications;

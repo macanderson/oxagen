@@ -1,41 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { engineView } from "./engine";
-import {
-  formatTimestamp,
-  initials,
-  sortNotifications,
-  unreadCount,
-} from "./format";
+import { initials } from "./format";
 import { activeWorkspace } from "./shell-data";
-import { isCommandShortcut, parseAccountTab } from "./shell-state";
+import { isCommandShortcut } from "./shell-state";
 import { filterByName } from "./switcher-filter";
-import { denied, notBacked, readError, readOk } from "@/data/not-backed";
-
-describe("formatTimestamp", () => {
-  it("formats in UTC so server and client agree", () => {
-    expect(formatTimestamp("2026-09-12T23:44:00Z", "en-US")).toBe(
-      "Sep 12, 23:44",
-    );
-  });
-});
-
-describe("notifications helpers", () => {
-  const items = [
-    { at: "2026-09-12T12:00:00Z", unread: false, id: "a" },
-    { at: "2026-09-12T15:00:00Z", unread: false, id: "b" },
-    { at: "2026-09-12T15:00:00Z", unread: true, id: "c" },
-  ];
-
-  it("counts unread", () => {
-    expect(unreadCount(items)).toBe(1);
-    expect(unreadCount([])).toBe(0);
-  });
-
-  it("sorts newest first, unread first at the same instant, without mutating", () => {
-    expect(sortNotifications(items).map((i) => i.id)).toEqual(["c", "b", "a"]);
-    expect(items.map((i) => i.id)).toEqual(["a", "b", "c"]);
-  });
-});
+import { readError, readOk } from "@/data/not-backed";
 
 describe("initials", () => {
   it("takes the first and last word", () => {
@@ -43,58 +11,6 @@ describe("initials", () => {
     expect(initials("  priya   q natarajan ")).toBe("PN");
     expect(initials("Dana")).toBe("D");
     expect(initials("")).toBe("");
-  });
-});
-
-describe("engineView", () => {
-  it("is up only when the engine says so", () => {
-    expect(
-      engineView(
-        readOk({ status: "up", model: "glm-flash", version: "0.31.4" }),
-      ),
-    ).toEqual({
-      state: "up",
-      model: "glm-flash",
-      version: "0.31.4",
-    });
-  });
-
-  it("names a down engine's status", () => {
-    expect(
-      engineView(
-        readOk({
-          status: "down",
-          httpStatus: 503,
-          version: "0.31.4",
-          lastHealthyAt: null,
-        }),
-      ),
-    ).toEqual({
-      state: "down",
-      reason: "engine",
-      httpStatus: 503,
-      version: "0.31.4",
-      lastHealthyAt: null,
-    });
-  });
-
-  it("treats every failed read as down, never as ready", () => {
-    expect(
-      engineView(readError("shell_assistant_engine_not_wired", 501)),
-    ).toEqual({
-      state: "down",
-      reason: "read",
-      code: "shell_assistant_engine_not_wired",
-      status: 501,
-    });
-    expect(engineView(denied("assistant.use"))).toMatchObject({
-      state: "down",
-      status: 403,
-    });
-    expect(engineView(notBacked("M1", "G6"))).toMatchObject({
-      state: "down",
-      code: "not_backed_G6",
-    });
   });
 });
 
@@ -150,12 +66,6 @@ describe("activeWorkspace", () => {
 });
 
 describe("shell state helpers", () => {
-  it("parses account tabs, defaulting to profile", () => {
-    expect(parseAccountTab("security")).toBe("security");
-    expect(parseAccountTab("billing")).toBe("profile");
-    expect(parseAccountTab(null)).toBe("profile");
-  });
-
   it("recognises ⌘K and Ctrl+K only", () => {
     const key = (over: Partial<KeyboardEvent>) => ({
       key: "k",
