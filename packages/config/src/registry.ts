@@ -1366,9 +1366,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   E2E_TEST: {
     group: "Testing / e2e",
     description:
-      'Set "true" in the vitest test lanes (declared in turbo.json test:unit/test:coverage env) ' +
-      "so app code can branch to test-only behavior. Not for dev/preview/prod. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      'The exact string "true" on the e2e webServer (apps/app/playwright.config.ts) and the e2e ' +
+      "seed (apps/app seed:e2e): packages/auth relaxes email verification, secure cookies and " +
+      "rate limiting on that value, off-Vercel only (local-env.ts). Declared in turbo.json " +
+      "test:e2e env. Not for dev/preview/prod. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  STRIPE_E2E: {
+    group: "Testing / e2e",
+    description:
+      'Whether the e2e job resolved a Stripe test key: "1" when STRIPE_TEST_SECRET_KEY was mapped ' +
+      'into STRIPE_SECRET_KEY, "0" on a fork pull request without one (pay.spec.ts skips). Set by ' +
+      "the e2e webServer env (apps/app/playwright.config.ts) and the CI job (WL-48). NOTE: read " +
+      "via raw process.env — not in baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],
