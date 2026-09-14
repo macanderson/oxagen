@@ -127,6 +127,14 @@ frames 0–N and serving tool results from the cassette is the harness's work
 (ADR-043); Oxagen records the fork's provenance and gates it. The
 `run-controls-steering` lane wires the harness side.
 
+A ledger run seals at the `harness` tier in this revision
+(`gradeSealedAttempt`, `packages/run-ledger/src/frame-body.ts`): its frames
+are submitted by an engine Oxagen did not host, so the grade caps at `view`
+and `fork_run` refuses every ledger run until a gateway-observed ledger run
+exists. A wrapped session at the `gateway` tier with every body can seal
+`fork`, and the word is recorded; forking a wrapped session is not a
+capability of this revision because no attempt row exists to mint for it.
+
 ## Consequences
 
 - One recorder rule for two stores. A frame from either store carries the
