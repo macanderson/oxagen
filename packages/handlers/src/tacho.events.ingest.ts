@@ -11,14 +11,19 @@
 //
 // What lands: every event in ClickHouse `tacho_events`; the session rows,
 // per-model rollups, files touched, and commands run in Postgres; the host's
-// liveness; and the control envelope in the response.
+// liveness; and the control envelope in the response. A batch that carried
+// cost adds it to the spend-budget counter (ADR-058 §3), and an `agent_stop`
+// on a root session emits `cost/run.sealed` so the rollup job rebuilds the
+// run's `cost.run_totals` row from its frames (ADR-058 §2).
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import { insertTachoEvents } from "@oxagen/telemetry";
+import { recordSpend } from "@oxagen/billing";
 import { and, eq, sql } from "drizzle-orm";
+import { eventClient } from "./event-client";
 import {
   type TachoHostRow,
   controlEnvelope,
@@ -428,6 +433,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       reason: string;
     }> = [];
     const verified = new Map<string, boolean>();
+    // What the batch changed about spend: cost each session added, and the
+    // root sessions it sealed. Both are acted on after the transaction.
+    const spendDeltas: { micros: number; at: Date }[] = [];
+    const sealedRoots: string[] = [];
     let newSessions = 0;
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
@@ -584,7 +593,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
-        columns: { id: true },
+        columns: { id: true, publicId: true, parentSessionUuid: true },
       });
       const sessionId = sessionRow?.id;
       if (sessionId) {
@@ -592,6 +601,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         await rollupFiles(tx, ctx, sessionId, events, now);
         await rollupCommands(tx, ctx, sessionId, events, now);
       }
+      if (delta.totalCostMicros > 0)
+        spendDeltas.push({ micros: delta.totalCostMicros, at: now });
+      if (
+        sessionRow &&
+        sessionRow.parentSessionUuid === null &&
+        "sealedAt" in terminalColumns
+      )
+        sealedRoots.push(sessionRow.publicId);
     }
 
     if (newSessions > 0) {
@@ -604,8 +621,39 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }
     await touchHost(tx as never, host, input.daemon, now, true);
     const control = await controlEnvelope(tx as never, ctx, host, now);
-    return { chainBreaks, verified, control };
+    return { chainBreaks, verified, control, spendDeltas, sealedRoots };
   });
+
+  // The spend counter and the seal event are best-effort: the batch is
+  // accepted once the rows are written, and neither may fail the intake.
+  for (const spend of result.spendDeltas) {
+    try {
+      await recordSpend({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        at: spend.at,
+        micros: BigInt(spend.micros),
+      });
+    } catch (err) {
+      logger.error(
+        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "tacho.events.ingest: spend counter write failed",
+      );
+    }
+  }
+  for (const runId of result.sealedRoots) {
+    try {
+      await eventClient.send({
+        name: "cost/run.sealed",
+        data: { runId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      });
+    } catch (err) {
+      logger.error(
+        { err, runId },
+        "tacho.events.ingest: cost/run.sealed dispatch failed; the nightly sweep rolls the run up",
+      );
+    }
+  }
 
   const inserts = input.events.map((event) => ({
     event,

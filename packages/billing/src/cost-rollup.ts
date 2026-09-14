@@ -152,12 +152,17 @@ function scaledCost(units: number, microsPerMillion: bigint): bigint {
   return BigInt(units) * microsPerMillion;
 }
 
-/** Fold two bases into the run's: equal stays, different is `mixed`. */
+/**
+ * Fold two bases into the run's: equal stays, different is `mixed`, and an
+ * `estimated` figure on either side makes the whole `estimated`, since a
+ * total that contains a guess is a guess whoever observed the rest.
+ */
 export function foldBasis(
   current: CostBasis | null,
   next: CostBasis,
 ): CostBasis {
   if (current === null || current === next) return next;
+  if (current === "estimated" || next === "estimated") return "estimated";
   return "mixed";
 }
 
