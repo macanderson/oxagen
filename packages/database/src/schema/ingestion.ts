@@ -15,6 +15,7 @@ import { ingestionSchema } from "./_schemas";
 import {
   appendOnlyAuditMixin,
   citext,
+  hexIdMixin,
   idMixin,
   orgScopeMixin,
   uuidv7Default,
@@ -470,7 +471,7 @@ export const githubInstallations = ingestionSchema.table(
 export const repositoryBindings = ingestionSchema.table(
   "repository_bindings",
   {
-    ...idMixin("rpb"),
+    ...hexIdMixin("rpb"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
     connectionId: uuid("connection_id").notNull(),

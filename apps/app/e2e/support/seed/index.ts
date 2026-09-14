@@ -27,7 +27,7 @@
 // off that flag (auth.ts, local-env.ts). Never imported by src/ (INV-07).
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { auth } from "@oxagen/auth/server";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
@@ -307,7 +307,7 @@ async function ownerPrincipalId(scope: Scope, userId: string): Promise<string> {
 /**
  * The retention policy version the run pins. One digest-only policy per
  * workspace: the digest unique index makes a second seed resolve to the same
- * row. The public id is minted here in the hex form RunSpecV2 requires.
+ * row.
  */
 async function retentionPolicy(
   scope: Scope,
@@ -324,7 +324,6 @@ async function retentionPolicy(
       .insert(schema.retentionPolicyVersions)
       .values({
         ...scope,
-        publicId: `rpv_${randomBytes(12).toString("hex")}`,
         version: 1,
         mode: policy.mode,
         retainedContentClasses: policy.retained_content_classes,
