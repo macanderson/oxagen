@@ -256,6 +256,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   manifest/blob ledger lands in the evidence-ledger PR. org_id +
   //   workspace_id both NOT NULL → standard tenant_isolation.
   { table: "evidence.retention_policy_versions", policyClass: "standard" },
+  // The export job `export_run` queues (ADR-057): org_id + workspace_id NOT NULL.
+  { table: "evidence.run_exports", policyClass: "standard" },
 
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
   //   not run (docs/specs/tacho/data-model.md section 3). All eight carry

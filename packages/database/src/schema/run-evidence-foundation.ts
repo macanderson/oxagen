@@ -20,11 +20,18 @@ import {
   integer,
   jsonb,
   text,
+  timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { evidenceSchema } from "./_schemas";
-import { appendOnlyAuditMixin, idMixin, orgScopeMixin } from "./_mixins";
+import {
+  appendOnlyAuditMixin,
+  auditMixin,
+  idMixin,
+  orgScopeMixin,
+} from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // Shared vocabularies
@@ -192,3 +199,75 @@ export type RetentionPolicyVersion =
   typeof retentionPolicyVersions.$inferSelect;
 export type NewRetentionPolicyVersion =
   typeof retentionPolicyVersions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// evidence.run_exports — the export job `export_run` queues (spec App. E)
+// ---------------------------------------------------------------------------
+//
+// One row per requested bundle. The job builds the bundle (the frame
+// envelopes as NDJSON, the Merkle root, the attestation, the verifier script)
+// into the organisation's object store and records where it landed; the row
+// is what Audit › exports lists. Mutable by design: `status` moves from
+// `queued` through `building` to `ready` or `failed`, and every other column
+// is written once. ADR-057.
+export const RUN_EXPORT_STATUSES = [
+  "queued",
+  "building",
+  "ready",
+  "failed",
+] as const;
+export type RunExportStatus = (typeof RUN_EXPORT_STATUSES)[number];
+
+export const runExports = evidenceSchema.table(
+  "run_exports",
+  {
+    ...idMixin("rexp"),
+    ...orgScopeMixin(),
+    ...auditMixin(),
+    // The run's public id (`arun_…` or `tse_…`): the export names the run the
+    // way every surface does, whichever store minted it.
+    runPublicId: text("run_public_id").notNull(),
+    // The signed-in user who asked; the attestation names them.
+    requestedByUserId: uuid("requested_by_user_id").notNull(),
+    status: text("status").notNull().default("queued"),
+    // Set together when the bundle is ready: where it is, its digest, and the
+    // Merkle root and frame count the attestation commits to.
+    bundleRef: text("bundle_ref"),
+    bundleDigest: text("bundle_digest"),
+    merkleRoot: text("merkle_root"),
+    frameCount: integer("frame_count"),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // Set when `status = 'failed'`.
+    error: text("error"),
+  },
+  (t) => ({
+    orgIdx: index("run_exports_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.createdAt,
+    ),
+    runIdx: index("run_exports_run_idx").on(t.runPublicId),
+    statusCheck: check(
+      "run_exports_status_check",
+      sql`${t.status} IN ('queued', 'building', 'ready', 'failed')`,
+    ),
+    readyCheck: check(
+      "run_exports_ready_check",
+      sql`(${t.status} = 'ready') = (${t.bundleRef} IS NOT NULL AND ${t.bundleDigest} IS NOT NULL AND ${t.merkleRoot} IS NOT NULL AND ${t.frameCount} IS NOT NULL AND ${t.completedAt} IS NOT NULL)`,
+    ),
+    failedCheck: check(
+      "run_exports_failed_check",
+      sql`(${t.status} = 'failed') = (${t.error} IS NOT NULL)`,
+    ),
+    digestCheck: check(
+      "run_exports_digest_check",
+      sql`(${t.bundleDigest} IS NULL OR ${t.bundleDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND (${t.frameCount} IS NULL OR ${t.frameCount} >= 0)`,
+    ),
+  }),
+);
+
+export type RunExport = typeof runExports.$inferSelect;
+export type NewRunExport = typeof runExports.$inferInsert;
