@@ -142,7 +142,8 @@
       "name": "commit_agent_definition",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -1847,7 +1848,8 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli"
+        "cli",
+        "mcp"
       ],
       "writes": []
     },
@@ -1942,7 +1944,8 @@
       "name": "retire_agent",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2014,7 +2017,8 @@
       "name": "rotate_agent_credential",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2316,7 +2320,8 @@
       "name": "suspend_agent",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2654,7 +2659,7 @@
       "writes": []
     }
   ],
-  "contentHash": "3edcc8b23f341c050bb5984432704f7e605d9641d6a151804703114a3c111d9c",
+  "contentHash": "588e0bfebb701d3681225c4625d7b82ad4c24c7824b7410f8f8eb6b48ae16f37",
   "domains": [
     {
       "name": "agent",
