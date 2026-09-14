@@ -63,6 +63,8 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
 import {
   apiPost,
   installCli,
+  parseConnect,
+  parseDetect,
   listOrganizations,
   listWorkspaces,
   logTail,
@@ -193,5 +195,58 @@ describe("runSidecar", () => {
     spawned[1]?.emit("stderr", "tacho: cannot read host.json");
     spawned[1]?.emit("close", { code: 1 });
     expect(await none).toBeNull();
+  });
+});
+
+describe("detect and connect parsing", () => {
+  it("reads the detect document and rejects anything else", () => {
+    const doc = {
+      enrolled: false,
+      harnesses: [
+        {
+          harness: "claude-code",
+          label: "Claude Code",
+          installed: true,
+          path: "/x",
+          version: "2.1.0",
+          enrolled: false,
+        },
+        { harness: "codex", label: "Codex", installed: false, enrolled: false },
+      ],
+    };
+    expect(parseDetect(JSON.stringify(doc))).toEqual(doc);
+    expect(parseDetect("")).toBeNull();
+    expect(parseDetect("not json")).toBeNull();
+    expect(parseDetect(JSON.stringify({ enrolled: true }))).toBeNull();
+  });
+
+  it("takes the last JSON line of a verify run and falls back to stderr", () => {
+    expect(
+      parseConnect({
+        code: 0,
+        stdout:
+          'Running claude -p...\nSession s chained as u: 6 events, sealed.\n{"ok":true,"sessionId":"s","seq":6,"detail":"chained"}\n',
+        stderr: "",
+      }),
+    ).toEqual({ ok: true, sessionId: "s", seq: 6, detail: "chained" });
+    expect(
+      parseConnect({
+        code: 1,
+        stdout: '{"ok":false,"detail":"not enrolled"}\n',
+        stderr: "",
+      }),
+    ).toEqual({ ok: false, detail: "not enrolled" });
+    expect(
+      parseConnect({ code: 1, stdout: "", stderr: "codex: not found\n" }),
+    ).toEqual({
+      ok: false,
+      detail: "codex: not found",
+    });
+    expect(parseConnect({ code: null, stdout: "{broken", stderr: "" })).toEqual(
+      {
+        ok: false,
+        detail: "tacho verify exited ? without a result",
+      },
+    );
   });
 });

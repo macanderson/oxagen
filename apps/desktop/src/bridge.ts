@@ -158,3 +158,77 @@ export async function tachoStatus(): Promise<TachoStatus | null> {
   const result = await runSidecar("tacho", ["status", "--json"]);
   return parseTachoStatus(result.stdout);
 }
+
+/** `tacho detect --json`: which harnesses the machine has and which are hooked. */
+export interface DetectedHarness {
+  harness: "claude-code" | "codex";
+  label: string;
+  installed: boolean;
+  path?: string;
+  version?: string;
+  enrolled: boolean;
+}
+export interface DetectReport {
+  enrolled: boolean;
+  harnesses: DetectedHarness[];
+}
+
+export async function detectHarnesses(): Promise<DetectReport | null> {
+  const result = await runSidecar("tacho", ["detect", "--json"]);
+  return parseDetect(result.stdout);
+}
+
+/** The detect document, or null when the sidecar printed none. */
+export function parseDetect(stdout: string): DetectReport | null {
+  try {
+    const parsed = JSON.parse(stdout) as DetectReport;
+    return Array.isArray(parsed?.harnesses) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `tacho verify --harness <h> --json`: one recorded turn on that harness. */
+export interface ConnectResult {
+  ok: boolean;
+  sessionId?: string;
+  sessionUuid?: string;
+  seq?: number;
+  detail: string;
+}
+
+/** The last JSON line of a `verify --json` run, or a failure built from stderr. */
+export function parseConnect(result: RunResult): ConnectResult {
+  const last = result.stdout
+    .trim()
+    .split("\n")
+    .reverse()
+    .find((line) => line.startsWith("{"));
+  if (last) {
+    try {
+      const parsed = JSON.parse(last) as Partial<ConnectResult>;
+      if (typeof parsed.ok === "boolean" && typeof parsed.detail === "string")
+        return parsed as ConnectResult;
+    } catch {
+      // fall through to the stderr-based failure
+    }
+  }
+  return {
+    ok: false,
+    detail:
+      result.stderr.trim() ||
+      `tacho verify exited ${result.code ?? "?"} without a result`,
+  };
+}
+
+export async function connectRun(
+  harness: "claude-code" | "codex",
+  onLine?: (line: string, stream: "stdout" | "stderr") => void,
+): Promise<ConnectResult> {
+  const result = await runSidecar(
+    "tacho",
+    ["verify", "--harness", harness, "--json"],
+    onLine,
+  );
+  return parseConnect(result);
+}

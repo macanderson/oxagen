@@ -35,6 +35,7 @@ import {
   runtimeCommands,
   shellQuote,
 } from "./deps";
+import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
 import { reassign } from "./reassign";
@@ -902,6 +903,81 @@ describe("export and verify", () => {
     const empty = deps();
     await exportCommand({}, empty);
     expect(empty.lines.at(-1)).toContain("no sessions");
+  });
+
+  it("verify drives Codex through codex exec and matches the newest chain", async () => {
+    const signer = bundleSigner();
+    const calls: string[][] = [];
+    const d = deps({
+      exec: (command, args) => {
+        calls.push([command, ...args]);
+        if (args[0] === "exec")
+          return { status: 0, stdout: "OK\n", stderr: "" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    d.service.running = true;
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const result = await verify({ harness: "codex" }, d);
+    expect(result.ok).toBe(true);
+    expect(result.sessionId).toBe("sess-verify");
+    expect(calls).toContainEqual([
+      "/usr/local/bin/codex",
+      "exec",
+      "--skip-git-repo-check",
+      "Reply with exactly the word OK and nothing else.",
+    ]);
+    expect(d.lines.join("\n")).toContain("Running codex exec");
+    const noCodex = deps({ codex: () => ({}) });
+    noCodex.service.running = true;
+    writeHostFile(
+      noCodex.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    expect((await verify({ harness: "codex" }, noCodex)).detail).toContain(
+      "codex",
+    );
+  });
+
+  it("detect reports installed harnesses and which are enrolled", () => {
+    const d = deps();
+    const fresh = detect({}, d);
+    expect(fresh.enrolled).toBe(false);
+    expect(
+      fresh.harnesses.map((h) => [h.harness, h.installed, h.enrolled]),
+    ).toEqual([
+      ["claude-code", true, false],
+      ["codex", true, false],
+    ]);
+    expect(d.lines.join("\n")).toContain(
+      "Claude Code  2.1.263 at /usr/local/bin/claude",
+    );
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["claude-code"],
+      }),
+    );
+    const missingCodex = deps({ codex: () => ({}) });
+    writeHostFile(
+      missingCodex.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["claude-code"],
+      }),
+    );
+    const report = detect({ json: true }, missingCodex);
+    expect(report).toMatchObject({
+      enrolled: true,
+      harnesses: [
+        { harness: "claude-code", installed: true, enrolled: true },
+        { harness: "codex", installed: false, enrolled: false },
+      ],
+    });
+    expect(JSON.parse(missingCodex.lines.join("\n"))).toEqual(report);
   });
 
   it("verify reports each failure mode", async () => {

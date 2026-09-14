@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   ago,
+  defaultRegistration,
+  deregisterArgs,
+  missionControlUrl,
+  wizardStep,
   enrollArgs,
   pendingChange,
   primaryAction,
@@ -147,6 +151,67 @@ describe("panel helpers", () => {
     );
     expect(primaryAction(true, true, { target: false, harness: true })).toBe(
       "apply",
+    );
+  });
+});
+
+describe("wizard and de-register", () => {
+  it("derives the step from the machine state so a relaunch resumes", () => {
+    const base = {
+      loggedIn: false,
+      targetChosen: false,
+      enrolled: false,
+      outcomeSeen: false,
+    };
+    expect(wizardStep(base)).toBe(1);
+    expect(wizardStep({ ...base, loggedIn: true })).toBe(2);
+    expect(wizardStep({ ...base, loggedIn: true, targetChosen: true })).toBe(3);
+    expect(wizardStep({ ...base, loggedIn: true, enrolled: true })).toBe(4);
+    expect(
+      wizardStep({
+        ...base,
+        loggedIn: true,
+        enrolled: true,
+        outcomeSeen: true,
+      }),
+    ).toBe(5);
+    // Signed out after enrolling: back to step 1, never a half state.
+    expect(wizardStep({ ...base, enrolled: true, outcomeSeen: true })).toBe(1);
+  });
+
+  it("ticks every detected agent by default and none of the absent ones", () => {
+    expect(
+      defaultRegistration([
+        { harness: "claude-code", installed: true },
+        { harness: "codex", installed: false },
+      ]),
+    ).toEqual(["claude-code"]);
+    expect(
+      defaultRegistration([
+        { harness: "claude-code", installed: true },
+        { harness: "codex", installed: true },
+      ]),
+    ).toEqual(["claude-code", "codex"]);
+    expect(defaultRegistration([])).toEqual([]);
+  });
+
+  it("de-registers one agent by re-enrolling with the rest, or unenrolls the last", () => {
+    expect(deregisterArgs(["claude-code", "codex"], "codex")).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--harness", "claude-code"],
+    });
+    expect(deregisterArgs(["claude-code"], "claude-code")).toEqual({
+      sidecar: "tacho",
+      args: ["unenroll"],
+    });
+  });
+
+  it("links Mission Control for the workspace the host reports to", () => {
+    expect(missionControlUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
+      "https://app.oxagen.sh/acme/core/runs",
+    );
+    expect(missionControlUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
+      "https://app.oxagen.sh/a%20b/c%2Fd/runs",
     );
   });
 });

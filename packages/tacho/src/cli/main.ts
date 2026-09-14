@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
 import { defaultCliDeps, isNativeBuild } from "./deps";
+import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
 import { reassign } from "./reassign";
@@ -170,11 +171,33 @@ export function buildTachoProgram(): Command {
 
   program
     .command("verify")
-    .description("Run one headless Claude Code turn and confirm it was chained")
-    .action(async () => {
-      const result = await verify({}, deps);
-      deps.out(result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`);
+    .description(
+      "Run one headless turn (Claude Code by default, --harness codex) and confirm it was chained",
+    )
+    .option("--harness <name>", "claude-code | codex", "claude-code")
+    .option("--json", "Machine-readable result")
+    .action(async (opts: { harness?: string; json?: boolean }) => {
+      const [harness] = parseHarnesses(opts.harness);
+      const result = await verify(
+        harness !== undefined ? { harness } : {},
+        deps,
+      );
+      if (opts.json === true) deps.out(JSON.stringify(result));
+      else
+        deps.out(
+          result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`,
+        );
       if (!result.ok) process.exitCode = 1;
+    });
+
+  program
+    .command("detect")
+    .description(
+      "Which harnesses this machine has (claude, codex) and which are enrolled",
+    )
+    .option("--json", "Machine-readable output")
+    .action((opts: { json?: boolean }) => {
+      detect({ ...(opts.json !== undefined ? { json: opts.json } : {}) }, deps);
     });
 
   program

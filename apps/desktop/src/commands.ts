@@ -113,6 +113,57 @@ export function ago(
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+/**
+ * De-register one harness: re-enroll in place with the rest, or unenroll
+ * outright when it was the last one (the hooks, service and credentials go
+ * with it). The wizard's install side asked twice; the UI asks twice here.
+ */
+export function deregisterArgs(
+  enrolled: readonly string[],
+  harness: Harness,
+): SidecarCall {
+  const remaining = enrolled.filter((h) => h !== harness);
+  if (remaining.length === 0) return { sidecar: "tacho", args: ["unenroll"] };
+  return {
+    sidecar: "tacho",
+    args: ["reassign", "--harness", remaining.join(",")],
+  };
+}
+
+/** Mission Control for the workspace the host reports to. */
+export function missionControlUrl(
+  appUrl: string,
+  org: string,
+  workspace: string,
+): string {
+  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}/runs`;
+}
+
+export type WizardStep = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * Where the first-run wizard stands, derived from the machine's state so a
+ * relaunch resumes at the right step: 1 sign in → 2 org & workspace →
+ * 3 detect and register agents → 4 outcome → 5 record a first run.
+ */
+export function wizardStep(input: {
+  loggedIn: boolean;
+  targetChosen: boolean;
+  enrolled: boolean;
+  outcomeSeen: boolean;
+}): WizardStep {
+  if (!input.loggedIn) return 1;
+  if (!input.enrolled) return input.targetChosen ? 3 : 2;
+  return input.outcomeSeen ? 5 : 4;
+}
+
+/** Default selection for step 3: every installed harness, none of the absent ones. */
+export function defaultRegistration(
+  detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
+): Harness[] {
+  return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
 /** The one gold action on screen: the next step, never a destructive one. */
 export function primaryAction(
   loggedIn: boolean,
