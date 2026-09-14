@@ -101,6 +101,24 @@ code,
   font-size: 12px;
 }
 
+/* The update control: a caption ("up to date", "v2.2.0 available") and one
+   small button, on the masthead so it never competes with a panel's action. */
+.masthead .updates {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.masthead .updates .sub {
+  margin: 0;
+}
+
+.masthead .updates button {
+  font-size: 12px;
+  padding-block: 4px;
+}
+
 .dot {
   display: inline-block;
   width: 9px;
