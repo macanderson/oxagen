@@ -214,6 +214,17 @@
                     }
                   ]
                 },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "issued_at": {
                   "type": "string"
                 },
@@ -236,6 +247,7 @@
                 "requested_mode",
                 "delivery_mode",
                 "degraded_reason",
+                "reason",
                 "issued_at",
                 "expires_at"
               ],

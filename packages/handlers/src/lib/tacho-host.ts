@@ -237,6 +237,7 @@ export function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
     requested_mode: row.requestedMode as DeliveredCommand["requested_mode"],
     delivery_mode: row.deliveryMode as DeliveredCommand["delivery_mode"],
     degraded_reason: row.degradedReason,
+    reason: row.reason,
     issued_at: row.issuedAt.toISOString(),
     expires_at: row.expiresAt?.toISOString() ?? null,
   };

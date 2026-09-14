@@ -289,10 +289,10 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       host_enrollment_id: hostPublicId,
     });
     expect(
-      poll.control.commands.map((c) => [c.command, c.delivery_mode]),
+      poll.control.commands.map((c) => [c.command, c.delivery_mode, c.reason]),
     ).toEqual([
-      ["pause", null],
-      ["steer", "next_step"],
+      ["pause", null, "review the plan"],
+      ["steer", "next_step", null],
     ]);
     const sent = await rowsFor(publicIds.live);
     expect(sent.filter((r) => r.outcome === "sent")).toHaveLength(2);

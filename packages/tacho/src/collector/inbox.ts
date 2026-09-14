@@ -30,7 +30,13 @@ export interface InboxResult {
   acknowledgements: CommandAcknowledgement[];
 }
 
+/**
+ * The operator's reason: the row's `reason` column as the wire carries it,
+ * or `payload.reason` for a row queued before the column existed.
+ */
 function reasonOf(command: DeliveredCommand): string {
+  if (command.reason !== null && command.reason.length > 0)
+    return command.reason;
   const reason = command.payload["reason"];
   return typeof reason === "string" && reason.length > 0
     ? reason

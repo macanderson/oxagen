@@ -103,7 +103,9 @@ export type DenyGeneration = z.output<typeof denyGenerationSchema>;
 /**
  * A command as delivered to a host (spec section 7.4). `requested_mode` and
  * `delivery_mode` are set for the commands that carry prompt content
- * (`steer`, `message`); `degraded_reason` names why the two differ.
+ * (`steer`, `message`); `degraded_reason` names why the two differ. `reason`
+ * is the operator's reason as recorded on the row: the collector shows it at
+ * the boundary a pause denies and the model reads it on resume.
  */
 export const deliveredCommandSchema = z
   .object({
@@ -114,6 +116,7 @@ export const deliveredCommandSchema = z
     requested_mode: tachoDeliveryModeSchema.nullable(),
     delivery_mode: tachoDeliveryModeSchema.nullable(),
     degraded_reason: z.string().max(64).nullable(),
+    reason: z.string().max(512).nullable(),
     issued_at: z.string(),
     expires_at: z.string().nullable(),
   })

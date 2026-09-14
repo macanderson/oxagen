@@ -71,6 +71,7 @@ function command(overrides: Partial<DeliveredCommand>): DeliveredCommand {
     requested_mode: null,
     delivery_mode: null,
     degraded_reason: null,
+    reason: null,
     issued_at: "2026-09-10T10:00:00.000Z",
     expires_at: null,
     ...overrides,
@@ -151,7 +152,9 @@ describe("inbox", () => {
           command: "message",
           payload: { text: "all hands" },
         }),
-        command({ id: "hp", command: "pause" }),
+        // The row's reason travels as `reason`; a row queued before the
+        // column existed carries it in the payload.
+        command({ id: "hp", command: "pause", reason: "fleet hold" }),
         command({
           id: "hrv",
           command: "revoke",
@@ -184,7 +187,7 @@ describe("inbox", () => {
     expect(
       result.acknowledgements.find((a) => a.command_id === "x")?.detail,
     ).toMatch(/expired/);
-    expect(record.control.paused).toBe("operator pause");
+    expect(record.control.paused).toBe("fleet hold");
     expect(record.control.cancelled).toBe("operator cancel");
     expect(record.control.messages.map((m) => m.text)).toEqual([
       "wrap up",

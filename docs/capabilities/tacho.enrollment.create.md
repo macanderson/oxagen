@@ -1,6 +1,6 @@
 # tacho.enrollment.create
 
-Enrol a machine as a Tacho host (`docs/specs/tacho/spec.md` section 5.2). This is the operator half of the host trust boundary: `ingest_tacho_events`, `get_tacho_bundle`, and `fetch_tacho_commands` refuse any API key that does not carry the server-owned `tacho_host_v1` scope, and the generic `create_api_key` and `rotate_api_key` capabilities refuse to mint or preserve that scope. This capability is its only writer.
+Enrol a machine as a Tacho host (`docs/specs/tacho/spec.md` section 5.2). This is the operator half of the host trust boundary: `ingest_tacho_events`, `get_tacho_bundle`, and `fetch_commands` refuse any API key that does not carry the server-owned `tacho_host_v1` scope, and the generic `create_api_key` and `rotate_api_key` capabilities refuse to mint or preserve that scope. This capability is its only writer.
 
 The response carries, once each and never again: the host's API key, the HMAC-signed enrollment document the collector verifies offline against the secret named by `verification_secret_env`, the initial Ed25519-signed policy bundle, and the bundle-signing public key. The host's `agentKey` is derived from the organization and workspace namespaces (ADR-024) and the hostname, so it is the identifier a bill, an audit row, and a fleet page show.
 

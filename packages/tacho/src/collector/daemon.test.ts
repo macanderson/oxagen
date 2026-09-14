@@ -133,7 +133,7 @@ function fakeControlPlane(bundleEtag: string) {
     queue: (
       command: Omit<
         DeliveredCommand,
-        "requested_mode" | "delivery_mode" | "degraded_reason"
+        "requested_mode" | "delivery_mode" | "degraded_reason" | "reason"
       > &
         Partial<DeliveredCommand>,
     ) =>
@@ -141,6 +141,7 @@ function fakeControlPlane(bundleEtag: string) {
         requested_mode: null,
         delivery_mode: null,
         degraded_reason: null,
+        reason: null,
         ...command,
       }),
     setHostStatus: (status: ControlEnvelope["host_status"]) => {

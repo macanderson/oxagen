@@ -2,7 +2,7 @@
 
 The idle-host control poll (`docs/specs/tacho/spec.md` section 7.4; Mission Control spec Appendix E "control channel; headless"): the collector acknowledges the commands it took and applied, in the §7.4 status vocabulary, and receives the queued ones together with the same control envelope every ingest carries. A host with active sessions never needs this; a host between sessions polls it at the bundle interval.
 
-Every poll first expires this host's commands whose expiry passed before they reached a terminal status, then drains the `queued` rows as `sent`, each carrying its `requested_mode`, `delivery_mode` and `degraded_reason`. An acknowledgement lands only on a row that is not terminal: a row Oxagen already cancelled (superseded) or expired keeps what Oxagen recorded.
+Every poll first expires this host's commands whose expiry passed before they reached a terminal status, then drains the `queued` rows as `sent`, each carrying its `requested_mode`, `delivery_mode`, `degraded_reason` and the operator's `reason`, which the collector shows at the boundary a pause denies. An acknowledgement lands only on a row that is not terminal: a row Oxagen already cancelled (superseded) or expired keeps what Oxagen recorded.
 
 ## Mode
 
@@ -32,7 +32,7 @@ Every poll first expires this host's commands whose expiry passed before they re
 | Field | Type | Description |
 |---|---|---|
 | `acknowledged` | integer | acknowledgements that landed on an open row |
-| `control` | object | `host_status`, `deny_generation`, `bundle_etag`, `commands[]` — each command carries `id`, `command`, `session_uuid`, `payload`, `requested_mode`, `delivery_mode`, `degraded_reason`, `issued_at`, `expires_at` |
+| `control` | object | `host_status`, `deny_generation`, `bundle_etag`, `commands[]` — each command carries `id`, `command`, `session_uuid`, `payload`, `requested_mode`, `delivery_mode`, `degraded_reason`, `reason`, `issued_at`, `expires_at` |
 
 ## Honesty
 

@@ -196,6 +196,7 @@ function fakeDb(): FakeDb {
         requestedMode: "next_step",
         deliveryMode: "next_step",
         degradedReason: null,
+        reason: null,
         issuedAt: new Date("2026-09-08T10:00:00.000Z"),
         expiresAt: null,
       },
