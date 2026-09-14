@@ -5,12 +5,12 @@ import { agentRegister } from "./agent.register";
 const input = { slug: "release-bot", name: "Release bot", harness: "stella" };
 
 describe("register_agent contract", () => {
-  it("is an identity write on api, mcp and cli: mutates, unmetered, Owner/Admin", () => {
+  it("is an identity write on api and cli: mutates, unmetered, Owner/Admin", () => {
     expect(getCapability("register_agent")).toBe(agentRegister);
     expect(agentRegister.mutates).toBe(true);
     expect(agentRegister.noBillingGate).toBe(true);
     expect(agentRegister.scoped).toBe(true);
-    expect(agentRegister.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(agentRegister.surfaces).toEqual(["api", "cli"]);
     expect(agentRegister.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

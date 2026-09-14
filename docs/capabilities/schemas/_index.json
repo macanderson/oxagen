@@ -155,8 +155,7 @@
       "name": "commit_agent_definition",
       "domain": "agent",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2027,7 +2026,6 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp",
         "cli"
       ],
       "component": null,
@@ -2132,8 +2130,7 @@
       "name": "retire_agent",
       "domain": "agent",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2212,8 +2209,7 @@
       "name": "rotate_agent_credential",
       "domain": "agent",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2547,8 +2543,7 @@
       "name": "suspend_agent",
       "domain": "agent",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],

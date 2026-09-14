@@ -40,7 +40,6 @@ Org Owner or Admin, checked by the handler (INV-29).
 ## Surfaces
 
 - `POST /api/v1/{org}/{ws}/agents/suspend`
-- MCP tool `suspend_agent`
 
 ## Errors
 

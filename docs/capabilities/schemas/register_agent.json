@@ -5,7 +5,6 @@
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp",
     "cli"
   ],
   "sensitivity": "high",

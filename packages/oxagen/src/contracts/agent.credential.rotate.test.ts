@@ -3,13 +3,13 @@ import { getCapability } from "../registry";
 import { agentCredentialRotate } from "./agent.credential.rotate";
 
 describe("rotate_agent_credential contract", () => {
-  it("is a credential write: mutates, unmetered, Owner/Admin, api and mcp", () => {
+  it("is a credential write: mutates, unmetered, Owner/Admin, api only", () => {
     expect(getCapability("rotate_agent_credential")).toBe(
       agentCredentialRotate,
     );
     expect(agentCredentialRotate.mutates).toBe(true);
     expect(agentCredentialRotate.noBillingGate).toBe(true);
-    expect(agentCredentialRotate.surfaces).toEqual(["api", "mcp"]);
+    expect(agentCredentialRotate.surfaces).toEqual(["api"]);
     expect(agentCredentialRotate.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

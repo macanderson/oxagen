@@ -4,8 +4,7 @@
   "description": "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp"
+    "api"
   ],
   "sensitivity": "high",
   "agent": {

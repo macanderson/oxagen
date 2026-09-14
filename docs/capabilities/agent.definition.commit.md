@@ -48,7 +48,6 @@ Org Owner, Admin or Member; workspace Owner or Member. Checked by the handler (I
 ## Surfaces
 
 - `POST /api/v1/{org}/{ws}/agents/definition/commit`
-- MCP tool `commit_agent_definition`
 
 ## Errors
 

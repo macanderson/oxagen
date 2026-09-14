@@ -39,7 +39,6 @@ Org Owner or Admin, checked by the handler (INV-29).
 ## Surfaces
 
 - `POST /api/v1/{org}/{ws}/agents/credential/rotate`
-- MCP tool `rotate_agent_credential`
 
 ## Errors
 

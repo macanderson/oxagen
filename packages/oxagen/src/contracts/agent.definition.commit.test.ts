@@ -20,7 +20,7 @@ describe("commit_agent_definition contract", () => {
     );
     expect(agentDefinitionCommit.mutates).toBe(true);
     expect(agentDefinitionCommit.noBillingGate).toBe(true);
-    expect(agentDefinitionCommit.surfaces).toEqual(["api", "mcp"]);
+    expect(agentDefinitionCommit.surfaces).toEqual(["api"]);
     expect(agentDefinitionCommit.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow", Member: "allow" },
       workspace: { Owner: "allow", Member: "allow" },

@@ -7,7 +7,7 @@ describe("retire_agent contract", () => {
     expect(getCapability("retire_agent")).toBe(agentRetire);
     expect(agentRetire.mutates).toBe(true);
     expect(agentRetire.noBillingGate).toBe(true);
-    expect(agentRetire.surfaces).toEqual(["api", "mcp"]);
+    expect(agentRetire.surfaces).toEqual(["api"]);
     expect(agentRetire.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

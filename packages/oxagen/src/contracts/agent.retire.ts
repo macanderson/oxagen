@@ -16,8 +16,12 @@ export const agentRetire = registerCapability({
   description:
     "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // The handler requires a signed-in user (assertOrgRole, INV-29). The MCP
+  // server builds every context with `userId: null` (apps/mcp/src/context.ts),
+  // so the write ships on the API alone; `tacho.enrollment.create` set the
+  // pattern for a user-bound write.
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

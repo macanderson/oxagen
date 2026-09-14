@@ -48,7 +48,6 @@ Org Owner or Admin, checked by the handler (`assertOrgRole`, INV-29). A call wit
 ## Surfaces
 
 - `POST /api/v1/{org}/{ws}/agents/register`
-- MCP tool `register_agent`
 - CLI `oxagen agent register`
 
 ## Errors

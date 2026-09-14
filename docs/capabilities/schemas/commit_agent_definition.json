@@ -1,11 +1,10 @@
 {
   "name": "commit_agent_definition",
   "domain": "agent",
-  "description": "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it; the default branch is never written.",
+  "description": "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp"
+    "api"
   ],
   "sensitivity": "medium",
   "agent": {

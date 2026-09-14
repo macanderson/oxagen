@@ -20,8 +20,12 @@ export const agentRegister = registerCapability({
   description:
     "Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once. The definition is committed to the repository separately.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // The handler requires a signed-in user (assertOrgRole, INV-29). The MCP
+  // server builds every context with `userId: null` (apps/mcp/src/context.ts),
+  // so the write ships on the API alone; `tacho.enrollment.create` set the
+  // pattern for a user-bound write.
+  surfaces: ["api", "cli"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

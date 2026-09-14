@@ -42,13 +42,11 @@
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -77,13 +75,11 @@
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -882,13 +878,11 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
         "cli"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -899,13 +893,11 @@
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -988,13 +980,11 @@
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
