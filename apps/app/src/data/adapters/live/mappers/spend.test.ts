@@ -8,7 +8,7 @@ import {
   cacheHitRate,
   MAX_EXACT_MICROS,
   moneyFromMicros,
-  moneyFromUsd,
+  moneyFromWire,
   monthWindow,
   SpendContractMismatch,
   type SpendBudgetStatus,
@@ -334,21 +334,21 @@ describe("moneyFromMicros", () => {
   });
 });
 
-describe("moneyFromUsd", () => {
-  it.each([
-    1n,
-    999_999n,
-    1_000_001n,
-    123_456_789_012n,
-    BigInt(MAX_EXACT_MICROS),
-  ])("round-trips %s micros through the handler's float dollars", (micros) => {
-    expect(moneyFromUsd("f", Number(micros) / 1_000_000).micros).toBe(
-      String(micros),
-    );
-  });
+describe("moneyFromWire", () => {
+  it.each(["1", "999999", "1000001", "123456789012", String(MAX_EXACT_MICROS)])(
+    "carries %s micros through unchanged",
+    (micros) => {
+      expect(moneyFromWire("f", { micros, currency: "USD" }).micros).toBe(
+        micros,
+      );
+    },
+  );
 
-  it("refuses a non-finite dollar amount", () => {
-    expect(() => moneyFromUsd("f", Number.POSITIVE_INFINITY)).toThrow(
+  it("refuses a non-integer micros string or another currency", () => {
+    expect(() =>
+      moneyFromWire("f", { micros: "1.5", currency: "USD" }),
+    ).toThrow(SpendContractMismatch);
+    expect(() => moneyFromWire("f", { micros: "1", currency: "EUR" })).toThrow(
       SpendContractMismatch,
     );
   });
@@ -398,9 +398,9 @@ describe("toBudget", () => {
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd: 100,
-    spentUsd: 12.5,
-    projectedUsd: 30,
+    limit: { micros: "100000000", currency: "USD" },
+    spent: { micros: "12500000", currency: "USD" },
+    projected: { micros: "30000000", currency: "USD" },
     ratio: 0.125,
     state: "ok",
     reachedThreshold: 0,
@@ -410,7 +410,7 @@ describe("toBudget", () => {
   });
 
   it("drops a status with no limit configured", () => {
-    expect(toBudget(status({ limitUsd: null }), SLUGS)).toBeNull();
+    expect(toBudget(status({ limit: null }), SLUGS)).toBeNull();
   });
 
   it("refuses a workspace ceiling without the workspace's slug", () => {

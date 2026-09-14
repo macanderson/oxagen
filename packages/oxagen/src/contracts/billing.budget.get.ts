@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { moneySchema } from "../money";
 
 // The window a ceiling is measured over. Mirrors SpendBudgetPeriod in
 // @oxagen/billing (kept as a literal here to keep the contract layer
 // dependency-light — the values are a locked API surface).
-const spendPeriod = z.enum(["monthly", "rolling"]);
-const spendScope = z.enum(["org", "workspace"]);
-const spendState = z.enum([
+export const spendPeriod = z.enum(["monthly", "rolling"]);
+export const spendScope = z.enum(["org", "workspace"]);
+export const spendState = z.enum([
   "ok",
   "threshold_50",
   "threshold_80",
@@ -14,10 +15,12 @@ const spendState = z.enum([
   "exceeded",
 ]);
 
-// One configured ceiling with its LIVE burn — the shape the app Budgets panel
-// renders per scope. Dollars are plain USD numbers (the handler converts from
-// the micro-USD the store/ClickHouse keep) so the client never juggles bigints.
-const spendBudgetStatus = z.object({
+// One configured ceiling with its LIVE burn, the shape a Budgets panel renders
+// per scope. Money is micro-units in a decimal string with its currency
+// (ADR-057 decision 2, apps/app/ARCHITECTURE.md INV-09): the store keeps
+// `limit_micros bigint`, ClickHouse keeps `cost_usd_micros`, and neither is
+// rounded through a float on the way out.
+export const spendBudgetStatus = z.object({
   /** "org" (all workspaces roll up) or "workspace" (this workspace only). */
   scope: spendScope,
   /** External handle for the ceiling row; null when no ceiling is configured yet. */
@@ -27,12 +30,12 @@ const spendBudgetStatus = z.object({
   period: spendPeriod,
   /** Trailing window length in days for `rolling`; null for `monthly`. */
   windowDays: z.number().int().positive().nullable(),
-  /** The hard ceiling in USD; null when no ceiling is configured. */
-  limitUsd: z.number().nonnegative().nullable(),
-  /** Period-to-date spend in USD. */
-  spentUsd: z.number().nonnegative(),
+  /** The hard ceiling; null when no ceiling is configured. */
+  limit: moneySchema.nullable(),
+  /** Period-to-date spend. */
+  spent: moneySchema,
   /** Linear projection of spend to the period end (monthly); equals spent for rolling. */
-  projectedUsd: z.number().nonnegative(),
+  projected: moneySchema,
   /** spent ÷ limit (0 when no limit). */
   ratio: z.number().nonnegative(),
   /** Position of spend relative to the ceiling. */
@@ -49,7 +52,7 @@ export const billingBudgetGet = registerCapability({
   name: "get_spend_budget",
   domain: "billing",
   description:
-    "Read the hard period-to-date spend ceilings governing the active scope — the org-level ceiling (covers every workspace) and this workspace's own ceiling, if configured — each with its live burn: period-to-date spend, projection to the period end, the percent-of-ceiling reached, and whether the gate is currently denying. Powers the Billing → Budgets panel. Reading your own budget is never blocked by being over it.",
+    "Read the hard period-to-date spend ceilings governing the active scope — the org-level ceiling (covers every workspace) and this workspace's own ceiling, if configured — each with its live burn in micro-units: period-to-date spend, projection to the period end, the percent-of-ceiling reached, and whether the gate is currently denying. Reading your own budget is never blocked by being over it.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],

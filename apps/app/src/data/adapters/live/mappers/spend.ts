@@ -52,7 +52,7 @@
 //   scopeId        org.organizations.slug / workspace.workspaces.slug recorded
 //   period         period (CHECK monthly | rolling)                   recorded
 //                  window_days is dropped: Budget has no field for it (promote)
-//   limit          limit_micros (bigint), via the contract's limitUsd recorded
+//   limit          limit_micros (bigint), via the contract's limit (micros) recorded
 //   spent          sumSpendMicros over token_usage for the window     derived
 //                  basis `estimated` (the same token_usage cost as above)
 //   mode           `hard`: the ceiling is enforced in invoke()        recorded
@@ -132,16 +132,17 @@ export function moneyFromMicros(
 }
 
 /**
- * Float USD (as get_spend_budget returns it, converted from bigint micros by
- * `Number(micros) / 1e6`) back to Money. Exact below MAX_EXACT_MICROS.
+ * Money as `get_spend_budget` returns it (integer micros in a decimal string,
+ * ADR-057 decision 2) to the view model's Money. Exact below MAX_EXACT_MICROS.
  */
-export function moneyFromUsd(
+export function moneyFromWire(
   field: string,
-  usd: number,
+  money: { micros: string; currency: string },
   basis?: Money["basis"],
 ): Money {
-  if (!Number.isFinite(usd)) throw new SpendContractMismatch(field, usd);
-  return moneyFromMicros(field, Math.round(usd * 1_000_000), basis);
+  if (!/^-?\d+$/.test(money.micros) || money.currency !== SPEND_CURRENCY)
+    throw new SpendContractMismatch(field, money);
+  return moneyFromMicros(field, Number(money.micros), basis);
 }
 
 /**
@@ -203,7 +204,7 @@ export function toBudget(
   status: SpendBudgetStatus,
   slugs: ScopeSlugs,
 ): Budget | null {
-  if (!status.enabled || status.limitUsd === null) return null;
+  if (!status.enabled || status.limit === null) return null;
   const scopeId = status.scope === "org" ? slugs.org : slugs.workspace;
   if (scopeId === null)
     throw new SpendContractMismatch("budgets.scopeId", status.publicId);
@@ -212,8 +213,8 @@ export function toBudget(
     scopeKind: status.scope,
     scopeId,
     period: status.period,
-    limit: moneyFromUsd(`${field}.limitUsd`, status.limitUsd),
-    spent: moneyFromUsd(`${field}.spentUsd`, status.spentUsd, "estimated"),
+    limit: moneyFromWire(`${field}.limit`, status.limit),
+    spent: moneyFromWire(`${field}.spent`, status.spent, "estimated"),
     mode: "hard",
   };
 }

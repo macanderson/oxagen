@@ -61,9 +61,9 @@ const NORMAL_BUDGET: SpendBudgetStatus = {
   enabled: true,
   period: "monthly",
   windowDays: null,
-  limitUsd: 500,
-  spentUsd: 120.5,
-  projectedUsd: 250,
+  limit: { micros: "500000000", currency: "USD" },
+  spent: { micros: "120500000", currency: "USD" },
+  projected: { micros: "250000000", currency: "USD" },
   ratio: 0.241,
   state: "ok",
   reachedThreshold: 0,
@@ -77,9 +77,9 @@ const EXCEEDED_BUDGET: SpendBudgetStatus = {
   enabled: true,
   period: "rolling",
   windowDays: 7,
-  limitUsd: 500,
-  spentUsd: 612.34,
-  projectedUsd: 612.34,
+  limit: { micros: "500000000", currency: "USD" },
+  spent: { micros: "612340000", currency: "USD" },
+  projected: { micros: "612340000", currency: "USD" },
   ratio: 1.2247,
   state: "exceeded",
   reachedThreshold: 100,
@@ -93,9 +93,9 @@ const NO_BUDGET_CONFIGURED: SpendBudgetStatus = {
   enabled: false,
   period: "monthly",
   windowDays: null,
-  limitUsd: null,
-  spentUsd: 42.1,
-  projectedUsd: 84.2,
+  limit: null,
+  spent: { micros: "42100000", currency: "USD" },
+  projected: { micros: "84200000", currency: "USD" },
   ratio: 0,
   state: "ok",
   reachedThreshold: 0,
@@ -200,11 +200,25 @@ describe("budget set — validation", () => {
   });
 
   it("rejects a non-positive --limit without calling the API", async () => {
-    const { writer, err } = memoryWriter();
-    await budgetSet({ scope: "org", period: "monthly", limit: "0" }, writer);
-    expect(process.exitCode).toBe(2);
-    expect(err.join("\n")).toContain("Invalid --limit");
-    expect(apiPutOrThrow).not.toHaveBeenCalled();
+    for (const limit of ["0", "-5", "abc", "1.2345678"]) {
+      process.exitCode = 0;
+      vi.mocked(apiPutOrThrow).mockClear();
+      const { writer, err } = memoryWriter();
+      await budgetSet({ scope: "org", period: "monthly", limit }, writer);
+      expect(process.exitCode).toBe(2);
+      expect(err.join("\n")).toContain("Invalid --limit");
+      expect(apiPutOrThrow).not.toHaveBeenCalled();
+    }
+  });
+
+  it("sends a decimal --limit as exact micros, never through a float", async () => {
+    (apiPutOrThrow as unknown as Mock).mockResolvedValueOnce(NORMAL_BUDGET);
+    const { writer } = memoryWriter();
+    await budgetSet({ scope: "org", period: "monthly", limit: "0.07" }, writer);
+    expect(apiPutOrThrow).toHaveBeenCalledWith(
+      "billing/budget",
+      expect.objectContaining({ limit: { micros: "70000", currency: "USD" } }),
+    );
   });
 
   it("rolling without --window-days fails client-side (the contract's refine, mirrored)", async () => {
@@ -262,7 +276,7 @@ describe("budget set — success", () => {
       enabled: true,
       period: "monthly",
       windowDays: undefined,
-      limitUsd: 500,
+      limit: { micros: "500000000", currency: "USD" },
     });
     const text = out.join("\n");
     expect(text).toContain(
@@ -289,7 +303,7 @@ describe("budget set — success", () => {
       enabled: false,
       period: "rolling",
       windowDays: 7,
-      limitUsd: 500,
+      limit: { micros: "500000000", currency: "USD" },
     });
   });
 

@@ -1,0 +1,50 @@
+// retire_agent — retire an agent identity (MC spec §6.2, App. E; #2956). The
+// principal is retired, never deleted, so its runs keep their identity: the
+// agent row is archived, the principal suspended, every long-lived credential
+// soft-deleted and every enrolled host revoked, in one transaction. The
+// definition file in git is not touched here; removing it is a pull request
+// through `commit_agent_definition` with an empty definition.
+//
+// A governance write on the identity, outside the metering surface:
+// `noBillingGate: true`. Roles: org Owner or Admin (INV-29).
+import { z } from "zod";
+import { registerCapability } from "../registry";
+
+export const agentRetire = registerCapability({
+  name: "retire_agent",
+  domain: "agent",
+  description:
+    "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
+  mode: "sync",
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
+  scoped: true,
+  noBillingGate: true,
+  mutates: true,
+  agent: { requiresApproval: true, riskLevel: "high", category: "identity" },
+  sensitivity: "high",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: {},
+  },
+  input: z
+    .object({
+      /** Agent public id (`agt_…`) or slug. */
+      agentId: z.string().min(1).max(128),
+      reason: z.string().max(512).optional(),
+    })
+    .strict(),
+  output: z
+    .object({
+      agentId: z.string().regex(/^agt_[0-9a-z]+$/),
+      status: z.literal("retired"),
+      revokedCredentials: z.number().int().nonnegative(),
+      revokedHosts: z.number().int().nonnegative(),
+      retiredAt: z.string().datetime({ offset: true }),
+    })
+    .strict(),
+});
+
+export type AgentRetireInput = z.output<typeof agentRetire.input>;
+export type AgentRetireOutput = z.output<typeof agentRetire.output>;

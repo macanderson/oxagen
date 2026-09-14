@@ -63,6 +63,10 @@ export const agents = agentSchema.table(
     // cross-schema FK per CLAUDE.md storage rules); provisioned by
     // agent.definition.create and soft-deleted together with the agent.
     principalId: uuid("principal_id"),
+    // The harness the agent runs under (MC spec §6.2): the identity half
+    // records it so the identities table can print it without a host row.
+    // CHECK: harness IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom').
+    harness: text("harness").notNull().default("custom"),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -93,6 +97,10 @@ export const agents = agentSchema.table(
       "agents_slug_check",
       sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
     ),
+    harnessCheck: check(
+      "agents_harness_check",
+      sql`${t.harness} IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom')`,
+    ),
   }),
 );
 
@@ -113,6 +121,19 @@ export const agentVersions = agentSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
+    // The definition of record is the file `.oxagen/agents/<slug>.toml` in the
+    // workspace's repository (ADR-057 decision 1). A version written by
+    // `commit_agent_definition` caches where that file went: its path, the
+    // digest of the file at the commit, the commit, the branch it was pushed
+    // to and the pull request that carries it, plus the file's text so the
+    // definition tab reads the record without a GitHub round trip. Null on
+    // every version the legacy `create/update_agent_def` path inserted.
+    definitionPath: text("definition_path"),
+    definitionDigest: text("definition_digest"),
+    definitionSource: text("definition_source"),
+    commitSha: text("commit_sha"),
+    branch: text("branch"),
+    pullRequestUrl: text("pull_request_url"),
     // No updatedAt by design — INSERT-only once published.
   },
   (t) => ({

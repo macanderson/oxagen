@@ -381,14 +381,14 @@ const ROUTES: ThinRoute[] = [
       enabled: true,
       period: "rolling",
       windowDays: 30,
-      limitUsd: 250,
+      limit: { micros: "250000000", currency: "USD" },
     },
     // The refinement rejects a rolling budget with no window.
     invalidBody: {
       scope: "workspace",
       enabled: true,
       period: "rolling",
-      limitUsd: 250,
+      limit: { micros: "250000000", currency: "USD" },
     },
     status: 200,
   },
