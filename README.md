@@ -365,9 +365,11 @@ variable.
 `NEXT_PUBLIC_APP_URL`/`API_URL`/`DOCS_URL` come from the registry's own
 per-environment static values, not Parameter Store. Of the client values #1182
 originally flagged, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the one still read
-by shipping code (`apps/app/src/app/[orgSlug]/billing/subscription/subscription-body.tsx`)
-with no value in Parameter Store yet — pasting the real `pk_live_…` key there
-is the one action left, and it needs a credential this repository does not
+by shipping code (`apps/app/src/app/[orgSlug]/billing/subscription/subscription-body.tsx`);
+Parameter Store now carries the shared Stripe sandbox's `pk_test_…` key for it,
+as it does for every environment until the production cutover
+(`docs/ops/stripe-sandbox-mode.md`). Swapping in a `pk_live_…` key is the
+maintainer's cutover step and needs a credential this repository does not
 hold. `NEXT_PUBLIC_POSTHOG_KEY`/`_HOST` have no reader anywhere in the tree (no
 PostHog client is wired up yet), so setting them would only bake two unused
 strings into the bundle; the Google Maps pair was never wired to a consumer
