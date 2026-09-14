@@ -1240,6 +1240,9 @@ importers:
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
+      '@oxagen/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
@@ -1255,6 +1258,9 @@ importers:
       '@oxagen/github':
         specifier: workspace:*
         version: link:../github
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../iam
       '@oxagen/ingestion':
         specifier: workspace:*
         version: link:../ingestion

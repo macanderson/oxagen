@@ -11,115 +11,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHash } from "node:crypto";
 
+// The org-role query itself is tested where it lives
+// (packages/iam/src/org-role.test.ts); here it is replaced so the predicate's
+// mapping from a role name to a yes/no is what runs.
 const mocks = vi.hoisted(() => ({
-  withTenantDb: vi.fn(),
-  gt: vi.fn((col: unknown, val: unknown) => ({ __gt: [col, val] })),
-  isNull: vi.fn((col: unknown) => ({ __isNull: col })),
+  resolveActorOrgRole: vi.fn(),
 }));
 
-// generateApiKey is pure crypto, but the module imports @oxagen/database for its
-// sibling role-resolution helpers. Pass the real module through (so no DB pool is
-// touched at import time — mirrors api.key.create.test.ts) with only
-// withTenantDb replaced, so the role queries run against a tx double.
-vi.mock("@oxagen/database", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+vi.mock("@oxagen/iam/org-role", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/iam/org-role")>();
+  return { ...real, resolveActorOrgRole: mocks.resolveActorOrgRole };
 });
 
-// Capture the expiry predicates without depending on Drizzle SQL internals.
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const real = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...real, gt: mocks.gt, isNull: mocks.isNull };
-});
-
-import { schema } from "@oxagen/database";
-import {
-  actorCanManageApiKeys,
-  generateApiKey,
-  resolveActorOrgRole,
-} from "./api-key-authz";
-
-/**
- * Tx double for the two-query role resolution: the principals lookup
- * (select→from→where→limit) then the role join (select→from→innerJoin→where→limit).
- * `whereArgs` collects both predicates so a test can inspect the second one.
- */
-function makeRoleTx(
-  principalId: string | null,
-  roleName: string | null,
-  whereArgs: unknown[],
-) {
-  let call = 0;
-  return {
-    select: () => {
-      call++;
-      const terminal = (rows: unknown[]) => ({
-        where: (predicate: unknown) => {
-          whereArgs.push(predicate);
-          return { limit: () => Promise.resolve(rows) };
-        },
-      });
-      if (call === 1) {
-        return {
-          from: () => terminal(principalId ? [{ id: principalId }] : []),
-        };
-      }
-      return {
-        from: () => ({
-          innerJoin: () => terminal(roleName ? [{ roleName }] : []),
-        }),
-      };
-    },
-  };
-}
-
-function stubRoleResolution(
-  principalId: string | null,
-  roleName: string | null,
-) {
-  const whereArgs: unknown[] = [];
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(makeRoleTx(principalId, roleName, whereArgs))),
-  );
-  return whereArgs;
-}
-
-describe("resolveActorOrgRole", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns null when the user has no active principal in the org", async () => {
-    stubRoleResolution(null, null);
-    expect(await resolveActorOrgRole("org_1", "user_1")).toBeNull();
-  });
-
-  it("returns null when the principal holds no org-scoped role", async () => {
-    stubRoleResolution("prn_1", null);
-    expect(await resolveActorOrgRole("org_1", "user_1")).toBeNull();
-  });
-
-  it("returns the assigned org role name", async () => {
-    stubRoleResolution("prn_1", "Admin");
-    expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Admin");
-  });
-
-  it("excludes expired (JIT) role assignments from the role lookup", async () => {
-    // A time-bounded Admin grant that has lapsed must stop granting Admin, the
-    // same way the kernel resolver's isExpired() treats an expired grant.
-    stubRoleResolution("prn_1", "Admin");
-    await resolveActorOrgRole("org_1", "user_1");
-
-    expect(mocks.isNull).toHaveBeenCalledWith(
-      schema.principalRoleAssignments.expiresAt,
-    );
-    const gtCall = mocks.gt.mock.calls.find(
-      ([col]) => col === schema.principalRoleAssignments.expiresAt,
-    );
-    expect(gtCall).toBeDefined();
-    expect(gtCall?.[1]).toBeInstanceOf(Date);
-  });
-});
+import { actorCanManageApiKeys, generateApiKey } from "./api-key-authz";
 
 describe("actorCanManageApiKeys", () => {
   beforeEach(() => {
@@ -135,13 +39,14 @@ describe("actorCanManageApiKeys", () => {
 
   for (const { roleName, allowed } of cases) {
     it(`role ${roleName} → ${allowed}`, async () => {
-      stubRoleResolution("prn_1", roleName);
+      mocks.resolveActorOrgRole.mockResolvedValue(roleName);
       expect(await actorCanManageApiKeys("org_1", "user_1")).toBe(allowed);
+      expect(mocks.resolveActorOrgRole).toHaveBeenCalledWith("org_1", "user_1");
     });
   }
 
   it("denies a user with no role at all", async () => {
-    stubRoleResolution("prn_1", null);
+    mocks.resolveActorOrgRole.mockResolvedValue(null);
     expect(await actorCanManageApiKeys("org_1", "user_1")).toBe(false);
   });
 });

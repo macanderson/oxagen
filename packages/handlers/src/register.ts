@@ -66,6 +66,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .apiKeyRotateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "authorize_cli",
+    async () =>
+      (await import("./auth.cli.authorize"))
+        .authCliAuthorizeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "upload_asset",
     async () =>
       (await import("./asset.upload"))

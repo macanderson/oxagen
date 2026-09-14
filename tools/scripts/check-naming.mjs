@@ -132,6 +132,8 @@ const ACTIONS = new Set([
   "sync",
   "reconcile",
   "approve",
+  // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
+  "authorize",
   "decline",
   "accept",
   "resolve",

@@ -939,7 +939,10 @@
       "file": "api.key.list.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1020,6 +1023,18 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "authorize_cli",
+      "file": "auth.cli.authorize.ts",
+      "domain": "auth",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
