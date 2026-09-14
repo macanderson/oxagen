@@ -311,9 +311,9 @@ describe("billableActionCount", () => {
 // ---------------------------------------------------------------------------
 
 describe("microCreditsForActions vs creditsForActions", () => {
-  it("prices one action at the $6 band as 0.6 of a credit in micro-credits, not 1", () => {
+  it("prices one action at the $2 band as 0.2 of a credit in micro-credits, not 1", () => {
     const micro = microCreditsForActions(1, COMMITTED_25M);
-    expect(micro).toBe(600_000n); // 0.6 credit exactly
+    expect(micro).toBe(200_000n); // 0.2 credit exactly
     expect(micro).toBeLessThan(MICRO_CREDITS_PER_CREDIT);
   });
 
@@ -321,21 +321,21 @@ describe("microCreditsForActions vs creditsForActions", () => {
     expect(creditsForActions(1, COMMITTED_25M)).toBe(1n);
   });
 
-  it("does NOT price 1000 actions at the $6 band as 1000 credits", () => {
+  it("does NOT price 1000 actions at the $2 band as 1000 credits", () => {
     // The exact failure this file exists to prevent: rounding every action up
-    // to a whole credit would charge 1000 credits for $6 of work.
+    // to a whole credit would charge 1000 credits for $2 of work.
     const micro = microCreditsForActions(1000, COMMITTED_25M);
-    expect(micro).toBe(600_000_000n); // exactly 600 credits, in micro-credits
-    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(600n);
+    expect(micro).toBe(200_000_000n); // exactly 200 credits, in micro-credits
+    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(200n);
     expect(micro).toBeLessThan(1000n * MICRO_CREDITS_PER_CREDIT);
   });
 
   it("agrees with creditsForActions once a count's worth lands on a whole credit", () => {
-    // 50 actions at the $20 band = $1.00 = exactly 100 credits.
+    // 50 actions at the $5 band = $0.25 = exactly 25 credits.
     const micro = microCreditsForActions(50, FIRST_1M);
     const credits = creditsForActions(50, FIRST_1M);
-    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(100n);
-    expect(credits).toBe(100n);
+    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(25n);
+    expect(credits).toBe(25n);
     expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(credits);
   });
 
@@ -393,14 +393,14 @@ describe("retentionCreditsForGbMonths", () => {
 
 describe("priceAnnualVolumeCredits", () => {
   it("prices the whole annual total at the single band it lands in", () => {
-    // 3M actions land in the 1m-5m ($15) band; the WHOLE 3M prices at $15,
-    // not $20 for the first million and $15 after.
+    // 3M actions land in the 1m-5m ($4) band; the WHOLE 3M prices at $4,
+    // not $5 for the first million and $4 after.
     const total = 3_000_000;
     expect(resolveActionBand(total).id).toBe("1m-5m");
     expect(priceAnnualVolumeCredits(total)).toBe(
       creditsForActions(total, M1_5M),
     );
-    expect(priceAnnualVolumeCredits(total)).toBe(4_500_000n);
+    expect(priceAnnualVolumeCredits(total)).toBe(1_200_000n);
   });
 
   it("is strictly less than pricing the total at the first band's rate (proves it is not marginal)", () => {
@@ -603,9 +603,9 @@ describe("recordGovernedAction", () => {
     // Seed the counter already at the free tier's 25,000 allowance.
     await incrementActionCounter("org-1", 25_000, 0, now);
     consumeCreditsMock.mockResolvedValueOnce({
-      chargedCents: 20n,
+      chargedCents: 5n,
       shortfallCents: 0n,
-      balanceCents: 980n,
+      balanceCents: 995n,
       carryMicroCents: 0n,
     });
 
@@ -619,12 +619,12 @@ describe("recordGovernedAction", () => {
 
     expect(result.billableActions).toBe(10);
     expect(result.band.id).toBe("first-1m");
-    expect(result.creditsCharged).toBe(20n);
+    expect(result.creditsCharged).toBe(5n);
     expect(consumeCreditsMock).toHaveBeenCalledTimes(1);
     expect(consumeCreditsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: "org-1",
-        requestedMicroCents: 20_000_000n, // 10 actions @ $20/1000 = 20 credits
+        requestedMicroCents: 5_000_000n, // 10 actions @ $5/1000 = 5 credits
         reason: CREDIT_REASONS.CONSUME_EXECUTION,
         referenceType: "governed_action",
       }),

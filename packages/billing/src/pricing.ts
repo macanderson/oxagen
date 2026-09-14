@@ -794,9 +794,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     slug: "build-v2",
     displayName: "Build",
     tier: "build",
-    includedCredits: 2_400, // $24 face value, sold for $20 → 16.7% discount
-    monthlyCents: 2_000,
-    annualCents: 20_000, // 2 months free
+    // v1 GAU pricing (2026-09-14): $199 / mo. Credits stay at 1.2 cr/¢ so the
+    // blended-margin solve is unchanged; the GAU terms (50,000 GAU / mo at
+    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    includedCredits: 23_880, // $238.80 face value, sold for $199 → 16.7% discount
+    monthlyCents: 19_900,
+    annualCents: 199_000, // 2 months free
     seats: 5,
     weight: 0.35,
     features: {
@@ -811,9 +814,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     slug: "scale-v2",
     displayName: "Scale",
     tier: "scale",
-    includedCredits: 13_200, // $132 face value, sold for $99 → 25% discount
-    monthlyCents: 9_900,
-    annualCents: 99_000, // 2 months free
+    // v1 GAU pricing (2026-09-14): $999 / mo. Credits stay at 1.33 cr/¢ so the
+    // blended-margin solve is unchanged; the GAU terms (300,000 GAU / mo at
+    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    includedCredits: 133_200, // $1,332 face value, sold for $999 → 25% discount
+    monthlyCents: 99_900,
+    annualCents: 999_000, // 2 months free
     seats: 25,
     weight: 0.2,
     features: {
