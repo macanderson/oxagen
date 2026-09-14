@@ -6,13 +6,17 @@
 // having one derived, and names the first workspace instead of getting
 // "Default". The org row, the owner membership, the workspace, its owner
 // membership, IAM bootstrap and the built-in agents share one transaction, so a
-// partial tenant cannot exist. Credits and workspace seeds run after it and are
-// recoverable, so their failure never fails sign-up.
+// partial tenant cannot exist. The workspace seeds run after it and are
+// recoverable, so their failure never fails sign-up. Nothing billing-shaped is
+// written: a new org's credit balance starts at zero (ADR-055 §3.9 item 14).
 //
 // withSystemDb is deliberate: no tenant exists yet, so no scope can be entered;
 // this call is what creates the first tenant identity.
 import "server-only";
-import { RESERVED_ORG_SLUGS, RESERVED_WORKSPACE_SLUGS } from "./agent-key";
+import {
+  RESERVED_ORG_SLUGS,
+  RESERVED_WORKSPACE_SLUGS,
+} from "@oxagen/oxagen/contracts/org.create";
 import type { OrganizationFormValue } from "./org-form";
 
 export type CreateOrganizationResult =
@@ -33,8 +37,8 @@ export async function createOrganization(
   form: OrganizationFormValue,
 ): Promise<CreateOrganizationResult> {
   // Re-checked here, not only in OrganizationForm: a route segment taken as an
-  // org or workspace slug makes that tenant unreachable, and the create_org
-  // contract does not know the app's routes yet.
+  // org or workspace slug makes that tenant unreachable. The sets live on the
+  // create_org contract, which refuses them on every surface.
   if (RESERVED_ORG_SLUGS.has(form.slug.trim()))
     return { ok: false, error: "slugReserved" };
   if (RESERVED_WORKSPACE_SLUGS.has(form.workspaceSlug.trim()))
@@ -167,10 +171,6 @@ async function afterCreate(
   logger: Logger,
 ): Promise<void> {
   const steps: Array<[string, () => Promise<unknown>]> = [
-    [
-      "grantFreeCredits",
-      async () => (await import("@oxagen/billing")).grantFreeCredits(orgId),
-    ],
     [
       "seedWorkspaceDefaultRegistrySystem",
       async () =>
