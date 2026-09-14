@@ -1,7 +1,8 @@
 // `fetch_commands`: the idle-host control poll (spec section 7.4). The host
 // reports what became of the commands it took — `received`, `acknowledged`,
-// `applied` with the frame it landed on, or `failed` with a detail — and
-// receives the queued ones with the control envelope.
+// `applied` with the frame it landed on, `expired` when the deadline passed
+// with no boundary reached, or `failed` with a detail — and receives the
+// queued ones with the control envelope.
 //
 // An acknowledgement lands only on a row that has not reached a terminal
 // status: a row Oxagen already cancelled (superseded) or expired while it
@@ -46,6 +47,7 @@ export function ackPatch(
         appliedAt: now,
         appliedAtSeq: ack.applied_at_seq ?? null,
       };
+    case "expired":
     case "failed":
       return base;
   }

@@ -191,12 +191,14 @@ export function signBundle(
  *
  * Only `queued` rows are swept: a row is Oxagen's until it leaves on the
  * wire, and the host's after. The host checks the deadline at receipt and
- * again at the boundary that would inject a steer, so every acknowledgement
- * it sends is true of the chain, and it may arrive after the clock passed
- * (a pause applied at receipt is acknowledged on the next poll; an ingest in
- * between must not turn that row `expired` and make `fetch_commands` drop
- * the `applied`). A row the host holds and never acknowledges reads
- * `expired` from `list_commands`, which derives it at read time.
+ * again at the boundary that would inject a steer, acknowledging `expired`
+ * when it passed, so every acknowledgement it sends is true of the chain,
+ * and it may arrive after the clock passed (a pause applied at receipt is
+ * acknowledged on the next poll; an ingest in between must not turn that
+ * row `expired` and make `fetch_commands` drop the `applied`).
+ * `list_commands` derives `expired` under this same predicate and no wider;
+ * a row the host holds and never acknowledges reads as recorded, with its
+ * `expiresAt` for the interface to show.
  */
 export async function expireCommands(
   tx: TachoTx,

@@ -48,7 +48,6 @@ export const tachoCommandSchema = z.enum([
   "refresh_bundle",
   "kill",
 ]);
-export type TachoCommand = z.output<typeof tachoCommandSchema>;
 /**
  * The closed status vocabulary of Mission Control spec §7.4, shared by
  * commands and messages so one delivery report reads the same whatever was
@@ -66,16 +65,17 @@ export const tachoCommandStatusSchema = z.enum([
   "expired",
   "failed",
 ]);
-export type TachoCommandStatus = z.output<typeof tachoCommandStatusSchema>;
 /**
  * The statuses a connection point is in a position to assert about itself.
- * `expired` is Oxagen's clock and `sent` is Oxagen's own act, so neither is
- * a host's to report.
+ * `expired` is among them: the host holds the deadline for a command it
+ * received, and reports the expiry that passed with no boundary reached.
+ * `sent` is Oxagen's own act and stays Oxagen's to record.
  */
 export const tachoCommandAckStatusSchema = tachoCommandStatusSchema.extract([
   "received",
   "acknowledged",
   "applied",
+  "expired",
   "failed",
 ]);
 /**

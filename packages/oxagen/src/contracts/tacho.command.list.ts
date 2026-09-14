@@ -4,10 +4,12 @@
  * §7.4 status, the mode that was requested and the mode that was achieved,
  * and `appliedAtSeq`, the frame that proves an `applied`.
  *
- * The status shown is the recorded one, with one derivation: a command that
- * has not reached a terminal status and whose expiry has passed reads
- * `expired`, so a report is right for a host that stopped polling; a host
- * that holds the row settles it with `applied` or `failed` at the boundary.
+ * The status shown is the recorded one, with one derivation: a `queued`
+ * command whose expiry has passed reads `expired`, what the host's next poll
+ * writes, so a report is right for a host that stopped polling. A command
+ * the host holds reads as recorded until the host settles it with `applied`,
+ * `expired` or `failed` at the boundary; `expiresAt` is there for the
+ * interface to show it as past expiry and awaiting the host.
  * A console read is never a governed action (ADR-052 exclusion 2):
  * `noBillingGate`.
  */

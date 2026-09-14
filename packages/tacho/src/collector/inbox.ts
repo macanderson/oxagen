@@ -5,8 +5,9 @@
  * chain for host-level commands), and is acknowledged back to the control
  * plane in the closed status vocabulary: `applied` with the seq that
  * recorded it, `received` for prompt content queued for the next boundary
- * (the hook that injects it acknowledges `applied` then), or `failed` with
- * the reason.
+ * (the hook that injects it acknowledges `applied` then), `expired` for a
+ * command already past its deadline at receipt, or `failed` with the
+ * reason.
  */
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -169,11 +170,11 @@ export async function applyCommands(
   const now = deps.now();
   for (const command of commands) {
     if (command.expires_at !== null && Date.parse(command.expires_at) < now) {
-      // `expired` is the control plane's word; the host reports that it
-      // could not apply a command whose expiry had already passed.
+      // The host holds the deadline for a command it received: one already
+      // past its expiry at receipt reached no boundary, which is `expired`.
       acknowledgements.push({
         command_id: command.id,
-        status: "failed",
+        status: "expired",
         detail: "expired before the host could apply it",
       });
       continue;

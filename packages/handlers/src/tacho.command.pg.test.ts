@@ -328,12 +328,12 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
 
     // 5. Expiry follows ownership. A resume is queued and every row of the
     //    run is backdated past its expiry. Before any poll the report derives
-    //    `expired` for both open rows. A poll with nothing to report (the
+    //    `expired` for the queued resume only; the sent pause is the host's
+    //    row and reads `sent` as recorded. A poll with nothing to report (the
     //    ingest that lands between the host's receipt and its next poll)
     //    sweeps the queued resume (Oxagen's row, never drained) and leaves
-    //    the sent pause alone (the host's row): the host applied it at
-    //    receipt, acknowledges it on the poll after, past the clock, and the
-    //    acknowledgement lands.
+    //    the sent pause alone: the host applied it at receipt, acknowledges
+    //    it on the poll after, past the clock, and the acknowledgement lands.
     const third = await dispatch({
       target: { kind: "run", id: publicIds.live },
       command: "resume",
@@ -349,7 +349,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     const statusBefore = new Map(before.commands.map((c) => [c.id, c.status]));
     expect(statusBefore.get(resumeId)).toBe("expired");
     expect(before.commands.find((c) => c.command === "pause")?.status).toBe(
-      "expired",
+      "sent",
     );
     expect(statusBefore.get(steerId)).toBe("applied");
     const pauseId =

@@ -177,7 +177,7 @@ describe("inbox", () => {
       k: "applied",
       c: "applied",
       rb: "failed",
-      x: "failed",
+      x: "expired",
       nf: "failed",
       hrb: "applied",
       hm: "received",

@@ -507,7 +507,7 @@ describe("tachod", () => {
         "cmd_pause:applied",
         "cmd_msg:received",
         "cmd_msg:applied",
-        "cmd_old:failed",
+        "cmd_old:expired",
         "cmd_lost:failed",
         "cmd_resume:applied",
       ]),

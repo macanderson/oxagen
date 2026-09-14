@@ -323,12 +323,12 @@ describe("handleHookEvent over the recorded session", () => {
     expect(open.response).toEqual({});
   });
 
-  it("drops a queued steer whose expiry passed while it waited: no injection, no frame, a failed ack", async () => {
+  it("drops a queued steer whose expiry passed while it waited: no injection, no frame, an expired ack", async () => {
     // The sequence the delivery report must stay honest over: a steer is
     // received while the session is paused, its expiry passes, the session
-    // resumes. The control plane reads the row `expired`; the boundary must
-    // not put the text in front of the model and chain a frame that says
-    // it did.
+    // resumes. The row is the host's, so the host records `expired`; the
+    // boundary must not put the text in front of the model and chain a
+    // frame that says it did.
     const { deps, registry, acks } = harness();
     const fixtures = loadFixtures();
     const start = fixtures[0] as Fixture;
@@ -370,7 +370,7 @@ describe("handleHookEvent over the recorded session", () => {
     expect(acks).toEqual([
       {
         command_id: "cmd_stale",
-        status: "failed",
+        status: "expired",
         session_uuid: record.recorder.sessionUuid,
         detail: "expired before a boundary",
       },

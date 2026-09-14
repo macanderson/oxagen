@@ -1,11 +1,12 @@
 // `list_commands`: the delivery report for one run (Mission Control spec
 // §7.4, §7.6). Every row addressed to the run, newest first, in the recorded
-// status with one derivation: a row that is not terminal and whose expiry
-// has passed reads `expired`. The sweep writes it for a `queued` row on the
-// host's next poll; for a row the host holds, this derivation is the only
-// place it appears, and it stands until the host reports what the boundary
-// did (`applied` with the frame, or `failed` because the deadline passed
-// first), so the status shown never contradicts the chain.
+// status with one derivation: a `queued` row whose expiry has passed reads
+// `expired`, the status the sweep writes on the host's next poll
+// (`expireCommands` in ./lib/tacho-host.ts, the same predicate). A row the
+// host holds (`sent`, `received`, `acknowledged`) reads as recorded whatever
+// the clock says: the host settles it with `applied`, `expired` or `failed`,
+// and until then the report carries `expiresAt` for the app to render
+// "past expiry, awaiting the host". Nothing shown is a status nobody wrote.
 //
 // The run is fenced the way `get_run` fences it: a `tse_…` id resolves only
 // in the caller's workspace, an `arun_…` id through the ledger's RLS and the
@@ -45,17 +46,13 @@ export type CommandRow = Pick<
   | "outcomeDetail"
 >;
 
-const TERMINAL: ReadonlySet<string> = new Set(
-  schema.TACHO_COMMAND_TERMINAL_OUTCOMES,
-);
-
-/** The status a report shows: the recorded one, or `expired` once the clock passed it. */
+/** The status a report shows: the recorded one, or `expired` for a `queued` row the clock passed. */
 export function reportedStatus(
   row: Pick<CommandRow, "outcome" | "expiresAt">,
   now: Date,
 ): CommandReportItem["status"] {
   if (
-    !TERMINAL.has(row.outcome) &&
+    row.outcome === "queued" &&
     row.expiresAt !== null &&
     row.expiresAt.getTime() <= now.getTime()
   ) {

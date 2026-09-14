@@ -147,9 +147,9 @@ function operatorBlock(
  *
  * An item whose deadline passed while it waited (a session paused past a
  * steer's expiry, then resumed) is dropped here: no injection, no frame, and
- * a `failed` acknowledgement. The control plane derives `expired` for that
- * row from the clock (spec §7.4), and the chain must not hold a frame the
- * report says never landed.
+ * an `expired` acknowledgement. The row is the host's once it left on the
+ * wire (spec §7.4), so the host records that its expiry passed with no
+ * boundary reached, and the chain holds no frame for it.
  */
 function drainMessages(
   record: SessionRecord,
@@ -162,7 +162,7 @@ function drainMessages(
     if (message.expiresAt !== null && Date.parse(message.expiresAt) < now) {
       deps.acknowledge?.({
         command_id: message.id,
-        status: "failed",
+        status: "expired",
         session_uuid: record.recorder.sessionUuid,
         detail: "expired before a boundary",
       });

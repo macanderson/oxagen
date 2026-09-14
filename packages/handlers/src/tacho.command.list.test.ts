@@ -1,5 +1,5 @@
 // list_commands: the delivery report reads the recorded status, derives
-// `expired` for a non-terminal row past its expiry, fences the run the way
+// `expired` only for a `queued` row past its expiry, fences the run the way
 // get_run does, and maps every column the report carries.
 import { describe, expect, it, vi } from "vitest";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
@@ -46,22 +46,30 @@ function row(over: Partial<CommandRow> = {}): CommandRow {
 }
 
 describe("reportedStatus", () => {
-  it("reads expired for a non-terminal row at or past its expiry, and the recorded status otherwise", () => {
-    for (const outcome of ["queued", "sent", "received", "acknowledged"]) {
-      expect(reportedStatus(row({ outcome, expiresAt: NOW }), NOW)).toBe(
-        "expired",
-      );
-      expect(
-        reportedStatus(
-          row({ outcome, expiresAt: new Date(NOW.getTime() + 1) }),
-          NOW,
-        ),
-      ).toBe(outcome);
-      expect(reportedStatus(row({ outcome, expiresAt: null }), NOW)).toBe(
-        outcome,
-      );
-    }
-    for (const outcome of ["applied", "cancelled", "expired", "failed"]) {
+  it("reads expired for a queued row at or past its expiry, and the recorded status otherwise", () => {
+    expect(
+      reportedStatus(row({ outcome: "queued", expiresAt: NOW }), NOW),
+    ).toBe("expired");
+    expect(
+      reportedStatus(
+        row({ outcome: "queued", expiresAt: new Date(NOW.getTime() + 1) }),
+        NOW,
+      ),
+    ).toBe("queued");
+    expect(
+      reportedStatus(row({ outcome: "queued", expiresAt: null }), NOW),
+    ).toBe("queued");
+    // A row the host holds reads as recorded past its expiry: the host
+    // settles it, and the app reads `expiresAt` for the waiting state.
+    for (const outcome of [
+      "sent",
+      "received",
+      "acknowledged",
+      "applied",
+      "cancelled",
+      "expired",
+      "failed",
+    ]) {
       expect(
         reportedStatus(
           row({ outcome, expiresAt: new Date("2020-01-01T00:00:00.000Z") }),

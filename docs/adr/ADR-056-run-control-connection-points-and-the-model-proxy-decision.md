@@ -110,14 +110,14 @@ use is this table with `command = message`.
 
 ### The collector protocol
 
-The control channel is `tacho.commands.v2`. A host acknowledges in the four
+The control channel is `tacho.commands.v2`. A host acknowledges in the five
 statuses it can assert about itself — `received`, `acknowledged`, `applied`
-(with `applied_at_seq`, the frame the effect landed on) and `failed` — and
-receives commands that carry `requested_mode`, `delivery_mode` and
-`degraded_reason`. `sent` is Oxagen's own act and `expired` Oxagen's clock;
-neither is a host's to report, and a host that finds a command past its
-expiry reports `failed` with the reason. A v1 body has no `schema` tag and
-acknowledges with `outcome`; the strict shape refuses it.
+(with `applied_at_seq`, the frame the effect landed on), `expired` (the
+deadline passed with no boundary reached, with the detail) and `failed` —
+and receives commands that carry `requested_mode`, `delivery_mode` and
+`degraded_reason`. `sent` is Oxagen's own act and stays Oxagen's to record.
+A v1 body has no `schema` tag and acknowledges with `outcome`; the strict
+shape refuses it.
 
 The `control.steer` frame of §8.2 is chained by the collector as
 `oxagen:command_applied` in the wrapper vocabulary, with
@@ -130,24 +130,29 @@ hook adapter; the proxy sets it.
 
 A new command cancels an earlier `queued` command of the same kind on the
 same run (`cancelled`, `outcome_detail = superseded_by:<id>`), so a
-correction never delivers twice. A row that is not terminal and whose
-expiry has passed reads `expired` from `list_commands`, which derives it at
-read time so the report is right for a host that stopped polling.
+correction never delivers twice.
 
 Who writes `expired` follows who owns the row. A row is Oxagen's while
 `queued` and the host's once it leaves on the wire: the poll's sweep turns a
 `queued` row past its expiry into `expired`, and never a `sent`,
-`received` or `acknowledged` one. The host holds the deadline instead — it
-refuses a command already past expiry at receipt, and a steer whose expiry
-passed while it waited for a boundary (a session paused past it, then
-resumed) is dropped at that boundary with no injection, no
-`oxagen:command_applied` frame and a `failed` acknowledgement
-(`expired before a boundary`). A pause or cancel applied at receipt is
+`received` or `acknowledged` one. `list_commands` derives `expired` under
+the sweep's own predicate — a `queued` row past its expiry — so a report
+read before the host's next poll shows what that poll writes, and a host
+that stopped polling leaves its queued rows reading `expired`. A row the
+host holds reads as recorded: the status shown is one somebody wrote, and
+the report carries `expiresAt` so an interface can show a held row as past
+expiry and awaiting the host. The host holds that deadline — it refuses a
+command already past expiry at receipt, and a steer whose expiry passed
+while it waited for a boundary (a session paused past it, then resumed) is
+dropped at that boundary with no injection, no `oxagen:command_applied`
+frame and an `expired` acknowledgement (`expired before a boundary`), the
+one word §7.4 gives that case. A pause or cancel applied at receipt is
 acknowledged on the next poll; had an ingest in between swept the row, the
 `applied` would have hit `fetch_commands`' terminal fence and the report
 would have said `expired` for a command the chain shows applied. With the
-sweep bounded to `queued`, every acknowledgement the host sends lands, and
-the frame chain and the command row cannot disagree.
+sweep and the derivation both bounded to `queued`, every acknowledgement
+the host sends lands, no row reads a status the host can overturn, and the
+frame chain and the command row cannot disagree.
 
 ## Consequences
 

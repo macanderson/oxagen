@@ -442,6 +442,20 @@ describe("ackPatch", () => {
       appliedAtSeq: 4,
     });
     expect(
+      ackPatch(
+        {
+          command_id: "c",
+          status: "expired",
+          detail: "expired before a boundary",
+        },
+        now,
+      ),
+    ).toEqual({
+      outcome: "expired",
+      outcomeDetail: "expired before a boundary",
+      updatedAt: now,
+    });
+    expect(
       ackPatch({ command_id: "c", status: "failed", detail: "gone" }, now),
     ).toEqual({ outcome: "failed", outcomeDetail: "gone", updatedAt: now });
   });

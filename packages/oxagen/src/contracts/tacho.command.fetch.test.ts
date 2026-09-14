@@ -12,14 +12,20 @@ describe("fetch_commands contract", () => {
     expect(tachoCommandFetch.noBillingGate).toBe(true);
   });
 
-  it("accepts a bare poll and acknowledgements in the four statuses a host can assert", () => {
+  it("accepts a bare poll and acknowledgements in the five statuses a host can assert", () => {
     expect(
       tachoCommandFetch.input.parse({
         schema: SCHEMA,
         host_enrollment_id: HOST,
       }).acknowledgements,
     ).toEqual([]);
-    for (const status of ["received", "acknowledged", "applied", "failed"]) {
+    for (const status of [
+      "received",
+      "acknowledged",
+      "applied",
+      "expired",
+      "failed",
+    ]) {
       const parsed = tachoCommandFetch.input.parse({
         schema: SCHEMA,
         host_enrollment_id: HOST,
@@ -39,7 +45,7 @@ describe("fetch_commands contract", () => {
       acknowledgements: [{ command_id: "x", outcome: "applied" }],
     });
     refuse({ schema: "tacho.commands.v1", host_enrollment_id: HOST });
-    for (const status of ["queued", "sent", "cancelled", "expired", "draft"]) {
+    for (const status of ["queued", "sent", "cancelled", "draft"]) {
       refuse({
         schema: SCHEMA,
         host_enrollment_id: HOST,

@@ -13,9 +13,8 @@ import { tachoCommandFetch as live } from "../tacho.command.fetch";
  *
  * The one carry change: acknowledgements speak §7.4's vocabulary. v1
  * acknowledged with `outcome` from `delivered | applied | expired | failed`,
- * two of which a host cannot honestly report — `expired` is Oxagen's clock,
- * and `delivered` is the merge of `sent`, `received` and `acknowledged` that
- * §7.4 exists to pull apart. The body now carries `schema:
+ * where `delivered` is the merge of `sent`, `received` and `acknowledged`
+ * that §7.4 exists to pull apart. The body now carries `schema:
  * "tacho.commands.v2"`, which is the collector protocol bump.
  */
 export const fetchCommands = defineTool({
@@ -34,7 +33,7 @@ export const fetchCommands = defineTool({
       from: "outcome",
       source: "fetch_tacho_commands",
       to: "status",
-      why: "the value set changes with the field: `tachoCommandOutcomeSchema` is replaced by §7.4's closed status vocabulary, narrowed to what a host can assert (`received`, `acknowledged`, `applied`, `failed`).",
+      why: "the value set changes with the field: `tachoCommandOutcomeSchema` is replaced by §7.4's closed status vocabulary, narrowed to what a host can assert (`received`, `acknowledged`, `applied`, `expired`, `failed`).",
     },
   ],
   drops: [],

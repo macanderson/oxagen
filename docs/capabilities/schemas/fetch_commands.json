@@ -39,6 +39,7 @@
                 "received",
                 "acknowledged",
                 "applied",
+                "expired",
                 "failed"
               ]
             },
