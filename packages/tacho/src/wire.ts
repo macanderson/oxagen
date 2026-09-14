@@ -176,12 +176,39 @@ export type DaemonHealth = z.output<typeof daemonHealthSchema>;
 
 export const TACHO_MAX_BATCH = 200;
 
+/** The most bytes one frame body may carry, before base64. */
+export const TACHO_MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * A frame body shipped next to its event (Mission Control spec §8.2; tacho
+ * spec §2 "Bodies are digested, content is governed"). The host redacts and
+ * digests the bytes before it chains `content.digest`; the control plane
+ * verifies the digest, refuses bytes its own detectors would redact, and
+ * writes the object whose reference the row records. A body naming an event
+ * outside the batch, or one whose digest disagrees, is refused and the event
+ * is recorded without a body.
+ */
+export const tachoBodySchema = z
+  .object({
+    event_id_idem: z.string().regex(/^evt_[0-9a-f]{64}$/),
+    content_type: z.string().min(1).max(128),
+    bytes_base64: z
+      .string()
+      .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+      .max(Math.ceil(TACHO_MAX_BODY_BYTES / 3) * 4),
+  })
+  .strict();
+
+export type TachoBody = z.output<typeof tachoBodySchema>;
+
 /** The wire batch a host ships (spec section 3.1 step 3). */
 export const tachoBatchSchema = z
   .object({
     schema: z.literal(TACHO_BATCH_SCHEMA),
     host_enrollment_id: hostEnrollmentIdSchema,
     events: z.array(tachoEventWireSchema).min(1).max(TACHO_MAX_BATCH),
+    /** Bodies for events in this batch, at most one per event. */
+    bodies: z.array(tachoBodySchema).max(TACHO_MAX_BATCH).optional(),
     daemon: daemonHealthSchema.optional(),
   })
   .strict();

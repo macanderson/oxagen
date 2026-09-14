@@ -10,13 +10,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const chInsert = vi.fn(
   async (_table: string, _rows: readonly Record<string, unknown>[]) => {},
 );
+const chSelect = vi.fn(
+  async (_q: { query: string; params?: Record<string, unknown> }) => ({
+    data: [] as unknown[],
+  }),
+);
 
 vi.mock("./tenant", () => ({
   chInsert: (table: string, rows: readonly Record<string, unknown>[]) =>
     chInsert(table, rows),
+  chSelect: (q: { query: string; params?: Record<string, unknown> }) =>
+    chSelect(q),
 }));
 
-import { insertTachoEvents, tachoEventRow } from "./tacho-events";
+import {
+  insertTachoEvents,
+  selectTachoEvents,
+  tachoEventRow,
+} from "./tacho-events";
 
 const RECEIVED_AT = new Date("2026-09-08T10:07:00.000Z");
 const SESSION = sessionUuid("tch_host", "sess-1");
@@ -51,6 +62,7 @@ function genesis(): TachoEvent {
 
 beforeEach(() => {
   chInsert.mockClear();
+  chSelect.mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(RECEIVED_AT);
 });
@@ -102,5 +114,88 @@ describe("insertTachoEvents", () => {
       RECEIVED_AT.toISOString(),
     );
     expect(row["rogue"]).toBeUndefined();
+  });
+});
+
+describe("bytes_ref is server-owned", () => {
+  it("writes the control plane's body reference over anything the producer sent", () => {
+    const row = tachoEventRow(
+      {
+        event: genesis(),
+        chainVerified: true,
+        bytesRef: "evb:v1:evidence:env:v1:" + "a".repeat(64),
+      },
+      RECEIVED_AT.toISOString(),
+    );
+    expect(row["bytes_ref"]).toBe("evb:v1:evidence:env:v1:" + "a".repeat(64));
+  });
+
+  it("leaves the column to the flattened envelope when no reference was written", () => {
+    const row = tachoEventRow(
+      { event: genesis(), chainVerified: true },
+      RECEIVED_AT.toISOString(),
+    );
+    expect(row["bytes_ref"]).toBeUndefined();
+  });
+});
+
+describe("selectTachoEvents", () => {
+  it("reads past a sequence under FINAL and maps the frame columns", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        {
+          seq: "3",
+          ts: "2026-09-08 10:06:03.000",
+          kind: "tool_call",
+          hash: "sha256:" + "b".repeat(64),
+          content_digest: "sha256:" + "c".repeat(64),
+          bytes_ref: "",
+          redactions: "[]",
+          body: '{"tool_name":"Bash"}',
+          tool_name: "Bash",
+          tool_status: "ok",
+          tool_use_id: "toolu_1",
+          model: "",
+          provider: "",
+          policy_decision: "allow",
+          cost_usd_micros: null,
+          turn_seq: "2",
+        },
+      ],
+    });
+    const rows = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 2,
+      limit: 10,
+    });
+    expect(rows).toEqual([
+      {
+        seq: 3,
+        ts: "2026-09-08 10:06:03.000",
+        kind: "tool_call",
+        hash: "sha256:" + "b".repeat(64),
+        contentDigest: "sha256:" + "c".repeat(64),
+        bytesRef: "",
+        redactions: "[]",
+        body: '{"tool_name":"Bash"}',
+        toolName: "Bash",
+        toolStatus: "ok",
+        toolUseId: "toolu_1",
+        model: "",
+        provider: "",
+        policyDecision: "allow",
+        costUsdMicros: null,
+        turnSeq: 2,
+      },
+    ]);
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain("FINAL");
+    expect(call?.query).toContain("org_id = {orgId:UUID}");
+    expect(call?.query).toContain("seq > {afterSeq:Int64}");
+    expect(call?.params).toEqual({
+      sessionUuid: SESSION,
+      afterSeq: 2,
+      limit: 10,
+    });
   });
 });
