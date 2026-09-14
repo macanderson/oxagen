@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@oxagen/database": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "ai": "7.0.14",
     "drizzle-orm": "0.45.2",
     "typescript": "6.0.3",

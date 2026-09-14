@@ -62,7 +62,25 @@
  */
 import { sql, type SQL } from "drizzle-orm";
 import { withTenantDb, type Tx } from "@oxagen/database";
+import { buildArchiveSegment, type Redaction } from "@oxagen/tacho";
 import type { PlatformSurface } from "./surface";
+import {
+  type AttemptEventBodyInput,
+  archiveFrameOf,
+  bodyRetainedByPolicy,
+  deriveCompletenessGaps,
+  digestOnlyColumns,
+  type FrameBodyColumns,
+  gradeSealedAttempt,
+  NO_BODY,
+  type PreparedFrameBody,
+  prepareFrameBody,
+  retainedColumns,
+  type RetentionPolicyBinding,
+  type RunArchiveStore,
+  type RunBodyStore,
+  type SealedFrameRow,
+} from "./frame-body";
 import {
   assertRunRowMatchesSpec,
   runSpecV2Digest,
@@ -162,6 +180,12 @@ export interface CreateAttemptInput {
   producerId: string;
   engine: ResolvedEngineIdentity;
   resumedFrom?: AttemptProvenance;
+  /**
+   * A fork replay's branch point (spec §8.4 `fork`): the run-global sequence,
+   * as a decimal string, up to which the recording replays. Requires
+   * `resumedFrom`, the attempt that recorded that frame.
+   */
+  forkedFromRunSeq?: string;
 }
 
 /** A newly created attempt, as `createAttempt` returns it. */
@@ -175,6 +199,7 @@ export interface CreatedAttempt {
   maxAttempts: number;
   engine: ResolvedEngineIdentity;
   resumedFrom: AttemptProvenance | null;
+  forkedFromRunSeq: string | null;
 }
 
 /**
@@ -197,6 +222,13 @@ export interface AttemptEventInput {
   encryptedPayloadRef?: string;
   /** Required with `encryptedPayloadRef`; derived from `payload` otherwise. */
   payloadDigest?: string;
+  /**
+   * The content the frame is about (spec §8.2): redacted, digested and,
+   * when the run's pinned retention policy keeps the frame's content class,
+   * written through the body store. A replayed event carries the same
+   * bytes; the row already holds their digest.
+   */
+  body?: AttemptEventBodyInput;
 }
 
 export interface AppendAttemptBatchInput {
@@ -245,6 +277,8 @@ export interface AttemptEventReadRecord {
   encryptedPayloadRef: string | null;
   observedAt: Date;
   recordedAt: Date;
+  /** The frame's content as recorded: a digest, and a reference when retained. */
+  body: FrameBodyColumns;
 }
 
 /** Terminal statuses an attempt seal may carry. */
@@ -309,6 +343,14 @@ export interface RunStoreOptions {
    * a trace until the real sink is wired.
    */
   securityEvents?: RunSecurityEventSink;
+  /**
+   * Where retained bodies go. Required to append a frame whose body the
+   * run's policy keeps; a deployment that retains content and has no store
+   * fails the append rather than silently grading the run down.
+   */
+  bodies?: RunBodyStore;
+  /** Where the seal's archive segment goes. Required to seal an attempt. */
+  archive?: RunArchiveStore;
 }
 
 // ── Read projections ─────────────────────────────────────────────────────────
@@ -351,6 +393,7 @@ export interface AttemptRecord {
   producerId: string;
   engine: ResolvedEngineIdentity;
   resumedFrom: AttemptProvenance | null;
+  forkedFromRunSeq: string | null;
   claimedAt: Date;
   /** Present once the attempt is sealed; null while it is still open. */
   seal: AttemptSealRecord | null;
@@ -367,6 +410,11 @@ export interface AttemptSealRecord {
   finalEventDigest: string | null;
   eventStreamDigest: string;
   sealedAt: Date;
+  /** Null on a seal written before the recorder graded (ADR-057). */
+  replayGrade: string | null;
+  completenessGaps: string[];
+  merkleRoot: string | null;
+  archiveSegmentRef: string | null;
 }
 
 // ── The store surface ────────────────────────────────────────────────────────
@@ -592,6 +640,7 @@ export interface AttemptRow {
   engine_build_digest: string;
   resumed_from_attempt_id: string | null;
   resumed_from_attempt_public_id: string | null;
+  forked_from_run_seq: string | number | null;
   claimed_at: string | Date;
   seal_id: string | null;
   terminal_status: string | null;
@@ -602,6 +651,17 @@ export interface AttemptRow {
   final_event_digest: string | null;
   event_stream_digest: string | null;
   sealed_at: string | Date | null;
+  replay_grade: string | null;
+  completeness_gaps: unknown | null;
+  merkle_root: string | null;
+  archive_segment_ref: string | null;
+}
+
+/** The gaps column as a string array; anything else is an empty list. */
+function gapsOf(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
 }
 
 /** Map one attempt row (with its optional seal) to the public projection. */
@@ -625,6 +685,8 @@ export function mapAttemptRow(row: AttemptRow): AttemptRecord {
             attemptPublicId: row.resumed_from_attempt_public_id,
           }
         : null,
+    forkedFromRunSeq:
+      row.forked_from_run_seq === null ? null : String(row.forked_from_run_seq),
     claimedAt: toDate(row.claimed_at),
     seal:
       row.seal_id !== null && row.event_stream_digest !== null
@@ -642,6 +704,10 @@ export function mapAttemptRow(row: AttemptRow): AttemptRecord {
             finalEventDigest: row.final_event_digest ?? null,
             eventStreamDigest: row.event_stream_digest,
             sealedAt: toDate(row.sealed_at ?? row.claimed_at),
+            replayGrade: row.replay_grade ?? null,
+            completenessGaps: gapsOf(row.completeness_gaps),
+            merkleRoot: row.merkle_root ?? null,
+            archiveSegmentRef: row.archive_segment_ref ?? null,
           }
         : null,
   };
@@ -660,6 +726,8 @@ export interface PreparedAttemptEvent {
   payload: unknown | null;
   encryptedPayloadRef: string | null;
   observedAt: string;
+  /** The redacted body, or null when the producer sent none. */
+  body: PreparedFrameBody | null;
 }
 
 /**
@@ -722,6 +790,7 @@ export function prepareAttemptEvent(
     payload,
     encryptedPayloadRef,
     observedAt: event.observedAt,
+    body: event.body === undefined ? null : prepareFrameBody(event.body),
   };
 }
 
@@ -794,7 +863,9 @@ export interface ExistingAttemptEventRow {
  * `reconcileReplayedEvents` needs, plus the three fields the stream digest
  * commits to.
  */
-export interface AttemptEventStateRow extends ExistingAttemptEventRow {
+export interface AttemptEventStateRow
+  extends ExistingAttemptEventRow,
+    SealedFrameRow {
   event_schema_version: string;
   event_type: string;
   payload_digest: string;
@@ -937,6 +1008,32 @@ export interface LockedAttemptRow {
   workspace_id: string;
   attempt_number: number | string;
   seal_id: string | null;
+  /** The run's pinned retention policy (`agent_runs.retention_policy_id`). */
+  retention_mode: string | null;
+  retained_content_classes: readonly string[] | string | null;
+}
+
+/**
+ * `text[]` arrives as a JS array from the driver, or as Postgres' brace form
+ * from a raw execute; a run with no pinned policy retains nothing.
+ */
+export function retentionPolicyOf(
+  row: LockedAttemptRow,
+): RetentionPolicyBinding {
+  const raw = row.retained_content_classes;
+  const classes = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw
+          .replace(/^\{|\}$/g, "")
+          .split(",")
+          .map((v) => v.replace(/^"|"$/g, ""))
+          .filter((v) => v.length > 0)
+      : [];
+  return {
+    mode: row.retention_mode ?? "digest_only",
+    retainedContentClasses: classes,
+  };
 }
 
 /**
@@ -1076,6 +1173,7 @@ export interface InsertAttemptInput {
   producerId: string;
   engine: ResolvedEngineIdentity;
   resumedFrom: AttemptProvenance | null;
+  forkedFromRunSeq: string | null;
 }
 
 /**
@@ -1090,7 +1188,8 @@ export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
     INSERT INTO agent.agent_run_attempts (
       public_id, org_id, workspace_id, run_id, attempt_number, worker_id,
       engine_name, engine_version, engine_build_digest,
-      resumed_from_attempt_id, resumed_from_attempt_public_id
+      resumed_from_attempt_id, resumed_from_attempt_public_id,
+      forked_from_run_seq
     )
     VALUES (
       ${input.publicId},
@@ -1103,7 +1202,8 @@ export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
       ${input.engine.version},
       ${input.engine.buildDigest},
       ${resumedFrom?.attemptId ?? null}::uuid,
-      ${resumedFrom?.attemptPublicId ?? null}
+      ${resumedFrom?.attemptPublicId ?? null},
+      ${input.forkedFromRunSeq}::bigint
     )
     RETURNING id, public_id, attempt_number
   `;
@@ -1155,9 +1255,13 @@ export function buildLockAttemptForWriteSql(attemptId: string): SQL {
       a.org_id,
       a.workspace_id,
       a.attempt_number,
-      s.id            AS seal_id
+      s.id            AS seal_id,
+      rpv.mode        AS retention_mode,
+      rpv.retained_content_classes
     FROM agent.agent_run_attempts a
     JOIN locked lk ON lk.id = a.run_id
+    JOIN agent.agent_runs r ON r.id = a.run_id
+    LEFT JOIN evidence.retention_policy_versions rpv ON rpv.id = r.retention_policy_id
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
     WHERE a.id = ${attemptId}::uuid
   `;
@@ -1173,7 +1277,9 @@ export function buildSelectAttemptEventStateSql(attemptId: string): SQL {
   return sql`
     SELECT
       id, attempt_seq, run_seq::text AS run_seq,
-      event_schema_version, event_type, payload_digest, event_digest
+      event_schema_version, event_type, stage, payload_digest, event_digest,
+      payload_inline, encrypted_payload_ref, observed_at,
+      body_ref, body_digest, body_bytes, redactions, fidelity
     FROM agent.agent_run_events
     WHERE event_record_version = 2
       AND attempt_id = ${attemptId}::uuid
@@ -1200,6 +1306,8 @@ export function buildAllocateRunSeqSql(runId: string, count: number): SQL {
 
 export interface AttemptEventInsertRow extends PreparedAttemptEvent {
   runSeq: string;
+  /** The body columns after the retention decision and the store write. */
+  bodyColumns: FrameBodyColumns;
 }
 
 /**
@@ -1223,7 +1331,12 @@ export function buildInsertAttemptEventsSql(
       ${e.payloadDigest}, ${e.eventDigest},
       ${e.payload === null ? null : JSON.stringify(e.payload)}::jsonb,
       ${e.encryptedPayloadRef},
-      ${e.observedAt}::timestamptz
+      ${e.observedAt}::timestamptz,
+      ${e.bodyColumns.bodyRef},
+      ${e.bodyColumns.bodyDigest},
+      ${e.bodyColumns.bodyBytes},
+      ${e.bodyColumns.redactions === null ? null : JSON.stringify(e.bodyColumns.redactions)}::jsonb,
+      ${e.bodyColumns.fidelity}
     )`,
   );
   return sql`
@@ -1232,7 +1345,8 @@ export function buildInsertAttemptEventsSql(
       attempt_id, run_seq, attempt_seq,
       event_schema_version, event_type, stage,
       payload_digest, event_digest,
-      payload_inline, encrypted_payload_ref, observed_at
+      payload_inline, encrypted_payload_ref, observed_at,
+      body_ref, body_digest, body_bytes, redactions, fidelity
     )
     VALUES ${sql.join(rows, sql`, `)}
     RETURNING id, attempt_seq, run_seq::text AS run_seq
@@ -1252,6 +1366,10 @@ export interface InsertSealInput {
   finalEventDigest: string | null;
   eventStreamDigest: string;
   sealerId: string;
+  replayGrade: string;
+  completenessGaps: readonly string[];
+  merkleRoot: string;
+  archiveSegmentRef: string;
 }
 
 /**
@@ -1266,7 +1384,8 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
     INSERT INTO agent.agent_run_attempt_seals (
       org_id, workspace_id, run_id, attempt_id, terminal_status, reason_code,
       event_count, final_run_seq, final_attempt_seq, final_event_digest,
-      event_stream_digest, sealer_kind, sealer_worker_id
+      event_stream_digest, sealer_kind, sealer_worker_id,
+      replay_grade, completeness_gaps, merkle_root, archive_segment_ref
     )
     VALUES (
       ${input.orgId}::uuid,
@@ -1281,7 +1400,11 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.finalEventDigest},
       ${input.eventStreamDigest},
       'ingress',
-      ${input.sealerId}
+      ${input.sealerId},
+      ${input.replayGrade},
+      ${JSON.stringify(input.completenessGaps)}::jsonb,
+      ${input.merkleRoot},
+      ${input.archiveSegmentRef}
     )
     RETURNING id
   `;
@@ -1327,10 +1450,12 @@ export function buildListRunAttemptsSql(runId: string): SQL {
     SELECT
       a.id, a.public_id, a.run_id, a.attempt_number, a.worker_id,
       a.engine_name, a.engine_version, a.engine_build_digest,
-      a.resumed_from_attempt_id, a.resumed_from_attempt_public_id, a.claimed_at,
+      a.resumed_from_attempt_id, a.resumed_from_attempt_public_id,
+      a.forked_from_run_seq::text AS forked_from_run_seq, a.claimed_at,
       s.id AS seal_id, s.terminal_status, s.reason_code, s.event_count,
       s.final_run_seq::text AS final_run_seq, s.final_attempt_seq,
-      s.final_event_digest, s.event_stream_digest, s.sealed_at
+      s.final_event_digest, s.event_stream_digest, s.sealed_at,
+      s.replay_grade, s.completeness_gaps, s.merkle_root, s.archive_segment_ref
     FROM agent.agent_run_attempts a
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
     WHERE a.run_id = ${runId}::uuid
@@ -1350,6 +1475,7 @@ export function buildReadAttemptEventsSinceSql(
       e.event_schema_version, e.event_type, e.stage,
       e.payload_digest, e.event_digest, e.payload_inline,
       e.encrypted_payload_ref, e.observed_at, e.created_at,
+      e.body_ref, e.body_digest, e.body_bytes, e.redactions, e.fidelity,
       a.public_id AS attempt_public_id
     FROM agent.agent_run_events e
     JOIN agent.agent_run_attempts a ON a.id = e.attempt_id
@@ -1377,6 +1503,31 @@ export interface AttemptEventReadRow {
   encrypted_payload_ref: string | null;
   observed_at: string | Date;
   created_at: string | Date;
+  body_ref: string | null;
+  body_digest: string | null;
+  body_bytes: number | string | null;
+  redactions: unknown | null;
+  fidelity: string;
+}
+
+/** The body columns as the row holds them; a pre-recorder row has none. */
+export function mapFrameBodyColumns(row: {
+  body_ref: string | null;
+  body_digest: string | null;
+  body_bytes: number | string | null;
+  redactions: unknown | null;
+  fidelity: string;
+}): FrameBodyColumns {
+  if (row.body_digest === null) return NO_BODY;
+  return {
+    bodyRef: row.body_ref,
+    bodyDigest: row.body_digest,
+    bodyBytes: row.body_bytes === null ? null : Number(row.body_bytes),
+    redactions: Array.isArray(row.redactions)
+      ? (row.redactions as Redaction[])
+      : [],
+    fidelity: row.fidelity === "full" ? "full" : "digest_only",
+  };
 }
 
 export function mapAttemptEventReadRow(
@@ -1397,6 +1548,7 @@ export function mapAttemptEventReadRow(
     encryptedPayloadRef: row.encrypted_payload_ref ?? null,
     observedAt: toDate(row.observed_at),
     recordedAt: toDate(row.created_at),
+    body: mapFrameBodyColumns(row),
   };
 }
 
@@ -1414,6 +1566,39 @@ async function readAttemptStateInTx(
 }
 
 /**
+ * The body columns one new row gets: nothing when the producer sent no body;
+ * the digest alone when the pinned policy does not keep the frame's content
+ * class; the store's reference when it does. A policy that keeps content in a
+ * deployment with no body store is a misconfiguration the append reports
+ * rather than a downgrade it records.
+ */
+async function resolveBodyColumns(
+  attempt: LockedAttemptRow,
+  policy: RetentionPolicyBinding,
+  event: PreparedAttemptEvent,
+  bodies: RunBodyStore | undefined,
+): Promise<FrameBodyColumns> {
+  if (event.body === null) return NO_BODY;
+  if (!bodyRetainedByPolicy(event.eventType, policy)) {
+    return digestOnlyColumns(event.body);
+  }
+  if (!bodies) {
+    throw new RunStoreStateError(
+      `run ${attempt.run_id} retains ${event.eventType} bodies but the ledger has no body store`,
+    );
+  }
+  const { ref } = await bodies.put({
+    orgId: attempt.org_id,
+    workspaceId: attempt.workspace_id,
+    runId: attempt.run_id,
+    digest: event.body.digest,
+    contentType: event.body.contentType,
+    bytes: event.body.bytes,
+  });
+  return retainedColumns(event.body, ref);
+}
+
+/**
  * Append a prepared batch against an ALREADY LOCKED, already-validated attempt,
  * inside the caller's transaction.
  *
@@ -1428,9 +1613,11 @@ async function appendPreparedBatchInTx(
   state: AttemptEventState,
   durable: readonly AttemptEventStateRow[],
   prepared: readonly PreparedAttemptEvent[],
+  bodies: RunBodyStore | undefined,
 ): Promise<AppendAttemptBatchResult> {
   const attemptId = attempt.attempt_id;
   const plan = planAttemptBatch(attemptId, state.lastAttemptSeq, prepared);
+  const policy = retentionPolicyOf(attempt);
 
   const replayed =
     plan.replays.length > 0
@@ -1449,9 +1636,18 @@ async function appendPreparedBatchInTx(
       );
     }
     const base = BigInt(firstRunSeq);
+    // Bodies are written before the rows that reference them, inside the
+    // transaction: a rollback leaves a content-addressed object nobody
+    // references, which the next append of the same bytes reuses.
+    const bodyColumns = await Promise.all(
+      plan.appends.map((event) =>
+        resolveBodyColumns(attempt, policy, event, bodies),
+      ),
+    );
     const rows: AttemptEventInsertRow[] = plan.appends.map((event, index) => ({
       ...event,
       runSeq: (base + BigInt(index)).toString(),
+      bodyColumns: bodyColumns[index] as FrameBodyColumns,
     }));
     const insert = buildInsertAttemptEventsSql(
       attempt.run_id,
@@ -1519,6 +1715,9 @@ interface SealTransactionInput {
   finalEventDigest: string | null;
   eventStreamDigest: string;
   sealerId: string;
+  /** Every durable row of the attempt, terminal event included. */
+  rows: readonly AttemptEventStateRow[];
+  archive: RunArchiveStore | undefined;
 }
 
 /**
@@ -1532,6 +1731,31 @@ async function sealAttemptInTx(
   input: SealTransactionInput,
 ): Promise<SealedAttemptHandle> {
   const { attempt } = input;
+
+  // The replay evidence (spec §8.3, §8.4): the gaps the rows show, the grade
+  // they earn, and the segment and root that commit to every frame. The
+  // segment is written before the seal row that names it, inside the
+  // transaction; a rollback leaves an unreferenced object.
+  if (!input.archive) {
+    throw new RunStoreStateError(
+      `attempt ${attempt.attempt_id} cannot seal: the ledger has no archive store`,
+    );
+  }
+  const completenessGaps = deriveCompletenessGaps({
+    rows: input.rows,
+    policy: retentionPolicyOf(attempt),
+    terminalStatus: input.terminalStatus,
+  });
+  const replayGrade = gradeSealedAttempt(completenessGaps);
+  const segment = buildArchiveSegment(input.rows.map(archiveFrameOf));
+  const { ref: archiveSegmentRef } = await input.archive.putSegment({
+    orgId: attempt.org_id,
+    workspaceId: attempt.workspace_id,
+    runId: attempt.run_id,
+    attemptId: attempt.attempt_id,
+    digest: segment.segmentDigest,
+    bytes: segment.bytes,
+  });
 
   const sealRows = (await tx.execute(
     buildInsertAttemptSealSql({
@@ -1547,6 +1771,10 @@ async function sealAttemptInTx(
       finalEventDigest: input.finalEventDigest,
       eventStreamDigest: input.eventStreamDigest,
       sealerId: input.sealerId,
+      replayGrade,
+      completenessGaps,
+      merkleRoot: segment.merkleRoot,
+      archiveSegmentRef,
     }),
   )) as unknown as Array<{ id: string }>;
   const seal = sealRows[0];
@@ -1657,6 +1885,8 @@ export function createPostgresRunStore(
   options: RunStoreOptions = {},
 ): RunStore {
   const securityEvents = options.securityEvents ?? CONSOLE_SECURITY_EVENT_SINK;
+  const bodies = options.bodies;
+  const archive = options.archive;
   return {
     async createRun(input) {
       const publicId = generateRunPublicId();
@@ -1723,6 +1953,7 @@ export function createPostgresRunStore(
             producerId: input.producerId,
             engine: input.engine,
             resumedFrom: input.resumedFrom ?? null,
+            forkedFromRunSeq: input.forkedFromRunSeq ?? null,
           }),
         )) as unknown as Array<{
           id: string;
@@ -1755,6 +1986,7 @@ export function createPostgresRunStore(
           maxAttempts,
           engine: input.engine,
           resumedFrom: input.resumedFrom ?? null,
+          forkedFromRunSeq: input.forkedFromRunSeq ?? null,
         };
       });
     },
@@ -1785,7 +2017,14 @@ export function createPostgresRunStore(
             tx,
             input.attemptId,
           );
-          return appendPreparedBatchInTx(tx, attempt, state, rows, prepared);
+          return appendPreparedBatchInTx(
+            tx,
+            attempt,
+            state,
+            rows,
+            prepared,
+            bodies,
+          );
         });
       } catch (err) {
         // Reported AFTER the transaction rolled back, deliberately: a sink
@@ -1848,10 +2087,19 @@ export function createPostgresRunStore(
 
         const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
         const appended = terminalEvent
-          ? await appendPreparedBatchInTx(tx, attempt, state, rows, [
-              terminalEvent,
-            ])
+          ? await appendPreparedBatchInTx(
+              tx,
+              attempt,
+              state,
+              rows,
+              [terminalEvent],
+              bodies,
+            )
           : null;
+        // Re-read so the segment carries the terminal event just appended.
+        const sealedRows = appended
+          ? (await readAttemptStateInTx(tx, input.attemptId)).rows
+          : rows;
 
         const eventCount = appended ? appended.eventCount : state.eventCount;
         const hasEvents = eventCount > 0;
@@ -1876,6 +2124,8 @@ export function createPostgresRunStore(
             ? appended.eventStreamDigest
             : state.eventStreamDigest,
           sealerId: input.sealerId,
+          rows: sealedRows,
+          archive,
         });
 
         await tx.execute(

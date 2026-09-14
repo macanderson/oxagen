@@ -58,11 +58,14 @@ import {
   type AttemptEventStateRow,
   type AttemptRow,
   type LockedAttemptRow,
+  retentionPolicyOf,
   type PreparedAttemptEvent,
   type RunSecurityEventSink,
   type RunSummaryRow,
   type RunV2IdentityRow,
 } from "./run-store";
+import { NO_BODY } from "./frame-body";
+import { digestBytes, readArchiveSegment } from "@oxagen/tacho";
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
@@ -242,7 +245,49 @@ function makeAttemptRow(
     workspace_id: UUID_WS,
     attempt_number: 1,
     seal_id: null,
+    retention_mode: "content_exact",
+    retained_content_classes: ["tool_call", "model_call"],
     ...overrides,
+  };
+}
+
+/** A fake body store: records every put and answers a content-addressed ref. */
+function fakeBodyStore() {
+  const puts: Array<{
+    digest: string;
+    bytes: Uint8Array;
+    contentType: string;
+  }> = [];
+  return {
+    puts,
+    store: {
+      put: vi.fn(
+        async (input: {
+          digest: string;
+          bytes: Uint8Array;
+          contentType: string;
+        }) => {
+          puts.push(input);
+          return { ref: `evb:v1:test:${input.digest.slice(7)}` };
+        },
+      ),
+    },
+  };
+}
+
+/** A fake archive store: records the segment and answers a ref. */
+function fakeArchiveStore() {
+  const segments: Array<{ digest: string; bytes: Uint8Array }> = [];
+  return {
+    segments,
+    store: {
+      putSegment: vi.fn(
+        async (input: { digest: string; bytes: Uint8Array }) => {
+          segments.push(input);
+          return { ref: `evidence/segment/${input.digest.slice(7)}` };
+        },
+      ),
+    },
   };
 }
 
@@ -283,8 +328,17 @@ function durableRow(
     run_seq: runSeq,
     event_schema_version: prepared.eventSchemaVersion,
     event_type: prepared.eventType,
+    stage: prepared.stage,
     payload_digest: prepared.payloadDigest,
     event_digest: prepared.eventDigest,
+    payload_inline: prepared.payload,
+    encrypted_payload_ref: prepared.encryptedPayloadRef,
+    observed_at: prepared.observedAt,
+    body_ref: null,
+    body_digest: null,
+    body_bytes: null,
+    redactions: null,
+    fidelity: "digest_only",
   };
 }
 
@@ -427,6 +481,7 @@ describe("mapAttemptRow", () => {
     engine_build_digest: SHA_1,
     resumed_from_attempt_id: null,
     resumed_from_attempt_public_id: null,
+    forked_from_run_seq: null,
     claimed_at: "2026-07-21T12:00:00.000Z",
     seal_id: null,
     terminal_status: null,
@@ -437,6 +492,10 @@ describe("mapAttemptRow", () => {
     final_event_digest: null,
     event_stream_digest: null,
     sealed_at: null,
+    replay_grade: null,
+    completeness_gaps: null,
+    merkle_root: null,
+    archive_segment_ref: null,
   };
 
   it("projects an open attempt with no seal and no provenance", () => {
@@ -537,6 +596,11 @@ describe("mapAttemptEventReadRow", () => {
       encrypted_payload_ref: null,
       observed_at: OBSERVED_AT,
       created_at: "2026-07-21T12:00:02.000Z",
+      body_ref: null,
+      body_digest: null,
+      body_bytes: null,
+      redactions: null,
+      fidelity: "digest_only",
     });
     expect(record.runSeq).toBe("9007199254740993");
     expect(record.attemptSeq).toBe(4);
@@ -562,6 +626,11 @@ describe("mapAttemptEventReadRow", () => {
       encrypted_payload_ref: BLOB_REF,
       observed_at: new Date(OBSERVED_AT),
       created_at: new Date(OBSERVED_AT),
+      body_ref: null,
+      body_digest: null,
+      body_bytes: null,
+      redactions: null,
+      fidelity: "digest_only",
     });
     expect(record.payload).toBeNull();
     expect(record.encryptedPayloadRef).toBe(BLOB_REF);
@@ -973,6 +1042,7 @@ describe("SQL builders", () => {
           attemptId: UUID_A,
           attemptPublicId: PRIOR_ATTEMPT_PUBLIC_ID,
         },
+        forkedFromRunSeq: null,
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempts");
@@ -994,9 +1064,11 @@ describe("SQL builders", () => {
         producerId: "drain-1",
         engine: ENGINE,
         resumedFrom: null,
+        forkedFromRunSeq: null,
       }),
     );
-    expect(params.filter((p) => p === null)).toHaveLength(2);
+    // Both provenance halves and the fork sequence.
+    expect(params.filter((p) => p === null)).toHaveLength(3);
   });
 
   it("buildMarkRunAttemptedSql moves only operational columns", () => {
@@ -1046,7 +1118,11 @@ describe("SQL builders", () => {
       UUID_ORG,
       UUID_WS,
       UUID_ATTEMPT,
-      prepared.map((e, i) => ({ ...e, runSeq: String(i + 5) })),
+      prepared.map((e, i) => ({
+        ...e,
+        runSeq: String(i + 5),
+        bodyColumns: NO_BODY,
+      })),
     );
     const { sql: text, params } = compile(query as SQL);
     expect(text).not.toContain("ON CONFLICT");
@@ -1082,6 +1158,10 @@ describe("SQL builders", () => {
         finalEventDigest: SHA_2,
         eventStreamDigest: SHA_3,
         sealerId: "drain-1",
+        replayGrade: "view",
+        completenessGaps: ["tool_bodies"],
+        merkleRoot: SHA_1,
+        archiveSegmentRef: "evidence/segment/abc",
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
@@ -1252,6 +1332,7 @@ describe("createAttempt", () => {
       maxAttempts: 3,
       engine: ENGINE,
       resumedFrom: null,
+      forkedFromRunSeq: null,
     });
     expect(ranSql(executed, MARK_ATTEMPTED)).toBe(true);
   });
@@ -1615,7 +1696,9 @@ describe("sealAttempt", () => {
       ...SEAL_ROUTES,
     ]);
     useTx(tx);
-    const handle = await createPostgresRunStore().sealAttempt({
+    const handle = await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
       attemptId: UUID_ATTEMPT,
       terminalStatus: "completed",
       terminalEvent: terminalEvent(1),
@@ -1651,7 +1734,9 @@ describe("sealAttempt", () => {
       ...SEAL_ROUTES,
     ]);
     useTx(tx);
-    const handle = await createPostgresRunStore().sealAttempt({
+    const handle = await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
       attemptId: UUID_ATTEMPT,
       terminalStatus: "abandoned",
       reasonCode: "producer_gone",
@@ -1678,7 +1763,9 @@ describe("sealAttempt", () => {
       ...SEAL_ROUTES,
     ]);
     useTx(tx);
-    const handle = await createPostgresRunStore().sealAttempt({
+    const handle = await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
       attemptId: UUID_ATTEMPT,
       terminalStatus: "completed",
       sealerId: "drain-1",
@@ -1709,7 +1796,9 @@ describe("sealAttempt", () => {
       },
     ]);
     useTx(tx);
-    const handle = await createPostgresRunStore().sealAttempt({
+    const handle = await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
       attemptId: UUID_ATTEMPT,
       terminalStatus: "completed",
       sealerId: "drain-2",
@@ -1731,11 +1820,13 @@ describe("sealAttempt", () => {
     ]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "completed",
-        sealerId: "drain-1",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "completed",
+          sealerId: "drain-1",
+        },
+      ),
     ).rejects.toThrow(/no finalization grant or obligation/);
   });
 
@@ -1743,12 +1834,14 @@ describe("sealAttempt", () => {
     const { tx, execute } = makeRoutingTx([]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "completed",
-        terminalEvent: toolEvent(1),
-        sealerId: "drain-1",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "completed",
+          terminalEvent: toolEvent(1),
+          sealerId: "drain-1",
+        },
+      ),
     ).rejects.toThrow(/is not a terminal-stage event/);
     expect(execute).not.toHaveBeenCalled();
   });
@@ -1757,11 +1850,13 @@ describe("sealAttempt", () => {
     const { tx } = makeRoutingTx([]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "completed",
-        sealerId: "drain-1",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "completed",
+          sealerId: "drain-1",
+        },
+      ),
     ).rejects.toBeInstanceOf(AttemptNotWritableError);
   });
 
@@ -1772,12 +1867,14 @@ describe("sealAttempt", () => {
     ]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "failed",
-        sealerId: "drain-1",
-        error: "boom",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "failed",
+          sealerId: "drain-1",
+          error: "boom",
+        },
+      ),
     ).rejects.toThrow(/seal insert returned no row/);
   });
 
@@ -1789,11 +1886,13 @@ describe("sealAttempt", () => {
     ]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "completed",
-        sealerId: "drain-1",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "completed",
+          sealerId: "drain-1",
+        },
+      ),
     ).rejects.toThrow(/finalization grant insert returned no row/);
   });
 
@@ -1806,11 +1905,13 @@ describe("sealAttempt", () => {
     ]);
     useTx(tx);
     await expect(
-      createPostgresRunStore().sealAttempt({
-        attemptId: UUID_ATTEMPT,
-        terminalStatus: "completed",
-        sealerId: "drain-1",
-      }),
+      createPostgresRunStore({ archive: fakeArchiveStore().store }).sealAttempt(
+        {
+          attemptId: UUID_ATTEMPT,
+          terminalStatus: "completed",
+          sealerId: "drain-1",
+        },
+      ),
     ).rejects.toThrow(/finalization obligation insert returned no row/);
   });
 });
@@ -2002,5 +2103,306 @@ describe("read side", () => {
     expect(
       await createPostgresRunStore().getFinalizationHandle(UUID_ATTEMPT),
     ).toBeNull();
+  });
+});
+
+// ── Frame bodies and the seal's replay evidence (ADR-057) ────────────────────
+
+const enc = new TextEncoder();
+
+function toolEventWithBody(attemptSeq: number, text: string) {
+  return {
+    ...toolEvent(attemptSeq, `call_${attemptSeq}`),
+    body: { contentType: "application/json", bytes: enc.encode(text) },
+  };
+}
+
+describe("appendAttemptBatch: frame bodies", () => {
+  const appendRoutes = (attempt: LockedAttemptRow): Route[] => [
+    { match: LOCK_ATTEMPT, rows: [attempt] },
+    { match: ATTEMPT_STATE, rows: [] },
+    { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "5" }] },
+    {
+      match: INSERT_EVENTS,
+      rows: [{ id: "event-1", attempt_seq: 1, run_seq: "5" }],
+    },
+  ];
+
+  it("writes a retained body content-addressed and records its reference", async () => {
+    const bodies = fakeBodyStore();
+    const { tx, executed } = makeRoutingTx(appendRoutes(makeAttemptRow()));
+    useTx(tx);
+    await createPostgresRunStore({ bodies: bodies.store }).appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEventWithBody(1, '{"out":"ok"}')],
+    });
+    const digest = digestBytes(enc.encode('{"out":"ok"}'));
+    expect(bodies.puts).toHaveLength(1);
+    expect(bodies.puts[0]).toMatchObject({
+      digest,
+      contentType: "application/json",
+    });
+    const insert = executed.find((e) => INSERT_EVENTS.test(e.sql));
+    expect(insert?.sql).toContain(
+      "body_ref, body_digest, body_bytes, redactions, fidelity",
+    );
+    expect(insert?.params).toContain(`evb:v1:test:${digest.slice(7)}`);
+    expect(insert?.params).toContain(digest);
+    expect(insert?.params).toContain(12);
+    expect(insert?.params).toContain("full");
+  });
+
+  it("redacts before the write: the store never sees the credential", async () => {
+    const bodies = fakeBodyStore();
+    const { tx, executed } = makeRoutingTx(appendRoutes(makeAttemptRow()));
+    useTx(tx);
+    const key = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
+    await createPostgresRunStore({ bodies: bodies.store }).appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEventWithBody(1, `token=${key}`)],
+    });
+    const written = new TextDecoder().decode(bodies.puts[0]?.bytes);
+    expect(written).not.toContain(key);
+    expect(written).toContain("[redacted:model_api_key]");
+    // The digest names the redacted bytes and the removal is on the row.
+    expect(bodies.puts[0]?.digest).toBe(digestBytes(enc.encode(written)));
+    const insert = executed.find((e) => INSERT_EVENTS.test(e.sql));
+    const redactions = insert?.params.find(
+      (p) => typeof p === "string" && p.includes("model_api_key"),
+    );
+    expect(redactions).toBeDefined();
+    expect(JSON.parse(redactions as string)[0]).toMatchObject({
+      reason: "model_api_key",
+      original_digest: digestBytes(enc.encode(key)),
+    });
+  });
+
+  it("records the digest alone under a digest_only policy and writes nothing", async () => {
+    const bodies = fakeBodyStore();
+    const { tx, executed } = makeRoutingTx(
+      appendRoutes(makeAttemptRow({ retention_mode: "digest_only" })),
+    );
+    useTx(tx);
+    await createPostgresRunStore({ bodies: bodies.store }).appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEventWithBody(1, '{"out":"ok"}')],
+    });
+    expect(bodies.puts).toHaveLength(0);
+    const insert = executed.find((e) => INSERT_EVENTS.test(e.sql));
+    expect(insert?.params).toContain(digestBytes(enc.encode('{"out":"ok"}')));
+    expect(insert?.params).toContain("digest_only");
+    expect(insert?.params.some((p) => String(p).startsWith("evb:"))).toBe(
+      false,
+    );
+  });
+
+  it("records the digest alone when the policy does not list the content class", async () => {
+    const bodies = fakeBodyStore();
+    const { tx, executed } = makeRoutingTx(
+      appendRoutes(
+        makeAttemptRow({ retained_content_classes: ["model_call"] }),
+      ),
+    );
+    useTx(tx);
+    await createPostgresRunStore({ bodies: bodies.store }).appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEventWithBody(1, "x")],
+    });
+    expect(bodies.puts).toHaveLength(0);
+    const insert = executed.find((e) => INSERT_EVENTS.test(e.sql));
+    expect(insert?.params).toContain("digest_only");
+  });
+
+  it("refuses to append a retained body when no body store is configured", async () => {
+    const { tx } = makeRoutingTx(appendRoutes(makeAttemptRow()));
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEventWithBody(1, "x")],
+      }),
+    ).rejects.toThrow(/no body store/);
+  });
+
+  it("stores no body columns for a frame the producer sent without one", async () => {
+    const bodies = fakeBodyStore();
+    const { tx, executed } = makeRoutingTx(appendRoutes(makeAttemptRow()));
+    useTx(tx);
+    await createPostgresRunStore({ bodies: bodies.store }).appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEvent(1)],
+    });
+    expect(bodies.puts).toHaveLength(0);
+    const insert = executed.find((e) => INSERT_EVENTS.test(e.sql));
+    expect(insert?.params).toContain("digest_only");
+  });
+});
+
+describe("retentionPolicyOf", () => {
+  it("reads the driver's array and Postgres' brace form alike", () => {
+    expect(
+      retentionPolicyOf(
+        makeAttemptRow({
+          retained_content_classes: '{tool_call,"model_call"}',
+        }),
+      ),
+    ).toEqual({
+      mode: "content_exact",
+      retainedContentClasses: ["tool_call", "model_call"],
+    });
+    expect(
+      retentionPolicyOf(
+        makeAttemptRow({
+          retention_mode: null,
+          retained_content_classes: null,
+        }),
+      ),
+    ).toEqual({ mode: "digest_only", retainedContentClasses: [] });
+  });
+});
+
+describe("sealAttempt: replay evidence", () => {
+  function sealedRows(
+    prepared: PreparedAttemptEvent[],
+    body: Partial<AttemptEventStateRow> = {},
+  ): AttemptEventStateRow[] {
+    return prepared.map((p, i) => ({
+      ...durableRow(p, `event-${i + 1}`, String(i + 5)),
+      ...body,
+    }));
+  }
+
+  it("writes the grade, the gaps, the Merkle root and the archive segment on the seal", async () => {
+    const prepared = [
+      prepareAttemptEvent(toolEvent(1)),
+      prepareAttemptEvent(terminalEvent(2)),
+    ];
+    const rows = sealedRows(prepared, {
+      body_ref: "evb:v1:test:abc",
+      body_digest: SHA_1,
+      body_bytes: 3,
+      redactions: [],
+      fidelity: "full",
+    });
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    expect(archive.segments).toHaveLength(1);
+    const frames = readArchiveSegment(archive.segments[0]!.bytes);
+    expect(frames).toHaveLength(2);
+    expect(frames[0]).toMatchObject({
+      event_type: "tool.call_completed",
+      run_seq: "5",
+      content: { bytes_ref: "evb:v1:test:abc", fidelity: "full" },
+    });
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.sql).toContain(
+      "replay_grade, completeness_gaps, merkle_root, archive_segment_ref",
+    );
+    // Every body present on a harness-tier run: view.
+    expect(seal?.params).toContain("view");
+    expect(seal?.params).toContain("[]");
+    expect(seal?.params).toContain(
+      `evidence/segment/${archive.segments[0]!.digest.slice(7)}`,
+    );
+    expect(
+      seal?.params.some(
+        (p) => typeof p === "string" && /^sha256:[0-9a-f]{64}$/.test(p),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      "digest_only",
+      { retention_mode: "digest_only" },
+      {
+        body_digest: SHA_1,
+        body_bytes: 1,
+        redactions: [],
+        fidelity: "digest_only",
+      },
+      "completed",
+    ],
+    [
+      "body_missing",
+      {},
+      {
+        body_digest: SHA_1,
+        body_bytes: 1,
+        redactions: [],
+        fidelity: "digest_only",
+      },
+      "completed",
+    ],
+    ["unobserved_tail", {}, {}, "abandoned"],
+  ] as const)(
+    "grades inspect and records the %s gap",
+    async (gap, attempt, body, terminal) => {
+      const rows = sealedRows([prepareAttemptEvent(toolEvent(1))], body);
+      const archive = fakeArchiveStore();
+      const { tx, executed } = makeRoutingTx([
+        { match: LOCK_ATTEMPT, rows: [makeAttemptRow(attempt)] },
+        { match: ATTEMPT_STATE, rows },
+        ...SEAL_ROUTES,
+      ]);
+      useTx(tx);
+      await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: terminal,
+        sealerId: "drain-1",
+      });
+      const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+      expect(seal?.params).toContain("inspect");
+      const gaps = seal?.params.find(
+        (p) => typeof p === "string" && p.startsWith("[") && p.includes(gap),
+      );
+      expect(JSON.parse(gaps as string)).toContain(gap);
+    },
+  );
+
+  it("grades view with the tool_bodies gap when no tool result body was kept", async () => {
+    const rows = sealedRows([prepareAttemptEvent(toolEvent(1))]);
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.params).toContain("view");
+    expect(seal?.params).toContain('["tool_bodies"]');
+  });
+
+  it("refuses to seal when no archive store is configured", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        sealerId: "drain-1",
+      }),
+    ).rejects.toThrow(/no archive store/);
+    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
   });
 });

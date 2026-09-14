@@ -11,6 +11,25 @@
  */
 export { type PlatformSurface } from "./surface";
 
+// Frame bodies and the seal's replay evidence (ADR-057): the body and archive
+// store seams the recorder writes through, and the pure grading helpers.
+export {
+  prepareFrameBody,
+  bodyRetainedByPolicy,
+  deriveCompletenessGaps,
+  gradeSealedAttempt,
+  archiveFrameOf,
+  NO_BODY,
+  type AttemptEventBodyInput,
+  type PreparedFrameBody,
+  type FrameBodyColumns,
+  type FrameFidelity,
+  type RetentionPolicyBinding,
+  type RunBodyStore,
+  type RunArchiveStore,
+  type SealedFrameRow,
+} from "./frame-body";
+
 // The ledger itself: admission, immutable attempts, fenced appends, seals,
 // terminal outcome, and the read side.
 export {

@@ -1707,6 +1707,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)
