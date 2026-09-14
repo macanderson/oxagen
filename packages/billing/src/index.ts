@@ -23,6 +23,16 @@ export * from "./spend-budget-store";
 export * from "./spend-budget-gate";
 export * from "./discount";
 export * from "./action-metering";
+export {
+  FREE_PLAN_SLUG,
+  resolveContractTerms,
+  resolveGauEntitlement,
+  type ContractTerms,
+  type GauEntitlement,
+  type GauSubscriptionPeriod,
+} from "./contract-terms";
+export * from "./gau-bucket";
+export * from "./gau-settlements";
 export * from "./plan-allowance";
 export * from "./metering";
 export * from "./tier";
