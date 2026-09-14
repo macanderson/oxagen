@@ -11,6 +11,18 @@ import ts from "typescript";
 /** apps/app, the directory every path in this harness is relative to. */
 export const APP_DIR = fileURLToPath(new URL("../../..", import.meta.url));
 
+/**
+ * The budget for a test that parses every production module, rather than
+ * vitest's 5s default for one unit. Such a test read 448ms, 1461ms, 2135ms and
+ * 7947ms inside a single CI job (run 34802433363): the work is identical every
+ * time, and what moves is coverage instrumentation and how much of the runner
+ * the rest of the suite is taking. A budget near the measured time gates the
+ * machine rather than the code, which is what the 5s default did when it failed
+ * the import graph at 7947ms. This one exists to catch a hang, so it sits an
+ * order of magnitude above the slowest reading.
+ */
+export const WHOLE_TREE_TIMEOUT_MS = 60_000;
+
 export type SourceText = {
   /** Posix path relative to APP_DIR, e.g. `src/ui/money.tsx`. */
   readonly file: string;

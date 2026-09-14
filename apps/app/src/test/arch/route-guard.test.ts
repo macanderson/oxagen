@@ -17,6 +17,7 @@ import {
   listFiles,
   productionFiles,
   resolveInternal,
+  WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
 const RULE = "route-guard";
@@ -390,16 +391,20 @@ describe("route guard", () => {
     ]);
   });
 
-  it("today's violations are exactly the baseline", () => {
-    const actual = routes.flatMap((file) =>
-      routeGuardViolations(program, file),
-    );
-    const diff = diffBaseline(actual, baselineEntries([RULE]));
-    expect(diff, describeDiff(diff, actual)).toEqual({
-      unexpected: [],
-      stale: [],
-    });
-  });
+  it(
+    "today's violations are exactly the baseline",
+    () => {
+      const actual = routes.flatMap((file) =>
+        routeGuardViolations(program, file),
+      );
+      const diff = diffBaseline(actual, baselineEntries([RULE]));
+      expect(diff, describeDiff(diff, actual)).toEqual({
+        unexpected: [],
+        stale: [],
+      });
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("every probe route is placed", () => {
     const routeProbes = listFiles(PROBE_DIR)
