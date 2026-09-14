@@ -12,6 +12,14 @@ name: Desktop
 #   Windows  AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET (Trusted Signing)
 #            or WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD
 #   Linux    unsigned
+#   Updater  TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD when
+#            the key has one): the minisign key whose public half sits in
+#            tauri.conf.json plugins.updater.pubkey. Present → every bundle
+#            gets a .sig and the release carries latest.json, which installed
+#            apps poll. Absent → the build passes --config tauri.unsigned.conf.json
+#            (createUpdaterArtifacts: false) so `tauri build` does not stop at
+#            "public key found but no private key", and no latest.json is
+#            published; installed apps then report "up to date".
 
 on:
   push:
@@ -92,10 +100,30 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
           rm certificate.p12
 
+      # Updater signing is all-or-nothing: with the key, sign and publish
+      # latest.json; without it, switch updater artifacts off for this build.
+      - name: Updater signing
+        id: updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "args=--config src-tauri/tauri.unsigned.conf.json" >> "$GITHUB_OUTPUT"
+            echo "::notice::TAURI_SIGNING_PRIVATE_KEY is not set; building without updater artifacts."
+          fi
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater: present → .sig per bundle + latest.json; absent → see above.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS: present → sign + notarize; absent → ad-hoc.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -107,13 +135,13 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         with:
           projectPath: apps/desktop
-          args: --target ${{ matrix.triple }} --bundles ${{ matrix.bundles }}
+          args: --target ${{ matrix.triple }} --bundles ${{ matrix.bundles }} ${{ steps.updater.outputs.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && format('Oxagen {0}', github.ref_name) || '' }}
           releaseBody: See docs/specs/oxagen-desktop/spec.html for what the app does and how to verify an install.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          includeUpdaterJson: ${{ steps.updater.outputs.signed == 'true' }}
 
       - name: Upload bundles
         uses: actions/upload-artifact@v4
@@ -127,3 +155,4 @@ jobs:
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/appimage/*.AppImage
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/msi/*.msi
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/**/*.sig

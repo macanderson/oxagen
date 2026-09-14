@@ -5,6 +5,7 @@
  * destructive control; those use the danger treatment.
  */
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import type { Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type DesktopState,
@@ -32,6 +33,7 @@ import {
   toggleHarness as toggle,
   unenrollArgs,
 } from "./commands";
+import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 
 interface LogLine {
   text: string;
@@ -58,6 +60,12 @@ export function App() {
   const [pickedHarnesses, setPickedHarnesses] = useState<Harness[] | null>(
     null,
   );
+  /** The masthead's update control: idle, the last check's caption, or the
+   *  offered build waiting for "Install". */
+  const [update, setUpdate] = useState<{
+    caption: string | null;
+    offered: Update | null;
+  }>({ caption: null, offered: null });
   const [purge, setPurge] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tail, setTail] = useState<string>("");
@@ -278,6 +286,51 @@ export function App() {
     setTail(await logTail(120));
   }
 
+  async function doCheckUpdate() {
+    if (!state) return;
+    setBusy("update");
+    setError(null);
+    setUpdate({ caption: "checking…", offered: null });
+    try {
+      const r = await checkForUpdate(state.app_version);
+      setUpdate({ caption: describeCheck(r.result), offered: r.update });
+    } catch (e) {
+      setUpdate({ caption: null, offered: null });
+      setError(
+        `Update check failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function doInstallUpdate() {
+    const offered = update.offered;
+    if (!offered) return;
+    setBusy("update");
+    setError(null);
+    setNotice(null);
+    setUpdate({ caption: `installing v${offered.version}…`, offered });
+    setLog([{ text: `$ update to v${offered.version}`, err: false }]);
+    try {
+      await installUpdate(offered, (line) =>
+        setLog((prev) => [...prev, { text: line, err: false }]),
+      );
+    } catch (e) {
+      const text = e instanceof Error ? e.message : String(e);
+      setLog((prev) => [...prev, { text, err: true }]);
+      setError(`Update failed: ${text}`);
+      setUpdate({
+        caption: describeCheck({
+          available: true,
+          version: offered.version,
+          currentVersion: offered.currentVersion,
+        }),
+        offered,
+      });
+      setBusy(null);
+    }
+  }
+
   const toggleHarness = (h: Harness) =>
     setPickedHarnesses(toggle(harnesses, h));
 
@@ -308,6 +361,31 @@ export function App() {
               ? `connected · ${host.host_status}`
               : "enrolled · collector not answering"}
           {state ? ` · v${state.app_version}` : ""}
+        </span>
+        <span className="updates">
+          {update.caption && (
+            <span className="sub" role="status">
+              {update.caption}
+            </span>
+          )}
+          {update.offered && busy !== "update" ? (
+            <button
+              type="button"
+              onClick={doInstallUpdate}
+              disabled={busy !== null || !state}
+            >
+              Install
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="quiet"
+              onClick={doCheckUpdate}
+              disabled={busy !== null || !state}
+            >
+              Check for updates
+            </button>
+          )}
         </span>
       </header>
 

@@ -377,6 +377,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open Oxagen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Oxagen", true, None::<&str>)?;
