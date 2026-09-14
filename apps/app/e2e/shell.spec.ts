@@ -150,9 +150,12 @@ test.describe("shell · loaded", () => {
     await expect(page).toHaveURL(new RegExp(`/${ORG}/${WS}$`));
   });
 
-  test("the workspace switcher moves to another workspace", async ({
+  test("the workspace switcher navigates to another workspace, which is not found for a non-member", async ({
     signedInPage: page,
   }) => {
+    // Marcus is an Acme member with no finops membership
+    // (src/server/fixture-tenancy.ts), so the [ws] layout answers 404 for the
+    // workspace it navigates to (INV-15).
     await page.goto(`/${ORG}/${WS}`);
     await sidebar(page)
       .getByRole("button", { name: /Switch workspace/ })
@@ -163,10 +166,13 @@ test.describe("shell · loaded", () => {
     await dialog.getByRole("link", { name: /FinOps/ }).click();
     await expect(page).toHaveURL(new RegExp(`/${ORG}/finops$`));
     await expect(
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
+    ).toBeVisible();
+    await expect(
       sidebar(page).getByRole("button", {
         name: "Switch workspace, current FinOps",
       }),
-    ).toBeVisible();
+    ).toHaveCount(0);
   });
 });
 

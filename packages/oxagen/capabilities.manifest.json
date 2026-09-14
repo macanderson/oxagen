@@ -2438,6 +2438,34 @@
       }
     },
     {
+      "name": "get_run",
+      "file": "run.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_runs",
+      "file": "run.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "run_schema_chat",
       "file": "schema.chat.ts",
       "domain": "schema",
