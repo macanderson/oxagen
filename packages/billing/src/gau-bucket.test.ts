@@ -101,7 +101,6 @@ const {
   carriedFrom,
   assertGauAvailable,
   GauExhaustedError,
-  isGauExhaustedError,
 } = await import("./gau-bucket");
 const { BillingSuspendedError } = await import("./dunning");
 const { withTenantDb } = await import("@oxagen/database");
@@ -567,7 +566,9 @@ describe("readBucket", () => {
 
 describe("assertGauAvailable", () => {
   const exhausted = (reason: string | null) => (e: unknown) =>
-    isGauExhaustedError(e) && e.code === "gau_exhausted" && e.reason === reason;
+    e instanceof GauExhaustedError &&
+    e.code === "gau_exhausted" &&
+    e.reason === reason;
 
   it("refuses a suspended org in prepaid mode before reading anything else", async () => {
     mocks.assertOrgCanConsume.mockRejectedValue(
@@ -746,8 +747,6 @@ describe("assertGauAvailable", () => {
     });
     expect(err.code).toBe("gau_exhausted");
     expect(err.name).toBe("GauExhaustedError");
-    expect(isGauExhaustedError(err)).toBe(true);
-    expect(isGauExhaustedError(new Error("x"))).toBe(false);
     const withReason = new GauExhaustedError({
       reason: "free_no_payment_method",
       remainingGau: 0,

@@ -320,10 +320,6 @@ export class GauExhaustedError extends Error {
   }
 }
 
-export function isGauExhaustedError(e: unknown): e is GauExhaustedError {
-  return e instanceof GauExhaustedError;
-}
-
 /**
  * The admission gate (ARCHITECTURE.md §3.9 item 9). Runs inside the kernel's
  * tenant scope before every governed action:

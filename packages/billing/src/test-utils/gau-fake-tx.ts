@@ -1,10 +1,12 @@
 /**
  * An in-memory executor for the GAU bucket and settlement writers, for unit
- * tests. It mirrors the statements gau-bucket.ts and gau-settlements.ts issue
- * — the `(org_id, period_start)` upsert-add, the re-checked claim UPDATE, the
- * settlement INSERT — and records every statement it runs, so a test can
- * assert what was written and that the executor it passed in is the one the
- * function used.
+ * tests. It runs the statements gau-bucket.ts and gau-settlements.ts issue
+ * — the upsert, the re-checked claim UPDATE, the settlement INSERT — from
+ * their arguments: the upsert's arbiter must be `(org_id, period_start)` and
+ * its SET clause is interpreted, so an overwrite where the writer means an
+ * add, or a wrong arbiter, fails the tests that ride on the statement. Every
+ * statement is recorded, so a test can assert what was written and that the
+ * executor it passed in is the one the function used.
  *
  * Conditions are the plain objects the test's `drizzle-orm` mock builds
  * (`test-utils/gau-conditions.ts`); a column is matched by identity against
@@ -12,7 +14,7 @@
  * `GAU_REMAINING_SQL` — is evaluated by its documented meaning.
  */
 
-import { getTableColumns, type SQL } from "drizzle-orm";
+import { getTableColumns, is, StringChunk, type SQL } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
 import { GAU_REMAINING_SQL, remainingGau } from "../gau-bucket";
 import type { Cond } from "./gau-conditions";
@@ -42,6 +44,13 @@ const bucketKeys = new Map<unknown, string>(
 const settlementKeys = new Map<unknown, string>(
   Object.entries(getTableColumns(schema.gauSettlements)).map(([k, c]) => [
     c,
+    k,
+  ]),
+);
+/** `used_gau` → `usedGau`, for the `excluded.<column>` reference a SET carries. */
+const bucketKeyByName = new Map<string, string>(
+  Object.entries(getTableColumns(schema.gauBuckets)).map(([k, c]) => [
+    c.name,
     k,
   ]),
 );
@@ -84,6 +93,48 @@ function matches(row: Row, cond: Cond, keys: Map<unknown, string>): boolean {
 
 function isSql(v: unknown): v is SQL {
   return typeof v === "object" && v !== null && "queryChunks" in v;
+}
+
+/**
+ * Evaluates one SET value against a row. The writers use three shapes of SQL
+ * — `now()`, `<column> + <integer>` and `<column> + excluded.<column>` — and
+ * anything else throws, so a statement the fake does not model fails the
+ * test rather than passing on a guess. A plain value is assigned as is.
+ */
+function evalSet(
+  row: Row,
+  val: unknown,
+  keys: Map<unknown, string>,
+  excluded: Row | null,
+): unknown {
+  if (!isSql(val)) return val;
+  let text = "";
+  let column: string | null = null;
+  for (const chunk of val.queryChunks) {
+    if (is(chunk, StringChunk)) {
+      text += chunk.value.join("");
+      continue;
+    }
+    const key = keys.get(chunk);
+    if (key === undefined || column !== null) {
+      throw new Error("fake tx: unsupported SET expression");
+    }
+    column = key;
+    text += "$col";
+  }
+  text = text.trim();
+  if (text === "now()") return new Date();
+  const add = /^\$col \+ (?:(\d+)|excluded\.(\w+))$/.exec(text);
+  if (add === null || column === null) {
+    throw new Error(`fake tx: unsupported SET expression: ${text}`);
+  }
+  const base = row[column] as number;
+  if (add[1] !== undefined) return base + Number(add[1]);
+  const excludedKey = bucketKeyByName.get(add[2]!);
+  if (excluded === null || excludedKey === undefined) {
+    throw new Error(`fake tx: no excluded row for ${text}`);
+  }
+  return base + (excluded[excludedKey] as number);
 }
 
 /**
@@ -144,24 +195,41 @@ export function fakeGauExecutor(store: FakeGauStore) {
         };
         return {
           returning: insertPlain,
-          onConflictDoUpdate: (_conflict: { target: unknown; set: Row }) => ({
+          onConflictDoUpdate: (conflict: { target: unknown; set: Row }) => ({
             returning: () => {
               if (t !== "buckets") throw new Error("fake tx: upsert table");
-              store.log.push({ op: "upsert", table: t, values: v });
+              const target = Array.isArray(conflict.target)
+                ? conflict.target
+                : [conflict.target];
+              // The unique index the statement must name is
+              // (org_id, period_start); any other arbiter is a different
+              // statement.
+              if (
+                target.length !== 2 ||
+                target[0] !== schema.gauBuckets.orgId ||
+                target[1] !== schema.gauBuckets.periodStart
+              ) {
+                throw new Error(
+                  "fake tx: upsert arbiter is not (org_id, period_start)",
+                );
+              }
+              store.log.push({
+                op: "upsert",
+                table: t,
+                values: v,
+                set: conflict.set,
+              });
               const existing = store.buckets.find(
                 (b) =>
                   b.orgId === v.orgId &&
                   cmp(b.periodStart, v.periodStart) === 0,
               );
               if (existing) {
-                // DO UPDATE SET used_gau = used_gau + EXCLUDED.used_gau,
-                //               purchased_gau = purchased_gau + EXCLUDED.purchased_gau
-                existing.usedGau =
-                  (existing.usedGau as number) + (v.usedGau as number);
-                existing.purchasedGau =
-                  (existing.purchasedGau as number) +
-                  (v.purchasedGau as number);
-                existing.updatedAt = new Date();
+                const next: Row = {};
+                for (const [k, val] of Object.entries(conflict.set)) {
+                  next[k] = evalSet(existing, val, bucketKeys, v);
+                }
+                Object.assign(existing, next);
                 return Promise.resolve([{ ...existing }]);
               }
               const row: Row = {
@@ -192,16 +260,11 @@ export function fakeGauExecutor(store: FakeGauStore) {
             store.log.push({ op: "update", table: t, set: patch });
             const hit = tables[t].filter((r) => matches(r, cond, keys));
             for (const row of hit) {
+              const next: Row = {};
               for (const [k, val] of Object.entries(patch)) {
-                if (isSql(val)) {
-                  // The two SQL patches the writers use: `topup_seq + 1`
-                  // and `now()`.
-                  row[k] =
-                    k === "topupSeq" ? (row[k] as number) + 1 : new Date();
-                } else {
-                  row[k] = val;
-                }
+                next[k] = evalSet(row, val, keys, null);
               }
+              Object.assign(row, next);
             }
             const projected = hit.map((row) => {
               if (!cols) return { ...row };

@@ -122,6 +122,7 @@ const mocks = vi.hoisted(() => ({
   resolveGauEntitlement: vi.fn(),
   readOrgBillingSettings: vi.fn(),
   readDefaultPaymentMethod: vi.fn(),
+  billingProvider: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
@@ -161,6 +162,15 @@ vi.mock(
     }) satisfies Pick<
       typeof import("./payment-methods"),
       "readDefaultPaymentMethod"
+    >,
+);
+
+vi.mock(
+  "./client",
+  () =>
+    ({ billingProvider: mocks.billingProvider }) satisfies Pick<
+      typeof import("./client"),
+      "billingProvider"
     >,
 );
 
@@ -624,6 +634,7 @@ describe("recordGovernedAction", () => {
     });
     expect(mocks.readDefaultPaymentMethod).toHaveBeenCalledWith(ORG);
     expect(store.log.filter((s) => s.op === "update")).toHaveLength(0);
+    expect(mocks.billingProvider).not.toHaveBeenCalled();
   });
 
   it("a Free org with a saved default card claims one auto_topup settlement for auto_topup_blocks × block_size_gau at Free's published rate", async () => {
@@ -655,6 +666,8 @@ describe("recordGovernedAction", () => {
       openTopupSettlementId: result.autoTopup!.id,
       topupSeq: 1,
     });
+    // The claim commits before any provider call; settlement is WL-31's.
+    expect(mocks.billingProvider).not.toHaveBeenCalled();
   });
 
   it("a Build org with a card claims exactly the same way", async () => {
