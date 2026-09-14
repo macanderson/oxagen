@@ -171,6 +171,13 @@ function event(
     encryptedPayloadRef: null,
     observedAt: new Date("2026-09-11T09:15:00.000Z"),
     recordedAt: new Date("2026-09-11T09:15:00.000Z"),
+    body: {
+      bodyRef: null,
+      bodyDigest: null,
+      bodyBytes: null,
+      redactions: null,
+      fidelity: "digest_only",
+    },
   };
 }
 
@@ -196,6 +203,14 @@ function sealedAttempt(): AttemptRecord {
     final_event_digest: SHA,
     event_stream_digest: SHA,
     sealed_at: "2026-09-11T09:31:41.000Z",
+    forked_from_run_seq: null,
+    replay_grade: null,
+    completeness_gaps: [],
+    merkle_root: null,
+    archive_segment_ref: null,
+    model_calls: null,
+    tool_calls: null,
+    turns: null,
   });
 }
 

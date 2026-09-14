@@ -128,6 +128,14 @@ function attemptRow(over: Partial<AttemptRow> = {}): AttemptRow {
     final_event_digest: SHA_A,
     event_stream_digest: SHA_B,
     sealed_at: "2026-09-11T09:31:41.000Z",
+    forked_from_run_seq: null,
+    replay_grade: null,
+    completeness_gaps: [],
+    merkle_root: null,
+    archive_segment_ref: null,
+    model_calls: null,
+    tool_calls: null,
+    turns: null,
     ...over,
   };
 }
@@ -156,6 +164,11 @@ function eventRow(
     encrypted_payload_ref: null,
     observed_at: "2026-09-11T09:15:10.250Z",
     created_at: "2026-09-11T09:15:10.300Z",
+    body_ref: null,
+    body_digest: null,
+    body_bytes: null,
+    redactions: null,
+    fidelity: "digest_only",
     ...over,
   };
 }
