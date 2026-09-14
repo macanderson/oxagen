@@ -4,10 +4,14 @@
 //   - resolveActorOrgRole: no active principal → null; principal with no
 //     org-scoped role → null; the assigned role name; expired (JIT)
 //     assignments are excluded from the lookup
+//   - resolveActorWorkspaceRole: the workspace-scoped assignment on the
+//     named workspace, or null; the query is pinned to that workspace id
 //   - assertOrgRole: no userId (an API-key call, or no actor) → forbidden
 //     `no_principal` with no query; no principal, no role, or a role outside
 //     the set → forbidden with `org_role_required`; a role in the set →
-//     returns it
+//     returns it; with a `workspace` requirement, a workspace role in that
+//     set passes after the org leg fails, one outside it is refused, and a
+//     context with no workspace never runs the workspace leg
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
@@ -16,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   gt: vi.fn((col: unknown, val: unknown) => ({ __gt: [col, val] })),
   isNull: vi.fn((col: unknown) => ({ __isNull: col })),
+  eq: vi.fn((col: unknown, val: unknown) => ({ __eq: [col, val] })),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -23,48 +28,79 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-// Capture the expiry predicates without depending on Drizzle SQL internals.
+// Capture the expiry and scope predicates without depending on Drizzle SQL
+// internals.
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...real, gt: mocks.gt, isNull: mocks.isNull };
+  return { ...real, gt: mocks.gt, isNull: mocks.isNull, eq: mocks.eq };
 });
 
 import { schema } from "@oxagen/database";
-import { assertOrgRole, resolveActorOrgRole } from "./org-role";
+import {
+  assertOrgRole,
+  resolveActorOrgRole,
+  resolveActorWorkspaceRole,
+} from "./org-role";
 
 /**
- * Tx double for the two-query role resolution: the principals lookup
- * (select→from→where→limit) then the role join (select→from→innerJoin→where→limit).
+ * Tx double for the role resolution: the principals lookup
+ * (select→from→where→limit) then the role join
+ * (select→from→innerJoin→where→limit). The join answers with the org-wide
+ * role unless the WHERE pinned a workspace id, in which case it answers with
+ * the workspace role — the same shape the two scoped queries take in Postgres.
  */
-function makeRoleTx(principalId: string | null, roleName: string | null) {
-  let call = 0;
+function makeRoleTx(
+  principalId: string | null,
+  roleName: string | null,
+  workspaceRoleName: string | null = null,
+) {
+  const pinsWorkspace = () =>
+    mocks.eq.mock.calls.some(
+      ([col, val]) =>
+        col === schema.principalRoleAssignments.workspaceId &&
+        typeof val === "string",
+    );
   return {
-    select: () => {
-      call++;
-      const terminal = (rows: unknown[]) => ({
-        where: () => ({ limit: () => Promise.resolve(rows) }),
-      });
-      if (call === 1) {
+    select: () => ({
+      from: (table: unknown) => {
+        if (table === schema.principals) {
+          return {
+            where: () => ({
+              limit: () =>
+                Promise.resolve(principalId ? [{ id: principalId }] : []),
+            }),
+          };
+        }
         return {
-          from: () => terminal(principalId ? [{ id: principalId }] : []),
+          innerJoin: () => ({
+            where: () => ({
+              limit: () => {
+                const name = pinsWorkspace() ? workspaceRoleName : roleName;
+                return Promise.resolve(name ? [{ roleName: name }] : []);
+              },
+            }),
+          }),
         };
-      }
-      return {
-        from: () => ({
-          innerJoin: () => terminal(roleName ? [{ roleName }] : []),
-        }),
-      };
-    },
+      },
+    }),
   };
 }
 
 function stubRoleResolution(
   principalId: string | null,
   roleName: string | null,
+  workspaceRoleName: string | null = null,
 ) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(makeRoleTx(principalId, roleName))),
+    Promise.resolve(fn(makeRoleTx(principalId, roleName, workspaceRoleName))),
   );
+}
+
+/** The workspace ids the role join was pinned to, in call order. */
+function pinnedWorkspaceIds(): unknown[] {
+  return mocks.eq.mock.calls
+    .filter(([col]) => col === schema.principalRoleAssignments.workspaceId)
+    .map(([, val]) => val);
 }
 
 const forbidden = (reason: string) => (e: unknown) =>
@@ -169,5 +205,108 @@ describe("assertOrgRole", () => {
     await expect(
       assertOrgRole(USER, { org: ["Owner", "Billing"] }),
     ).resolves.toBe("Billing");
+  });
+
+  it("never runs the workspace leg for an org-only requirement", async () => {
+    stubRoleResolution("prn_1", "Viewer", "Owner");
+    await expect(
+      assertOrgRole({ ...USER, workspaceId: "ws_1" }, OWNER_ADMIN),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
+    expect(pinnedWorkspaceIds()).toEqual([]);
+  });
+});
+
+describe("resolveActorWorkspaceRole", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns null when the user has no active principal in the org", async () => {
+    stubRoleResolution(null, null, "Owner");
+    expect(
+      await resolveActorWorkspaceRole("org_1", "ws_1", "user_1"),
+    ).toBeNull();
+  });
+
+  it("returns null when the principal holds no role on that workspace", async () => {
+    stubRoleResolution("prn_1", "Admin", null);
+    expect(
+      await resolveActorWorkspaceRole("org_1", "ws_1", "user_1"),
+    ).toBeNull();
+  });
+
+  it("returns the workspace role, with the join pinned to the named workspace", async () => {
+    stubRoleResolution("prn_1", null, "Member");
+    expect(await resolveActorWorkspaceRole("org_1", "ws_1", "user_1")).toBe(
+      "Member",
+    );
+    expect(pinnedWorkspaceIds()).toEqual(["ws_1"]);
+    expect(mocks.eq).toHaveBeenCalledWith(schema.roles.scopeKind, "workspace");
+  });
+});
+
+describe("assertOrgRole with a workspace requirement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const APPROVER = {
+    org: ["Owner", "Admin"],
+    workspace: ["Owner", "Member"],
+  } as const;
+  const IN_WS = {
+    orgId: "org_1",
+    workspaceId: "ws_1",
+    userId: "user_1",
+  } as const;
+
+  it.each(["Owner", "Admin"])(
+    "returns the org role %s without reading the workspace",
+    async (role) => {
+      stubRoleResolution("prn_1", role, null);
+      await expect(assertOrgRole(IN_WS, APPROVER)).resolves.toBe(role);
+      expect(pinnedWorkspaceIds()).toEqual([]);
+    },
+  );
+
+  it.each(["Owner", "Member"])(
+    "returns the workspace role %s when the org leg fails",
+    async (role) => {
+      stubRoleResolution("prn_1", "Viewer", role);
+      await expect(assertOrgRole(IN_WS, APPROVER)).resolves.toBe(role);
+      expect(pinnedWorkspaceIds()).toEqual(["ws_1"]);
+    },
+  );
+
+  it("refuses a workspace Viewer whose org role is also outside the set", async () => {
+    stubRoleResolution("prn_1", "Viewer", "Viewer");
+    await expect(assertOrgRole(IN_WS, APPROVER)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
+  });
+
+  it("refuses a user with no role on the workspace and none in the org", async () => {
+    stubRoleResolution("prn_1", null, null);
+    await expect(assertOrgRole(IN_WS, APPROVER)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
+  });
+
+  it("refuses a workspace role from a context that names no workspace", async () => {
+    // An org-only context cannot borrow a workspace assignment: without a
+    // workspace id there is nothing to pin the join to, so the leg is skipped.
+    stubRoleResolution("prn_1", "Viewer", "Owner");
+    await expect(
+      assertOrgRole({ orgId: "org_1", userId: "user_1" }, APPROVER),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
+    expect(pinnedWorkspaceIds()).toEqual([]);
+  });
+
+  it("refuses a context with no user before any query", async () => {
+    stubRoleResolution("prn_1", "Owner", "Owner");
+    await expect(
+      assertOrgRole({ ...IN_WS, userId: null }, APPROVER),
+    ).rejects.toSatisfy(forbidden("no_principal"));
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });
