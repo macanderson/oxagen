@@ -1704,9 +1704,15 @@ importers:
 
   packages/run-ledger:
     dependencies:
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@oxagen/tacho':
         specifier: workspace:*
         version: link:../tacho

@@ -174,6 +174,23 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── run: the recorded run (export_run) ──────────────────────────────────────
+
+  const runCmd = program
+    .command("run")
+    .description("The recorded run: export its signed evidence bundle");
+  runCmd
+    .command("export")
+    .description(
+      "Queue the signed, offline-verifiable evidence bundle for a sealed run — Owner/Admin only",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runExport } = await import("./commands/run.js");
+      await runExport(runId, opts);
+    });
+
   // ── trace: one agent run as a span tree ─────────────────────────────────────
 
   program

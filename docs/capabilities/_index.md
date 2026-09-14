@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**229 capabilities across 36 domains.**
+**235 capabilities across 36 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -265,10 +265,16 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
-## Run (2)
+## Run (8)
 
-- [run.get](run.get.md) — Read one run's header and, for an evidence-ledger run, one page of its frames from an opaque cursor, optionally waiting for a new frame; a wrapped-agent run answers its header with frames: null
+- [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
+- [run.export](run.export.md) — Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script
+- [run.fork](run.fork.md) — Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body
+- [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
+- [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
 - [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+- [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
+- [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds
 
 ## Schema (23)
 
