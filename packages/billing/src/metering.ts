@@ -121,8 +121,11 @@ export interface StartTurnOptions {
 export { BillingSuspendedError };
 
 /**
- * The single pre-turn admission gate. Must be called before any AI model call
- * begins so suspended or zero-balance orgs are refused before tokens are spent.
+ * The credit-balance gate for the ADR-053 platform-funded assistant turn
+ * (turn-credit-gate.ts is its one caller). Must be called before the model
+ * call begins so suspended or zero-balance orgs are refused before tokens are
+ * spent. Governed actions are admitted by `assertGauAvailable` (gau-bucket.ts,
+ * ADR-055), which the kernel runs through setBillingAdmissionGate.
  *
  * Order:
  *   1. assertOrgCanConsume → throws BillingSuspendedError when dunningState==='suspended'
