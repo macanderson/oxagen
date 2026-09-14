@@ -1354,9 +1354,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   PLAYWRIGHT_BASE_URL: {
     group: "Testing / e2e",
     description:
-      "Base URL Playwright drives in apps/app e2e (apps/app/playwright.config.ts). LOCAL: unset → " +
-      "defaults to http://localhost:3000. CI: the booted next server URL. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      "Base URL of the deprecated Playwright suite (apps/app_deprecated/playwright.config.ts, " +
+      "deleted with that app in WL-50). The rev1 harness (apps/app/playwright.config.ts) reads " +
+      "NEXT_PUBLIC_APP_URL and does not read this. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],
