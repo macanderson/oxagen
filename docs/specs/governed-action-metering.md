@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-08 (open questions answered 2026-09-10; amended
-  2026-09-13 for ADR-055)
+  2026-09-13 for ADR-055; v1 rates set 2026-09-14)
 - **Author:** platform
 - **Related:** [ADR-052](../adr/ADR-052-governed-action-as-the-billable-unit.md)
   (the decision), [ADR-055](../adr/ADR-055-gau-buckets-and-contracted-rates.md)
@@ -14,7 +14,10 @@
   the contracts that implement ADR-055)
 
 Paragraphs marked **Amended 2026-09-13 (ADR-055)** replace the text they
-follow. ADR-055 refines ADR-052's pricing clause: the allowance is a bucket of
+follow. The figures in §4 are the v1 rates the maintainer set on 2026-09-14;
+they replace the provisional figures the ADR-055 amendment carried (2,000 /
+20,000 / 125,000 GAU a month, 20,000 micros per GAU, 1,000-GAU blocks) and
+the per-year table that preceded them. ADR-055 refines ADR-052's pricing clause: the allowance is a bucket of
 governed action units (GAUs) per month, more GAUs are bought in unit
 quantities at the customer's contracted rate, and an organisation is either
 prepaid or invoice-billed. The unit and its exclusions (§3) are unchanged.
@@ -131,55 +134,61 @@ with the rate card converts one to the other and shows its assumptions.
 ### 4.1 Volume tiers
 
 Per 1,000 governed actions, by annual volume. A customer's whole volume prices
-at the band their total lands in.
+at the band their total lands in. v1 rates, set 2026-09-14:
 
-| Annual governed actions | Per 1,000 |
-|---|---|
-| First 1M | $20 |
-| 1M – 5M | $15 |
-| 5M – 25M | $10 |
-| 25M+ (committed) | $6 |
+| Annual governed actions | Per 1,000 | Per GAU |
+|---|---|---|
+| First 1M | $5 | 5,000 micros |
+| 1M – 5M | $4 | 4,000 micros |
+| 5M – 25M | $3 | 3,000 micros |
+| 25M+ (committed) | $2 | 2,000 micros |
+
+The first band is the list rate: 5,000 micros per GAU, and the rate every
+published tier carries (§4.2). `ACTION_RATE_BANDS` in
+`packages/billing/src/action-metering.ts` is this table, and `get_rate_card`
+and `preview_action_cost` report it for quoting.
 
 ### 4.2 Subscription tiers and allowances
 
-Mapping onto the `PlanTier` values that already exist:
+Mapping onto the `PlanTier` values that already exist. The §4.1 bands are the
+published volume rate card that `get_rate_card` and `preview_action_cost`
+report for quoting. They are not the rate a customer is charged or shown on
+the billing page: that figure is `rate_per_gau_micros` on the plan row or the
+negotiated row, and every settlement records the rate it charged (ADR-055).
+The allowance is per month and the bucket is one month for every
+organisation. v1 rates, set by the maintainer 2026-09-14:
 
-| Tier | Platform | Included actions / yr | Evidence retention |
-|---|---|---|---|
-| `free` | $0 | 25k | 30 days |
-| `build` | $500 / mo | 250k | 12 months |
-| `scale` | $2,500 / mo | 1.5M | 12 months |
-| `enterprise` | custom, committed | negotiated floor | 12 months, extensible |
+| Tier | Platform | Included GAUs / month | Rate per GAU | Block size | Currency | Evidence retention | Past the allowance |
+|---|---|---|---|---|---|---|---|
+| `free` | $0 | 5,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 30 days | hard stop: no card, no auto top-up |
+| `build` | $199 / mo | 50,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list |
+| `scale` | $999 / mo | 300,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list; invoice billing eligible |
+| `enterprise` | committed annual, negotiated | negotiated (`billing.contract_terms`) | negotiated: $2.50 – $3.00 per 1,000 at ≥ 5M / year | negotiated | USD | 12 months, extensible | invoice billing |
 
-Overage beyond the allowance prices at the §4.1 band.
+These figures are the published terms `billing.plans` carries
+(`rate_per_gau_micros`, `block_size_gau`, `included_gau_per_month`,
+`currency`; WL-24 seeds them). An annual subscriber gets the same monthly
+figure as a monthly subscriber, sliced on the cycle's anniversary day. The
+`enterprise-v2` plan row (`packages/billing/src/pricing.ts`, written to
+`billing.plans` by `billing:stripe-sync`) carries the `scale` figures
+(300,000 GAU a month, 5,000 micros per GAU, 5,000-GAU blocks, USD); they
+apply to an enterprise organisation only while it has no effective
+`billing.contract_terms` row (§7.3), and a negotiated agreement replaces all
+four figures at once. `(rate_per_gau_micros × block_size_gau)` must be a
+whole number of cents (a CHECK on both tables), so a block prices without
+rounding: 5,000 micros × 5,000 GAU = $25.00.
 
-**Amended 2026-09-13 (ADR-055).** The §4.1 bands are the published volume
-rate card that `get_rate_card` and `preview_action_cost` report for quoting.
-They are not the rate a customer is charged or shown on the billing page:
-that figure is `rate_per_gau_micros` on the plan row or the negotiated row,
-and every settlement records the rate it charged. The allowance is per month
-and the bucket is one month for every organisation, so the table above is
-restated:
+`free` is a hard stop: the Free plan has no saved card and auto top-up is off,
+so when its bucket reaches `remaining ≤ 0` the next governed action is refused
+with `gau_exhausted` until the month rolls over or the organisation upgrades.
+The paid tiers auto top-up at the list rate; `scale` and `enterprise` may be
+approved for invoice billing.
 
-| Tier | Platform | Included GAUs / month | Rate per GAU | Block size | Currency | Evidence retention |
-|---|---|---|---|---|---|---|
-| `free` | $0 | 2,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 30 days |
-| `build` | $500 / mo | 20,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months |
-| `scale` | $2,500 / mo | 125,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months |
-| `enterprise` | custom, committed | 125,000 | 20,000 micros ($20 per 1,000) | 1,000 GAU | USD | 12 months, extensible |
-
-The per-month figures, the per-GAU rate per tier, the block size and the
-currency are the design's provisional values (`apps/app/ARCHITECTURE.md`
-openQuestions) until the maintainer supplies the published ones; an annual
-subscriber gets the same monthly figure as a monthly subscriber, sliced on
-the cycle's anniversary day. The `enterprise` row is the published terms of
-the `enterprise-v2` plan (`packages/billing/src/pricing.ts`), the figures
-`billing:stripe-sync` writes to its `billing.plans` row; they are the `scale`
-figures, and they apply to an enterprise organisation only while it has no
-effective `billing.contract_terms` row (§7.3). A negotiated agreement
-replaces all four figures at once. `(rate_per_gau_micros × block_size_gau)`
-must be a whole number of cents (a CHECK on both tables), so a block prices
-without rounding: at the figures above a block is $20.00.
+The previous figures, for the record: the per-year table this section first
+carried (25k / 250k / 1.5M a year at $0 / $500 / $2,500 a month) and the
+ADR-055 amendment's provisional per-month figures (2,000 / 20,000 / 125,000
+GAU at 20,000 micros per GAU in 1,000-GAU blocks, a $20.00 block). Nothing
+was billed at either.
 
 Beyond the allowance:
 
@@ -209,39 +218,58 @@ a line item at `$0.00`; the line is not omitted.
 ### 4.5 Worked example
 
 The reference customer from the seed deck: 50 agents, 20 runs per agent per
-working day, 250 working days.
+working day, 250 working days. The calculator's quote, at the v1 §4.1 band:
 
 ```
 runs/yr      = 50 × 20 × 250            = 250,000
 actions/yr   = 250,000 × 15             = 3,750,000   (standard-task class)
-band         = 1M–5M                    → $15 / 1,000
-tier         = scale                    → $30,000 / yr, 1.5M included
-overage      = (3,750,000 − 1,500,000) × $15 / 1,000 = $33,750
+band         = 1M–5M                    → $4 / 1,000
+tier         = scale                    → $11,988 / yr, 300,000 / month
+                                          (3.6M / yr) included
+overage      = (3,750,000 − 3,600,000) × $4 / 1,000 = $600
 ─────────────────────────────────────────────────────────────
-platform ACV                            = $63,750
+platform ACV (quote)                    = $12,588
 ```
 
-Cross-check against the deck, which models this customer at ~$63k on a
-per-run price: the ACV is unchanged; only the unit changes.
+The seed deck priced this customer at ~$63k on the pre-v1 per-run figures;
+at v1 the platform line is ~$12.6k and the customer's model spend, reported
+at $0.00 (§4.4), is the larger number by design (§4.6).
 
 **Amended 2026-09-13 (ADR-055).** The same customer under the bucket model,
-one month at a time, at the provisional `scale` terms above:
+one month at a time, at the published `scale` terms above (the quote's band
+rate applies only through a negotiated `contract_terms` row; a published
+tier settles at its plan rate, 5,000 micros):
 
 ```
 GAU / month     = 3,750,000 / 12                       ≈ 312,500
-included        = 125,000 per month (the bucket)
-overage         = 312,500 − 125,000                    = 187,500 GAU
-prepaid         : 188 blocks of 1,000 GAU at $20.00    = $3,760 / month
+included        = 300,000 per month (the bucket)
+overage         = 312,500 − 300,000                    = 12,500 GAU
+prepaid         : 3 blocks of 5,000 GAU at $25.00      = $75 / month
                   (bought through Checkout or by auto top-up as the bucket
-                   empties; unused purchased GAUs carry into the next month)
-invoice billing : 187,500 × $0.02                      = $3,750 at period end,
-                  or, with invoice_gau_max = 100,000, one interim invoice for
-                  100,000 GAU the day accrued overage reaches it and a
-                  period-close invoice for the remaining 87,500
+                   empties; the 2,500 unused purchased GAUs carry into the
+                   next month)
+invoice billing : 12,500 × $0.005                      = $62.50 at period end;
+                  with invoice_gau_max = 100,000 no interim invoice fires,
+                  because accrued overage never reaches the cap in a month
 ```
 
 A negotiated `contract_terms` row replaces every figure above for that
 customer; nothing on the page or the invoice comes from the §4.1 band.
+
+### 4.6 Why these figures (v1, 2026-09-14)
+
+- A coding run is 30–80 governed actions (§3.4), so at $5 per 1,000 a run
+  costs $0.15 – $0.40, about 10 – 15% of the model spend the same run
+  reports at $0.00 (§4.4). The platform line is priced to sit beside the
+  model bill, not to compete with it.
+- The marginal cost of a GAU (the kernel invoke, the evidence write, the
+  ClickHouse row) is under $0.001, so margin exceeds 85% at every band. At
+  the $2 committed band that holds for a marginal cost at or below $0.0003
+  per GAU, which is within the estimate.
+- Retention beyond 12 months bills per GB-month (§4.3, ADR-052); it is not
+  folded into the GAU rate.
+- Free is a hard stop with no card on file: the tier is for evaluation, and
+  its 5,000 GAU a month is roughly 60 – 165 coding runs.
 
 ---
 
@@ -342,8 +370,9 @@ the page.
 1. **Shadow.** Record actions and continue charging cost-derived credits. Both
    numbers land in ClickHouse; nobody's bill moves.
 2. **Compare.** One full billing period. For every org, publish action-priced
-   versus cost-priced. The distribution of the delta is the input to the final
-   rates in §4.1; the numbers there are provisional until the comparison.
+   versus cost-priced. The distribution of the delta is the check on the
+   v1 rates in §4.1 (set 2026-09-14); a delta that argues for moving them is
+   a maintainer decision, recorded here with a date.
 3. **Notify.** Every org sees both numbers in-product for a period before the
    switch. Orgs whose bill rises are contacted individually.
 4. **Cut over.** Action pricing becomes the charging path. Cost-derived pricing
@@ -432,9 +461,9 @@ with its rate, block size and currency, and the row is the whole answer.
 an enterprise org with no effective negotiated row resolves to the published
 terms of the plan its subscription names, like every other org. For the
 `enterprise-v2` plan those are the §4.2 `enterprise` row, which
-`billing:stripe-sync` writes to `billing.plans` with the same provisional
-figures as `scale` (125,000 GAUs a month, 20,000 micros per GAU, 1,000-GAU
-blocks, USD). The bound this section set is kept by the stored row rather
+`billing:stripe-sync` writes to `billing.plans` with the same figures as
+`scale` (300,000 GAUs a month, 5,000 micros per GAU, 5,000-GAU blocks, USD;
+v1 rates set 2026-09-14). The bound this section set is kept by the stored row rather
 than by a fallback branch: a mis-provisioned enterprise org meters at the
 `scale` figures, and the four columns are NOT NULL so no plan row can be
 absent.

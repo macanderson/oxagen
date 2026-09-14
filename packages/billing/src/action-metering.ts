@@ -49,34 +49,35 @@ export interface ActionRateBand {
 }
 
 /**
- * Spec §4.1. A customer's whole volume prices at the band their annual total
- * lands in, so the bands are read against a running annual figure rather than
- * applied marginally.
+ * Spec §4.1, v1 rates set 2026-09-14. A customer's whole volume prices at the
+ * band their annual total lands in, so the bands are read against a running
+ * annual figure rather than applied marginally. The first band is the list
+ * rate every published tier carries (5,000 micros per GAU).
  */
 export const ACTION_RATE_BANDS: readonly ActionRateBand[] = [
   {
     id: "first-1m",
     minAnnualActions: 0,
     maxAnnualActions: 1_000_000,
-    usdPer1000: 20,
+    usdPer1000: 5,
   },
   {
     id: "1m-5m",
     minAnnualActions: 1_000_000,
     maxAnnualActions: 5_000_000,
-    usdPer1000: 15,
+    usdPer1000: 4,
   },
   {
     id: "5m-25m",
     minAnnualActions: 5_000_000,
     maxAnnualActions: 25_000_000,
-    usdPer1000: 10,
+    usdPer1000: 3,
   },
   {
     id: "committed-25m-plus",
     minAnnualActions: 25_000_000,
     maxAnnualActions: null,
-    usdPer1000: 6,
+    usdPer1000: 2,
   },
 ] as const;
 
@@ -193,8 +194,8 @@ export function retentionCreditsForGbMonths(gbMonths: number): bigint {
  * What `count` governed actions are worth in MICRO-credits at `band`.
  *
  * Micro-credits, not credits, for the same reason the token meter uses them: at
- * the $6 band one action is worth 0.6 of a credit, and rounding each one up to
- * a whole credit would over-charge a high-volume customer by 66% — the exact
+ * the $2 band one action is worth 0.2 of a credit, and rounding each one up to
+ * a whole credit would over-charge a high-volume customer fivefold — the exact
  * failure #1413 fixed on the other meter. {@link consumeCredits} carries the
  * sub-credit remainder across calls, so a sequence of actions is exact.
  */
@@ -231,8 +232,8 @@ export function creditsForActions(
  *
  * The recorder charges INCREMENTALLY at whatever band the running total was in
  * at the time, which is not the same number: an organisation that ends the year
- * at 3M actions paid the $20 rate on its first million and the $15 rate after,
- * where §4.1 prices all 3M at $15. The difference is a true-up owed to the
+ * at 3M actions paid the $5 rate on its first million and the $4 rate after,
+ * where §4.1 prices all 3M at $4. The difference is a true-up owed to the
  * customer, and it is surfaced rather than absorbed — `get_action_usage`
  * reports both figures so the amount is visible before the reconciliation, not
  * discovered after it.

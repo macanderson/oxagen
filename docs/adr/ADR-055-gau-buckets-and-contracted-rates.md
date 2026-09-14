@@ -69,6 +69,20 @@ whose `effective_to` is null. Both tables carry the check
 `(rate_per_gau_micros * block_size_gau) % 10000 = 0`, so a block prices to
 whole cents and no line needs rounding.
 
+**2026-09-14 — v1 rates.** The figures the spec's §4.2 table carries were
+set by the maintainer on this date, replacing the provisional ones this ADR
+was written against (2,000 / 20,000 / 125,000 GAU a month, 20,000 micros per
+GAU, 1,000-GAU blocks): every published tier is 5,000 micros per GAU ($5 per
+1,000) in 5,000-GAU blocks ($25.00, whole cents under the check above), with
+5,000 / 50,000 / 300,000 included GAUs a month on Free / Build / Scale at
+$0 / $199 / $999 a month; Enterprise is a committed annual agreement on its
+`contract_terms` row at $2.50 – $3.00 per 1,000 for 5M or more a year, on
+invoice billing. Free is a hard stop at exhaustion (no card, no auto
+top-up); Build and Scale auto top-up at list; Scale and Enterprise may be
+approved for invoice billing. The figures are spec-owned
+(`docs/specs/governed-action-metering.md` §4.1, §4.2, §4.6) and this ADR
+cites them without restating them elsewhere.
+
 There is no `source`, `tier`, `stripe_price_id` or `exhaustion_policy`
 column on the negotiated row: the source is implied by the table, the tier
 is the entitlement's, the checkout uses `price_data`, and what happens past
