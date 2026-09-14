@@ -248,7 +248,8 @@ export interface RunRollupDeps {
 
 type Row = typeof totals.$inferSelect;
 
-function rowToRecord(row: Row): RunTotalsRecord {
+/** A `cost.run_totals` row as the rollup record; the handlers read rows through this too. */
+export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
   return {
     runId: row.runId,
     runSource: row.runSource as RunMeta["runSource"],
@@ -281,26 +282,38 @@ function rowToRecord(row: Row): RunTotalsRecord {
   };
 }
 
-/** jsonb carries the per-model cost as a decimal string; bring it back to bigint. */
-function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
+type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
+type ModelBreakdownJson = Omit<ModelBreakdown, "costMicros" | "costByClass"> & {
+  costMicros: string;
+  costByClass: Record<keyof ModelBreakdown["costByClass"], string>;
+};
+
+/** jsonb carries the per-model costs as decimal strings; bring them back to bigint. */
+export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   const raw = value as {
-    models: (Omit<
-      RunTotalsRecord["breakdown"]["models"][number],
-      "costMicros"
-    > & { costMicros: string })[];
+    models: ModelBreakdownJson[];
     tools: RunTotalsRecord["breakdown"]["tools"];
   };
   return {
-    models: raw.models.map((m) => ({ ...m, costMicros: BigInt(m.costMicros) })),
+    models: raw.models.map((m) => ({
+      ...m,
+      costMicros: BigInt(m.costMicros),
+      costByClass: Object.fromEntries(
+        Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
+      ) as ModelBreakdown["costByClass"],
+    })),
     tools: raw.tools,
   };
 }
 
-function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
+export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
   return {
     models: breakdown.models.map((m) => ({
       ...m,
       costMicros: m.costMicros.toString(),
+      costByClass: Object.fromEntries(
+        Object.entries(m.costByClass).map(([k, v]) => [k, v.toString()]),
+      ),
     })),
     tools: breakdown.tools,
   };
@@ -455,7 +468,7 @@ export async function readRunTotalsForDay(args: {
       )
       .orderBy(asc(totals.startedAt)),
   );
-  return rows.map(rowToRecord);
+  return rows.map(runTotalsRowToRecord);
 }
 
 /** Replace the workspace-day's group rows in one transaction. */

@@ -200,6 +200,33 @@ describe("rollupRun", () => {
     expect(record.priceEntryIds).toEqual(["pe_cr", "pe_in"]);
   });
 
+  it("splits each model's cost by token class, rounded once per class", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame({
+          tokens: tokens({
+            input_uncached: 1000,
+            cache_write_5m: 1000,
+            output: 100,
+          }),
+        }),
+      ],
+    });
+    const sonnet = record.breakdown.models[0]!;
+    expect(sonnet.costByClass).toEqual({
+      input_uncached: 3000n,
+      cache_read: 0n,
+      cache_write_5m: 3750n,
+      cache_write_1h: 0n,
+      output: 1500n,
+      reasoning: 0n,
+    });
+    expect(sonnet.costMicros).toBe(8250n);
+  });
+
   it("reports mixed when a run's frames were observed by different parties", () => {
     const record = rollupRun({
       meta,

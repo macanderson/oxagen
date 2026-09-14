@@ -92,6 +92,8 @@ export interface ModelBreakdown {
   calls: number;
   tokens: TokenCounts;
   costMicros: bigint;
+  /** The same cost split by token class, each rounded once; a class the book priced nothing for is 0. */
+  costByClass: Record<TokenClass, bigint>;
   basis: CostBasis;
 }
 
@@ -183,9 +185,20 @@ const PRICE_CLASS: Record<TokenClass, PriceTokenClass> = {
 interface PricedFrame {
   /** A million times the frame's micro-USD. */
   scaled: bigint;
+  /** The same, by token class; an estimated frame's reported figure sits under `output`. */
+  scaledByClass: Record<TokenClass, bigint>;
   basis: CostBasis;
   priceEntryIds: string[];
 }
+
+const zeroScaled = (): Record<TokenClass, bigint> => ({
+  input_uncached: 0n,
+  cache_read: 0n,
+  cache_write_5m: 0n,
+  cache_write_1h: 0n,
+  output: 0n,
+  reasoning: 0n,
+});
 
 /**
  * Price one frame against the book. Every class with units resolves its own
@@ -200,6 +213,7 @@ export function priceFrame(
   frame: ModelCallFrame,
 ): PricedFrame {
   let scaled = 0n;
+  const scaledByClass = zeroScaled();
   let missed = false;
   const ids = new Set<string>();
   for (const c of TOKEN_CLASSES) {
@@ -216,19 +230,26 @@ export function priceFrame(
       continue;
     }
     ids.add(entry.id);
-    scaled += scaledCost(units, entry.microsPerMillion);
+    const part = scaledCost(units, entry.microsPerMillion);
+    scaled += part;
+    scaledByClass[c] += part;
   }
-  if (missed) {
+  if (missed && frame.reportedCostMicros !== null) {
+    // The reported figure is one number with no split; it sits under output.
+    const reported = frame.reportedCostMicros * MILLION;
     return {
-      scaled:
-        frame.reportedCostMicros !== null
-          ? frame.reportedCostMicros * MILLION
-          : scaled,
+      scaled: reported,
+      scaledByClass: { ...zeroScaled(), output: reported },
       basis: "estimated",
       priceEntryIds: [...ids],
     };
   }
-  return { scaled, basis: frame.basis, priceEntryIds: [...ids] };
+  return {
+    scaled,
+    scaledByClass,
+    basis: missed ? "estimated" : frame.basis,
+    priceEntryIds: [...ids],
+  };
 }
 
 /**
@@ -281,6 +302,7 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       calls: number;
       tokens: TokenCounts;
       scaled: bigint;
+      scaledByClass: Record<TokenClass, bigint>;
       basis: CostBasis | null;
     }
   >();
@@ -300,11 +322,13 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       calls: 0,
       tokens: { ...ZERO_TOKENS },
       scaled: 0n,
+      scaledByClass: zeroScaled(),
       basis: null,
     };
     group.calls += 1;
     addTokens(group.tokens, frame.tokens);
     group.scaled += p.scaled;
+    for (const c of TOKEN_CLASSES) group.scaledByClass[c] += p.scaledByClass[c];
     group.basis = foldBasis(group.basis, p.basis);
     group.provider ??= frame.provider;
     byModel.set(frame.model, group);
@@ -337,6 +361,12 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
           calls: g.calls,
           tokens: g.tokens,
           costMicros: divideHalfEven(g.scaled, MILLION),
+          costByClass: Object.fromEntries(
+            TOKEN_CLASSES.map((c) => [
+              c,
+              divideHalfEven(g.scaledByClass[c], MILLION),
+            ]),
+          ) as Record<TokenClass, bigint>,
           // A group always holds at least one priced frame, so a basis exists.
           basis: g.basis ?? "estimated",
         }))
