@@ -10,6 +10,7 @@
 
 import type { CapabilityDeclaration } from "../types";
 import { apiKeyCreate } from "./api.key.create";
+import { apiKeyList } from "./api.key.list";
 import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalList } from "./agent.approval.list";
@@ -377,6 +378,7 @@ export type {
 
 export {
   apiKeyCreate,
+  apiKeyList,
   apiKeyRevoke,
   assetUpload,
   agentApprovalList,
@@ -626,6 +628,7 @@ export {
 // what the compiler will serialize into a declaration file.
 export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyCreate,
+  apiKeyList,
   apiKeyRevoke,
   assetUpload,
   agentApprovalList,

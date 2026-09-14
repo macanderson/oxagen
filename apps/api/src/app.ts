@@ -145,6 +145,7 @@ import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.lis
 import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
 import { iamRoleListRoute } from "./routes/v1/iam.role.list";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
+import { apiKeyListRoute } from "./routes/v1/api.key.list";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { apiKeyRotateRoute } from "./routes/v1/api.key.rotate";
 import { listMembersRoute } from "./routes/v1/workspace.member.list";
@@ -612,6 +613,8 @@ orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
 // IAM roles read (read-only; writes remain provisioning-script-only).
 orgScoped.route("/iam/roles/list", iamRoleListRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
+// GET on the same path lists the keys in scope (separate thin adapter per capability).
+orgScoped.route("/api-keys", apiKeyListRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
 orgScoped.route("/workspace/member/list", listMembersRoute);

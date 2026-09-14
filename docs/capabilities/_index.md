@@ -70,6 +70,7 @@ Capabilities granted to an agent as a set have a page of their own:
 ## Api (3)
 
 - [api.key.create](api.key.create.md) — Create a new API key scoped to the requesting org; the raw key is shown once and never retrievable
+- [api.key.list](api.key.list.md) — List the API keys in scope with their metadata; never returns a key's secret or its hash
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
 

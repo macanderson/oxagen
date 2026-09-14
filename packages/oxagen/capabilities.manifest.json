@@ -935,6 +935,19 @@
       }
     },
     {
+      "name": "list_api_keys",
+      "file": "api.key.list.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "revoke_api_key",
       "file": "api.key.revoke.ts",
       "domain": "api_key",

@@ -1168,6 +1168,16 @@
       "writes": []
     },
     {
+      "domain": "api_key",
+      "name": "list_api_keys",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_approvals",
       "reads": [],
@@ -2550,7 +2560,7 @@
       "writes": []
     }
   ],
-  "contentHash": "61324272f39d1f942937c81db35a11cf5ee05f174515ac613fe92af945f6626a",
+  "contentHash": "db34c290ecb4a8f8e5cead4ad8fe1fe6fe26bbf9560a250e20b5905ad54a6c82",
   "domains": [
     {
       "name": "agent",
