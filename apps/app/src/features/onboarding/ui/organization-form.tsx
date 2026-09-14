@@ -1,7 +1,8 @@
 "use client";
-// Gate step 1 (mockup `obOrg` @ mc-baseline-w1): name the organization, its
+// Create an organization (mockup `obOrg` @ mc-baseline-w1): name it, its
 // address and immutable namespace, and the first workspace. The address and
-// namespace follow the name until someone edits them by hand.
+// namespace follow the name until someone edits them by hand. A created
+// organization lands on its first workspace's Fleet page.
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -10,11 +11,12 @@ import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { eyebrow, panel } from "@/ui/control-styles";
 import { createOrganizationAction } from "../actions";
-import { suggestNamespace, toSlug } from "../agent-key";
 import {
   OrganizationForm as Schema,
   type OrganizationField,
   type OrgFormErrorKey,
+  suggestNamespace,
+  toSlug,
 } from "../org-form";
 
 type Values = Record<OrganizationField, string>;

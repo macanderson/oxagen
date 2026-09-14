@@ -1,6 +1,6 @@
 "use client";
-// The ⌘K command menu (mockup `cmdMenu()`): a combobox over every page, recent
-// runs, actions and graph questions. Arrow keys move, Enter opens, Esc closes.
+// The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes.
+// Arrow keys move, Enter opens, Esc closes.
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,7 +10,6 @@ import {
   buildCommands,
   type Command,
   filterCommands,
-  groupCommands,
   moveHighlight,
 } from "./commands";
 import { parseShellPath } from "./nav";
@@ -57,19 +56,10 @@ function CommandPalette({
 
   const commands = useMemo(
     () =>
-      buildCommands(
-        { org: data.org, ws, runs: data.runs },
-        {
-          nav: (key) => t(`nav.${key}`),
-          action: (id) => t(`commands.actions.${id}`),
-          question: (id) => t(`commands.questions.${id}`),
-        },
-      ),
-    [data.org, data.runs, ws, t],
+      buildCommands({ org: data.org, ws }, { nav: (key) => t(`nav.${key}`) }),
+    [data.org, ws, t],
   );
-  const filtered = filterCommands(commands, query);
-  const groups = groupCommands(filtered);
-  const ordered = groups.flatMap((g) => g.items);
+  const ordered = filterCommands(commands, query);
   const active = ordered[highlight] ?? null;
 
   const open = (c: Command) => {
@@ -89,8 +79,8 @@ function CommandPalette({
         <input
           ref={inputRef}
           role="combobox"
-          aria-expanded={groups.length > 0}
-          aria-controls={groups.length > 0 ? listId : undefined}
+          aria-expanded={ordered.length > 0}
+          aria-controls={ordered.length > 0 ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={active === null ? undefined : optionId(active)}
           aria-label={t("commands.input")}
@@ -118,7 +108,7 @@ function CommandPalette({
           className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
-      {groups.length === 0 ? (
+      {ordered.length === 0 ? (
         <p
           role="status"
           className="px-3 py-6 text-center text-sm text-muted-foreground"
@@ -132,56 +122,30 @@ function CommandPalette({
           aria-label={t("commands.title")}
           className="min-h-0 flex-1 overflow-y-auto p-2"
         >
-          {groups.map((g) => (
-            <div
-              key={g.group}
-              role="group"
-              aria-labelledby={`${listId}-g-${g.group}`}
-              className="mb-1"
-            >
-              <p
-                id={`${listId}-g-${g.group}`}
-                role="presentation"
-                className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+          {ordered.map((c, i) => {
+            const selected = active?.id === c.id;
+            return (
+              <div
+                key={c.id}
+                id={optionId(c)}
+                role="option"
+                aria-selected={selected}
+                data-command={c.id}
+                tabIndex={-1}
+                onMouseMove={() => {
+                  if (i !== highlight) setHighlight(i);
+                }}
+                onClick={() => {
+                  open(c);
+                }}
+                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                  selected ? "bg-accent text-accent-foreground" : ""
+                }`}
               >
-                {t(`commands.groups.${g.group}`)}
-              </p>
-              {g.items.map((c) => {
-                const selected = active?.id === c.id;
-                return (
-                  <div
-                    key={c.id}
-                    id={optionId(c)}
-                    role="option"
-                    aria-selected={selected}
-                    data-command={c.id}
-                    tabIndex={-1}
-                    onMouseMove={() => {
-                      const i = ordered.indexOf(c);
-                      if (i !== highlight) setHighlight(i);
-                    }}
-                    onClick={() => {
-                      open(c);
-                    }}
-                    className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
-                      selected ? "bg-accent text-accent-foreground" : ""
-                    }`}
-                  >
-                    <span
-                      className={`min-w-0 flex-1 truncate ${c.group === "runs" ? "font-mono text-[13px]" : ""}`}
-                    >
-                      {c.label}
-                    </span>
-                    {c.detail === null ? null : (
-                      <span className="truncate font-mono text-xs text-muted-foreground">
-                        {c.detail}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
@@ -193,9 +157,6 @@ function CommandPalette({
         </span>
         <span>
           <kbd className="font-mono">esc</kbd> {t("commands.footer.close")}
-        </span>
-        <span className="ml-auto hidden font-mono sm:inline">
-          {t("commands.footer.contract")}
         </span>
       </div>
     </Dialog.Popup>

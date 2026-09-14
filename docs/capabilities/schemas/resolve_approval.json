@@ -55,8 +55,7 @@
         "type": "string",
         "enum": [
           "approved",
-          "denied",
-          "expired"
+          "denied"
         ]
       }
     },

@@ -1,4 +1,3 @@
-// The onboarding gate and Register an agent: public surface for route files.
-// Server-only reads sit behind these screens; import from Server Components only.
-export { RegisterScreen, WelcomeScreen } from "./screens";
-export { GateSkeleton } from "./ui/gate-shell";
+// Organization creation: the public surface for the /new-organization route.
+// Server-only reads sit behind the screen; import from Server Components only.
+export { NewOrganizationScreen } from "./new-organization";

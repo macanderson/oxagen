@@ -10,13 +10,11 @@
 export type Theme = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
-export const THEMES: readonly Theme[] = ["system", "light", "dark"];
-
 /** The house kit's cookie name (@oxagen/ui THEME_COOKIE_NAME), so both agree. */
 export const THEME_COOKIE = "theme";
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
-export function parseTheme(value: string | null | undefined): Theme {
+function parseTheme(value: string | null | undefined): Theme {
   return value === "light" || value === "dark" || value === "system"
     ? value
     : "system";

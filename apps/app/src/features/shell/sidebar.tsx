@@ -1,19 +1,16 @@
 "use client";
 // The sidebar (mockup `sidebar()`): brand, organization and workspace
-// switchers, the Workspace and Organization sections, and the assistant
-// launcher the flyout flies out of.
+// switchers, the Workspace and Organization sections, and the data-plane line.
 import { OxagenWordmark } from "@oxagen/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
-import { AssistantLauncher } from "./assistant-launcher";
 import {
   isNavItemCurrent,
   type NavSection,
   parseShellPath,
   sidebarSections,
-  visibleCount,
 } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
 import { activeWorkspace, type ShellData } from "./shell-data";
@@ -28,9 +25,7 @@ export function useSidebarSections(data: ShellData): {
   const pathname = usePathname();
   const urlWs = parseShellPath(pathname).ws;
   const ws = activeWorkspace(data, urlWs);
-  const counts =
-    data.counts.ok && ws !== null ? (data.counts.value[ws] ?? null) : null;
-  return { sections: sidebarSections(data.org, ws, counts), ws, pathname };
+  return { sections: sidebarSections(data.org, ws), ws, pathname };
 }
 
 export function SidebarNav({
@@ -57,7 +52,6 @@ export function SidebarNav({
             {section.items.map((item) => {
               const Icon = NAV_ICONS[item.key];
               const current = isNavItemCurrent(item.key, pathname);
-              const count = visibleCount(item);
               return (
                 <li key={item.key}>
                   <Link
@@ -76,22 +70,6 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
-                    {count === null ? null : (
-                      <span
-                        className={`rounded border px-1.5 font-mono text-[11px] ${
-                          item.hot
-                            ? "border-current text-link"
-                            : "border-sidebar-border text-sidebar-nav-label-fg"
-                        }`}
-                      >
-                        <span aria-hidden="true">{count}</span>
-                        <span className="sr-only">
-                          {item.hot
-                            ? t("sidebar.attentionLabel", { count })
-                            : t("sidebar.countLabel", { count })}
-                        </span>
-                      </span>
-                    )}
                   </Link>
                 </li>
               );
@@ -118,11 +96,7 @@ export function SidebarHeader({ data }: { data: ShellData }) {
       {data.context.ok ? (
         <>
           <OrgSwitcher context={data.context.value} />
-          <WorkspaceSwitcher
-            context={data.context.value}
-            current={ws}
-            counts={data.counts.ok ? data.counts.value : null}
-          />
+          <WorkspaceSwitcher context={data.context.value} current={ws} />
         </>
       ) : (
         <p className="truncate px-1 font-mono text-xs text-sidebar-nav-label-fg">
@@ -133,24 +107,15 @@ export function SidebarHeader({ data }: { data: ShellData }) {
   );
 }
 
+/** The data-plane line; nothing when the context read failed. */
 export function SidebarFooter({ data }: { data: ShellData }) {
   const t = useTranslations("shell.sidebar");
-  const { ws } = useSidebarSections(data);
-  const context = data.context.ok ? data.context.value : null;
-  const agents =
-    ws !== null && data.counts.ok
-      ? (data.counts.value[ws]?.agents ?? null)
-      : null;
+  if (!data.context.ok) return null;
   return (
     <div className="border-t border-sidebar-border p-2.5">
-      <AssistantLauncher engine={data.engine} />
-      {context === null ? null : (
-        <p className="px-1 font-mono text-[11px] text-sidebar-nav-label-fg">
-          {agents === null
-            ? t("footerPlaneOnly", { plane: context.org.dataPlane })
-            : t("footer", { agents, plane: context.org.dataPlane })}
-        </p>
-      )}
+      <p className="px-1 font-mono text-[11px] text-sidebar-nav-label-fg">
+        {t("footer", { plane: data.context.value.org.dataPlane })}
+      </p>
     </div>
   );
 }

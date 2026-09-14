@@ -18,8 +18,6 @@ export const PAGE_KEYS = [
   "ontology",
   "steering",
   "spend",
-  "register",
-  "welcome",
   "organization",
   "roles",
   "apiKeys",
@@ -74,9 +72,6 @@ export const PAGE_FAILURES = {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
   },
-  // Register an agent and the onboarding gate: the enrollment read path.
-  register: { error: IAM_DOWN, permission: "agent.register" },
-  welcome: { error: CONTROL_PLANE_DOWN, permission: "org.create" },
   organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   roles: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   apiKeys: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
@@ -88,10 +83,8 @@ export const PAGE_FAILURES = {
     error: { code: "audit_store_unavailable", status: 503 },
     permission: "org.auditor",
   },
-  // The shell has no page of its own in the mockup; its reads fail with the
-  // notification store and need only organization membership.
-  shell: {
-    error: { code: "notification_store_unavailable", status: 503 },
-    permission: "org.read",
-  },
+  // The shell has no page of its own in the mockup; its one read (the
+  // organization context) fails with the control plane and needs only
+  // organization membership.
+  shell: { error: CONTROL_PLANE_DOWN, permission: "org.read" },
 } as const satisfies Record<PageKey, PageFailure>;

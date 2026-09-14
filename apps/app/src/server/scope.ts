@@ -17,7 +17,7 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
-import { liveTenancyLookups } from "./tenancy-lookups";
+import { systemLookups } from "./tenancy-lookups";
 import {
   canonicalPath,
   resolveViewerWith,
@@ -38,7 +38,7 @@ export const resolveViewer = cache(
     // error; connection() defers it to the request.
     await connection();
     return resolveViewerWith(
-      { session, lookups: liveTenancyLookups, now: new Date() },
+      { session, lookups: systemLookups, now: new Date() },
       orgSlug,
       wsSlug,
     );

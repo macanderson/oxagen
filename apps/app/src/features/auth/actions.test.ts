@@ -114,7 +114,7 @@ describe("resendVerification", () => {
       to: "/verify",
     });
     expect(api.sendVerificationEmail).toHaveBeenCalledWith({
-      body: { email: "m@acme.example", callbackURL: "/welcome" },
+      body: { email: "m@acme.example", callbackURL: "/new-organization" },
     });
   });
 

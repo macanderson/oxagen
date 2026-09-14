@@ -1,11 +1,37 @@
-// Gate step 1: name the organization and its first workspace. Issues carry keys
-// under `onboarding.errors.*`.
+// The organization form: name the organization, its address and immutable
+// namespace, and the first workspace. Issues carry keys under
+// `onboarding.errors.*`. The address and namespace rules are the spec's:
+//   namespace: 2–6 lowercase letters or digits, immutable (App. A
+//              `org.organizations.namespace`, the live `organizations_namespace_check`)
+//   slug:      lowercase letters, digits and hyphens (the `create_org` contract,
+//              which also owns the reserved org and workspace slug sets)
 import { z } from "zod";
 import {
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
 } from "@oxagen/oxagen/contracts/org.create";
-import { NAMESPACE_PATTERN, SLUG_PATTERN } from "./agent-key";
+
+const NAMESPACE_PATTERN = /^[a-z0-9]{2,6}$/;
+const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+
+/** Lowercase, hyphen-separated, trimmed of edge hyphens, at most `max` characters. */
+export function toSlug(input: string, max = 40): string {
+  return input
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, max)
+    .replace(/-+$/g, "");
+}
+
+/** A namespace suggestion from a slug: its first alphanumeric run, cut to six characters. */
+export function suggestNamespace(slug: string): string {
+  const compact =
+    slug.split("-").find((part) => part.length >= 2) ?? slug.replace(/-/g, "");
+  return compact.replace(/[^a-z0-9]/g, "").slice(0, 6);
+}
 
 export type OrgFormErrorKey =
   | "orgNameRequired"

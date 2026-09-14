@@ -29,7 +29,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  liveTenancyLookups: { name: "live" },
+  systemLookups: { name: "live" },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -37,7 +37,7 @@ vi.mock("./viewer-resolution", async (importOriginal) => ({
 }));
 
 import { MFA_ENROLL_PATH } from "./mfa-gate";
-import { liveTenancyLookups } from "./tenancy-lookups";
+import { systemLookups } from "./tenancy-lookups";
 import { requestUrl, requireViewer } from "./scope";
 
 const viewer = { userId: "u1" };
@@ -57,7 +57,7 @@ describe("requireViewer", () => {
     resolves({ kind: "ok", viewer });
     await expect(requireViewer("acme", "core-platform")).resolves.toBe(viewer);
     expect(resolveMock).toHaveBeenCalledWith(
-      expect.objectContaining({ session, lookups: liveTenancyLookups }),
+      expect.objectContaining({ session, lookups: systemLookups }),
       "acme",
       "core-platform",
     );

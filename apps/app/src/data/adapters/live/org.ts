@@ -72,7 +72,7 @@ import { ORG_ONLY_WORKSPACE_ID, type Scope } from "@/data/scope";
 import { ContractOutputMismatch, ToolNotRegistered } from "@/server/errors";
 import type { ToolContract } from "@/server/invoke";
 import { getSession } from "@/server/session";
-import { liveTenancyLookups } from "@/server/tenancy-lookups";
+import { systemLookups } from "@/server/tenancy-lookups";
 import {
   type ApiKeySource,
   type InvitationSource,
@@ -603,7 +603,7 @@ export const liveOrgDeps: OrgLiveDeps = {
   async principal() {
     return (await getSession())?.user.id ?? null;
   },
-  orgRole: (orgId, userId) => liveTenancyLookups.orgRole(orgId, userId),
+  orgRole: (orgId, userId) => systemLookups.orgRole(orgId, userId),
   invoke: kernelOrgInvoke,
   store: postgresOrgStore,
   report: (error, context) => void reportToTelemetry(error, context),

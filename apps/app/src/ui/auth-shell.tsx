@@ -1,4 +1,4 @@
-// The frame every sign-in and onboarding screen sits in (mockup `obShell` @
+// The frame every sign-in and organization-creation screen sits in (mockup `obShell` @
 // mc-baseline-w1): the brand on the top bar, a faint gold wash, and one centred
 // column.
 import Link from "next/link";
@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { eyebrow } from "./control-styles";
 
-export async function Brandmark() {
+async function Brandmark() {
   const t = await getTranslations("ui.brand");
   return (
     <Link

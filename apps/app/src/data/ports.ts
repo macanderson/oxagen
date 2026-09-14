@@ -6,7 +6,6 @@
 // src/data/backing.ts records, per method, which page reads it, which Batch 3
 // lane wires it, and the milestone and gap it waits on.
 import type {
-  AccountView,
   AgentDefinition,
   AgentDetail,
   AgentRow,
@@ -14,18 +13,15 @@ import type {
   ApiKey,
   ApprovalItem,
   ArchiveExport,
-  AssistantEngine,
   AssuranceHistoryRow,
   AssuranceRun,
   AuditEvent,
   AutoApprovalRule,
   BillingPlan,
   Budget,
-  CommandRun,
   Connection,
   ContextWindow,
   DataPlane,
-  DetectedRepository,
   DrillKind,
   EmbeddingIndex,
   EncryptionKey,
@@ -33,13 +29,9 @@ import type {
   Finding,
   FindingEvidence,
   FindingFix,
-  FirstFrameScript,
-  FlowNamespaces,
   Frame,
   Incident,
-  InstallerOffer,
   Invitation,
-  InvitationView,
   Invoice,
   KillSwitch,
   LegalHold,
@@ -48,15 +40,11 @@ import type {
   Member,
   Meter,
   ModelFunding,
-  NavCounts,
-  NotificationFeed,
   ObservedSchemaProposal,
-  OnboardingGate,
   OntologyClass,
   OntologyVersion,
   Organization,
   PermissionGroup,
-  Person,
   PolicySimulation,
   PolicyVersion,
   Receipt,
@@ -220,49 +208,10 @@ export interface AuditReadPort {
  * layout resolves the viewer first (`requireViewer`), so every read takes the
  * organization-level scope; reads about the viewer take their user id too.
  */
+/** The shell's one rev1 read (ARCHITECTURE.md §3.3); a stub until WL-11 binds it. */
 export interface ShellReadPort {
   /** The organization, its workspaces and the viewer. `error` 404: no such organization for this viewer. */
   context(scope: Scope, userId: string): R<ShellContext>;
-  /** Counts beside the sidebar items, keyed by workspace slug (one read for the switcher and the sidebar). */
-  navCounts(scope: Scope): R<Record<string, NavCounts>>;
-  notifications(scope: Scope, userId: string): R<NotificationFeed>;
-  people(scope: Scope): R<Person[]>;
-  /** W9: the flyout reads this; every other screen works with the engine down. */
-  assistantEngine(scope: Scope): R<AssistantEngine>;
-  /** Recent runs the command menu offers to open. */
-  recentRuns(scope: Scope): R<CommandRun[]>;
-  account(scope: Scope, userId: string): R<AccountView>;
-}
-
-/** Which of the two flows that share the onboarding screens is reading. */
-export type OnboardingFlow = "gate" | "register";
-
-/**
- * The onboarding gate and Register an agent (spec §4.4). Organizations,
- * workspaces and invitations are backed today; the gate state, the one-click
- * installer, the first frame and the detected repository wait on G15 (M1).
- */
-export interface OnboardingReadPort {
-  /** The namespaces agent keys are minted in, by the ids `requireViewer` admitted. `error` 404 when gone. */
-  namespaces(scope: Scope): R<FlowNamespaces>;
-  /**
-   * The invitation behind one public token. Unscoped on purpose: the invitee
-   * is not a member of the organization yet, so the token is the capability.
-   */
-  invitation(token: string): R<InvitationView>;
-  /** Where the gate stands. `scope` is null before the organization exists. */
-  gate(flow: OnboardingFlow, scope: Scope | null): R<OnboardingGate>;
-  installerOffer(scope: Scope, flow: OnboardingFlow): R<InstallerOffer>;
-  firstFrameScript(
-    scope: Scope,
-    q: {
-      flow: OnboardingFlow;
-      agentKey: string;
-      harness: string;
-      operator: string;
-    },
-  ): R<FirstFrameScript>;
-  detectedRepository(scope: Scope): R<DetectedRepository>;
 }
 
 /** One field per port. The only object a page gets from `dataSource()`. */
@@ -279,7 +228,6 @@ export interface DataSource {
   billing: BillingReadPort;
   audit: AuditReadPort;
   shell: ShellReadPort;
-  onboarding: OnboardingReadPort;
 }
 
 export type PortName = keyof DataSource;

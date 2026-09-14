@@ -115,7 +115,7 @@ describe("createOrganizationAction", () => {
   it("sends a signed-out person to log in", async () => {
     getAuthUser.mockResolvedValue(null);
     await expect(createOrganizationAction(form)).rejects.toThrow(
-      "NEXT_REDIRECT /login?next=%2Fwelcome",
+      "NEXT_REDIRECT /login?next=%2Fnew-organization",
     );
   });
 
@@ -137,7 +137,7 @@ describe("createOrganizationAction", () => {
   });
 
   it("refuses an organization address that is a top-level route, writing nothing (negative)", async () => {
-    for (const slug of ["welcome", "login", "api"])
+    for (const slug of ["new-organization", "login", "api"])
       expect(await createOrganizationAction({ ...form, slug })).toEqual({
         ok: false,
         fields: { slug: "slugReserved" },
@@ -145,10 +145,10 @@ describe("createOrganizationAction", () => {
     expect(inserted).toHaveLength(0);
   });
 
-  it("creates the tenant and moves on to its wrap step", async () => {
+  it("creates the tenant and lands on its first workspace's Fleet page", async () => {
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
-      to: "/welcome/wrap?org=acme&ws=core-platform",
+      to: "/acme/core-platform",
     });
   });
 
@@ -182,7 +182,7 @@ describe("createOrganizationAction", () => {
 
 describe("createOrganization", () => {
   it("re-checks reserved addresses before any write, so a crafted call cannot skip the form", async () => {
-    for (const slug of ["welcome", "login", "api"])
+    for (const slug of ["new-organization", "login", "api"])
       expect(await createOrganization("u-owner", { ...form, slug })).toEqual({
         ok: false,
         error: "slugReserved",
