@@ -769,12 +769,17 @@ export function buildProgram(): Command {
       "Open the browser even without a TTY, and even when a session is saved (what the desktop app runs)",
     )
     .option("--no-browser", "Prompt for token instead of opening the browser")
+    .option(
+      "--signup",
+      "Create an Oxagen account first: opens the sign-up page, then the same consent page (implies --browser)",
+    )
     .action(
       async (opts: {
         token?: string;
         org?: string;
         workspace?: string;
         browser?: boolean;
+        signup?: boolean;
       }) => {
         const { handleLogin } = await import("./commands/auth.js");
         await handleLogin(opts);

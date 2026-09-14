@@ -52,6 +52,8 @@ export interface LoginOptions {
    * TTY needed, and a saved session is replaced rather than reported.
    */
   browser?: boolean;
+  /** Open the sign-up page (with the consent page as its return) instead of the consent page. Implies `browser`. */
+  signup?: boolean;
 }
 
 function maskToken(token: string): string {
@@ -143,6 +145,7 @@ export interface InteractiveLoginResult {
 export async function runBrowserLogin(
   onStatus?: (line: string) => void,
   signal?: AbortSignal,
+  options: { signup?: boolean } = {},
 ): Promise<InteractiveLoginResult> {
   const apiUrl = getApiUrl();
   const appUrl = getAppUrl();
@@ -152,12 +155,17 @@ export async function runBrowserLogin(
     appUrl,
     onStatus,
     signal,
+    ...(options.signup === true ? { signup: true } : {}),
   });
   writeConfig({ token, orgSlug, workspaceSlug, appUrl });
   return { token, orgSlug, workspaceSlug };
 }
 
-export async function handleLogin(opts: LoginOptions): Promise<void> {
+export async function handleLogin(input: LoginOptions): Promise<void> {
+  // `--signup` is the browser flow with the sign-up page first; it can never
+  // mean "report the saved session".
+  const opts: LoginOptions =
+    input.signup === true ? { ...input, browser: true } : input;
   const apiUrl = getApiUrl();
   const appUrl = getAppUrl();
   const isTTY = process.stdin.isTTY ?? false;
@@ -205,8 +213,10 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
 
   if (useBrowser) {
     try {
-      const { token, orgSlug, workspaceSlug } = await runBrowserLogin((line) =>
-        process.stdout.write(`\n${line}\n`),
+      const { token, orgSlug, workspaceSlug } = await runBrowserLogin(
+        (line) => process.stdout.write(`\n${line}\n`),
+        undefined,
+        { signup: opts.signup === true },
       );
       process.stdout.write(`\nLogged in to Oxagen:\n`);
       process.stdout.write(`  token:     ${maskToken(token)}\n`);

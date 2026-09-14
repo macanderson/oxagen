@@ -32,8 +32,10 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
  * session saved, print it and exit 0 without re-authenticating; the flag
  * makes both Sign in and Switch organization the browser flow.
  */
-export function loginArgs(): string[] {
-  return ["login", "--browser"];
+export function loginArgs(options: { signup?: boolean } = {}): string[] {
+  return options.signup === true
+    ? ["login", "--browser", "--signup"]
+    : ["login", "--browser"];
 }
 
 /**

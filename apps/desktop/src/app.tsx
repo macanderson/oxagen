@@ -304,14 +304,21 @@ export function App() {
   // `oxagen login --browser` replaces whatever session config.json holds,
   // so a sign-in after a 401 (or a Switch organization) starts the pickers
   // over from the new session rather than keeping the dead one's verdict.
-  const signIn = () =>
-    act("signin", "oxagen", loginArgs(), () => {
-      setSessionExpired(false);
-      setSessionEpoch((n) => n + 1);
-      setPickedOrg(null);
-      setPickedWorkspace(null);
-      setNotice("Signed in.");
-    });
+  const signIn = (options: { signup?: boolean } = {}) =>
+    act(
+      options.signup ? "signup" : "signin",
+      "oxagen",
+      loginArgs(options),
+      () => {
+        setSessionExpired(false);
+        setSessionEpoch((n) => n + 1);
+        setPickedOrg(null);
+        setPickedWorkspace(null);
+        setNotice(
+          options.signup ? "Account created and signed in." : "Signed in.",
+        );
+      },
+    );
   const signOut = () =>
     act("signout", "oxagen", ["logout"], () => {
       setOrgs(null);
@@ -691,16 +698,26 @@ export function App() {
                     ? `The saved session for ${state?.config.org_slug ?? "your organization"} has expired. `
                     : ""}
                   Sign in opens your browser; come back here when it says you
-                  are done.
+                  are done. New to Oxagen? Create an account — you will name
+                  your organization and first workspace, then land back here.
                 </p>
                 <div className="row">
                   <button
                     type="button"
                     className="primary"
-                    onClick={signIn}
+                    onClick={() => signIn()}
                     disabled={busy !== null}
                   >
                     {busy === "signin" ? "Waiting for the browser…" : "Sign in"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => signIn({ signup: true })}
+                    disabled={busy !== null}
+                  >
+                    {busy === "signup"
+                      ? "Waiting for the browser…"
+                      : "Create an account"}
                   </button>
                 </div>
               </>
@@ -1081,7 +1098,7 @@ export function App() {
             <button
               type="button"
               className="primary"
-              onClick={signIn}
+              onClick={() => signIn()}
               disabled={busy !== null}
             >
               {busy === "signin" ? "Waiting for the browser…" : "Sign in"}

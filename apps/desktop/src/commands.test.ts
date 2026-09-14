@@ -27,6 +27,11 @@ describe("sidecar argv", () => {
     // A bare `login` in a piped child refuses without a token and, with a
     // session saved, prints it and exits 0; only --browser reaches PKCE.
     expect(loginArgs()).toEqual(["login", "--browser"]);
+    expect(loginArgs({ signup: true })).toEqual([
+      "login",
+      "--browser",
+      "--signup",
+    ]);
   });
 
   it("enrolls with the picked org, workspace, and harness list", () => {

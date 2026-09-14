@@ -17,7 +17,12 @@ import { authClient } from "@oxagen/auth/client";
 
 type Mode = "totp" | "backup";
 
-export function TwoFactorForm() {
+export function TwoFactorForm({
+  returnTo = null,
+}: {
+  /** Same-origin path to continue to once the session exists (validated by the page). */
+  returnTo?: string | null;
+}) {
   const router = useRouter();
   const [mode, setMode] = React.useState<Mode>("totp");
   const [pending, setPending] = React.useState(false);
@@ -42,8 +47,9 @@ export function TwoFactorForm() {
               : "That backup code is invalid or already used."),
         );
       }
-      // Session is now established — leave the auth boundary.
-      router.push("/");
+      // Session is now established — leave the auth boundary, to wherever
+      // sign-in was heading (the CLI consent page for a browser login).
+      router.push(returnTo ?? "/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");

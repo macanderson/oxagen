@@ -134,6 +134,7 @@ export async function browserLogin({
   appUrl,
   onStatus,
   signal,
+  signup = false,
 }: {
   apiUrl: string;
   appUrl: string;
@@ -141,6 +142,13 @@ export async function browserLogin({
   onStatus?: (line: string) => void;
   /** Abort the in-flight wait early (closes the loopback server, rejects). */
   signal?: AbortSignal;
+  /**
+   * Open the app's sign-up page instead of the consent page, with the
+   * consent page as its `returnTo`: the new account creates its organization
+   * and lands on the same authorize URL, so the callback below is unchanged.
+   * The desktop installer's "Create an account" runs `login --signup`.
+   */
+  signup?: boolean;
 }): Promise<{ token: string; orgSlug: string; workspaceSlug: string }> {
   const emit =
     onStatus ?? ((line: string) => void process.stdout.write(`${line}\n`));
@@ -172,10 +180,17 @@ export async function browserLogin({
     code_challenge_method: "S256",
     label: os.hostname(),
   });
-  const authorizeUrl = `${appUrl}/cli/authorize?${params.toString()}`;
+  const authorizePath = `/cli/authorize?${params.toString()}`;
+  const authorizeUrl = signup
+    ? `${appUrl}/signup?returnTo=${encodeURIComponent(authorizePath)}`
+    : `${appUrl}${authorizePath}`;
 
   // Always surface the URL so the user can paste it if the browser fails to open.
-  emit("Opening browser for authentication...");
+  emit(
+    signup
+      ? "Opening browser to create your Oxagen account..."
+      : "Opening browser for authentication...",
+  );
   emit(`If your browser didn't open, paste this URL:\n  ${authorizeUrl}`);
   openBrowser(authorizeUrl);
 
