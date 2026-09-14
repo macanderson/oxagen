@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "typescript": "6.0.3",
+    "@vitest/coverage-v8": "2.1.9",
     "vite": "6.4.3",
     "vitest": "2.1.9"
   }

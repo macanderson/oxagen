@@ -327,6 +327,9 @@ jobs:
           #
           # Build only: the Coverage step below runs every package's suite
           # under test:coverage, so a test:unit pass here ran it twice.
+          # tools/scripts/check-coverage-gates.mjs (under check:contracts in
+          # the checks job) refuses a package with a test:unit script and no
+          # test:coverage script, which is what keeps that sentence true.
           pnpm turbo run build --concurrency=3 $TURBO_FILTER
 
       - name: Coverage thresholds

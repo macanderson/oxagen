@@ -19,6 +19,13 @@
  *
  * Two of three is the failure. Declaring none is fine — a package may
  * legitimately not gate on coverage, and this says nothing about that choice.
+ *
+ * A fourth fact ties the unit suite to the same task. PR CI's `test` job
+ * (`.github/workflows/pipeline.yml`) runs `turbo run test:coverage` and not
+ * `test:unit`, so a package with a `test:unit` script and no `test:coverage`
+ * script has a suite no PR runs. `@oxagen/desktop` shipped that way: its
+ * `vitest run` covered `src/commands.test.ts` on the nightly matrix only. A
+ * `test:unit` script therefore requires a `test:coverage` script.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -26,7 +33,7 @@ import { join } from "node:path";
 const ROOTS = ["packages", "apps", "tools"];
 const PROVIDER = "@vitest/coverage-v8";
 
-/** The three facts, for one package directory. */
+/** The four facts, for one package directory. */
 export function inspect(dir, read = readFileSync, exists = existsSync) {
   const pkgPath = join(dir, "package.json");
   if (!exists(pkgPath)) return null;
@@ -50,6 +57,7 @@ export function inspect(dir, read = readFileSync, exists = existsSync) {
     dir,
     declaresThresholds: /thresholds\s*:/.test(config),
     hasScript: typeof pkg.scripts?.["test:coverage"] === "string",
+    hasUnitScript: typeof pkg.scripts?.["test:unit"] === "string",
     hasProvider:
       PROVIDER in (pkg.devDependencies ?? {}) ||
       PROVIDER in (pkg.dependencies ?? {}),
@@ -59,20 +67,24 @@ export function inspect(dir, read = readFileSync, exists = existsSync) {
 /** What is wrong with one package, or nothing. */
 export function verdict(facts) {
   if (!facts) return null;
-  const { declaresThresholds, hasScript, hasProvider } = facts;
+  const { declaresThresholds, hasScript, hasUnitScript, hasProvider } = facts;
   const missing = [];
-  if (declaresThresholds) {
-    if (!hasScript)
-      missing.push('a "test:coverage" script — turbo has no task to run');
-    if (!hasProvider)
+  if (!hasScript) {
+    if (hasUnitScript)
       missing.push(
-        `a ${PROVIDER} dependency — the task cannot resolve a provider`,
+        'a "test:coverage" script — PR CI runs test:coverage, so the "test:unit" suite gates nothing',
       );
-  } else if (hasScript && !hasProvider) {
+    else if (declaresThresholds)
+      missing.push('a "test:coverage" script — turbo has no task to run');
+  }
+  if (declaresThresholds && !hasProvider)
+    missing.push(
+      `a ${PROVIDER} dependency — the task cannot resolve a provider`,
+    );
+  else if (hasScript && !hasProvider)
     missing.push(
       `a ${PROVIDER} dependency — its "test:coverage" script cannot run`,
     );
-  }
   return missing.length > 0
     ? { name: facts.name, dir: facts.dir, missing }
     : null;
@@ -91,13 +103,13 @@ function main() {
 
   if (problems.length === 0) {
     console.log(
-      "[coverage-gates] every declared threshold has a task that can fail it",
+      "[coverage-gates] every unit suite and declared threshold has a test:coverage task that can fail it",
     );
     return;
   }
 
   console.error(
-    "[coverage-gates] a declared coverage threshold cannot fail:\n",
+    "[coverage-gates] a unit suite or declared threshold has no test:coverage task to fail it:\n",
   );
   for (const p of problems) {
     console.error(`  ${p.name} (${p.dir})`);
@@ -106,7 +118,10 @@ function main() {
   console.error(
     "\nAdd what is missing, or remove the thresholds. Four numbers nothing reads",
   );
-  console.error("are worse than no numbers: they read as a gate.");
+  console.error(
+    "are worse than no numbers: they read as a gate. A test:unit script",
+  );
+  console.error("with no test:coverage script is a suite PR CI never runs.");
   process.exit(1);
 }
 

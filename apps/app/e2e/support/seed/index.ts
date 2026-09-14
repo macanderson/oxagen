@@ -44,7 +44,7 @@ import {
 } from "@oxagen/run-ledger";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
-import { AUTH_DIR, SEED, SEED_RECORD, type SeedRecord } from "../index";
+import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
 
 /** The agent the seeded run is attributed to; created through the kernel. */
 const AGENT = { slug: "e2e-agent", name: "E2E agent" } as const;
@@ -483,7 +483,7 @@ async function main(): Promise<void> {
   const runPublicId = await runInTenantScope({ ...scope, userId }, () =>
     seedRun(scope, userId),
   );
-  const record: SeedRecord = { runPublicId };
+  const record = { runPublicId };
   mkdirSync(AUTH_DIR, { recursive: true });
   writeFileSync(SEED_RECORD, `${JSON.stringify(record, null, 2)}\n`);
   log("done", { record: SEED_RECORD });
