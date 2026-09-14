@@ -60,7 +60,7 @@ describe("fixture tokens", () => {
 
   it("a probe reading MC_DATA fails; a clean probe passes", () => {
     expect(tokenHits([`${PROBES}fixture-tokens/switch.ts`])).toEqual([
-      `${RULE} ${PROBES}fixture-tokens/switch.ts:2 MC_DATA`,
+      `${RULE} ${PROBES}fixture-tokens/switch.ts:3 MC_DATA`,
     ]);
     expect(tokenHits([`${PROBES}fixture-tokens/clean.ts`])).toEqual([]);
   });
