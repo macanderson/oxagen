@@ -1,4 +1,6 @@
 [
+  "e2e-files apps/app_deprecated/e2e spec-outside-apps-app",
+  "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app",
   "layer src/app/(auth)/login/page.tsx:19 @/server/fixture-session",
   "layer src/app/(auth)/signup/page.tsx:20 @/server/fixture-session",
   "layer src/app/(auth)/two-factor/page.tsx:12 @/server/fixture-session",

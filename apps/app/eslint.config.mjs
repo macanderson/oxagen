@@ -1,7 +1,7 @@
 // apps/app/eslint.config.mjs — ESLint 10, standalone. It does not import
 // ../../eslint.next.mjs, which is ESLint 9 + eslint-config-next (that config
 // hard-depends on eslint-plugin-react / jsx-a11y / import, all capped at ESLint 9).
-// Accessibility is gated by axe on rendered pages in e2e instead.
+// Accessibility is gated by axe-core in component tests (INV-26).
 import js from "@eslint/js";
 import react from "@eslint-react/eslint-plugin";
 import next from "@next/eslint-plugin-next";
