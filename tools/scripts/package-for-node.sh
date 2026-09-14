@@ -152,11 +152,21 @@ case $SERVICE in
     ;;
 
   app)
-    log "building @oxagen/app"
+    # The directory that ships as app.oxagen.sh is the one APP_DIR names
+    # (tools/scripts/lib/app-dir.mjs), the same source the parity gates read.
+    # During the Mission Control rebuild that is apps/app_deprecated, the app
+    # customers use; apps/app is the rebuild, whose pages still render
+    # NotBacked. The cutover batch flips APP_DIR once and the deploy follows
+    # (implementation plan §6 Q2). Hardcoding @oxagen/app here shipped the
+    # rebuild the moment its integration branch reached main (#2894).
+    app_dir=$(node --input-type=module -e \
+      'import { APP_DIR } from "./tools/scripts/lib/app-dir.mjs"; process.stdout.write(APP_DIR)')
+    app_pkg=$(node -p "require('./$app_dir/package.json').name")
+    log "building $app_pkg from $app_dir (APP_DIR)"
     # The same 5GB heap the CI build uses. Next's own TypeScript pass is off
     # (`ignoreBuildErrors`), so this is the compile alone.
-    NODE_OPTIONS=--max-old-space-size=5120 STANDALONE=1 pnpm --filter @oxagen/app build
-    assemble_next apps/app
+    NODE_OPTIONS=--max-old-space-size=5120 STANDALONE=1 pnpm --filter "$app_pkg" build
+    assemble_next "$app_dir"
 
     # `serverExternalPackages` and the turbopack aliases keep several packages
     # OUT of the standalone trace on purpose — native addons Turbopack cannot
@@ -176,7 +186,7 @@ case $SERVICE in
     # @oxagen/engram without duckdb present is already a supported state, by
     # the design store/errors.ts spells out.
     log "installing runtime dependencies for the externalised packages"
-    pnpm deploy --filter @oxagen/app --prod --no-optional --legacy "$ROOT/.deploy-app"
+    pnpm deploy --filter "$app_pkg" --prod --no-optional --legacy "$ROOT/.deploy-app"
     # Merged rather than replaced: the standalone trace's node_modules holds
     # what Next bundled for it, and dropping that in favour of the install
     # would lose exactly the modules the trace was for.
