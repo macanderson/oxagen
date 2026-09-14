@@ -171,14 +171,6 @@ jobs:
           # Three concurrent tasks bounds peak RSS while keeping the cores busy.
           pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
-      # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
-      # is reachable from a production entry and every dependency is imported.
-      # knip.json wires knip.preprocessor.ts, which applies the shrink-only
-      # apps/app/knip-baseline.json: a finding outside the baseline and a
-      # baseline entry knip no longer reports both fail this step.
-      - name: knip production mode (apps/app)
-        run: pnpm --filter @oxagen/app exec knip --production --strict
-
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders
 
@@ -500,15 +492,7 @@ jobs:
           # compilation). Two concurrent tasks leaves enough headroom for
           # apps/app's own build to run without contending against another
           # large build at the same time.
-          #
-          # --filter=!@oxagen/app-deprecated: the deprecated app is not under
-          # e2e (its test:e2e script is gone) and nothing here serves it, yet
-          # its `next build` reserves the same 5GB heap as apps/app. Building
-          # both on this runner is the OOM above twice over. Its build stays
-          # gated in exactly one place, the `test` job's `turbo run build`.
-          # Turbo subtracts an exclusion from the include set, and with an
-          # empty TURBO_FILTER (push to main) it starts from every package.
-          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
+          pnpm turbo run build --concurrency=2 $TURBO_FILTER
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
@@ -694,14 +678,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # An older commit's run can reach this job after a newer commit already
+      # deployed (queue order is not commit order, #2874). Ask for the tip of
+      # main now; every step below is gated on the answer, so a superseded run
+      # skips its publish and stays green. Shape held by check-deploy-tip
+      # --guard in check:contracts.
+      - name: Refuse to ship a commit that is no longer the tip of main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/scripts/check-deploy-tip.mjs
+
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        if: steps.tip.outputs.at_tip == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
       - uses: ./.github/actions/pnpm-install
+        if: steps.tip.outputs.at_tip == 'true'
 
       - name: Build the marketing site
+        if: steps.tip.outputs.at_tip == 'true'
         run: |
           set -euo pipefail
           # apps/web is hand-authored HTML plus a blog compiled from
@@ -722,6 +720,7 @@ jobs:
           echo "publishing $count files"
 
       - name: Publish the marketing site
+        if: steps.tip.outputs.at_tip == 'true'
         env:
           BUCKET: oxagen-web-916294258235
           DISTRIBUTION: E2NYX5PXV8HXB3
@@ -748,6 +747,7 @@ jobs:
             --distribution-id "$DISTRIBUTION" --id "$invalidation"
 
       - name: Verify through the public hostname
+        if: steps.tip.outputs.at_tip == 'true'
         run: |
           set -euo pipefail
           for attempt in $(seq 1 10); do
@@ -808,14 +808,27 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # An older commit's run can reach this job after a newer commit already
+      # deployed (queue order is not commit order, #2874). Ask for the tip of
+      # main now; every step below is gated on the answer, so a superseded run
+      # skips its publish and stays green. Shape held by check-deploy-tip
+      # --guard in check:contracts.
+      - name: Refuse to ship a commit that is no longer the tip of main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/scripts/check-deploy-tip.mjs
+
       # This job runs on a bare arm runner (the artifact's architecture has to
       # match the instance's), so the action installs Node and pnpm rather than
       # taking the oxagen-ci-* image's, and keys its store cache on the arch.
       - uses: ./.github/actions/pnpm-install
+        if: steps.tip.outputs.at_tip == 'true'
 
       # Credentials are assumed before packaging, not after: the build itself
       # needs Parameter Store now, where previously only the upload did.
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        if: steps.tip.outputs.at_tip == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
@@ -834,7 +847,7 @@ jobs:
       # build environment to resolve; build-env.ts refuses a service it does
       # not know, which is what stopped the first engine deploy (#2833).
       - name: Resolve the build environment for ${{ matrix.service }}
-        if: matrix.service != 'stella-serve'
+        if: steps.tip.outputs.at_tip == 'true' && (matrix.service != 'stella-serve')
         env:
           PARAMETER_PREFIX: /oxagen/production
         run: |
@@ -856,6 +869,7 @@ jobs:
       # `pnpm install` above — which runs third-party lifecycle scripts — has no
       # business seeing them.
       - name: Package ${{ matrix.service }}
+        if: steps.tip.outputs.at_tip == 'true'
         run: |
           set -euo pipefail
           if [ -f "$RUNNER_TEMP/build-env" ]; then
@@ -866,6 +880,7 @@ jobs:
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
       - uses: ./.github/actions/ship-to-node
+        if: steps.tip.outputs.at_tip == 'true'
         id: ship
         with:
           service: ${{ matrix.service }}

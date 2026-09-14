@@ -1,33 +1,21 @@
-// list_members with the database stubbed: which query each scope runs and how
-// rows become contract output. The behaviour against real rows (cross-org
-// isolation, a Member listing, expired invitations left out) is in
-// workspace.member.list.pg.test.ts.
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
-  // One entry per query, in execution order: that query's rows, or the error
-  // it fails with.
-  results: [] as (unknown[] | Error)[],
-  froms: [] as unknown[],
+  selectWhere: vi.fn(),
 }));
 
-// A drizzle query chain: select().from().[innerJoin()].where().orderBy().
-// `from` records the table so a test can say which one a scope reads.
+mocks.selectWhere.mockResolvedValue([]);
+
+// Build a fake drizzle query chain:
+// .select().from().innerJoin().where()
 const makeTx = () => ({
   select: () => ({
-    from: (table: unknown) => {
-      mocks.froms.push(table);
-      const rows = mocks.results.shift() ?? [];
-      const tail = {
-        orderBy: async () => {
-          if (rows instanceof Error) throw rows;
-          return rows;
-        },
-      };
-      const where = { where: () => tail };
-      return { innerJoin: () => where, ...where };
-    },
+    from: () => ({
+      innerJoin: () => ({
+        where: mocks.selectWhere,
+      }),
+    }),
   }),
 });
 
@@ -41,97 +29,78 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-import { schema } from "@oxagen/database";
-import { listMembersHandler } from "./workspace.member.list";
+import { workspaceMemberListHandler } from "./workspace.member.list";
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const memberRow = (overrides: Record<string, unknown> = {}) => ({
-  id: "usr_alice",
-  name: "Alice",
+const makeRow = (overrides: Record<string, unknown> = {}) => ({
+  publicId: "wsu_abc",
   email: "alice@example.com",
   role: "Member",
   joinedAt: new Date("2024-01-15T00:00:00.000Z"),
   ...overrides,
 });
 
-const invitationRow = (overrides: Record<string, unknown> = {}) => ({
-  id: "invi_bob",
-  email: "bob@example.com",
-  role: "Admin",
-  invitedAt: new Date("2024-02-01T00:00:00.000Z"),
-  expiresAt: new Date("2024-02-08T00:00:00.000Z"),
-  ...overrides,
-});
-
-describe("listMembersHandler", () => {
+describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
-    mocks.results.length = 0;
-    mocks.froms.length = 0;
+    vi.clearAllMocks();
+    mocks.selectWhere.mockResolvedValue([]);
   });
 
-  it("workspace scope reads workspace_users and returns members only", async () => {
-    mocks.results.push([memberRow()]);
-    const out = await listMembersHandler({ scope: "workspace" }, CTX);
-    expect(listMembers.output.safeParse(out).success).toBe(true);
-    expect(mocks.froms).toEqual([schema.workspaceUsers]);
-    expect(out).toEqual({
-      scope: "workspace",
-      members: [
-        {
-          id: "usr_alice",
-          name: "Alice",
-          email: "alice@example.com",
-          role: "Member",
-          joinedAt: "2024-01-15T00:00:00.000Z",
-        },
-      ],
-    });
+  it("returns empty array when no rows exist", async () => {
+    mocks.selectWhere.mockResolvedValueOnce([]);
+    const result = await workspaceMemberListHandler({}, CTX);
+    expect(result).toEqual([]);
   });
 
-  it("org scope reads org_users then invitations and returns both", async () => {
-    mocks.results.push([memberRow({ name: null })], [invitationRow()]);
-    const out = await listMembersHandler({ scope: "org" }, CTX);
-    expect(listMembers.output.safeParse(out).success).toBe(true);
-    expect(mocks.froms).toEqual([schema.orgUsers, schema.invitations]);
-    expect(out).toEqual({
-      scope: "org",
-      members: [
-        {
-          id: "usr_alice",
-          name: null,
-          email: "alice@example.com",
-          role: "Member",
-          joinedAt: "2024-01-15T00:00:00.000Z",
-        },
-      ],
-      invitations: [
-        {
-          id: "invi_bob",
-          email: "bob@example.com",
-          role: "Admin",
-          invitedAt: "2024-02-01T00:00:00.000Z",
-          expiresAt: "2024-02-08T00:00:00.000Z",
-        },
-      ],
-    });
+  it("maps DB rows to the contract output shape", async () => {
+    mocks.selectWhere.mockResolvedValueOnce([makeRow()]);
+    const result = await workspaceMemberListHandler({}, CTX);
+
+    expect(result).toHaveLength(1);
+    const member = result[0]!;
+    expect(member.id).toBe("wsu_abc");
+    expect(member.email).toBe("alice@example.com");
+    expect(member.role).toBe("Member");
+    expect(member.joined_at).toBe("2024-01-15T00:00:00.000Z");
   });
 
-  it("an invitation with no expiry is returned with expiresAt null", async () => {
-    mocks.results.push([], [invitationRow({ expiresAt: null })]);
-    const out = await listMembersHandler({ scope: "org" }, CTX);
-    if (out.scope !== "org") throw new Error("unreachable");
-    expect(out.invitations[0]?.expiresAt).toBeNull();
+  it("returns multiple members in order received", async () => {
+    mocks.selectWhere.mockResolvedValueOnce([
+      makeRow({ publicId: "wsu_1", email: "alice@example.com" }),
+      makeRow({ publicId: "wsu_2", email: "bob@example.com", role: "Admin" }),
+    ]);
+    const result = await workspaceMemberListHandler({}, CTX);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.id).toBe("wsu_1");
+    expect(result[1]!.id).toBe("wsu_2");
+    expect(result[1]!.role).toBe("Admin");
   });
 
-  it("an empty org answers with two empty arrays", async () => {
-    const out = await listMembersHandler({ scope: "org" }, CTX);
-    expect(out).toEqual({ scope: "org", members: [], invitations: [] });
+  it("invokes the query builder once (confirms tenant-scoped path)", async () => {
+    await workspaceMemberListHandler({}, CTX);
+    expect(mocks.selectWhere).toHaveBeenCalledTimes(1);
   });
 
-  it("propagates a database failure", async () => {
-    mocks.results.push(new Error("DB connection failed"));
-    await expect(
-      listMembersHandler({ scope: "workspace" }, CTX),
-    ).rejects.toThrow("DB connection failed");
+  // ── error paths ───────────────────────────────────────────────────────────
+
+  it("propagates DB error when the query rejects", async () => {
+    mocks.selectWhere.mockRejectedValueOnce(new Error("DB connection failed"));
+
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(
+      "DB connection failed",
+    );
+  });
+
+  it("throws when joinedAt is null (non-nullable field returned as null)", async () => {
+    // The handler calls r.joinedAt.toISOString() without a null guard.
+    // A corrupted DB row where joinedAt is null surfaces as a TypeError.
+    mocks.selectWhere.mockResolvedValueOnce([makeRow({ joinedAt: null })]);
+
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(
+      TypeError,
+    );
   });
 });

@@ -57,7 +57,6 @@ import { agentMemoryCiteRoute } from "./routes/v1/agent.memory.cite";
 import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory_evidence.attach";
 import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory_citation.list";
 import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation.stats";
-import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
@@ -145,10 +144,9 @@ import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.lis
 import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
 import { iamRoleListRoute } from "./routes/v1/iam.role.list";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
-import { apiKeyListRoute } from "./routes/v1/api.key.list";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { apiKeyRotateRoute } from "./routes/v1/api.key.rotate";
-import { listMembersRoute } from "./routes/v1/workspace.member.list";
+import { workspaceMemberListRoute } from "./routes/v1/workspace.member.list";
 import { workspaceInviteSendRoute } from "./routes/v1/workspace.invite.send";
 import { conversationChatRoute } from "./routes/v1/conversation.chat";
 import { toolDeclarationPublishRoute } from "./routes/v1/tool.declaration.publish";
@@ -211,8 +209,6 @@ import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
-import { runListRoute } from "./routes/v1/run.list";
-import { runGetRoute } from "./routes/v1/run.get";
 
 export type AppEnv = {
   Variables: {
@@ -407,10 +403,6 @@ orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
-// Runs across both stores (the evidence ledger and tacho sessions): the
-// Fleet list and the Run header with its frame page.
-orgScoped.route("/runs", runListRoute);
-orgScoped.route("/runs/get", runGetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",
@@ -424,7 +416,10 @@ orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
 orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
-orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
+orgScoped.route(
+  "/billing/evidence/retention",
+  billingEvidenceRetentionRoute,
+);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
@@ -484,7 +479,6 @@ orgScoped.route(
 orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
 orgScoped.route("/agent/memory/citations/stats", agentMemoryCitationStatsRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
-orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
@@ -613,11 +607,9 @@ orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
 // IAM roles read (read-only; writes remain provisioning-script-only).
 orgScoped.route("/iam/roles/list", iamRoleListRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
-// GET on the same path lists the keys in scope (separate thin adapter per capability).
-orgScoped.route("/api-keys", apiKeyListRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
-orgScoped.route("/workspace/member/list", listMembersRoute);
+orgScoped.route("/workspace/member/list", workspaceMemberListRoute);
 orgScoped.route("/workspace/invite/send", workspaceInviteSendRoute);
 orgScoped.route("/conversation/chat", conversationChatRoute);
 orgScoped.route("/tool/declaration/publish", toolDeclarationPublishRoute);

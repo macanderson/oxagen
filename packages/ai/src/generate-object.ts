@@ -235,10 +235,16 @@ export async function generateObjectFor<T>(
       },
       cacheOptions,
     );
-    if (read.hit) {
+    // The cache key carries only the schema's top-level key names, so an entry
+    // written under `status: z.enum(["draft"])` is still found after a deploy
+    // changes the field to `z.enum(["approved"])` or to a number. Re-validate
+    // the stored value against the schema the caller holds now; a value that
+    // no longer parses is a miss, not a typed lie handed to the caller.
+    const revalidated = read.hit ? args.schema.safeParse(read.hit.value) : null;
+    if (read.hit && revalidated?.success) {
       // Serve from cache — no model call, no telemetry write, no credit charge.
       return {
-        object: read.hit.value,
+        object: revalidated.data,
         usage: {
           promptTokens: read.hit.usage.inputTokens,
           completionTokens: read.hit.usage.outputTokens,
