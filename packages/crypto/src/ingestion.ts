@@ -60,7 +60,18 @@ export function createIngestionCryptoAdapter(): IngestionCryptoAdapter {
     return buildKmsAdapter();
   }
 
-  return buildEnvAdapter();
+  if (provider === "env") {
+    return buildEnvAdapter();
+  }
+
+  // An unrecognized value ("KMS", " kms", "aws") must not fall through to the
+  // env provider: with INGESTION_ENCRYPTION_KEY still set during a migration
+  // window the app would start, encrypt every new credential under the local
+  // key, and give the operator no sign that KMS was never engaged.
+  throw new Error(
+    `[crypto/ingestion] INGESTION_CRYPTO_PROVIDER=${JSON.stringify(provider)} is not a ` +
+      'known provider — cannot select an encryption provider. Expected "env" or "kms".',
+  );
 }
 
 /**
