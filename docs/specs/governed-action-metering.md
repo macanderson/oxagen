@@ -477,7 +477,7 @@ in which the platform bills nothing at all.
 | §4.2 the month bucket (ADR-055) | `packages/billing/src/gau-bucket.ts` — `periodFor`, `readBucket`, `ensureCurrentBucket`; `billing.gau_buckets` |
 | §4.2 the two modes (ADR-055) | `billing.org_billing_settings` — `approved_for_invoice_billing`, `invoice_gau_max`, `auto_topup_enabled`, `auto_topup_blocks`; `packages/billing/src/billing-settings.ts` — `readOrgBillingSettings`; `set_org_billing_terms`, `set_auto_topup` |
 | §4.2 settlements (ADR-055) | `packages/billing/src/gau-settlements.ts`; `billing.gau_settlements`; `BillingProvider.createGauCheckout`, `createGauInvoice`, `finalizeAndPayGauInvoice`, `deleteOrVoidDraftInvoice`; `billing.gau-close` (hourly) |
-| §4.3 retention | `packages/billing/src/action-metering.ts` — `RETENTION_USD_PER_GB_MONTH`, `CREDIT_REASONS.CONSUME_RETENTION`; no charger in rev1 (`chargeEvidenceRetention` deleted, ADR-055 §12) |
+| §4.3 retention | `packages/billing/src/action-metering.ts` — `RETENTION_USD_PER_GB_MONTH`, read by `get_rate_card` and `get_evidence_retention`; no charger in rev1: `chargeEvidenceRetention` (`:595-629`, with `CREDIT_REASONS.CONSUME_RETENTION`) and `retentionCreditsForGbMonths` are still in the tree with no production caller and WL-25 deletes them (ADR-055 §12, §15) |
 | §4.4 reported at zero | `packages/ai/src/*` charge sites, gated on `fundedBy === "platform"` (ADR-053 §3) |
 | §7.2 multi-unit | contract `meter` block, read in the kernel from validated output |
 | §7.5 shadow | retired (ADR-055) |
