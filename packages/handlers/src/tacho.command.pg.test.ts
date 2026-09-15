@@ -14,7 +14,7 @@ import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch"
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { tachoCommandDispatchHandler } from "./tacho.command.dispatch";
 import { tachoCommandFetchHandler } from "./tacho.command.fetch";
 import { tachoCommandListHandler } from "./tacho.command.list";
@@ -77,12 +77,21 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         operator,
       ),
     );
+  // Ordered, because the walk below asserts issue order off it. An unordered
+  // SELECT returns rows in heap order, which is not insertion order — the
+  // supersede UPDATE rewrites a row and moves it — so the assertion passed by
+  // luck until it did not. Same total order the host poll and `list_commands`
+  // use: the issue instant, then the public id to break a tie.
   const rowsFor = (runId: string) =>
     withSystemDb((tx) =>
       tx
         .select()
         .from(schema.tachoControlCommands)
-        .where(eq(schema.tachoControlCommands.targetId, runId)),
+        .where(eq(schema.tachoControlCommands.targetId, runId))
+        .orderBy(
+          asc(schema.tachoControlCommands.issuedAt),
+          asc(schema.tachoControlCommands.publicId),
+        ),
     );
 
   const session = (

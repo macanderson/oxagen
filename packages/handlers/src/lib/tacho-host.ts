@@ -256,7 +256,17 @@ export async function drainCommands(
         gt(schema.tachoControlCommands.expiresAt, now),
       ),
     ),
-    orderBy: [asc(schema.tachoControlCommands.issuedAt)],
+    // `issued_at` alone is a partial order: `defaultNow()` is the transaction
+    // timestamp, so two commands dispatched in the same instant tie and the
+    // host then receives them in whatever order the heap hands back — a pause
+    // arriving after the steer the operator issued second. The public id is
+    // the tie-break `list_commands` already uses, so the delivery order and
+    // the delivery report agree on one total order rather than two partial
+    // ones.
+    orderBy: [
+      asc(schema.tachoControlCommands.issuedAt),
+      asc(schema.tachoControlCommands.publicId),
+    ],
     limit: 100,
   })) as ControlCommandRow[];
   if (rows.length > 0) {
