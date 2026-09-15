@@ -1,5 +1,5 @@
 {
-  "generatedCount": 238,
+  "generatedCount": 246,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -601,22 +601,21 @@
       "consumes": []
     },
     {
-      "name": "fetch_commands",
-      "domain": "control",
+      "name": "export_statement",
+      "domain": "spend",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
       "consumes": []
     },
     {
-      "name": "get_action_usage",
-      "domain": "billing",
+      "name": "fetch_commands",
+      "domain": "control",
       "surfaces": [
-        "api",
-        "mcp",
-        "agent"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -743,6 +742,18 @@
       "consumes": []
     },
     {
+      "name": "get_contract_rate",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_data_plane",
       "domain": "org",
       "surfaces": [
@@ -784,6 +795,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_gau_bucket",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1056,12 +1078,34 @@
       "consumes": []
     },
     {
+      "name": "get_run_cost",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_schema_registry",
       "domain": "schema",
       "surfaces": [
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1075,6 +1119,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend_drill",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1458,6 +1513,17 @@
       "consumes": []
     },
     {
+      "name": "list_invoices",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_mcp_consents",
       "domain": "agent",
       "surfaces": [
@@ -1615,6 +1681,17 @@
       "consumes": []
     },
     {
+      "name": "list_price_entries",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
@@ -1700,6 +1777,17 @@
       "surfaces": [
         "api",
         "agent",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_waste",
+      "domain": "spend",
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "component": null,

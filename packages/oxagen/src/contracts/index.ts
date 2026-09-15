@@ -49,6 +49,12 @@ import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
 import { runList } from "./run.list";
+import { runCostGet } from "./run.cost";
+import { spendGet } from "./spend.get";
+import { spendDrill } from "./spend.drill";
+import { spendWasteList } from "./spend.waste";
+import { spendStatementExport } from "./spend.statement.export";
+import { costPriceEntryList } from "./cost.price_entry.list";
 import { runGet } from "./run.get";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
@@ -271,6 +277,22 @@ export type {
   FieldError as SharedFieldError,
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
+// Spend vocabulary (ADR-060): money in micros with a basis, day ranges, token
+// classes. The shared file is not a capability, so it is exported here to
+// satisfy the check-contracts file-coverage guard.
+export {
+  costBasisSchema,
+  costSchema,
+  moneySchema,
+  spendFigureSchema,
+  tokenCountsSchema,
+} from "./spend.shared";
+export type {
+  Cost,
+  CostBasis,
+  SpendGroupKind,
+  TokenCounts,
+} from "./spend.shared";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
@@ -446,6 +468,12 @@ export {
   tachoSessionGet,
   runList,
   runGet,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -697,6 +725,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoSessionGet,
   runList,
   runGet,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,

@@ -27,14 +27,15 @@ import {
   createPostgresRunStore,
   type RunStore,
 } from "@oxagen/run-ledger";
-import { sumTokenUsageByExecutionStep } from "@oxagen/telemetry";
 import {
   invalidCursor,
   ledgerEnrichment,
+  postgresReadRunCosts,
   postgresRunQueries,
+  type ReadRunCosts,
+  rollupCost,
   type RunQueries,
   runScope,
-  type SumTokenUsage,
   toLedgerRunItem,
   toTachoRunItem,
 } from "./run.list";
@@ -133,7 +134,7 @@ export type RunGetDeps = {
     "ledgerIdentity" | "ledgerRollups" | "ledgerSeals" | "tachoSession"
   >;
   store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">;
-  sumTokenUsage: SumTokenUsage;
+  readRunCosts: ReadRunCosts;
   /** The long poll's clock, injectable so a test does not wait. */
   now: () => number;
   sleep: (ms: number) => Promise<void>;
@@ -176,7 +177,11 @@ export function createRunGetHandler(
     if (input.runId.startsWith("tse_")) {
       const row = await deps.queries.tachoSession(scope, input.runId);
       if (!row) throw runNotFound();
-      return { run: toTachoRunItem(row), frames: null };
+      const costs = await deps.readRunCosts(scope, [input.runId]);
+      return {
+        run: toTachoRunItem(row, rollupCost(costs.get(input.runId))),
+        frames: null,
+      };
     }
 
     const summary = await deps.store.getRunByPublicId(input.runId);
@@ -185,13 +190,14 @@ export function createRunGetHandler(
     if (!row) throw runNotFound();
     const id = summary.runId;
 
-    const [enrich, events] = await Promise.all([
+    const [enrich, costs, events] = await Promise.all([
       ledgerEnrichment(deps, scope, [id]),
+      deps.readRunCosts(scope, [input.runId]),
       readFrames(id, after, input.frameLimit, input.waitMs),
     ]);
     const last = events.at(-1);
     return {
-      run: toLedgerRunItem(enrich(row)),
+      run: toLedgerRunItem(enrich(row), rollupCost(costs.get(input.runId))),
       frames: {
         frames: events.map(toFrame),
         cursor: last ? encodeFrameCursor(last.runSeq) : null,
@@ -210,7 +216,7 @@ export function defaultRunGetDeps(): RunGetDeps {
       readAttemptEventsSince: (id, after, limit) =>
         ledger.readAttemptEventsSince(id, after, limit),
     },
-    sumTokenUsage: sumTokenUsageByExecutionStep,
+    readRunCosts: postgresReadRunCosts,
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };

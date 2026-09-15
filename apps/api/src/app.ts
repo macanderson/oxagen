@@ -216,6 +216,12 @@ import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
+import { spendGetRoute } from "./routes/v1/spend.get";
+import { spendDrillRoute } from "./routes/v1/spend.drill";
+import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { runCostGetRoute } from "./routes/v1/run.cost";
+import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
   Variables: {
@@ -417,6 +423,14 @@ orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Fleet list and the Run header with its frame page.
 orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
+// Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
+// run's cost and the price book. All noBillingGate reads of Postgres rollups.
+orgScoped.route("/spend", spendGetRoute);
+orgScoped.route("/spend/drill", spendDrillRoute);
+orgScoped.route("/spend/waste", spendWasteListRoute);
+orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
