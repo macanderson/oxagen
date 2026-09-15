@@ -202,7 +202,7 @@ describe("pages", () => {
       '<img src="/blog/pillars/alpha/thumb.png" alt="" width="640" height="360"',
     );
     expect(html).toContain(
-      `<title>${BLOG_TITLE} — the science of ontologies, agents, and self-improving systems</title>`,
+      `<title>${BLOG_TITLE}: the science of ontologies, agents, and self-improving systems</title>`,
     );
     expect(html).toContain(
       '<a class="pillar-card" href="/blog/pillars/alpha">',

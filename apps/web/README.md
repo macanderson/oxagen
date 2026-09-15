@@ -15,7 +15,8 @@ committed.
 ## Layout
 
 - `assets/oxagen.css` — the shared shell: the house colour tokens, the nav,
-  buttons, cards, terminal chrome, forms and footer. Every page under
+  buttons, cards, the terminal window, the diagram primitives (`.dg`, with
+  state carried by border shape), forms and footer. Every page under
   `index.html` and `products/` links it. Each page adds its own small
   `<style>` block for the parts only that page has (its hero, mostly). The
   treatment — the corner scale (`--r`, `--r-lg`, `--r-xl`), the ember sheen on
@@ -24,18 +25,22 @@ committed.
   (`apps/docs`, on `@oxagen/ui`), so the two sites read as one; change it
   there first, then here.
 - `assets/oxagen.js` — the shared behaviour for those same pages: nav state,
-  the products dropdown, the mobile drawer, reveal-on-scroll, the typewriters
-  and terminal replay, the `[data-count]` counters, the `[data-tabs]` deck,
-  the copy buttons, and the lead forms. Plain JavaScript, no dependencies, no
-  build step. Every animation that would otherwise run forever (typewriters,
-  terminal replay) is started and stopped by an IntersectionObserver, so a
-  page of them costs nothing below the fold.
-- `assets/tui/*.svg` — the four terminal-deck renderings used as screenshots.
-- `index.html` — the marketing one-pager: the hero, the terminal CLI section, the
-  platform, a `#field-manual` section with the ebook lead-capture form, and the
-  "Get a demo" lead form.
-- `products/oxagen/` — one page
-  per product. Each carries its own copy of the nav, drawer and footer markup.
+  the mobile drawer, reveal-on-scroll, the live-figure observer, the terminal
+  replay, and the lead forms. Plain JavaScript, no dependencies, no build step.
+  Every animation that would otherwise run forever (a figure's `.dg-loop`, the
+  terminal replay) is started and stopped by an IntersectionObserver, so a page
+  of them costs nothing below the fold.
+- `index.html` — the marketing one-pager: the hero with a spend rollup, the
+  four promises (govern, explain, spend, learn) each with its own figure, the
+  wrap section with the site's one terminal, a `#field-manual` section with the
+  ebook lead-capture form, and the "Get a demo" lead form.
+- `products/oxagen/` — the product page: an approval card in the hero, then one
+  figure per ranked feature. It carries its own copy of the nav, drawer and
+  footer markup.
+- The copy on both pages comes from the Oxagen messaging bank (four pillars,
+  sixteen ranked features). The figures are drawn in HTML and inline SVG, never
+  screenshots, and each one shows a different mechanism, so the two pages do
+  not repeat a picture.
 - `read/index.html` — the gate in front of the ebook *Engineering
   Deterministic AI Coding Agents*. The page itself holds no book text. It
   takes a single-use `?c=` code, posts it to `/v1/cms/book/redeem`, and
@@ -98,8 +103,8 @@ whole discipline:
 Reskinning means repointing an alias. It never means re-hexing a primitive, and
 it never means writing a colour into a rule or a page.
 
-The same table is what `assets/tui/*.svg` is drawn in, which is the point: the
-product screenshots and the page around them are one surface. Gold (`--gold`,
+The same table is what the home and product figures are drawn in, which is the
+point: the product illustrations and the page around them are one surface. Gold (`--gold`,
 `#D6962C`) is identity and at most one action per screen, never a state and
 never a surface; `--pass` and `--fail` carry state.
 
