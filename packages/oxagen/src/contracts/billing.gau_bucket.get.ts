@@ -28,7 +28,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /** Which side of ADR-055 §5 the organisation is on. */
-export const gauBillingModeSchema = z.enum(["prepaid", "invoice"]);
+const gauBillingModeSchema = z.enum(["prepaid", "invoice"]);
 
 /** A count of governed action units. Never negative on its own. */
 const gauCount = z.number().int().nonnegative();
@@ -155,4 +155,3 @@ export type BillingGauBucketGetInput = z.output<
 export type BillingGauBucketGetOutput = z.output<
   typeof billingGauBucketGet.output
 >;
-export type GauBillingMode = z.output<typeof gauBillingModeSchema>;

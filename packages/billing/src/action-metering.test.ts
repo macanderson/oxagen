@@ -78,7 +78,6 @@ vi.mock("./logger", () => ({
 }));
 
 const {
-  ACTION_RATE_BANDS,
   resolveActionBand,
   TIER_ACTION_ALLOWANCES,
   ENTERPRISE_FALLBACK_ALLOWANCE,
@@ -89,13 +88,6 @@ const {
   recordGovernedAction,
 } = await import("./action-metering");
 const { logger } = await import("./logger");
-
-const FIRST_1M = ACTION_RATE_BANDS.find((b) => b.id === "first-1m")!;
-const M1_5M = ACTION_RATE_BANDS.find((b) => b.id === "1m-5m")!;
-const M5_25M = ACTION_RATE_BANDS.find((b) => b.id === "5m-25m")!;
-const COMMITTED_25M = ACTION_RATE_BANDS.find(
-  (b) => b.id === "committed-25m-plus",
-)!;
 
 let store: FakeGauStore;
 let txs: ReturnType<typeof fakeGauExecutor>[];

@@ -6,9 +6,11 @@
  * role gate runs for real against a tx double that answers the principal and
  * role-assignment tables.
  *
- * The read path is exercised two ways. Most tests inject the five reads, so a
- * test states a bucket and asserts what the page is told about it. One test
- * runs the shipped `postgresGauBucketQueries` — the real `readBucket`,
+ * The read path is exercised three ways. Most tests inject the six reads, so
+ * a test states a bucket and asserts what the page is told about it. The
+ * settlement tests render `pastDueQuery` and `lastAutoTopupQuery` through
+ * `drizzle.mock` and read the kind, status, order and limit off the SQL. One
+ * test runs the shipped `postgresGauBucketQueries` — the real `readBucket`,
  * `readOrgBillingSettings` and `resolveGauEntitlement` from @oxagen/billing —
  * against a recording executor, and asserts that the statement log holds
  * SELECTs and nothing else: a read that created the month's bucket or the
@@ -17,6 +19,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { isHandlerError } from "@oxagen/oxagen";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { schema } from "@oxagen/database";
@@ -36,6 +39,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   createBillingGauBucketGetHandler,
+  lastAutoTopupQuery,
+  pastDueQuery,
   postgresGauBucketQueries,
   uninvoicedGau,
   type AutoTopupAttempt,
@@ -45,6 +50,7 @@ import { makeCTX } from "./test-utils/fixtures";
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 const BUCKET = "0192d4a8-7c1e-7a00-8000-0000000b0c01";
+const OTHER_ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3f";
 
 const ctx = (over: { orgId?: string; userId?: string | null } = {}) =>
   makeCTX({ orgId: ORG, userId: USER, ...over });
@@ -416,6 +422,91 @@ describe("get_gau_bucket auto top-up", () => {
     })({}, ctx());
     expect(lastAutoTopup).not.toHaveBeenCalled();
     expect(out.autoTopup?.lastAttempt).toBeNull();
+  });
+});
+
+// ── the settlement queries ────────────────────────────────────────────────────
+
+/**
+ * The two predicates the page's `pastDue` and `lastAttempt` lines rest on,
+ * read off the SQL the builders emit. The handler tests above inject the
+ * answer; these fix what the ledger is asked.
+ */
+describe("get_gau_bucket settlement queries", () => {
+  const db = drizzle.mock({ schema });
+
+  describe("pastDueQuery", () => {
+    it("asks for an open interim_invoice or period_close row of the org's bucket, one row at most", () => {
+      const query = pastDueQuery(db, ORG, BUCKET).toSQL();
+      expect(query.sql).toMatch(/"gau_settlements"\."org_id" = \$\d+/);
+      expect(query.sql).toMatch(/"gau_settlements"\."bucket_id" = \$\d+/);
+      expect(query.sql).toMatch(
+        /"gau_settlements"\."kind" in \(\$\d+, \$\d+\)/,
+      );
+      expect(query.sql).toMatch(/"gau_settlements"\."status" = \$\d+/);
+      expect(query.sql).toMatch(/limit \$\d+$/);
+      expect(query.params).toEqual([
+        ORG,
+        BUCKET,
+        "interim_invoice",
+        "period_close",
+        "open",
+        1,
+      ]);
+    });
+
+    it("counts neither a paid row nor an auto top-up (negative)", () => {
+      const { params } = pastDueQuery(db, ORG, BUCKET).toSQL();
+      expect(params).not.toContain("paid");
+      expect(params).not.toContain("pending");
+      expect(params).not.toContain("failed");
+      expect(params).not.toContain("auto_topup");
+      expect(params).not.toContain("checkout");
+    });
+
+    it("a different org binds a different id (negative)", () => {
+      const { params } = pastDueQuery(db, OTHER_ORG, BUCKET).toSQL();
+      expect(params).not.toContain(ORG);
+      expect(params).toContain(OTHER_ORG);
+    });
+  });
+
+  describe("lastAutoTopupQuery", () => {
+    it("asks for the newest paid, open or failed auto_topup row of the org's bucket", () => {
+      const query = lastAutoTopupQuery(db, ORG, BUCKET).toSQL();
+      expect(query.sql).toMatch(/"gau_settlements"\."org_id" = \$\d+/);
+      expect(query.sql).toMatch(/"gau_settlements"\."bucket_id" = \$\d+/);
+      expect(query.sql).toMatch(/"gau_settlements"\."kind" = \$\d+/);
+      expect(query.sql).toMatch(
+        /"gau_settlements"\."status" in \(\$\d+, \$\d+, \$\d+\)/,
+      );
+      expect(query.sql).toMatch(
+        /order by "billing"\."gau_settlements"\."created_at" desc, "billing"\."gau_settlements"\."id" desc limit \$\d+$/,
+      );
+      expect(query.params).toEqual([
+        ORG,
+        BUCKET,
+        "auto_topup",
+        "paid",
+        "open",
+        "failed",
+        1,
+      ]);
+    });
+
+    it("skips a pending row and every other kind (negative)", () => {
+      const { params } = lastAutoTopupQuery(db, ORG, BUCKET).toSQL();
+      expect(params).not.toContain("pending");
+      expect(params).not.toContain("interim_invoice");
+      expect(params).not.toContain("period_close");
+      expect(params).not.toContain("checkout");
+    });
+
+    it("a different org binds a different id (negative)", () => {
+      const { params } = lastAutoTopupQuery(db, OTHER_ORG, BUCKET).toSQL();
+      expect(params).not.toContain(ORG);
+      expect(params).toContain(OTHER_ORG);
+    });
   });
 });
 
