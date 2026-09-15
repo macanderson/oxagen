@@ -96,7 +96,7 @@ function checks(statuses: readonly Check["status"][]): Check[] {
   });
 }
 
-const PASSED = checks(NAMES.map(() => "passed"));
+const PASSED = checks(NAMES.map((): Check["status"] => "passed"));
 
 const CHECKS: Record<ProposalStatus, Check[]> = {
   proposed: [],
