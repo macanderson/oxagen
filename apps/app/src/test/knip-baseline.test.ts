@@ -50,7 +50,9 @@ afterEach(() => {
   fixture = undefined;
 });
 
-describe("knip baseline", () => {
+// Each case spawns knip on a fresh fixture; the first cold spawn has run past
+// vitest's 5 s default on a loaded CI runner.
+describe("knip baseline", { timeout: 30_000 }, () => {
   it("apps/app's baseline is empty: every export is reachable and every dependency imported (INV-16)", () => {
     const baseline: unknown = JSON.parse(
       readFileSync(path.join(appDir, BASELINE_FILE), "utf8"),

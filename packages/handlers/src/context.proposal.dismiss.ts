@@ -13,7 +13,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { bodyNamesProposal } from "./context.steering.view";
 
@@ -29,7 +29,20 @@ export function createDismissProposalHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextProposalDismiss> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"], workspace: ["Owner"] });
+    // Dismissing a proposal is a person's act, as merging is; an API key
+    // carries no user and is refused before its creator is looked up.
+    if (!ctx.userId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "no_principal",
+        message: "Dismissing a proposal needs a signed-in user",
+      });
+    }
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner"] },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const row = await deps.store.findProposal(scope, input.proposalId);
     if (!row) {
@@ -79,7 +92,7 @@ export function createDismissProposalHandler(
           status: "rejected",
           dismissedAt: deps.now(),
           dismissedReason: input.reason,
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         DISMISSABLE,
       );

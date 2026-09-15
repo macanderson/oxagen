@@ -27,7 +27,7 @@ import {
   type RecordForce,
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
   CHECK_TITLES,
   parseChecked,
@@ -83,10 +83,20 @@ export function createOpenContextPrHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextPrOpen> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, {
-      org: ["Owner", "Admin"],
-      workspace: ["Owner", "Member"],
-    });
+    // Opening a Context PR is a person's act, as merging is; an API key
+    // carries no user and is refused before its creator is looked up.
+    if (!ctx.userId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "no_principal",
+        message: "Opening a Context PR needs a signed-in user",
+      });
+    }
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     let row = await deps.store.findProposal(scope, input.proposalId);
     if (!row) {
@@ -192,7 +202,7 @@ export function createOpenContextPrHandler(
           stampedRecordId: record.record_id,
           recordHash: record.record_hash,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         ["proposed"],
       );
@@ -205,7 +215,7 @@ export function createOpenContextPrHandler(
           governanceMode: mode,
           headSha: pr.headSha,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         OPEN_PR,
       );
