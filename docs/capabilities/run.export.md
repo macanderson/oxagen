@@ -9,7 +9,7 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/export`
-- MCP: `export_run`
+- MCP: none. MCP callers authenticate with an API key, which carries no org role, and the handler checks one.
 - CLI: `oxagen run export <run-id>`
 - Authentication: session; org Owner or Admin, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2)
 - Capability name: `export_run`

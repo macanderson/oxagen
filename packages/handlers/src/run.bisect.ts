@@ -5,9 +5,12 @@
 // the run reader (lib/run-read.ts); the alignment itself is the pure
 // `bisectFrames` (@oxagen/run-ledger), keyed on each frame's receipt and
 // never on a body. A run longer than the read cap is compared over its
-// first BISECT_FRAME_CAP frames; two such runs that agree throughout answer
-// null over what was compared, and `aligned` says how much that was.
+// first BISECT_FRAME_CAP frames. A divergence inside that prefix is answered;
+// when the prefixes agree and either run was cut, the handler refuses with
+// `conflict` (`run_exceeds_bisect_cap`), because the frames past the cap were
+// never compared and `null` would claim the runs are identical.
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
   runBisect,
   type RunBisectOutput,
@@ -36,7 +39,17 @@ export function createRunBisectHandler(
       readAllFrames(deps, a, BISECT_FRAME_CAP),
       readAllFrames(deps, b, BISECT_FRAME_CAP),
     ]);
-    return bisectFrames(framesA.frames, framesB.frames);
+    const result = bisectFrames(framesA.frames, framesB.frames);
+    if (
+      result.divergentSeq === null &&
+      !(framesA.complete && framesB.complete)
+    ) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "run_exceeds_bisect_cap",
+      });
+    }
+    return result;
   };
 }
 

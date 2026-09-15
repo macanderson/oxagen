@@ -63,7 +63,7 @@ export function isContentBearingFrame(type: string): boolean {
   return CONTENT_BEARING_FRAME_TYPES.has(type);
 }
 
-export interface ReplayGradeInput {
+interface ReplayGradeInput {
   /** The gaps the recorder observed, deduplicated by the caller or not. */
   gaps: readonly string[];
   /** Where the frames were observed from; `fork` needs the gateway. */

@@ -426,7 +426,7 @@ type GeneratedSummaryColumns = {
   summaryModel: string | null;
 };
 
-export type LedgerRunCore = GeneratedSummaryColumns & {
+type LedgerRunCore = GeneratedSummaryColumns & {
   runId: string;
   publicId: string;
   /** `agent_runs.status` (CHECK: pending, running, completed, failed, cancelled). */

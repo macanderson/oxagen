@@ -43,7 +43,7 @@ export interface SealedSegment {
   digests: string[];
 }
 
-export type RunRecord =
+type RunRecord =
   | { source: "ledger"; runId: string; attempts: AttemptRecord[] }
   | {
       source: "tacho";

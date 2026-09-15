@@ -22,7 +22,7 @@ import type { SealedSegment } from "./run-record";
 
 export const BUNDLE_FORMAT = "oxagen.run-export/1";
 
-export interface RunExportManifest {
+interface RunExportManifest {
   format: typeof BUNDLE_FORMAT;
   run_id: string;
   source: "ledger" | "tacho";
@@ -42,7 +42,7 @@ export interface RunExportManifest {
   }>;
 }
 
-export interface RunExportBundle {
+interface RunExportBundle {
   bytes: Uint8Array;
   digest: string;
   manifest: RunExportManifest;

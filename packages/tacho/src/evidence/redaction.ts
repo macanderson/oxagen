@@ -24,7 +24,7 @@ export interface Redaction {
   original_digest: Sha256Digest;
 }
 
-export interface RedactionResult {
+interface RedactionResult {
   bytes: Uint8Array;
   redactions: Redaction[];
 }

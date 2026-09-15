@@ -9,7 +9,7 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/summarize`
-- MCP: `summarize_run`
+- MCP: none. MCP callers authenticate with an API key, which carries no org role, and the handler checks one.
 - CLI: none
 - Authentication: session; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2)
 - Capability name: `summarize_run`

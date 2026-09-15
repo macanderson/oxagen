@@ -58,7 +58,7 @@ interface RunSummarizeEventData {
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /** One step of the transcript as the model reads it. */
-export interface SummaryStep {
+interface SummaryStep {
   seq: string;
   kind: string;
   label: string;

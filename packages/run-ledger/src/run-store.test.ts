@@ -2625,7 +2625,7 @@ describe("compaction", () => {
     return buildArchiveSegment(rows.map(archiveFrameOf)).bytes;
   }
 
-  it("deletes through the SECURITY DEFINER function with the cutoff, never the seal", async () => {
+  it("deletes through the SECURITY DEFINER function, which takes no cutoff, never the seal", async () => {
     const executed: Array<{ sql: string; params: unknown[] }> = [];
     mocks.withSystemDb.mockImplementation(
       async (fn: (tx: unknown) => unknown) =>
@@ -2637,14 +2637,12 @@ describe("compaction", () => {
           },
         }),
     );
-    const removed = await createPostgresRunStore().compactSealedAttempts(
-      new Date("2025-08-01T00:00:00.000Z"),
-    );
+    const removed = await createPostgresRunStore().compactSealedAttempts();
     expect(removed).toBe(42);
     expect(executed[0]?.sql).toContain(
-      "SELECT agent.compact_sealed_attempt_events(",
+      "SELECT agent.compact_sealed_attempt_events()",
     );
-    expect(executed[0]?.params).toEqual(["2025-08-01T00:00:00.000Z"]);
+    expect(executed[0]?.params).toEqual([]);
     expect(executed[0]?.sql).not.toMatch(/DELETE|agent_run_attempt_seals/);
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
@@ -2657,9 +2655,7 @@ describe("compaction", () => {
     expect(text).toContain("final_run_seq > ");
     expect(text).toContain("NOT EXISTS");
     expect(params).toEqual([UUID_RUN, "4"]);
-    expect(compile(buildCompactSealedAttemptsSql(new Date(0))).params).toEqual([
-      "1970-01-01T00:00:00.000Z",
-    ]);
+    expect(compile(buildCompactSealedAttemptsSql()).params).toEqual([]);
   });
 
   it("reads a compacted attempt's frames from its segment, past the cursor, in order, with every field the hot row carried", async () => {

@@ -11,7 +11,7 @@ Oxagen mints the attempt and records its provenance; the harness that consumes t
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/fork`
-- MCP: `fork_run`
+- MCP: none. MCP callers authenticate with an API key, which carries no org role, and the handler checks one.
 - CLI: none
 - Authentication: session; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2)
 - Capability name: `fork_run`
@@ -21,7 +21,7 @@ Oxagen mints the attempt and records its provenance; the harness that consumes t
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `runId` | string | yes | `arun_…` only: a wrapped session has no attempt to fork |
+| `runId` | string | yes | `arun_…` or `tse_…`; a wrapped session is refused with `conflict` (`fork_requires_ledger_run`) |
 | `fromSeq` | string | yes | decimal `run_seq` ≥ 1: the last recorded frame the fork replays |
 
 ## Output
@@ -37,6 +37,6 @@ The attempt carries the sealed attempt's engine identity, `resumed_from_attempt_
 
 - `forbidden` (403): the actor holds none of Owner, Admin, Member in the org.
 - `not_found` (404): no ledger run with that id in the caller's workspace.
-- `conflict` (409), by `reason`: `run_not_sealed` (no attempt has sealed); `replay_grade_below_fork` (the seal recorded `inspect` or `view`, or no grade); `from_seq_past_seal` (the branch point lies past the sealed recording); `gap_before_from_seq` (a frame at or before the branch point carried content whose body was not retained, so the cassette would have a hole before the fork).
+- `conflict` (409), by `reason`: `fork_requires_ledger_run` (the run is a wrapped session: it has no attempt row to mint, whatever grade its seal recorded); `run_not_sealed` (no attempt has sealed); `replay_grade_below_fork` (the seal recorded `inspect` or `view`, or no grade); `from_seq_past_seal` (the branch point lies past the sealed recording); `gap_before_from_seq` (a frame at or before the branch point carried content whose body was not retained, so the cassette would have a hole before the fork).
 
 The grade is read from the seal and never recomputed: a run is forkable when its record says so (spec §8.4 "the interface renders the recorded grade and never a stronger word").

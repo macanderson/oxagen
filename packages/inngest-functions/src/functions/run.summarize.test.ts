@@ -1,22 +1,69 @@
 import { NO_BODY, tachoFrame } from "@oxagen/run-ledger";
+import { NonRetriableError } from "@oxagen/functions";
 import { digestBytes } from "@oxagen/tacho";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@oxagen/ai", () => ({
+const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   modelIdOf: vi.fn(),
   resolveModelFundingSource: vi.fn(),
   selectModel: vi.fn(),
+  withTenantDb: vi.fn(),
+  runInTenantScope: vi.fn(),
+  ledgerStore: vi.fn(),
+  readRunFrames: vi.fn(),
+  resolveRunRecord: vi.fn(),
 }));
-vi.mock("@oxagen/database", () => ({ schema: {}, withTenantDb: vi.fn() }));
-vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: vi.fn() }));
+
+type StepRun = (name: string, fn: () => unknown) => Promise<unknown>;
+type Handler = (ctx: {
+  event: { data: unknown };
+  step: { run: StepRun };
+}) => Promise<unknown>;
+
+/** Where the createFunction stub leaves the handler the module hands it. */
+const captured = vi.hoisted(
+  () => ({ handler: undefined }) as { handler?: Handler },
+);
+
+vi.mock("../create-function", () => ({
+  createFunction: (_opts: unknown, _trigger: unknown, fn: Handler) => {
+    captured.handler = fn;
+    return [{}, {}];
+  },
+}));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor: mocks.generateObjectFor,
+  modelIdOf: mocks.modelIdOf,
+  resolveModelFundingSource: mocks.resolveModelFundingSource,
+  selectModel: mocks.selectModel,
+}));
+vi.mock("@oxagen/database", () => ({
+  schema: {
+    tachoSessions: {
+      id: "sessions.id",
+      publicId: "sessions.public_id",
+      orgId: "sessions.org_id",
+      workspaceId: "sessions.workspace_id",
+    },
+  },
+  withTenantDb: mocks.withTenantDb,
+}));
+vi.mock("drizzle-orm", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("drizzle-orm")>()),
+  eq: (...args: unknown[]) => ({ eq: args }),
+  and: (...args: unknown[]) => ({ and: args }),
+}));
+vi.mock("@oxagen/tenancy", () => ({
+  runInTenantScope: mocks.runInTenantScope,
+}));
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: vi.fn(),
 }));
 vi.mock("../lib/run-record", () => ({
-  ledgerStore: vi.fn(),
-  readRunFrames: vi.fn(),
-  resolveRunRecord: vi.fn(),
+  ledgerStore: mocks.ledgerStore,
+  readRunFrames: mocks.readRunFrames,
+  resolveRunRecord: mocks.resolveRunRecord,
 }));
 
 import {
@@ -120,5 +167,127 @@ describe("run.summarize", () => {
     expect(
       summarySchema.safeParse({ name: "x".repeat(81), summary: "x" }).success,
     ).toBe(false);
+  });
+});
+
+describe("run.summarize job", () => {
+  const data = {
+    orgId: "org_1",
+    workspaceId: "ws_1",
+    runPublicId: "tse_4q8r1t6v3x5z0b2d7h2k9m",
+    requestedByUserId: "user_1",
+  };
+  const tachoRecord = {
+    source: "tacho",
+    sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
+    enforcementTier: "gateway",
+    completenessGaps: [],
+    replayGrade: "view",
+  };
+
+  /** Runs the captured job, answering `returned` from the tacho update. */
+  function run(returned: unknown[]) {
+    const steps: string[] = [];
+    const updates: Array<{ values: unknown; where: unknown }> = [];
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          update: () => ({
+            set: (values: unknown) => ({
+              where: (where: unknown) => ({
+                returning: () => {
+                  updates.push({ values, where });
+                  return Promise.resolve(returned);
+                },
+              }),
+            }),
+          }),
+        }),
+    );
+    const done = (captured.handler as Handler)({
+      event: { data },
+      step: {
+        run: async (name, fn) => {
+          steps.push(name);
+          return fn();
+        },
+      },
+    });
+    return { done, steps, updates };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => fn(),
+    );
+    mocks.resolveRunRecord.mockResolvedValue(tachoRecord);
+    mocks.readRunFrames.mockResolvedValue([]);
+    mocks.resolveModelFundingSource.mockResolvedValue({
+      fundedBy: "platform",
+      credential: null,
+    });
+    mocks.selectModel.mockReturnValue({ id: "fast" });
+    mocks.modelIdOf.mockReturnValue("fast-model");
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { name: "Review PR 42", summary: "Left two comments." },
+    });
+  });
+
+  it("reads the run in its workspace, generates, then writes the summary fenced on public id, org and workspace", async () => {
+    const { done, steps, updates } = run([{ id: "s1" }]);
+    await expect(done).resolves.toEqual({
+      runPublicId: data.runPublicId,
+      model: "fast-model",
+    });
+    expect(steps).toEqual(["read-transcript", "generate", "write-summary"]);
+    expect(mocks.resolveRunRecord).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      data.runPublicId,
+    );
+    expect(mocks.readRunFrames).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      tachoRecord,
+    );
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.values).toMatchObject({
+      name: "Review PR 42",
+      summary: "Left two comments.",
+      summaryModel: "fast-model",
+    });
+    expect(updates[0]?.where).toEqual({
+      and: [
+        { eq: ["sessions.public_id", data.runPublicId] },
+        { eq: ["sessions.org_id", "org_1"] },
+        { eq: ["sessions.workspace_id", "ws_1"] },
+      ],
+    });
+  });
+
+  it("fails without retry when the update writes no row (negative)", async () => {
+    const { done } = run([]);
+    await expect(done).rejects.toBeInstanceOf(NonRetriableError);
+  });
+
+  it("fails without retry, before any model call, when the run is not in the job's workspace (negative)", async () => {
+    mocks.resolveRunRecord.mockResolvedValue(null);
+    const { done, steps } = run([{ id: "s1" }]);
+    await expect(done).rejects.toBeInstanceOf(NonRetriableError);
+    expect(steps).toEqual(["read-transcript"]);
+    expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+  });
+
+  it("writes a ledger run's summary through the ledger store", async () => {
+    const ledger = { source: "ledger", runId: "r1", attempts: [] };
+    mocks.resolveRunRecord.mockResolvedValue(ledger);
+    const setRunSummary = vi.fn().mockResolvedValue(true);
+    mocks.ledgerStore.mockReturnValue({ setRunSummary });
+    const { done, updates } = run([]);
+    await done;
+    expect(setRunSummary).toHaveBeenCalledWith(
+      "r1",
+      expect.objectContaining({ name: "Review PR 42", model: "fast-model" }),
+    );
+    expect(updates).toHaveLength(0);
   });
 });

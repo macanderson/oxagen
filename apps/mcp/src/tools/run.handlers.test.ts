@@ -1,6 +1,7 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
-// (#2952, ADR-058): get_run_frame_body, get_run_transcript, bisect_runs,
-// fork_run, export_run, summarize_run.
+// (#2952, ADR-058): get_run_frame_body, get_run_transcript, bisect_runs.
+// fork_run, export_run and summarize_run check an org role in the handler and
+// an MCP context carries no user, so they have no MCP tool.
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
 // each default-export handler runs without a live runtime. Each tool asserts:
@@ -34,18 +35,6 @@ import runBisectTool, {
   schema as bisectSchema,
   metadata as bisectMetadata,
 } from "./run.bisect";
-import runForkTool, {
-  schema as forkSchema,
-  metadata as forkMetadata,
-} from "./run.fork";
-import runExportTool, {
-  schema as exportSchema,
-  metadata as exportMetadata,
-} from "./run.export";
-import runSummarizeTool, {
-  schema as summarizeSchema,
-  metadata as summarizeMetadata,
-} from "./run.summarize";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -130,45 +119,6 @@ const CASES: ToolCase[] = [
       aligned: 3,
     },
     invalidOutput: { divergentSeq: 4, keyA: null, keyB: null, aligned: 3 },
-  },
-  {
-    name: "fork_run",
-    handler: runForkTool,
-    schema: forkSchema,
-    metadata: forkMetadata,
-    fields: ["runId", "fromSeq"],
-    readOnly: false,
-    args: { runId: LEDGER_ID, fromSeq: "2" },
-    validOutput: {
-      attemptId: "arat_forkforkforkforkforkfo",
-      attemptNumber: 2,
-    },
-    invalidOutput: {
-      attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b2",
-      attemptNumber: 2,
-    },
-  },
-  {
-    name: "export_run",
-    handler: runExportTool,
-    schema: exportSchema,
-    metadata: exportMetadata,
-    fields: ["runId"],
-    readOnly: false,
-    args: { runId: LEDGER_ID },
-    validOutput: { exportId: "rexp_0123456789abcdefghjkmn", status: "queued" },
-    invalidOutput: { exportId: "rexp_0123456789abcdefghjkmn", status: "ready" },
-  },
-  {
-    name: "summarize_run",
-    handler: runSummarizeTool,
-    schema: summarizeSchema,
-    metadata: summarizeMetadata,
-    fields: ["runId"],
-    readOnly: false,
-    args: { runId: TACHO_ID },
-    validOutput: { runId: TACHO_ID, status: "queued" },
-    invalidOutput: { runId: TACHO_ID, status: "done" },
   },
 ];
 

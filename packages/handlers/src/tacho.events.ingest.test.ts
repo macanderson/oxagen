@@ -8,6 +8,8 @@ import {
   sessionUuid,
 } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -837,6 +839,55 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     );
     expect(counters?.values).toHaveProperty("contentFrames");
     expect(counters?.values).toHaveProperty("bodyFrames");
+  });
+
+  it("never re-seals or re-counts a re-sent sealing batch, even one that drops its bodies", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    const row = db.sessions.get(SESSION) as Record<string, unknown>;
+    expect(row).toMatchObject({ replayGrade: "view", completenessGaps: [] });
+    // What Postgres holds after the first batch's increments.
+    Object.assign(row, {
+      contentFrames: 1,
+      bodyFrames: 1,
+      toolBodyFrames: 1,
+      numToolCalls: 1,
+      telemetryGapCount: 0,
+    });
+    const sealedAt = row["sealedAt"];
+    db.updates.length = 0;
+    const eventsSent = mocks.sendEvent.mock.calls.length;
+
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(row).toMatchObject({
+      replayGrade: "view",
+      completenessGaps: [],
+      sealedAt,
+    });
+    const update = db.updates.find((u) => u.table === "sessions");
+    expect(update?.values).not.toHaveProperty("replayGrade");
+    expect(update?.values).not.toHaveProperty("completenessGaps");
+    expect(update?.values).not.toHaveProperty("sealedAt");
+    expect(update?.values).not.toHaveProperty("lastHash");
+    const dialect = new PgDialect();
+    for (const counter of [
+      "contentFrames",
+      "bodyFrames",
+      "toolBodyFrames",
+      "numToolCalls",
+    ]) {
+      const query = dialect.sqlToQuery(update?.values[counter] as SQL);
+      expect(query.params, counter).toEqual([0]);
+    }
+    expect(mocks.bodyPut).toHaveBeenCalledOnce();
+    expect(mocks.sendEvent.mock.calls.length).toBe(eventsSent);
   });
 
   it("seals inspect on an observe-tier host whatever bodies it shipped (spec §8.4)", async () => {

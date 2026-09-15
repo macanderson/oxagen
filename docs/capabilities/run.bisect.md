@@ -34,8 +34,9 @@ The first frame at which two recordings diverge (Mission Control spec §8.4 "bis
 | `keyA`, `keyB` | string or null | the keys at that position; null for the run that has no frame there |
 | `aligned` | integer | positions compared before the divergence, or in total when there is none |
 
-Alignment is by position, so a ledger run and a wrapped session can be compared. A run longer than 10 000 frames is compared over its first 10 000.
+Alignment is by position, so a ledger run and a wrapped session can be compared. A run longer than 10 000 frames is compared over its first 10 000: a divergence inside that prefix is answered, and two runs whose prefixes agree when either was cut are refused, because the frames past the cap were never compared.
 
 ## Errors
 
 - `not_found` (404): either run is outside the caller's workspace.
+- `conflict` (409), `reason: run_exceeds_bisect_cap`: the first 10 000 frames of both runs agree and at least one run has more, so no answer covers the whole recording.

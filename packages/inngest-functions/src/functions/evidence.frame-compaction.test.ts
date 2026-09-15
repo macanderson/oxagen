@@ -1,20 +1,47 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../lib/run-record", () => ({ ledgerStore: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  compactSealedAttempts: vi.fn(),
+  loggerInfo: vi.fn(),
+}));
 
-import {
-  compactionCutoff,
-  HOT_WINDOW_MONTHS,
-} from "./evidence.frame-compaction";
+type StepRun = (name: string, fn: () => unknown) => Promise<unknown>;
+type Handler = (ctx: { step: { run: StepRun } }) => Promise<unknown>;
+
+/** Where the createFunction stub leaves the handler the module hands it. */
+const captured = vi.hoisted(
+  () => ({ handler: undefined }) as { handler?: Handler },
+);
+
+vi.mock("../create-function", () => ({
+  createFunction: (_opts: unknown, _trigger: unknown, fn: Handler) => {
+    captured.handler = fn;
+    return [{}, {}];
+  },
+}));
+vi.mock("../logger", () => ({ logger: { info: mocks.loggerInfo } }));
+vi.mock("../lib/run-record", () => ({
+  ledgerStore: () => ({ compactSealedAttempts: mocks.compactSealedAttempts }),
+}));
+
+import "./evidence.frame-compaction";
 
 describe("evidence.frame-compaction", () => {
-  it("cuts thirteen calendar months before now, so a seal inside the hot window is never compacted", () => {
-    expect(HOT_WINDOW_MONTHS).toBe(13);
-    expect(
-      compactionCutoff(new Date("2026-09-03T04:00:00.000Z")).toISOString(),
-    ).toBe("2025-08-03T04:00:00.000Z");
-    expect(
-      compactionCutoff(new Date("2026-01-31T00:00:00.000Z")).toISOString(),
-    ).toBe("2024-12-31T00:00:00.000Z");
+  beforeEach(() => vi.clearAllMocks());
+
+  it("calls the compaction with no cutoff: the hot window is the SQL function's constant", async () => {
+    mocks.compactSealedAttempts.mockResolvedValue(7);
+    const steps: string[] = [];
+    const result = await captured.handler?.({
+      step: {
+        run: async (name, fn) => {
+          steps.push(name);
+          return fn();
+        },
+      },
+    });
+    expect(steps).toEqual(["compact-sealed-attempts"]);
+    expect(mocks.compactSealedAttempts).toHaveBeenCalledWith();
+    expect(result).toEqual({ removed: 7 });
   });
 });

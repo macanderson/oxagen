@@ -5,7 +5,10 @@
 //   1. Role: org Owner, Admin or Member (`assertOrgRole`, ARCHITECTURE.md
 //      §3.2); the kernel's IAM check allows everything for a non-enterprise
 //      org, so the handler is where a Viewer is refused.
-//   2. The run is a ledger run in the caller's workspace (`not_found`).
+//   2. The run is in the caller's workspace (`not_found`) and is a ledger run
+//      (`conflict`, `fork_requires_ledger_run`): a wrapped session can record
+//      `fork`, and has no attempt row to mint, so its fork is refused by name
+//      (ADR-058 decision 3).
 //   3. The run has a sealed attempt whose recorded grade allows `fork`
 //      (`conflict`, `replay_grade_below_fork`). The grade is read, never
 //      recomputed: the seal is the record.
@@ -64,9 +67,7 @@ export function createRunForkHandler(
     await assertOrgRole(ctx, { org: FORK_ROLES });
     const scope = runScope(ctx);
     const run = await resolveRun(deps, scope, input.runId);
-    if (run.source !== "ledger") {
-      throw new HandlerError({ code: "not_found", reason: "run_not_found" });
-    }
+    if (run.source !== "ledger") throw conflict("fork_requires_ledger_run");
 
     const sealed = latestSealedAttempt(
       await deps.attempts.listRunAttempts(run.runId),
@@ -114,7 +115,7 @@ export function createRunForkHandler(
   };
 }
 
-export function defaultRunForkDeps(): RunForkDeps {
+function defaultRunForkDeps(): RunForkDeps {
   const ledger = ledgerStore();
   return {
     ...defaultRunReadDeps(),

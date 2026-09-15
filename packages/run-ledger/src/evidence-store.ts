@@ -48,7 +48,7 @@ const BUNDLE_CONTENT_TYPE = "application/zip";
 /** The longest content type the body frame carries (RFC 6838 names are short). */
 const MAX_CONTENT_TYPE_BYTES = 255;
 
-export interface EvidenceScope {
+interface EvidenceScope {
   orgId: string;
   workspaceId: string;
 }
@@ -155,7 +155,7 @@ export function parseFrameBodyPlaintext(plaintext: Uint8Array): {
   };
 }
 
-export interface EvidenceStoreDeps {
+interface EvidenceStoreDeps {
   storage: StorageAdapter;
   /** The KEK new objects are wrapped under. */
   writeCrypto: () => IngestionCryptoAdapter;
@@ -163,7 +163,7 @@ export interface EvidenceStoreDeps {
   readCrypto: (keyId: string) => IngestionCryptoAdapter;
 }
 
-export interface StoredFrameBody {
+interface StoredFrameBody {
   /** The redacted plaintext the reference names; the digest proves it. */
   bytes: Uint8Array;
   contentType: string;

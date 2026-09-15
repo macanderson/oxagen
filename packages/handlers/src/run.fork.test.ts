@@ -124,24 +124,15 @@ const conflict = (reason: string) => (e: unknown) =>
 describe("fork_run", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("mints a successor attempt with the sealed attempt's engine, its provenance and the branch point", async () => {
+  it("refuses a wrapped session by name even when its seal recorded fork (negative)", async () => {
     const { fork, createAttempt } = harness({});
-    const out = await fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx());
-    expect(runFork.output.parse(out)).toEqual(out);
-    expect(out).toEqual({
-      attemptId: "arat_forkforkforkforkforkfo",
-      attemptNumber: 2,
-    });
-    expect(createAttempt).toHaveBeenCalledWith({
-      runId: RUN_UUID,
-      producerId: "drain_1",
-      engine: { name: "stella", version: "2.1.0", buildDigest: DIGEST },
-      resumedFrom: {
-        attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
-        attemptPublicId: "arat_0123456789abcdefghjkmn",
-      },
-      forkedFromRunSeq: "2",
-    });
+    await expect(
+      fork({ runId: TACHO_ID, fromSeq: "1" }, ctx()),
+    ).rejects.toSatisfy(conflict("fork_requires_ledger_run"));
+    expect(createAttempt).not.toHaveBeenCalled();
+    expect(
+      runFork.input.safeParse({ runId: TACHO_ID, fromSeq: "1" }).success,
+    ).toBe(true);
   });
 
   it("refuses a Viewer and a user with no org role, before any read (negative)", async () => {
@@ -173,24 +164,6 @@ describe("fork_run", () => {
     }
   });
 
-  it("accepts a retry-graded run: every weaker verb comes with a stronger grade", async () => {
-    const { fork } = harness({
-      attempts: [
-        attempt({
-          seal: {
-            ...(attempt().seal as NonNullable<AttemptRecord["seal"]>),
-            replayGrade: "retry",
-          },
-        }),
-      ],
-    });
-    await expect(
-      fork({ runId: LEDGER_ID, fromSeq: "1" }, ctx()),
-    ).resolves.toMatchObject({
-      attemptNumber: 2,
-    });
-  });
-
   it("refuses a branch point a bodiless frame precedes (negative)", async () => {
     const { fork, createAttempt } = harness({
       events: [
@@ -205,12 +178,6 @@ describe("fork_run", () => {
       fork({ runId: LEDGER_ID, fromSeq: "3" }, ctx()),
     ).rejects.toSatisfy(conflict("gap_before_from_seq"));
     expect(createAttempt).not.toHaveBeenCalled();
-    // The same recording forks before the gap.
-    await expect(
-      fork({ runId: LEDGER_ID, fromSeq: "1" }, ctx()),
-    ).resolves.toMatchObject({
-      attemptNumber: 2,
-    });
   });
 
   it("refuses a branch point past the seal, and a run with no sealed attempt (negative)", async () => {

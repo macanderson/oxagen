@@ -127,6 +127,33 @@ describe("bisect_runs", () => {
     });
   });
 
+  it("refuses when the capped prefixes agree and either run is longer than the cap, and answers a divergence inside the prefix (negative)", async () => {
+    const CAP = 10_000;
+    const long = Array.from({ length: CAP + 1 }, (_, i) => tachoRow(i));
+    const exact = long.slice(0, CAP);
+    for (const [a, b] of [
+      [long, long],
+      [long, exact],
+    ] as const) {
+      await expect(
+        harness({ a, b })({ runA: TACHO_A, runB: TACHO_B }, ctx()),
+      ).rejects.toSatisfy(
+        (e) =>
+          isHandlerError(e) &&
+          e.code === "conflict" &&
+          e.reason === "run_exceeds_bisect_cap",
+      );
+    }
+    const diverged = [...long];
+    diverged[5] = tachoRow(5, { toolName: "Write" });
+    expect(
+      await harness({ a: long, b: diverged })(
+        { runA: TACHO_A, runB: TACHO_B },
+        ctx(),
+      ),
+    ).toMatchObject({ divergentSeq: "5", aligned: 5 });
+  });
+
   it("is not_found when either run is outside the workspace (negative)", async () => {
     const bisect = harness({ a: same, b: same });
     await expect(

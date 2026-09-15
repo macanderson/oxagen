@@ -15,7 +15,7 @@ describe("fork_run contract", () => {
     });
   });
 
-  it("accepts only an evidence-ledger run and a branch point of at least 1 (negative)", () => {
+  it("accepts either run id, so the handler can refuse a wrapped session by name, and a branch point of at least 1 (negative)", () => {
     expect(runFork.input.safeParse({ runId: RUN, fromSeq: "1" }).success).toBe(
       true,
     );
@@ -24,6 +24,9 @@ describe("fork_run contract", () => {
     );
     expect(
       runFork.input.safeParse({ runId: "tse_0a1b2c", fromSeq: "1" }).success,
+    ).toBe(true);
+    expect(
+      runFork.input.safeParse({ runId: "arat_0a1b2c", fromSeq: "1" }).success,
     ).toBe(false);
     expect(runFork.input.safeParse({ runId: RUN, fromSeq: 1 }).success).toBe(
       false,

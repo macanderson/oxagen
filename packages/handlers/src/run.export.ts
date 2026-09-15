@@ -78,7 +78,7 @@ export function createRunExportHandler(
   };
 }
 
-export function defaultRunExportDeps(): RunExportDeps {
+function defaultRunExportDeps(): RunExportDeps {
   return {
     ...defaultRunReadDeps(),
     insertExport: async (row) => {

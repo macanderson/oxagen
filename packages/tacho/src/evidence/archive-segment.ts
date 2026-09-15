@@ -22,7 +22,7 @@ export interface ArchiveFrame {
   envelope: JsonValue;
 }
 
-export interface ArchiveSegment {
+interface ArchiveSegment {
   bytes: Uint8Array;
   /** sha256 over `bytes` as stored. */
   segmentDigest: Sha256Digest;

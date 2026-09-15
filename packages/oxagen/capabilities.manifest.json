@@ -3278,13 +3278,11 @@
       "domain": "run",
       "mode": "async",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -3295,13 +3293,11 @@
       "domain": "run",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -3363,13 +3359,11 @@
       "domain": "run",
       "mode": "async",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }

@@ -147,7 +147,16 @@ are submitted by an engine Oxagen did not host, so the grade caps at `view`
 and `fork_run` refuses every ledger run until a gateway-observed ledger run
 exists. A wrapped session at the `gateway` tier with every body can seal
 `fork`, and the word is recorded; forking a wrapped session is not a
-capability of this revision because no attempt row exists to mint for it.
+capability of this revision because no attempt row exists to mint for it, and
+`fork_run` refuses it with `conflict` (`fork_requires_ledger_run`), never
+`not_found`. The recorded word stays what the recording supports: capping a
+wrapped seal below `fork` would write a grade the evidence contradicts, and a
+grade is never raised afterwards, so those sessions could not be forked once a
+later revision mints attempts for wrapped sessions. Until then no store
+records a grade `fork_run` accepts: a ledger seal caps at `view` and a
+wrapped session is refused by name. `fork_run`, `export_run` and
+`summarize_run` check an org role in the handler and have no MCP surface,
+because an MCP context carries no user.
 
 ## Consequences
 

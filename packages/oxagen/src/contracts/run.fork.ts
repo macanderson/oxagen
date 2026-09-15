@@ -16,16 +16,15 @@
  * grade is the one the seal recorded; nothing here recomputes it.
  *
  * Org Owner, Admin or Member, checked in the handler (`assertOrgRole`,
- * ARCHITECTURE.md §3.2). A wrapped session has no attempt to fork: only an
- * evidence-ledger run (`arun_…`) is accepted.
+ * ARCHITECTURE.md §3.2), so the capability has no MCP surface: an MCP context
+ * carries no user. The input takes either run id; a wrapped session (`tse_…`)
+ * has no attempt row to mint and is refused by name (`conflict`,
+ * `fork_requires_ledger_run`), whatever grade it recorded.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { frameSeqSchema } from "./run.frame_body.get";
-
-export const ledgerRunPublicIdSchema = z
-  .string()
-  .regex(/^arun_[0-9a-z]+$/, "an evidence-ledger run public id (arun_…)");
+import { runPublicIdSchema } from "./run.list";
 
 export const attemptPublicIdSchema = z
   .string()
@@ -37,8 +36,8 @@ export const runFork = registerCapability({
   description:
     "Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
@@ -51,7 +50,7 @@ export const runFork = registerCapability({
   },
   input: z
     .object({
-      runId: ledgerRunPublicIdSchema,
+      runId: runPublicIdSchema,
       /** The last recorded frame the fork replays, as a decimal `run_seq` ≥ 1. */
       fromSeq: frameSeqSchema.refine((v) => v !== "0", "fromSeq is at least 1"),
     })

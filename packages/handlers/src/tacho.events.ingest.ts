@@ -478,19 +478,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     });
     bytesRefs.set(body.eventIdIdem, ref);
   }
-  const bodyFramesBySession = new Map<string, number>();
-  const toolBodyFramesBySession = new Map<string, number>();
-  for (const body of retained) {
-    bodyFramesBySession.set(
-      body.sessionUuid,
-      (bodyFramesBySession.get(body.sessionUuid) ?? 0) + 1,
-    );
-    if (body.kind === "tool_call")
-      toolBodyFramesBySession.set(
-        body.sessionUuid,
-        (toolBodyFramesBySession.get(body.sessionUuid) ?? 0) + 1,
-      );
-  }
 
   const result = await withTenantDb(async (tx) => {
     const bySession = new Map<string, TachoEvent[]>();
@@ -533,6 +520,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           bodyFrames: true,
           toolBodyFrames: true,
           enforcementTier: true,
+          sealedAt: true,
         },
       });
       if (existing && existing.hostId !== host.id) {
@@ -551,22 +539,27 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         breakSeq = first.seq;
         reason = internal.violations[0] ?? "chain verification failed";
       }
+      // A re-send repeats rows already accepted (idempotent under the
+      // (session_uuid, seq) key). Only the events past the recorded head are
+      // new: they alone move the counters, the head and the seal, so a retried
+      // batch never counts a frame twice.
+      const fresh = existing
+        ? events.filter((event) => event.seq >= existing.seqCount)
+        : events;
+      const head = fresh[0];
       if (existing) {
-        if (first.seq < existing.seqCount) {
-          // A re-send of rows already accepted: idempotent under the
-          // (session_uuid, seq) key; verify it links to nothing new.
-          ok = ok && true;
-        } else if (first.seq !== existing.seqCount) {
+        if (first.seq > existing.seqCount) {
           ok = false;
           breakSeq = first.seq;
           reason = `seq ${first.seq} follows recorded seq ${existing.seqCount - 1}: the sequence must be dense`;
         } else if (
+          head &&
           existing.lastHash !== null &&
-          first.prev_hash !== existing.lastHash
+          head.prev_hash !== existing.lastHash
         ) {
           ok = false;
-          breakSeq = first.seq;
-          reason = `seq ${first.seq} prev_hash does not match the recorded chain head`;
+          breakSeq = head.seq;
+          reason = `seq ${head.seq} prev_hash does not match the recorded chain head`;
         }
         if (!existing.chainVerified) ok = false;
       } else if (first.seq !== 0) {
@@ -583,11 +576,20 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         });
 
       const delta = emptyDelta();
-      for (const event of events) foldDelta(delta, event);
-      const contentFrames = countContentFrames(events);
-      const bodyFrames = bodyFramesBySession.get(sessionUuid) ?? 0;
-      const toolBodyFrames = toolBodyFramesBySession.get(sessionUuid) ?? 0;
-      const terminal = terminalPatch(events, now);
+      for (const event of fresh) foldDelta(delta, event);
+      const contentFrames = countContentFrames(fresh);
+      const freshIds = new Set(fresh.map((event) => event.event_id_idem));
+      const freshBodies = retained.filter(
+        (body) =>
+          body.sessionUuid === sessionUuid && freshIds.has(body.eventIdIdem),
+      );
+      const bodyFrames = freshBodies.length;
+      const toolBodyFrames = freshBodies.filter(
+        (body) => body.kind === "tool_call",
+      ).length;
+      // The grade is computed once, at seal: a sealed session is never
+      // sealed again, whatever a later batch carries.
+      const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
           totalCostMicrosAuthoritative?: number;
@@ -614,7 +616,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         terminalColumns["completenessGaps"] = seal.completenessGaps;
         terminalColumns["replayGrade"] = seal.replayGrade;
       }
-      const lastContext = last.context ?? {};
+      const tail = fresh.at(-1);
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -656,12 +658,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       const common = {
         lastEventAt: now,
         seqCount: sql`GREATEST(${schema.tachoSessions.seqCount}, ${last.seq + 1})`,
-        lastHash: last.hash,
         chainVerified: ok,
         ...(ok ? {} : { chainBreakAtSeq: breakSeq }),
-        modelFinal: lastContext.model ?? null,
-        permissionModeFinal: lastContext.permission_mode ?? null,
-        gitHeadShaEnd: lastContext.git_head_sha ?? null,
+        ...(tail
+          ? {
+              lastHash: tail.hash,
+              modelFinal: tail.context?.model ?? null,
+              permissionModeFinal: tail.context?.permission_mode ?? null,
+              gitHeadShaEnd: tail.context?.git_head_sha ?? null,
+            }
+          : {}),
         updatedAt: now,
         ...terminalColumns,
         ...increments,
@@ -704,9 +710,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       });
       const sessionId = sessionRow?.id;
       if (sessionId) {
-        await rollupModels(tx, ctx, sessionId, events, now);
-        await rollupFiles(tx, ctx, sessionId, events, now);
-        await rollupCommands(tx, ctx, sessionId, events, now);
+        await rollupModels(tx, ctx, sessionId, fresh, now);
+        await rollupFiles(tx, ctx, sessionId, fresh, now);
+        await rollupCommands(tx, ctx, sessionId, fresh, now);
       }
       if (delta.totalCostMicros > 0)
         spendDeltas.push({ micros: delta.totalCostMicros, at: now });

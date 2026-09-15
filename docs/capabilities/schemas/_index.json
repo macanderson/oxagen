@@ -592,8 +592,7 @@
       "name": "export_run",
       "domain": "run",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -647,8 +646,7 @@
       "name": "fork_run",
       "domain": "run",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2631,8 +2629,7 @@
       "name": "summarize_run",
       "domain": "run",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],

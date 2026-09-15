@@ -496,15 +496,17 @@ export interface RunStore {
   ): Promise<AttemptEventReadRecord[]>;
 
   /**
-   * Compaction (spec §13.3): remove the hot frames of every attempt whose
-   * seal is older than `before` and names an archive segment. The seal keeps
+   * Compaction (spec §13.3): remove the hot frames of every attempt sealed
+   * more than thirteen months ago whose seal names an archive segment. The
+   * window is a constant inside the SQL function, so no caller can move the
+   * cutoff. The seal keeps
    * `event_count`, `merkle_root`, `archive_segment_ref` and the rollup; the
    * frames stay readable from the segment. Cross-tenant, for the monthly job;
    * the delete itself is the SECURITY DEFINER function the migration owns,
    * because the app role holds no DELETE on the event log. Answers the rows
    * removed.
    */
-  compactSealedAttempts(before: Date): Promise<number>;
+  compactSealedAttempts(): Promise<number>;
 
   /**
    * Write the generated summary (`summarize_run`, G14): the three columns
@@ -1594,9 +1596,9 @@ export function buildSetRunSummarySql(
   `;
 }
 
-/** The compaction call; the rule lives in the function's WHERE clause. */
-export function buildCompactSealedAttemptsSql(before: Date): SQL {
-  return sql`SELECT agent.compact_sealed_attempt_events(${before.toISOString()}::timestamptz) AS removed`;
+/** The compaction call; the hot window is a constant in the function's WHERE clause. */
+export function buildCompactSealedAttemptsSql(): SQL {
+  return sql`SELECT agent.compact_sealed_attempt_events() AS removed`;
 }
 
 /**
@@ -2361,10 +2363,10 @@ export function createPostgresRunStore(
       });
     },
 
-    async compactSealedAttempts(before) {
+    async compactSealedAttempts() {
       return withSystemDb(async (tx: Tx) => {
         const rows = (await tx.execute(
-          buildCompactSealedAttemptsSql(before),
+          buildCompactSealedAttemptsSql(),
         )) as unknown as Array<{ removed: number | string }>;
         return Number(rows[0]?.removed ?? 0);
       });
