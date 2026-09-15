@@ -32,6 +32,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "set_spend_budget",
   "append_record",
   "propose_record",
   "dismiss_proposal",
