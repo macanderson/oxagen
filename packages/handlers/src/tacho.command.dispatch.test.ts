@@ -42,14 +42,30 @@ const OPERATOR: CapabilityContext = {
   messageId: null,
 };
 
+/** The user the API key in these tests was created by. */
+const KEY_CREATOR = "00000000-0000-4000-8000-0000000000c7";
+
+/** An API-key call: no signed-in user, the key's id. */
+const KEY_CALL: CapabilityContext = {
+  ...OPERATOR,
+  userId: null,
+  apiKeyId: "00000000-0000-4000-8000-0000000000a9",
+  surface: "mcp",
+};
+
 const dialect = new PgDialect();
 
 /**
- * The role queries `assertOrgRole` runs, answered by the table read and the
- * scope the WHERE pinned: an org-wide assignment has `workspace_id is null`,
- * a workspace assignment carries the id.
+ * The role queries `resolveActingUserId` and `assertOrgRole` run, answered by
+ * the table read and the scope the WHERE pinned: the API key's creator
+ * (`keyCreator`, null for a key with none); an org-wide assignment has
+ * `workspace_id is null`, a workspace assignment carries the id.
  */
-function tenant(orgRole: string | null, workspaceRole: string | null = null) {
+function tenant(
+  orgRole: string | null,
+  workspaceRole: string | null = null,
+  keyCreator: string | null = KEY_CREATOR,
+) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(
       fn({
@@ -63,6 +79,10 @@ function tenant(orgRole: string | null, workspaceRole: string | null = null) {
                 return chain;
               },
               limit: () => {
+                if (table === schema.apiKeys)
+                  return Promise.resolve(
+                    keyCreator ? [{ createdByUserId: keyCreator }] : [],
+                  );
                 if (table === schema.principals)
                   return Promise.resolve([{ id: "prn_1" }]);
                 const pinsWorkspace = lastWhere
@@ -181,6 +201,8 @@ const conflict = (reason: string) => (e: unknown) =>
 const notFound = (reason: string) => (e: unknown) =>
   isHandlerError(e) && e.code === "not_found" && e.reason === reason;
 const forbidden = (e: unknown) => isHandlerError(e) && e.code === "forbidden";
+const refused = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
 
 const RUN = session().publicId;
 
@@ -256,6 +278,37 @@ describe("dispatch_command — role gate", () => {
       handlerOver(store)(input, { ...OPERATOR, userId: null }),
     ).rejects.toSatisfy(forbidden);
     expect(store.rows).toEqual([]);
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    const input = () =>
+      parse({ target: { kind: "run", id: RUN }, command: "pause" });
+
+    it("dispatches for a creator who is an org Admin, recorded as the issuer", async () => {
+      tenant("Admin");
+      const store = new MemoryStore([session()]);
+      const { commandIds } = await handlerOver(store)(input(), KEY_CALL);
+      expect(commandIds).toHaveLength(1);
+      expect(store.rows[0]?.issuedByUserId).toBe(KEY_CREATOR);
+    });
+
+    it("refuses a key whose creator is an org Member with no workspace role (negative)", async () => {
+      tenant("Member");
+      const store = new MemoryStore([session()]);
+      await expect(handlerOver(store)(input(), KEY_CALL)).rejects.toSatisfy(
+        refused("org_role_required"),
+      );
+      expect(store.rows).toEqual([]);
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      tenant("Owner", "Owner", null);
+      const store = new MemoryStore([session()]);
+      await expect(handlerOver(store)(input(), KEY_CALL)).rejects.toSatisfy(
+        refused("no_principal"),
+      );
+      expect(store.rows).toEqual([]);
+    });
   });
 });
 

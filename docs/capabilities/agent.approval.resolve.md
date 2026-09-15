@@ -37,7 +37,8 @@ approved tool call or skips it and apologises.
 
 | code        | reason              | meaning                                                                                       |
 | ----------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| `forbidden` | `org_role_required` | The caller is not an org Owner or Admin, nor a workspace Owner or Member (403).               |
+| `forbidden` | `no_principal`      | No signed-in user and no API key with a live creator (403).                                   |
+| `forbidden` | `org_role_required` | The acting user (the signed-in user, or the API key's creator) is not an org Owner or Admin, nor a workspace Owner or Member (403). |
 | `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). The call is not a governed action and is never billed. |
 
 ## SPEC references

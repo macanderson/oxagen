@@ -78,9 +78,11 @@ const NEGOTIATED: NegotiatedRow = {
   effectiveTo: null,
 };
 
-const { world, scope } = vi.hoisted(() => ({
+const { world, scope, key } = vi.hoisted(() => ({
   world: new Map<string, unknown>(),
   scope: { orgId: "" },
+  /** The user the API key in these tests was created by, or none. */
+  key: { creator: "usr_creator" as string | null },
 }));
 
 const PRINCIPAL_ID = "prn_actor";
@@ -91,6 +93,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const rowsFor = (table: unknown, joined: boolean): unknown[] => {
     const w = here();
     if (!w) throw new Error(`no tenant scope entered for ${scope.orgId}`);
+    if (table === real.schema.apiKeys)
+      return key.creator ? [{ createdByUserId: key.creator }] : [];
     if (table === real.schema.principals) return [{ id: PRINCIPAL_ID }];
     if (table === real.schema.principalRoleAssignments)
       return w.role ? [{ roleName: w.role }] : [];
@@ -133,12 +137,16 @@ import { billingContractRateGetHandler } from "./billing.contract_rate.get";
 const ORG_NEGOTIATED = "org-negotiated";
 const ORG_SELF_SERVE = "org-self-serve";
 
-function ctxFor(orgId: string, userId: string | null = "usr_actor") {
+function ctxFor(
+  orgId: string,
+  userId: string | null = "usr_actor",
+  apiKeyId: string | null = null,
+) {
   return {
     orgId,
     workspaceId: "ws_1",
     userId,
-    apiKeyId: null,
+    apiKeyId,
     requestId: "req_1",
     surface: "api" as const,
     messageId: null,
@@ -147,11 +155,15 @@ function ctxFor(orgId: string, userId: string | null = "usr_actor") {
 }
 
 /** Enter `orgId`'s tenant scope and read its rate, as the kernel would. */
-async function readRateFor(orgId: string, userId: string | null = "usr_actor") {
+async function readRateFor(
+  orgId: string,
+  userId: string | null = "usr_actor",
+  apiKeyId: string | null = null,
+) {
   scope.orgId = orgId;
   return billingContractRateGetHandler(
     {},
-    ctxFor(orgId, userId) as Parameters<
+    ctxFor(orgId, userId, apiKeyId) as Parameters<
       typeof billingContractRateGetHandler
     >[1],
   );
@@ -159,6 +171,7 @@ async function readRateFor(orgId: string, userId: string | null = "usr_actor") {
 
 beforeEach(() => {
   world.clear();
+  key.creator = "usr_creator";
   // Two organisations on the same tier: one with a negotiated agreement in
   // force, one self-serve with none.
   world.set(ORG_NEGOTIATED, {
@@ -312,5 +325,38 @@ describe("get_contract_rate — the role gate", () => {
       (e: unknown) => e,
     );
     expect(err).toMatchObject({ code: "forbidden", reason: "no_principal" });
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    const readAsKey = () => readRateFor(ORG_SELF_SERVE, null, "aky_1");
+    const withRole = (role: string) =>
+      world.set(ORG_SELF_SERVE, {
+        role,
+        negotiated: null,
+        entitled: SCALE_PLAN,
+      } satisfies OrgWorld);
+
+    it("reads the rate for a creator who is an org Billing user", async () => {
+      withRole("Billing");
+      await expect(readAsKey()).resolves.toMatchObject({
+        source: "published_tier",
+      });
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      withRole("Member");
+      await expect(readAsKey()).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      key.creator = null;
+      await expect(readAsKey()).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "no_principal",
+      });
+    });
   });
 });

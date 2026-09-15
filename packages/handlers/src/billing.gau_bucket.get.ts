@@ -29,7 +29,8 @@
 // and the invoice amounts are list_invoices' (INV-09, INV-25).
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner, Admin or Billing. The kernel's
+//   1. Role gate — assertOrgRole: org Owner, Admin or Billing, for the
+//      signed-in user or the creator of the API key. The kernel's
 //      IAM check allows every capability for a non-enterprise org, so the
 //      handler owns this check (apps/app/ARCHITECTURE.md §3.2, INV-29).
 //   2. Resolve the terms and the subscription, the settings, and the month.
@@ -55,7 +56,7 @@ import {
   type OrgGauBillingSettings,
 } from "@oxagen/billing";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 // ---- Settlement reads ------------------------------------------------------
@@ -170,7 +171,10 @@ export function createBillingGauBucketGetHandler(
 ): CapabilityHandler<typeof billingGauBucketGet> {
   return async (_input, ctx): Promise<BillingGauBucketGetOutput> => {
     // ── Role gate ─────────────────────────────────────────────────────────
-    await assertOrgRole(ctx, { org: ["Owner", "Admin", "Billing"] });
+    await assertOrgRole(
+      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { org: ["Owner", "Admin", "Billing"] },
+    );
 
     const orgId = ctx.orgId;
     const now = new Date();

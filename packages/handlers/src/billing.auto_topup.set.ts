@@ -5,7 +5,8 @@
 // saved card when the GAU bucket runs out, and for how many blocks.
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner or Admin. The kernel's IAM check
+//   1. Role gate — assertOrgRole: org Owner or Admin, for the signed-in user
+//      or the creator of the API key (resolveActingUserId). The kernel's IAM check
 //      allows every capability for a non-enterprise org, so the handler owns
 //      this check (§3.2, INV-29). A Member or a Billing user is refused.
 //   2. Upsert the two columns on org_billing_settings, keyed on org_id, and
@@ -29,7 +30,7 @@ import {
   type BillingAutoTopupSetOutput,
 } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { setAutoTopup, type AutoTopupSettings } from "@oxagen/billing";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
@@ -44,7 +45,11 @@ export function createBillingAutoTopupSetHandler(
 ): CapabilityHandler<typeof billingAutoTopupSet> {
   return async (input, ctx): Promise<BillingAutoTopupSetOutput> => {
     // ── Role gate ─────────────────────────────────────────────────────────
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
 
     // ── Write ─────────────────────────────────────────────────────────────
     const stored = await write(ctx.orgId, {
@@ -59,7 +64,7 @@ export function createBillingAutoTopupSetHandler(
     // top-up is that decision for governed action units rather than credits.
     emitSecurityEvent({
       eventType: "billing.auto_reload_updated",
-      actorUserId: ctx.userId ?? null,
+      actorUserId: actingUserId,
       orgId: ctx.orgId,
       workspaceId: null,
       capability: billingAutoTopupSet.name,
@@ -72,7 +77,7 @@ export function createBillingAutoTopupSetHandler(
     logger.info(
       {
         orgId: ctx.orgId,
-        actorUserId: ctx.userId,
+        actorUserId: actingUserId,
         enabled: stored.enabled,
         blocks: stored.blocks,
         surface: ctx.surface,

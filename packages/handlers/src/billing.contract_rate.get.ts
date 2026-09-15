@@ -2,7 +2,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { resolveContractTerms } from "@oxagen/billing";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 
 /**
  * get_contract_rate — the organisation's contracted governed-action terms
@@ -24,8 +24,12 @@ export const billingContractRateGetHandler: CapabilityHandler<
 > = async (_input, ctx) => {
   // Role gate (ARCHITECTURE.md §3.2, INV-29): the contract's defaultRoles are
   // Owner, Admin and Billing, and the kernel's IAM check enforces them for
-  // enterprise orgs only, so the handler checks them itself.
-  await assertOrgRole(ctx, { org: ["Owner", "Admin", "Billing"] });
+  // enterprise orgs only, so the handler checks them itself, for the signed-in
+  // user or the creator of the API key.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin", "Billing"] },
+  );
 
   const terms = await resolveContractTerms(ctx.orgId);
 

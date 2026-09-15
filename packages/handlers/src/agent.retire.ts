@@ -1,5 +1,6 @@
 // agent.retire.ts — retire an agent identity (MC spec §6.2, App. E; #2956).
-// Role gate: org Owner or Admin (INV-29). One transaction archives the
+// Role gate: org Owner or Admin (INV-29), for the signed-in user
+// or the creator of the API key (resolveActingUserId). One transaction archives the
 // agent row, suspends the principal, soft-deletes every live credential and
 // revokes every live host through the writes `revoke_tacho_enrollment`
 // shares (lib/tacho-host-revoke.ts). Nothing is
@@ -7,9 +8,8 @@
 // agent answers the recorded retirement without a write.
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { HandlerError } from "@oxagen/oxagen";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentKeysFor } from "@oxagen/agent/handlers/_agent-identity";
 import { and, eq, inArray } from "drizzle-orm";
@@ -25,15 +25,13 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   input,
   ctx,
 ) => {
-  if (!ctx.userId) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "no_principal",
-      message: "retire_agent requires a signed-in user",
-    });
-  }
-  const userId = ctx.userId;
-  await assertOrgRole(ctx, { org: [...AGENT_IDENTITY_ROLES] });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: [...AGENT_IDENTITY_ROLES] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const userId = actingUserId as string;
 
   const now = new Date();
   const reason = input.reason ?? "agent retired";

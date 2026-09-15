@@ -8,18 +8,17 @@
 
 Buy governed action units (GAUs) in block quantities at the organisation's
 contracted rate, through a Stripe Checkout Session (ADR-055 §6). The
-billing page's "Buy governed action units" form and session-authenticated
-API callers reach it. The MCP tool (`purchase_gau_bucket`) and API-key
-callers are refused `forbidden / no_principal`: MCP and API-key contexts
-carry no user (`apps/mcp/src/context.ts`, `apps/api/src/middleware/auth.ts`),
-and the role gate runs before any read. Whether an API key may buy as its
-creator is undecided.
+billing page's "Buy governed action units" form, API callers and the MCP
+tool (`purchase_gau_bucket`) reach it. An API-key call (every MCP call, and
+an API call with a key) buys as the key's creator, bounded by the creator's
+current org role (`resolveActingUserId`); a key with no recorded creator is
+refused `forbidden / no_principal` before any read.
 
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/billing/gau-bucket/purchase`
 - MCP: `purchase_gau_bucket`
-- Authentication: session; the handler requires org Owner or Billing (`assertOrgRole`, INV-29) — the kernel's IAM check enforces `defaultRoles` for enterprise organisations only
+- Authentication: session or API key; the handler requires org Owner or Billing of the signed-in user or the key's creator (`assertOrgRole`, INV-29) — the kernel's IAM check enforces `defaultRoles` for enterprise organisations only
 - Capability name: `purchase_gau_bucket`
 - Not billed (`noBillingGate: true`, INV-27); IAM default-deny; high sensitivity; agent surface requires approval
 
@@ -93,7 +92,7 @@ No money field: the page prints the total from `get_contract_rate`.
 | code             | meaning                                                                                                                                                     |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tenant_missing` | No active tenant on the request context.                                                                                                                     |
-| `forbidden`      | `HandlerError` (403): no signed-in user (`no_principal`), or the user holds neither Owner nor Billing in the org (`org_role_required`).                       |
+| `forbidden`      | `HandlerError` (403): no signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) holds neither Owner nor Billing in the org (`org_role_required`).                       |
 | `conflict`       | `HandlerError` (409), reason `invoice_billed`: the organisation is approved for invoice billing, where consumption is never capped and units are not bought. |
 | `invalid_input`  | `quantityGau` is not a whole number of blocks at the contracted block size, or a return path is not app-relative.                                            |
 

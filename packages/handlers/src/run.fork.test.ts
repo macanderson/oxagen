@@ -19,6 +19,7 @@ import { createRunForkHandler, type RunForkDeps } from "./run.fork";
 import {
   ctx,
   event,
+  keyCtx,
   ledgerRun,
   memoryEvents,
   memoryStores,
@@ -76,11 +77,16 @@ function attempt(over: Partial<AttemptRecord> = {}): AttemptRecord {
 
 function harness(over: {
   role?: string | null;
+  keyCreator?: string | null;
   attempts?: AttemptRecord[];
   events?: AttemptEventReadRecord[];
 }) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(roleTx(over.role === undefined ? "Member" : over.role))),
+    Promise.resolve(
+      fn(
+        roleTx(over.role === undefined ? "Member" : over.role, over.keyCreator),
+      ),
+    ),
   );
   const stores = memoryStores(
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
@@ -122,6 +128,8 @@ function harness(over: {
 
 const conflict = (reason: string) => (e: unknown) =>
   isHandlerError(e) && e.code === "conflict" && e.reason === reason;
+const refused = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
 
 describe("fork_run", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -145,6 +153,35 @@ describe("fork_run", () => {
       ).rejects.toSatisfy((e) => isHandlerError(e) && e.code === "forbidden");
       expect(createAttempt).not.toHaveBeenCalled();
     }
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    it("mints the attempt for a creator who is an org Member", async () => {
+      const { fork, createAttempt } = harness({ role: "Member" });
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, keyCtx()),
+      ).resolves.toMatchObject({ attemptNumber: 2 });
+      expect(createAttempt).toHaveBeenCalledOnce();
+    });
+
+    it("refuses a key whose creator is an org Viewer (negative)", async () => {
+      const { fork, createAttempt } = harness({ role: "Viewer" });
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, keyCtx()),
+      ).rejects.toSatisfy(refused("org_role_required"));
+      expect(createAttempt).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      const { fork, createAttempt } = harness({
+        role: "Owner",
+        keyCreator: null,
+      });
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, keyCtx()),
+      ).rejects.toSatisfy(refused("no_principal"));
+      expect(createAttempt).not.toHaveBeenCalled();
+    });
   });
 
   it("refuses a run whose recorded grade is below fork, and one the recorder never graded (negative)", async () => {

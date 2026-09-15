@@ -75,9 +75,11 @@ const NEGOTIATED: NegotiatedRow = {
   effectiveTo: null,
 };
 
-const { world, scope, log } = vi.hoisted(() => ({
+const { world, scope, log, key } = vi.hoisted(() => ({
   world: new Map<string, unknown>(),
   scope: { orgId: "" },
+  /** The user the API key in these tests was created by, or none. */
+  key: { creator: "usr_creator" as string | null },
   log: {
     tablesRead: [] as string[],
     inserts: [] as Array<{ table: string; values: Record<string, unknown> }>,
@@ -100,6 +102,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const rowsFor = (table: unknown, joined: boolean): unknown[] => {
     const w = here();
     log.tablesRead.push(nameOf(table));
+    if (table === real.schema.apiKeys)
+      return key.creator ? [{ createdByUserId: key.creator }] : [];
     if (table === real.schema.principals) return [{ id: PRINCIPAL_ID }];
     if (table === real.schema.principalRoleAssignments)
       return w.role ? [{ roleName: w.role }] : [];
@@ -221,12 +225,16 @@ const INPUT = {
   cancelPath: "/acme/billing?checkout=cancel",
 };
 
-function ctxFor(orgId: string, userId: string | null = "usr_actor") {
+function ctxFor(
+  orgId: string,
+  userId: string | null = "usr_actor",
+  apiKeyId: string | null = null,
+) {
   return {
     orgId,
     workspaceId: "ws_1",
     userId,
-    apiKeyId: null,
+    apiKeyId,
     requestId: "req_1",
     surface: "api" as const,
     messageId: null,
@@ -239,9 +247,13 @@ async function purchaseFor(
   orgId: string,
   input = INPUT,
   userId: string | null = "usr_actor",
+  apiKeyId: string | null = null,
 ) {
   scope.orgId = orgId;
-  return billingGauBucketPurchaseHandler(input, ctxFor(orgId, userId));
+  return billingGauBucketPurchaseHandler(
+    input,
+    ctxFor(orgId, userId, apiKeyId),
+  );
 }
 
 function orgWorld(overrides: Partial<OrgWorld> = {}): OrgWorld {
@@ -264,6 +276,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   log.tablesRead.length = 0;
   log.inserts.length = 0;
+  key.creator = "usr_creator";
   world.clear();
   world.set(ORG_FREE, orgWorld());
   world.set(ORG_NEGOTIATED, orgWorld({ negotiated: NEGOTIATED }));
@@ -419,11 +432,41 @@ describe("purchase_gau_bucket handler", () => {
     },
   );
 
-  it("refuses a caller with no user (an API key alone) as forbidden", async () => {
-    await expect(purchaseFor(ORG_FREE, INPUT, null)).rejects.toSatisfy(
-      forbidden,
-    );
+  it("refuses a caller with no user and no API key as forbidden", async () => {
+    await expect(purchaseFor(ORG_FREE, INPUT, null)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "no_principal",
+    });
     expect(provider.createGauCheckout).not.toHaveBeenCalled();
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    const buyAsKey = () => purchaseFor(ORG_FREE, INPUT, null, "aky_1");
+
+    it("buys for a creator who is an org Owner, and the security event names the creator", async () => {
+      await expect(buyAsKey()).resolves.toMatchObject({ blocks: 2 });
+      expect(emitSecurityEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ actorUserId: "usr_creator" }),
+      );
+    });
+
+    it("refuses a key whose creator is an org Admin (negative)", async () => {
+      (world.get(ORG_FREE) as OrgWorld).role = "Admin";
+      await expect(buyAsKey()).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      key.creator = null;
+      await expect(buyAsKey()).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "no_principal",
+      });
+      expect(provider.createGauCheckout).not.toHaveBeenCalled();
+    });
   });
 
   it("prefixes the return paths with NEXT_PUBLIC_APP_URL, whatever its trailing slash", async () => {

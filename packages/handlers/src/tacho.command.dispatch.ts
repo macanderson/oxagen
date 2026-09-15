@@ -35,7 +35,7 @@ import {
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import type { TachoDeliveryMode } from "@oxagen/tacho";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { createPostgresRunStore } from "@oxagen/run-ledger";
 import { and, eq, isNull, ne } from "drizzle-orm";
@@ -202,11 +202,14 @@ export function createDispatchCommandHandler(
   return async (input, ctx): Promise<DispatchCommandOutput> => {
     // Org Owners and Admins control any run; a workspace Owner or Member
     // controls the runs of the workspace the call is scoped to, which is the
-    // scope every recipient is resolved in (INV-29).
-    await assertOrgRole(ctx, {
-      org: ["Owner", "Admin"],
-      workspace: ["Owner", "Member"],
-    });
+    // scope every recipient is resolved in (INV-29). The acting user is the
+    // signed-in user or the creator of the API key, and is recorded as the
+    // issuer.
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    );
     const scope = runScope(ctx);
     const now = deps.now();
     const expiresAt = new Date(now.getTime() + input.expiresInMs);
@@ -240,7 +243,7 @@ export function createDispatchCommandHandler(
           reason: input.reason ?? null,
           outcome: reason === null ? "queued" : "failed",
           outcomeDetail: reason,
-          issuedByUserId: ctx.userId,
+          issuedByUserId: actingUserId,
           issuedAt: now,
           expiresAt,
         });

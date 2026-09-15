@@ -38,14 +38,35 @@ import { makeCTX } from "./test-utils/fixtures";
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 
-const ctx = (over: { orgId?: string; userId?: string | null } = {}) =>
-  makeCTX({ orgId: ORG, userId: USER, ...over });
+const ctx = (
+  over: {
+    orgId?: string;
+    userId?: string | null;
+    apiKeyId?: string | null;
+  } = {},
+) => makeCTX({ orgId: ORG, userId: USER, ...over });
+
+/** An API-key call: no signed-in user, the key's id. */
+const keyCall = () => ctx({ userId: null, apiKeyId: KEY });
 
 // ── role-gate tx double ───────────────────────────────────────────────────────
 
-/** Answers by the table asked for, so query order does not matter. */
-function stubRole(roleName: string | null) {
+/** The user the API key in these tests was created by, and the key. */
+const KEY_CREATOR = "0192d4a8-7c1e-7a00-8000-0000000c7ea7";
+const KEY = "0192d4a8-7c1e-7a00-8000-0000000a91e1";
+
+/**
+ * Answers by the table asked for, so query order does not matter: the API
+ * key's creator (`keyCreator`, null for a key with none), the principal and
+ * the org role.
+ */
+function stubRole(
+  roleName: string | null,
+  keyCreator: string | null = KEY_CREATOR,
+) {
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === schema.apiKeys)
+      return keyCreator ? [{ createdByUserId: keyCreator }] : [];
     if (table === schema.principals) return [{ id: "prn_1" }];
     if (table === schema.principalRoleAssignments)
       return roleName ? [{ roleName }] : [];
@@ -123,6 +144,39 @@ describe("set_auto_topup handler — the role gate", () => {
       expect((err as { code: string }).code).toBe("forbidden");
       expect(store.write).not.toHaveBeenCalled();
       expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("saves for an API key whose creator is an org Admin, and records the creator as the actor", async () => {
+    stubRole("Admin");
+    const store = makeStore();
+    const handler = createBillingAutoTopupSetHandler(store.write);
+
+    await expect(
+      handler({ enabled: true, blocks: 2 }, keyCall()),
+    ).resolves.toEqual({ enabled: true, blocks: 2 });
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: KEY_CREATOR }),
+    );
+  });
+
+  it.each([
+    ["an org Member", "Member", KEY_CREATOR, "org_role_required"],
+    ["no creator", "Owner", null, "no_principal"],
+  ] as const)(
+    "refuses an API key whose creator is %s and writes nothing (negative)",
+    async (_label, role, creator, reason) => {
+      stubRole(role, creator);
+      const store = makeStore();
+      const handler = createBillingAutoTopupSetHandler(store.write);
+
+      const err = await handler({ enabled: true, blocks: 1 }, keyCall()).catch(
+        (e: unknown) => e,
+      );
+
+      expect(isHandlerError(err)).toBe(true);
+      expect(err).toMatchObject({ code: "forbidden", reason });
+      expect(store.write).not.toHaveBeenCalled();
     },
   );
 

@@ -12,6 +12,8 @@ const { subFindFirst, planFindFirst, balanceFindFirst, tenant } = vi.hoisted(
     tenant: {
       principalId: "prn_1" as string | null,
       roleName: "Owner" as string | null,
+      /** The creator an API key resolves to, or none. */
+      keyCreator: "u-creator" as string | null,
     },
   }),
 );
@@ -24,6 +26,8 @@ const { subFindFirst, planFindFirst, balanceFindFirst, tenant } = vi.hoisted(
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === real.schema.apiKeys)
+      return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)
@@ -106,6 +110,7 @@ beforeEach(() => {
   balanceFindFirst.mockResolvedValue({ balanceCents: 0n });
   tenant.principalId = "prn_1";
   tenant.roleName = "Owner";
+  tenant.keyCreator = "u-creator";
 });
 
 const forbidden = (e: unknown) => isHandlerError(e) && e.code === "forbidden";
@@ -128,16 +133,38 @@ describe("billingSubscriptionReadHandler — authorization guards", () => {
     expect(subFindFirst).not.toHaveBeenCalled();
   });
 
-  it("refuses an API-key actor: the role gate resolves a person's org role", async () => {
+  describe("an API-key call acts as the key's creator", () => {
     const apiKeyCtx: CapabilityContext = {
       ...ctx,
       userId: null,
       apiKeyId: "aky_abc",
+      surface: "mcp",
     };
-    await expect(
-      billingSubscriptionReadHandler({}, apiKeyCtx),
-    ).rejects.toSatisfy(forbidden);
-    expect(subFindFirst).not.toHaveBeenCalled();
+    const refused = (reason: string) => (e: unknown) =>
+      forbidden(e) && isHandlerError(e) && e.reason === reason;
+
+    it("reads the subscription for a creator who is an org Owner", async () => {
+      subFindFirst.mockResolvedValue(null);
+      const result = await billingSubscriptionReadHandler({}, apiKeyCtx);
+      expect(result.subscription).toBeNull();
+      expect(subFindFirst).toHaveBeenCalledOnce();
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      tenant.roleName = "Member";
+      await expect(
+        billingSubscriptionReadHandler({}, apiKeyCtx),
+      ).rejects.toSatisfy(refused("org_role_required"));
+      expect(subFindFirst).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      tenant.keyCreator = null;
+      await expect(
+        billingSubscriptionReadHandler({}, apiKeyCtx),
+      ).rejects.toSatisfy(refused("no_principal"));
+      expect(subFindFirst).not.toHaveBeenCalled();
+    });
   });
 
   it("throws when orgId is empty (session-authenticated, unscoped)", async () => {

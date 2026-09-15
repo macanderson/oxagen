@@ -11,7 +11,9 @@
 //      consent on a person's behalf.
 //   2. Role gate — assertOrgRole: org Owner or Admin. The kernel's IAM check
 //      allows every capability for a non-enterprise org, so the handler owns
-//      this check (apps/app/ARCHITECTURE.md §3.2, INV-29).
+//      this check (apps/app/ARCHITECTURE.md §3.2, INV-29). The guard above
+//      admits a session only, so the acting user resolveActingUserId returns
+//      is the signed-in user, never an API key's creator.
 //   3. Loopback guard — the redirect target is validated by the one rule in
 //      @oxagen/auth/cli-auth; anything else is refused as invalid_input and
 //      no code exists to leak (RFC 8252 §7.3).
@@ -32,7 +34,7 @@ import {
   isLoopbackRedirectUri,
 } from "@oxagen/auth/cli-auth";
 import { schema, withTenantDb } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -54,7 +56,10 @@ export const authCliAuthorizeHandler: CapabilityHandler<
   const { userId, orgId, workspaceId } = ctx;
 
   // ── Role gate ───────────────────────────────────────────────────────────
-  await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"] },
+  );
 
   // ── Loopback guard ──────────────────────────────────────────────────────
   if (!isLoopbackRedirectUri(input.redirectUri)) {

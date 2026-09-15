@@ -11,9 +11,9 @@ Oxagen mints the attempt and records its provenance; the harness that consumes t
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/fork`
-- MCP: none. MCP callers authenticate with an API key, which carries no org role, and the handler checks one.
+- MCP: none; no tool is built.
 - CLI: none
-- Authentication: session; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2)
+- Authentication: session or API key; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `fork_run`
 - `mutates: true`; `agent.requiresApproval: false`; not billed (`noBillingGate: true`): minting the attempt is not a governed action, the actions the fork takes are metered as they happen. IAM default-deny; high sensitivity.
 

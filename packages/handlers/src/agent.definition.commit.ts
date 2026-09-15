@@ -3,8 +3,9 @@
 // §6.2, §10.2; ADR-057 decision 1; #2956).
 //
 // Flow:
-//   1. Principal and role gate — a signed-in org Owner, Admin or Member
-//      (assertOrgRole, INV-29).
+//   1. Role gate — org Owner, Admin or Member (assertOrgRole, INV-29), for
+//      the signed-in user or the creator of the API key (resolveActingUserId).
+//      That user is the committer the delegation ceiling reads.
 //   2. The agent, in this workspace; a retired agent accepts no definition.
 //   3. The file: `schema` must be the canonical schema and `slug` the
 //      agent's; the `tools` it names are checked against the committer's own
@@ -38,7 +39,7 @@ import { resolveAgentIdentity } from "@oxagen/agent/handlers/_agent-identity";
 import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
 import { createGitHubClient } from "@oxagen/github";
 import { fetchAgentRunAuthz } from "@oxagen/iam";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { getCapability, HandlerError } from "@oxagen/oxagen";
 import {
@@ -308,15 +309,13 @@ async function insertVersionRow(
 export const agentDefinitionCommitHandler: CapabilityHandler<
   typeof agentDefinitionCommit
 > = async (input, ctx) => {
-  if (!ctx.userId) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "no_principal",
-      message: "commit_agent_definition requires a signed-in user",
-    });
-  }
-  const userId = ctx.userId;
-  await assertOrgRole(ctx, { org: [...AGENT_DEFINITION_ROLES] });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: [...AGENT_DEFINITION_ROLES] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const userId = actingUserId as string;
 
   const now = new Date();
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
