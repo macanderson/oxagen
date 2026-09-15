@@ -13,7 +13,7 @@ import {
   moveHighlight,
 } from "./commands";
 import { parseShellPath } from "./nav";
-import { activeWorkspace, type ShellData } from "./shell-data";
+import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 
 export function CommandMenu({ data }: { data: ShellData }) {
@@ -46,7 +46,7 @@ function CommandPalette({
   const t = useTranslations("shell");
   const router = useRouter();
   const pathname = usePathname();
-  const ws = activeWorkspace(data, parseShellPath(pathname).ws);
+  const ws = parseShellPath(pathname).ws;
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const listId = useId();
@@ -56,8 +56,11 @@ function CommandPalette({
 
   const commands = useMemo(
     () =>
-      buildCommands({ org: data.org, ws }, { nav: (key) => t(`nav.${key}`) }),
-    [data.org, ws, t],
+      buildCommands(
+        { org: data.org.slug, ws },
+        { nav: (key) => t(`nav.${key}`) },
+      ),
+    [data.org.slug, ws, t],
   );
   const ordered = filterCommands(commands, query);
   const active = ordered[highlight] ?? null;

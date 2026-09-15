@@ -5,39 +5,83 @@
     "skipToContent": "Skip to content"
   },
   "routes": {
-    "placeholder": "This page is being rebuilt for Mission Control.",
-    "home": { "title": "Mission Control" },
-    "login": { "title": "Log in" },
-    "signup": { "title": "Create your account" },
-    "verify": { "title": "Verify your email" },
-    "twoFactor": { "title": "Two-factor authentication" },
-    "forgotPassword": { "title": "Reset your password" },
-    "resetPassword": { "title": "Choose a new password" },
-    "invite": { "title": "Accept your invitation" },
-    "newOrganization": { "title": "Create your organization" },
-    "cliAuthorize": { "title": "Authorize the Oxagen CLI" },
-    "githubSetup": { "title": "Finish connecting GitHub" },
-    "organization": { "title": "Organization" },
-    "apiKeys": { "title": "API keys" },
-    "roles": { "title": "Roles" },
-    "billing": { "title": "Billing" },
-    "audit": { "title": "Audit" },
-    "fleet": { "title": "Fleet" },
-    "run": { "title": "Run" },
-    "agents": { "title": "Agents" },
-    "agent": { "title": "Agent" },
-    "agentSource": { "title": "Agent definition" },
-    "mandate": { "title": "Mandate" },
-    "tools": { "title": "Tools" },
-    "ontology": { "title": "Ontology" },
-    "steering": { "title": "Steering" },
-    "spend": { "title": "Spend" }
+    "home": {
+      "title": "Mission Control"
+    },
+    "login": {
+      "title": "Log in"
+    },
+    "signup": {
+      "title": "Create your account"
+    },
+    "verify": {
+      "title": "Verify your email"
+    },
+    "twoFactor": {
+      "title": "Two-factor authentication"
+    },
+    "forgotPassword": {
+      "title": "Reset your password"
+    },
+    "resetPassword": {
+      "title": "Choose a new password"
+    },
+    "invite": {
+      "title": "Accept your invitation"
+    },
+    "newOrganization": {
+      "title": "Create your organization"
+    },
+    "cliAuthorize": {
+      "title": "Authorize the Oxagen CLI"
+    },
+    "githubSetup": {
+      "title": "Finish connecting GitHub"
+    },
+    "organization": {
+      "title": "Organization"
+    },
+    "apiKeys": {
+      "title": "API keys"
+    },
+    "billing": {
+      "title": "Billing"
+    },
+    "audit": {
+      "title": "Audit"
+    },
+    "fleet": {
+      "title": "Fleet"
+    },
+    "run": {
+      "title": "Run"
+    },
+    "agents": {
+      "title": "Agents"
+    },
+    "tools": {
+      "title": "Tools"
+    },
+    "ontology": {
+      "title": "Ontology"
+    },
+    "steering": {
+      "title": "Steering"
+    },
+    "spend": {
+      "title": "Spend"
+    }
+  },
+  "unrecorded": {
+    "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",
+    "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",
+    "steering": "Steering records and proposals are not recorded here yet.",
+    "spend": "Spend by operator and agent, and costed findings, are not recorded here yet.",
+    "run": {
+      "frames_wrapped": "Frames of a wrapped run are not recorded yet."
+    }
   },
   "states": {
-    "notBacked": {
-      "title": "Not recorded yet",
-      "body": "Oxagen does not record this yet. It arrives with milestone {milestone} (backend gap {gap})."
-    },
     "denied": {
       "title": "You do not have access",
       "body": "This needs the {permission} permission. Ask an organization admin to grant it."

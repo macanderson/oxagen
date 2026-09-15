@@ -1,0 +1,68 @@
+{
+  "name": "export_statement",
+  "domain": "spend",
+  "description": "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "month": {
+        "type": "string"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv"
+        ],
+        "default": "csv"
+      }
+    },
+    "required": [
+      "month"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "month": {
+        "type": "string"
+      },
+      "filename": {
+        "type": "string"
+      },
+      "mediaType": {
+        "const": "text/csv"
+      },
+      "content": {
+        "type": "string"
+      },
+      "lines": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "month",
+      "filename",
+      "mediaType",
+      "content",
+      "lines"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,43 +1,26 @@
 // @vitest-environment jsdom
-// The server half: the chrome loads through the source and 404s an unknown
-// organization; the frame streams a skeleton and the pre-paint theme script.
+// The server half: the chrome renders the viewer the source resolved and 404s
+// an organization the viewer does not belong to; the frame streams a skeleton
+// and the pre-paint theme script.
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement } from "react";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import shellMessages from "../../../messages/shell.json";
-import { readError } from "@/data/not-backed";
-import type { ShellReadPort } from "@/data/ports";
-import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { SHELL_ORG_ID, SHELL_VIEWER, shellData } from "./shell.builders";
-import type { ShellSource } from "./source";
-
-const source = vi.hoisted(() => ({ current: null as ShellSource | null }));
+import { shellData } from "./shell.builders";
+import type { ShellData } from "./shell-data";
 
 vi.mock("./source", () => ({
   // requireViewer runs inside shellSource: an organization the viewer is not a
-  // member of never reaches the port.
-  shellSource: (org: string) => {
-    if (source.current === null) throw new Error("no source set");
-    if (org !== "acme") return Promise.reject(new NotFound("NEXT_NOT_FOUND"));
-    return Promise.resolve(source.current);
-  },
+  // member of is a 404 before the chrome renders.
+  shellSource: (org: string) =>
+    org === "acme"
+      ? Promise.resolve(shellData())
+      : Promise.reject(new NotFound("NEXT_NOT_FOUND")),
 }));
 
+/** What requireViewer throws through Next's notFound() for a non-member. */
 const { NotFound } = vi.hoisted(() => ({
   NotFound: class NotFound extends Error {},
-}));
-vi.mock("next/navigation", () => ({
-  notFound: () => {
-    throw new NotFound("NEXT_NOT_FOUND");
-  },
 }));
 
 // React's cache() only dedupes inside a server request; in tests it is a pass-through.
@@ -55,29 +38,6 @@ vi.mock("next-intl/server", () => ({
     }),
 }));
 
-const ORG_SCOPE = {
-  orgId: SHELL_ORG_ID,
-  workspaceId: ORG_ONLY_WORKSPACE_ID,
-};
-
-/** A port serving the built context to the built viewer, and a 404 to anyone else. */
-function builtPort(): ShellReadPort {
-  const data = shellData();
-  return {
-    context: (_scope, userId) =>
-      Promise.resolve(
-        userId === SHELL_VIEWER.id
-          ? data.context
-          : readError("org_not_found", 404),
-      ),
-  };
-}
-const builtSource = (): ShellSource => ({
-  port: builtPort(),
-  scope: ORG_SCOPE,
-  userId: SHELL_VIEWER.id,
-});
-
 // The first import of the chrome pulls the whole shell graph through jsdom. On
 // the CI runner that alone outlasted the first test's 5s budget, so load it once
 // here; each test's own `await import` then resolves from the module cache.
@@ -85,42 +45,24 @@ beforeAll(async () => {
   await import("./shell-chrome");
 }, 30_000);
 
-beforeEach(() => {
-  source.current = builtSource();
-});
 afterEach(() => {
   cleanup();
 });
 
 describe("ShellChrome", () => {
-  it("hands the loaded organization to the client shell", async () => {
+  it("hands the resolved organization and viewer to the client shell", async () => {
     const { ShellChrome } = await import("./shell-chrome");
     const element = (await ShellChrome({
       params: Promise.resolve({ org: "acme" }),
-    })) as ReactElement<{
-      data: { org: string; context: { ok: boolean } };
-    }>;
+    })) as ReactElement<{ data: ShellData }>;
     expect(isValidElement(element)).toBe(true);
-    expect(element.props.data.org).toBe("acme");
-    expect(element.props.data.context.ok).toBe(true);
+    expect(element.props.data).toEqual(shellData());
   });
 
   it("is not found for an organization the viewer does not belong to", async () => {
     const { ShellChrome } = await import("./shell-chrome");
     await expect(
       ShellChrome({ params: Promise.resolve({ org: "globex" }) }),
-    ).rejects.toBeInstanceOf(NotFound);
-  });
-
-  it("is not found when the organization read is a 404 for this viewer", async () => {
-    source.current = {
-      port: builtPort(),
-      scope: ORG_SCOPE,
-      userId: "usr_someoneelse",
-    };
-    const { ShellChrome } = await import("./shell-chrome");
-    await expect(
-      ShellChrome({ params: Promise.resolve({ org: "acme" }) }),
     ).rejects.toBeInstanceOf(NotFound);
   });
 });

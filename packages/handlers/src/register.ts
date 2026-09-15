@@ -106,6 +106,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.invoice.list"))
         .billingInvoiceListHandler as CapabilityHandlerFn,
   );
+  // ADR-055 §5 — the two billing-terms writes: the customer's auto top-up, and
+  // the platform operator's commercial terms. set_org_billing_terms is on no
+  // surface; the kernel's platformOnly check is what lets it be registered here
+  // without being reachable from one (INV-31).
+  registerHandler(
+    "set_auto_topup",
+    async () =>
+      (await import("./billing.auto_topup.set"))
+        .billingAutoTopupSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_org_billing_terms",
+    async () =>
+      (await import("./billing.org_terms.set"))
+        .billingOrgTermsSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_subscription",
     async () =>
@@ -894,6 +910,38 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.incident.list"))
         .tachoIncidentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run_cost",
+    async () =>
+      (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend",
+    async () =>
+      (await import("./spend.get")).spendGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend_drill",
+    async () =>
+      (await import("./spend.drill")).spendDrillHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_waste",
+    async () =>
+      (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "export_statement",
+    async () =>
+      (await import("./spend.statement.export"))
+        .spendStatementHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_price_entries",
+    async () =>
+      (await import("./cost.price_entry.list"))
+        .priceEntryListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_tacho_hosts",

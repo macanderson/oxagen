@@ -3,11 +3,15 @@
  * spend ceiling. `assertWithinSpendBudget` is injected into the
  * kernel via setBudgetAdmissionGate (bootstrapBillingRuntime) and runs on EVERY
  * scoped, metered invoke() — so it must be cheap. Two short-TTL caches (budget
- * config + ClickHouse spend, both keyed by scope) keep the steady-state guard a
+ * config + period spend, both keyed by scope) keep the steady-state guard a
  * sub-millisecond map read; a stubbed-reader timing test asserts the cached path
- * adds <5ms. The gate FAILS OPEN on any DB/telemetry error — a degraded store
- * must never block every invocation — but a real ceiling breach throws
- * BudgetExceededError (a DENY, mapped to 402 at the surfaces).
+ * adds <5ms. Spend comes from the recorders' running counter in Postgres
+ * (./spend-counter.ts, spec §12.5, ADR-060 §5): the ClickHouse sum it replaced
+ * stalled with the store and, failing open, zeroed the ceiling while the
+ * customer kept being charged (#2820). The gate still FAILS OPEN on a DB
+ * error — a degraded store must never block every invocation — but a real
+ * ceiling breach throws BudgetExceededError (a DENY, mapped to 402 at the
+ * surfaces).
  *
  * Soft thresholds (50/80/95%) emit an in-app notification to org admins once per
  * threshold per period (deduped by a conditional watermark UPDATE); 100% is the
@@ -16,7 +20,7 @@
  */
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
-import { sumSpendMicros } from "@oxagen/telemetry";
+import { sumSpendCounter } from "./spend-counter";
 import {
   BudgetExceededError,
   evaluateSpendBudget,
@@ -37,7 +41,7 @@ import { logger } from "./logger";
 export interface SpendGateDeps {
   /** Load every enabled ceiling applicable to the active scope (org + workspace). */
   loadBudgets: () => Promise<SpendBudgetRow[]>;
-  /** Sum period-to-date spend (micro-USD) for a scope window. */
+  /** Sum period-to-date spend (micro-USD) for a scope window, from the recorders' counter. */
   readSpend: (args: {
     orgId: string;
     workspaceId: string | null;
@@ -70,7 +74,7 @@ const DEFAULT_TTL_SPEND_MS = 15_000;
 
 const productionDeps: SpendGateDeps = {
   loadBudgets: getScopeBudgets,
-  readSpend: sumSpendMicros,
+  readSpend: sumSpendCounter,
   now: () => Date.now(),
   claimThreshold: claimBudgetThreshold,
   notify: (notice) => {
@@ -228,7 +232,7 @@ export async function assertWithinSpendBudget(
         limitMicros: budget.limitMicros,
       });
     } catch (err) {
-      // A spend read failure (ClickHouse down) must never block a turn — fail
+      // A spend read failure (Postgres down) must never block a turn — fail
       // open for THIS budget and continue to the next.
       logger.error(
         {
@@ -355,7 +359,7 @@ export async function getSpendBudgetStatuses(
   > = {},
 ): Promise<SpendBudgetStatus[]> {
   const loadBudgets = overrides.loadBudgets ?? listSpendBudgets;
-  const readSpend = overrides.readSpend ?? sumSpendMicros;
+  const readSpend = overrides.readSpend ?? sumSpendCounter;
   const now = new Date((overrides.now ?? (() => Date.now()))());
 
   const budgets = await loadBudgets();

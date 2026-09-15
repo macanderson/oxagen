@@ -19,9 +19,9 @@ import {
   memoryEvents,
   memoryStores,
   OTHER_WORKSPACE,
+  rollupCostRow,
   summary,
   tachoSession,
-  usage,
 } from "./run.test-support";
 
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
@@ -41,7 +41,11 @@ type Over = {
 function harness(over: Over = {}) {
   const stores = memoryStores(
     over.ledger ?? [
-      ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID, usage: usage() }),
+      ledgerRun({
+        publicId: LEDGER_ID,
+        runId: RUN_UUID,
+        cost: rollupCostRow(),
+      }),
     ],
     over.tacho ?? [tachoSession({ publicId: TACHO_ID })],
   );
@@ -57,7 +61,7 @@ function harness(over: Over = {}) {
         ),
       readAttemptEventsSince: memoryEvents(log),
     },
-    sumTokenUsage: stores.sumTokenUsage,
+    readRunCosts: stores.readRunCosts,
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -81,10 +85,28 @@ describe("get_run", () => {
     expect(out.run).toMatchObject({
       id: TACHO_ID,
       source: "tacho",
+      // No rollup row yet: no cost, never a zero.
       cost: null,
     });
     expect(out.frames).toBeNull();
     expect(sleeps).toEqual([]);
+  });
+
+  it("answers a wrapped session's cost from its rollup row with the basis recorded there", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          cost: rollupCostRow({ costMicros: 97_937n, costBasis: "mixed" }),
+        }),
+      ],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.cost).toEqual({
+      micros: "97937",
+      currency: "USD",
+      basis: "mixed",
+    });
   });
 
   it("answers a ledger run's header and a first frame page whose cursor resumes it", async () => {
@@ -252,19 +274,19 @@ describe("get_run", () => {
     expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
   });
 
-  it("does not call ClickHouse or the ledger reader for a wrapped session", async () => {
+  it("does not call the ledger reader for a wrapped session, and reads its rollup row alone", async () => {
     const readEvents = vi.fn();
     const stores = memoryStores([], [tachoSession({ publicId: TACHO_ID })]);
     const get = createRunGetHandler({
       queries: stores.queries,
       store: { getRunByPublicId: vi.fn(), readAttemptEventsSince: readEvents },
-      sumTokenUsage: stores.sumTokenUsage,
+      readRunCosts: stores.readRunCosts,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
     await get(input({ runId: TACHO_ID }), ctx());
     expect(readEvents).not.toHaveBeenCalled();
-    expect(stores.usageCalls).toEqual([]);
+    expect(stores.costCalls).toEqual([[TACHO_ID]]);
   });
 });
 

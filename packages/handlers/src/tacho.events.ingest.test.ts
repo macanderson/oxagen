@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
   withTenantDb: vi.fn(),
   loggerError: vi.fn(),
+  recordSpend: vi.fn(),
+  sendEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -27,6 +29,11 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 vi.mock("./logger", () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
+vi.mock("./event-client", () => ({
+  eventClient: { send: mocks.sendEvent },
 }));
 
 import { foldDelta, tachoEventsIngestHandler } from "./tacho.events.ingest";
@@ -255,6 +262,7 @@ function wire(db: FakeDb): void {
                 if (name === "sessions")
                   db.sessions.set(values["sessionUuid"] as string, {
                     id: "s1",
+                    publicId: "tse_fake0000000000000001",
                     ...values,
                   });
                 if (name === "session_models") db.models.push(values);
@@ -292,6 +300,8 @@ function wire(db: FakeDb): void {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
+  mocks.recordSpend.mockResolvedValue(undefined);
+  mocks.sendEvent.mockResolvedValue(undefined);
 });
 
 describe("ingest_tacho_events", () => {
@@ -325,6 +335,27 @@ describe("ingest_tacho_events", () => {
     }>;
     expect(inserts).toHaveLength(events.length);
     expect(inserts.every((insert) => insert.chainVerified)).toBe(true);
+
+    // The batch's cost moves the spend-budget counter, and the seal of a
+    // root session asks the rollup job for the run's cost row.
+    expect(mocks.recordSpend).toHaveBeenCalledTimes(1);
+    expect(mocks.recordSpend.mock.calls[0]?.[0]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      workspaceId: CONTEXT.workspaceId,
+      micros: 1200n,
+    });
+    expect(mocks.sendEvent).toHaveBeenCalledWith({
+      name: "cost/run.sealed",
+      data: {
+        runId: "tse_fake0000000000000001",
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+      },
+    });
+    // The rollup job reads ClickHouse on receipt, so the frames land first.
+    expect(mocks.insertTachoEvents.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendEvent.mock.invocationCallOrder[0] as number,
+    );
 
     const row = db.sessions.get(SESSION);
     expect(row).toMatchObject({
@@ -555,6 +586,7 @@ describe("ingest_tacho_events", () => {
       ),
     ).rejects.toThrow("clickhouse down");
     expect(mocks.loggerError).toHaveBeenCalledOnce();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
   });
 
   it("folds every counted kind into the session delta", () => {

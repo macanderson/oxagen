@@ -59,6 +59,7 @@ import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { agentToolbeltGet } from "@oxagen/oxagen/contracts/agent.toolbelt.get";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { billingAutoTopupSet } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
@@ -73,6 +74,12 @@ import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dis
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
+import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
+import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
+import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
 import { agentCredentialRotateRoute } from "./agent.credential.rotate";
@@ -107,6 +114,7 @@ import { agentSuspendRoute } from "./agent.suspend";
 import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
+import { billingAutoTopupSetRoute } from "./billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
@@ -118,6 +126,12 @@ import { contextRecordPromoteRoute } from "./context.record.promote";
 import { contextRecordPublishRoute } from "./context.record.publish";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
+import { costPriceEntryListRoute } from "./cost.price_entry.list";
+import { runCostGetRoute } from "./run.cost";
+import { spendDrillRoute } from "./spend.drill";
+import { spendGetRoute } from "./spend.get";
+import { spendStatementExportRoute } from "./spend.statement.export";
+import { spendWasteListRoute } from "./spend.waste";
 import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
 import { tachoCommandListRoute } from "./tacho.command.list";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
@@ -527,6 +541,15 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "billing.auto_topup.set",
+    route: billingAutoTopupSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: billingAutoTopupSet.name,
+    body: { enabled: true, blocks: 2 },
+    invalidBody: { enabled: true, blocks: 0 },
+    status: 200,
+  },
+  {
     file: "billing.budget.set",
     route: billingBudgetSetRoute as unknown as Hono<never>,
     method: "PUT",
@@ -700,6 +723,68 @@ const ROUTES: ThinRoute[] = [
       source: "builtin",
       manifest: {},
     },
+    status: 200,
+  },
+  {
+    file: "spend.get",
+    route: spendGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendGet.name,
+    body: {
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      groupBy: "operator",
+    },
+    invalidBody: {
+      period: { from: "2026-09-30", to: "2026-09-01" },
+      groupBy: "operator",
+    },
+    status: 200,
+  },
+  {
+    file: "spend.drill",
+    route: spendDrillRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendDrill.name,
+    body: { kind: "agent", key: "acme.core.cc" },
+    expectedInput: { kind: "agent", key: "acme.core.cc", days: 30 },
+    invalidBody: { kind: "model", key: "claude-sonnet-5" },
+    status: 200,
+  },
+  {
+    file: "spend.waste",
+    route: spendWasteListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendWasteList.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-02-30", to: "2026-03-01" } },
+    status: 200,
+  },
+  {
+    file: "spend.statement.export",
+    route: spendStatementExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendStatementExport.name,
+    body: { month: "2026-09" },
+    expectedInput: { month: "2026-09", format: "csv" },
+    invalidBody: { month: "2026-13" },
+    status: 200,
+  },
+  {
+    file: "run.cost",
+    route: runCostGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runCostGet.name,
+    body: { runId: "tse_0192d4a87c1e7a0080000000" },
+    invalidBody: { runId: "run_1" },
+    status: 200,
+  },
+  {
+    file: "cost.price_entry.list",
+    route: costPriceEntryListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costPriceEntryList.name,
+    body: { at: "2026-09-14T00:00:00.000Z" },
+    invalidBody: { at: "yesterday" },
     status: 200,
   },
 ];

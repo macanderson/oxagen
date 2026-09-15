@@ -10,7 +10,6 @@ import {
   Radar,
   Receipt,
   ScrollText,
-  UserCog,
   Wrench,
 } from "lucide-react";
 import type { NavKey } from "./nav";
@@ -26,5 +25,4 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   billing: Receipt,
   audit: ScrollText,
   apiKeys: KeyRound,
-  roles: UserCog,
 };
