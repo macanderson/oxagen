@@ -231,7 +231,10 @@ export function describeCliInstall(
     case "linked":
       return `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`;
     case "already":
-      return `${files} already on PATH in ${install.dir}.${skipped}`;
+      // The Rust side leaves `files` empty here: nothing needed linking, so
+      // there is nothing to list. Say so plainly rather than "nothing
+      // already on PATH".
+      return `Already on PATH in ${install.dir}.${skipped}`;
     case "skipped":
       return `Skipped linking on launch: ${install.note}`;
     case "opted_out":

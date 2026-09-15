@@ -303,8 +303,21 @@ describe("describeCliInstall", () => {
     ).toBe(
       "Linked oxagen, tacho into /Users/a/.local/bin on launch. Skipped stella (already a symlink to another install).",
     );
-    expect(describeCliInstall({ ...base, state: "already" })).toBe(
-      "oxagen, tacho already on PATH in /Users/a/.local/bin.",
+    // The Rust side never populates `files` for "already" (nothing needed
+    // linking), so the copy must not depend on it or read "nothing already
+    // on PATH".
+    expect(describeCliInstall({ ...base, files: [], state: "already" })).toBe(
+      "Already on PATH in /Users/a/.local/bin.",
+    );
+    expect(
+      describeCliInstall({
+        ...base,
+        files: [],
+        state: "already",
+        skipped: ["stella (already a symlink to another install)"],
+      }),
+    ).toBe(
+      "Already on PATH in /Users/a/.local/bin. Skipped stella (already a symlink to another install).",
     );
     expect(
       describeCliInstall({
@@ -329,9 +342,6 @@ describe("describeCliInstall", () => {
     ).toBe("Could not link into /Users/a/.local/bin: permission denied");
     expect(describeCliInstall({ ...base, state: "pending" })).toBe(
       "Linking on launch…",
-    );
-    expect(describeCliInstall({ ...base, files: [], state: "already" })).toBe(
-      "nothing already on PATH in /Users/a/.local/bin.",
     );
     // An unrecognized state (a newer CLI, an older app) falls back to its note.
     expect(

@@ -109,7 +109,10 @@ interface HealthInput {
   now: number;
 }
 
-function healthFor(input: HealthInput): { health: AgentHealth; summary: string } {
+function healthFor(input: HealthInput): {
+  health: AgentHealth;
+  summary: string;
+} {
   if (!input.daemonUp) {
     return { health: "down", summary: "collector not answering" };
   }
@@ -259,14 +262,17 @@ export function computeAgentRows(
 ): AgentRow[] {
   const daemon = state.daemon;
   const daemonAgents = daemon?.agents ?? [];
-  const byHarness = new Map(daemonAgents.map((a) => [a.harness, a]));
+  // Matched on `runtime`, not `harness`: a custom agent can be named after a
+  // built-in harness (`tacho hook --agent codex`, runtime "custom", harness
+  // "codex") and must not be folded into the built-in Codex row.
+  const byRuntime = new Map(daemonAgents.map((a) => [a.runtime, a]));
   const rows: AgentRow[] = HARNESSES.map((h) =>
-    harnessRow(h, state, tacho, byHarness.get(h), now),
+    harnessRow(h, state, tacho, byRuntime.get(h), now),
   );
   if (daemon) {
     const known = new Set<string>(HARNESSES);
     for (const agent of daemonAgents) {
-      if (known.has(agent.harness)) continue;
+      if (known.has(agent.runtime)) continue;
       rows.push(customRow(agent, daemon, now));
     }
   }
@@ -278,8 +284,15 @@ export function summarizeAgents(rows: AgentRow[]): string {
   const wrapped = rows.filter((r) => r.wrapped);
   if (wrapped.length === 0) return "no agents wrapped yet";
   const counts = new Map<AgentHealth, number>();
-  for (const r of wrapped) counts.set(r.health, (counts.get(r.health) ?? 0) + 1);
-  const order: AgentHealth[] = ["healthy", "idle", "pending", "degraded", "down"];
+  for (const r of wrapped)
+    counts.set(r.health, (counts.get(r.health) ?? 0) + 1);
+  const order: AgentHealth[] = [
+    "healthy",
+    "idle",
+    "pending",
+    "degraded",
+    "down",
+  ];
   const parts = order
     .filter((h) => (counts.get(h) ?? 0) > 0)
     .map((h) => `${counts.get(h)} ${HEALTH_LABEL[h].toLowerCase()}`);

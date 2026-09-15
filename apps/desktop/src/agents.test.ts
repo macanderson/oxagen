@@ -51,7 +51,12 @@ function state(overrides: Partial<DesktopState> = {}): DesktopState {
     },
     host: host(),
     host_path: "/Users/a/.config/oxagen/tacho/host.json",
-    daemon: { uptime_s: 100, spool_depth: 0, last_ingest_at: null, last_error: null },
+    daemon: {
+      uptime_s: 100,
+      spool_depth: 0,
+      last_ingest_at: null,
+      last_error: null,
+    },
     log_path: "/Users/a/.config/oxagen/tacho/tachod.log",
     sidecar_dir: "/Applications/Oxagen.app/Contents/MacOS",
     sidecar_transient: false,
@@ -63,7 +68,9 @@ function state(overrides: Partial<DesktopState> = {}): DesktopState {
   };
 }
 
-function agent(overrides: Partial<DaemonAgentSummary> = {}): DaemonAgentSummary {
+function agent(
+  overrides: Partial<DaemonAgentSummary> = {},
+): DaemonAgentSummary {
   return {
     key: "claude-code",
     runtime: "claude-code",
@@ -128,7 +135,9 @@ describe("computeAgentRows: hook presence", () => {
       hooks: { complete: false, present: [], missing: ["Stop"] },
     };
     const rowsOne = computeAgentRows(state(), one, NOW);
-    expect(rowsOne.find((r) => r.key === "claude-code")!.health).toBe("degraded");
+    expect(rowsOne.find((r) => r.key === "claude-code")!.health).toBe(
+      "degraded",
+    );
     expect(rowsOne.find((r) => r.key === "claude-code")!.summary).toBe(
       "1 hook missing",
     );
@@ -168,7 +177,11 @@ describe("computeAgentRows: hook presence", () => {
   });
 
   it("omits version and presence details when neither is known", () => {
-    const rows = computeAgentRows(state({ host: host({ claude_version: null }) }), null, NOW);
+    const rows = computeAgentRows(
+      state({ host: host({ claude_version: null }) }),
+      null,
+      NOW,
+    );
     expect(rows.find((r) => r.key === "claude-code")!.details).toEqual([]);
   });
 });
@@ -313,6 +326,47 @@ describe("computeAgentRows: custom agents", () => {
     expect(old.summary).toBe("last run 8d ago");
   });
 
+  it("keeps a custom agent named after a built-in harness separate from it", () => {
+    // tacho hook --agent codex: runtime "custom", harness "codex". Matching
+    // on harness instead of runtime would fold this into the built-in
+    // Codex row and hide it entirely.
+    const s = state({
+      host: host({ harnesses: ["claude-code"] }),
+      daemon: {
+        uptime_s: 1,
+        spool_depth: 0,
+        last_ingest_at: "2026-09-15T11:59:00Z",
+        agents: [
+          agent({
+            key: "custom:codex",
+            runtime: "custom",
+            harness: "codex",
+            label: "codex (custom script)",
+            last_seen_at: "2026-09-15T11:57:00Z",
+            sessions_total: 2,
+            sessions_live: 0,
+          }),
+        ],
+      },
+    });
+    const rows = computeAgentRows(s, null, NOW);
+    expect(rows.map((r) => r.key)).toEqual([
+      "claude-code",
+      "codex",
+      "stella",
+      "custom:codex",
+    ]);
+    const builtinCodex = rows.find((r) => r.key === "codex")!;
+    expect(builtinCodex.kind).toBe("harness");
+    expect(builtinCodex.wrapped).toBe(false);
+    expect(builtinCodex.health).toBe("not_wrapped");
+    expect(builtinCodex.lastSeenAt).toBeNull();
+    const customCodex = rows.find((r) => r.key === "custom:codex")!;
+    expect(customCodex.kind).toBe("custom");
+    expect(customCodex.label).toBe("codex (custom script)");
+    expect(customCodex.health).toBe("healthy");
+  });
+
   it("degrades a custom row too when the shared collector has a standing error", () => {
     const s = state({
       daemon: {
@@ -344,7 +398,11 @@ describe("computeAgentRows: custom agents", () => {
 
 describe("summarizeAgents", () => {
   it("says nothing is wrapped yet when no row is wrapped", () => {
-    const rows = computeAgentRows(state({ host: null, daemon: null }), null, NOW);
+    const rows = computeAgentRows(
+      state({ host: null, daemon: null }),
+      null,
+      NOW,
+    );
     expect(summarizeAgents(rows)).toBe("no agents wrapped yet");
   });
 
@@ -366,7 +424,11 @@ describe("summarizeAgents", () => {
   });
 
   it("uses singular phrasing for exactly one wrapped agent", () => {
-    const rows = computeAgentRows(state({ host: host({ harnesses: ["claude-code"] }) }), null, NOW);
+    const rows = computeAgentRows(
+      state({ host: host({ harnesses: ["claude-code"] }) }),
+      null,
+      NOW,
+    );
     expect(summarizeAgents(rows)).toBe("1 agent wrapped · 1 idle");
   });
 
