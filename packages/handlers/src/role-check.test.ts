@@ -5,7 +5,10 @@
 // The array below names the contracts whose handlers carry the gate. For each
 // one the test reads `register.ts` for the module the handler loads from,
 // parses that module with the TypeScript compiler API and asserts the
-// exported handler's body contains a call expression to `assertOrgRole`.
+// exported handler's body contains a call expression to a role gate:
+// `assertOrgRole`, or `assertConsequenceRole` (`@oxagen/iam/mandate-role`),
+// which asks for the org roles a workspace names for a consequence and calls
+// `assertOrgRole` with the resolved user itself (rule two scans that call).
 // Every entry must also be a registered contract, so a renamed capability
 // fails here rather than silently dropping out of the gate. The array grows
 // with each lane that adds a role-checked handler.
@@ -29,7 +32,10 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "grant_mandate",
   "request_mandate",
+  "revoke_mandate",
+  "update_mandate_limits",
   "publish_tool_declaration",
   "update_workspace_settings",
 ] as const;
@@ -77,14 +83,17 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   ts.isIdentifier(node.expression) &&
   node.expression.text === name;
 
-/** Whether the exported handler's initializer contains a call to `assertOrgRole`. */
-function handlerCallsAssertOrgRole(
+/** The calls that gate a handler on an org role. */
+const ROLE_GATES = ["assertOrgRole", "assertConsequenceRole"] as const;
+
+/** Whether the exported handler's initializer contains a call to a role gate. */
+function handlerCallsRoleGate(
   source: ts.SourceFile,
   exportName: string,
 ): boolean {
   let calls = false;
   const scan = (node: ts.Node) => {
-    if (isCallTo(node, "assertOrgRole")) calls = true;
+    if (ROLE_GATES.some((gate) => isCallTo(node, gate))) calls = true;
     ts.forEachChild(node, scan);
   };
   for (const statement of source.statements) {
@@ -204,18 +213,28 @@ describe("INV-29: role-restricted contracts are gated in their handler", () => {
   });
 
   it.each(ROLE_CHECKED_CONTRACTS)(
-    "%s's handler body calls assertOrgRole",
+    "%s's handler body calls a role gate",
     (name) => {
       const { module, exportName } = handlerBinding(register, name);
       const source = parse(join(SRC, `${module}.ts`));
-      expect(handlerCallsAssertOrgRole(source, exportName)).toBe(true);
+      expect(handlerCallsRoleGate(source, exportName)).toBe(true);
     },
   );
 
   it("the scan itself sees no gate in a handler that has none", () => {
     const { module, exportName } = handlerBinding(register, "list_incidents");
     const source = parse(join(SRC, `${module}.ts`));
-    expect(handlerCallsAssertOrgRole(source, exportName)).toBe(false);
+    expect(handlerCallsRoleGate(source, exportName)).toBe(false);
+  });
+
+  it("the scan sees assertConsequenceRole as a gate", () => {
+    const source = parseSource(
+      "probe.ts",
+      `export const handler = async (_input, ctx) => {
+         await assertConsequenceRole(ctx, ["moves_money"], {});
+       };`,
+    );
+    expect(handlerCallsRoleGate(source, "handler")).toBe(true);
   });
 });
 
@@ -231,6 +250,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "handlers/src/billing.invoice.list.ts",
         "handlers/src/tacho.command.dispatch.ts",
         "handlers/src/workspace.archive.ts",
+        "iam/src/mandate-role.ts",
       ]),
     );
   });
