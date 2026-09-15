@@ -45,9 +45,9 @@ import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 // ---- Delivery mode resolution --------------------------------------------------------
 
 /** Why the achieved mode is below the requested one (spec §7.3). */
-export type DegradedReason = "harness_tier";
+type DegradedReason = "harness_tier";
 
-export type ResolvedMode = {
+type ResolvedMode = {
   deliveryMode: TachoDeliveryMode;
   degradedReason: DegradedReason | null;
 };
@@ -83,11 +83,9 @@ export type RecipientSession = {
 };
 
 /** Why a recipient cannot take the command (recorded on the row, or refused). */
-export type UndeliverableReason = "run_sealed" | "observe_tier";
+type UndeliverableReason = "run_sealed" | "observe_tier";
 
-export function undeliverable(
-  session: RecipientSession,
-): UndeliverableReason | null {
+function undeliverable(session: RecipientSession): UndeliverableReason | null {
   if (session.outcome !== "running") return "run_sealed";
   if (session.enforcementTier === "observe") return "observe_tier";
   return null;
@@ -145,7 +143,7 @@ export interface CommandStore {
   }): Promise<number>;
 }
 
-export type DispatchCommandDeps = {
+type DispatchCommandDeps = {
   /** Run `fn` against a store inside one tenant transaction. */
   withStore<T>(fn: (store: CommandStore) => Promise<T>): Promise<T>;
   now: () => Date;
@@ -289,7 +287,7 @@ const recipientColumns = {
   enforcementTier: sessions.enforcementTier,
 };
 
-export function postgresCommandStore(tx: Tx): CommandStore {
+function postgresCommandStore(tx: Tx): CommandStore {
   const ledger = createPostgresRunStore();
   return {
     session: async (scope, publicId) => {
@@ -387,7 +385,7 @@ export function postgresCommandStore(tx: Tx): CommandStore {
   };
 }
 
-export function defaultDispatchCommandDeps(): DispatchCommandDeps {
+function defaultDispatchCommandDeps(): DispatchCommandDeps {
   return {
     withStore: (fn) => withTenantDb((tx) => fn(postgresCommandStore(tx))),
     now: () => new Date(),

@@ -82,7 +82,7 @@ export function toReportItem(row: CommandRow, now: Date): CommandReportItem {
   };
 }
 
-export type ListCommandsDeps = {
+type ListCommandsDeps = {
   queries: Pick<RunQueries, "ledgerIdentity" | "tachoSession">;
   store: Pick<RunStore, "getRunByPublicId">;
   /** Rows addressed to the run, newest first. */
@@ -119,7 +119,7 @@ export function createListCommandsHandler(
 
 const commands = schema.tachoControlCommands;
 
-export function defaultListCommandsDeps(): ListCommandsDeps {
+function defaultListCommandsDeps(): ListCommandsDeps {
   // Construction is pure: nothing connects until a read runs inside the scope.
   const ledger = createPostgresRunStore();
   return {
