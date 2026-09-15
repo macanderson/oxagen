@@ -41,6 +41,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "update_mandate_limits",
   "publish_tool_declaration",
   "update_workspace_settings",
+  "set_spend_budget",
   "append_record",
   "propose_record",
   "dismiss_proposal",

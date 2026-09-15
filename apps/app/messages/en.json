@@ -28,7 +28,6 @@
     "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",
     "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",
     "steering": "Steering records and proposals are not recorded here yet.",
-    "spend": "Spend by operator and agent, and costed findings, are not recorded here yet.",
     "run": {
       "frames_wrapped": "Frames of a wrapped run are not recorded yet."
     }

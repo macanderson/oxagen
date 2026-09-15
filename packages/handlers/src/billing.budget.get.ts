@@ -10,7 +10,8 @@ import { toSpendBudgetDto } from "./lib/spend-budget-dto";
  * RLS (`workspace_nullable`) returns the org-default row AND this workspace's
  * own row, so the panel sees both scopes in one read. Spend is read FRESH
  * (getSpendBudgetStatuses bypasses the gate's short-TTL cache) so the panel is
- * accurate, and never throws on a degraded ClickHouse (reports spent = 0).
+ * accurate. A failed spend read fails the call: a zero in its place would
+ * report a ceiling past its limit as `ok` (#3064).
  */
 export const billingBudgetGetHandler: CapabilityHandler<
   typeof billingBudgetGet
