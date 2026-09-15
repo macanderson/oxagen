@@ -66,11 +66,11 @@ interface DeliveryConfig {
   repo?: unknown;
 }
 
-export async function resolveSteeringRepository(
-  scope: { orgId: string; workspaceId: string },
-  client: (token: string) => GitHubClient = (token) =>
-    createGitHubClient({ token }),
-): Promise<{ repo: SteeringRepository; gh: GitHubClient }> {
+/** The workspace's connected GitHub repository, from its source connection. */
+export async function readGitHubConnection(scope: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<{ owner: string; repo: string } | null> {
   const [connection] = await withTenantDb((tx) =>
     tx
       .select({ deliveryConfig: schema.sourceConnections.deliveryConfig })
@@ -89,26 +89,17 @@ export async function resolveSteeringRepository(
   const config = (connection?.deliveryConfig as DeliveryConfig | null) ?? {};
   const owner = typeof config.owner === "string" ? config.owner : null;
   const repo = typeof config.repo === "string" ? config.repo : null;
-  if (!connection || !owner || !repo) {
-    throw new HandlerError({
-      code: "not_found",
-      reason: "workspace_repository_missing",
-      message:
-        "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
-    });
-  }
-  const token = await resolveGitHubToken(scope);
-  const gh = client(token);
-  const info = await gh.getRepoInfo({ owner, repo });
-  return {
-    repo: {
-      owner,
-      repo,
-      fullName: info.fullName,
-      defaultBranch: info.defaultBranch,
-    },
-    gh,
-  };
+  return connection && owner && repo ? { owner, repo } : null;
+}
+
+/** What the seam is built from; the tests pass fakes. */
+export interface SteeringGitHubDeps {
+  readConnection: typeof readGitHubConnection;
+  resolveToken: (scope: {
+    orgId: string;
+    workspaceId: string;
+  }) => Promise<string>;
+  client: (token: string) => GitHubClient;
 }
 
 /** Wrap a GitHub error as a `conflict` the surfaces map to 409. */
@@ -120,7 +111,13 @@ function githubRefused(err: unknown): HandlerError {
   });
 }
 
-export function createSteeringGitHub(): SteeringGitHub {
+export function createSteeringGitHub(
+  deps: SteeringGitHubDeps = {
+    readConnection: readGitHubConnection,
+    resolveToken: resolveGitHubToken,
+    client: (token) => createGitHubClient({ token }),
+  },
+): SteeringGitHub {
   const clients = new Map<string, GitHubClient>();
   const clientFor = (repo: SteeringRepository): GitHubClient => {
     const gh = clients.get(repo.fullName);
@@ -130,11 +127,27 @@ export function createSteeringGitHub(): SteeringGitHub {
   };
   return {
     async resolveRepository(scope) {
-      const { repo, gh } = await resolveSteeringRepository(scope);
+      const connection = await deps.readConnection(scope);
+      if (!connection) {
+        throw new HandlerError({
+          code: "not_found",
+          reason: "workspace_repository_missing",
+          message:
+            "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
+        });
+      }
+      const gh = deps.client(await deps.resolveToken(scope));
+      const info = await gh.getRepoInfo(connection);
+      const repo: SteeringRepository = {
+        owner: connection.owner,
+        repo: connection.repo,
+        fullName: info.fullName,
+        defaultBranch: info.defaultBranch,
+      };
       clients.set(repo.fullName, gh);
       return repo;
     },
-    readFile(repo, path, ref) {
+    async readFile(repo, path, ref) {
       return clientFor(repo).getFileContent({
         owner: repo.owner,
         repo: repo.repo,
