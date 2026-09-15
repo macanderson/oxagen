@@ -12,7 +12,9 @@ import { requireEnv } from "@oxagen/config/env";
 import type {
   BillingCreditPackLineItem,
   BillingCheckoutDynamicCreditInput,
+  BillingCheckoutGauInput,
   BillingCheckoutPaymentInput,
+  BillingCheckoutPaymentMethod,
   BillingCheckoutResult,
   BillingCheckoutSession,
   BillingCheckoutSubscriptionInput,
@@ -179,6 +181,28 @@ function resolveSubscriptionRef(
 ): string | null {
   if (!ref) return null;
   return typeof ref === "string" ? ref : ref.id;
+}
+
+/** A Stripe reference that is an id or an expanded object, to its id. */
+function resolveRef(
+  ref: string | { id: string } | null | undefined,
+): string | null {
+  if (!ref) return null;
+  return typeof ref === "string" ? ref : ref.id;
+}
+
+function checkoutSessionToNeutral(
+  sess: Stripe.Checkout.Session,
+): BillingCheckoutSession {
+  return {
+    id: sess.id,
+    mode: sess.mode ?? "",
+    paymentStatus: sess.payment_status ?? "",
+    customerId: resolveRef(sess.customer),
+    metadata: (sess.metadata as Record<string, string>) ?? {},
+    subscriptionId: resolveSubscriptionRef(sess.subscription),
+    invoiceId: resolveRef(sess.invoice),
+  };
 }
 
 /**
@@ -670,6 +694,74 @@ export class StripeProvider implements BillingProvider {
     return { sessionId: session.id, url: session.url };
   }
 
+  async createGauCheckout(
+    input: BillingCheckoutGauInput,
+  ): Promise<BillingCheckoutResult> {
+    const taxEnabled = automaticTaxEnabled();
+    // The session and the invoice it issues carry the terms the purchase was
+    // priced at. The webhook grant reads them from here and nowhere else, so
+    // a paid session is self-sufficient (ADR-055 §6; ARCHITECTURE.md §3.9
+    // item 11).
+    const metadata = {
+      oxagen_kind: "gau_purchase",
+      org_id: input.orgId,
+      gau_quantity: String(input.quantityGau),
+      block_size_gau: String(input.quantityGau / input.blocks),
+      rate_per_gau_micros: input.ratePerGauMicros.toString(),
+      currency: input.currency,
+    };
+    const session = await this.client().checkout.sessions.create({
+      mode: "payment",
+      customer: input.customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: input.currency,
+            unit_amount: input.blockPriceCents,
+            product_data: {
+              name: "Oxagen governed action units",
+              metadata: { oxagen_kind: "gau_block" },
+            },
+          },
+          quantity: input.blocks,
+        },
+      ],
+      metadata,
+      invoice_creation: { enabled: true, invoice_data: { metadata } },
+      // The card Checkout collects is attached to the customer for the
+      // recorder's off-session auto top-up; Checkout tells the customer so.
+      payment_intent_data: { setup_future_usage: "off_session" },
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
+      automatic_tax: { enabled: taxEnabled },
+      customer_update: taxEnabled ? { address: "auto" } : undefined,
+    });
+    if (!session.url) throw new Error("Stripe did not return a checkout URL");
+    return { sessionId: session.id, url: session.url };
+  }
+
+  async getCheckoutPaymentMethod(
+    sessionId: string,
+  ): Promise<BillingCheckoutPaymentMethod | null> {
+    // Two levels deep: under `payment_intent` alone, `payment_method` is a
+    // string id and carries no card details.
+    const sess = await this.client().checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent.payment_method"],
+    });
+    const pi = sess.payment_intent;
+    if (!pi || typeof pi === "string") return null;
+    const pm = pi.payment_method;
+    if (!pm || typeof pm === "string") return null;
+    return {
+      id: pm.id,
+      type: pm.type,
+      brand: pm.card?.brand ?? null,
+      last4: pm.card?.last4 ?? null,
+      expMonth: pm.card?.exp_month ?? null,
+      expYear: pm.card?.exp_year ?? null,
+    };
+  }
+
   async getCheckoutSessionCreditPacks(
     sessionId: string,
   ): Promise<BillingCreditPackLineItem[]> {
@@ -739,14 +831,7 @@ export class StripeProvider implements BillingProvider {
       }
       case "checkout.session.completed": {
         const sess = event.data.object as Stripe.Checkout.Session;
-        const checkoutSession: BillingCheckoutSession = {
-          id: sess.id,
-          mode: sess.mode ?? "",
-          paymentStatus: sess.payment_status ?? "",
-          metadata: (sess.metadata as Record<string, string>) ?? {},
-          subscriptionId: resolveSubscriptionRef(sess.subscription),
-        };
-        return { ...base, checkoutSession };
+        return { ...base, checkoutSession: checkoutSessionToNeutral(sess) };
       }
       case "payment_method.attached":
       case "payment_method.detached":
