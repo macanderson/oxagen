@@ -29,7 +29,6 @@ export * from "./discount";
 export * from "./action-metering";
 export {
   FREE_PLAN_SLUG,
-  readGauEntitlement,
   resolveContractTerms,
   resolveGauEntitlement,
   type ContractTerms,

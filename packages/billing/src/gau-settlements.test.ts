@@ -526,13 +526,25 @@ describe("grantGauPurchaseForCheckout", () => {
     expect(store.paymentMethods).toHaveLength(0);
   });
 
-  it("runs with no active tenant scope: every write is on withSystemDb, and the tenant seam would throw", async () => {
+  it("runs with no active tenant scope: the entitlement read and every write are on the withSystemDb transaction", async () => {
     // The real withTenantDb refuses before it touches a database when no
-    // scope is entered — which is the webhook's situation.
+    // scope is entered, which is the webhook's situation. The tenant-scoped
+    // entitlement read goes through that seam here, so a grant that reached
+    // for it would throw.
     mocks.withTenantDb.mockImplementation(mocks.realWithTenantDb!);
+    mocks.resolveGauEntitlement.mockImplementation((orgId: string, now: Date) =>
+      mocks.realWithTenantDb!((t) => mocks.readGauEntitlement(t, orgId, now)),
+    );
+    const tx = makeFakeGauTx(store);
+    mocks.withSystemDb.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
 
     await grantGauPurchaseForCheckout(paidSession());
 
+    expect(mocks.readGauEntitlement).toHaveBeenCalledWith(tx, ORG, NOW);
+    expect(mocks.resolveGauEntitlement).not.toHaveBeenCalled();
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(store.settlements).toHaveLength(1);
     expect(store.paymentMethods).toHaveLength(1);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);

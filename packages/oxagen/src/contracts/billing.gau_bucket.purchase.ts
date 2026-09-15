@@ -30,7 +30,7 @@ import { registerCapability } from "../registry";
  * characters. The handler prefixes `NEXT_PUBLIC_APP_URL`, so the return can
  * only ever be the app's own origin.
  */
-export const appRelativePath = z
+const appRelativePath = z
   .string()
   .min(1)
   .max(2048)
