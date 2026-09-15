@@ -1,4 +1,4 @@
-// archive_workspace: the role gate, the three refusals and the write.
+// archive_workspace: the role gate, the refusals and the guarded write.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -22,6 +22,10 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
     /** The tenant scope the write ran in. */
     writeScope: undefined as string | undefined,
     updates: [] as Array<Record<string, unknown>>,
+    /** The workspace update's WHERE, rendered with its params. */
+    updateQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    /** Whether the update's WHERE matches a row: false when a concurrent archive landed first. */
+    updateMatches: true,
   },
   emitted: [] as Array<Record<string, unknown>>,
 }));
@@ -59,10 +63,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => ({
-        where: async () => {
-          db.updates.push(values);
-          db.writeScope = getScope()?.workspaceId;
-        },
+        where: (cond: SQL) => ({
+          returning: async () => {
+            db.updateQueries.push(dialect.sqlToQuery(cond));
+            db.writeScope = getScope()?.workspaceId;
+            if (!db.updateMatches) return [];
+            db.updates.push(values);
+            return [{ id: "written" }];
+          },
+        }),
       }),
     }),
   };
@@ -127,6 +136,8 @@ beforeEach(() => {
   db.scopes.length = 0;
   db.writeScope = undefined;
   db.updates.length = 0;
+  db.updateQueries.length = 0;
+  db.updateMatches = true;
   emitted.length = 0;
 });
 
@@ -238,6 +249,25 @@ describe("archive_workspace", () => {
     expect(isHandlerError(err) && err.code).toBe("conflict");
     expect(isHandlerError(err) && err.reason).toBe("workspace_has_agents");
     expect(String(err.message)).toContain("Core has 2 registered agent(s)");
+    expect(db.updates).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
+  });
+
+  it("writes only a row still unarchived", async () => {
+    await run();
+    expect(db.updateQueries).toHaveLength(1);
+    const { sql, params } = db.updateQueries[0]!;
+    expect(sql).toMatch(/"workspaces"\."id" = \$1/);
+    expect(sql).toMatch(/"workspaces"\."archived_at" is null/);
+    expect(params).toEqual([ACTIVE.id]);
+  });
+
+  it("refuses with conflict / already_archived when a concurrent archive changed the row first, and records no security event (negative)", async () => {
+    db.updateMatches = false;
+    await expect(refusal(run())).resolves.toEqual({
+      code: "conflict",
+      reason: "already_archived",
+    });
     expect(db.updates).toHaveLength(0);
     expect(emitted).toHaveLength(0);
   });

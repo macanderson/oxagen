@@ -12,7 +12,9 @@
 //   4. `archived_at` and `archived_by_user_id` are written together. From
 //      then on `list_workspaces` leaves the row out unless asked; its slug
 //      stays taken and everything recorded in it stays readable. Recorded as
-//      the `workspace.archived` security event.
+//      the `workspace.archived` security event. The write matches only a row
+//      still unarchived; when a concurrent archive got there first it changes
+//      nothing and the call is refused with `already_archived`.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -96,7 +98,9 @@ export const workspaceArchiveHandler: CapabilityHandler<
           });
         }
         const archivedAt = new Date();
-        await tx
+        // The write repeats the `archived_at is null` check, so of two
+        // concurrent archives of one workspace only one changes the row.
+        const [written] = await tx
           .update(schema.workspaces)
           .set({
             archivedAt,
@@ -104,7 +108,20 @@ export const workspaceArchiveHandler: CapabilityHandler<
             updatedAt: archivedAt,
             updatedByUserId: userId,
           })
-          .where(eq(schema.workspaces.id, workspace.id));
+          .where(
+            and(
+              eq(schema.workspaces.id, workspace.id),
+              isNull(schema.workspaces.archivedAt),
+            ),
+          )
+          .returning({ id: schema.workspaces.id });
+        if (!written) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "already_archived",
+            message: `${workspace.name} is already archived`,
+          });
+        }
         return { ...workspace, archivedAt };
       }),
   );
