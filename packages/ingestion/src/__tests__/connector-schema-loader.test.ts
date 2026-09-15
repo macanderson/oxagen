@@ -6,9 +6,14 @@
  *     The real YAML files exist on disk, so no mocking is needed.
  *   - loadBuiltInSchema: verify it returns null for unknown plugin IDs.
  *   - loadSchema: verify built-in resolution path (no schemaUrl needed).
- *   - loadSchema: verify partner URL fetch path with a mocked fetch injected via
- *     globalThis.fetch override — validates caching, retry behaviour on 5xx,
- *     immediate failure on 4xx, shape validation, and cacheWriter callback.
+ *   - loadSchema: verify partner URL fetch path through a per-test fake
+ *     `transport` (fetch, DNS lookup, sleep) — validates caching, retry
+ *     behaviour on 5xx, immediate failure on 4xx, shape validation, the SSRF
+ *     guard, and the cacheWriter callback.
+ *   - Network guard: the real `fetch` global and `node:dns/promises` are
+ *     replaced for the whole file. A call that reaches either records itself
+ *     and fails the test in afterEach, so a missing fake is a loud failure
+ *     rather than a slow, flaky call to the internet.
  *   - validateConfigAgainstSchema: validate required, pattern, itemPattern,
  *     minItems, maxItems, min/max number, and oneOf rules.
  */
@@ -23,7 +28,23 @@ import {
   loadSchema,
   validateConfigAgainstSchema,
   _clearSchemaCacheForTest,
+  type SchemaFetchTransport,
 } from "../connector-schema-loader";
+
+// ── Network guard ─────────────────────────────────────────────────────────────
+// Every partner fetch in this file runs on a fake transport. The platform
+// defaults are replaced here so a test that forgets its transport fails with
+// the escaped call named, instead of resolving a real host (which on a slow CI
+// resolver outlives the 5 s test timeout and leaks into the next test).
+
+const networkGuard = vi.hoisted(() => ({ escaped: [] as string[] }));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: async (hostname: string) => {
+    networkGuard.escaped.push(`dns lookup ${hostname}`);
+    throw new Error(`unmocked DNS lookup of ${hostname}`);
+  },
+}));
 
 // ── Shared partner schema YAML fixture ────────────────────────────────────────
 
@@ -66,21 +87,52 @@ sync:
 `;
 
 /** Build a minimal Response-compatible mock. */
-function makeResponse(body: string, status = 200): Response {
+function makeResponse(
+  body: string,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(headers),
     text: async () => body,
   } as unknown as Response;
+}
+
+const SCHEMA_URL = "https://cdn.example.com/schema.yaml";
+
+/**
+ * A fresh fake transport per test. The host resolves to a public address,
+ * sleeps return at once, and fetch fails loudly unless the test queued a
+ * response. Being per call, a transport cannot be consumed by another test.
+ */
+function fakeTransport() {
+  return {
+    fetch: vi.fn<SchemaFetchTransport["fetch"]>(async (url) => {
+      throw new Error(`test transport: no response queued for ${url}`);
+    }),
+    lookup: vi.fn<SchemaFetchTransport["lookup"]>(async () => [
+      { address: "93.184.215.14" },
+    ]),
+    sleep: vi.fn<SchemaFetchTransport["sleep"]>(async () => undefined),
+  };
 }
 
 beforeEach(() => {
   _clearSchemaCacheForTest();
   vi.restoreAllMocks();
+  vi.stubGlobal("fetch", async (input: unknown) => {
+    networkGuard.escaped.push(`fetch ${String(input)}`);
+    throw new Error(`unmocked fetch of ${String(input)}`);
+  });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  const escaped = networkGuard.escaped.splice(0);
+  expect(escaped, "test reached the real network").toEqual([]);
 });
 
 // ── loadBuiltInSchema ──────────────────────────────────────────────────────────
@@ -288,12 +340,12 @@ describe("loadBuiltInSchema — built-in plugins", () => {
 
 describe("loadSchema — built-in connectors (no schemaUrl needed)", () => {
   it("resolves 'github' as a built-in without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const schema = await loadSchema("github");
+    const transport = fakeTransport();
+    const schema = await loadSchema("github", { transport });
     expect(schema).not.toBeNull();
     expect(schema?.metadata.id).toBe("github");
     // fetch must not be called for built-in schemas.
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 
   it("returns null for unknown plugin with no schemaUrl", async () => {
@@ -302,13 +354,14 @@ describe("loadSchema — built-in connectors (no schemaUrl needed)", () => {
   });
 
   it("ignores schemaUrl when pluginId is a known built-in", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     const schema = await loadSchema("slack", {
       schemaUrl: "https://example.com/schema.yaml",
+      transport,
     });
     expect(schema?.metadata.id).toBe("slack");
     // Built-in wins — URL should not be fetched.
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 });
 
@@ -316,12 +369,12 @@ describe("loadSchema — built-in connectors (no schemaUrl needed)", () => {
 
 describe("loadSchema — partner URL fetch", () => {
   it("fetches and parses a partner schema from schemaUrl", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(PARTNER_SCHEMA_YAML),
-    );
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
 
     const schema = await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
+      schemaUrl: SCHEMA_URL,
+      transport,
     });
 
     expect(schema).not.toBeNull();
@@ -329,24 +382,28 @@ describe("loadSchema — partner URL fetch", () => {
     expect(schema?.kind).toBe("ConnectorPlugin");
     expect(schema?.metadata.id).toBe("custom-partner");
     expect(schema?.metadata.displayName).toBe("Custom Partner");
+    expect(transport.lookup).toHaveBeenCalledWith("cdn.example.com");
+    expect(transport.fetch).toHaveBeenCalledWith(
+      SCHEMA_URL,
+      expect.objectContaining({ redirect: "manual" }),
+    );
   });
 
   it("calls cacheWriter with pluginId, schemaUrl, and parsed schema", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(PARTNER_SCHEMA_YAML),
-    );
-
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
     const cacheWriter = vi.fn().mockResolvedValue(undefined);
 
     await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
+      schemaUrl: SCHEMA_URL,
       cacheWriter,
+      transport,
     });
 
     expect(cacheWriter).toHaveBeenCalledOnce();
     expect(cacheWriter).toHaveBeenCalledWith(
       "custom-partner",
-      "https://cdn.example.com/schema.yaml",
+      SCHEMA_URL,
       expect.objectContaining({
         metadata: expect.objectContaining({ id: "custom-partner" }),
       }),
@@ -354,32 +411,23 @@ describe("loadSchema — partner URL fetch", () => {
   });
 
   it("returns cached instance on repeated calls without re-fetching", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
+    const opts = { schemaUrl: SCHEMA_URL, transport };
 
-    const first = await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
-    });
-    const second = await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
-    });
+    const first = await loadSchema("custom-partner", opts);
+    const second = await loadSchema("custom-partner", opts);
 
     expect(first).toBe(second);
     // fetch called exactly once — second call hits the in-process cache.
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(transport.fetch).toHaveBeenCalledOnce();
   });
 
   it("does not call cacheWriter on cache hit (second call)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(PARTNER_SCHEMA_YAML),
-    );
-
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
     const cacheWriter = vi.fn().mockResolvedValue(undefined);
-    const opts = {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
-      cacheWriter,
-    };
+    const opts = { schemaUrl: SCHEMA_URL, cacheWriter, transport };
 
     await loadSchema("custom-partner", opts);
     await loadSchema("custom-partner", opts);
@@ -388,52 +436,75 @@ describe("loadSchema — partner URL fetch", () => {
     expect(cacheWriter).toHaveBeenCalledOnce();
   });
 
-  it("retries on 5xx and succeeds on second attempt", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
+  it("retries on 5xx after the retry delay and succeeds on second attempt", async () => {
+    const transport = fakeTransport();
+    transport.fetch
       .mockResolvedValueOnce(makeResponse("", 503))
       .mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
 
     const schema = await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
+      schemaUrl: SCHEMA_URL,
       maxRetries: 2,
+      transport,
     });
 
     expect(schema?.metadata.id).toBe("custom-partner");
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(transport.fetch).toHaveBeenCalledTimes(2);
+    // One wait, before the second attempt, of the fixed 500 ms retry delay.
+    expect(transport.sleep.mock.calls).toEqual([[500]]);
+  });
+
+  it("retries a network error and succeeds on the next attempt", async () => {
+    const transport = fakeTransport();
+    transport.fetch
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
+
+    const schema = await loadSchema("custom-partner", {
+      schemaUrl: SCHEMA_URL,
+      transport,
+    });
+
+    expect(schema?.metadata.id).toBe("custom-partner");
+    expect(transport.fetch).toHaveBeenCalledTimes(2);
   });
 
   it("throws immediately on 4xx (non-retryable)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse("Not Found", 404),
-    );
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse("Not Found", 404));
 
     await expect(
       loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
+        schemaUrl: SCHEMA_URL,
         maxRetries: 2,
+        transport,
       }),
     ).rejects.toThrow(/returned 404/);
+    expect(transport.fetch).toHaveBeenCalledOnce();
+    expect(transport.sleep).not.toHaveBeenCalled();
   });
 
   it("throws after exhausting all retries on repeated 5xx", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(makeResponse("", 500));
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValue(makeResponse("", 500));
 
     await expect(
       loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
+        schemaUrl: SCHEMA_URL,
         maxRetries: 1,
+        transport,
       }),
     ).rejects.toThrow(/returned 500/);
+    expect(transport.fetch).toHaveBeenCalledTimes(2);
+    expect(transport.sleep).toHaveBeenCalledTimes(1);
   });
 
   it("throws on empty response body", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse("   "));
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse("   "));
 
     await expect(
-      loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
-      }),
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
     ).rejects.toThrow(/empty response/);
   });
 
@@ -442,14 +513,11 @@ describe("loadSchema — partner URL fetch", () => {
       "oxagen.ai/v1alpha1",
       "oxagen.ai/v2",
     );
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(badSchema),
-    );
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(badSchema));
 
     await expect(
-      loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
-      }),
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
     ).rejects.toThrow(/unsupported apiVersion/);
   });
 
@@ -458,14 +526,11 @@ describe("loadSchema — partner URL fetch", () => {
       "kind: ConnectorPlugin",
       "kind: SomethingElse",
     );
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(badSchema),
-    );
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(badSchema));
 
     await expect(
-      loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
-      }),
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
     ).rejects.toThrow(/unexpected kind/);
   });
 
@@ -483,14 +548,11 @@ metadata:
 sync:
   delivery: polling
 `;
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(badSchema),
-    );
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(makeResponse(badSchema));
 
     await expect(
-      loadSchema("custom-partner", {
-        schemaUrl: "https://cdn.example.com/schema.yaml",
-      }),
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
     ).rejects.toThrow(/missing metadata\.id/);
   });
 });
@@ -498,61 +560,82 @@ sync:
 // ── loadSchema — SSRF guard (scheme + private-host blocking) ──────────────────
 
 describe("loadSchema — SSRF protection on partner schemaUrl", () => {
-  beforeEach(() => {
-    _clearSchemaCacheForTest();
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("rejects a non-HTTPS schemaUrl without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     await expect(
       loadSchema("custom-partner", {
         schemaUrl: "http://cdn.example.com/schema.yaml",
+        transport,
       }),
     ).rejects.toThrow(/must use HTTPS/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 
   it("rejects the cloud metadata IP (169.254.169.254) without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     await expect(
       loadSchema("custom-partner", {
         schemaUrl: "https://169.254.169.254/latest/meta-data/",
+        transport,
       }),
     ).rejects.toThrow(/non-public address/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 
   it("rejects a loopback IP literal without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     await expect(
       loadSchema("custom-partner", {
         schemaUrl: "https://127.0.0.1/schema.yaml",
+        transport,
       }),
     ).rejects.toThrow(/non-public address/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 
   it("rejects an RFC1918 private IP literal without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     await expect(
       loadSchema("custom-partner", {
         schemaUrl: "https://10.0.0.5/schema.yaml",
+        transport,
       }),
     ).rejects.toThrow(/non-public address/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
   });
 
   it("rejects localhost without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const transport = fakeTransport();
     await expect(
       loadSchema("custom-partner", {
         schemaUrl: "https://localhost/schema.yaml",
+        transport,
       }),
     ).rejects.toThrow(/not a permitted public host/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(transport.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a DNS name that resolves to a private address without fetching", async () => {
+    const transport = fakeTransport();
+    transport.lookup.mockResolvedValueOnce([
+      { address: "93.184.215.14" },
+      { address: "10.1.2.3" },
+    ]);
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
+    ).rejects.toThrow(/non-public address/);
+    expect(transport.fetch).not.toHaveBeenCalled();
+  });
+
+  it("re-validates a redirect target and refuses to follow it to a private host", async () => {
+    const transport = fakeTransport();
+    transport.fetch.mockResolvedValueOnce(
+      makeResponse("", 302, { location: "https://169.254.169.254/latest/" }),
+    );
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport }),
+    ).rejects.toThrow(/non-public address/);
+    expect(transport.fetch).toHaveBeenCalledOnce();
   });
 });
 
@@ -560,19 +643,16 @@ describe("loadSchema — SSRF protection on partner schemaUrl", () => {
 
 describe("loadSchema — after cache clear, re-fetches partner schema", () => {
   it("fetches again after _clearSchemaCacheForTest", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(makeResponse(PARTNER_SCHEMA_YAML));
+    const transport = fakeTransport();
+    transport.fetch.mockImplementation(async () =>
+      makeResponse(PARTNER_SCHEMA_YAML),
+    );
 
-    await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
-    });
+    await loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport });
     _clearSchemaCacheForTest();
-    await loadSchema("custom-partner", {
-      schemaUrl: "https://cdn.example.com/schema.yaml",
-    });
+    await loadSchema("custom-partner", { schemaUrl: SCHEMA_URL, transport });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(transport.fetch).toHaveBeenCalledTimes(2);
   });
 });
 
