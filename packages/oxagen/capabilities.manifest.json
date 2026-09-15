@@ -2244,6 +2244,21 @@
       }
     },
     {
+      "name": "set_disclosure_grain",
+      "file": "evidence.disclosure_grain.set.ts",
+      "domain": "evidence",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_node",
       "file": "graph.node.get.ts",
       "domain": "graph",
@@ -3700,6 +3715,21 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_proof",
+      "file": "run.proof.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }

@@ -16,7 +16,6 @@ import {
   type RunBisectOutput,
 } from "@oxagen/oxagen/contracts/run.bisect";
 import { bisectFrames } from "@oxagen/run-ledger";
-import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
   readAllFrames,
@@ -30,10 +29,9 @@ export function createRunBisectHandler(
   deps: RunReadDeps,
 ): CapabilityHandler<typeof runBisect> {
   return async (input, ctx): Promise<RunBisectOutput> => {
-    const scope = runScope(ctx);
     const [a, b] = await Promise.all([
-      resolveRun(deps, scope, input.runA),
-      resolveRun(deps, scope, input.runB),
+      resolveRun(deps, ctx, input.runA),
+      resolveRun(deps, ctx, input.runB),
     ]);
     const [framesA, framesB] = await Promise.all([
       readAllFrames(deps, a, BISECT_FRAME_CAP),

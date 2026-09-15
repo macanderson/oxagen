@@ -63,6 +63,7 @@ const run: ResolvedRun = {
   row: {} as never,
   record: {} as never,
   item: {} as never,
+  witnessFor: null,
 };
 
 beforeEach(() => {

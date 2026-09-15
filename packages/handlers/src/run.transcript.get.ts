@@ -122,7 +122,7 @@ export function createRunTranscriptGetHandler(
 ): CapabilityHandler<typeof runTranscriptGet> {
   return async (input, ctx): Promise<RunTranscriptGetOutput> => {
     const scope = runScope(ctx);
-    const run = await resolveRun(deps, scope, input.runId);
+    const run = await resolveRun(deps, ctx, input.runId);
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     const folds = foldTranscript(read.frames, input.zoom);
     const kept = folds.slice(0, TRANSCRIPT_ENTRY_MAX);

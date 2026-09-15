@@ -8,7 +8,8 @@ import {
   sessionUuid,
 } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import type { SQL } from "drizzle-orm";
+import { Param, SQL } from "drizzle-orm";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,6 +21,11 @@ const mocks = vi.hoisted(() => ({
   recordSpend: vi.fn(),
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
+  recordProofFrames: vi.fn(),
+}));
+
+vi.mock("./lib/proof", () => ({
+  recordProofFrames: mocks.recordProofFrames,
 }));
 
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
@@ -246,6 +252,22 @@ function tableName(table: unknown): string {
   return "unknown";
 }
 
+/** Every value a drizzle condition binds, in order. */
+function boundValues(node: unknown): unknown[] {
+  if (node instanceof Param) return [node.value];
+  if (node instanceof SQL) return node.queryChunks.flatMap(boundValues);
+  return [];
+}
+
+/** The session row a `tacho.sessions` lookup names: the row keyed by a session uuid it binds. */
+function sessionNamed(db: FakeDb, where: unknown) {
+  for (const value of boundValues(where)) {
+    const row = db.sessions.get(value as string);
+    if (row) return row;
+  }
+  return undefined;
+}
+
 function wire(db: FakeDb): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -267,7 +289,10 @@ function wire(db: FakeDb): void {
               return db.principals[0];
             },
           },
-          tachoSessions: { findFirst: async () => db.sessions.get(SESSION) },
+          tachoSessions: {
+            findFirst: async (args: { where?: unknown }) =>
+              sessionNamed(db, args.where),
+          },
           authorizationDenyGenerations: {
             findMany: async () => [
               { workspaceId: null, generation: 4 },
@@ -334,6 +359,7 @@ beforeEach(() => {
   }));
   mocks.recordSpend.mockResolvedValue(undefined);
   mocks.sendEvent.mockResolvedValue(undefined);
+  mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
 });
 
 describe("ingest_tacho_events", () => {
@@ -1102,5 +1128,210 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     const gaps = db.sessions.get(SESSION)?.["completenessGaps"] as string[];
     expect(gaps).toContain("chain_break");
     expect(db.sessions.get(SESSION)?.["replayGrade"]).toBe("inspect");
+  });
+});
+
+describe("proof.observed frames (ADR-064)", () => {
+  const d = (c: string) => `sha256:${c.repeat(64)}`;
+  const FLIP = {
+    witness_id: "wit_01K5RQ8M4",
+    oracle: "test_flip",
+    target_ref: "main",
+    target_sha: "a4c91e2",
+    pr_ref: "refs/pull/482/head",
+    pr_sha: "f70b3d9",
+    command_normalized_digest: d("1"),
+    target_result: "fail",
+    pr_result: "pass",
+    verdict: "flipped",
+    fail_fingerprint: d("2"),
+    pass_output_digest: d("3"),
+    tamper_exclusion: "held",
+    disclosure_grain: "L0",
+    witness_run_id: null,
+    runner_attestation: { key_id: "kms:witness/v3", signature: "MEUCIQ" },
+  };
+  const RUN = "tse_fake0000000000000001";
+
+  function batch(events: TachoEvent[]) {
+    return {
+      schema: "tacho.batch.v1" as const,
+      host_enrollment_id: HOST_PUBLIC,
+      events,
+    };
+  }
+
+  /**
+   * A session sealed before this batch, one frame long, and the proof frame
+   * that follows it, naming `rootSessionUuid` as its root.
+   */
+  function sealedSessionAndProof(
+    db: FakeDb,
+    parentSessionUuid: string | null,
+    rootSessionUuid: string = SESSION,
+  ) {
+    const genesis = sealEvent(
+      unsealed("agent_start", { session_start_source: "startup" }),
+      GENESIS_CURSOR,
+    );
+    db.sessions.set(SESSION, {
+      id: "s1",
+      publicId: RUN,
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      seqCount: 1,
+      lastHash: genesis.event.hash,
+      chainVerified: true,
+      telemetryGapCount: 0,
+      numToolCalls: 0,
+      contentFrames: 0,
+      bodyFrames: 0,
+      toolBodyFrames: 0,
+      enforcementTier: "observe",
+      sealedAt: new Date("2026-09-08T10:06:02.000Z"),
+      parentSessionUuid,
+    });
+    return sealEvent(
+      {
+        ...unsealed("proof.observed", FLIP),
+        root_session_uuid: rootSessionUuid,
+      },
+      genesis.next,
+    ).event;
+  }
+
+  it("hands a root session's fresh proof frames and its public id to the proof recorder", async () => {
+    const db = fakeDb();
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events = [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("proof.observed", FLIP),
+    ].map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+    mocks.recordProofFrames.mockResolvedValue({
+      written: 1,
+      witnessRunIds: [],
+    });
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(mocks.recordProofFrames).toHaveBeenCalledOnce();
+    expect(mocks.recordProofFrames.mock.calls[0]?.slice(1)).toEqual([
+      { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
+      RUN,
+      [events[1]],
+    ]);
+    // An open session has no cost row yet: its seal asks for one later.
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("asks the rollup to rebuild a root session sealed before the verdict arrived", async () => {
+    const db = fakeDb();
+    wire(db);
+    const proof = sealedSessionAndProof(db, null);
+    mocks.recordProofFrames.mockResolvedValue({
+      written: 1,
+      witnessRunIds: [],
+    });
+    await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+    expect(mocks.recordProofFrames.mock.calls[0]?.[3]).toEqual([proof]);
+    expect(mocks.sendEvent).toHaveBeenCalledWith({
+      name: "cost/run.sealed",
+      data: {
+        runId: RUN,
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+      },
+    });
+  });
+
+  it("asks the rollup to rebuild each witness run the new verdicts name, beside the sealed run", async () => {
+    const db = fakeDb();
+    wire(db);
+    const WITNESS_RUN = "tse_fake0000000000witness";
+    const proof = sealedSessionAndProof(db, null);
+    mocks.recordProofFrames.mockResolvedValue({
+      written: 1,
+      witnessRunIds: [WITNESS_RUN],
+    });
+    await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+    expect(mocks.sendEvent.mock.calls.map(([e]) => e.data.runId)).toEqual([
+      RUN,
+      WITNESS_RUN,
+    ]);
+  });
+
+  it("asks for no rebuild when the recorder wrote nothing (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const proof = sealedSessionAndProof(db, null);
+    await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+    expect(mocks.recordProofFrames).toHaveBeenCalledOnce();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("records a subagent's proof frame under its root session's run and rebuilds the sealed root", async () => {
+    const db = fakeDb();
+    wire(db);
+    const ROOT_SESSION = crypto.randomUUID();
+    const ROOT_RUN = "tse_fake00000000000000root";
+    db.sessions.set(ROOT_SESSION, {
+      id: "s0",
+      publicId: ROOT_RUN,
+      sessionUuid: ROOT_SESSION,
+      hostId: HOST_ID,
+      sealedAt: new Date("2026-09-08T10:07:00.000Z"),
+      parentSessionUuid: null,
+    });
+    const proof = sealedSessionAndProof(db, ROOT_SESSION, ROOT_SESSION);
+    mocks.recordProofFrames.mockResolvedValue({
+      written: 1,
+      witnessRunIds: [],
+    });
+    await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+    expect(mocks.recordProofFrames.mock.calls[0]?.slice(1)).toEqual([
+      { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
+      ROOT_RUN,
+      [proof],
+    ]);
+    expect(mocks.sendEvent).toHaveBeenCalledOnce();
+    expect(mocks.sendEvent).toHaveBeenCalledWith({
+      name: "cost/run.sealed",
+      data: {
+        runId: ROOT_RUN,
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+      },
+    });
+  });
+
+  it("refuses a subagent's proof frame whose root session the workspace has not recorded (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const unrecorded = crypto.randomUUID();
+    const proof = sealedSessionAndProof(db, unrecorded, unrecorded);
+    const err = await tachoEventsIngestHandler(batch([proof]), CONTEXT).catch(
+      (e: unknown) => e,
+    );
+    expect(isHandlerError(err) && [err.code, err.reason]).toEqual([
+      "conflict",
+      "root_session_unrecorded",
+    ]);
+    expect(mocks.recordProofFrames).not.toHaveBeenCalled();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("never hands the recorder a frame at or below the recorded head (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const proof = sealedSessionAndProof(db, null);
+    const genesisAgain = sealEvent(
+      unsealed("agent_start", { session_start_source: "startup" }),
+      GENESIS_CURSOR,
+    ).event;
+    await tachoEventsIngestHandler(batch([genesisAgain, proof]), CONTEXT);
+    expect(mocks.recordProofFrames.mock.calls[0]?.[3]).toEqual([proof]);
   });
 });

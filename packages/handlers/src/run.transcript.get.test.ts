@@ -45,7 +45,8 @@ function harness(rows: TachoFrameRow[]) {
       getRunByPublicId: () => Promise.resolve(null),
       readAttemptEventsSince: memoryEvents([]),
     },
-    readRunCosts: stores.readRunCosts,
+    readRunRollups: stores.readRunRollups,
+    readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
     bodies: { getBody },
   };

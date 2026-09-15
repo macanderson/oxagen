@@ -14,6 +14,7 @@
 // cost.daily-rollup folds run rows into the workspace's per-day groups. Both
 // tables can be dropped and rebuilt. Every money column is integer micro-USD;
 // a null cost is a run or group no frame priced, never a zero.
+import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -65,16 +66,9 @@ export const COST_BASES = [
 ] as const;
 export type CostBasis = (typeof COST_BASES)[number];
 
-export const RUN_VERDICTS = [
-  "flipped",
-  "failing",
-  "unmoved",
-  "unsatisfied",
-  "tampered",
-  "unverified",
-  "waived",
-  "none",
-] as const;
+// The witness verdicts (@oxagen/run-evidence, spec §8.5) plus `none`, the
+// rollup's word for a run no witness reported on (App. A.7).
+export const RUN_VERDICTS = [...PROOF_VERDICTS, "none"] as const;
 
 export const ENFORCEMENT_TIERS = ["gateway", "harness", "observe"] as const;
 export const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;

@@ -7,6 +7,7 @@ const gate = vi.hoisted(() => ({ refuse: false }));
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
+  resolveActingUserId: async (c: { userId: string | null }) => c.userId,
   assertOrgRole: async () => {
     if (gate.refuse) {
       throw new HandlerError({

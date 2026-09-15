@@ -5,7 +5,9 @@
 // The array below names the contracts whose handlers carry the gate. For each
 // one the test reads `register.ts` for the module the handler loads from,
 // parses that module with the TypeScript compiler API and asserts the
-// exported handler's body contains a call expression to `assertOrgRole`.
+// exported handler's body contains a call expression to `assertOrgRole`. A
+// handler exported as a call to a factory declared in the same module is
+// scanned through that factory's body.
 // Every entry must also be a registered contract, so a renamed capability
 // fails here rather than silently dropping out of the gate. The array grows
 // with each lane that adds a role-checked handler.
@@ -29,6 +31,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "get_run_proof",
+  "set_disclosure_grain",
 ] as const;
 
 const SRC = join(__dirname);
@@ -74,7 +78,11 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   ts.isIdentifier(node.expression) &&
   node.expression.text === name;
 
-/** Whether the exported handler's initializer contains a call to `assertOrgRole`. */
+/**
+ * Whether the exported handler's initializer contains a call to
+ * `assertOrgRole`, following a call to a factory function declared in the
+ * same module into that function's body.
+ */
 function handlerCallsAssertOrgRole(
   source: ts.SourceFile,
   exportName: string,
@@ -84,15 +92,26 @@ function handlerCallsAssertOrgRole(
     if (isCallTo(node, "assertOrgRole")) calls = true;
     ts.forEachChild(node, scan);
   };
+  const factories = new Map<string, ts.FunctionDeclaration>();
+  for (const statement of source.statements)
+    if (ts.isFunctionDeclaration(statement) && statement.name)
+      factories.set(statement.name.text, statement);
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const decl of statement.declarationList.declarations) {
       if (
-        ts.isIdentifier(decl.name) &&
-        decl.name.text === exportName &&
-        decl.initializer
+        !ts.isIdentifier(decl.name) ||
+        decl.name.text !== exportName ||
+        !decl.initializer
       )
-        scan(decl.initializer);
+        continue;
+      scan(decl.initializer);
+      const init = decl.initializer;
+      const factory =
+        ts.isCallExpression(init) && ts.isIdentifier(init.expression)
+          ? factories.get(init.expression.text)
+          : undefined;
+      if (factory?.body) scan(factory.body);
     }
   }
   return calls;

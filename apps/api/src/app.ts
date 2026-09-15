@@ -251,6 +251,8 @@ import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runProofGetRoute } from "./routes/v1/run.proof.get";
+import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
@@ -467,6 +469,10 @@ orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
+// Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
+// Both handlers refuse an API-key caller; the session auth above is the path.
+orgScoped.route("/runs/proof", runProofGetRoute);
+orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
