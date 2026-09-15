@@ -87,7 +87,7 @@ describe("/cli/authorize", () => {
 
   it("with a valid PKCE query and no organization yet: sends the account to create one and back", async () => {
     loadConsentChoices.mockResolvedValue({ ok: true, value: [] });
-    await renderPage(await page.default(routeProps({}, PKCE)));
+    await renderPage(page.default(routeProps({}, PKCE)));
     expect(redirectTo).toHaveBeenCalledWith(
       expect.stringMatching(/^\/new-organization\?next=%2Fcli%2Fauthorize%3F/),
     );
