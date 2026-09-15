@@ -241,6 +241,18 @@ describe("custom agents and harness pids in the hook handler", () => {
         "Not A Slug",
       ),
     ).rejects.toThrow(/invalid custom agent name/);
+    // A poster with the local token cannot claim a built-in name either.
+    await expect(
+      handleHookEvent(
+        { session_id: "x", hook_event_name: "SessionStart" },
+        {},
+        d,
+        undefined,
+        undefined,
+        "stella",
+      ),
+    ).rejects.toThrow(/"stella" is a built-in harness or runtime name/);
+    expect(d.registry.get("x")).toBeUndefined();
     expect(contextForHarness(CONTEXT, undefined, "bot").agent).toMatchObject({
       runtime: "custom",
       harness: "bot",

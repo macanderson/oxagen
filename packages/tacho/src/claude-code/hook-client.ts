@@ -18,8 +18,7 @@ import type { TachoPaths } from "../host/paths";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
-  CUSTOM_AGENT_NAME_PATTERN,
-  customAgentNameSchema,
+  customAgentNameProblem,
   type TachoHarness,
   tachoHarnessSchema,
 } from "../wire";
@@ -294,10 +293,12 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const now = deps.now ?? (() => Date.now());
   const platform = deps.platform ?? process.platform;
   const agent = deps.agent;
-  if (agent !== undefined && !customAgentNameSchema.safeParse(agent).success) {
+  const agentProblem =
+    agent !== undefined ? customAgentNameProblem(agent) : undefined;
+  if (agentProblem !== undefined) {
     return {
       stdout: "{}\n",
-      stderr: `tacho-hook: invalid --agent name ${JSON.stringify(agent)}; expected ${CUSTOM_AGENT_NAME_PATTERN.source}\n`,
+      stderr: `tacho-hook: invalid --agent name ${JSON.stringify(agent)}; ${agentProblem}\n`,
       exitCode: 0,
       path: "invalid",
     };

@@ -517,5 +517,33 @@ describe("runTachoHook for Stella and custom agents", () => {
       });
       expect(refused.stderr).toContain("invalid --agent name");
     }
+    // Every built-in harness and runtime name is reserved, so a custom
+    // agent can never be listed as one of them.
+    for (const reserved of [
+      "claude-code",
+      "codex",
+      "stella",
+      "claude-agent-sdk",
+      "custom",
+      "proxy",
+    ]) {
+      const refused = await runTachoHook({
+        paths,
+        env: {},
+        stdin: PRE,
+        agent: reserved,
+        post: async () => {
+          throw new Error("must not post");
+        },
+      });
+      expect(refused).toMatchObject({
+        path: "invalid",
+        stdout: "{}\n",
+        exitCode: 0,
+      });
+      expect(refused.stderr).toBe(
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-agent-sdk, custom, proxy)\n`,
+      );
+    }
   });
 });

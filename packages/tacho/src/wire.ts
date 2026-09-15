@@ -5,7 +5,7 @@
  * shapes; `packages/oxagen` re-exports these for its contracts.
  */
 import { z } from "zod";
-import { tachoEventSchema, type TachoEvent } from "./envelope";
+import { TACHO_RUNTIMES, tachoEventSchema, type TachoEvent } from "./envelope";
 
 export const TACHO_BATCH_SCHEMA = "tacho.batch.v1" as const;
 export const TACHO_BUNDLE_SCHEMA = "tacho.bundle.v1" as const;
@@ -41,9 +41,31 @@ export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
  * slug: lowercase, no spaces, short enough for every column that shows it.
  */
 export const CUSTOM_AGENT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-export const customAgentNameSchema = z
-  .string()
-  .regex(CUSTOM_AGENT_NAME_PATTERN);
+
+/**
+ * Names a custom agent may not take: every built-in harness and runtime.
+ * A custom agent named `stella` would carry `harness: "stella"`, and the
+ * fleet page and the desktop app, which label rows by harness, would show
+ * it as the built-in Stella. Derived from both lists, so a new harness or
+ * runtime is reserved the day it is added.
+ */
+export const RESERVED_AGENT_NAMES: readonly string[] = [
+  ...new Set<string>([...tachoHarnessSchema.options, ...TACHO_RUNTIMES]),
+];
+
+/** Why a custom agent name is refused, or undefined when it is acceptable. */
+export function customAgentNameProblem(name: string): string | undefined {
+  if (!CUSTOM_AGENT_NAME_PATTERN.test(name))
+    return `expected ${CUSTOM_AGENT_NAME_PATTERN.source}`;
+  if (RESERVED_AGENT_NAMES.includes(name))
+    return `${JSON.stringify(name)} is a built-in harness or runtime name (reserved: ${RESERVED_AGENT_NAMES.join(", ")})`;
+  return undefined;
+}
+
+export const customAgentNameSchema = z.string().superRefine((name, ctx) => {
+  const problem = customAgentNameProblem(name);
+  if (problem !== undefined) ctx.addIssue({ code: "custom", message: problem });
+});
 export const tachoHostStatusSchema = z.enum([
   "active",
   "paused",

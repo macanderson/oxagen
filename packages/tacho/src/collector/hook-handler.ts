@@ -14,8 +14,7 @@ import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
 import {
-  CUSTOM_AGENT_NAME_PATTERN,
-  customAgentNameSchema,
+  customAgentNameProblem,
   type DenyGeneration,
   type PolicyBundle,
   type TachoHarness,
@@ -189,9 +188,13 @@ export async function handleHookEvent(
   agent?: string,
 ): Promise<HookOutcome> {
   const input = hookInputSchema.parse(raw);
-  if (agent !== undefined && !customAgentNameSchema.safeParse(agent).success) {
+  // The daemon checks again: anything holding the local token can post an
+  // envelope without going through `tacho-hook`.
+  const agentProblem =
+    agent !== undefined ? customAgentNameProblem(agent) : undefined;
+  if (agentProblem !== undefined) {
     throw new Error(
-      `invalid custom agent name ${JSON.stringify(agent)}; expected ${CUSTOM_AGENT_NAME_PATTERN.source}`,
+      `invalid custom agent name ${JSON.stringify(agent)}; ${agentProblem}`,
     );
   }
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
