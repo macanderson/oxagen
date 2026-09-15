@@ -26,18 +26,17 @@ afterEach(() => {
 });
 
 describe("OrganizationForm", () => {
-  it("derives the address and namespace from the name until they are edited", async () => {
+  it("derives each address from its name until the address is edited", async () => {
     renderWithIntl(<OrganizationForm />);
     await userEvent.type(
       screen.getByLabelText("Organization name"),
       "Acme Robotics",
     );
     expect(screen.getByLabelText("Address")).toHaveValue("acme-robotics");
-    expect(screen.getByLabelText("Namespace")).toHaveValue("acme");
-    await userEvent.clear(screen.getByLabelText("Namespace"));
-    await userEvent.type(screen.getByLabelText("Namespace"), "acr");
+    await userEvent.clear(screen.getByLabelText("Address"));
+    await userEvent.type(screen.getByLabelText("Address"), "acr");
     await userEvent.type(screen.getByLabelText("Organization name"), "!");
-    expect(screen.getByLabelText("Namespace")).toHaveValue("acr");
+    expect(screen.getByLabelText("Address")).toHaveValue("acr");
     await userEvent.type(
       screen.getByLabelText("Workspace name"),
       "Core Platform",
@@ -58,10 +57,11 @@ describe("OrganizationForm", () => {
     expect(createOrganizationAction).not.toHaveBeenCalled();
   });
 
-  it("lands on the new organization's Fleet page, or shows what the server refused", async () => {
+  it("lands on the new organization's Fleet page, or shows what the server refused: a field, a taken address, a denial, a failure", async () => {
     createOrganizationAction.mockResolvedValueOnce({
       ok: false,
-      fields: { slug: "slugTaken" },
+      reason: "conflict",
+      code: "slug_taken",
     });
     renderWithIntl(<OrganizationForm initialName="Acme Robotics" />);
     await userEvent.type(
@@ -81,7 +81,31 @@ describe("OrganizationForm", () => {
 
     createOrganizationAction.mockResolvedValueOnce({
       ok: false,
-      error: "failed",
+      reason: "invalid",
+      code: "workspaceSlugReserved",
+      field: "workspaceSlug",
+    });
+    await submit();
+    expect(
+      await screen.findByText(
+        "That address is used by an organization page. Pick another.",
+      ),
+    ).toBeInTheDocument();
+
+    createOrganizationAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    await submit();
+    expect(await screen.findByTestId("organization-denied")).toHaveTextContent(
+      "This account may not create an organization.",
+    );
+
+    createOrganizationAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
     });
     await submit();
     expect(
@@ -97,7 +121,7 @@ describe("OrganizationForm", () => {
 
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
-      to: "/acme-robotics/core-platform",
+      value: { to: "/acme-robotics/core-platform" },
     });
     await submit();
     await waitFor(() => {
@@ -108,7 +132,7 @@ describe("OrganizationForm", () => {
   it("continues to the requested destination instead of the Fleet page", async () => {
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
-      to: "/acme-robotics/core-platform",
+      value: { to: "/acme-robotics/core-platform" },
     });
     renderWithIntl(
       <OrganizationForm

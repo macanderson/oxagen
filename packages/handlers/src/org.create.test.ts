@@ -135,16 +135,18 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
 
   // ── slug conflict guard ──────────────────────────────────────────────────
 
-  it("throws a friendly error when the slug already exists (pre-check path)", async () => {
+  it("refuses a taken slug as a conflict (pre-check path)", async () => {
     mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
 
-    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
-      'slug "acme" already in use',
-    );
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "slug_taken",
+      message: 'slug "acme" already in use',
+    });
     expect(mocks.txInsertOrg).not.toHaveBeenCalled();
   });
 
-  it("throws a friendly error on unique_violation (race condition path)", async () => {
+  it("refuses a slug taken by a concurrent create as a conflict (race condition path)", async () => {
     // Pre-check passes (no row), but the second withSystemDb call (main body)
     // races and hits the unique index.
     let callIdx = 0;
@@ -152,12 +154,35 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         callIdx++;
         if (callIdx === 1) return fn(makeTx());
-        throw Object.assign(new Error("dup"), { code: "23505" });
+        throw Object.assign(new Error("dup"), {
+          code: "23505",
+          constraint_name: "organizations_slug_idx",
+        });
       },
     );
 
-    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
-      'slug "acme" already in use',
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "slug_taken",
+    });
+  });
+
+  it("re-throws a unique violation on another index unchanged", async () => {
+    let callIdx = 0;
+    const namespaceRace = Object.assign(new Error("dup"), {
+      code: "23505",
+      constraint_name: "organizations_namespace_idx",
+    });
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        callIdx++;
+        if (callIdx === 1) return fn(makeTx());
+        throw namespaceRace;
+      },
+    );
+
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toBe(
+      namespaceRace,
     );
   });
 
