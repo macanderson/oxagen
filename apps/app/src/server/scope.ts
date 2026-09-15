@@ -28,8 +28,8 @@ import {
 export { ORG_ONLY_WS, type Scope } from "./tenant-scope";
 export type { Viewer, ViewerResolution } from "./viewer-resolution";
 
-/** Resolve without throwing a navigation interrupt: route handlers map the result to a Response. */
-export const resolveViewer = cache(
+/** Resolve without throwing a navigation interrupt; exported again for route handlers with the Run stream (WL-35). */
+const resolveViewer = cache(
   async (orgSlug: string, wsSlug?: string): Promise<ViewerResolution> => {
     const session = await getSession();
     // The MFA deadline is judged against the request's clock. Under partial

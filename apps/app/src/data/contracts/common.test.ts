@@ -1,32 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  Currency,
-  Money,
-  PublicId,
-  RecordKind,
-  ReplayGrade,
-  Verdict,
-} from "./common";
-
-describe("PublicId", () => {
-  it.each(["run_01K5RS7M2E8FJ3QW", "usr_marcusbell", "apk_9"])(
-    "accepts %s",
-    (id) => {
-      expect(PublicId.safeParse(id).success).toBe(true);
-    },
-  );
-
-  it.each([
-    "run-01K5",
-    "Run_01",
-    "_01",
-    "run_",
-    "run_01 ",
-    "913d6df1-0000-4000-8000-000000000000",
-  ])("rejects %s", (id) => {
-    expect(PublicId.safeParse(id).success).toBe(false);
-  });
-});
+import { Currency, Money, OrgRole } from "./common";
 
 describe("Money", () => {
   it("accepts integer micros as a decimal string, with or without a basis", () => {
@@ -62,18 +35,10 @@ describe("Money", () => {
   });
 });
 
-describe("spec vocabulary", () => {
-  it("uses the spec's replay grades, not the mockup's", () => {
-    expect(ReplayGrade.options).toEqual(["inspect", "view", "fork", "retry"]);
-    expect(ReplayGrade.safeParse("full").success).toBe(false);
-  });
-
-  it("spells an absent verdict `none`, never null", () => {
-    expect(Verdict.safeParse("none").success).toBe(true);
-    expect(Verdict.safeParse(null).success).toBe(false);
-  });
-
-  it("has exactly the six record kinds", () => {
-    expect(RecordKind.options).toHaveLength(6);
+describe("OrgRole", () => {
+  it("accepts the six stored roles and nothing else", () => {
+    expect(OrgRole.options).toHaveLength(6);
+    expect(OrgRole.safeParse("Owner").success).toBe(false);
+    expect(OrgRole.safeParse("superuser").success).toBe(false);
   });
 });

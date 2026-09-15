@@ -8,8 +8,7 @@
       "sections": {
         "workspace": "Workspace",
         "organization": "Organization"
-      },
-      "footer": "{plane, select, shared {shared plane} dedicated {dedicated plane} other {{plane} plane}}"
+      }
     },
     "nav": {
       "fleet": "Fleet",
@@ -25,27 +24,8 @@
       "roles": "Roles"
     },
     "switcher": {
-      "org": {
-        "trigger": "Switch organization, current {name}",
-        "title": "Switch organization",
-        "search": "Search organizations",
-        "current": "current",
-        "detail": "{slug} · {plan}",
-        "detailNoPlan": "{slug}",
-        "note": "An organization owns a Neo4j database, a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane.",
-        "empty": "No organization matches that search."
-      },
-      "ws": {
-        "trigger": "Switch workspace, current {name}",
-        "title": "Switch workspace",
-        "current": "current",
-        "detail": "{repo} · {branch}",
-        "agents": "{count, plural, =0 {no agents} one {# agent} other {# agents}}",
-        "noRepo": "no main repo linked",
-        "none": "This organization has no workspaces yet.",
-        "manage": "Workspaces are created on the Organization page."
-      },
-      "close": "Close"
+      "org": "Organization",
+      "ws": "Workspace"
     },
     "topbar": {
       "label": "Top bar",
@@ -53,8 +33,7 @@
       "breadcrumbs": "Breadcrumb",
       "search": "Go to a page",
       "searchShortcut": "⌘K",
-      "userMenu": "User menu for {name}",
-      "userMenuUnknown": "User menu"
+      "userMenu": "User menu for {name}"
     },
     "userMenu": {
       "switchTheme": "Switch theme",

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The client shell against the built context read: the sidebar, top bar,
-// switchers, command menu, user menu and <MobileNav>, driven the way an
-// operator drives them, and the chrome rev1 does not render (ARCHITECTURE.md
-// §1.2) asserted absent.
+// The client shell against the viewer the layout resolved: the sidebar, top
+// bar, the organization and workspace tiles, command menu, user menu and
+// <MobileNav>, driven the way an operator drives them, and the chrome rev1
+// does not render (ARCHITECTURE.md §1.2) asserted absent.
 import {
   act,
   cleanup,
@@ -25,12 +25,8 @@ import {
 } from "vitest";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
-import { readOk } from "@/data/not-backed";
-import { liveShell } from "@/data/adapters/live/shell";
-import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
-import { loadShellData } from "./load";
 import { MobileNav } from "./mobile-nav";
-import { SHELL_ORG_ID, shellData } from "./shell.builders";
+import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
@@ -104,11 +100,6 @@ afterEach(() => {
   delete document.documentElement.dataset.theme;
 });
 
-const ORG_SCOPE = {
-  orgId: SHELL_ORG_ID,
-  workspaceId: ORG_ONLY_WORKSPACE_ID,
-};
-
 function renderShell(data: ShellData) {
   return render(
     <NextIntlClientProvider
@@ -168,10 +159,9 @@ describe("sidebar", () => {
       "aria-current",
       "page",
     );
-    expect(within(sidebar).getByText("shared plane")).toBeInTheDocument();
   });
 
-  it("points the workspace section at the first workspace on an organization page", () => {
+  it("carries only the organization section on an organization page: no workspace is known without a list", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
@@ -179,80 +169,26 @@ describe("sidebar", () => {
       "aria-current",
       "page",
     );
-    expect(within(main).getByRole("link", { name: "Tools" })).toHaveAttribute(
-      "href",
-      "/acme/core-platform/tools",
-    );
-  });
-
-  it("degrades to the slug, without switchers or the plane line, when the context is not wired", async () => {
-    const load = await loadShellData(liveShell, {
-      org: "acme",
-      scope: ORG_SCOPE,
-      userId: "",
-    });
-    if (load.kind !== "ok") throw new Error("unexpected not found");
-    renderShell(load.data);
-    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
-    expect(
-      within(sidebar).queryByRole("button", { name: /Switch organization/ }),
-    ).toBeNull();
-    expect(within(sidebar).getByText("acme")).toBeInTheDocument();
-    expect(within(sidebar).queryByText(/plane/)).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "User menu" }),
-    ).toBeInTheDocument();
+    expect(within(main).queryByRole("link", { name: "Tools" })).toBeNull();
+    expect(screen.queryByTestId("workspace-switcher")).toBeNull();
   });
 });
 
-describe("switchers", () => {
-  it("lists workspaces with their recorded agent count and links each to its Fleet", async () => {
+describe("organization and workspace tiles", () => {
+  it("show the current organization from the viewer and the current workspace from the URL, with nothing to switch to (negative)", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
-    await user.click(
-      screen.getByRole("button", {
-        name: "Switch workspace, current Core platform",
-      }),
-    );
-    const dialog = await screen.findByRole("dialog", {
-      name: "Switch workspace",
-    });
-    const finops = within(dialog).getByRole("link", { name: /FinOps/ });
-    expect(finops).toHaveAttribute("href", "/acme/finops");
-    expect(finops).toHaveTextContent("4 agents");
-    expect(
-      within(dialog).getByRole("link", { name: /Core platform/ }),
-    ).toHaveAttribute("aria-current", "page");
-    await user.click(finops);
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: "Switch workspace" }),
-      ).toBeNull();
-    });
-  });
-
-  it("searches organizations", async () => {
-    const user = userEvent.setup();
-    renderShell(shellData());
-    await user.click(
-      screen.getByRole("button", {
-        name: "Switch organization, current Acme Robotics",
-      }),
-    );
-    const dialog = await screen.findByRole("dialog", {
-      name: "Switch organization",
-    });
-    await user.type(
-      within(dialog).getByRole("searchbox", { name: "Search organizations" }),
-      "globex",
-    );
-    expect(
-      within(dialog).getByText("No organization matches that search."),
-    ).toBeInTheDocument();
-    await user.clear(within(dialog).getByRole("searchbox"));
-    await user.click(
-      within(dialog).getByRole("link", { name: /Acme Robotics/ }),
-    );
+    const org = screen.getByRole("group", { name: "Organization" });
+    expect(org).toHaveTextContent("Acme Robotics");
+    expect(org).toHaveTextContent("acme");
+    const ws = screen.getByRole("group", { name: "Workspace" });
+    expect(ws).toHaveTextContent("core-platform");
+    expect(within(org).queryByRole("button")).toBeNull();
+    expect(within(ws).queryByRole("button")).toBeNull();
+    await user.click(org);
+    await user.click(ws);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("searchbox")).toBeNull();
   });
 });
 
@@ -352,6 +288,15 @@ describe("user menu", () => {
     await user.click(screen.getByTestId("switch-theme"));
     expect(document.documentElement.dataset.theme).toBeUndefined();
   });
+
+  it("names a viewer with no recorded name by their email", () => {
+    renderShell(
+      shellData({ viewer: { name: null, email: "dana@acme.example" } }),
+    );
+    expect(
+      screen.getByRole("button", { name: "User menu for dana@acme.example" }),
+    ).toHaveTextContent("D");
+  });
 });
 
 describe("phone navigation", () => {
@@ -402,24 +347,5 @@ describe("phone navigation", () => {
       screen.getByRole("button", { name: "More" }).click();
     });
     expect(onMore).toHaveBeenCalled();
-  });
-});
-
-describe("readOk guard", () => {
-  it("renders the shell for a context without workspaces", () => {
-    const data = shellData();
-    if (!data.context.ok) throw new Error("built context failed");
-    renderShell({
-      ...data,
-      context: readOk({ ...data.context.value, workspaces: [] }),
-    });
-    expect(
-      screen.queryByRole("button", { name: /Switch workspace/ }),
-    ).toBeNull();
-    expect(
-      within(screen.getByTestId("mobile-nav"))
-        .getAllByRole("link")
-        .map((l) => l.textContent),
-    ).toEqual(["Organization", "Billing", "Audit"]);
   });
 });

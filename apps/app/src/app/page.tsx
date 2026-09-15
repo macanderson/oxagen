@@ -1,12 +1,15 @@
-import { notBacked } from "@/data/not-backed";
-import { PageState } from "@/ui/page-state";
-import { PlaceholderPage } from "@/ui/placeholder-page";
+import { getTranslations } from "next-intl/server";
+import { PageHeader } from "@/ui/page-header";
 
-// Batch 0 skeleton; its Batch 2 page lane replaces it.
-export default function HomePage() {
+// The title alone until WL-32 makes / a redirect to the viewer's first workspace (ARCHITECTURE.md §1.2).
+export default async function HomePage() {
+  const t = await getTranslations("routes");
   return (
-    <PlaceholderPage route="home">
-      <PageState page="home" result={notBacked("M1", "G15")} />
-    </PlaceholderPage>
+    <main
+      id="main"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10"
+    >
+      <PageHeader title={t("home.title")} />
+    </main>
   );
 }
