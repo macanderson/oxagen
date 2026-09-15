@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-The control plane for every AI agent an enterprise runs. Every agent operates under a mandate — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run.
+Mission Control for your autonomous agents. Every agent gets its own identity and a mandate (its authority, budget, tools, and skills), set by the teams accountable for it and enforced on the actions routed through Oxagen, the agent control plane.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
