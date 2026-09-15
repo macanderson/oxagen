@@ -4,7 +4,8 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api — the reviewer is a signed-in user; an API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
+**Surfaces:** api
+**Why api only:** The reviewer is a signed-in user; an API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes

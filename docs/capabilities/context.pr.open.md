@@ -4,7 +4,8 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api — the handler's role gate needs a signed-in user; an API key (the MCP and CLI bearer) carries none and is refused `no_principal`, so neither surface is declared. `oxagen context propose` records the proposal (`propose_record`); the PR is opened from Mission Control.
+**Surfaces:** api
+**Why api only:** The handler's role gate needs a signed-in user; an API key (the MCP and CLI bearer) carries none and is refused `no_principal`, so neither surface is declared. `oxagen context propose` records the proposal (`propose_record`); the PR is opened from Mission Control.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes

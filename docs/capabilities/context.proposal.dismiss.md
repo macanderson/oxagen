@@ -4,7 +4,8 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api — the handler's role gate needs a signed-in user; an API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
+**Surfaces:** api
+**Why api only:** The handler's role gate needs a signed-in user; an API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
 **Risk level:** medium
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
