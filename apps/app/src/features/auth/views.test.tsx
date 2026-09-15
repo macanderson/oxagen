@@ -4,6 +4,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
 vi.mock("next/navigation", () => ({
@@ -62,8 +63,13 @@ async function renderServer(node: ReactNode) {
   return render(<IntlProvider>{await resolve(node)}</IntlProvider>);
 }
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 const invitation = {

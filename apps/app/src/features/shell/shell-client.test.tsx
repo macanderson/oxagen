@@ -23,6 +23,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 
@@ -88,8 +89,13 @@ beforeEach(() => {
   nav.push.mockReset();
 });
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
   document.cookie = "theme=; Max-Age=0; Path=/";
   delete document.documentElement.dataset.theme;
 });

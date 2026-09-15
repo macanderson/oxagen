@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
 
@@ -54,8 +55,13 @@ beforeEach(() => {
   // Storage holds no remembered destination unless a test puts one there.
   live.takePendingNext.mockReturnValue(null);
 });
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("LoginForm", () => {

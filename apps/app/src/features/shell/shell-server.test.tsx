@@ -4,6 +4,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import shellMessages from "../../../messages/shell.json";
 import { shellData } from "./shell.builders";
 import type { ShellData } from "./shell-data";
@@ -31,8 +32,13 @@ beforeAll(async () => {
   await import("./shell-chrome");
 }, 30_000);
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("ShellChrome", () => {
