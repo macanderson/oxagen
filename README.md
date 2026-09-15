@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-The control plane that teaches, governs, explains, and learns from every AI agent an enterprise runs.
+The control plane for every AI agent an enterprise runs. Every agent operates under a mandate — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
@@ -24,11 +24,12 @@ The control plane that teaches, governs, explains, and learns from every AI agen
 
 ## What It Does
 
-Oxagen combines three concerns that agent frameworks, observability tools, and RAG stacks each handle separately:
+Oxagen does not run agents — Stella and any other agent do the work. Oxagen is where the company sets the terms under which that work may happen, and where it goes to find out what happened. Three teams each write one clause of an agent's **mandate**, and the platform enforces the whole thing on every run:
 
-1. **Governance** — every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are schema-enforced and metered.
-2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context.
-3. **Explain and meter** — every run is saved as one trace (who asked, what it read, what it changed, what proved it, what it cost), and a ClickHouse→Stripe loop prices the platform by use, per governed action.
+1. **Access** — security sets the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, and the actions it is permitted. Every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI; there is no ungoverned tool surface.
+2. **Budget & rules** — FinOps sets what it may spend, under which commercial terms, and the business rules it must obey. Every governed action is metered from ClickHouse through to Stripe.
+3. **Equipment** — engineering sets the knowledge it is handed (a Neo4j graph plus ontology, grounding answers in cited, time-aware context), the skills and tools it may use, and the steering it runs under.
+4. **Record** — the platform keeps one trace per run: who asked, what it read, what it changed, what proved it, what it cost.
 
 The platform is vendor-neutral: bring your own model keys and your own Neo4j endpoint.
 

@@ -1,14 +1,15 @@
-# Oxagen Vision — teach, govern, explain, learn
+# Oxagen Vision — the agent control plane
 
-> **Mission: Oxagen teaches your agents your business, governs what they may do,
-> explains every run, and learns from each one — so a company stops renting
-> intelligence and starts owning it.**
+> **Mission: Oxagen is the control plane for the agents an enterprise runs. Every
+> agent operates under a mandate — its access, its budget, its tools, its rules —
+> set by the teams accountable for it and enforced on every run.**
 
-We sell to the enterprise team that runs the agents and answers for them. Coding
-teams first, because everyone using a terminal agent today is a customer. We do not
-sell to resellers, and we do not build the machinery a customer would need to resell
-agent usage to their own customers. The September 2026 positioning deck is the
-source this document follows.
+We sell to the teams that answer for the agents: the security team that decides
+what an agent may reach, the FinOps team that decides what it may spend and under
+which business rules, and the engineering team that decides what it knows and what
+it can do. Coding teams first, because everyone using a terminal agent today is a
+customer. We do not sell to resellers, and we do not build the machinery a customer
+would need to resell agent usage to their own customers.
 
 This document is the north star for every product and engineering decision. Feature
 recommendations, roadmap priorities, and architecture choices are judged against it —
@@ -16,12 +17,34 @@ by humans, by coding agents (see `CLAUDE.md` → *Mission*), and by the automate
 Vision Gate in CI (`.github/workflows/vision-gate.yml`), which LLM-judges every PR
 diff against this file and flags drift.
 
-## The gap — nobody enforces the accountability chain
+## What a control plane is
+
+A control plane does not run the workload. It decides what the workload may do, hands
+it what it needs, and keeps the record. Kubernetes does not execute your containers;
+IAM does not run your services. Oxagen does not run agents (ADR-043) — Stella and any
+other agent do the work. Oxagen is where the company sets the terms under which that
+work is allowed to happen, and where it goes to find out what happened.
+
+The unit the control plane manages is the **mandate**. Security, finance, and
+engineering are not configuring three products; each writes one clause of the same
+mandate, and the platform enforces the whole thing on every run:
+
+| Clause | Who sets it | What it says | Platform job |
+|---|---|---|---|
+| **Access** | Security | Which identity the agent acts as, which systems it is connected to, which data and graph scope it may read, which actions it is permitted | **Govern** |
+| **Budget & rules** | FinOps | What it may spend, under which commercial terms, and the business rules it must obey — approval thresholds, allowed vendors, decision rules | **Meter**, **Govern** |
+| **Equipment** | Engineering | The knowledge it is handed at the start of a job, the skills and tools it may use, the steering it runs under | **Ground** |
+| **Record** | The platform | What the run read, what it changed, what proved it, what it cost — one trace an auditor, a finance lead, or an engineer can read | **Explain**, **Rate** |
+
+Five platform jobs enforce the four clauses — **govern, ground, explain, meter,
+rate**. Every capability in the tree must serve one of them or be deleted.
+
+## The gap — nobody enforces the mandate as one object
 
 Despite the explosion of agent tooling, **90% of organizations have no way to govern
 what agents in production are actually doing, and 54% have already had a security
 incident caused by an agent acting unexpectedly.** The reason is structural — every
-existing layer covers one link and stops:
+existing layer covers one clause and stops:
 
 - **Identity** says *who the agent is* — and nothing more.
 - **Gateways** say *which tools it can call* — but most only handle routing, some
@@ -29,18 +52,20 @@ existing layer covers one link and stops:
   initiated the task, which agent acted, which tool was called, and what data was
   accessed.
 - **Billing** says *what it consumed* — but can't stop anything.
+- **Prompt and skill repos** say *what the agent was told* — with no link to what it
+  was allowed to do or what it cost.
 
-Nobody binds **identity → knowledge scope → permitted action → commercial terms →
-verified outcome → audit record** into one enforced object. That object is Oxagen's
-**contracted-capabilities ontology**: every capability is a typed contract that
-carries the caller's identity, the graph scope it may read, the action it is
-entitled to take (IAM + entitlements), the commercial terms it is metered and billed
-under, the outcome it verifiably produced, and the audit record it leaves behind —
-enforced at invocation time, not reconstructed after the incident.
+Nobody binds those into one enforced object. Oxagen's mechanism for doing so is the
+**typed capability contract**: every capability carries the caller's identity, the
+graph scope it may read, the action it is entitled to take (IAM + entitlements), the
+commercial terms it is metered and billed under, the outcome it produced, and the
+audit record it leaves behind — **identity → knowledge scope → permitted action →
+commercial terms → outcome → audit record** — enforced at invocation time, not
+reconstructed after the incident. The contract is how a mandate becomes executable.
 
 Even the official MCP 2026 roadmap names audit trails, enterprise-managed auth, and
 gateway patterns as open gaps: the protocol layer itself is asking for what Oxagen's
-contract layer already is. The wedge below is how we own that answer.
+contract layer already is.
 
 ## Positioning
 
@@ -48,72 +73,46 @@ Oxagen does not compete where it loses. It will not out-Glean Glean on connector
 breadth and graph maturity, out-eval Braintrust, or out-mindshare LangGraph. The
 single wedge where a platform of Oxagen's exact shape can credibly be #1:
 
-**The control plane that teaches, governs, explains, and learns from every agent an
-enterprise runs — whoever built it.**
+**The control plane for every agent an enterprise runs — whoever built it.**
 
-Four jobs, one loop. Learn feeds Teach. Own the intersection no incumbent bundles:
-
-1. **Govern** — capability-parity typed contracts that make every MCP tool
-   inherently governed and un-poisonable. Every capability is a typed contract with
-   IAM + entitlement enforcement, exposed with parity across API, MCP, CLI, and UI.
-   The contract is the one enforced object that binds identity → knowledge scope →
-   permitted action → commercial terms → verified outcome → audit record — the full
-   accountability chain, not just routing or authentication.
-2. **Teach** — a Neo4j graph + ontology that hands an agent the company's knowledge
-   and rules when it starts a job, grounds its answers in cited, time-aware context,
-   and takes back what the run learned. Accuracy is the product, citations are the
-   proof.
-3. **Explain** — every run saved as one trace next to the data it touched: who
-   asked, what the agent read, what it changed, what proved it, and what it cost.
-   A security lead gets an answer instead of a log file. Finance sees what each
-   run bought. The same ClickHouse→Stripe loop prices the platform by use, per
-   governed action.
-4. **Learn** — each proven run leaves behind skills, tools, tuned settings, and
-   knowledge written back to the graph, so the next run starts with all four.
-   Later, those proven runs train an open-weight model the customer owns and can
-   run inside their own firewall. Labels are the expensive part of training a
-   model; a run that fails a test and then passes it is a label made as a side
-   effect of doing the work.
-
-That is not "another agent framework" or "another enterprise search box." It is
-**the governed, graph-grounded control plane for the agents an enterprise already
-runs**, with the knowledge graph as the **accuracy moat**, vendor-neutral BYOK as the
-**trust moat**, and the proven-run corpus as the **compounding asset** no competitor
-can copy from outside the customer.
+Not "another agent framework" and not "another enterprise search box." The knowledge
+graph is the **accuracy moat**, vendor-neutral BYOK (own model keys, own Neo4j
+endpoint) is the **trust moat**, and the corpus of recorded, rated runs is the
+**compounding asset** no competitor can copy from outside the customer: proven runs
+leave behind skills, tools, tuned settings, and knowledge written back to the graph,
+and later train an open-weight model the customer owns and can run inside their own
+firewall. Labels are the expensive part of training a model; a run that fails a test
+and then passes it is a label made as a side effect of doing the work.
 
 ## Market gaps we own (underserved needs nobody bundles)
 
 1. **Per-run cost attribution an enterprise can act on.** The clearest whitespace.
    Observability tools show spend as a total; FinOps tools chargeback by account.
-   Neither can say which agent, on whose behalf, under which rule, spent what — and
-   whether the work was proven. Oxagen meters the governed action, so the answer is
-   a row, not an estimate. Verified: uncontested.
+   Neither can say which agent, on whose behalf, under which rule, spent what. Oxagen
+   meters the governed action, so the answer is a row, not an estimate. Verified:
+   uncontested.
 2. **Governed, schema-enforced, metered MCP tools as an anti-poisoning story.** The
    market fears tool poisoning/injection (OWASP entry, ~200K vulnerable instances),
    but gateways only inspect third-party servers. A platform whose tools are natively
    typed contracts with IAM + entitlement enforcement is a different, stronger trust
    posture. Underserved.
-3. **The enforced accountability chain.** Identity vendors, gateways, and billing
-   tools each cover one link; none binds who initiated the task, which agent acted,
-   which tool was called, what data was accessed, under what commercial terms, with
-   what verified outcome and audit record — into one object enforced at invocation.
-   90% of organizations can't govern what production agents actually do; 54% have
-   had an agent-caused security incident; the MCP 2026 roadmap itself lists audit
-   trails, enterprise-managed auth, and gateway patterns as open gaps. Oxagen's
-   contracted-capabilities ontology *is* that object. Uncontested as a bundle.
+3. **The mandate enforced as one object.** Identity vendors, gateways, billing tools
+   and prompt repos each cover one clause; none binds who initiated the task, which
+   agent acted, which tool was called, what data was accessed, under what commercial
+   terms, with what outcome and audit record — into one object enforced at
+   invocation. Oxagen's typed contract *is* that object. Uncontested as a bundle.
 4. **Graph-grounded accuracy/citations with time-aware fact validity.** Graphiti
    proved bi-temporal graphs improve reasoning accuracy, but as a thin-funded library.
    Nobody offers hosted, multi-tenant, citation-backed, time-aware graph grounding as
    a product. Real gap.
-4. **Vendor-neutral agent platform (no cloud gravity).** Every full platform pulls
+5. **Vendor-neutral agent platform (no cloud gravity).** Every full platform pulls
    toward a cloud (Azure/GCP) or a model (OpenAI/Anthropic/Cognition). A credibly
    neutral, BYOK, self-hostable-or-hosted platform is underserved — especially for
    teams burned by OpenAI's AgentKit deprecation and Microsoft's forced AutoGen/SK
    migration.
-5. **Fleet-scale agent coordination with typed lineage + metering.** Everyone ships
-   "parallel agents"; nobody offers structured fan-out where each agent grounds in a
-   shared typed graph and every step emits lineage + cost. Partially owned by no one —
-   but requires proof to claim.
+6. **Fleet-scale lineage + metering.** Everyone ships "parallel agents"; nobody
+   records a fleet where each agent grounds in a shared typed graph and every step
+   emits lineage + cost. Partially owned by no one — but requires proof to claim.
 
 ## Go-to-market tailwinds
 
@@ -124,52 +123,50 @@ can copy from outside the customer.
 - Tool-poisoning fear is driving demand for exactly the typed-contract governance
   Oxagen already enforces.
 
-Win by being the one place an enterprise can teach, govern, explain, and learn from
-every agent it runs — then earn evals and connector breadth as **fast-follows, not the
+Win by being the one place an enterprise sets and enforces the mandate for every
+agent it runs — then earn evals and connector breadth as **fast-follows, not the
 front line**.
 
 ## What advances the vision
 
-Work that strengthens the wedge:
+Work that lets an accountable team set a clause of the mandate, or lets the platform
+enforce or record it:
 
-- Metering coverage: every capability, agent step, and LLM call emits usage events
-  that can be priced and re-billed (`invoke()` metering, `@oxagen/ai` telemetry,
-  Stripe meter sync).
-- Contract governance: new capabilities land as typed contracts with IAM +
+- **Access (security):** agent identity and registration, connections to systems,
+  IAM + entitlement gates, permission-scoped graph retrieval, principal attribution
+  (who initiated → which agent → which tool → what data), the governed tool gateway.
+- **Budget & rules (FinOps):** metering coverage — every capability, agent step, and
+  LLM call emits usage events that can be priced (`invoke()` metering, `@oxagen/ai`
+  telemetry, Stripe meter sync); budgets and admission gates; decision rules and
+  business mandates enforced in the kernel; cost attribution that resolves spend to a
+  workspace, an agent, a rule, and a run.
+- **Equipment (engineering):** graph grounding — agent answers cite nodes/edges with
+  time-aware validity; ingestion and ontology work that deepens cited, multi-tenant
+  grounding; skills, tools, steering and prompt settings managed as governed,
+  versioned objects; what a proven run writes back into the graph.
+- **Record (platform):** the evidence ledger and the tacho seam; run-evidence
+  ingress (`runner_observed` and `client_attested` evidence); audit trails; evidence
+  exports for auditors; rating on recorded outcomes rather than self-report; fleet
+  lineage where every step emits typed lineage + cost.
+- **Contract governance:** new capabilities land as typed contracts with IAM +
   entitlement gates and full API/MCP/CLI/UI parity; nothing ships as an ungoverned
   tool surface.
-- Graph grounding: agent answers cite nodes/edges with time-aware validity;
-  ingestion and ontology work that deepens cited, multi-tenant grounding.
-- Vendor neutrality: BYOK paths, model/provider abstraction (`modelIdOf()`, the AI
+- **Vendor neutrality:** BYOK paths, model/provider abstraction (`modelIdOf()`, the AI
   Gateway), self-hostable surfaces, and zero hard vendor lock-in.
-- Fleet lineage: fan-out/coordination primitives whose every step emits typed
-  lineage + cost (`agent.subagent.dispatch`/`aggregate`).
-- Accountability chain: work that binds the links of identity → knowledge scope →
-  permitted action → commercial terms → verified outcome → audit record more tightly
-  into the contract object — principal attribution (who initiated → which agent →
-  which tool → what data), audit trails, verified/attested outcomes, and
-  permission-scoped graph retrieval.
-- Learning from proven runs: skills, tools, tuned settings, and knowledge that a
-  proven run writes back into the graph, and the pipeline that turns a corpus of
-  proven runs into a model the customer owns.
-- Cost attribution an enterprise can act on: metering the governed action so spend
-  resolves to a workspace, an agent, a rule, and a run.
-- External-agent governance: Oxagen governs ANY agent, first- or third-party
-  (ADR-040). Work on the run-evidence ingress (`runner_observed` and
-  `client_attested` evidence), the governed tool gateway, third-party agent
-  identity and registration, wrapper SDKs/shims that make external agents
-  observable, permission-requesting, and CGP-conformant, and evidence
-  exports for auditors advances the wedge directly.
+- **External-agent governance:** Oxagen governs ANY agent, first- or third-party
+  (ADR-040, ADR-043). Wrapper SDKs/shims that make external agents observable,
+  permission-requesting, and CGP-conformant advance the wedge directly.
 
 ## What is drift
 
 - Building standalone eval tooling, connector breadth for its own sake, or framework
   mindshare plays **as the front line** (they are permitted as fast-follows once the
   wedge is won, and as thin layers in service of the wedge).
-- Deepening the first-party in-process agent runtime as a product surface
-  (ADR-040): Oxagen is the governance plane, not the agent. Engine work
-  belongs behind the `execute-turn` seam or upstream in Stella; removing or
-  extracting runtime code in service of the refocus is advancing, not drift.
+- Running agents. Any in-process agent runtime, sandbox, coding engine, worker,
+  subagent fan-out, skill executor, eval harness, automation engine, browser/code
+  tool, or content generator as a product surface (ADR-043): Oxagen is the control
+  plane, not the agent. Engine work belongs in Stella; removing or extracting runtime
+  code in service of the refocus is advancing, not drift.
 - New capabilities or tool surfaces that bypass typed contracts, IAM/entitlement
   gates, or metering ("just this once" untyped/unmetered paths).
 - Agent answers or UI surfaces that present ungrounded, citation-free output where
@@ -177,8 +174,8 @@ Work that strengthens the wedge:
 - Hard-coupling to a single model vendor or cloud (hard-coded model slugs, provider
   lock-in, features that only work on one cloud).
 - Fan-out/orchestration that emits no lineage or cost accounting.
-- Agent actions that break the accountability chain — no principal attribution, no
-  audit record, or retrieval that ignores the caller's knowledge scope.
+- Agent actions that break the mandate — no principal attribution, no audit record,
+  or retrieval that ignores the caller's knowledge scope.
 - Storing data across the four-store boundaries in ways that break the metering or
   grounding story (see `CLAUDE.md` → *Infrastructure boundaries*).
 - Reseller and re-bill machinery: letting a customer package, price, and invoice
@@ -195,8 +192,10 @@ strategic drift, not to nag maintenance.
 
 ## Drift tests (the questions the Vision Gate asks)
 
-1. Does this change help an enterprise teach its agents the business, govern what
-   they may do, explain what they did, or learn from a proven run? (advances)
+1. Does this change let an accountable team set a clause of an agent's mandate —
+   grant access, bound spend and rules, equip it with knowledge, skills or tools —
+   or let the platform enforce that mandate or record what happened under it?
+   (advances)
 2. Does it add a capability without a typed contract, IAM/entitlement gate, or
    metering? (drifts)
 3. Does it present agent output without citations where graph grounding applies?
@@ -205,10 +204,12 @@ strategic drift, not to nag maintenance.
    exists? (drifts)
 5. Is it front-line investment in a market we explicitly declined to fight
    (connector breadth, standalone evals, framework mindshare)? (drifts)
-6. Does it strengthen or weaken the accountability chain — the binding of identity,
-   knowledge scope, permitted action, commercial terms, verified outcome, and audit
-   record into the enforced contract object? (advances / drifts)
-7. Does it build machinery for a customer to resell agent usage to their own
+6. Does it make Oxagen run agents rather than govern them — an engine, sandbox,
+   fan-out, or executor as a product surface? (drifts)
+7. Does it strengthen or weaken the enforced contract — the binding of identity,
+   knowledge scope, permitted action, commercial terms, outcome, and audit record
+   into one object? (advances / drifts)
+8. Does it build machinery for a customer to resell agent usage to their own
    customers — markup pricing, downstream customer records, re-bill runs, or holding
    their payment credentials? (drifts)
-8. Is it routine maintenance, fix, test, or tooling work? (neutral)
+9. Is it routine maintenance, fix, test, or tooling work? (neutral)
