@@ -8,7 +8,12 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
-import { decideLocally, postUnix, runTachoHook } from "./hook-client";
+import {
+  decideLocally,
+  harnessFromArgv,
+  postUnix,
+  runTachoHook,
+} from "./hook-client";
 import { hookInputSchema } from "./hooks";
 
 const PRE = JSON.stringify({
@@ -117,6 +122,79 @@ describe("runTachoHook", () => {
     });
     expect(noSocket.path).toBe("local");
     expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it("reads --harness off argv and defaults to Claude Code for anything else", () => {
+    expect(harnessFromArgv(["--enrollment", "e", "--harness", "codex"])).toBe(
+      "codex",
+    );
+    expect(harnessFromArgv(["--harness", "claude-code"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness", "cursor"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness"])).toBe("claude-code");
+    expect(harnessFromArgv([])).toBe("claude-code");
+  });
+
+  it("posts over loopback TCP on Windows and labels the envelope and the spool with the harness", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const host = testHostFile(signer, signer.sign(unsignedBundle()));
+    writeHostFile(paths.hostFile, host);
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const daemon = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      platform: "win32",
+      harness: "codex",
+      post: async (options) => {
+        seen.push(options);
+        return { status: 200, body: "{}" };
+      },
+    });
+    expect(daemon.path).toBe("daemon");
+    // No Unix socket on Windows: the hook dials 127.0.0.1:<port> instead.
+    expect(seen[0]?.loopbackPort).toBe(host.port);
+    expect(seen[0]?.socketPath).toBeUndefined();
+    expect(JSON.parse(seen[0]?.body ?? "{}")).toMatchObject({
+      harness: "codex",
+    });
+    // A POSIX host keeps the socket and never sets a port.
+    const posix = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      platform: "linux",
+      post: async (options) => {
+        seen.push(options);
+        return { status: 200, body: "{}" };
+      },
+    });
+    expect(posix.path).toBe("daemon");
+    expect(seen[1]?.socketPath).toBe(paths.socket);
+    expect(seen[1]?.loopbackPort).toBeUndefined();
+    expect(JSON.parse(seen[1]?.body ?? "{}")).toMatchObject({
+      harness: "claude-code",
+    });
+    // When the daemon is down the spooled event still says which harness
+    // ran the hook, so the replay labels the session the same way.
+    const down = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      platform: "win32",
+      harness: "codex",
+      post: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    expect(down.path).toBe("local");
+    const files = readdirSync(paths.spool);
+    expect(files).toHaveLength(1);
+    const spooled = JSON.parse(
+      readFileSync(join(paths.spool, files[0] as string), "utf8"),
+    ) as { harness: string; schema: string };
+    expect(spooled.schema).toBe("tacho.spool.v1");
+    expect(spooled.harness).toBe("codex");
   });
 
   it("decides every enforcement event locally per host status", () => {

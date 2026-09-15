@@ -164,6 +164,45 @@ describe("browserLogin", () => {
     expect(verifier.length).toBeGreaterThan(0);
   });
 
+  it("signup opens the sign-up page with the consent page as its returnTo, and the callback is unchanged", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "tok", orgSlug: "new", workspaceSlug: "ws" }),
+    } as Response);
+    const statusLines: string[] = [];
+    const loginPromise = browserLogin({
+      apiUrl: "https://api.test.oxagen.sh",
+      appUrl: "https://app.test.oxagen.sh",
+      signup: true,
+      onStatus: (line) => statusLines.push(line),
+    });
+    await waitFor(() => expect(mockOpenBrowser).toHaveBeenCalledOnce());
+    const opened = new URL(mockOpenBrowser.mock.calls[0]![0]);
+    expect(opened.origin + opened.pathname).toBe(
+      "https://app.test.oxagen.sh/signup",
+    );
+    // returnTo is the same authorize path the plain flow opens directly,
+    // PKCE parameters included, so the account lands on the consent page.
+    const returnTo = opened.searchParams.get("returnTo") ?? "";
+    expect(returnTo.startsWith("/cli/authorize?")).toBe(true);
+    const authorize = new URL(returnTo, "https://app.test.oxagen.sh");
+    expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(authorize.searchParams.get("state")).toBeTruthy();
+    expect(statusLines[0]).toContain("create your Oxagen account");
+    const port = portFromAuthorizeUrl(authorize.toString());
+    const state = stateFromAuthorizeUrl(authorize.toString());
+    await sendCallback(
+      port,
+      new URLSearchParams({ code: "authcode_new", state }).toString(),
+    );
+    expect(await loginPromise).toEqual({
+      token: "tok",
+      orgSlug: "new",
+      workspaceSlug: "ws",
+    });
+  });
+
   it("rejects with 'state mismatch (possible CSRF)' when state does not match", async () => {
     const loginPromise = browserLogin({
       apiUrl: "https://api.test.oxagen.sh",

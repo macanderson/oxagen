@@ -2,8 +2,21 @@ import Link from "next/link";
 import { OxagenWordmark } from "@/components/ui/brand";
 import { LoginForm } from "@/components/auth/login-form";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { safeReturnTo, withReturnTo } from "@/lib/return-to";
 
-export default function LoginPage() {
+/**
+ * /login. `returnTo` (a same-origin path) is where the user goes once signed
+ * in — `/cli/authorize` sets it so the CLI and desktop browser login come
+ * back to the consent page; it rides through the second factor and the
+ * sign-up link so an operator with no account can still finish the flow.
+ */
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const returnTo = safeReturnTo(params["returnTo"] ?? params["next"]);
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
@@ -20,7 +33,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <OAuthButtons callbackURL="/" />
+        <OAuthButtons callbackURL={returnTo ?? "/"} />
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
@@ -31,12 +44,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <LoginForm mode="signin" />
+        <LoginForm mode="signin" returnTo={returnTo} />
 
         <p className="text-center text-sm text-muted-foreground">
           Don&rsquo;t have an account?{" "}
           <Link
-            href="/signup"
+            href={withReturnTo("/signup", returnTo)}
             className="font-medium text-primary hover:underline"
           >
             Sign up

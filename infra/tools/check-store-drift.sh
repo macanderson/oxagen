@@ -48,7 +48,13 @@
 # hands over what it read from Parameter Store:
 #
 #   CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE
-#   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD
+#   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE
+#
+# NEO4J_DATABASE is the one with a fallback (`neo4j`, the default in
+# `packages/config/src/env.ts`), so a caller who misses it gets a plausible
+# answer about the wrong database rather than an error. That is worth naming
+# here: a deployment whose graph is not on the default database, checked by
+# hand without this set, reads as drifted when it is current.
 #
 # Nothing here prints a credential. The failure messages name files and
 # constraints.
@@ -265,6 +271,25 @@ ch_url_readonly() {
   esac
 }
 
+# ch_curl_config USER PASSWORD
+#
+# Renders the curl config that carries the ClickHouse credential. curl has ONE
+# credential option, `user`, and its value is "user:password" — there is no
+# `password` option. The first version of this file wrote one anyway, and the
+# two curls in play answered it differently, neither of them by authenticating:
+# Ubuntu's warned, prompted "Enter host password for user 'oxagen'", read
+# nothing from the non-tty and sent the user with no password, which ClickHouse
+# refused as AUTHENTICATION_FAILED (#2987 — three red runs read as a rotated
+# credential that was never rotated); macOS's curl refuses the file outright.
+# The value is double-quoted, so a backslash or a quote in the password is
+# escaped the way curl's config parser unescapes it.
+ch_curl_config() {
+  local user=$1 password=$2
+  user=${user//\\/\\\\}; user=${user//\"/\\\"}
+  password=${password//\\/\\\\}; password=${password//\"/\\\"}
+  printf 'user = "%s:%s"\n' "$user" "$password"
+}
+
 # ---------------------------------------------------------------------------
 # Sourcing stops here. Below this line the script talks to two databases.
 # ---------------------------------------------------------------------------
@@ -301,8 +326,7 @@ status=0
 # state this check exists for read as "could not be queried".
 ch_query() {
   local body=$1 out=$2 err=$3
-  printf 'user = "%s"\npassword = "%s"\n' \
-    "$CLICKHOUSE_USERNAME" "$CLICKHOUSE_PASSWORD" |
+  ch_curl_config "$CLICKHOUSE_USERNAME" "$CLICKHOUSE_PASSWORD" |
     curl -sS --fail-with-body --max-time 30 --config - \
       "$(ch_url_readonly "$CLICKHOUSE_URL")" --data-binary "$body" > "$out" 2>"$err"
 }
@@ -382,8 +406,19 @@ neo4j_declared_names "$REPO/packages/ontology/src/schema.cypher" \
 # single statement this check could never succeed at all, and the job would have
 # been permanently red on "could not be read" — the state that teaches people to
 # stop reading it.
+#
+# `-d` names the database, because SHOW CONSTRAINTS and SHOW INDEXES are scoped
+# to one and cypher-shell otherwise reads whichever the connection defaults to.
+# The platform does not use that default by construction: every ontology query
+# runs against NEO4J_DATABASE (`packages/ontology/src/client.ts`, `session()`),
+# and `store-migrate.yml` reads that parameter before applying schema.cypher.
+# Without this the check asks a different database than the one the applier
+# writes to, and answers "0 present" about a database nothing migrates — a
+# false report of an empty production graph, which is the one direction a drift
+# check must never be wrong in.
 neo_cypher() {
-  cypher-shell -a "$NEO4J_URI" --format plain --non-interactive "$1"
+  cypher-shell -a "$NEO4J_URI" -d "${NEO4J_DATABASE:-neo4j}" \
+    --format plain --non-interactive "$1"
 }
 
 if ! command -v cypher-shell >/dev/null 2>&1; then

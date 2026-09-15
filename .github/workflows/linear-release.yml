@@ -26,6 +26,9 @@ concurrency:
 
 jobs:
   linear-release:
+    # `desktop-latest` is the rolling release desktop.yml keeps the updater
+    # feed (latest.json) on; it carries no commits of its own.
+    if: github.event.release.tag_name != 'desktop-latest'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

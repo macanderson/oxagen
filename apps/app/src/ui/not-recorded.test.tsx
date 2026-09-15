@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import { UNRECORDED, type UnrecordedKey } from "@/data/unrecorded";
 import { NotRecorded } from "./not-recorded";
-import { renderWithIntl } from "./testing/render-with-intl";
 
 afterEach(() => {
   cleanup();
 });
+
+function renderWithIntl(element: ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
+      {element}
+    </NextIntlClientProvider>,
+  );
+}
 
 const keys = Object.keys(UNRECORDED) as UnrecordedKey[];
 

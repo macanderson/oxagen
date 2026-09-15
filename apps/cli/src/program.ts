@@ -693,6 +693,10 @@ export function buildProgram(): Command {
       "Replace the harness list (default: keep the current one)",
     )
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--default",
+      "Also make the new org and workspace the CLI default (config.json)",
+    )
     .action(
       async (opts: {
         token?: string;
@@ -700,6 +704,7 @@ export function buildProgram(): Command {
         workspace?: string;
         harness?: string;
         reason?: string;
+        default?: boolean;
       }) => {
         const { handleTachoReassign } = await import("./commands/tacho.js");
         if (!(await handleTachoReassign(opts))) process.exitCode = 1;
@@ -768,15 +773,30 @@ export function buildProgram(): Command {
       "--token <token>",
       "Platform API token — skips browser login (CI/headless)",
     )
-    .option("--org <slug>", "Organization slug (required with --token)")
-    .option("--workspace <slug>", "Workspace slug (required with --token)")
+    .option(
+      "--org <slug>",
+      "Organization slug; with a saved session and no --token, rescopes the default without a browser",
+    )
+    .option(
+      "--workspace <slug>",
+      "Workspace slug; with a saved session and no --token, rescopes the default without a browser",
+    )
+    .option(
+      "--browser",
+      "Open the browser even without a TTY, and even when a session is saved (what the desktop app runs)",
+    )
     .option("--no-browser", "Prompt for token instead of opening the browser")
+    .option(
+      "--signup",
+      "Create an Oxagen account first: opens the sign-up page, then the same consent page (implies --browser)",
+    )
     .action(
       async (opts: {
         token?: string;
         org?: string;
         workspace?: string;
         browser?: boolean;
+        signup?: boolean;
       }) => {
         const { handleLogin } = await import("./commands/auth.js");
         await handleLogin(opts);

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getTranslations } from "next-intl/server";
@@ -19,7 +18,6 @@ import {
   AuthSkeleton,
 } from "@/ui/auth-shell";
 import { OutcomePanel } from "@/ui/form-feedback";
-import { buttonSecondary } from "@/ui/control-styles";
 
 // The authorize leg of the CLI's loopback OAuth + PKCE login (RFC 8252). A bad
 // redirect_uri is never followed, not even to report an error: it renders here.
@@ -64,25 +62,12 @@ async function CliAuthorize({
   const user = await getAuthUser();
   if (!user) redirect(withNext("/login", authorizeReturnPath(params)));
   const orgs = await loadCliScopes(user.id);
-  if (orgs.length === 0) {
-    return (
-      <AuthColumn>
-        <AuthHeading kicker={t("title")} title={t("noScopeTitle")} />
-        <OutcomePanel
-          tone="neutral"
-          testId="cli-no-scope"
-          title={t("noScopeTitle")}
-          actions={
-            <Link href="/new-organization" className={buttonSecondary}>
-              {t("createOrganization")}
-            </Link>
-          }
-        >
-          {t("noScopeBody")}
-        </OutcomePanel>
-      </AuthColumn>
-    );
-  }
+  // A brand-new account (`oxagen auth login --signup`, the desktop installer's
+  // "Create an account", or a social sign-up that landed here) has nothing to
+  // authorize yet: create the organization and its first workspace, then come
+  // back to this consent page with the PKCE parameters intact.
+  if (orgs.length === 0)
+    redirect(withNext("/new-organization", authorizeReturnPath(params)));
   return (
     <AuthColumn>
       <AuthHeading

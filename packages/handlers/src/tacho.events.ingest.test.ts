@@ -7,6 +7,7 @@ import {
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
+import { schema } from "@oxagen/database";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -59,10 +60,17 @@ const CONTEXT: CapabilityContext = {
 };
 const SESSION = sessionUuid(HOST_PUBLIC, "sess-1");
 
+type AgentLabel = Pick<TachoEvent["agent"], "runtime" | "harness">;
+const CLAUDE_CODE: AgentLabel = {
+  runtime: "claude-code",
+  harness: "claude-code",
+};
+
 function unsealed(
   kind: UnsealedTachoEvent["kind"],
   body: Record<string, unknown>,
   source: TachoEvent["source"] = "hook",
+  label: AgentLabel = CLAUDE_CODE,
 ): UnsealedTachoEvent {
   return {
     v: "tacho/1.0",
@@ -76,8 +84,7 @@ function unsealed(
     agent: {
       agent_key: "acme.core.cc-laptop",
       fleet_id: "wrk_1",
-      runtime: "claude-code",
-      harness: "claude-code",
+      ...label,
       wrapper_version: "2.1.1",
       host_enrollment_id: HOST_PUBLIC,
     },
@@ -411,6 +418,48 @@ describe("ingest_tacho_events", () => {
       hooksOk: true,
       spoolDepth: 3,
     });
+  });
+
+  it("files a Codex session under runtime codex, not custom", async () => {
+    const db = fakeDb();
+    wire(db);
+    const codex: AgentLabel = { runtime: "codex", harness: "codex" };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup", tools_available: ["shell"] },
+        "hook",
+        codex,
+      ),
+      unsealed(
+        "agent_stop",
+        {
+          session_outcome: "completed",
+          session_end_reason: "other",
+          total_cost_usd_micros: 0,
+          duration_ms: 10,
+        },
+        "hook",
+        codex,
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    const output = await tachoEventsIngestHandler(
+      { schema: "tacho.batch.v1", host_enrollment_id: HOST_PUBLIC, events },
+      CONTEXT,
+    );
+    expect(output.accepted).toBe(2);
+    expect(output.chain_breaks).toEqual([]);
+    const row = db.sessions.get(SESSION);
+    expect(row).toMatchObject({ runtime: "codex", harness: "codex" });
+    // The row's runtime is a value the database CHECK admits; the fleet page
+    // can filter on it without reading the free-text harness.
+    expect(schema.TACHO_RUNTIMES).toContain(row?.["runtime"]);
   });
 
   it("records a chain break without rejecting the batch", async () => {

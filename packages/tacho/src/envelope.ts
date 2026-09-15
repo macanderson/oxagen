@@ -32,13 +32,23 @@ const bool = z.boolean();
 const ts = z.string().refine(isProtocolTimestamp, "protocol timestamp");
 const json = z.unknown();
 
+/**
+ * The runtimes a session may claim. The control plane CHECKs
+ * `tacho.sessions.runtime` to the same list (`TACHO_RUNTIMES` in
+ * `packages/database/src/schema/tacho.ts`); this package is a leaf and cannot
+ * import it, so `packages/handlers/src/tacho.runtimes.test.ts` holds the two
+ * in step. Adding a value here without the paired Atlas migration passes the
+ * envelope schema and dies on the database constraint at ingest.
+ */
 export const TACHO_RUNTIMES = [
   "claude-code",
   "claude-agent-sdk",
   "custom",
   "stella",
   "proxy",
+  "codex",
 ] as const;
+export type TachoRuntime = (typeof TACHO_RUNTIMES)[number];
 export const TACHO_FIDELITIES = ["sdk", "ambient", "proxy"] as const;
 export const TACHO_SOURCES = [
   "hook",

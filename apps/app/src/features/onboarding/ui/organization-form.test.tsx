@@ -103,4 +103,27 @@ describe("OrganizationForm", () => {
       expect(router.push).toHaveBeenCalledWith("/acme-robotics/core-platform");
     });
   });
+
+  it("continues to the requested destination instead of the Fleet page", async () => {
+    createOrganizationAction.mockResolvedValueOnce({
+      ok: true,
+      to: "/acme-robotics/core-platform",
+    });
+    renderWithIntl(
+      <OrganizationForm
+        initialName="Acme Robotics"
+        destination="/cli/authorize?state=abc"
+      />,
+    );
+    await userEvent.type(
+      screen.getByLabelText("Workspace name"),
+      "core-platform",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create organization" }),
+    );
+    await waitFor(() => {
+      expect(router.push).toHaveBeenCalledWith("/cli/authorize?state=abc");
+    });
+  });
 });

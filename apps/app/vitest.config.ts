@@ -35,7 +35,6 @@ export default defineConfig({
       exclude: [
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
-        "src/**/*.stories.tsx",
         "src/**/*.d.ts",
         "src/test/**",
         // Route files are exercised by the Playwright suite against a running

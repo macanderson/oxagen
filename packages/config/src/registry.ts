@@ -682,7 +682,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── Stripe ──────────────────────────────────────────────────────────────────
   STRIPE_SECRET_KEY: {
     group: "Stripe",
-    description: "Stripe secret key (sk_live in prod, sk_test in preview/dev).",
+    description:
+      "Stripe secret key. Every environment, production included, binds to " +
+      "the shared Stripe sandbox (sk_test_) until the maintainer cuts " +
+      "production over to live keys; see docs/ops/stripe-sandbox-mode.md.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
@@ -693,7 +696,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
     description:
-      "Stripe publishable key (pk_live in prod, pk_test in preview/dev). " +
+      "Stripe publishable key. Every environment, production included, is " +
+      "the sandbox's pk_test_ key until the production cutover. " +
       "Provisioning-only: no service reads it. The browser reads the " +
       "NEXT_PUBLIC_ prefixed name, and env-manager pulls this one from the " +
       "secret store so the two stay in step.",
@@ -706,7 +710,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   STRIPE_WEBHOOK_SECRET: {
     group: "Stripe",
-    description: "Stripe webhook signing secret (whsec_).",
+    description:
+      "Stripe webhook signing secret (whsec_) of the endpoint registered on " +
+      "the shared sandbox for this environment's API URL; production's is " +
+      "the sandbox endpoint for https://api.oxagen.sh/webhooks/stripe until " +
+      "the cutover.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
@@ -716,7 +724,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
-    description: "Browser-exposed Stripe publishable key for Stripe.js init.",
+    description:
+      "Browser-exposed Stripe publishable key for Stripe.js init. Inlined " +
+      "into the app bundle at build, so a rotation needs a rebuild. Sandbox " +
+      "pk_test_ in every environment until the production cutover.",
     secret: false,
     clientExposed: true,
     services: ["app"],
