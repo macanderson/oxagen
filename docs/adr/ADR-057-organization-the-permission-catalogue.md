@@ -100,12 +100,18 @@ membership roles humans hold are the seeded system set and
    path to a custom one. A role with an active assignment is not deleted
    (`conflict` / `role_in_use`); the holders are reassigned first.
 
-6. **A role name is unique per organization and scope kind.** The seeded
-   set carries an org `Owner` and a workspace `Owner`, so the unique index
-   is `(org_id, scope_kind, lower(name))`
-   (`roles_org_scope_name_uq`, migration `20260915140000`), not
-   `(org_id, name)` as #2158 proposed. `create_role` reads its violation as
-   `conflict` / `role_exists`.
+6. **A role name is unique per organization and scope kind, and a custom
+   role name is unique per organization.** The seeded set carries an org
+   `Owner` and a workspace `Owner`, so the index over every role is
+   `(org_id, scope_kind, lower(name))` (`roles_org_scope_name_uq`, migration
+   `20260915140000`), not `(org_id, name)` as #2158 proposed. Custom roles
+   add `(org_id, lower(name)) WHERE NOT is_system_default`
+   (`roles_org_custom_name_uq`, migration `20260915141000`):
+   `assign_agent_role`, `revoke_agent_role` and `get_agent_role` take a name
+   with no scope, so a custom org role and a custom workspace role of one
+   name would bind whichever row the lookup returned. `create_role`'s
+   lower-case name pattern keeps a custom name from equalling a seeded one.
+   `create_role` reads either violation as `conflict` / `role_exists`.
 
 7. **Role writes are recorded.** `iam.role_created`, `iam.role_grants_set`
    and `iam.role_deleted` join the security-event taxonomy (migration

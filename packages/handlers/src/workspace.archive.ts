@@ -1,6 +1,7 @@
 // `archive_workspace`: freeze a workspace (issue #2964).
 //
-//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29).
+//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the
+//      signed-in user or the creator of the API key (resolveActingUserId).
 //   2. The workspace is resolved by public id in the org (`not_found`); one
 //      already archived is refused (`conflict`, `already_archived`).
 //   3. `archived_at` and `archived_by_user_id` are written together. From
@@ -11,15 +12,20 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 export const workspaceArchiveHandler: CapabilityHandler<
   typeof workspaceArchive
 > = async (input, ctx) => {
-  await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
-  const userId = ctx.userId as string;
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const userId = actingUserId as string;
 
   const archived = await withTenantDb(async (tx) => {
     const [workspace] = await tx

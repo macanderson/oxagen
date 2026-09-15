@@ -6,7 +6,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertCustomRole, roleNotFound } from "./iam.role.grants.set";
 import { logger } from "./logger";
 import { withRoleStore, type RoleStore } from "./lib/iam-roles";
@@ -15,8 +15,13 @@ export function createDeleteRoleHandler(deps: {
   withStore: <T>(fn: (store: RoleStore) => Promise<T>) => Promise<T>;
 }): CapabilityHandler<typeof iamRoleDelete> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
-    const userId = ctx.userId as string;
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
+    // assertOrgRole refused a call with no acting user.
+    const userId = actingUserId as string;
 
     const deleted = await deps.withStore(async (store) => {
       const role = await store.roleByPublicId(ctx.orgId, input.roleId);

@@ -9,6 +9,8 @@ const { tenant, emitted } = vi.hoisted(() => ({
   tenant: {
     principalId: "prn_1" as string | null,
     roleName: "Owner" as string | null,
+    /** The creator an API key resolves to, or none (a deleted or unknown key). */
+    keyCreator: "00000000-0000-0000-0000-00000000000c" as string | null,
   },
   emitted: [] as Array<{ eventType: string; capability: string | null }>,
 }));
@@ -16,6 +18,8 @@ const { tenant, emitted } = vi.hoisted(() => ({
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === real.schema.apiKeys)
+      return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)
@@ -78,6 +82,14 @@ const ctx: CapabilityContext = {
   messageId: null,
 };
 
+/** An MCP call: an API key, no signed-in user. The key's creator is USER. */
+const keyCtx: CapabilityContext = {
+  ...ctx,
+  userId: null,
+  apiKeyId: "00000000-0000-0000-0000-00000000000d",
+  surface: "mcp",
+};
+
 /** An in-memory role store: roles, grants, assignment counts, and the granter's own allow set. */
 function fakeStore() {
   const roles = new Map<string, RoleRecord>();
@@ -116,8 +128,11 @@ function fakeStore() {
       return role ?? null;
     },
     async insertRole(row) {
+      // roles_org_scope_name_uq, and roles_org_custom_name_uq for custom roles.
       const taken = [...roles.values()].some(
-        (r) => r.name === row.name && r.scopeKind === row.scopeKind,
+        (r) =>
+          r.name.toLowerCase() === row.name.toLowerCase() &&
+          (r.scopeKind === row.scopeKind || !r.isSystemDefault),
       );
       if (taken) {
         throw Object.assign(new Error("duplicate key"), {
@@ -145,9 +160,6 @@ function fakeStore() {
         roleId,
         capabilityIds.map((capability) => ({ capability, effect: "allow" })),
       );
-    },
-    async grantsOf(_orgId, roleId) {
-      return grants.get(roleId) ?? [];
     },
     async activeAssignmentCount(_orgId, roleId) {
       return holders.get(roleId) ?? 0;
@@ -203,6 +215,7 @@ const createInput = (
 beforeEach(() => {
   tenant.principalId = "prn_1";
   tenant.roleName = "Owner";
+  tenant.keyCreator = USER;
   emitted.length = 0;
   enforcement = { tier: "enterprise", enforced: true };
   fake = fakeStore();
@@ -292,9 +305,56 @@ describe("create_role", () => {
       code: "conflict",
       reason: "role_exists",
     });
-    // The same name in the other scope kind is a different role.
-    const out = await handler()(createInput({ scopeKind: "org" }), ctx);
-    expect(out.role.scopeKind).toBe("org");
+  });
+
+  it("refuses a custom role whose name another custom role holds in the other scope kind, so a name lookup finds one row (negative)", async () => {
+    await handler()(createInput({ scopeKind: "workspace" }), ctx);
+    await expect(
+      refusal(handler()(createInput({ scopeKind: "org" }), ctx)),
+    ).resolves.toEqual({ code: "conflict", reason: "role_exists" });
+    expect([...fake.roles.values()].map((r) => r.scopeKind)).toEqual([
+      "workspace",
+    ]);
+  });
+
+  it("lets a custom role share a seeded role's name in the other scope kind only through case, which the name lookup tells apart", async () => {
+    fake.seed({
+      id: "owner",
+      name: "Owner",
+      scopeKind: "org",
+      isSystemDefault: true,
+    });
+    await expect(
+      refusal(handler()(createInput({ name: "owner", scopeKind: "org" }), ctx)),
+    ).resolves.toEqual({ code: "conflict", reason: "role_exists" });
+    const out = await handler()(
+      createInput({ name: "owner", scopeKind: "workspace" }),
+      ctx,
+    );
+    expect(out.role.name).toBe("owner");
+  });
+
+  it("acts as the API key's creator on an MCP call: an Owner creator creates the role as that user", async () => {
+    const out = await handler()(createInput(), keyCtx);
+    expect(out.role.createdBy).toBe("Priya Natarajan");
+    expect([...fake.roles.values()][0]?.createdByUserId).toBe(USER);
+  });
+
+  it("refuses an MCP call whose key creator is an org Member (negative)", async () => {
+    tenant.roleName = "Member";
+    await expect(refusal(handler()(createInput(), keyCtx))).resolves.toEqual({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(fake.roles.size).toBe(0);
+  });
+
+  it("refuses an MCP call whose key resolves to no creator (negative)", async () => {
+    tenant.keyCreator = null;
+    await expect(refusal(handler()(createInput(), keyCtx))).resolves.toEqual({
+      code: "forbidden",
+      reason: "no_principal",
+    });
   });
 });
 
@@ -355,6 +415,18 @@ describe("set_role_grants", () => {
     ]);
   });
 
+  it("acts as the API key's creator on an MCP call, and refuses a Member creator (negative)", async () => {
+    const out = await handler()(input(["run.control"]), keyCtx);
+    expect(out.role.permissions).toEqual(["run.control"]);
+    tenant.roleName = "Member";
+    await expect(
+      refusal(handler()(input(["run.read"]), keyCtx)),
+    ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+    expect(fake.grants.get("custom")).toEqual([
+      { capability: "dispatch_command", effect: "allow" },
+    ]);
+  });
+
   it("refuses an org Member and an unenforced tier (negative)", async () => {
     tenant.roleName = "Member";
     await expect(refusal(handler()(input(["run.read"]), ctx))).resolves.toEqual(
@@ -410,6 +482,20 @@ describe("delete_role", () => {
       reason: "role_not_found",
     });
     expect(fake.roles.has("system")).toBe(true);
+  });
+
+  it("refuses an MCP call whose key creator is an org Member, and deletes as an Owner creator", async () => {
+    tenant.roleName = "Member";
+    await expect(
+      refusal(handler()(input("rol_custom"), keyCtx)),
+    ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+    expect(fake.roles.has("custom")).toBe(true);
+    tenant.roleName = "Owner";
+    await expect(handler()(input("rol_custom"), keyCtx)).resolves.toEqual({
+      id: "rol_custom",
+      name: "agent.release",
+    });
+    expect(fake.roles.has("custom")).toBe(false);
   });
 
   it("refuses an org Viewer before reading the role (negative)", async () => {

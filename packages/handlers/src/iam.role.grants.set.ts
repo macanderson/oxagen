@@ -8,7 +8,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
 import { capabilitiesOf } from "@oxagen/oxagen/iam";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
   assertRolesEnforced,
   assertWithinCeiling,
@@ -34,8 +34,13 @@ export function createSetRoleGrantsHandler(
   deps: RoleEditorDeps,
 ): CapabilityHandler<typeof iamRoleGrantsSet> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
-    const userId = ctx.userId as string;
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
+    // assertOrgRole refused a call with no acting user.
+    const userId = actingUserId as string;
     assertRolesEnforced(await deps.enforcement(ctx));
     const capabilityIds = capabilitiesOf(input.permissions);
 

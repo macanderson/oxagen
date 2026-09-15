@@ -5,6 +5,8 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
   tenant: {
     principalId: "prn_1" as string | null,
     roleName: "Owner" as string | null,
+    /** The creator an API key resolves to, or none. */
+    keyCreator: "00000000-0000-0000-0000-00000000000e" as string | null,
   },
   db: {
     /** The workspace row the select answers, or none. */
@@ -17,6 +19,8 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === real.schema.apiKeys)
+      return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)
@@ -95,6 +99,7 @@ const refusal = async (p: Promise<unknown>) => {
 beforeEach(() => {
   tenant.principalId = "prn_1";
   tenant.roleName = "Owner";
+  tenant.keyCreator = "00000000-0000-0000-0000-00000000000e";
   db.workspace = { ...ACTIVE };
   db.updates.length = 0;
   emitted.length = 0;
@@ -144,6 +149,40 @@ describe("archive_workspace", () => {
     await expect(
       refusal(run("wrk_core", { ...ctx, userId: null })),
     ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+  });
+
+  describe("an MCP call: an API key and no signed-in user", () => {
+    const keyCtx: CapabilityContext = {
+      ...ctx,
+      userId: null,
+      apiKeyId: "00000000-0000-0000-0000-00000000000d",
+      surface: "mcp",
+    };
+
+    it("archives as the key's creator when the creator is an org Owner", async () => {
+      await expect(run("wrk_core", keyCtx)).resolves.toMatchObject({
+        id: "wrk_core",
+      });
+      expect(db.updates[0]?.archivedByUserId).toBe(tenant.keyCreator);
+      expect(emitted[0]?.actorUserId).toBe(tenant.keyCreator);
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      tenant.roleName = "Member";
+      await expect(refusal(run("wrk_core", keyCtx))).resolves.toEqual({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+      expect(db.updates).toHaveLength(0);
+    });
+
+    it("refuses a key that resolves to no creator (negative)", async () => {
+      tenant.keyCreator = null;
+      await expect(refusal(run("wrk_core", keyCtx))).resolves.toEqual({
+        code: "forbidden",
+        reason: "no_principal",
+      });
+    });
   });
 
   it("refuses a workspace outside the org with not_found (negative)", async () => {

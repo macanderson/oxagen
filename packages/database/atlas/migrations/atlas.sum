@@ -1,4 +1,4 @@
-h1:YLia8nGc/4Aa6xva7/CLllpISqaHz7Xm4K9XbdtTDBU=
+h1:a1qNjg9hFfawgu+auI8D6tnsYthEaJwnqxfioO9MfoM=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -115,3 +115,4 @@ h1:YLia8nGc/4Aa6xva7/CLllpISqaHz7Xm4K9XbdtTDBU=
 20260915120000_drop_governed_action_counters.sql h1:VjFCoymDI2MM4KNGsb9wqGKgeTrLQGFDkeqk6/DjHxY=
 20260915140000_roles_uniqueness_and_workspace_archive.sql h1:t/oMnCIPr0pYIkqTOllO/+XNMi4PSvexF8xEt/wAjuY=
 20260915140500_organization_roles_and_workspace_archive_security_events.sql h1:PWxxYpVJpRnLwVAlfrylqgPezr5Npmbhihk8JPI6PR0=
+20260915141000_roles_custom_name_uq.sql h1:OlMN/W5D63Wu2IDir17+Ws3TloGBMEtkr1EEB5ajcSU=

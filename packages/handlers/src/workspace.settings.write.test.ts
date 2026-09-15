@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
       principalId: "prn_1" as string | null,
       roleName: "Owner" as string | null,
       workspaceRoleName: null as string | null,
+      /** The creator an API key resolves to, or none. */
+      keyCreator: "u_1" as string | null,
     },
   };
 });
@@ -36,6 +38,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // assignment carries the id. The handler's own reads go through
   // query.workspaces.findFirst.
   const rowsFor = (table: unknown, where: SQL | null): unknown[] => {
+    if (table === real.schema.apiKeys)
+      return mocks.tenant.keyCreator
+        ? [{ createdByUserId: mocks.tenant.keyCreator }]
+        : [];
     if (table === real.schema.principals)
       return mocks.tenant.principalId ? [{ id: mocks.tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments) {
@@ -105,6 +111,7 @@ describe("workspace.settings.write handler", () => {
     mocks.tenant.principalId = "prn_1";
     mocks.tenant.roleName = "Owner";
     mocks.tenant.workspaceRoleName = null;
+    mocks.tenant.keyCreator = "u_1";
   });
 
   // ── Role gate (INV-29) ───────────────────────────────────────────────────
@@ -159,6 +166,41 @@ describe("workspace.settings.write handler", () => {
         workspaceSettingsWriteHandler({ name: "X" }, { ...CTX, userId: null }),
       ),
     ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+  });
+
+  describe("an MCP call: an API key and no signed-in user", () => {
+    const keyCtx = {
+      ...CTX,
+      userId: null,
+      apiKeyId: "aky_1",
+      surface: "mcp" as const,
+    };
+
+    it("edits as the key's creator when the creator is an org Owner", async () => {
+      mocks.findFirst
+        .mockResolvedValueOnce(EXISTING)
+        .mockResolvedValueOnce({ ...EXISTING, name: "Renamed" });
+      const out = await workspaceSettingsWriteHandler(
+        { name: "Renamed" },
+        keyCtx,
+      );
+      expect(out.name).toBe("Renamed");
+    });
+
+    it("refuses a key whose creator is an org Member with no workspace role (negative)", async () => {
+      mocks.tenant.roleName = "Member";
+      await expect(
+        refusal(workspaceSettingsWriteHandler({ name: "X" }, keyCtx)),
+      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key that resolves to no creator (negative)", async () => {
+      mocks.tenant.keyCreator = null;
+      await expect(
+        refusal(workspaceSettingsWriteHandler({ name: "X" }, keyCtx)),
+      ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+    });
   });
 
   // ── Target workspace ─────────────────────────────────────────────────────

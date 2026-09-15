@@ -1,6 +1,7 @@
 // `create_role`: a custom role from the permission catalogue (ADR-057).
 //
-//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29).
+//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the
+//      signed-in user or the creator of the API key (resolveActingUserId).
 //   2. Tier gate — the kernel runs the IAM resolver only for the enterprise
 //      tier (§1.5); for any other tier the role would never be read, so the
 //      write is refused with `enterprise_tier_required` rather than stored as
@@ -9,14 +10,15 @@
 //      resolved for the granter; one they do not hold refuses the whole set
 //      with the capabilities named.
 //   4. The role row and one `allow` grant per capability, in one transaction.
-//      A name already used in the same scope kind is the unique index's
-//      23505, read as `conflict` / `role_exists`.
+//      A name already used in the same scope kind, or by another custom
+//      role of the org in either scope kind, is a unique index's 23505, read
+//      as `conflict` / `role_exists`.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
 import { capabilitiesOf } from "@oxagen/oxagen/iam";
 import { isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { findDelegationCeilingViolations } from "@oxagen/iam";
 import { logger } from "./logger";
 import { toRoleRow, withRoleStore, type RoleStore } from "./lib/iam-roles";
@@ -66,9 +68,13 @@ export function createRoleHandler(
   deps: RoleEditorDeps,
 ): CapabilityHandler<typeof iamRoleCreate> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"] });
-    // assertOrgRole refused a context with no user.
-    const userId = ctx.userId as string;
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
+    // assertOrgRole refused a call with no acting user.
+    const userId = actingUserId as string;
     assertRolesEnforced(await deps.enforcement(ctx));
     const capabilityIds = capabilitiesOf(input.permissions);
 
@@ -93,7 +99,7 @@ export function createRoleHandler(
           throw new HandlerError({
             code: "conflict",
             reason: "role_exists",
-            message: `A ${input.scopeKind} role named ${input.name} already exists`,
+            message: `A role named ${input.name} already exists in this organization`,
           });
         }
         throw err;

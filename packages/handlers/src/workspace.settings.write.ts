@@ -2,7 +2,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { mapWorkspaceSettingsRow } from "./workspace.settings.read";
 import { logger } from "./logger";
@@ -21,7 +21,8 @@ const workspaceNotFound = () =>
 // are all real columns, each set independently — so a concurrent
 // prompt.settings.write can no longer clobber description (audit §1.7).
 //
-//   1. Role gate — assertOrgRole (INV-29). With no `workspaceId` the target is
+//   1. Role gate — assertOrgRole (INV-29), for the signed-in user or the
+//      creator of the API key (resolveActingUserId). With no `workspaceId` the target is
 //      the scoped workspace: org Owner or Admin, or that workspace's Owner or
 //      Admin (the contract's defaultRoles). With a `workspaceId` the gate
 //      accepts org Owner or Admin only, because `assertOrgRole` reads the
@@ -34,7 +35,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
   typeof workspaceSettingsWrite
 > = async (input, ctx) => {
   await assertOrgRole(
-    ctx,
+    { ...ctx, userId: await resolveActingUserId(ctx) },
     input.workspaceId === undefined
       ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
       : { org: ["Owner", "Admin"] },

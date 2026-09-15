@@ -53,7 +53,6 @@ export interface RoleStore {
     capabilityIds: readonly string[],
     actorUserId: string,
   ): Promise<void>;
-  grantsOf(orgId: string, roleId: string): Promise<RoleGrantRecord[]>;
   /** Non-deleted, unexpired assignments holding the role. */
   activeAssignmentCount(orgId: string, roleId: string): Promise<number>;
   /** The role's grants and the role. */
@@ -187,24 +186,6 @@ export function postgresRoleStore(tx: Tx): RoleStore {
         .update(schema.roles)
         .set({ updatedAt: new Date(), updatedByUserId: actorUserId })
         .where(and(eq(schema.roles.orgId, orgId), eq(schema.roles.id, roleId)));
-    },
-    async grantsOf(orgId, roleId) {
-      const rows = await tx
-        .select({
-          capability: schema.roleGrants.capabilityId,
-          effect: schema.roleGrants.effect,
-        })
-        .from(schema.roleGrants)
-        .where(
-          and(
-            eq(schema.roleGrants.orgId, orgId),
-            eq(schema.roleGrants.roleId, roleId),
-          ),
-        );
-      return rows.map((r) => ({
-        capability: r.capability,
-        effect: r.effect as RoleGrantRecord["effect"],
-      }));
     },
     async activeAssignmentCount(orgId, roleId) {
       const [row] = await tx

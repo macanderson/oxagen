@@ -1,11 +1,13 @@
 // The Organization › Roles and Workspaces backend against a real Postgres
 // (issue #2964, ADR-057): an enterprise org's Admin creates a custom role
 // over the catalogue, reads it back folded into permissions, is refused a
-// second role of the same name in the same scope kind by the unique index
-// and allowed one in the other, replaces the grants, is refused a delete
+// second custom role of the same name in either scope kind by the unique
+// indexes, replaces the grants, is refused a delete
 // while an agent holds the role and allowed after; creates a second
 // workspace, sees it in the list, archives it, sees it leave the list unless
-// asked, and is refused a second archive. Runs wherever DATABASE_URL points
+// asked, and is refused a second archive. The second workspace is created
+// through an API key the Admin created, the MCP path, which acts as the key's
+// creator. Runs wherever DATABASE_URL points
 // at a migrated database — CI's `test` job migrates Postgres with Atlas
 // before `turbo run build test:unit`; a local run without one is skipped, not
 // red. Every row it writes is removed in afterAll.
@@ -42,6 +44,7 @@ describe.skipIf(!enabled)(
     const userId = crypto.randomUUID();
     const agentPrincipalId = crypto.randomUUID();
     let adminRoleId = "";
+    let apiKeyId = "";
 
     const admin: CapabilityContext = {
       orgId,
@@ -138,6 +141,20 @@ describe.skipIf(!enabled)(
             effect: "allow",
           })),
         );
+        const [key] = await tx
+          .insert(schema.apiKeys)
+          .values({
+            orgId,
+            workspaceId,
+            keyPrefix: `ox_g${tag}`,
+            keyHash: `hash-${tag}`,
+            name: "g2964 walk",
+            scope: {},
+            createdByUserId: userId,
+          })
+          .returning({ id: schema.apiKeys.id });
+        if (!key) throw new Error("fixture insert returned no row");
+        apiKeyId = key.id;
       });
     });
 
@@ -158,6 +175,7 @@ describe.skipIf(!enabled)(
             .where(inArray(schema.roleGrants.roleId, roleIds));
         }
         await tx.delete(schema.roles).where(eq(schema.roles.orgId, orgId));
+        await tx.delete(schema.apiKeys).where(eq(schema.apiKeys.orgId, orgId));
         await tx
           .delete(schema.principals)
           .where(eq(schema.principals.orgId, orgId));
@@ -224,8 +242,8 @@ describe.skipIf(!enabled)(
         ["run.read", "run.control"],
       );
 
-      // Unique per (org, scope kind, name): the index refuses the same name in
-      // the same scope kind and admits it in the other.
+      // A custom role name is unique in the org: the indexes refuse the same
+      // name in the same scope kind and in the other one.
       await expect(
         refusal(
           scoped(() =>
@@ -240,17 +258,20 @@ describe.skipIf(!enabled)(
           ),
         ),
       ).resolves.toEqual({ code: "conflict", reason: "role_exists" });
-      const orgTwin = await scoped(() =>
-        iamRoleCreateHandler(
-          iamRoleCreate.input.parse({
-            name: "agent.release",
-            scopeKind: "org",
-            permissions: ["run.read"],
-          }),
-          admin,
+      await expect(
+        refusal(
+          scoped(() =>
+            iamRoleCreateHandler(
+              iamRoleCreate.input.parse({
+                name: "agent.release",
+                scopeKind: "org",
+                permissions: ["run.read"],
+              }),
+              admin,
+            ),
+          ),
         ),
-      );
-      expect(orgTwin.role.scopeKind).toBe("org");
+      ).resolves.toEqual({ code: "conflict", reason: "role_exists" });
 
       // The ceiling: the Admin holds run.read and run.control, so run.approve
       // is refused and run.control replaces the grants.
@@ -352,14 +373,27 @@ describe.skipIf(!enabled)(
       ).resolves.toEqual({ code: "conflict", reason: "system_role_readonly" });
     });
 
-    it("walks the workspaces: create, list, archive, list without and with archived rows, refuse a second archive", async () => {
+    it("walks the workspaces: create through an API key, list, archive, list without and with archived rows, refuse a second archive", async () => {
+      const keyCall: CapabilityContext = {
+        ...admin,
+        userId: null,
+        apiKeyId,
+        surface: "mcp",
+      };
       const created = await scoped(() =>
         workspaceCreateHandler(
           workspaceCreate.input.parse({ name: "Data platform", slug: "data" }),
-          admin,
+          keyCall,
         ),
       );
       expect(created.orgSlug).toBe(orgSlug);
+      const [createdRow] = await withSystemDb((tx) =>
+        tx
+          .select({ createdByUserId: schema.workspaces.createdByUserId })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.publicId, created.publicId)),
+      );
+      expect(createdRow?.createdByUserId).toBe(userId);
       await expect(
         refusal(
           scoped(() =>

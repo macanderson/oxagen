@@ -1,16 +1,17 @@
 // `create_workspace`: a workspace in the caller's org.
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin, or the Owner of the
-//      workspace the call is scoped to (the contract's defaultRoles; INV-29).
-//      The gate refuses a context with no user, so the bootstrap below
-//      always has a creator.
+//      workspace the call is scoped to (the contract's defaultRoles; INV-29),
+//      for the signed-in user or the creator of the API key
+//      (resolveActingUserId). The gate refuses a call with no acting user,
+//      so the bootstrap below always has a creator.
 //   2. The slug is unique in the org: the pre-check and the unique index's
 //      23505 both read as `conflict` / `slug_taken`.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
@@ -25,11 +26,12 @@ const slugTaken = (slug: string) =>
 export const workspaceCreateHandler: CapabilityHandler<
   typeof workspaceCreate
 > = async (input, ctx) => {
-  await assertOrgRole(ctx, {
-    org: ["Owner", "Admin"],
-    workspace: ["Owner"],
-  });
-  const userId = ctx.userId as string;
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+  const userId = actingUserId as string;
 
   const tenant = await withTenantDb((tx) =>
     tx.query.organizations.findFirst({

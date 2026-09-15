@@ -13,20 +13,20 @@ within the tenant and forms the second segment of every URL
 
 ## Input
 
-| Field  | Type                     | Notes                                |
-| ------ | ------------------------ | ------------------------------------ |
-| `name` | `string` (1 – 120 chars) | Human-readable workspace name.       |
-| `slug` | `string` (2 – 40 chars)  | Lowercase letters, digits, hyphens.  |
+| Field  | Type                     | Notes                               |
+| ------ | ------------------------ | ----------------------------------- |
+| `name` | `string` (1 – 120 chars) | Human-readable workspace name.      |
+| `slug` | `string` (2 – 40 chars)  | Lowercase letters, digits, hyphens. |
 
 ## Output
 
-| Field         | Type                | Notes                                  |
-| ------------- | ------------------- | -------------------------------------- |
-| `publicId`    | `string`            | Prefixed with `wrk_` per §4.3.         |
-| `name`        | `string`            | Echoes the stored name.                |
-| `slug`        | `string`            | Echoes the reserved slug.              |
-| `tenantSlug`  | `string`            | Convenience for client-side routing.   |
-| `createdAt`   | `string` (ISO 8601) | Server-side creation timestamp.        |
+| Field        | Type                | Notes                                |
+| ------------ | ------------------- | ------------------------------------ |
+| `publicId`   | `string`            | Prefixed with `wrk_` per §4.3.       |
+| `name`       | `string`            | Echoes the stored name.              |
+| `slug`       | `string`            | Echoes the reserved slug.            |
+| `tenantSlug` | `string`            | Convenience for client-side routing. |
+| `createdAt`  | `string` (ISO 8601) | Server-side creation timestamp.      |
 
 ## Side effects
 
@@ -36,17 +36,17 @@ within the tenant and forms the second segment of every URL
 
 ## Access
 
-Org `Owner` or `Admin`, or the `Owner` of the workspace the call is scoped to, checked in the handler (`assertOrgRole`, INV-29). `noBillingGate`: creating a workspace is a settings write, never a governed action (ADR-052 exclusion 2). A context with no signed-in user is refused before any read.
+Org `Owner` or `Admin`, or the `Owner` of the workspace the call is scoped to, checked in the handler (`assertOrgRole`, INV-29) for the signed-in user or, on an API-key (MCP) call, the key's creator (`resolveActingUserId`). `noBillingGate`: creating a workspace is a settings write, never a governed action (ADR-052 exclusion 2). A call with neither a signed-in user nor an API key with a live creator is refused before any read.
 
 ## Errors
 
-| code | reason | meaning |
-| --- | --- | --- |
-| `forbidden` | `no_principal` | No signed-in user on the request. |
-| `forbidden` | `org_role_required` | The user holds none of the accepted roles. |
-| `not_found` | `org_not_found` | The org row the context names is missing. |
-| `conflict` | `slug_taken` | Slug collides within the org (pre-check, or the unique index on a race). |
-| `invalid_input` | — | Slug fails the contract's validator (kernel). |
+| code            | reason              | meaning                                                                  |
+| --------------- | ------------------- | ------------------------------------------------------------------------ |
+| `forbidden`     | `no_principal`      | No signed-in user, and no API key with a live creator, on the request.   |
+| `forbidden`     | `org_role_required` | The acting user holds none of the accepted roles.                        |
+| `not_found`     | `org_not_found`     | The org row the context names is missing.                                |
+| `conflict`      | `slug_taken`        | Slug collides within the org (pre-check, or the unique index on a race). |
+| `invalid_input` | —                   | Slug fails the contract's validator (kernel).                            |
 
 ## SPEC references
 

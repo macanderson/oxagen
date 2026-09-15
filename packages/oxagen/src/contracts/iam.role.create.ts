@@ -25,15 +25,15 @@ export const rolePermissionsSchema = z
  * The handler refuses a granter who does not hold every one of those
  * capabilities (the delegation ceiling), an org whose tier does not run the
  * IAM resolver (`forbidden`, `enterprise_tier_required`: the kernel would
- * never read the role), and a name already taken in the same scope kind
- * (`conflict`, `role_exists`). Custom roles are agent roles: only
+ * never read the role), and a name already taken in the same scope kind or,
+ * for a custom role, in either scope kind (`conflict`, `role_exists`). Custom roles are agent roles: only
  * `assign_agent_role` binds them.
  */
 export const iamRoleCreate = registerCapability({
   name: "create_role",
   domain: "iam",
   description:
-    "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions, for a tier the kernel does not enforce roles on, and for a name already used in the same scope kind.",
+    "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions, for a tier the kernel does not enforce roles on, and for a name another role of the org already uses.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

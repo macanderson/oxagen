@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   tenant: {
     principalId: "prn_1" as string | null,
     roleName: "Owner" as string | null,
+    /** The creator an API key resolves to, or none. */
+    keyCreator: "u_1" as string | null,
   },
 }));
 
@@ -91,6 +93,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         select: () => ({
           from: (table: unknown) => {
             const rows = (): unknown[] => {
+              if (table === real.schema.apiKeys)
+                return mocks.tenant.keyCreator
+                  ? [{ createdByUserId: mocks.tenant.keyCreator }]
+                  : [];
               if (table === real.schema.principals)
                 return mocks.tenant.principalId
                   ? [{ id: mocks.tenant.principalId }]
@@ -137,6 +143,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     // Restore defaults
     mocks.tenant.principalId = "prn_1";
     mocks.tenant.roleName = "Owner";
+    mocks.tenant.keyCreator = "u_1";
     mocks.orgFindFirst.mockResolvedValue({ slug: "acme" });
     mocks.wsFindFirst.mockResolvedValue(null);
     mocks.txInsertWsReturning.mockResolvedValue([
@@ -171,6 +178,37 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       reason: "no_principal",
     });
     expect(mocks.orgFindFirst).not.toHaveBeenCalled();
+  });
+
+  describe("an MCP call: an API key and no signed-in user", () => {
+    const keyCtx: CapabilityContext = {
+      ...CTX,
+      userId: null,
+      apiKeyId: "aky_1",
+      surface: "mcp",
+    };
+
+    it("creates the workspace as the key's creator when the creator is an org Owner", async () => {
+      await expect(
+        workspaceCreateHandler({ name: "Test", slug: "test" }, keyCtx),
+      ).resolves.toMatchObject({ publicId: "ws_pub_1", orgSlug: "acme" });
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      mocks.tenant.roleName = "Member";
+      await expect(
+        refusal({ name: "Test", slug: "test" }, keyCtx),
+      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.txInsertWs).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key that resolves to no creator (negative)", async () => {
+      mocks.tenant.keyCreator = null;
+      await expect(
+        refusal({ name: "Test", slug: "test" }, keyCtx),
+      ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+      expect(mocks.orgFindFirst).not.toHaveBeenCalled();
+    });
   });
 
   it.each(["Member", "Billing", "Compliance", "Viewer"])(

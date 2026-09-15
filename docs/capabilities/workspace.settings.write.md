@@ -25,22 +25,22 @@ a settings write, never a governed action (ADR-052 exclusion 2).
 
 ## Input
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| workspaceId | string (`wrk_…`), optional | The workspace to update; omitted, the workspace the call is scoped to |
-| name | string (1–120, trimmed), optional | New display name |
-| slug | string (1–100, kebab-case), optional | New URL slug; must be unique within the org |
-| description | string (≤2000) \| null, optional | Free-text description; `null` clears it |
-| avatarUrl | string \| null, optional | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
+| Field       | Type                                 | Notes                                                                                                               |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| workspaceId | string (`wrk_…`), optional           | The workspace to update; omitted, the workspace the call is scoped to                                               |
+| name        | string (1–120, trimmed), optional    | New display name                                                                                                    |
+| slug        | string (1–100, kebab-case), optional | New URL slug; must be unique within the org                                                                         |
+| description | string (≤2000) \| null, optional     | Free-text description; `null` clears it                                                                             |
+| avatarUrl   | string \| null, optional             | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
 
 ## Output
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| name | string | Workspace display name after the update |
-| slug | string | URL slug after the update |
-| description | string \| null | Description after the update |
-| avatarUrl | string \| null | Avatar after the update; `null` when unset |
+| Field       | Type           | Notes                                      |
+| ----------- | -------------- | ------------------------------------------ |
+| name        | string         | Workspace display name after the update    |
+| slug        | string         | URL slug after the update                  |
+| description | string \| null | Description after the update               |
+| avatarUrl   | string \| null | Avatar after the update; `null` when unset |
 
 ## Side effects
 
@@ -49,9 +49,9 @@ ClickHouse observes the invocation via the kernel; the change is audit-logged.
 
 ## Errors
 
-| code | reason | when |
-| --- | --- | --- |
-| `forbidden` | `no_principal` / `org_role_required` | no signed-in user, or a user outside the accepted roles |
-| `not_found` | `workspace_not_found` | no workspace with that public id in the org, or the active one is not in the org |
-| `conflict` | `slug_taken` | the slug is already used by another workspace in the org |
-| `invalid_input` | — | the slug fails the contract's validator (kernel) |
+| code            | reason                               | when                                                                                                                                          |
+| --------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forbidden`     | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside the accepted roles |
+| `not_found`     | `workspace_not_found`                | no workspace with that public id in the org, or the active one is not in the org                                                              |
+| `conflict`      | `slug_taken`                         | the slug is already used by another workspace in the org                                                                                      |
+| `invalid_input` | —                                    | the slug fails the contract's validator (kernel)                                                                                              |

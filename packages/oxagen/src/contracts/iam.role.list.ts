@@ -24,7 +24,7 @@ const roleGrantRow = z.object({
 });
 
 /** Who a role can be held by: the human system roles, or an agent principal. */
-export const roleKindSchema = z.enum(["human", "agent"]);
+const roleKindSchema = z.enum(["human", "agent"]);
 
 export const roleRow = z.object({
   id: z.string().describe("Public role id (rol_…)"),
@@ -63,7 +63,7 @@ export const roleRow = z.object({
     .describe("Display name of the user who created the role, when recorded"),
 });
 
-export const permissionCatalogEntry = z.object({
+const permissionCatalogEntry = z.object({
   id: z.string(),
   group: z.enum(PERMISSION_GROUPS),
   description: z.string(),
