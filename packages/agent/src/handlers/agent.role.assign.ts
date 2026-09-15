@@ -1,9 +1,14 @@
 // agent.role.assign — attach an IAM role to an agent's delegated principal
 // (Agent RBAC Phase 1, docs/specs/agent-rbac/spec.md §3.2, §3.4).
 //
-// Flow (single tenant-scoped transaction — guards and the write are atomic):
-//   1. Auth + scope guard.
-//   2. Resolve the effective assigner (session user, or API key creator).
+// Flow:
+//   1. Scope guard.
+//   2. Role gate — assertOrgRole: org Owner or Admin, the gate the sibling
+//      IAM writes (create_role, set_role_grants) run, for the signed-in user
+//      or the creator of the API key (resolveActingUserId). That user is the
+//      assigner. The kernel's IAM check allows every capability for a
+//      non-enterprise org, so the handler checks (INV-29).
+// Then, in one tenant-scoped transaction (guards and the write are atomic):
 //   3. Resolve the agent (workspace-scoped) and its delegated principal.
 //   4. Resolve the role by NAME (seeding is decoupled — spec §3.2).
 //   5. Assignability gate: system agent roles only among system roles.
@@ -18,6 +23,7 @@
 //   9. Emit the IAM audit event with principal_kind='agent' (fire-and-forget).
 
 import { withTenantDb, schema } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { canAccessACL, resolveOrgTier, TierDeniedError } from "@oxagen/billing";
@@ -34,7 +40,6 @@ import {
   assertWithinDelegationCeiling,
   emitAgentRoleAudit,
   resolveAgentForRoles,
-  resolveEffectiveAssigner,
   resolveRoleByName,
 } from "./_agent-role";
 
@@ -49,18 +54,20 @@ export async function agentRoleAssignHandler(
   input: AgentRoleAssignInput,
   ctx: CapabilityContext,
 ): Promise<AgentRoleAssignOutput> {
-  if (!ctx.userId && !ctx.apiKeyId) {
-    throw new Error("Unauthorized: no authenticated principal");
-  }
   if (!ctx.orgId || !ctx.workspaceId) {
     throw new Error("Forbidden: org and workspace scope are required");
   }
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const assignerUserId = actingUserId as string;
 
   const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
 
   const result = await withTenantDb(async (tx) => {
-    const assignerUserId = await resolveEffectiveAssigner(tx, ctx);
-
     const agent = await resolveAgentForRoles(
       tx,
       input.agentId,
