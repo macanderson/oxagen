@@ -1,4 +1,4 @@
-# ADR-055: Stella is wrapped through its hooks until it speaks the Tacho contract natively
+# ADR-068: Stella is wrapped through its hooks until it speaks the Tacho contract natively
 
 - **Status:** Accepted
 - **Date:** 2026-09-15

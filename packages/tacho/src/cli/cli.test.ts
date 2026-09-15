@@ -467,6 +467,28 @@ describe("enroll → status → unenroll", () => {
       ).ok,
     ).toBe(false);
     expect(refused.errors[0]).toContain("refused the enrollment (403)");
+    expect(refused.errors[0]).toContain("(403) — forbidden: your token cannot");
+    const expired = deps({
+      fetch: async () => ({
+        ok: false,
+        status: 401,
+        text: async () =>
+          JSON.stringify({
+            error: { code: "unauthorized", message: "API key expired" },
+          }),
+      }),
+    });
+    expect(
+      (
+        await enroll(
+          { token: "t", org: "o", workspace: "w", apiUrl: "https://x" },
+          expired,
+        )
+      ).ok,
+    ).toBe(false);
+    expect(expired.errors[0]).toContain(
+      "(401) — API key expired: your token is invalid or expired",
+    );
     const down = deps({
       fetch: async () => {
         throw new Error("ENOTFOUND");

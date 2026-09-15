@@ -69,16 +69,7 @@ export function siteHeader({ wordmark, current }) {
   <div class="nav-in">
     <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
     <nav class="nav-links" aria-label="Primary">
-      <div class="drop" data-open="false">
-        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
-        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
-          <a href="/products/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
-          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
-          <a href="/products/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
-          <div class="drop-sep"></div>
-          <div class="drop-foot">one loop · three deployments</div>
-        </div>
-      </div>
+      <a href="/products/oxagen">Product</a>
       <a href="/blog"${cur("blog")}>Research</a>
       <a href="/#field-manual">Field manual</a>
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
@@ -93,10 +84,8 @@ export function siteHeader({ wordmark, current }) {
 
 <div class="drawer" id="drawer" data-open="false">
   <div class="wrap">
-    <h5>Products</h5>
-    <a href="/products/stella">Stella — the terminal agent</a>
-    <a href="/products/oxagen">Oxagen — the control plane</a>
-    <a href="/products/private-llms">Private LLMs</a>
+    <h5>Product</h5>
+    <a href="/products/oxagen">Oxagen, the control plane</a>
     <h5>More</h5>
     <a href="/blog">Research</a>
     <a href="/#field-manual">Field manual</a>
@@ -115,12 +104,10 @@ export function siteFooter({ wordmark, pillars }) {
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
         <p>Everyone has the same models.<br>Your edge is context.</p>
       </div>
-      <nav class="foot-col" aria-label="Products">
-        <h4>Products</h4>
+      <nav class="foot-col" aria-label="Product">
+        <h4>Product</h4>
         <ul>
-          <li><a href="/products/stella">Stella — the agent</a></li>
-          <li><a href="/products/oxagen">Oxagen — the platform</a></li>
-          <li><a href="/products/private-llms">Private LLMs</a></li>
+          <li><a href="/products/oxagen">Oxagen, the platform</a></li>
           <li><a href="/#demo">Get a demo</a></li>
         </ul>
       </nav>
@@ -241,12 +228,23 @@ export function picture(src, o) {
 }
 
 /**
+ * A page's banner laid behind its title: the picture fills the section and
+ * the stylesheet masks it out toward the words, so the prose sits on ink
+ * and the drawing comes through beside it. Decorative, so hidden from
+ * readers who hear the page.
+ * @param {string} src
+ */
+export function heroArt(src) {
+  return `<div class="hero-art" aria-hidden="true">${picture(src, { alt: "", width: 2400, height: 1200, priority: true })}</div>`;
+}
+
+/**
  * @param {object} post with `images` from the build
  * @param {Array<{slug: string, name: string}>} pillars
  */
 export function postCard(post, pillars) {
   return `<article class="post-card">
-  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true">${picture(post.images.thumb, { alt: "", width: 800, height: 450, lazy: true })}</a>
+  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true">${picture(post.images.thumb, { alt: "", width: 960, height: 480, lazy: true })}</a>
   <div class="post-card-meta">
     ${pillarChips(pillars, post.pillars)}
     <h3><a href="${urls.post(post.slug)}">${esc(post.title)}</a></h3>
@@ -273,7 +271,7 @@ export function indexPage({ pillars, posts, wordmark, image }) {
 ${pillars
   .map(
     (p) => `        <a class="pillar-card" href="${urls.pillar(p.slug)}">
-          ${picture(p.images.thumb, { alt: "", width: 640, height: 360, lazy: true })}
+          ${picture(p.images.thumb, { alt: "", width: 960, height: 480, lazy: true })}
           <div class="pillar-card-body"><h3>${esc(p.name)}</h3><p>${esc(p.tagline)}</p><span class="pillar-count">${posts.filter((x) => x.pillars.includes(p.slug)).length} posts</span></div>
         </a>`,
   )
@@ -290,7 +288,7 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
     </div>
   </section>`;
   return layout({
-    title: `${BLOG_TITLE} — the science of ontologies, agents, and self-improving systems`,
+    title: `${BLOG_TITLE}: the science of ontologies, agents, and self-improving systems`,
     description: BLOG_DESCRIPTION,
     path: urls.blog(),
     image,
@@ -312,14 +310,14 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
 /** @param {{ pillar: object, pillars: object[], posts: object[], wordmark: string }} o */
 export function pillarPage({ pillar, pillars, posts, wordmark }) {
   const body = `
-  <section class="pillar-hero">
-    <div class="pillar-hero-shot">${picture(pillar.images.banner, { alt: "", width: 1600, height: 900, priority: true })}</div>
-    <div class="wrap pillar-hero-copy">
+  <section class="pillar-hero hero-field">
+    ${heroArt(pillar.images.banner)}
+    <div class="wrap"><div class="pillar-hero-copy">
       <p class="eyebrow"><a href="${urls.blog()}">Research</a> · Pillar</p>
       <h1>${esc(pillar.name)}</h1>
       <p class="pillar-tagline">${esc(pillar.tagline)}</p>
       <p class="pillar-desc">${esc(pillar.description)}</p>
-    </div>
+    </div></div>
   </section>
   <section class="sec-tight sec-alt">
     <div class="wrap">
@@ -338,7 +336,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     </div>
   </section>`;
   return layout({
-    title: `${pillar.name} — ${BLOG_TITLE}`,
+    title: `${pillar.name} · ${BLOG_TITLE}`,
     description: pillar.description,
     path: urls.pillar(pillar.slug),
     image: pillar.images.og,
@@ -369,8 +367,9 @@ export function postPage({ post, html, headings, pillars, related, wordmark }) {
   const primary = pillars.find((p) => p.slug === post.pillars[0]);
   const body = `
   <article class="post">
-    <header class="post-head">
-      <div class="wrap post-head-in">
+    <header class="post-head hero-field">
+      ${heroArt(post.images.banner)}
+      <div class="wrap"><div class="post-head-in">
         <p class="eyebrow"><a href="${urls.blog()}">Research</a> · <a href="${urls.pillar(primary.slug)}">${esc(primary.name)}</a></p>
         <h1>${esc(post.title)}</h1>
         <p class="post-sub">${esc(post.description)}</p>
@@ -380,10 +379,7 @@ export function postPage({ post, html, headings, pillars, related, wordmark }) {
           <span>${post.readingMinutes} min read</span>
         </p>
         ${pillarChips(pillars, post.pillars)}
-      </div>
-      <figure class="post-hero">
-        ${picture(post.images.banner, { alt: "", width: 1600, height: 900, priority: true })}
-      </figure>
+      </div></div>
     </header>
     <div class="wrap post-body">
       ${toc.length > 1 ? `<nav class="toc" aria-label="In this post"><p class="mono">In this post</p><ol>${toc.map((h) => `<li><a href="#${esc(h.id)}">${esc(h.text)}</a></li>`).join("")}</ol></nav>` : ""}
@@ -399,7 +395,7 @@ ${html}
     </footer>
   </article>`;
   return layout({
-    title: `${post.title} — ${BLOG_TITLE}`,
+    title: `${post.title} · ${BLOG_TITLE}`,
     description: post.description,
     path: urls.post(post.slug),
     image: post.images.og,

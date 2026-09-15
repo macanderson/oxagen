@@ -135,6 +135,23 @@ async function callEnrollment(
   return enrollmentResponseSchema.parse(JSON.parse(text));
 }
 
+/**
+ * The server's own reason from an error body, as ` — <reason>`, or "" when
+ * the body carries none. The API answers `{ error: { code, message } }`.
+ */
+function controlErrorReason(body: string): string {
+  let reason = body.trim();
+  try {
+    const parsed: unknown = JSON.parse(reason);
+    const message = (parsed as { error?: { message?: unknown } } | null)?.error
+      ?.message;
+    if (typeof message === "string") reason = message;
+  } catch {
+    // Not JSON (plain text or a proxy's page): the text itself is the reason.
+  }
+  return reason === "" ? "" : ` — ${reason.slice(0, 200)}`;
+}
+
 export async function enroll(
   options: EnrollOptions,
   deps: CliDeps,
@@ -276,8 +293,13 @@ export async function enroll(
         error instanceof ControlError &&
         (error.status === 401 || error.status === 403)
       ) {
+        // 401 and 403 need different fixes, and the server's reason is the
+        // only thing that tells a person which check refused them.
+        const reason = controlErrorReason(error.body);
         deps.err(
-          `Oxagen refused the enrollment (${error.status}): your token cannot create Tacho enrollments in ${credentials.org}/${credentials.workspace}. An org Owner or Admin can, or can grant create_tacho_enrollment to your role.`,
+          error.status === 401
+            ? `Oxagen refused the enrollment (401)${reason}: your token is invalid or expired. Run \`oxagen login\` and enroll again.`
+            : `Oxagen refused the enrollment (403)${reason}: your token cannot create Tacho enrollments in ${credentials.org}/${credentials.workspace}. Enrolling a host takes an org Owner or Admin; run \`oxagen login\` as one and enroll again.`,
         );
       } else {
         deps.err(

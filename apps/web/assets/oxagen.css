@@ -1,10 +1,8 @@
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: the Oxagen house brand system, byte-for-byte, so this site, the app
-   (@oxagen/ui) and the terminal Stella ships are one surface. The generated
-   source of these values is tokens/house-tokens.css in
-   macanderson/oxagen-house-brand; the Rust copy of the same table is
-   crates/stella-tui-theme/src/token.rs.
+   Palette: the Oxagen house brand system, byte-for-byte, so this site and the
+   app (@oxagen/ui) are one surface. The generated source of these values is
+   tokens/house-tokens.css in macanderson/oxagen-house-brand.
    Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
    in a rule or a page.
@@ -33,7 +31,7 @@
   --st-gold: #D6962C; /* the brand metal: actions, active, money, the mark */
   --st-gold-bright: #F1C364; /* tiny live indicators only */
   --st-gold-ink: #8B5E1A; /* gold as TEXT where the metal itself is illegible */
-  --st-paper-text: #F2EEE5; /* primary text (what --stella-fg resolves to in dark) */
+  --st-paper-text: #F2EEE5; /* primary text in dark */
   --st-text: #e8e8ec; /* cooler alternate ink */
   --st-silver-type: #bfc1cc; /* types, tertiary labels */
   --st-silver: #9B958A; /* secondary emphasis */
@@ -125,8 +123,8 @@
 }
 
 /* Space Grotesk — the house typeface, self-hosted. Four static weights, the
-   subset the brand kit measured the wordmarks against: the `oxagen` and
-   `stella*` marks are this font's own outlines, so any other face would put
+   subset the brand kit measured the wordmarks against: the `oxagen`
+   wordmark is this font's own outlines, so any other face would put
    the running text and the logo in two unrelated designs.
    There is no house mono: "Space Grotesk is not a code face", so terminal
    output and code take the system monospace stack (see .mono below). */
@@ -266,13 +264,6 @@ hr {
 .skip:focus {
   top: 12px;
 }
-.vh {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
 
 /* ============ backdrops ============
    The docs landing page's layered background, as three classes:
@@ -319,17 +310,6 @@ hr {
   animation: glow 9s ease-in-out infinite;
 }
 /* an alt section: no lattice, no light, only the field, quieter */
-.tex-field::before {
-  content: none;
-}
-.tex-field::after {
-  content: "";
-  background-image: var(--tex-hex);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  opacity: 0.4;
-}
 @keyframes glow {
   0%,
   100% {
@@ -338,16 +318,6 @@ hr {
   50% {
     opacity: 0.85;
   }
-}
-/* a section rule that reads as a lit hairline (.lp-hairline), not a tape */
-.rule-tape {
-  height: 1px;
-  background-image: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--ember-b) 55%, transparent),
-    transparent
-  );
 }
 
 /* ============ the sheen on type ============
@@ -381,8 +351,7 @@ h2 .gold,
   gap: 10px;
 }
 .hero .eyebrow,
-.blog-hero .eyebrow,
-.eyebrow-pill {
+.blog-hero .eyebrow {
   font-size: 11px;
   letter-spacing: 0.14em;
   padding: 5px 12px;
@@ -523,8 +492,7 @@ h2 .gold,
   gap: 22px;
   margin-inline: auto;
 }
-.nav-links > a,
-.nav-links .drop-btn {
+.nav-links > a {
   font-size: 14.5px;
   color: var(--ink-3);
   transition: color 0.14s;
@@ -536,9 +504,7 @@ h2 .gold,
   align-items: center;
   gap: 6px;
 }
-.nav-links > a:hover,
-.nav-links .drop-btn:hover,
-.drop-btn[aria-expanded="true"] {
+.nav-links > a:hover {
   color: var(--ink);
 }
 .nav-cta {
@@ -560,105 +526,11 @@ h2 .gold,
   color: var(--faint);
   margin-left: 3px;
 }
-.nav-links a[aria-current="page"],
-.drop-btn[data-current="true"] {
+.nav-links a[aria-current="page"] {
   color: var(--gold);
 }
 
 /* dropdown */
-.drop {
-  position: relative;
-}
-.drop-btn .chev {
-  width: 9px;
-  height: 9px;
-  border-right: 1.4px solid currentColor;
-  border-bottom: 1.4px solid currentColor;
-  transform: rotate(45deg) translate(-2px, -2px);
-  transition: transform 0.18s var(--ease);
-}
-.drop-btn[aria-expanded="true"] .chev {
-  transform: rotate(-135deg) translate(-3px, -3px);
-}
-.drop-menu {
-  position: absolute;
-  top: calc(100% + 14px);
-  left: -18px;
-  min-width: 330px;
-  z-index: 110;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  padding: 6px;
-  display: grid;
-  gap: 2px;
-  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.9);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-5px);
-  transition:
-    opacity 0.16s,
-    transform 0.16s var(--ease),
-    visibility 0.16s;
-}
-.drop[data-open="true"] .drop-menu {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-}
-.drop-menu a {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0 12px;
-  padding: 11px 12px;
-  border-radius: var(--r);
-  border: 1px solid transparent;
-  transition:
-    background-color 0.14s,
-    border-color 0.14s;
-}
-.drop-menu a:hover,
-.drop-menu a:focus-visible {
-  background: var(--raised);
-  border-color: var(--line);
-}
-.drop-menu .dm-mark {
-  grid-row: span 2;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  color: var(--gold);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  align-self: start;
-  margin-top: 2px;
-}
-.drop-menu b {
-  font-size: 14.5px;
-  font-weight: 620;
-  color: var(--ink);
-}
-.drop-menu span {
-  font-size: 12.5px;
-  color: var(--ink-3);
-  line-height: 1.45;
-}
-.drop-sep {
-  height: 1px;
-  background: var(--line);
-  margin: 5px 8px;
-}
-.drop-foot {
-  padding: 9px 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
 
 /* mobile drawer */
 .burger {
@@ -763,17 +635,6 @@ h2 .gold,
    The chrome around every rendering: the docs terminal (.lp-term on
    docs.oxagen.sh) — a rounded window with a light edge along its top and a
    shadow lit by the ember beneath it. */
-.app {
-  margin: 0;
-  background: var(--ground);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
-}
 .app-bar {
   display: flex;
   align-items: center;
@@ -825,74 +686,8 @@ h2 .gold,
   color: var(--ink-3);
   letter-spacing: 0.06em;
 }
-.app-view {
-  position: relative;
-  background: var(--ground);
-  line-height: 0;
-}
-.app-view > img {
-  width: 100%;
-  height: auto;
-}
 /* a slow sweep, the only motion over the rendering itself */
-.app-sweep {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 64px;
-  pointer-events: none;
-  background: rgba(239, 197, 63, 0.045);
-  animation: sweep 7.5s var(--ease) infinite;
-}
-@keyframes sweep {
-  0% {
-    transform: translateY(-70px);
-  }
-  55%,
-  100% {
-    transform: translateY(105%);
-  }
-}
 /* the live strip below the render — where the typing happens */
-.app-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 13px;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--ink-3);
-  min-height: 38px;
-}
-.app-foot .pr {
-  color: var(--gold);
-  flex: none;
-}
-.app-foot .typed {
-  white-space: pre;
-  overflow: hidden;
-  min-height: 1.2em;
-}
-.app-foot .tail {
-  margin-left: auto;
-  color: var(--ink-3);
-  flex: none;
-  white-space: nowrap;
-}
-.app-foot .ok {
-  color: var(--pass);
-}
-.app-foot .bad {
-  color: var(--fail);
-}
-@media (max-width: 560px) {
-  .app-foot .tail {
-    display: none;
-  }
-}
 
 .caret {
   display: inline-block;
@@ -902,9 +697,6 @@ h2 .gold,
   vertical-align: text-bottom;
   margin-left: 1px;
   animation: blink 1.05s steps(1) infinite;
-}
-.caret-ink {
-  background: var(--ink);
 }
 @keyframes blink {
   50% {
@@ -978,19 +770,8 @@ figcaption b {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
-.grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-}
-@media (max-width: 900px) {
-  .grid-3 {
-    grid-template-columns: 1fr 1fr;
-  }
-}
 @media (max-width: 660px) {
-  .grid-2,
-  .grid-3 {
+  .grid-2 {
     grid-template-columns: 1fr;
   }
 }
@@ -1052,33 +833,6 @@ figcaption b {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.card-viz {
-  margin-top: 16px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.snippet {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.3px;
-  line-height: 1.8;
-  color: var(--ink-3);
-}
-.snippet .p {
-  color: var(--gold);
-}
-.snippet .c {
-  color: var(--ink-2);
-}
-.snippet .g {
-  color: var(--pass);
-}
-.snippet .r {
-  color: var(--fail);
-}
-.snippet .i {
-  color: var(--ink-3);
-}
 
 /* ============ spec list — a machine-readable row ============ */
 .spec {
@@ -1124,297 +878,6 @@ figcaption b {
   }
 }
 
-/* ============ deck — the tab strip, borrowed from the TUI ============ */
-.deck {
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  overflow: hidden;
-}
-.deck-tabs {
-  display: flex;
-  overflow-x: auto;
-  background: var(--ground);
-  border-bottom: 1px solid var(--line);
-  scrollbar-width: thin;
-}
-.deck-tabs button {
-  background: none;
-  border: 0;
-  border-right: 1px solid var(--line);
-  border-bottom: 2px solid transparent;
-  padding: 12px 17px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    color 0.14s,
-    border-color 0.14s,
-    background-color 0.14s;
-}
-.deck-tabs button:hover {
-  color: var(--ink);
-  background: var(--raised);
-}
-.deck-tabs button[aria-selected="true"] {
-  color: var(--gold);
-  border-bottom-color: var(--gold);
-  background: var(--panel);
-}
-.deck-panel {
-  padding: 18px;
-}
-.deck-panel .app {
-  box-shadow: none;
-}
-.deck-panel .lede {
-  margin-bottom: 16px;
-  color: var(--ink-3);
-  font-size: 15.5px;
-  max-width: 70ch;
-}
-.deck-panel .lede b {
-  color: var(--ink);
-  font-weight: 560;
-}
-
-/* ============ meters + audit log ============ */
-.panel {
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
-}
-.panel-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  font-size: 11.5px;
-  color: var(--ink-3);
-  letter-spacing: 0.06em;
-}
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--gold-hi);
-  animation: pulse 2.2s ease-in-out infinite;
-}
-.panel-body {
-  padding: 18px;
-  display: grid;
-  gap: 20px;
-}
-.meters {
-  display: grid;
-  gap: 13px;
-}
-.meter label {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--faint);
-  letter-spacing: 0.08em;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-}
-.meter label b {
-  color: var(--ink-3);
-  font-weight: 520;
-}
-.meter .track {
-  height: 6px;
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-}
-.meter .fill {
-  height: 100%;
-  background: var(--gold);
-  transform-origin: left;
-  transform: scaleX(0);
-  animation: fillUp 1.9s var(--ease) forwards;
-}
-.meter .fill.alt {
-  background: var(--ink-3);
-}
-.meter .fill.pass {
-  background: var(--pass);
-}
-@keyframes fillUp {
-  to {
-    transform: scaleX(var(--w, 0.7));
-  }
-}
-.audit {
-  border-top: 1px solid var(--line);
-  padding-top: 15px;
-  display: grid;
-  gap: 8px;
-  font-size: 12px;
-}
-.audit-line {
-  display: flex;
-  gap: 10px;
-  color: var(--faint);
-  opacity: 0;
-  transform: translateY(4px);
-  animation: logIn 0.45s var(--ease) forwards;
-}
-.audit-line .tag {
-  color: var(--pass);
-  flex: none;
-}
-.audit-line .tag.deny {
-  color: var(--fail);
-}
-.audit-line .who {
-  color: var(--gold);
-  flex: none;
-}
-.audit-line .what {
-  color: var(--ink-3);
-}
-.audit-line:nth-child(1) {
-  animation-delay: 0.7s;
-}
-.audit-line:nth-child(2) {
-  animation-delay: 1.2s;
-}
-.audit-line:nth-child(3) {
-  animation-delay: 1.7s;
-}
-.audit-line:nth-child(4) {
-  animation-delay: 2.2s;
-}
-.audit-line:nth-child(5) {
-  animation-delay: 2.7s;
-}
-@keyframes logIn {
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .meter .fill {
-    transform: scaleX(var(--w, 0.7));
-    animation: none;
-  }
-  .audit-line {
-    opacity: 1;
-    transform: none;
-    animation: none;
-  }
-}
-
-/* ============ pillars ============ */
-.pillars {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pillar {
-  display: flex;
-  gap: 16px;
-  padding: 18px;
-  border-radius: var(--r);
-  border: 1px solid transparent;
-  transition:
-    background-color 0.18s,
-    border-color 0.18s;
-}
-.pillar:hover {
-  background: var(--panel);
-  border-color: var(--line);
-}
-.pillar-icon {
-  flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r);
-  display: grid;
-  place-items: center;
-  background: var(--raised);
-  border: 1px solid var(--line);
-}
-.pillar-icon svg {
-  width: 19px;
-  height: 19px;
-  stroke: var(--gold);
-  fill: none;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.pillar h3 {
-  font-size: 17px;
-  font-weight: 620;
-  margin-bottom: 5px;
-}
-.pillar p {
-  color: var(--ink-3);
-  font-size: 14.5px;
-}
-
-/* ============ numbered steps ============ */
-.steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-@media (max-width: 820px) {
-  .steps {
-    grid-template-columns: 1fr;
-  }
-}
-.step {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 24px;
-}
-.step-num {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  letter-spacing: 0.2em;
-  color: var(--gold);
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 13px;
-}
-.step-num::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--gold);
-}
-.step h3 {
-  font-size: 18px;
-  margin-bottom: 8px;
-  font-weight: 620;
-}
-.step p {
-  color: var(--ink-3);
-  font-size: 14.8px;
-}
-
 /* ============ two-up layout ============ */
 .split {
   display: grid;
@@ -1422,126 +885,16 @@ figcaption b {
   gap: 48px;
   align-items: center;
 }
-.split-wide {
-  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
-}
 .split-flip > *:first-child {
   order: 2;
 }
 @media (max-width: 960px) {
-  .split,
-  .split-wide {
+  .split {
     grid-template-columns: 1fr;
     gap: 36px;
   }
   .split-flip > *:first-child {
     order: 0;
-  }
-}
-
-/* ============ ticker ============ */
-.ticker {
-  border-block: 1px solid var(--line);
-  background: var(--panel);
-  overflow: hidden;
-  padding: 12px 0;
-  position: relative;
-}
-.ticker-track {
-  display: flex;
-  gap: 34px;
-  width: max-content;
-  animation: tick 46s linear infinite;
-}
-.ticker:hover .ticker-track {
-  animation-play-state: paused;
-}
-@keyframes tick {
-  to {
-    transform: translateX(-50%);
-  }
-}
-.tick-item {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  color: var(--faint);
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 34px;
-}
-.tick-item b {
-  color: var(--ink-3);
-  font-weight: 520;
-}
-.tick-item .sep {
-  color: var(--rule);
-}
-
-/* ============ install strip ============ */
-.install {
-  margin-top: 24px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 15px 18px;
-  transition: border-color 0.14s;
-}
-.install:hover {
-  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
-}
-.install code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
-  color: var(--ink);
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
-.install code .p {
-  color: var(--gold);
-}
-.copy-btn {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--rule);
-  background: transparent;
-  border-radius: var(--r);
-  padding: 6px 12px;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition:
-    color 0.14s,
-    border-color 0.14s;
-}
-.copy-btn:hover {
-  color: var(--gold);
-  border-color: var(--gold);
-}
-.copy-btn svg {
-  width: 13px;
-  height: 13px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-}
-.install .note {
-  width: 100%;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-@media (max-width: 640px) {
-  .copy-btn {
-    margin-left: 0;
   }
 }
 
@@ -1756,6 +1109,254 @@ footer {
   color: var(--gold);
 }
 
+/* ============ diagrams ============
+   The home and product pages explain the product with figures drawn in HTML
+   and inline SVG from the product's own vocabulary: no screenshots, and one
+   terminal on the whole site (the installer's output on the home page, where
+   the output is the thing being shown).
+   State is carried by border shape, so it survives grayscale and print:
+     .is-ok    double: allowed, held, matched, proven
+     .is-wait  dashed: pending, waiting on a person
+     .is-no    single, in the fail ink: denied, broken, an exception
+   The dot beside a label is a second signal, never the only one. A piece
+   marked .dg-in arrives in order (--i) once its .reveal figure is in view.
+   Anything that loops is a .dg-loop and runs only while its [data-live] host
+   is on screen (.playing, toggled in oxagen.js). Without script, nothing is
+   hidden and nothing moves. */
+.dg {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 30%, transparent),
+    0 18px 50px -30px rgba(0, 0, 0, 0.7);
+}
+.dg-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.dg-bar b {
+  color: var(--ink);
+  font-weight: 560;
+}
+.dg-bar .end {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  text-align: right;
+}
+@media (max-width: 520px) {
+  .dg-bar .end {
+    display: none;
+  }
+}
+.dg-body {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+.dg-foot {
+  padding: 11px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.dg-k {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.dg-m {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+.dg-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.is-ok {
+  border: 3px double var(--ink-3);
+}
+.dg-tag.is-ok {
+  padding: 1px 8px;
+}
+.is-wait {
+  border-style: dashed;
+  border-color: var(--ink-3);
+}
+.is-no {
+  border-color: var(--fail);
+}
+.dg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.dg-dot.ok {
+  background: var(--pass);
+}
+.dg-dot.wait {
+  background: var(--warn);
+}
+.dg-dot.no {
+  background: var(--fail);
+}
+.dg-track {
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  overflow: hidden;
+}
+.dg-fill {
+  height: 100%;
+  width: calc(var(--w, 0.5) * 100%);
+  background: var(--ink-3);
+  transform-origin: left;
+}
+/* a share split into parts: shades of the ink, labelled in a legend, so the
+   parts never need a hue */
+.dg-stack {
+  display: flex;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.dg-stack > span {
+  width: calc(var(--w) * 100%);
+  transform-origin: left;
+}
+.dg-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.dg-legend > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dg-legend > li::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+.dg-legend b {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.dg-stack > [data-s="1"],
+.dg-legend > [data-s="1"]::before {
+  background: color-mix(in srgb, var(--ink) 80%, var(--ground));
+}
+.dg-stack > [data-s="2"],
+.dg-legend > [data-s="2"]::before {
+  background: color-mix(in srgb, var(--ink) 54%, var(--ground));
+}
+.dg-stack > [data-s="3"],
+.dg-legend > [data-s="3"]::before {
+  background: color-mix(in srgb, var(--ink) 32%, var(--ground));
+}
+.dg-stack > [data-s="4"],
+.dg-legend > [data-s="4"]::before {
+  background: color-mix(in srgb, var(--ink) 18%, var(--ground));
+}
+.in-view .dg-in {
+  animation: dgIn 0.5s var(--ease) calc(var(--i, 0) * 110ms + 0.15s) both;
+}
+.in-view .dg-fill,
+.in-view .dg-stack > span {
+  animation: dgGrow 1s var(--ease) calc(var(--i, 0) * 110ms + 0.35s) both;
+}
+@keyframes dgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes dgGrow {
+  from {
+    transform: scaleX(0);
+  }
+}
+/* !important because each loop sets its own `animation` shorthand, which
+   resets the play state, and a page's own \3c style> comes after this file */
+[data-live]:not(.playing) .dg-loop {
+  animation-play-state: paused !important;
+}
+
+/* the copy column beside a figure */
+.dg-copy h2 {
+  font-size: clamp(28px, 3.8vw, 40px);
+  margin: 14px 0;
+}
+.dg-copy .lede {
+  color: var(--ink-3);
+  font-size: 17px;
+  max-width: 56ch;
+}
+.dg-copy ul {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+}
+.dg-copy li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--ink-2);
+  font-size: 15.5px;
+  max-width: 60ch;
+}
+.dg-copy li::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--ink-3);
+  border-radius: 2px;
+}
+
 /* ============ reveal ============ */
 /* Gated on .js: without the head script (blocked, failed, or an old browser)
    nothing is hidden, so a broken script costs the animation, not the content. */
@@ -1789,13 +1390,6 @@ footer {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .ticker-track {
-    animation: none;
-    transform: none;
-  }
-  .app-sweep {
-    display: none;
-  }
   .tex-hex::after {
     animation: none;
     opacity: 0.7;
@@ -1803,6 +1397,13 @@ footer {
   .js .reveal {
     opacity: 1;
     transform: none;
+  }
+  /* the stagger's delay is not a duration, so the rule above leaves it; drop
+     the arrival animations so every figure is simply there */
+  .in-view .dg-in,
+  .in-view .dg-fill,
+  .in-view .dg-stack > span {
+    animation: none;
   }
   .caret {
     animation: none;

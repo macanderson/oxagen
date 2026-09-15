@@ -103,11 +103,14 @@ describe("tenant policy manifest", () => {
     expect(entry?.policyClass).toBe("workspace_only");
   });
 
-  it("there are no org_or_global tables", () => {
+  it("the price book is the one org_or_global table (ADR-060)", () => {
+    // cost.price_entries: org_id NULL rows are the platform list prices every
+    // tenant reads, an org's negotiated rows are its own. Every other tenant
+    // table carries org_id NOT NULL.
     const orgOrGlobal = POLICY_MANIFEST.filter(
       (e) => e.policyClass === "org_or_global",
     ).map((e) => e.table);
-    expect(orgOrGlobal).toEqual([]);
+    expect(orgOrGlobal).toEqual(["cost.price_entries"]);
   });
 
   it("excludes tables that carry neither org_id nor a scoping workspace_id", () => {
@@ -134,11 +137,13 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
+    // 96 as of billing.spend_counters, cost.price_entries, cost.run_totals and
+    // cost.daily_totals (ADR-060, applied ahead of the WL-52 cutover).
     // 92 as of billing.governed_action_counters (ADR-052). The preceding note
     // read "97 as of org.model_credentials" while the assertion said 91, so it
     // had already drifted from the number it was describing — a count nobody
     // can check against its own comment is a pin with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(92);
+    expect(POLICY_MANIFEST.length).toBe(96);
   });
 
   it("covers billing.governed_action_counters as org_only (ADR-052)", () => {
