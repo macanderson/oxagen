@@ -57,9 +57,9 @@ describe("billingBudgetGetHandler (@oxagen/handlers)", () => {
     expect(out.budgets).toHaveLength(1);
     const b = out.budgets[0]!;
     expect(b.scope).toBe("org");
-    expect(b.limitUsd).toBe(10);
-    expect(b.spentUsd).toBe(4);
-    expect(b.projectedUsd).toBe(6);
+    expect(b.limit).toEqual({ micros: "10000000", currency: "USD" });
+    expect(b.spent).toEqual({ micros: "4000000", currency: "USD" });
+    expect(b.projected).toEqual({ micros: "6000000", currency: "USD" });
     expect(b.publicId).toBe("bdg_abc");
     expect(b.windowStart).toBe("2026-07-01T00:00:00.000Z");
   });

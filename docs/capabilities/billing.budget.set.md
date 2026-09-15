@@ -3,13 +3,13 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org + workspace (Owner, Admin, Billing)
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp, agent, cli
 **Risk level:** medium
 **Capability name:** `set_spend_budget`
 
 ## Intent
 
-Create or replace the hard **period-to-date spend ceiling** for one scope — the **org-level** ceiling (covers every workspace) or this **workspace's** own ceiling. Choose the window, the USD limit, and whether it is enforced.
+Create or replace the hard **period-to-date spend ceiling** for one scope — the **org-level** ceiling (covers every workspace) or this **workspace's** own ceiling. Choose the window, the limit in micro-units, and whether it is enforced.
 
 Over-ceiling metered agent runs are **denied at `invoke()` before any provider call** with a typed `budget_exceeded` error. RAISING a ceiling here is the **org-admin override** that clears such a denial — it is IAM-gated (Owner / Admin / Billing) and audited through the kernel audit chain. Writing your own budget is exempt from the budget gate (`noBillingGate`).
 
@@ -21,9 +21,9 @@ Over-ceiling metered agent runs are **denied at `invoke()` before any provider c
 | `enabled` | `boolean` | `false` keeps the config but stops gating. |
 | `period` | `"monthly" \| "rolling"` | `monthly` = calendar month to date (UTC); `rolling` = a trailing N-day window. |
 | `windowDays` | `number \| null?` | Required (`> 0`) for `rolling`; must be omitted for `monthly`. |
-| `limitUsd` | `number` | The hard ceiling in USD (`> 0`). |
+| `limit` | `Money` | The hard ceiling as `{ micros, currency }`: a positive integer micro-unit string and `"USD"`, the currency the store records (`billing.spend_budgets.limit_micros`). |
 
-The rolling/monthly ↔ `windowDays` rule is enforced by the contract and mirrored by a DB CHECK.
+The rolling/monthly ↔ `windowDays` rule is enforced by the contract and mirrored by a DB CHECK; the contract refuses a non-positive `limit.micros` and a currency other than `USD` (ADR-057 decision 2, INV-09).
 
 ## Output
 

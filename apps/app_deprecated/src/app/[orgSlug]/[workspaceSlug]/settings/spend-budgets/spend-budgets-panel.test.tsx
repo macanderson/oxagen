@@ -10,6 +10,7 @@
 import * as React from "react";
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { moneyFromUsd, usdFromMoney } from "./spend-budget-format";
 import type {
   SpendBudgetScope,
   SpendBudgetStatus,
@@ -29,7 +30,7 @@ vi.mock("./scope-budget-card", () => ({
   }) => (
     <div data-testid={`mock-card-${scope}`}>
       <span data-testid={`mock-card-${scope}-limit`}>
-        {budget?.limitUsd ?? "empty"}
+        {budget?.limit ? usdFromMoney(budget.limit) : "empty"}
       </span>
       <span data-testid={`mock-card-${scope}-can-manage`}>
         {String(canManage)}
@@ -43,9 +44,9 @@ vi.mock("./scope-budget-card", () => ({
             enabled: true,
             period: "monthly",
             windowDays: null,
-            limitUsd: 999,
-            spentUsd: 0,
-            projectedUsd: 0,
+            limit: moneyFromUsd(999),
+            spent: moneyFromUsd(0),
+            projected: moneyFromUsd(0),
             ratio: 0,
             state: "ok",
             reachedThreshold: 0,
@@ -74,9 +75,9 @@ function budget(scope: SpendBudgetScope, limitUsd: number): SpendBudgetStatus {
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd,
-    spentUsd: 0,
-    projectedUsd: 0,
+    limit: moneyFromUsd(limitUsd),
+    spent: moneyFromUsd(0),
+    projected: moneyFromUsd(0),
     ratio: 0,
     state: "ok",
     reachedThreshold: 0,

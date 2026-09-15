@@ -112,6 +112,18 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
+  // Agent identity (MC spec §6.2, ADR-057, #2956). An agent identity is a
+  // principal with a long-lived credential and roles; registering one adds a
+  // machine actor to the organisation, suspending or resuming one changes
+  // whether every run token it holds is honoured at the next call, and
+  // retiring one ends it for good (never deleted: its runs keep their
+  // identity). Each is a logical-access change (SOC2 CC6.1/CC6.3) emitted by
+  // packages/handlers/src/agent.{register,suspend,retire}.ts; the credential
+  // itself is covered by api_key.created / api_key.revoked.
+  "agent.registered",
+  "agent.suspended",
+  "agent.resumed",
+  "agent.retired",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by

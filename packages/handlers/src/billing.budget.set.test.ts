@@ -62,12 +62,17 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     mocks.emitSecurityEvent.mockReset();
   });
 
-  it("org scope → workspaceId null, USD→micros, invalidates cache, returns saved status", async () => {
+  it("org scope → workspaceId null, micros as given, invalidates cache, returns saved status", async () => {
     mocks.setSpendBudget.mockResolvedValue({});
     mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("org")]);
 
     const out = await billingBudgetSetHandler(
-      { scope: "org", enabled: true, period: "monthly", limitUsd: 500 },
+      {
+        scope: "org",
+        enabled: true,
+        period: "monthly",
+        limit: { micros: "500000000", currency: "USD" },
+      },
       CTX,
     );
 
@@ -85,7 +90,7 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
       orgId: "org_1",
     });
     expect(out.scope).toBe("org");
-    expect(out.limitUsd).toBe(500);
+    expect(out.limit).toEqual({ micros: "500000000", currency: "USD" });
   });
 
   it("workspace scope → workspaceId from ctx", async () => {
@@ -93,7 +98,12 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("workspace")]);
 
     const out = await billingBudgetSetHandler(
-      { scope: "workspace", enabled: true, period: "monthly", limitUsd: 500 },
+      {
+        scope: "workspace",
+        enabled: true,
+        period: "monthly",
+        limit: { micros: "500000000", currency: "USD" },
+      },
       CTX,
     );
 
@@ -113,7 +123,7 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
         enabled: true,
         period: "rolling",
         windowDays: 7,
-        limitUsd: 50,
+        limit: { micros: "50000000", currency: "USD" },
       },
       CTX,
     );
@@ -127,7 +137,12 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("org")]);
 
     await billingBudgetSetHandler(
-      { scope: "org", enabled: true, period: "monthly", limitUsd: 500 },
+      {
+        scope: "org",
+        enabled: true,
+        period: "monthly",
+        limit: { micros: "500000000", currency: "USD" },
+      },
       CTX,
     );
 
@@ -148,7 +163,12 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     mocks.getSpendBudgetStatuses.mockResolvedValue([]); // nothing found
     await expect(
       billingBudgetSetHandler(
-        { scope: "org", enabled: true, period: "monthly", limitUsd: 500 },
+        {
+          scope: "org",
+          enabled: true,
+          period: "monthly",
+          limit: { micros: "500000000", currency: "USD" },
+        },
         CTX,
       ),
     ).rejects.toThrow("not found on read-back");

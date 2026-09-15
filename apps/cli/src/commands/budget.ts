@@ -39,15 +39,21 @@ export type SpendBudgetState =
   | "threshold_95"
   | "exceeded";
 
+/** Money on the wire: integer micro-units in a decimal string with its currency. */
+interface Money {
+  micros: string;
+  currency: string;
+}
+
 export interface SpendBudgetStatus {
   scope: SpendBudgetScope;
   publicId: string | null;
   enabled: boolean;
   period: SpendBudgetPeriod;
   windowDays: number | null;
-  limitUsd: number | null;
-  spentUsd: number;
-  projectedUsd: number;
+  limit: Money | null;
+  spent: Money;
+  projected: Money;
   ratio: number;
   state: SpendBudgetState;
   reachedThreshold: number;
@@ -60,6 +66,25 @@ interface SpendBudgetGetResult {
 }
 
 const pct = (ratio: number): string => `${Math.round(ratio * 100)}%`;
+
+/** Display only: the wire carries micros, the terminal prints dollars. */
+function formatMoney(money: Money): string {
+  return formatUsd(Number(money.micros) / 1_000_000);
+}
+
+/**
+ * The `--limit <usd>` flag to wire micros. Dollars are parsed as a decimal
+ * string, never through a float multiply, so `--limit 0.07` is exactly
+ * 70,000 micros. More than six fractional digits is refused.
+ */
+function usdFlagToMicros(raw: string): string | null {
+  const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(raw.trim());
+  if (!m) return null;
+  const whole = m[1]!;
+  const frac = (m[2] ?? "").padEnd(6, "0");
+  const micros = `${whole}${frac}`.replace(/^0+(?=\d)/, "");
+  return micros === "0" ? null : micros;
+}
 
 const STATE_LABEL: Record<SpendBudgetState, string> = {
   ok: "ok",
@@ -80,10 +105,10 @@ function budgetRow(b: SpendBudgetStatus): string[] {
     b.scope,
     b.enabled ? "yes" : "no",
     periodCell(b),
-    b.limitUsd == null ? "—" : formatUsd(b.limitUsd),
-    formatUsd(b.spentUsd),
-    formatUsd(b.projectedUsd),
-    b.limitUsd == null ? "—" : pct(b.ratio),
+    b.limit == null ? "—" : formatMoney(b.limit),
+    formatMoney(b.spent),
+    formatMoney(b.projected),
+    b.limit == null ? "—" : pct(b.ratio),
     STATE_LABEL[b.state],
   ];
 }
@@ -112,7 +137,7 @@ function renderBudgetsTable(
     for (const b of alerts) {
       writer.write(
         `⚠ ${b.scope} budget ${b.state === "exceeded" ? "has been exceeded" : `is at ${pct(b.ratio)} of its limit`} ` +
-          `(${formatUsd(b.spentUsd)} of ${b.limitUsd == null ? "—" : formatUsd(b.limitUsd)}).`,
+          `(${formatMoney(b.spent)} of ${b.limit == null ? "—" : formatMoney(b.limit)}).`,
       );
     }
   }
@@ -196,15 +221,17 @@ export async function budgetSet(
     );
     return;
   }
-  const limitUsd = opts.limit === undefined ? NaN : Number(opts.limit);
-  if (!Number.isFinite(limitUsd) || limitUsd <= 0) {
+  const limitMicros =
+    opts.limit === undefined ? null : usdFlagToMicros(opts.limit);
+  if (limitMicros === null) {
     process.exitCode = 2;
     out.error(
-      `Invalid --limit "${opts.limit ?? ""}". Provide a positive USD number.`,
+      `Invalid --limit "${opts.limit ?? ""}". Provide a positive USD amount with at most six decimals.`,
       "usage",
     );
     return;
   }
+  const limit: Money = { micros: limitMicros, currency: "USD" };
 
   // Mirror the contract's cross-field refine: rolling requires a positive
   // integer windowDays; monthly must not carry one. Failing fast here (before
@@ -245,7 +272,7 @@ export async function budgetSet(
       enabled,
       period: opts.period,
       windowDays,
-      limitUsd,
+      limit,
     });
   } catch (err) {
     out.error(err, "api");
@@ -257,7 +284,7 @@ export async function budgetSet(
     return;
   }
   writer.write(
-    `✓ ${result.scope} spend ceiling set to ${formatUsd(limitUsd)} (${periodCell(result)}).`,
+    `✓ ${result.scope} spend ceiling set to ${formatMoney(limit)} (${periodCell(result)}).`,
   );
   writer.write("");
   renderBudgetsTable([result], writer);

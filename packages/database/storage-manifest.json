@@ -139,6 +139,15 @@
     },
     {
       "domain": "agent",
+      "name": "commit_agent_definition",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "commit_memory_import",
       "reads": [],
       "surfaces": [
@@ -569,6 +578,17 @@
     },
     {
       "domain": "agent",
+      "name": "get_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "get_agent_def",
       "reads": [],
       "surfaces": [
@@ -584,6 +604,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "get_agent_toolbelt",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1226,6 +1256,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_agents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "api_key",
       "name": "list_api_keys",
       "reads": [],
@@ -1360,6 +1400,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1895,6 +1945,16 @@
     },
     {
       "domain": "agent",
+      "name": "register_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "register_mcp_server",
       "reads": [],
       "surfaces": [
@@ -1980,6 +2040,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "retire_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "reveal_secret",
       "reads": [],
@@ -2036,6 +2105,15 @@
     {
       "domain": "tacho",
       "name": "revoke_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "rotate_agent_credential",
       "reads": [],
       "surfaces": [
         "api"
@@ -2349,6 +2427,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suspend_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -2686,7 +2773,7 @@
       "writes": []
     }
   ],
-  "contentHash": "6e98bb9b831cc8da619634d072731402a8dd0d2a175b50e6229532178e05eff1",
+  "contentHash": "3b1c43527897d226f5c138b82748be87aee461860260a5faa794f465de4b42c8",
   "domains": [
     {
       "name": "agent",
@@ -6235,6 +6322,42 @@
           "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "definition_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -6370,6 +6493,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",

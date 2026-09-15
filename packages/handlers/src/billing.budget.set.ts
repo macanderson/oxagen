@@ -1,55 +1,15 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
+import { parseMicros } from "@oxagen/oxagen/contracts/spend.shared";
 import {
   getSpendBudget,
   getSpendBudgetStatuses,
   invalidateSpendBudgetScope,
   setSpendBudget,
-  type SpendBudgetStatus,
 } from "@oxagen/billing";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
-
-/** USD → micro-USD (1 USD = 1_000_000), integer math on a dollar ceiling. */
-function usdToMicros(usd: number): bigint {
-  return BigInt(Math.round(usd * 1_000_000));
-}
-
-function microsToUsd(micros: bigint): number {
-  return Number(micros) / 1_000_000;
-}
-
-function toDto(status: SpendBudgetStatus): {
-  scope: "org" | "workspace";
-  publicId: string | null;
-  enabled: boolean;
-  period: "monthly" | "rolling";
-  windowDays: number | null;
-  limitUsd: number | null;
-  spentUsd: number;
-  projectedUsd: number;
-  ratio: number;
-  state: SpendBudgetStatus["state"];
-  reachedThreshold: number;
-  windowStart: string;
-  windowEnd: string;
-} {
-  return {
-    scope: status.budget.scope,
-    publicId: status.budget.publicId,
-    enabled: status.budget.enabled,
-    period: status.budget.period,
-    windowDays: status.budget.windowDays,
-    limitUsd: microsToUsd(status.budget.limitMicros),
-    spentUsd: microsToUsd(status.spentMicros),
-    projectedUsd: microsToUsd(status.projectedMicros),
-    ratio: status.ratio,
-    state: status.state,
-    reachedThreshold: status.reachedThreshold,
-    windowStart: status.window.start,
-    windowEnd: status.window.end,
-  };
-}
+import { toSpendBudgetDto } from "./lib/spend-budget-dto";
 
 /**
  * set_spend_budget — create or replace one scope's hard spend ceiling. Raising a
@@ -75,7 +35,7 @@ export const billingBudgetSetHandler: CapabilityHandler<
     enabled: input.enabled,
     period: input.period,
     windowDays: input.period === "rolling" ? (input.windowDays ?? null) : null,
-    limitMicros: usdToMicros(input.limitUsd),
+    limitMicros: parseMicros(input.limit.micros),
     actorUserId: ctx.userId,
   });
 
@@ -102,8 +62,8 @@ export const billingBudgetSetHandler: CapabilityHandler<
       actorUserId: ctx.userId,
       scope: input.scope,
       workspaceId,
-      previousLimitUsd: previous ? microsToUsd(previous.limitMicros) : null,
-      newLimitUsd: input.limitUsd,
+      previousLimitMicros: previous ? String(previous.limitMicros) : null,
+      newLimitMicros: input.limit.micros,
       previousEnabled: previous?.enabled ?? null,
       newEnabled: input.enabled,
       previousPeriod: previous?.period ?? null,
@@ -124,5 +84,5 @@ export const billingBudgetSetHandler: CapabilityHandler<
       `set_spend_budget: saved ${input.scope} ceiling not found on read-back`,
     );
   }
-  return toDto(saved);
+  return toSpendBudgetDto(saved);
 };

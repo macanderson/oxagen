@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, agent
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent
