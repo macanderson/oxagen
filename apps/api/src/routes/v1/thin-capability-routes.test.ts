@@ -58,6 +58,8 @@ import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.exec
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
+import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
@@ -93,6 +95,8 @@ import { contextRecordPromoteRoute } from "./context.record.promote";
 import { contextRecordPublishRoute } from "./context.record.publish";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
+import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
+import { tachoCommandListRoute } from "./tacho.command.list";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
 
 const CTX = {
@@ -481,6 +485,38 @@ const ROUTES: ThinRoute[] = [
     capability: conversationChat.name,
     body: { conversation_id: "cnv_1", message: "hello" },
     invalidBody: { message: "hello" },
+    status: 200,
+  },
+  {
+    file: "tacho.command.dispatch",
+    route: tachoCommandDispatchRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoCommandDispatch.name,
+    body: { target: { kind: "run", id: "tse_a1b2c3" }, command: "pause" },
+    // `expiresInMs` defaults in the contract, so the handler sees a field the
+    // request never sent — assert the resolved input, not the body.
+    expectedInput: {
+      target: { kind: "run", id: "tse_a1b2c3" },
+      command: "pause",
+      expiresInMs: 3_600_000,
+    },
+    // `steer` carries prompt content, so the contract's cross-field refine
+    // refuses it with no payload. A shape error would be caught by any
+    // invalid body; this one proves the refine runs in the adapter too.
+    invalidBody: {
+      target: { kind: "run", id: "tse_a1b2c3" },
+      command: "steer",
+    },
+    status: 201,
+  },
+  {
+    file: "tacho.command.list",
+    route: tachoCommandListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoCommandList.name,
+    body: { runId: "tse_a1b2c3" },
+    expectedInput: { runId: "tse_a1b2c3", limit: 50 },
+    invalidBody: { runId: "not-a-run-id" },
     status: 200,
   },
   {
