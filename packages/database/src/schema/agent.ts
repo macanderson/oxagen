@@ -464,7 +464,11 @@ export const agentRuns = agentSchema.table(
       sql`${t.specVersion} IN (1, 2)`,
     ),
     // The V1/V2 discriminant. A preserved V1 row carries NONE of the typed V2
-    // identity; a V2 row carries ALL of it. There is no partially-bound run.
+    // identity; a V2 row carries all of it. The seven repository columns follow
+    // run_kind: a `general` run binds no repository and carries NULL in each,
+    // a `repo_edit` run carries every one (migration 20260914190000; the
+    // earlier form required them on every V2 row, so a general run could not
+    // be admitted). There is no partially-bound run.
     v2IdentityCheck: check(
       "agent_runs_v2_identity_check",
       sql`(
@@ -497,16 +501,30 @@ export const agentRuns = agentSchema.table(
         AND ${t.agentVersionId} IS NOT NULL
         AND ${t.agentVersionChecksum} IS NOT NULL
         AND ${t.authorizationSnapshotId} IS NOT NULL
-        AND ${t.repositoryBindingId} IS NOT NULL
-        AND ${t.repositoryProvider} IS NOT NULL
-        AND ${t.providerRepositoryId} IS NOT NULL
-        AND ${t.repositoryConnectionId} IS NOT NULL
-        AND ${t.configuredDefaultRef} IS NOT NULL
-        AND ${t.baseCommitSha} IS NOT NULL
-        AND ${t.baseTreeSha} IS NOT NULL
         AND ${t.retentionPolicyId} IS NOT NULL
         AND ${t.retentionPolicyDigest} IS NOT NULL
         AND ${t.maxAttempts} IS NOT NULL
+        AND (
+          (
+            ${t.runKind} = 'general'
+            AND ${t.repositoryBindingId} IS NULL
+            AND ${t.repositoryProvider} IS NULL
+            AND ${t.providerRepositoryId} IS NULL
+            AND ${t.repositoryConnectionId} IS NULL
+            AND ${t.configuredDefaultRef} IS NULL
+            AND ${t.baseCommitSha} IS NULL
+            AND ${t.baseTreeSha} IS NULL
+          ) OR (
+            ${t.runKind} = 'repo_edit'
+            AND ${t.repositoryBindingId} IS NOT NULL
+            AND ${t.repositoryProvider} IS NOT NULL
+            AND ${t.providerRepositoryId} IS NOT NULL
+            AND ${t.repositoryConnectionId} IS NOT NULL
+            AND ${t.configuredDefaultRef} IS NOT NULL
+            AND ${t.baseCommitSha} IS NOT NULL
+            AND ${t.baseTreeSha} IS NOT NULL
+          )
+        )
       )`,
     ),
     runKindCheck: check(
