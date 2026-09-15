@@ -173,7 +173,7 @@ Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `
 
 **401 Unauthorized:** The API key is missing, invalid, or revoked. Check the key at **Organization → Developer → Tokens**.
 
-**Tool call denied:** On an Enterprise organization, the person who created the key has no role grant for that capability, or the grant routes the call to a person for approval. Check that person's role against [RBAC and roles](/docs/governance/rbac). Oxagen records each denial as a `capability.invoke_denied` event in **Organization → Security → Audit**.
+**Tool call denied:** On an Enterprise organization, the person who created the key has no role grant for that capability, or the grant routes the call to a person for approval. Check that person's role under **Governance → Policies**, and see [RBAC and roles](/docs/governance/rbac). Oxagen records each denial as a `capability.invoke_denied` event in **Organization → Security → Audit**.
 
 **Tool not in the list:** The server does not filter the tool list per key. A rule answers each call when the call is made. A tool missing from the list is not exposed on the MCP surface. See [MCP tools](/docs/mcp/tools).
 

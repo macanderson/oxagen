@@ -24,7 +24,7 @@ feature.
   settings. Local development reads `.env.local`.
 - Oxagen normalizes values at load time (for example, it strips surrounding quotes), so
   an over-quoted value such as `"https://example.com"` parses correctly.
-- Security-relevant predicates resolve the same way every time and **fail safe**:
+- Security-relevant predicates resolve the same way every time and are **fail-safe**:
   a value that leaks into a deployed environment cannot relax a control that protects
   production.
 

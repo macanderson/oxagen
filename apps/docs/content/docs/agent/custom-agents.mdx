@@ -9,10 +9,10 @@ Beyond the built-in workspace agent, you can define **custom agents**. A custom 
 
 An agent definition separates *identity* from *configuration*:
 
-1. **Draft.** Creating an agent inserts the identity (name and immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
-2. **Versioned edits.** Every config change snapshots a **new unpublished version**. Published versions are immutable and never edited in place.
-3. **Publish.** Publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
-4. **Deploy.** Activation needs a published version. Deactivating is always allowed and makes the agent's triggers dormant.
+1. **Draft**. Creating an agent inserts the identity (name and immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
+2. **Versioned edits**. Every config change snapshots a **new unpublished version**. Published versions are immutable and never edited in place.
+3. **Publish**. Publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
+4. **Deploy**. Activation needs a published version. Deactivating is always allowed and makes the agent's triggers dormant.
 
 For an audit, the version history shows what an agent was configured to do at any point in time.
 

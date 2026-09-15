@@ -16,6 +16,7 @@ Each installed MCP server shows one of these statuses:
 | **Connected** | Installed, and Oxagen holds a working credential for it. |
 | **No auth needed** | Installed, and the server needs no credential. |
 | **Needs authentication** | Installed, but OAuth is not done yet. Its tools are not in any agent's tool list. |
+| **Needs re-auth** | The OAuth credential needs a new consent. Click **Re-authenticate**. |
 | **Secret required** | Installed, but no API key is set yet. Its tools are not in any agent's tool list. |
 | **Revoked** | The OAuth token was revoked. Authenticate again. |
 | **Disabled** | Turned off by hand. Its tools are not in any agent's tool list. |
@@ -40,7 +41,7 @@ Capability packs work as soon as they install. An `mcp_server` or `integration` 
 
 ## Authenticating again
 
-If an OAuth token expires or is revoked, the server's row asks you to authenticate again. Org managers get a notification with a link to reconnect. You can also click **Authenticate** directly on the row.
+If an OAuth token expires, the server's status changes to **Needs re-auth**. A notification appears in the bell menu with a link to re-authenticate. You can also click **Re-authenticate** directly on the server's row. A revoked token shows **Revoked**, and the row offers **Authenticate**.
 
 ## Health status
 

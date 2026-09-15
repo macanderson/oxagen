@@ -10,7 +10,7 @@ an emailed verification link before it can sign in. SMTP delivers that link. If
 the SMTP transport is missing or misconfigured in production, Oxagen never sends the verification email,
 and those people cannot finish signing in.
 
-Oxagen also sends **password reset** email over the same transport.
+Oxagen also sends email for **password resets** over the same transport.
 
 ## Required environment variables
 
@@ -47,7 +47,7 @@ in the background instead of waiting on it. A background send that fails still l
 
 ## Local development
 
-Email verification is **off** locally (see [Local development](/docs/configuration/local-development)),
+Email verification is **disabled** locally (see [Local development](/docs/configuration/local-development)),
 so you do **not** need the `SMTP_*` variables to sign up and sign in on your machine.
 Set them locally only to exercise the real delivery path.
 
