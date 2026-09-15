@@ -60,7 +60,7 @@ export function listFiles(dir: string): string[] {
 }
 
 /** Test-only modules: never in a production bundle, exempt as importers (§4 preamble, INV-22). */
-function isTestOnly(file: string): boolean {
+export function isTestOnly(file: string): boolean {
   return (
     file.startsWith("src/test/") ||
     /\.(test|type-test|builders)\.tsx?$/.test(file) ||
@@ -112,7 +112,7 @@ export function directiveOf(
   return null;
 }
 
-function lineOf(sf: ts.SourceFile, node: ts.Node): number {
+export function lineOf(sf: ts.SourceFile, node: ts.Node): number {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
 
