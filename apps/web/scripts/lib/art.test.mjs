@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   drawing,
+  FIELD_BANDS,
+  field,
+  HALO,
+  halo,
   hash32,
   hexPoints,
   lattice,
@@ -93,6 +97,109 @@ describe("lattice", () => {
 
   it("is pure: the same box draws the same cells", () => {
     expect(lattice(box)).toBe(lattice(box));
+  });
+});
+
+describe("field", () => {
+  const spec = {
+    x: 0,
+    y: 0,
+    w: 2400,
+    h: 1200,
+    cell: 37.5,
+    focus: { x: 1680, y: 600 },
+    clear: { x: 624, y: 408 },
+  };
+  const cellsOf = (svg) =>
+    [...svg.matchAll(/<polygon points="([\d.]+),([\d.]+)/g)].map((m) => [
+      Number(m[1]),
+      Number(m[2]),
+    ]);
+
+  it("draws rings in the dim tone at the four bands, flat blocks in the line and rule tones, and exactly one gold cell", () => {
+    const svg = field({ rand: prng(1), ...spec });
+    const opacities = [...svg.matchAll(/stroke-opacity="([\d.]+)"/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(opacities).toEqual(FIELD_BANDS);
+    expect(svg).toContain(`<g fill="none" stroke="${INK.dim}"`);
+    expect(svg).toContain(`<g fill="${INK.line}" stroke="none">`);
+    expect(svg).toContain(`<g fill="${INK.rule}" stroke="none">`);
+    expect(svg.match(/fill="#D6962C"/g)).toHaveLength(1);
+    for (const c of colours(svg)) expect(ALLOWED.has(c)).toBe(true);
+    expect(svg).not.toMatch(/gradient|fill-opacity/i);
+    expect(cellsOf(svg).length).toBeGreaterThan(120);
+  });
+
+  it("clears the drawing's ellipse and keeps the gold cell beside it, in the middle band", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const svg = field({ rand: prng(seed), ...spec });
+      for (const [x, y] of cellsOf(svg)) {
+        // a cell's top point; its centre is one half-height below
+        const cy = y + 37.5 * (6.64 / 6.3);
+        const d = Math.hypot((x - 1680) / 624, (cy - 600) / 408);
+        expect(d).toBeGreaterThanOrEqual(1);
+      }
+      const gold = svg.match(
+        /<polygon points="([\d.]+),([\d.]+)[^"]*" fill="#D6962C"/,
+      );
+      expect(gold).not.toBeNull();
+      const gx = Number(gold[1]) / 2400;
+      const gy = (Number(gold[2]) + 37.5 * (6.64 / 6.3)) / 1200;
+      expect(gx).toBeGreaterThan(0.5);
+      expect(gx).toBeLessThan(0.97);
+      expect(gy).toBeGreaterThan(0.2);
+      expect(gy).toBeLessThan(0.62);
+    }
+  });
+
+  it("is quieter on the left: fewer cells in the first fifth than in the last", () => {
+    const cells = cellsOf(field({ rand: prng(7), ...spec }));
+    const left = cells.filter(([x]) => x < 480).length;
+    const right = cells.filter(([x]) => x > 1920).length;
+    expect(left).toBeLessThan(right);
+  });
+
+  it("is a pure function of its seed, and differs between seeds", () => {
+    expect(field({ rand: prng(9), ...spec })).toBe(
+      field({ rand: prng(9), ...spec }),
+    );
+    expect(field({ rand: prng(9), ...spec })).not.toBe(
+      field({ rand: prng(10), ...spec }),
+    );
+  });
+
+  it("takes a theme and a quiet fraction", () => {
+    const svg = field({
+      rand: prng(1),
+      ...spec,
+      t: { ...INK, dim: "#010101" },
+      quiet: 0.2,
+    });
+    expect(svg).toContain('stroke="#010101"');
+  });
+});
+
+describe("halo", () => {
+  it("steps four hairline hexagons out from the focus, fading in hard steps", () => {
+    const svg = halo({ focus: { x: 1680, y: 600 }, clear: { x: 624, y: 408 } });
+    expect(svg.match(/<polygon/g)).toHaveLength(HALO.length);
+    const opacities = [...svg.matchAll(/stroke-opacity="([\d.]+)"/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(opacities).toEqual(HALO.map(([, a]) => a));
+    // the first ring's top point sits one ring-height above the focus
+    expect(svg).toContain(
+      `points="1680,${(600 - 624 * 1.06 * (6.64 / 6.3)).toFixed(1)}`,
+    );
+    expect(svg).toContain(`stroke="${INK.dim}"`);
+    expect(
+      halo({
+        focus: { x: 0, y: 0 },
+        clear: { x: 10, y: 10 },
+        t: { ...INK, dim: "#020202" },
+      }),
+    ).toContain('stroke="#020202"');
   });
 });
 

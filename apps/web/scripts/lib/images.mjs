@@ -1,6 +1,6 @@
 // The images the build generates: a post's banner and thumbnail, and the
 // Open Graph card for every page. Each is a pure function of its inputs,
-// built from art.mjs (the lattice, the panel and the seven drawings) and
+// built from art.mjs (the field, the halo, the panel and the seven drawings) and
 // text.mjs (Space Grotesk as outlines), and rendered by raster.mjs. Every
 // image is on ink: the site is ink, and an ink image reads on any ground.
 
@@ -9,6 +9,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   drawing,
+  field,
+  halo,
   hash32,
   lattice,
   panel,
@@ -19,8 +21,16 @@ import {
 import { textPath, wrap } from "./text.mjs";
 import { INK } from "./theme.mjs";
 
-export const BANNER = { w: 1600, h: 900 };
-export const THUMB = { w: 800, h: 450 };
+export const BANNER = { w: 2400, h: 1200 };
+export const THUMB = { w: 960, h: 480 };
+
+/**
+ * Where a banner's drawing sits, as fractions of the banner: right of
+ * centre, so a page can set its title over the quiet left and let the
+ * picture come through on the right. The clearing is the drawing's box.
+ */
+export const FOCUS = { x: 0.7, y: 0.5 };
+export const CLEAR = { x: 0.26, y: 0.34 };
 export const OG = { w: 1200, h: 630 };
 
 const WORDMARK_FILE = path.resolve(
@@ -52,31 +62,34 @@ ${body}
 }
 
 /**
- * A post's banner: the lattice across the ink, and one panel holding the
- * post's drawing. The panel is centred, so the post hero's 21:9 crop keeps
- * all of it and the pillar hero's 380px band keeps its middle: a panel cut
- * at the top and bottom still reads as a panel. The thumbnail is this same
- * picture rendered at half size.
+ * A post's banner: a full-bleed field on ink. The honeycomb weathers across
+ * the whole picture, quiet on the left and clustered on the right; halo
+ * rings step out from a focus right of centre, and the post's drawing sits
+ * in the clearing at the focus. A page lays this behind its title, so the
+ * left is kept for words and the drawing keeps within the middle 21:9 band
+ * a wide hero crops to. The thumbnail is this same picture at two fifths
+ * the size.
  * @param {{ seed: string, treatment?: string }} o
  */
 export function bannerSvg(o) {
   const { w, h } = BANNER;
   const rand = prng(hash32(`banner:${o.seed}`));
   const treatment = o.treatment ?? treatmentFor(o.seed);
-  const card = panel({
-    x: 260,
-    y: 170,
-    w: w - 520,
-    h: 560,
-    label: `oxagen — ${SUBJECTS[treatment]}`,
-    pad: 56,
-  });
+  const focus = { x: w * FOCUS.x, y: h * FOCUS.y };
+  const clear = { x: w * CLEAR.x, y: h * CLEAR.y };
   return document(
     w,
     h,
-    lattice({ x: 0, y: 0, w, h, cell: 34 }) +
-      card.svg +
-      drawing(treatment, { rand, ...card.box }),
+    field({ rand, x: 0, y: 0, w, h, cell: w / 64, focus, clear }) +
+      halo({ focus, clear }) +
+      drawing(treatment, {
+        rand,
+        x: focus.x - clear.x,
+        y: focus.y - clear.y,
+        w: clear.x * 2,
+        h: clear.y * 2,
+        surface: INK.ground,
+      }),
   );
 }
 

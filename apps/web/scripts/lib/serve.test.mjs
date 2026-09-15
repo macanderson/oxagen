@@ -36,7 +36,7 @@ describe("shouldRebuild", () => {
     expect(shouldRebuild("content/posts/x/index.mdx")).toBe(true);
     expect(shouldRebuild("assets/blog.css")).toBe(true);
     expect(shouldRebuild("index.html")).toBe(true);
-    expect(shouldRebuild("products/stella/index.html")).toBe(true);
+    expect(shouldRebuild("products/oxagen/index.html")).toBe(true);
     expect(shouldRebuild("dist/blog/index.html")).toBe(false);
     expect(shouldRebuild("scripts/build.mjs")).toBe(false);
     expect(shouldRebuild("node_modules/x")).toBe(false);

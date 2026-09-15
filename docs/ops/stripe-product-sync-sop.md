@@ -23,6 +23,21 @@ truth.
 
 ---
 
+## Two meters (maintainer decision, 2026-09-15)
+
+Oxagen charges on two meters. `pricing.ts` holds the catalogue of both.
+
+| Meter | Unit | What sets the price | Sold as |
+|---|---|---|---|
+| Governed actions | governed action unit (GAU) | the published GAU terms on each plan: list $5 per 1,000, 5,000-GAU blocks at $25, Free 5,000 GAU a month, Build $199 with 50,000, Scale $999 with 300,000; Enterprise negotiated on `billing.contract_terms` (metering spec §4) | the Build and Scale subscriptions; GAU blocks and GAU invoices at the contracted rate (ADR-055) |
+| In-app AI usage | usage credit, 1 credit = $0.01 | provider cost times the meter markup, which the margin solve in §2 sets (`OXAGEN_TARGET_MARGIN`, `OXAGEN_METER_MARKUP`) | the credit packs, bought through `purchase_credits`; a new organisation starts with the $5 signup grant |
+
+The margin knob in §2 moves the credit meter only. A GAU figure changes by a
+maintainer decision recorded in the metering spec before `pricing.ts` changes.
+Tokens are not passed through at cost, and credits never buy GAUs.
+
+---
+
 ## 0. Which Stripe account am I hitting?
 
 The script uses whatever `STRIPE_SECRET_KEY` is in scope and **prints the mode**:

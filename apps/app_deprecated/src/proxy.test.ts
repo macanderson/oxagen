@@ -211,6 +211,13 @@ describe("proxy — auth boundary", () => {
     expect(location("/signup", { authed: false })).toBeNull();
   });
 
+  it("allows /cli/complete without a session (the CLI login landing page)", () => {
+    expect(location("/cli/complete", { authed: false })).toBeNull();
+    expect(location("/cli/authorize", { authed: false })).toBe(
+      `${ORIGIN}/login`,
+    );
+  });
+
   it("allows /two-factor without a full session (sign-in second factor)", () => {
     // After password auth the user holds only the short-lived 2FA cookie, not a
     // session_token — the gate must NOT bounce them to /login or the flow wedges.
