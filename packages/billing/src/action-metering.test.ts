@@ -4,118 +4,17 @@
  *
  * Each test is anchored to a specific invariant claimed in the source file's
  * JSDoc, so a change that breaks the claim also breaks the test that proves
- * it. The `withTenantDb` seam hands out one composite executor: the in-memory
- * GAU store from test-utils/gau-fake-tx.ts for `billing.gau_buckets` and
- * `billing.gau_settlements`, plus an upsert-add table for the annual counter
- * `get_action_usage` still reads. The recorder's other reads — terms,
- * settings, the default card — are module doubles.
+ * it. The `withTenantDb` seam hands out the in-memory GAU store from
+ * test-utils/gau-fake-tx.ts, which runs the real statements against
+ * `billing.gau_buckets` and `billing.gau_settlements`. The recorder's other
+ * reads — terms, settings, the default card — are module doubles.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { schema } from "@oxagen/database";
-import type { Cond } from "./test-utils/gau-conditions";
 import {
   fakeGauExecutor,
   makeFakeGauStore,
   type FakeGauStore,
 } from "./test-utils/gau-fake-tx";
-
-// ---------------------------------------------------------------------------
-// The governed_action_counters fake — an in-memory upsert-add table, keyed by
-// (orgId, periodStart). Mirrors the ON CONFLICT DO UPDATE ... RETURNING
-// semantics of incrementActionCounter's real statement.
-// ---------------------------------------------------------------------------
-
-interface CounterRow {
-  actionsUsed: bigint;
-  actionsCharged: bigint;
-}
-
-const state: { counters: Map<string, CounterRow> } = { counters: new Map() };
-
-function counterKey(orgId: string, periodStart: Date): string {
-  return `${orgId}::${periodStart.toISOString()}`;
-}
-
-function eqValue(cond: Cond, col: unknown): unknown {
-  if (cond.op !== "and") throw new Error("expected and()");
-  const hit = cond.conds.find((c) => c.op === "eq" && c.col === col);
-  if (!hit || hit.op !== "eq") throw new Error("expected eq()");
-  return hit.val;
-}
-
-function makeCountersTx() {
-  return {
-    insert: () => ({
-      values: (v: {
-        orgId: string;
-        periodStart: Date;
-        actionsUsed: bigint;
-        actionsCharged: bigint;
-      }) => ({
-        onConflictDoUpdate: () => ({
-          returning: async () => {
-            const key = counterKey(v.orgId, v.periodStart);
-            const existing = state.counters.get(key) ?? {
-              actionsUsed: 0n,
-              actionsCharged: 0n,
-            };
-            const next: CounterRow = {
-              actionsUsed: existing.actionsUsed + v.actionsUsed,
-              actionsCharged: existing.actionsCharged + v.actionsCharged,
-            };
-            state.counters.set(key, next);
-            return [{ actionsUsed: next.actionsUsed }];
-          },
-        }),
-      }),
-    }),
-    select: () => ({
-      from: () => ({
-        where: (cond: Cond) => ({
-          limit: async () => {
-            const orgId = eqValue(
-              cond,
-              schema.governedActionCounters.orgId,
-            ) as string;
-            const periodStart = eqValue(
-              cond,
-              schema.governedActionCounters.periodStart,
-            ) as Date;
-            const row = state.counters.get(counterKey(orgId, periodStart));
-            return row
-              ? [
-                  {
-                    actionsUsed: row.actionsUsed,
-                    actionsCharged: row.actionsCharged,
-                  },
-                ]
-              : [];
-          },
-        }),
-      }),
-    }),
-  };
-}
-
-/** One executor: the counter table and the GAU store, routed by table. */
-function makeCompositeTx(store: FakeGauStore) {
-  const gau = fakeGauExecutor(store);
-  const counters = makeCountersTx();
-  return {
-    marker: "composite-tx",
-    insert: (table: unknown) =>
-      table === schema.governedActionCounters
-        ? counters.insert()
-        : gau.insert(table),
-    select: () => ({
-      from: (table: unknown) =>
-        table === schema.governedActionCounters
-          ? counters.select().from()
-          : gau.select().from(table),
-    }),
-    update: gau.update,
-  };
-}
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
@@ -179,39 +78,26 @@ vi.mock("./logger", () => ({
 }));
 
 const {
-  ACTION_RATE_BANDS,
   resolveActionBand,
   TIER_ACTION_ALLOWANCES,
   ENTERPRISE_FALLBACK_ALLOWANCE,
   resolveActionAllowance,
   RETENTION_INCLUDED_MONTHS,
   RETENTION_USD_PER_GB_MONTH,
-  creditsForActions,
-  priceAnnualVolumeCredits,
   actionPeriodStart,
-  incrementActionCounter,
-  readActionCounter,
   recordGovernedAction,
 } = await import("./action-metering");
 const { logger } = await import("./logger");
 
-const FIRST_1M = ACTION_RATE_BANDS.find((b) => b.id === "first-1m")!;
-const M1_5M = ACTION_RATE_BANDS.find((b) => b.id === "1m-5m")!;
-const M5_25M = ACTION_RATE_BANDS.find((b) => b.id === "5m-25m")!;
-const COMMITTED_25M = ACTION_RATE_BANDS.find(
-  (b) => b.id === "committed-25m-plus",
-)!;
-
 let store: FakeGauStore;
-let txs: ReturnType<typeof makeCompositeTx>[];
+let txs: ReturnType<typeof fakeGauExecutor>[];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  state.counters = new Map();
   store = makeFakeGauStore();
   txs = [];
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
-    const tx = makeCompositeTx(store);
+    const tx = fakeGauExecutor(store);
     txs.push(tx);
     return Promise.resolve(fn(tx));
   });
@@ -319,30 +205,6 @@ describe("resolveActionAllowance", () => {
 });
 
 // ---------------------------------------------------------------------------
-// creditsForActions — the display figure, rounded up.
-// ---------------------------------------------------------------------------
-
-describe("creditsForActions", () => {
-  it("rounds a single action at the $2 band UP to a whole credit for display", () => {
-    expect(creditsForActions(1, COMMITTED_25M)).toBe(1n);
-  });
-
-  it("prices 50 actions at the $5 band as exactly 25 credits", () => {
-    expect(creditsForActions(50, FIRST_1M)).toBe(25n);
-  });
-
-  it("returns 0n for a non-positive or non-finite count", () => {
-    expect(creditsForActions(0, FIRST_1M)).toBe(0n);
-    expect(creditsForActions(-5, FIRST_1M)).toBe(0n);
-    expect(creditsForActions(Number.NaN, FIRST_1M)).toBe(0n);
-  });
-
-  it("defaults to the first band when none is given", () => {
-    expect(creditsForActions(50)).toBe(creditsForActions(50, FIRST_1M));
-  });
-});
-
-// ---------------------------------------------------------------------------
 // The retention constants the rate-card and retention capabilities print.
 // ---------------------------------------------------------------------------
 
@@ -354,37 +216,6 @@ describe("retention constants", () => {
 
   it("RETENTION_USD_PER_GB_MONTH is a positive rate", () => {
     expect(RETENTION_USD_PER_GB_MONTH).toBeGreaterThan(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// priceAnnualVolumeCredits — total volume, not marginal.
-// ---------------------------------------------------------------------------
-
-describe("priceAnnualVolumeCredits", () => {
-  it("prices the whole annual total at the single band it lands in", () => {
-    // 3M actions land in the 1m-5m ($4) band; the WHOLE 3M prices at $4,
-    // not $5 for the first million and $4 after.
-    const total = 3_000_000;
-    expect(resolveActionBand(total).id).toBe("1m-5m");
-    expect(priceAnnualVolumeCredits(total)).toBe(
-      creditsForActions(total, M1_5M),
-    );
-    expect(priceAnnualVolumeCredits(total)).toBe(1_200_000n);
-  });
-
-  it("is strictly less than pricing the total at the first band's rate (proves it is not marginal)", () => {
-    const total = 3_000_000;
-    const marginalWrong = creditsForActions(total, FIRST_1M);
-    expect(priceAnnualVolumeCredits(total)).toBeLessThan(marginalWrong);
-  });
-
-  it("prices a total landing in the 5m-25m band at that band's rate", () => {
-    const total = 10_000_000;
-    expect(resolveActionBand(total).id).toBe("5m-25m");
-    expect(priceAnnualVolumeCredits(total)).toBe(
-      creditsForActions(total, M5_25M),
-    );
   });
 });
 
@@ -414,59 +245,6 @@ describe("actionPeriodStart", () => {
     expect(start.getUTCFullYear()).toBe(nowYear);
     expect(start.getUTCMonth()).toBe(0);
     expect(start.getUTCDate()).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// incrementActionCounter / readActionCounter — the withTenantDb seam.
-// ---------------------------------------------------------------------------
-
-describe("incrementActionCounter", () => {
-  const now = new Date("2026-03-01T00:00:00Z");
-
-  it("derives before/after from the RETURNING total on a fresh counter", async () => {
-    const result = await incrementActionCounter("org-1", 5, 0, now);
-    expect(result).toEqual({ before: 0, after: 5 });
-  });
-
-  it("derives before/after from the RETURNING total on an existing counter", async () => {
-    await incrementActionCounter("org-1", 5, 0, now);
-    const result = await incrementActionCounter("org-1", 3, 1, now);
-    expect(result).toEqual({ before: 5, after: 8 });
-  });
-
-  it("clamps a negative or fractional actions count before storing", async () => {
-    const result = await incrementActionCounter("org-1", -5, -1, now);
-    expect(result).toEqual({ before: 0, after: 0 });
-  });
-
-  it("floors a fractional actions count", async () => {
-    const result = await incrementActionCounter("org-1", 2.9, 0, now);
-    expect(result).toEqual({ before: 0, after: 2 });
-  });
-
-  it("keeps counters for different orgs independent", async () => {
-    await incrementActionCounter("org-1", 5, 0, now);
-    const other = await incrementActionCounter("org-2", 1, 0, now);
-    expect(other).toEqual({ before: 0, after: 1 });
-  });
-});
-
-describe("readActionCounter", () => {
-  const now = new Date("2026-03-01T00:00:00Z");
-
-  it("returns zeroes when no row exists for the org/period", async () => {
-    const result = await readActionCounter("org-never-seen", now);
-    expect(result.actionsUsed).toBe(0);
-    expect(result.actionsCharged).toBe(0);
-    expect(result.periodStart.toISOString()).toBe("2026-01-01T00:00:00.000Z");
-  });
-
-  it("reflects prior increments", async () => {
-    await incrementActionCounter("org-1", 10, 4, now);
-    const result = await readActionCounter("org-1", now);
-    expect(result.actionsUsed).toBe(10);
-    expect(result.actionsCharged).toBe(4);
   });
 });
 
@@ -569,8 +347,9 @@ describe("recordGovernedAction", () => {
       table: "buckets",
       values: { orgId: ORG, usedGau: 1, purchasedGau: 0 },
     });
-    // The first tenant transaction is the debit; the counter follows in its own.
-    expect(txs.length).toBeGreaterThanOrEqual(2);
+    // The debit is the one tenant transaction a prepaid org inside its
+    // allowance opens; nothing else on the recorder path writes.
+    expect(txs).toHaveLength(1);
   });
 
   it("uses the subscription's period from periodFor, not the calendar month", async () => {
@@ -591,14 +370,11 @@ describe("recordGovernedAction", () => {
     );
   });
 
-  it("debits once per call: two calls add up, and the annual counter counts them too", async () => {
+  it("debits once per call: two calls add up on the one bucket", async () => {
     await record(2);
     const result = await record(5);
     expect(result.bucket.usedGau).toBe(7);
     expect(store.buckets).toHaveLength(1);
-    const counter = await readActionCounter(ORG, NOW);
-    expect(counter.actionsUsed).toBe(7);
-    expect(counter.actionsCharged).toBe(0);
   });
 
   it("reports the stored negative remaining when the debit overdraws the bucket", async () => {
@@ -692,8 +468,8 @@ describe("recordGovernedAction", () => {
       "update:buckets",
       "insert:settlements",
     ]);
-    // Three tenant transactions: the debit, the counter, the claim.
-    expect(txs).toHaveLength(3);
+    // Two tenant transactions: the debit, then the claim.
+    expect(txs).toHaveLength(2);
   });
 
   it("claims nothing while an episode is already open", async () => {

@@ -137,19 +137,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .billingCreditsPurchaseHandler as CapabilityHandlerFn,
   );
   // ADR-052 — the governed-action meter's own read surfaces: the published
-  // price, this organisation's position against it, the run→action calculator,
-  // and the retention posture.
+  // price, the run→action calculator, and the retention posture.
   registerHandler(
     "get_rate_card",
     async () =>
       (await import("./billing.action_rate_card"))
         .billingActionRateCardHandler as CapabilityHandlerFn,
   );
+  // ADR-055 — this organisation's position against its own contracted terms:
+  // the month's governed action unit bucket, its mode and its top-up state.
   registerHandler(
-    "get_action_usage",
+    "get_gau_bucket",
     async () =>
-      (await import("./billing.action_usage"))
-        .billingActionUsageHandler as CapabilityHandlerFn,
+      (await import("./billing.gau_bucket.get"))
+        .billingGauBucketGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "preview_action_cost",

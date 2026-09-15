@@ -47,7 +47,7 @@ export const billingActionRateCard = registerCapability({
     "The published rate card for governed actions (ADR-052): volume bands per 1,000 actions, per-tier included allowances, the evidence-retention price beyond the included window, and confirmation that model tokens are reported at zero charge. Static — the same answer for every organisation on a tier.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   // Org-scoped so the answer can carry the caller's own tier alongside the
   // published table, which is the question a buyer actually has.
   scoped: true,

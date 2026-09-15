@@ -52,6 +52,7 @@ import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
+import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -90,6 +91,7 @@ import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
+import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -384,6 +386,14 @@ const ROUTES: ThinRoute[] = [
     route: billingContractRateGetRoute as unknown as Hono<never>,
     method: "GET",
     capability: billingContractRateGet.name,
+    expectedInput: {},
+    status: 200,
+  },
+  {
+    file: "billing.gau_bucket.get",
+    route: billingGauBucketGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: billingGauBucketGet.name,
     expectedInput: {},
     status: 200,
   },
