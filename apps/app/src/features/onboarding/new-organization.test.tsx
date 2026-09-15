@@ -32,10 +32,9 @@ function elements(node: ReactNode): AnyElement[] {
       for (const c of n) visit(c);
       return;
     }
-    if (!isValidElement(n)) return;
-    const el = n as AnyElement;
-    out.push(el);
-    for (const value of Object.values(el.props)) visit(value);
+    if (!isValidElement<Record<string, unknown>>(n)) return;
+    out.push(n);
+    for (const value of Object.values(n.props)) visit(value);
   };
   visit(node);
   return out;
@@ -44,17 +43,46 @@ function elements(node: ReactNode): AnyElement[] {
 describe("NewOrganizationScreen", () => {
   it("sends a signed-out visit to log in and back here", async () => {
     getAuthUser.mockResolvedValue(null);
-    await expect(NewOrganizationScreen()).rejects.toThrow(
+    await expect(NewOrganizationScreen({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       "NEXT_REDIRECT /login?next=%2Fnew-organization",
     );
   });
 
   it("renders the heading and the organization form for a signed-in person", async () => {
     getAuthUser.mockResolvedValue({ id: "usr_marcusbell" });
-    const tree = elements(await NewOrganizationScreen());
+    const tree = elements(await NewOrganizationScreen({ searchParams: Promise.resolve({}) }));
     expect(redirect).not.toHaveBeenCalled();
     const heading = tree.find((e) => e.type === AuthHeading);
     expect(heading?.props.title).toBe("Name your organization");
     expect(tree.some((e) => e.type === OrganizationForm)).toBe(true);
+  });
+
+  it("carries a requested destination to log in and to the form", async () => {
+    const authorize = "/cli/authorize?state=abc&label=laptop";
+    getAuthUser.mockResolvedValueOnce(null);
+    await expect(
+      NewOrganizationScreen({
+        searchParams: Promise.resolve({ returnTo: authorize }),
+      }),
+    ).rejects.toThrow(
+      `NEXT_REDIRECT /login?next=${encodeURIComponent(
+        `/new-organization?next=${encodeURIComponent(authorize)}`,
+      )}`,
+    );
+
+    getAuthUser.mockResolvedValue({ id: "usr_marcusbell" });
+    const withDestination = elements(
+      await NewOrganizationScreen({
+        searchParams: Promise.resolve({ next: authorize }),
+      }),
+    ).find((e) => e.type === OrganizationForm);
+    expect(withDestination?.props.destination).toBe(authorize);
+
+    const refused = elements(
+      await NewOrganizationScreen({
+        searchParams: Promise.resolve({ next: "//evil.example" }),
+      }),
+    ).find((e) => e.type === OrganizationForm);
+    expect(refused?.props.destination).toBeUndefined();
   });
 });

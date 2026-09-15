@@ -32,13 +32,17 @@ const REV1_E2E_ENTRIES: readonly string[] = [
   "support",
 ];
 
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
 /** Top-level entries of `abs` that do not start with `.`; an absent directory has none. */
 function visibleEntries(abs: string): string[] {
   let names: string[];
   try {
     names = readdirSync(abs);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if (isMissing(error)) return [];
     throw error;
   }
   return names.filter((name) => !name.startsWith(".")).sort();
@@ -51,7 +55,7 @@ function hasSpec(abs: string): boolean {
       (entry) => entry.isFile() && entry.name.endsWith(".spec.ts"),
     );
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if (isMissing(error)) return false;
     throw error;
   }
 }

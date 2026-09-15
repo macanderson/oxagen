@@ -8,14 +8,15 @@ vi.mock("next-intl/server", () => ({
   getRequestConfig: <T>(factory: T) => factory,
 }));
 
-type Factory = () => { locale: string; messages: Record<string, unknown> };
+/** What Next hands the factory; the config reads no request locale. */
+const params = { requestLocale: Promise.resolve(undefined) };
 
 const messagesDir = path.join(process.cwd(), "messages");
 
 describe("i18n request config", () => {
   it("serves English with every catalog under messages/ merged", async () => {
     const { default: factory } = await import("./request");
-    const config = (factory as unknown as Factory)();
+    const config = await factory(params);
 
     expect(config.locale).toBe("en");
     expect(config.messages).toEqual(loadCatalogs(messagesDir));
@@ -26,18 +27,16 @@ describe("i18n request config", () => {
   it("reads the directory once per process outside development", async () => {
     vi.stubEnv("NODE_ENV", "production");
     const { default: factory } = await import("./request");
-    const f = factory as unknown as Factory;
-
-    expect(f().messages).toBe(f().messages);
+    const first = await factory(params);
+    const second = await factory(params);
+    expect(second.messages).toBe(first.messages);
   });
 
   it("re-reads the directory in development so a new catalog shows on refresh", async () => {
     vi.stubEnv("NODE_ENV", "development");
     const { default: factory } = await import("./request");
-    const f = factory as unknown as Factory;
-
-    const first = f().messages;
-    const second = f().messages;
+    const first = (await factory(params)).messages;
+    const second = (await factory(params)).messages;
     expect(second).not.toBe(first);
     expect(second).toEqual(first);
   });

@@ -69,16 +69,12 @@ vi.mock("@oxagen/ui", () => ({
 }));
 
 beforeAll(() => {
-  vi.stubGlobal(
-    "matchMedia",
-    (query: string) =>
-      ({
-        matches: false,
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }) as unknown as MediaQueryList,
-  );
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
   vi.stubGlobal(
     "ResizeObserver",
     class {

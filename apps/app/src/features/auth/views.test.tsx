@@ -3,7 +3,7 @@
 // islands inside render under the intl provider.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IntlProvider, translator } from "./test-intl";
 
@@ -33,24 +33,33 @@ const { CliConsentForm } = await import("./cli-consent-form");
 for (const component of [AuthShell, AuthColumn, AuthHeading, AuthFooter])
   SERVER_SYNC.add(component);
 
+type ServerComponent = (
+  props: Record<string, unknown>,
+) => ReactNode | Promise<ReactNode>;
+
+/** An async component, or a synchronous one listed in SERVER_SYNC. */
+function isServerComponent(type: unknown): type is ServerComponent {
+  return (
+    typeof type === "function" &&
+    (type.constructor.name === "AsyncFunction" || SERVER_SYNC.has(type))
+  );
+}
+
 /** Resolve server components in a tree so the result renders synchronously. */
 async function resolve(node: ReactNode): Promise<ReactNode> {
   if (Array.isArray(node)) return Promise.all(node.map(resolve));
-  if (!isValidElement(node)) return node;
-  const el = node as ReactElement<Record<string, unknown>>;
-  if (
-    typeof el.type === "function" &&
-    (el.type.constructor.name === "AsyncFunction" || SERVER_SYNC.has(el.type))
-  ) {
-    return resolve(
-      await (el.type as (p: unknown) => Promise<ReactNode>)(el.props),
-    );
-  }
+  if (!isValidElement<Record<string, unknown>>(node)) return node;
+  if (isServerComponent(node.type)) return resolve(await node.type(node.props));
   const props: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(el.props))
-    props[k] =
-      isValidElement(v) || Array.isArray(v) ? await resolve(v as ReactNode) : v;
-  return { ...el, props } as ReactNode;
+  for (const [k, v] of Object.entries(node.props))
+    props[k] = await resolveProp(v);
+  return { ...node, props };
+}
+
+/** A prop that holds elements (children, slots) is resolved; any other value is kept. */
+async function resolveProp(value: unknown): Promise<unknown> {
+  if (Array.isArray(value)) return Promise.all(value.map(resolveProp));
+  return isValidElement(value) ? resolve(value) : value;
 }
 
 async function renderServer(node: ReactNode) {

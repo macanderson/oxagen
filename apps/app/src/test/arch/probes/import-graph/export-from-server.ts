@@ -1,1 +1,1 @@
-export { ORG_ONLY_WS } from "@/server/tenant-scope";
+export { requireViewer } from "@/server/viewer";

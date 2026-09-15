@@ -1,60 +1,57 @@
-// shellSource: the viewer gate is the whole read. This file proves the shell
-// renders what requireViewer resolved and nothing for a refused organization.
+// shellSource: the organization and the person the layout's context admits.
+// This file proves the shell renders the context's organization and the
+// session's person, and refuses to render without a session.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const requireViewer = vi.fn();
-vi.mock("@/server/scope", () => ({ requireViewer }));
+const getAuthUser = vi.fn();
+vi.mock("@/features/auth", () => ({ getAuthUser }));
+const getSession = vi.fn();
+vi.mock("@/server/session", () => ({ getSession }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
 const { shellSource } = await import("./source");
 
-const viewer = {
+const ctx = unsafeMint(OrgCtx, {
   userId: "usr_marcusbell",
-  user: {
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "owner",
+});
+
+beforeEach(() => {
+  getAuthUser.mockReset();
+  getAuthUser.mockResolvedValue({
     id: "usr_marcusbell",
     email: "marcus.bell@acme.example",
     name: "Marcus Bell",
-    image: null,
-  },
-  orgRole: "owner",
-  scope: {
-    orgId: "7a000000-0000-4000-8000-0000000000a1",
-    workspaceId: "00000000-0000-0000-0000-000000000000",
-  },
-  org: {
-    id: "7a000000-0000-4000-8000-0000000000a1",
-    slug: "acme",
-    name: "Acme Robotics",
-  },
-  ws: null,
-};
-
-beforeEach(() => {
-  requireViewer.mockReset();
-  requireViewer.mockResolvedValue(viewer);
+  });
 });
 
 describe("shellSource", () => {
-  it("hands the organization and the person requireViewer admits to the shell", async () => {
-    expect(await shellSource("acme")).toEqual({
+  it("hands the context's organization and the signed-in person to the shell", async () => {
+    expect(await shellSource(ctx)).toEqual({
       org: { slug: "acme", name: "Acme Robotics" },
       viewer: { name: "Marcus Bell", email: "marcus.bell@acme.example" },
     });
-    expect(requireViewer).toHaveBeenCalledWith("acme");
   });
 
-  it("keeps a viewer with no recorded name as null, never an invented one", async () => {
-    requireViewer.mockResolvedValue({
-      ...viewer,
-      user: { ...viewer.user, name: null },
+  it("keeps a person with no recorded name as null, never an invented one", async () => {
+    getAuthUser.mockResolvedValue({
+      id: "usr_marcusbell",
+      email: "marcus.bell@acme.example",
+      name: "",
     });
-    expect((await shellSource("acme")).viewer).toEqual({
+    expect((await shellSource(ctx)).viewer).toEqual({
       name: null,
       email: "marcus.bell@acme.example",
     });
   });
 
-  it("renders nothing when requireViewer refuses the organization (negative)", async () => {
-    requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
-    await expect(shellSource("globex")).rejects.toThrow("NEXT_NOT_FOUND");
+  it("refuses to render without a session (negative)", async () => {
+    getAuthUser.mockResolvedValue(null);
+    await expect(shellSource(ctx)).rejects.toThrow("shell_without_session");
   });
 });

@@ -1,6 +1,7 @@
 // The pure core of requireViewer: given a session and the tenancy lookups,
 // decide whether this person may see /{org}[/{ws}], and as whom. No Next
-// imports, no I/O of its own, so every branch has a unit test.
+// imports, no I/O of its own, so every branch has a unit test. viewer.ts mints
+// the context from the fields an `ok` result carries.
 //
 // Order matters for what a stranger can learn:
 //   1. no session                       → unauthenticated
@@ -8,31 +9,40 @@
 //   3. unknown org, or not a member     → not_found (never a hint the org exists;
 //                                         membership is checked BEFORE a stale-slug
 //                                         redirect, so a rename is not disclosed either)
-//   4. unknown workspace, or not a member of it → not_found
-//   5. MFA policy requires enrollment   → mfa_enroll
-//   6. a historical slug                → redirect to the canonical slugs
-//   7. otherwise                        → the viewer
-import type { AppSession, SessionUser } from "./session";
+//   4. a role outside the stored set    → not_found (fail closed)
+//   5. unknown workspace, or not a member of it → not_found
+//   6. MFA policy requires enrollment   → mfa_enroll
+//   7. a historical slug                → redirect to the canonical slugs
+//   8. otherwise                        → the viewer's fields
 import { evaluateMfaGate, mfaGateApplies } from "./mfa-gate";
+import type { AppSession } from "./session";
 import type { SystemLookups } from "./tenancy-lookups";
-import { ORG_ONLY_WS, type Scope } from "./tenant-scope";
-
-export type Viewer = {
-  userId: string;
-  user: SessionUser;
-  /** The member's organization role, lowercase (owner, admin, member, billing, …). */
-  orgRole: string;
-  scope: Scope;
-  org: { id: string; slug: string; name: string };
-  ws: { id: string; slug: string; name: string } | null;
-};
+import type { OrgFields, OrgRole, WsFields } from "./viewer";
 
 export type ViewerResolution =
-  | { kind: "ok"; viewer: Viewer }
+  | {
+      kind: "ok";
+      org: OrgFields;
+      ws: Omit<WsFields, keyof OrgFields> | null;
+    }
   | { kind: "unauthenticated" }
   | { kind: "not_found" }
   | { kind: "mfa_enroll" }
   | { kind: "redirect"; org: string; ws: string | null };
+
+/** Every role the org_users CHECK admits, and nothing else. */
+const ORG_ROLES = {
+  owner: true,
+  admin: true,
+  member: true,
+  billing: true,
+  compliance: true,
+  viewer: true,
+} as const satisfies Record<OrgRole, true>;
+
+function isOrgRole(role: string): role is OrgRole {
+  return Object.hasOwn(ORG_ROLES, role);
+}
 
 /**
  * The slug format org and workspace create/rename validate against. A value
@@ -70,9 +80,9 @@ export async function resolveViewerWith(
   if (!org) return { kind: "not_found" };
 
   const role = await lookups.orgRole(org.id, userId);
-  if (!role) return { kind: "not_found" };
+  if (role === null || !isOrgRole(role)) return { kind: "not_found" };
 
-  let ws: Viewer["ws"] = null;
+  let ws: Extract<ViewerResolution, { kind: "ok" }>["ws"] = null;
   if (wsSlug !== undefined) {
     const found =
       (await lookups.workspaceBySlug(org.id, wsSlug)) ??
@@ -80,7 +90,7 @@ export async function resolveViewerWith(
     if (!found || found.orgId !== org.id) return { kind: "not_found" };
     if (!(await lookups.isWorkspaceMember(found.id, userId)))
       return { kind: "not_found" };
-    ws = { id: found.id, slug: found.slug, name: found.name };
+    ws = { workspaceId: found.id, wsSlug: found.slug, wsName: found.name };
   }
 
   const policy = await lookups.mfaPolicy(org.id);
@@ -94,20 +104,20 @@ export async function resolveViewerWith(
     if (decision.action === "enroll") return { kind: "mfa_enroll" };
   }
 
-  if (org.slug !== orgSlug || (ws !== null && ws.slug !== wsSlug)) {
-    return { kind: "redirect", org: org.slug, ws: ws?.slug ?? null };
+  if (org.slug !== orgSlug || (ws !== null && ws.wsSlug !== wsSlug)) {
+    return { kind: "redirect", org: org.slug, ws: ws?.wsSlug ?? null };
   }
 
   return {
     kind: "ok",
-    viewer: {
+    org: {
       userId,
-      user: session.user,
+      orgId: org.id,
+      orgSlug: org.slug,
+      orgName: org.name,
       orgRole: role,
-      scope: { orgId: org.id, workspaceId: ws?.id ?? ORG_ONLY_WS },
-      org: { id: org.id, slug: org.slug, name: org.name },
-      ws,
     },
+    ws,
   };
 }
 

@@ -19,7 +19,9 @@ function renderWithIntl(element: ReactElement) {
   );
 }
 
-const keys = Object.keys(UNRECORDED) as UnrecordedKey[];
+const keys = Object.keys(UNRECORDED).filter((key): key is UnrecordedKey =>
+  Object.hasOwn(UNRECORDED, key),
+);
 
 describe("NotRecorded", () => {
   it.each(keys)("renders the catalog prose for %s", (section) => {
@@ -43,13 +45,13 @@ describe("NotRecorded", () => {
   });
 
   it("has prose in the catalog for every row and no row without prose", () => {
-    const prose = en.unrecorded as Record<string, unknown>;
+    const prose: Record<string, unknown> = en.unrecorded;
     const flat = new Set<string>();
     const walk = (node: Record<string, unknown>, prefix: string) => {
       for (const [k, v] of Object.entries(node)) {
         const key = prefix ? `${prefix}.${k}` : k;
         if (typeof v === "string") flat.add(key);
-        else walk(v as Record<string, unknown>, key);
+        else if (typeof v === "object" && v !== null) walk({ ...v }, key);
       }
     };
     walk(prose, "");

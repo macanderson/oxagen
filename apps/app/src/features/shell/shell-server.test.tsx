@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// The server half: the chrome renders the viewer the source resolved and 404s
-// an organization the viewer does not belong to; the frame streams a skeleton
-// and the pre-paint theme script.
+// The server half: the chrome renders what the source read for the context the
+// layout resolved; the frame streams a skeleton and the pre-paint theme script.
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -9,30 +8,17 @@ import shellMessages from "../../../messages/shell.json";
 import { shellData } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 
-vi.mock("./source", () => ({
-  // requireViewer runs inside shellSource: an organization the viewer is not a
-  // member of is a 404 before the chrome renders.
-  shellSource: (org: string) =>
-    org === "acme"
-      ? Promise.resolve(shellData())
-      : Promise.reject(new NotFound("NEXT_NOT_FOUND")),
+const { shellSource } = vi.hoisted(() => ({
+  shellSource: vi.fn(() => Promise.resolve(shellData())),
 }));
-
-/** What requireViewer throws through Next's notFound() for a non-member. */
-const { NotFound } = vi.hoisted(() => ({
-  NotFound: class NotFound extends Error {},
-}));
-
-// React's cache() only dedupes inside a server request; in tests it is a pass-through.
-vi.mock("react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react")>();
-  return { ...actual, cache: <T,>(fn: T) => fn };
-});
+vi.mock("./source", () => ({ shellSource }));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 vi.mock("next-intl/server", () => ({
   getTranslations: () =>
     Promise.resolve((key: string) => {
-      const value = (shellMessages.shell as Record<string, unknown>)[key];
+      const value: unknown = Reflect.get(shellMessages.shell, key);
       if (typeof value !== "string") throw new Error(`missing shell.${key}`);
       return value;
     }),
@@ -50,20 +36,23 @@ afterEach(() => {
 });
 
 describe("ShellChrome", () => {
-  it("hands the resolved organization and viewer to the client shell", async () => {
+  it("hands the client shell what the source read for the layout's context", async () => {
     const { ShellChrome } = await import("./shell-chrome");
-    const element = (await ShellChrome({
-      params: Promise.resolve({ org: "acme" }),
-    })) as ReactElement<{ data: ShellData }>;
+    const { OrgCtx } = await import("@/server/viewer");
+    const { unsafeMint } = await import("@/server/viewer.testing");
+    const ctx = unsafeMint(OrgCtx, {
+      userId: "usr_marcusbell",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+    });
+    const element: ReactElement<{ data: ShellData }> = await ShellChrome({
+      ctx,
+    });
     expect(isValidElement(element)).toBe(true);
     expect(element.props.data).toEqual(shellData());
-  });
-
-  it("is not found for an organization the viewer does not belong to", async () => {
-    const { ShellChrome } = await import("./shell-chrome");
-    await expect(
-      ShellChrome({ params: Promise.resolve({ org: "globex" }) }),
-    ).rejects.toBeInstanceOf(NotFound);
+    expect(shellSource).toHaveBeenCalledWith(ctx);
   });
 });
 

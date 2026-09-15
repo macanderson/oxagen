@@ -6,7 +6,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { cache } from "react";
 
-export type SessionUser = {
+type SessionUser = {
   id: string;
   email: string;
   name: string | null;
