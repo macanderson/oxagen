@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -185,13 +185,27 @@ describe("service managers", () => {
     );
   });
 
-  it("installs a per-user Task Scheduler task on Windows", () => {
+  it("installs a per-user Task Scheduler task on Windows, and stops and observes the daemon by pid", () => {
     const home = mkdtempSync(join(tmpdir(), "tacho-win-"));
     const launcher = join(home, "tacho", "tachod.cmd");
+    const pidPath = join(home, "tacho", "tachod.pid");
+    // The task's own status is "Ready" whatever the daemon does (its action
+    // is `cmd /c start`, which returns at once); only the pid file says.
     const fake = fakeExec({
       "schtasks /Query": {
         status: 0,
-        stdout: "TaskName: \\OxagenTachod\r\nStatus: Running\r\n",
+        stdout: "TaskName: \\OxagenTachod\r\nStatus: Ready\r\n",
+        stderr: "",
+      },
+      "tasklist /FI PID eq 4242": {
+        status: 0,
+        stdout: '"tacho.exe","4242","Console","1","12,345 K"\r\n',
+        stderr: "",
+      },
+      "tasklist /FI PID eq 9": {
+        status: 0,
+        stdout:
+          "INFO: No tasks are running which match the specified criteria.\r\n",
         stderr: "",
       },
     });
@@ -200,6 +214,7 @@ describe("service managers", () => {
       home,
       exec: fake.exec,
       launcherPath: launcher,
+      pidPath,
     });
     expect(manager.kind).toBe("schtasks");
     manager.install(SPEC);
@@ -211,14 +226,43 @@ describe("service managers", () => {
       ),
     );
     expect(fake.calls).toContain("schtasks /Run /TN OxagenTachod");
+    // No pid file yet: installed, not running, and nothing was killed.
+    expect(manager.status()).toEqual({
+      installed: true,
+      running: false,
+      detail: "no daemon process",
+    });
+    expect(fake.calls.filter((c) => c.startsWith("taskkill"))).toEqual([]);
+
+    // The daemon wrote its pid: running, by that pid — and a re-install
+    // (re-enroll, reassign) kills it before /Run so the reused port is free.
+    writeFileSync(pidPath, "4242\n");
     expect(manager.status()).toEqual({
       installed: true,
       running: true,
-      detail: "Running",
+      detail: "pid 4242",
     });
+    fake.calls.length = 0;
+    manager.install(SPEC);
+    expect(fake.calls.indexOf("taskkill /PID 4242 /T /F")).toBeGreaterThan(-1);
+    expect(fake.calls.indexOf("taskkill /PID 4242 /T /F")).toBeLessThan(
+      fake.calls.indexOf("schtasks /Run /TN OxagenTachod"),
+    );
+    // A stale pid file (the process is gone) reads as stopped.
+    writeFileSync(pidPath, "9\n");
+    expect(manager.status().running).toBe(false);
+    writeFileSync(pidPath, "not a pid\n");
+    expect(manager.status().running).toBe(false);
+
+    writeFileSync(pidPath, "4242\n");
+    fake.calls.length = 0;
     manager.uninstall();
     expect(existsSync(launcher)).toBe(false);
+    expect(fake.calls).toContain("schtasks /End /TN OxagenTachod");
+    expect(fake.calls).toContain("taskkill /PID 4242 /T /F");
     expect(fake.calls).toContain("schtasks /Delete /TN OxagenTachod /F");
+    // Nothing is killed by image name: the daemon is tacho.exe or node.exe.
+    expect(fake.calls.some((c) => c.includes("/IM"))).toBe(false);
 
     const failing = serviceManagerFor({
       platform: "win32",

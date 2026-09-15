@@ -4,7 +4,13 @@
  * foreign entry intact (acceptance 1, 18); status and export read what is
  * there; verify drives a fake `claude`.
  */
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -14,7 +20,7 @@ import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
 import { oxagenConfigPath, tachoPaths } from "../host/paths";
-import type { ServiceManager, ServiceSpec } from "../host/service";
+import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
   scratchPaths,
@@ -34,9 +40,12 @@ import {
   resolveCredentials,
   runtimeCommands,
   shellQuote,
+  transientBinDir,
 } from "./deps";
+import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
+import { buildTachoProgram } from "./main";
 import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
@@ -286,14 +295,22 @@ describe("credentials", () => {
       "/usr/bin/node",
     );
     expect(dev.binDir.endsWith("/bin")).toBe(true);
-    expect(claudeFacts(() => ({ status: 1, stdout: "", stderr: "" }))).toEqual(
-      {},
-    );
+    const bare = { HOME: "/nonexistent", SHELL: "/bin/sh" };
     expect(
-      claudeFacts((_c, args) =>
-        args[0] === "-lc"
-          ? { status: 0, stdout: "/x/claude\n", stderr: "" }
-          : { status: 0, stdout: "1.2.3\n", stderr: "" },
+      claudeFacts(
+        () => ({ status: 1, stdout: "", stderr: "" }),
+        "darwin",
+        bare,
+      ),
+    ).toEqual({});
+    expect(
+      claudeFacts(
+        (_c, args) =>
+          args[0] === "-lc"
+            ? { status: 0, stdout: "/x/claude\n", stderr: "" }
+            : { status: 0, stdout: "1.2.3\n", stderr: "" },
+        "darwin",
+        bare,
       ),
     ).toEqual({ path: "/x/claude", version: "1.2.3" });
   });
@@ -571,10 +588,23 @@ describe("enroll → status → unenroll", () => {
     const first = await unenroll({}, d);
     expect(first.revoked).toBe(false);
     expect(first.warnings[0]).toContain("no operator token");
-    expect(readHostFile(d.paths.hostFile)?.revoked_at).not.toBeNull();
+    const marked = readHostFile(d.paths.hostFile)?.revoked_at;
+    expect(marked).not.toBeNull();
     expect(existsSync(d.paths.wal)).toBe(true);
-    const second = await unenroll({ purge: true }, d);
+    expect(d.requests).toEqual([]);
+    // The local mark means "revoke not done", never "already revoked": a
+    // second run without a token still cannot revoke and keeps host.json.
+    const stillNoToken = await unenroll({}, d);
+    expect(stillNoToken.revoked).toBe(false);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).toBe(marked);
+    // With a token the pending revoke is made, and only then does host.json go.
+    const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
+    ]);
+    expect(d.lines.join("\n")).toContain("Finishing the revoke of");
     expect(existsSync(d.paths.hostFile)).toBe(false);
     expect(existsSync(d.paths.wal)).toBe(false);
     const failing = deps({
@@ -604,7 +634,25 @@ describe("harnesses and reassign", () => {
       "claude-code",
       "codex",
     ]);
-    expect(() => parseHarnesses("cursor")).toThrow();
+    // One line naming the choices, not a ZodError's JSON issues array: both
+    // CLIs print the message verbatim.
+    expect(() => parseHarnesses("cursor")).toThrow(
+      'unknown harness "cursor"; expected one of claude-code, codex',
+    );
+    expect(() => parseHarnesses("claude_code")).toThrow(
+      /unknown harness "claude_code"/,
+    );
+  });
+
+  it("`tacho enroll` passes no harness list unless --harness is given", () => {
+    // A commander default of "claude-code" would make a bare `tacho enroll`
+    // on a Codex-only host add Claude Code hooks; enroll() defaults the
+    // fresh-enrollment case itself.
+    const enrollCommand = buildTachoProgram()
+      .commands.find((c) => c.name() === "enroll")
+      ?.options.find((o) => o.long === "--harness");
+    expect(enrollCommand).toBeDefined();
+    expect(enrollCommand?.defaultValue).toBeUndefined();
   });
 
   it("enrolls Codex next to Claude Code, and unenroll strips both", async () => {
@@ -654,12 +702,31 @@ describe("harnesses and reassign", () => {
     expect(d.lines.join("\n")).toContain("Codex");
 
     // Re-applying without --harness keeps Codex; it never drops a harness.
+    d.requests.length = 0;
     const again = await enroll({ token: "tok" }, d);
     expect(again.ok).toBe(true);
     expect(readHostFile(d.paths.hostFile)?.harnesses).toEqual([
       "claude-code",
       "codex",
     ]);
+    expect(d.requests).toEqual([]);
+    // Nor does naming the harnesses it already hooks re-enroll it.
+    expect(
+      (await enroll({ token: "tok", harnesses: ["codex", "claude-code"] }, d))
+        .ok,
+    ).toBe(true);
+    expect(d.requests).toEqual([]);
+    // A re-apply that names another pair does not move the host; it says so.
+    const elsewhere = await enroll(
+      { token: "tok", org: "beta", workspace: "edge" },
+      d,
+    );
+    expect(elsewhere.ok).toBe(true);
+    expect(elsewhere.warnings.join("\n")).toContain(
+      "reports to acme/core, not beta/edge",
+    );
+    expect(readHostFile(d.paths.hostFile)?.org_slug).toBe("acme");
+    expect(d.requests).toEqual([]);
 
     await unenroll({ token: "tok" }, d);
     const stripped = d.readCodexHooks() as {
@@ -670,6 +737,86 @@ describe("harnesses and reassign", () => {
     ).toEqual(["mine.sh"]);
     expect(Object.keys(stripped.hooks)).toEqual(["PreToolUse"]);
     expect(d.lines.join("\n")).toContain("removed from");
+  });
+
+  it("adds a harness to an enrolled host through a revoke and a fresh enrollment, so the control plane's record follows", async () => {
+    const d = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    const before = readHostFile(d.paths.hostFile);
+    d.requests.length = 0;
+    d.lines.length = 0;
+    // No --force: the addition itself is what re-enrolls. The revoke goes
+    // to the host's own org and workspace whatever the caller passes as a
+    // pair (the CLI's config.json default may name another org).
+    const grown = await enroll(
+      {
+        token: "tok",
+        org: "other",
+        workspace: "elsewhere",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(grown.ok).toBe(true);
+    expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/core/tacho/enrollments/revoke",
+      "https://api.test/v1/acme/core/tacho/enrollments",
+    ]);
+    expect(d.requests[0]?.body).toMatchObject({
+      hostEnrollmentId: TEST_ENROLLMENT,
+      reason: "tacho enroll --harness claude-code,codex",
+    });
+    expect(d.requests[1]?.body).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+    });
+    expect(d.lines.join("\n")).toContain("adding codex to");
+    const after = readHostFile(d.paths.hostFile);
+    expect(after).toMatchObject({
+      harnesses: ["claude-code", "codex"],
+      org_slug: "acme",
+      workspace_slug: "core",
+      port: before?.port,
+      local_token: before?.local_token,
+      device_key_fingerprint: before?.device_key_fingerprint,
+      revoked_at: null,
+      codex_version: "0.104.0",
+    });
+    expect(
+      codexHookPresence(d.readCodexHooks(), TEST_ENROLLMENT).complete,
+    ).toBe(true);
+    // Without a token the addition is refused before anything is revoked.
+    const offline = deps({
+      env: {},
+      home: join(scratchPaths().root, "nohome"),
+    });
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      offline,
+    );
+    offline.requests.length = 0;
+    const refused = await enroll(
+      { harnesses: ["claude-code", "codex"] },
+      offline,
+    );
+    expect(refused.ok).toBe(false);
+    expect(offline.requests).toEqual([]);
+    expect(readHostFile(offline.paths.hostFile)).toMatchObject({
+      harnesses: ["claude-code"],
+      revoked_at: null,
+    });
   });
 
   it("reassigns to another workspace keeping the device key and port", async () => {
@@ -732,11 +879,16 @@ describe("harnesses and reassign", () => {
     expect(codex).not.toContain(TEST_ENROLLMENT);
     expect(codex).toContain(OTHER_ENROLLMENT);
 
-    // Same target is a no-op; not enrolled and no --workspace are errors.
+    // Same target is a no-op; not enrolled, no --workspace, and --org
+    // without --workspace are errors (the current slug is not a workspace
+    // of the other org, or worse, a same-named one nobody chose).
     d.requests.length = 0;
     expect((await reassign({ workspace: "edge" }, d)).ok).toBe(true);
     expect(d.requests).toEqual([]);
     expect((await reassign({ token: "tok" }, d)).ok).toBe(false);
+    expect((await reassign({ token: "tok", org: "other" }, d)).ok).toBe(false);
+    expect(d.errors.at(-1)).toContain("--org other needs --workspace <slug>");
+    expect(d.requests).toEqual([]);
 
     // A harness-only change re-enrolls in place: the one way to drop Codex.
     const dropped = await reassign(
@@ -752,7 +904,7 @@ describe("harnesses and reassign", () => {
     expect(fresh.errors[0]).toContain("Not enrolled");
   });
 
-  it("skips the revoke when the old enrollment is already revoked, and says so when the new enrollment fails", async () => {
+  it("retries a pending revoke before moving, and leaves host.json retired when the new enrollment fails", async () => {
     const d = deps();
     await enroll(
       {
@@ -765,8 +917,8 @@ describe("harnesses and reassign", () => {
     );
     const host = readHostFile(d.paths.hostFile);
     if (host === undefined) throw new Error("not enrolled");
-    // The operator revoked this host from the fleet page already: the
-    // control plane is not asked again, the move goes straight to enroll.
+    // A marked host.json is one whose revoke did not go through (offline
+    // unenroll); the move asks the control plane again before enrolling.
     writeHostFile(d.paths.hostFile, {
       ...host,
       revoked_at: "2026-09-10T11:00:00.000Z",
@@ -775,14 +927,17 @@ describe("harnesses and reassign", () => {
     const moved = await reassign({ token: "tok", workspace: "edge" }, d);
     expect(moved.ok).toBe(true);
     expect(d.lines.join("\n")).toContain(
-      "already revoked at 2026-09-10T11:00:00.000Z",
+      "pending since 2026-09-10T11:00:00.000Z",
     );
     expect(d.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/core/tacho/enrollments/revoke",
       "https://api.test/v1/acme/edge/tacho/enrollments",
     ]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).toBeNull();
 
-    // When the create is refused after the revoke went through, the host is
-    // left unenrolled and the message says how to recover.
+    // When the create is refused after the revoke went through, host.json
+    // stays but marked retired: status says so, and the recovery command
+    // enrolls afresh instead of re-applying the revoked enrollment's hooks.
     const refusing = deps();
     await enroll(
       {
@@ -811,8 +966,105 @@ describe("harnesses and reassign", () => {
       "Reassign failed after revoking the old enrollment",
     );
     expect(refusing.errors.at(-1)).toContain(
-      "tacho enroll --org acme --workspace edge",
+      "tacho enroll --force --org acme --workspace edge --api-url https://api.test",
     );
+    const left = readHostFile(refusing.paths.hostFile);
+    expect(left?.host_enrollment_id).toBe(TEST_ENROLLMENT);
+    expect(left?.revoked_at).not.toBeNull();
+    expect(JSON.stringify(refusing.readSettings())).not.toContain(
+      TEST_ENROLLMENT,
+    );
+    // The printed recovery, and the same command without --force, both
+    // take the fresh path: the marked enrollment is never re-applied.
+    refusing.fetch = upstream;
+    refusing.requests.length = 0;
+    const recovered = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "edge",
+        apiUrl: "https://api.test",
+      },
+      refusing,
+    );
+    expect(recovered.ok).toBe(true);
+    expect(refusing.requests.map((r) => r.url)).toEqual([
+      "https://api.test/v1/acme/edge/tacho/enrollments",
+    ]);
+    expect(readHostFile(refusing.paths.hostFile)).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      workspace_slug: "edge",
+      revoked_at: null,
+    });
+  });
+  it("refuses to enroll from a directory that is gone after this launch", async () => {
+    // The exec paths an AppImage, a mounted .dmg and App Translocation give.
+    expect(transientBinDir("/tmp/.mount_OxagenAb12Cd/usr/bin", {})).toBe(
+      "an AppImage mount",
+    );
+    expect(
+      transientBinDir("/Volumes/Oxagen/Oxagen.app/Contents/MacOS", {}),
+    ).toBe("a mounted disk image");
+    expect(
+      transientBinDir(
+        "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS",
+        {},
+      ),
+    ).toContain("App Translocation");
+    expect(
+      transientBinDir("/usr/lib/oxagen", {
+        APPIMAGE: "/home/dev/Oxagen.AppImage",
+      }),
+    ).toBe("an AppImage mount");
+    // A permanent TACHO_BIN_DIR wins over the APPIMAGE variable the app
+    // inherits; a permanent install is never flagged.
+    expect(
+      transientBinDir("/home/dev/.local/share/oxagen/bin", {
+        APPIMAGE: "/home/dev/Oxagen.AppImage",
+        TACHO_BIN_DIR: "/home/dev/.local/share/oxagen/bin",
+      }),
+    ).toBeUndefined();
+    expect(
+      transientBinDir("/Applications/Oxagen.app/Contents/MacOS", {}),
+    ).toBeUndefined();
+    expect(transientBinDir("/opt/homebrew/bin", {})).toBeUndefined();
+    const mounted = runtimeCommands(
+      undefined,
+      {},
+      "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho",
+      "darwin",
+      true,
+    );
+    expect(mounted.transient).toBe("a mounted disk image");
+    expect(
+      runtimeCommands(
+        undefined,
+        {},
+        "/Applications/Oxagen.app/Contents/MacOS/tacho",
+        "darwin",
+        true,
+      ),
+    ).not.toHaveProperty("transient");
+
+    // enroll refuses before any request or key is minted, and says how out.
+    const d = deps({ runtime: { ...mounted, binDir: mounted.binDir } });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(result.ok).toBe(false);
+    expect(d.requests).toEqual([]);
+    expect(existsSync(d.paths.hostFile)).toBe(false);
+    expect(existsSync(d.paths.deviceKey)).toBe(false);
+    expect(d.errors.at(-1)).toContain("a mounted disk image");
+    expect(d.errors.at(-1)).toContain("Move Oxagen to /Applications");
+    // Not enrolled, so status still reads the machine as it is.
+    expect((await status({ json: true }, d)).enrolled).toBe(false);
   });
 
   it("uses the multi-call binary when compiled and quotes for cmd.exe on Windows", () => {
@@ -871,6 +1123,72 @@ describe("harnesses and reassign", () => {
       ),
     ).toEqual({ path: "C:\\npm\\codex.cmd", version: "0.104.0" });
   });
+
+  it("finds a harness through the login shell, then sh, then the install dirs, and never past a dead probe", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-home-"));
+    const env = { HOME: home, SHELL: "/bin/zsh" };
+    const calls: string[] = [];
+    const answering =
+      (found: Record<string, string>) =>
+      (command: string, args: string[]): ReturnType<Exec> => {
+        calls.push(`${command} ${args[0] ?? ""}`);
+        if (args[args.length - 1] === "--version")
+          return { status: 0, stdout: "9.9.9\n", stderr: "" };
+        const probe = found[command];
+        return probe === undefined
+          ? { status: 1, stdout: "", stderr: "" }
+          : { status: 0, stdout: `${probe}\n`, stderr: "" };
+      };
+    // The user's login shell wins (.zprofile, where Homebrew and nvm put
+    // their PATH lines).
+    expect(
+      harnessFacts(
+        answering({ "/bin/zsh": "/Users/dev/.local/bin/claude" }),
+        "claude",
+        "darwin",
+        env,
+      ),
+    ).toEqual({ path: "/Users/dev/.local/bin/claude", version: "9.9.9" });
+    expect(calls[0]).toBe("/bin/zsh -lc");
+    // Then sh -lc.
+    calls.length = 0;
+    expect(
+      harnessFacts(
+        answering({ sh: "/opt/homebrew/bin/codex" }),
+        "codex",
+        "darwin",
+        env,
+      ),
+    ).toEqual({ path: "/opt/homebrew/bin/codex", version: "9.9.9" });
+    expect(calls.slice(0, 2)).toEqual(["/bin/zsh -lc", "sh -lc"]);
+    // Then the well-known directories, checked on disk.
+    mkdirSync(join(home, ".local", "bin"), { recursive: true });
+    writeFileSync(join(home, ".local", "bin", "claude"), "");
+    expect(harnessFacts(answering({}), "claude", "darwin", env)).toEqual({
+      path: join(home, ".local", "bin", "claude"),
+      version: "9.9.9",
+    });
+    // Nothing anywhere: not found, no --version call.
+    calls.length = 0;
+    expect(harnessFacts(answering({}), "codex", "darwin", env)).toEqual({});
+    expect(calls.some((c) => c.endsWith("--version"))).toBe(false);
+    // A probe that timed out (status null) reads as not found, not as a hang.
+    expect(
+      harnessFacts(
+        () => ({ status: null, stdout: "", stderr: "timed out" }),
+        "codex",
+        "darwin",
+        env,
+      ),
+    ).toEqual({});
+    // /bin/sh as the login shell is not asked twice.
+    calls.length = 0;
+    harnessFacts(answering({}), "codex", "darwin", {
+      HOME: home,
+      SHELL: "/bin/sh",
+    });
+    expect(calls.filter((c) => c.startsWith("sh "))).toHaveLength(1);
+  });
 });
 
 describe("export and verify", () => {
@@ -902,6 +1220,81 @@ describe("export and verify", () => {
     const empty = deps();
     await exportCommand({}, empty);
     expect(empty.lines.at(-1)).toContain("no sessions");
+  });
+
+  it("verify drives Codex through codex exec and matches the newest chain", async () => {
+    const signer = bundleSigner();
+    const calls: string[][] = [];
+    const d = deps({
+      exec: (command, args) => {
+        calls.push([command, ...args]);
+        if (args[0] === "exec")
+          return { status: 0, stdout: "OK\n", stderr: "" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    d.service.running = true;
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const result = await verify({ harness: "codex" }, d);
+    expect(result.ok).toBe(true);
+    expect(result.sessionId).toBe("sess-verify");
+    expect(calls).toContainEqual([
+      "/usr/local/bin/codex",
+      "exec",
+      "--skip-git-repo-check",
+      "Reply with exactly the word OK and nothing else.",
+    ]);
+    expect(d.lines.join("\n")).toContain("Running codex exec");
+    const noCodex = deps({ codex: () => ({}) });
+    noCodex.service.running = true;
+    writeHostFile(
+      noCodex.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    expect((await verify({ harness: "codex" }, noCodex)).detail).toContain(
+      "codex",
+    );
+  });
+
+  it("detect reports installed harnesses and which are enrolled", () => {
+    const d = deps();
+    const fresh = detect({}, d);
+    expect(fresh.enrolled).toBe(false);
+    expect(
+      fresh.harnesses.map((h) => [h.harness, h.installed, h.enrolled]),
+    ).toEqual([
+      ["claude-code", true, false],
+      ["codex", true, false],
+    ]);
+    expect(d.lines.join("\n")).toContain(
+      "Claude Code  2.1.263 at /usr/local/bin/claude",
+    );
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["claude-code"],
+      }),
+    );
+    const missingCodex = deps({ codex: () => ({}) });
+    writeHostFile(
+      missingCodex.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["claude-code"],
+      }),
+    );
+    const report = detect({ json: true }, missingCodex);
+    expect(report).toMatchObject({
+      enrolled: true,
+      harnesses: [
+        { harness: "claude-code", installed: true, enrolled: true },
+        { harness: "codex", installed: false, enrolled: false },
+      ],
+    });
+    expect(JSON.parse(missingCodex.lines.join("\n"))).toEqual(report);
   });
 
   it("verify reports each failure mode", async () => {

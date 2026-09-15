@@ -7,11 +7,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureWriter } from "../../lib/capture-writer.js";
 
 const store: { token?: string; org?: string; ws?: string } = {};
+const configWrites: Array<Record<string, unknown>> = [];
 vi.mock("../../lib/config.js", () => ({
   getToken: () => store.token,
   getOrgId: () => store.org,
   getWorkspaceId: () => store.ws,
   getApiUrl: () => "https://api.test",
+  writeConfig: (patch: Record<string, unknown>) => {
+    configWrites.push(patch);
+  },
 }));
 
 const calls: Array<{ name: string; args: unknown[] }> = [];
@@ -20,10 +24,21 @@ const outcomes = {
   verify: { ok: true, detail: "chained" },
   status: { enrolled: true },
   unenroll: { ok: true },
-  reassign: { ok: true, warnings: [] as string[] },
+  reassign: {
+    ok: true,
+    warnings: [] as string[],
+    to: undefined as { org: string; workspace: string } | undefined,
+  },
   exportCommand: true,
 };
-vi.mock("@oxagen/tacho/cli", () => ({
+vi.mock("@oxagen/tacho/cli", async () => ({
+  // The real parser: what the operator sees on a typo is its message, so
+  // the mock must not paper over it.
+  parseHarnesses: (
+    await vi.importActual<typeof import("@oxagen/tacho/cli")>(
+      "@oxagen/tacho/cli",
+    )
+  ).parseHarnesses,
   defaultCliDeps: (overrides: Record<string, unknown>) => ({
     fake: true,
     ...overrides,
@@ -52,9 +67,6 @@ vi.mock("@oxagen/tacho/cli", () => ({
     calls.push({ name: "exportCommand", args });
     return outcomes.exportCommand;
   },
-  // The real parser: a comma list of known harness names.
-  parseHarnesses: (value?: string) =>
-    value === undefined ? ["claude-code"] : value.split(","),
 }));
 
 import {
@@ -70,12 +82,14 @@ import {
 describe("oxagen tacho", () => {
   beforeEach(() => {
     calls.length = 0;
+    configWrites.length = 0;
     store.token = "session-token";
     store.org = "acme";
     store.ws = "core";
     outcomes.enroll = { ok: true, warnings: [] };
     outcomes.verify = { ok: true, detail: "chained" };
     outcomes.status = { enrolled: true };
+    outcomes.reassign = { ok: true, warnings: [], to: undefined };
   });
 
   it("lends the logged-in credentials and lets flags override them", () => {
@@ -123,6 +137,22 @@ describe("oxagen tacho", () => {
       harnesses: ["claude-code", "codex"],
     });
     expect(calls[0]?.args[0]).not.toHaveProperty("harnesses");
+    // The real parser trims and dedupes, and an unknown name is one clear
+    // line (the bin's fatal handler prints err.message verbatim) with no
+    // enroll call behind it.
+    await handleTachoEnroll({ harness: " codex, codex " }, writer);
+    expect(calls.at(-1)?.args[0]).toMatchObject({ harnesses: ["codex"] });
+    const before = calls.length;
+    await expect(
+      handleTachoEnroll({ harness: "cursor" }, writer),
+    ).rejects.toThrow(
+      'unknown harness "cursor"; expected one of claude-code, codex',
+    );
+    expect(calls.length).toBe(before);
+    await expect(
+      handleTachoReassign({ harness: "claude_code" }, writer),
+    ).rejects.toThrow(/unknown harness "claude_code"/);
+    expect(calls.length).toBe(before);
     // The managed-settings flags and an explicit port travel too.
     await handleTachoEnroll(
       { managed: true, printManaged: true, port: 47010 },
@@ -153,13 +183,18 @@ describe("oxagen tacho", () => {
         writer,
       ),
     ).toBe(true);
-    expect(calls.at(-1)?.args[0]).toMatchObject({
+    // Only the token is lent to unenroll: the revoke goes to the org and
+    // workspace in host.json, never to the CLI's default pair, which may
+    // name another org and would 403 the revoke.
+    expect(calls.at(-1)?.args[0]).toEqual({
       token: "session-token",
-      org: "acme",
-      workspace: "core",
       purge: true,
       reason: "laptop retired",
     });
+    store.token = undefined;
+    expect(await handleTachoUnenroll({}, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({});
+    store.token = "session-token";
     expect(
       await handleTachoReassign(
         { workspace: "edge", harness: "codex", reason: "moved" },
@@ -178,10 +213,12 @@ describe("oxagen tacho", () => {
     await handleTachoReassign({ org: "beta", workspace: "edge" }, writer);
     expect(calls.at(-1)?.args[0]).toEqual({ org: "beta", workspace: "edge" });
     store.token = "session-token";
-    outcomes.reassign = { ok: false, warnings: [] };
+    outcomes.reassign = { ok: false, warnings: [], to: undefined };
     expect(await handleTachoReassign({ workspace: "edge" }, writer)).toBe(
       false,
     );
+    // Without --default the CLI's own config is never touched.
+    expect(configWrites).toEqual([]);
     expect(await handleTachoExport({ list: true }, writer)).toBe(true);
     expect(calls.at(-1)?.args[0]).toEqual({ list: true });
     expect(await handleTachoVerify(writer)).toBe(true);
@@ -189,5 +226,48 @@ describe("oxagen tacho", () => {
     outcomes.verify = { ok: false, detail: "daemon down" };
     expect(await handleTachoVerify(writer)).toBe(false);
     expect(output()).toContain("FAILED: daemon down");
+  });
+
+  it("reassign --default writes the host's new pair into config.json, and only after success", async () => {
+    const { writer, output } = captureWriter();
+    outcomes.reassign = {
+      ok: true,
+      warnings: [],
+      to: { org: "other", workspace: "edge" },
+    };
+    expect(
+      await handleTachoReassign(
+        { org: "other", workspace: "edge", default: true },
+        writer,
+      ),
+    ).toBe(true);
+    // The flag never reaches @oxagen/tacho: config.json is the CLI's file.
+    expect(calls.at(-1)?.args[0]).not.toHaveProperty("default");
+    expect(configWrites).toEqual([{ orgSlug: "other", workspaceSlug: "edge" }]);
+    expect(output()).toContain("CLI default is now other/edge");
+
+    // The pair written is the one the host reports (from host.json, via
+    // result.to), not the flags or the CLI's saved default: here config.json
+    // says acme, no --org is passed, and the host was enrolled in beta, so
+    // beta/edge is what lands. A write built from the flags or getOrgId()
+    // would put acme there — an org the host does not report to.
+    configWrites.length = 0;
+    outcomes.reassign = {
+      ok: true,
+      warnings: [],
+      to: { org: "beta", workspace: "edge" },
+    };
+    await handleTachoReassign({ workspace: "edge", default: true }, writer);
+    expect(configWrites).toEqual([{ orgSlug: "beta", workspaceSlug: "edge" }]);
+    expect(JSON.stringify(configWrites)).not.toContain("acme");
+    expect(output()).toContain("CLI default is now beta/edge");
+
+    // A failed reassign leaves the default where it was.
+    configWrites.length = 0;
+    outcomes.reassign = { ok: false, warnings: [], to: undefined };
+    expect(
+      await handleTachoReassign({ workspace: "edge", default: true }, writer),
+    ).toBe(false);
+    expect(configWrites).toEqual([]);
   });
 });

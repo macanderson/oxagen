@@ -7,18 +7,23 @@
  */
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
-import type { TachoEvent } from "../envelope";
+import type { TachoEvent, TachoRuntime } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
 import type { TachoHarness } from "../wire";
 
 /**
  * The recorder context for a session's harness. The daemon's context is
  * Claude Code's; a Codex session keeps every other fact and relabels the
- * agent. `runtime` is the control plane's checked enum (`claude-code`,
- * `claude-agent-sdk`, `custom`, `stella`, `proxy`), so Codex ships as
- * `custom` until that enum gains a `codex` member; `harness` is free text
- * and carries the honest name.
+ * agent with its own runtime. `runtime` is the control plane's checked enum
+ * (`TACHO_RUNTIMES`), so every harness this map admits must also be a member
+ * there: the fleet page filters on `runtime`, and a harness that had to
+ * borrow `custom` could not be told apart from a custom agent.
  */
+const RUNTIME_FOR_HARNESS: Record<TachoHarness, TachoRuntime> = {
+  "claude-code": "claude-code",
+  codex: "codex",
+};
+
 export function contextForHarness(
   context: ClaudeCodeContext,
   harness: TachoHarness | undefined,
@@ -26,7 +31,7 @@ export function contextForHarness(
   if (harness === undefined || harness === "claude-code") return context;
   return {
     ...context,
-    agent: { ...context.agent, harness, runtime: "custom" },
+    agent: { ...context.agent, harness, runtime: RUNTIME_FOR_HARNESS[harness] },
   };
 }
 

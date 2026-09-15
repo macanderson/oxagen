@@ -63,6 +63,8 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
 import {
   apiPost,
   installCli,
+  parseConnect,
+  parseDetect,
   listOrganizations,
   listWorkspaces,
   logTail,
@@ -175,6 +177,33 @@ describe("runSidecar", () => {
     await expect(runSidecar("tacho", ["status"])).rejects.toThrow("EACCES");
   });
 
+  it("gives a bounded probe a deadline instead of waiting on a close that never comes", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = runSidecar("tacho", ["detect", "--json"], undefined, {
+        timeoutMs: 5_000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      spawned[0]?.emit("stdout", "{");
+      vi.advanceTimersByTime(5_001);
+      await expect(pending).rejects.toThrow(
+        "tacho detect --json did not finish within 5s",
+      );
+      // A close inside the deadline clears it and resolves normally.
+      const quick = runSidecar("tacho", ["status", "--json"], undefined, {
+        timeoutMs: 5_000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      spawned[1]?.emit("close", { code: 0 });
+      expect(await quick).toEqual({ code: 0, stdout: "", stderr: "" });
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads tacho status --json off the sidecar and answers null when it printed none", async () => {
     const ok = tachoStatus();
     await Promise.resolve();
@@ -188,10 +217,79 @@ describe("runSidecar", () => {
       enrolled: true,
       wal: { sessions: 1, unshipped: 0 },
     });
+    // A clean run that printed nothing is null; a run that failed or wrote
+    // to stderr without a document is an error the panel must show.
     const none = tachoStatus();
     await Promise.resolve();
-    spawned[1]?.emit("stderr", "tacho: cannot read host.json");
-    spawned[1]?.emit("close", { code: 1 });
+    spawned[1]?.emit("close", { code: 0 });
     expect(await none).toBeNull();
+    const failed = tachoStatus();
+    await Promise.resolve();
+    spawned[2]?.emit("stderr", "tacho: cannot read host.json");
+    spawned[2]?.emit("close", { code: 1 });
+    await expect(failed).rejects.toThrow("tacho: cannot read host.json");
+    const silent = tachoStatus();
+    await Promise.resolve();
+    spawned[3]?.emit("close", { code: 2 });
+    await expect(silent).rejects.toThrow("tacho status exited 2");
+    // Not enrolled: the document is printed with exit 1 and is still read.
+    const notEnrolled = tachoStatus();
+    await Promise.resolve();
+    spawned[4]?.emit("stdout", '{"enrolled": false}');
+    spawned[4]?.emit("close", { code: 1 });
+    expect(await notEnrolled).toEqual({ enrolled: false });
+  });
+});
+
+describe("detect and connect parsing", () => {
+  it("reads the detect document and rejects anything else", () => {
+    const doc = {
+      enrolled: false,
+      harnesses: [
+        {
+          harness: "claude-code",
+          label: "Claude Code",
+          installed: true,
+          path: "/x",
+          version: "2.1.0",
+          enrolled: false,
+        },
+        { harness: "codex", label: "Codex", installed: false, enrolled: false },
+      ],
+    };
+    expect(parseDetect(JSON.stringify(doc))).toEqual(doc);
+    expect(parseDetect("")).toBeNull();
+    expect(parseDetect("not json")).toBeNull();
+    expect(parseDetect(JSON.stringify({ enrolled: true }))).toBeNull();
+  });
+
+  it("takes the last JSON line of a verify run and falls back to stderr", () => {
+    expect(
+      parseConnect({
+        code: 0,
+        stdout:
+          'Running claude -p...\nSession s chained as u: 6 events, sealed.\n{"ok":true,"sessionId":"s","seq":6,"detail":"chained"}\n',
+        stderr: "",
+      }),
+    ).toEqual({ ok: true, sessionId: "s", seq: 6, detail: "chained" });
+    expect(
+      parseConnect({
+        code: 1,
+        stdout: '{"ok":false,"detail":"not enrolled"}\n',
+        stderr: "",
+      }),
+    ).toEqual({ ok: false, detail: "not enrolled" });
+    expect(
+      parseConnect({ code: 1, stdout: "", stderr: "codex: not found\n" }),
+    ).toEqual({
+      ok: false,
+      detail: "codex: not found",
+    });
+    expect(parseConnect({ code: null, stdout: "{broken", stderr: "" })).toEqual(
+      {
+        ok: false,
+        detail: "tacho verify exited ? without a result",
+      },
+    );
   });
 });
