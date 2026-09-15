@@ -58,6 +58,15 @@ import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write"
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
+import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
+import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
+import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
+import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
@@ -93,6 +102,15 @@ import { budgetPolicyWriteRoute } from "./budget.policy.write";
 import { chatMessageExecutionRoute } from "./chat.message.execution";
 import { contextRecordPromoteRoute } from "./context.record.promote";
 import { contextRecordPublishRoute } from "./context.record.publish";
+import { contextRecordsListRoute } from "./context.records.list";
+import { contextRecordsGetRoute } from "./context.records.get";
+import { contextRecordsAppendRoute } from "./context.records.append";
+import { contextProposalCreateRoute } from "./context.proposal.create";
+import { contextProposalListRoute } from "./context.proposal.list";
+import { contextProposalDismissRoute } from "./context.proposal.dismiss";
+import { contextPrOpenRoute } from "./context.pr.open";
+import { contextPrGetRoute } from "./context.pr.get";
+import { contextPrMergeRoute } from "./context.pr.merge";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
@@ -127,6 +145,127 @@ interface ThinRoute {
 }
 
 const ROUTES: ThinRoute[] = [
+  // Steering (ADR-061).
+  {
+    file: "context.records.list",
+    route: contextRecordsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextRecordsList.name,
+    body: { kind: "rule" },
+    expectedInput: { kind: "rule", limit: 50, offset: 0 },
+    invalidBody: { kind: "directive" },
+    status: 200,
+  },
+  {
+    file: "context.records.get",
+    route: contextRecordsGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextRecordsGet.name,
+    body: { recordId: "ctx.release.notes-format" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "context.records.append",
+    route: contextRecordsAppendRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextRecordsAppend.name,
+    body: { kind: "observation", lineageId: "ctx.a", statement: "x" },
+    expectedInput: {
+      kind: "observation",
+      lineageId: "ctx.a",
+      statement: "x",
+      sharingScope: "workspace",
+      sourceRefs: [],
+      evidenceLinks: [],
+    },
+    invalidBody: { kind: "rule", lineageId: "ctx.a", statement: "x" },
+    status: 200,
+  },
+  {
+    file: "context.proposal.create",
+    route: contextProposalCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextProposalCreate.name,
+    body: {
+      record: {
+        lineageId: "ctx.a",
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "x",
+      },
+      rationale: "why",
+    },
+    expectedInput: {
+      record: {
+        lineageId: "ctx.a",
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "x",
+      },
+      rationale: "why",
+      support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+    },
+    invalidBody: {
+      record: {
+        lineageId: "ctx.a",
+        kind: "constraint",
+        force: "must",
+        sharingScope: "workspace",
+        statement: "x",
+      },
+      rationale: "why",
+    },
+    status: 200,
+  },
+  {
+    file: "context.proposal.list",
+    route: contextProposalListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextProposalList.name,
+    body: {},
+    expectedInput: { limit: 50, offset: 0 },
+    invalidBody: { status: "candidate" },
+    status: 200,
+  },
+  {
+    file: "context.proposal.dismiss",
+    route: contextProposalDismissRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextProposalDismiss.name,
+    body: { proposalId: "prp_1", reason: "duplicate" },
+    invalidBody: { proposalId: "prp_1" },
+    status: 200,
+  },
+  {
+    file: "context.pr.open",
+    route: contextPrOpenRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrOpen.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "ctr_1" },
+    status: 200,
+  },
+  {
+    file: "context.pr.get",
+    route: contextPrGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrGet.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "context.pr.merge",
+    route: contextPrMergeRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrMerge.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
   {
     file: "agent.definition.delete",
     route: agentDefinitionDeleteRoute as unknown as Hono<never>,

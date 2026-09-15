@@ -174,6 +174,49 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── context: steering proposals → Context PRs (open_context_pr) ─────────────
+
+  const contextCmd = program
+    .command("context")
+    .description("Steering: open a record proposal as a Context PR");
+  contextCmd
+    .command("propose [proposalId]")
+    .description(
+      "Open the Context PR for a proposal (branch, record file, PR, checks); with --lineage… records the proposal first",
+    )
+    .option(
+      "--lineage <id>",
+      "The lineage id (the file stem under .oxagen/rules/)",
+    )
+    .option(
+      "--kind <kind>",
+      "rule | constraint | procedure | fact | memory | preference",
+    )
+    .option("--force <force>", "must | should | may | info")
+    .option("--scope <scope>", "workspace | repository")
+    .option("--statement <text>", "The single-sentence claim")
+    .option("--rationale <text>", "Why the record should be published")
+    .option("--effect <effect>", "require | forbid — a constraint only")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        proposalId: string | undefined,
+        opts: {
+          lineage?: string;
+          kind?: string;
+          force?: string;
+          scope?: string;
+          statement?: string;
+          rationale?: string;
+          effect?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { contextPropose } = await import("./commands/context.js");
+        await contextPropose({ proposalId, ...opts });
+      },
+    );
+
   // ── trace: one agent run as a span tree ─────────────────────────────────────
 
   program
