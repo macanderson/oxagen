@@ -1,8 +1,10 @@
 // suspend_agent — stop an agent identity without retiring it (MC spec §6.2;
-// #2956). The principal's status becomes `suspended`, which invalidates every
-// run token at its next call and is the one-second revocation the identity
-// half exists for. Credentials, roles and hosts stay as they are so `resume`
-// is one status write back to `active`.
+// #2956). The principal's status becomes `suspended`: the runtime builds no
+// run context for a suspended principal (packages/iam/src/agent-run-context.ts),
+// so no governed run starts for it and `get_agent_toolbelt` reports an empty
+// belt. Credentials, roles and hosts stay as they are so `resume` is one
+// status write back to `active`. The long-lived credential is locked to the
+// run-token exchange of spec §6.2, which no surface serves yet (ADR-057 §4).
 //
 // A governance write on the identity, outside the metering surface:
 // `noBillingGate: true`. Roles: org Owner or Admin (INV-29).
@@ -13,7 +15,7 @@ export const agentSuspend = registerCapability({
   name: "suspend_agent",
   domain: "agent",
   description:
-    "Suspend or resume an agent identity: a suspended principal fails every run token at its next call; resuming restores it without re-issuing anything.",
+    "Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything.",
   mode: "sync",
   // The handler requires a signed-in user (assertOrgRole, INV-29). The MCP
   // server builds every context with `userId: null` (apps/mcp/src/context.ts),

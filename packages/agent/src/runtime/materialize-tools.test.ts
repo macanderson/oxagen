@@ -254,17 +254,33 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 // Agent RBAC Phase 4a: mcp-rbac.ts emits IAM audit rows (ClickHouse) for MCP
 // rule denials/ask-escalations — spy the emitter so tests can assert the
-// agent-principal rows without a ClickHouse client. (mcp-rbac.ts is the only
-// module in this file's import graph that touches @oxagen/iam.)
+// agent-principal rows without a ClickHouse client. The listing's read of the
+// active emergency denies is a spy too (the DB stub above has no
+// emergency_denies table); the matcher the belt decision applies to those
+// rows stays real, so a kill-switch scenario exercises the same predicate the
+// kernel runs at invoke.
 const iamMocks = vi.hoisted(() => ({
   emitAudit: vi.fn(async () => undefined),
+  readActiveEmergencyDenies: vi.fn(
+    async (): Promise<
+      readonly import("@oxagen/iam").ActiveEmergencyDeny[]
+    > => [],
+  ),
 }));
-vi.mock("@oxagen/iam", () => ({
-  emitAudit: iamMocks.emitAudit,
-}));
+vi.mock("@oxagen/iam", async () => {
+  const live = await vi.importActual<
+    typeof import("@oxagen/iam/live-agent-run-authorization")
+  >("@oxagen/iam/live-agent-run-authorization");
+  return {
+    emitAudit: iamMocks.emitAudit,
+    matchEmergencyDeny: live.matchEmergencyDeny,
+    readActiveEmergencyDenies: iamMocks.readActiveEmergencyDenies,
+  };
+});
 
 import { materializeTools, type MaterializeOptions } from "./materialize-tools";
 import { decideCapabilityForBelt } from "./toolbelt";
+import type { ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import {
@@ -1208,6 +1224,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
   beforeEach(() => {
     dbMocks.rowsByTable.clear();
     vi.mocked(resolveAgentRunCapability).mockClear();
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([]);
     // The plugin-entitlement suite above leaves its last claim and
     // entitlement set on the mocks; both sides of the parity test below read
     // the same two seams, so they are pinned to the builtin baseline here.
@@ -1290,14 +1307,28 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
   // by calling `decideCapabilityForBelt` over the registry; the runtime's
   // listing must be exactly the tools that function does not deny, on every
   // gate the runtime applies — surface, exclusion, allowlist, risk ceiling,
-  // the cached delegation ceiling and its fail-closed branch.
+  // the cached delegation ceiling and its fail-closed branch, and the active
+  // emergency denies.
   type ParityScenario = {
     agentRun: null | "observer" | "contributor" | "unresolved";
     opts: Pick<
       MaterializeOptions,
       "allowlist" | "excludeCapabilities" | "riskCeiling"
     >;
+    /** What `readActiveEmergencyDenies` answers; both sides see the rows. */
+    emergencyDenies?: ActiveEmergencyDeny[];
   };
+  const killSwitch = (
+    capabilityId: string,
+    principalId: string | null = null,
+  ): ActiveEmergencyDeny => ({
+    publicId: `edn_${capabilityId}`,
+    denyKind: "capability",
+    capabilityId,
+    resourceScopeDigest: null,
+    principalId,
+    reason: "incident",
+  });
   const PARITY: [string, ParityScenario][] = [
     ["no agent run, no narrowing", { agentRun: null, opts: {} }],
     ["allowlist", { agentRun: null, opts: { allowlist: new Set(["capB"]) } }],
@@ -1313,6 +1344,30 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
       { agentRun: "contributor", opts: { riskCeiling: "medium" } },
     ],
     ["agent run without a resolution", { agentRun: "unresolved", opts: {} }],
+    [
+      "contributor ceiling under a kill switch on capA",
+      {
+        agentRun: "contributor",
+        opts: {},
+        emergencyDenies: [killSwitch("capA")],
+      },
+    ],
+    [
+      "kill switch naming the agent principal",
+      {
+        agentRun: "contributor",
+        opts: {},
+        emergencyDenies: [killSwitch("fill_form", AGENT_PRN)],
+      },
+    ],
+    [
+      "kill switch naming another principal leaves the belt whole",
+      {
+        agentRun: "contributor",
+        opts: {},
+        emergencyDenies: [killSwitch("capA", "prn_someone_else")],
+      },
+    ],
   ];
   it.each(PARITY)(
     "lists exactly the tools the shared belt decision keeps: %s",
@@ -1326,10 +1381,24 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
       const agentRun =
         scenario.agentRun === null ? null : makeAgentRun(resolution);
       const ctx = agentRun === null ? CTX : ctxWith(agentRun);
+      const emergencyDenies = scenario.emergencyDenies ?? [];
+      iamMocks.readActiveEmergencyDenies.mockClear();
+      iamMocks.readActiveEmergencyDenies.mockResolvedValue(emergencyDenies);
       const { tools, governance, nameMap } = await materializeTools(
         ctx,
         scenario.opts,
       );
+      // The read happens once, and only for a resolved agent run: a human
+      // turn and a fail-closed run list nothing the kill switch could cut.
+      expect(iamMocks.readActiveEmergencyDenies).toHaveBeenCalledTimes(
+        resolution === undefined ? 0 : 1,
+      );
+      for (const deny of emergencyDenies) {
+        const name = deny.capabilityId ?? "";
+        if (deny.principalId === null || deny.principalId === AGENT_PRN)
+          expect(tools[name]).toBeUndefined();
+        else expect(tools[name]).toBeDefined();
+      }
       const listed = Object.keys(tools)
         .map((alias) => nameMap[alias] ?? alias)
         .sort();
@@ -1355,7 +1424,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
             scope,
             now: new Date(),
             clientIp: null,
-            emergencyDenies: [],
+            emergencyDenies,
             entitledPluginIds: new Set<string>(),
           }),
         }),
@@ -1496,6 +1565,7 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     consentMocks.recordConsent.mockResolvedValue({ consentId: "mcons_x" });
     iamMocks.emitAudit.mockClear();
     iamMocks.emitAudit.mockResolvedValue(undefined);
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([]);
 
     dbMocks.rowsByTable.clear();
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
@@ -1654,16 +1724,19 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
       tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
     ).execute!({});
 
-    // Consent lookup used the AGENT subject: principal id + "agent" kind —
-    // and it is the ONLY consent lookup (the user-scoped gate was skipped).
-    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(1);
-    expect(consentMocks.checkConsent).toHaveBeenCalledWith(
-      ctx,
-      AGENT_PRN,
-      MCP_SERVER.id,
-      "list_pull_requests",
-      "agent",
-    );
+    // Consent lookups used the AGENT subject: principal id + "agent" kind —
+    // once at listing (no record: the tool stays visible) and once at the
+    // call; the user-scoped gate was skipped.
+    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(2);
+    for (const call of consentMocks.checkConsent.mock.calls) {
+      expect(call).toEqual([
+        ctx,
+        AGENT_PRN,
+        MCP_SERVER.id,
+        "list_pull_requests",
+        "agent",
+      ]);
+    }
     // The HITL card machinery ran and the durable grant recorded the agent
     // principal as the subject with the distinct label.
     expect(events).toEqual([{ approvalId: "appr_ask" }]);
@@ -1696,7 +1769,7 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
   });
 
   it("ask: an active agent-subject grant runs inline — no card, no audit, no user gate", async () => {
-    consentMocks.checkConsent.mockResolvedValueOnce({
+    consentMocks.checkConsent.mockResolvedValue({
       status: "granted",
       active: true,
     });
@@ -1710,8 +1783,56 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
       .execute!({});
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
     expect(iamMocks.emitAudit).not.toHaveBeenCalled();
-    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(1);
+    // Once at listing, once at the call.
+    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(2);
     expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  // Toolbelt parity (#2956, ADR-057): `get_agent_toolbelt` decides an MCP
+  // tool with the agent principal's standing consent; the listing reads the
+  // same record for an ask rule, so a tool the console reports under
+  // `cannotSee: consent` is one the model is not given.
+  it("listing: an ask rule reads the agent principal's standing consent — a recorded denial hides the tool; a grant or no record keeps it; allow and deny rules read none", async () => {
+    const ask = () => ({
+      ...CTX,
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    });
+    consentMocks.checkConsent.mockResolvedValue({
+      status: "denied",
+      active: true,
+    });
+    const denied = await materializeTools(ask());
+    expect(denied.tools[ALIAS]).toBeUndefined();
+    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(1);
+    expect(consentMocks.checkConsent).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: CTX.orgId }),
+      AGENT_PRN,
+      MCP_SERVER.id,
+      "list_pull_requests",
+      "agent",
+    );
+
+    consentMocks.checkConsent.mockClear();
+    consentMocks.checkConsent.mockResolvedValue({
+      status: "granted",
+      active: true,
+    });
+    const granted = await materializeTools(ask());
+    expect(granted.tools[ALIAS]).toBeDefined();
+
+    consentMocks.checkConsent.mockClear();
+    consentMocks.checkConsent.mockResolvedValue(null);
+    const unrecorded = await materializeTools(ask());
+    expect(unrecorded.tools[ALIAS]).toBeDefined();
+
+    consentMocks.checkConsent.mockClear();
+    for (const effect of ["allow", "deny"] as const) {
+      await materializeTools({
+        ...CTX,
+        agentRun: makeMcpAgentRun([{ pattern: "github:*", effect }]),
+      });
+    }
+    expect(consentMocks.checkConsent).not.toHaveBeenCalled();
   });
 
   it("ask: unattended surface (no messageId) fails closed without writing a consent row", async () => {

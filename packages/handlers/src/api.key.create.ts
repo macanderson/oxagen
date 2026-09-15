@@ -23,6 +23,7 @@ import {
 } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
+import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 
@@ -81,6 +82,18 @@ export const apiKeyCreateHandler: CapabilityHandler<
     logger.warn(
       { orgId: ctx.orgId },
       "api.key.create: rejected — reserved Stella telemetry purpose",
+    );
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: reserved API-key scope purpose",
+    );
+  }
+
+  if (requestsReservedCliSessionPurpose(input.scope)) {
+    logger.warn(
+      { orgId: ctx.orgId },
+      "api.key.create: rejected — reserved CLI session purpose",
     );
     throw new CapabilityError(
       "create_api_key",

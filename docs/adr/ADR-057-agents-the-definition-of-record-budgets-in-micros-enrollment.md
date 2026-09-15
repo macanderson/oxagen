@@ -13,7 +13,8 @@
   `packages/oxagen/src/contracts/tacho.incident.list.ts`,
   `packages/oxagen/src/contracts/billing.budget.{get,set}.ts`,
   `packages/database/atlas/migrations/20260915013000_agent_identity_and_definition_of_record.sql`,
-  `packages/agent/src/runtime/toolbelt.ts`.
+  `packages/agent/src/runtime/toolbelt.ts`,
+  `packages/auth/src/resolvers/api-key.ts`.
 
 ## Context
 
@@ -96,9 +97,16 @@ identity tab's writes, with `register_agent` shared with onboarding.
   principal (`@oxagen/oxagen/agent-credential`); `generateApiKey` mints it
   so the prefix window `@oxagen/auth` resolves is the same as for any key.
   Rotation soft-deletes every live credential and mints the replacement in
-  one transaction.
-- Suspension is one write to `iam.principals.status`; every run token
-  fails at its next call. Resume is the same write back to `active`.
+  one transaction. The purpose locks the key (decision 4): no surface
+  authenticates it as a bearer, so the credential never carries the
+  authority of the Owner or Admin who minted it.
+- Suspension is one write to `iam.principals.status`. The runtime builds
+  no run context for a suspended principal
+  (`packages/iam/src/agent-run-context.ts`), so no governed run starts for
+  it and `get_agent_toolbelt` reports an empty belt. Resume is the same
+  write back to `active`. The run tokens of spec §6.2 do not exist in this
+  tree; the sentence that suspension fails them describes the exchange
+  this ADR does not build.
 - Retirement archives the agent row, suspends the principal, soft-deletes
   the credentials and revokes every live host with the three writes
   `revoke_tacho_enrollment` makes. Nothing is deleted: runs keep the
@@ -109,6 +117,38 @@ identity tab's writes, with `register_agent` shared with onboarding.
   in the handler (`assertOrgRole`, INV-29). Each emits a security event:
   `agent.registered`, `agent.suspended`, `agent.resumed`, `agent.retired`,
   with `api_key.created` / `api_key.revoked` where a key changed.
+
+### 4. An API key's scope purpose decides who the bearer is
+
+`resolveApiKey` (`packages/auth/src/resolvers/api-key.ts`), the one
+resolver the API and the MCP server call, reads the key's scope purpose:
+
+- `cli_session_v1`, written only by `POST /v1/auth/cli/token`
+  (`@oxagen/auth/cli-auth`), authenticates as the key's creator, the user
+  who approved the authorize flow. The API middleware carries that user on
+  the capability context, so the handler role gate of INV-29 (`assertOrgRole`,
+  which reads `ctx.userId` and nothing else) sees the person behind the
+  terminal, and `oxagen agent register`, `oxagen agent unenroll` and
+  `oxagen tacho enroll` reach the same writes the console makes. The
+  kernel's enterprise IAM path already authorized every key as its
+  creator (`packages/iam/src/fetch-authz.ts`); this makes the handler gate
+  agree with it for the one key a person consented to.
+- `agent_credential_v1` is refused with `purpose_locked`. The credential
+  is for the run-token exchange of spec §6.2; until that exchange exists
+  there is no surface it may authenticate on, and letting it through as a
+  plain key would hand the agent its registering admin's authority
+  (below enterprise the kernel allows every capability to any key; on
+  enterprise `fetch-authz` resolves the creator). Mapping the credential
+  to the agent principal in `fetch-authz` was considered and rejected: the
+  agent kind resolves only through the two-principal run context
+  (`checkIAM` fails closed without one), and the tier gate never reaches
+  `fetch-authz` for Free, Build and Scale organisations, so a mapping
+  there would enforce suspension on enterprise alone.
+- Every other purpose, and no purpose, carries no user, as before.
+
+`create_api_key` and `rotate_api_key` refuse `cli_session_v1` the way they
+refuse the Tacho host, Stella telemetry and agent credential purposes; a
+CLI session key is replaced by `oxagen login`.
 
 ### The belt is one decision, shared
 

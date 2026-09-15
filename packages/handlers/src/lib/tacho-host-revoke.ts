@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 
 const REVOKE_COMMAND_TTL_MS = 24 * 60 * 60 * 1000;
 
-export interface RevocableHost {
+interface RevocableHost {
   id: string;
   apiKeyId: string;
 }

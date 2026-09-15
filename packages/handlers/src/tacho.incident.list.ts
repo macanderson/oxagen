@@ -17,7 +17,7 @@ import {
 } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
-export type IncidentCursor = { detectedAt: Date; id: string };
+type IncidentCursor = { detectedAt: Date; id: string };
 
 export function encodeCursor(row: {
   detectedAt: Date;
@@ -42,7 +42,7 @@ export function decodeCursor(
   return { detectedAt: new Date(at), id };
 }
 
-export interface IncidentRow {
+interface IncidentRow {
   publicId: string;
   kind: string;
   severity: number;

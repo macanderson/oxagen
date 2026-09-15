@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./server": "./src/auth.ts",
     "./client": "./src/client.ts",
-    "./cli-auth": "./src/cli-auth/index.ts"
+    "./cli-auth": "./src/cli-auth/index.ts",
+    "./resolvers": "./src/resolvers/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -22,6 +23,7 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/notifications": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "better-auth": "1.6.11",
     "drizzle-orm": "0.45.2",

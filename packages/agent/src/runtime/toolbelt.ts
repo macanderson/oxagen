@@ -36,7 +36,7 @@ import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
 import type { RegistryCapability } from "../registry-loader";
 
-export type BeltOutcome = "allow" | "require_approval" | "deny";
+type BeltOutcome = "allow" | "require_approval" | "deny";
 
 export interface BeltDecision {
   outcome: BeltOutcome;
@@ -70,14 +70,12 @@ export interface CapabilityBeltEnv {
 
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
-export function riskLevelOf(
-  cap: RegistryCapability,
-): "low" | "medium" | "high" {
+function riskLevelOf(cap: RegistryCapability): "low" | "medium" | "high" {
   return cap.agent?.riskLevel ?? "low";
 }
 
 /** The resolver step that decided the more restrictive side of the ceiling. */
-export function ceilingRule(perms: EffectivePermissions): string {
+function ceilingRule(perms: EffectivePermissions): string {
   const agentOutcome = perms.agentResolution.outcome;
   const humanOutcome = perms.humanResolution.outcome;
   const side =
@@ -160,7 +158,7 @@ export function decideCapabilityForBelt(
   return { outcome, rule, riskLevel, readOnly };
 }
 
-export interface McpBeltEnv {
+interface McpBeltEnv {
   /** The run's effective MCP rule scope; undefined means unrestricted. */
   mcpScope: EffectiveMcpScope | undefined;
   /** The agent principal's standing consent for the tool, when recorded. */

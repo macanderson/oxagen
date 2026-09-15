@@ -1,7 +1,7 @@
 {
   "name": "suspend_agent",
   "domain": "agent",
-  "description": "Suspend or resume an agent identity: a suspended principal fails every run token at its next call; resuming restores it without re-issuing anything.",
+  "description": "Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything.",
   "mode": "sync",
   "surfaces": [
     "api"

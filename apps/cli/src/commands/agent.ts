@@ -1,7 +1,10 @@
 /**
  * `oxagen agent …` — the agent identity from the terminal (MC spec §14.1;
- * #2956). Every call goes through the org-scoped API client in lib/api.ts,
- * so the CLI carries the same session the console does.
+ * #2956). Every call goes through the org-scoped API client in lib/api.ts
+ * with the key `oxagen login` minted; the API authenticates that key as the
+ * user who approved the login (ADR-057 §4), so the handler role gates of
+ * `register_agent` and `revoke_tacho_enrollment` see the same person the
+ * console does.
  *
  *   oxagen agent register --slug <slug> --name <name> --harness <harness>
  *                         [--description <text>] [--validity-days <n>]

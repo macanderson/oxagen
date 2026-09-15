@@ -14,12 +14,22 @@
  * always yield "ox", which would never match the 12-char stored prefix and
  * would reject every real key. Mirror the generator exactly.
  *
+ * The key's scope purpose decides who the bearer is. A CLI session key
+ * (`cli_session_v1`, minted by the token exchange) authenticates as the user
+ * who approved the authorize flow, so `userId` is the key's creator. An agent
+ * credential (`agent_credential_v1`, minted by `register_agent`) is locked to
+ * the run-token exchange of MC spec §6.2, which no surface serves yet, so it
+ * is refused with `purpose_locked` rather than authorizing as its creator.
+ * Every other key carries no user.
+ *
  * This function has no HTTP dependency — it can be called identically from
  * API middleware, MCP handler, CLI, or tests.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
+import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
+import { CLI_SESSION_SCOPE_PURPOSE } from "../cli-auth/index";
 
 /**
  * Literal leading marker on every raw API key. Mirrors generateApiKey() in
@@ -47,12 +57,25 @@ export interface ApiKeyResult {
   apiKeyId: string;
   orgId: string;
   workspaceId: string;
+  /** The key's creator for a CLI session key; null for every other key. */
+  userId: string | null;
 }
 
 export type ApiKeyResolutionError =
   | { kind: "malformed" }
   | { kind: "invalid" }
-  | { kind: "expired" };
+  | { kind: "expired" }
+  /** The key is locked to a purpose this surface does not serve. */
+  | { kind: "purpose_locked" };
+
+function scopePurposeOf(scope: unknown): string | null {
+  return typeof scope === "object" &&
+    scope !== null &&
+    "purpose" in scope &&
+    typeof scope.purpose === "string"
+    ? scope.purpose
+    : null;
+}
 
 export type ApiKeyResolution =
   | ({ ok: true } & ApiKeyResult)
@@ -99,6 +122,8 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
         orgId: true,
         workspaceId: true,
         expiresAt: true,
+        scope: true,
+        createdByUserId: true,
       },
     }),
   );
@@ -118,10 +143,19 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     return { ok: false, kind: "expired" };
   }
 
+  const purpose = scopePurposeOf(row.scope);
+  if (purpose === AGENT_CREDENTIAL_SCOPE_PURPOSE) {
+    return { ok: false, kind: "purpose_locked" };
+  }
+
   return {
     ok: true,
     apiKeyId: row.id,
     orgId: row.orgId,
     workspaceId: row.workspaceId,
+    userId:
+      purpose === CLI_SESSION_SCOPE_PURPOSE
+        ? (row.createdByUserId ?? null)
+        : null,
   };
 }

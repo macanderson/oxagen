@@ -8,7 +8,12 @@ import {
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
-import { type AgentRunIAMResolution } from "@oxagen/oxagen/iam";
+import {
+  type AgentRunIAMResolution,
+  type EffectiveMcpScope,
+} from "@oxagen/oxagen/iam";
+import { withTenantDb } from "@oxagen/database";
+import { readActiveEmergencyDenies } from "@oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
@@ -353,6 +358,21 @@ export async function materializeTools(
   };
   const agentRunNow = new Date();
 
+  // The active emergency denies, read once when the turn carries a resolved
+  // agent run: a kill switch cuts the tool from the belt the model receives,
+  // the same rows `get_agent_toolbelt` reports under `kill_switch`, and the
+  // kernel enforces them again at invoke. This runs inside the caller's
+  // tenant scope (the chat route wraps materializeTools in runInTenantScope).
+  const emergencyDenies =
+    agentRun?.principalKind === "agent" && agentRunResolution !== null
+      ? await withTenantDb((tx) =>
+          readActiveEmergencyDenies(tx, {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId || null,
+          }),
+        )
+      : [];
+
   // Entitlement filter: if a capability is claimed by a plugin, the org must
   // have that plugin installed and enabled. Lazily fetch the entitled set on
   // the first plugin-claimed contract to avoid DB round-trips when no plugin
@@ -386,9 +406,7 @@ export async function materializeTools(
     // surface, exclusion, allowlist, risk ceiling, the run's cached
     // delegation-ceiling resolution (spec §3.5 — the memo written on
     // resolution.byCapability is the memo the kernel hits at invoke time),
-    // then entitlement. Emergency denies are not read here: the kernel
-    // enforces them on every invoke, and the listing never has (the console
-    // read passes the active rows so its record says which tools are cut).
+    // the active emergency denies, then entitlement.
     const decision = decideCapabilityForBelt(cap, {
       surfaces: getSurfaces(cap),
       excluded: opts.excludeCapabilities,
@@ -399,7 +417,7 @@ export async function materializeTools(
       scope: agentRunScope,
       now: agentRunNow,
       clientIp: ctx.clientIp ?? null,
-      emergencyDenies: [],
+      emergencyDenies,
       entitledPluginIds: await entitledPluginIdsFor(cap),
     });
     if (decision.outcome === "deny") continue;
@@ -564,6 +582,27 @@ export async function materializeTools(
           ctx.clientIp ?? null,
         )
       : undefined;
+  const listingConsentFor = async (
+    mcpScope: EffectiveMcpScope,
+    syntheticId: string,
+    serverName: string,
+    toolName: string,
+  ): Promise<{ status: "granted" | "denied" } | null> => {
+    if (decideMcpToolEffect(mcpScope, serverName, toolName) !== "ask")
+      return null;
+    const parts = parseMcpSyntheticId(syntheticId);
+    if (!parts || agentRun?.principalKind !== "agent") return null;
+    const recorded = await checkConsent(
+      ctx,
+      agentRun.agentPrincipal.id,
+      parts.serverId,
+      parts.toolName,
+      "agent",
+    );
+    return recorded === null
+      ? null
+      : { status: recorded.status === "granted" ? "granted" : "denied" };
+  };
   for (const contributor of getPluginTypeContributors()) {
     let contributed: ContributedRawTool[] = [];
     try {
@@ -592,13 +631,20 @@ export async function materializeTools(
       // its resolution must never expose external tools either.
       if (agentRunFailClosed) continue;
       // DENY tools are never registered — the model cannot see or call them.
-      // The same decision `get_agent_toolbelt` prints (toolbelt.ts); consent
-      // is resolved at call time below, so the listing passes none.
+      // The same decision `get_agent_toolbelt` prints (toolbelt.ts): a deny
+      // rule, or an ask rule the agent principal's standing consent has
+      // denied. The consent read happens only for an ask rule, the one case
+      // where it changes the decision; the call below reads it again.
       if (
         agentRunMcpScope !== undefined &&
         decideMcpToolForBelt(capturedServerName, capturedToolName, {
           mcpScope: agentRunMcpScope,
-          consent: null,
+          consent: await listingConsentFor(
+            agentRunMcpScope,
+            capturedKey,
+            capturedServerName,
+            capturedToolName,
+          ),
           decide: (server, tool) =>
             decideMcpToolEffect(agentRunMcpScope, server, tool),
         }).outcome === "deny"

@@ -45,7 +45,7 @@ import { resolveGitHubToken } from "./lib/github-token";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
 
-export const AGENT_DEFINITION_ROLES = ["Owner", "Admin", "Member"] as const;
+const AGENT_DEFINITION_ROLES = ["Owner", "Admin", "Member"] as const;
 
 /**
  * The top-level `key = "value"` string of a TOML subset (spec §6.2's file

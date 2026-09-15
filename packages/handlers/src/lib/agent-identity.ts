@@ -21,8 +21,6 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { generateApiKey } from "./api-key-authz";
 
-export type { AgentIdentityRow };
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The identity row, or `not_found`. Archived agents resolve; callers decide what a retired identity may do. */
@@ -53,7 +51,7 @@ export function assertNotRetired(row: AgentIdentityRow): void {
   }
 }
 
-export interface MintedCredential {
+interface MintedCredential {
   id: string;
   publicId: string;
   secret: string;

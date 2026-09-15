@@ -69,7 +69,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.role.get](agent.role.get.md) — Get one IAM role's status relative to an agent: held or not, assignment provenance, and the role's capability grant list
 - [agent.role.list](agent.role.list.md) — List the IAM roles attached to an agent's delegated principal with assignment provenance
 - [agent.role.revoke](agent.role.revoke.md) — Revoke an IAM role from an agent's delegated principal — soft-deletes the assignment (audit trail preserved); idempotent
-- [agent.suspend](agent.suspend.md) — Suspend or resume an agent identity: a suspended principal fails every run token at its next call; resuming restores it without re-issuing anything
+- [agent.suspend](agent.suspend.md) — Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything
 - [agent.toolbelt.get](agent.toolbelt.get.md) — Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives, and what the agent cannot see
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)

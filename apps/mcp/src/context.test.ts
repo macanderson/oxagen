@@ -137,6 +137,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_mysecret", requestId);
@@ -162,6 +163,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await resolveMcpContext("Bearer ox_mysecret", requestId, "203.0.113.7");
@@ -245,6 +247,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_emptyorg", requestId);
@@ -257,6 +260,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_emptyws", requestId);
@@ -269,6 +273,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await resolveMcpContext("Bearer ox_emptyorg", requestId);
@@ -282,6 +287,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await expect(
@@ -309,6 +315,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_plainstring",
@@ -324,6 +331,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-2",
       workspaceId: "ws-2",
       apiKeyId: "key-2",
+      userId: null,
     });
     const ctx = await buildContext({
       // xmcp headers() repeats a header as an array; firstHeader() picks [0]
@@ -340,6 +348,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -354,6 +363,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     // requestId should be a UUID (no x-request-id supplied)
@@ -376,6 +386,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
   });
 
@@ -430,6 +441,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -444,6 +456,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -458,6 +471,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.requestId).toMatch(
@@ -471,6 +485,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -521,6 +536,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.userId).toBeNull();
@@ -532,6 +548,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.messageId).toBeNull();

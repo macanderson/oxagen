@@ -12,7 +12,7 @@ import { z } from "zod";
 export const microsSchema = z.string().regex(/^-?\d+$/, "integer micros");
 
 /** ISO 4217, three letters. */
-export const currencySchema = z.string().length(3);
+const currencySchema = z.string().length(3);
 
 export const moneySchema = z
   .object({
@@ -24,7 +24,7 @@ export const moneySchema = z
 export type Money = z.output<typeof moneySchema>;
 
 /** Who observed a metered figure. */
-export const costBasisSchema = z.enum(["gateway_observed", "client_attested"]);
+const costBasisSchema = z.enum(["gateway_observed", "client_attested"]);
 
 export const costSchema = moneySchema
   .extend({ basis: costBasisSchema })

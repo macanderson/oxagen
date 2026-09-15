@@ -8,9 +8,9 @@ import { microsString, type Money } from "@oxagen/oxagen/money";
 import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
 
 /** `billing.spend_budgets.limit_micros` and `token_usage.cost_usd_micros` are micro-USD. */
-export const SPEND_BUDGET_CURRENCY = "USD";
+const SPEND_BUDGET_CURRENCY = "USD";
 
-export function microsToMoney(micros: bigint): Money {
+function microsToMoney(micros: bigint): Money {
   return { micros: microsString(micros), currency: SPEND_BUDGET_CURRENCY };
 }
 

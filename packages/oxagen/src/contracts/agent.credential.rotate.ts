@@ -1,8 +1,8 @@
 // rotate_agent_credential — replace an agent's long-lived credential (MC spec
 // §6.2; #2956). The previous key is soft-deleted in the same transaction the
 // new one is minted, so there is no moment with two live secrets and none
-// with zero. Every run token minted from the old credential fails at its next
-// call (§7.4). The new secret is returned once.
+// with zero. The old secret is refused at its next presentation. The new
+// secret is returned once.
 //
 // A credential write, outside the metering surface: `noBillingGate: true`.
 // Roles: org Owner or Admin, checked by the handler (INV-29).

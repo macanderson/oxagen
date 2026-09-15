@@ -19,6 +19,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
+import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 
@@ -118,6 +119,18 @@ export const apiKeyRotateHandler: CapabilityHandler<
         "rotate_api_key",
         "authz_denied",
         "Forbidden: enrolled Stella telemetry keys require operator rotation",
+      );
+    }
+
+    if (requestsReservedCliSessionPurpose(oldKey.scope)) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        "api.key.rotate: rejected — reserved CLI session purpose",
+      );
+      throw new CapabilityError(
+        "rotate_api_key",
+        "authz_denied",
+        "Forbidden: a CLI session key is replaced by `oxagen login`",
       );
     }
 

@@ -10,7 +10,7 @@
 
 ## Intent
 
-Mint an agent identity in the workspace (MC spec §6.2, App. E; #2956; shared with the onboarding flow and `oxagen agent register`). One transaction inserts the `agent.agents` row (status `draft`, deployment `inactive`, the harness as given), its delegated `iam.principals` row (kind `agent`, acting for the registering user), the org's default agent role when it is seeded, and the long-lived credential: an `auth.api_keys` row whose scope carries the server-owned purpose `agent_credential_v1` bound to the agent and its principal. The raw key is returned once and never stored.
+Mint an agent identity in the workspace (MC spec §6.2, App. E; #2956; shared with the onboarding flow and `oxagen agent register`). One transaction inserts the `agent.agents` row (status `draft`, deployment `inactive`, the harness as given), its delegated `iam.principals` row (kind `agent`, acting for the registering user), the org's default agent role when it is seeded, and the long-lived credential: an `auth.api_keys` row whose scope carries the server-owned purpose `agent_credential_v1` bound to the agent and its principal. The raw key is returned once and never stored. `resolveApiKey` refuses a key carrying that purpose on every surface (`purpose_locked`): the credential is for the run-token exchange of spec §6.2, which is not built, and it never authorizes as the user who minted it (ADR-057 §4).
 
 Registration writes no definition: the definition of record is the file `.oxagen/agents/<slug>.toml` in the workspace repository, written by `commit_agent_definition` (ADR-057 decision 1).
 

@@ -197,6 +197,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { agentGetHandler } = await import(
       "@oxagen/agent/handlers/agent.get"
     );
+    // The resolvers subpath: the barrel builds the Better Auth instance at
+    // import, which needs the login env this block does not carry.
+    const { resolveApiKey } = await import("@oxagen/auth/resolvers");
 
     let owner: import("@oxagen/agent/handlers/_agent-identity.test-support").SeededTenant;
     const orgIds: string[] = [];
@@ -229,6 +232,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     let registered: Awaited<ReturnType<typeof agentRegisterHandler>>;
+    let rotatedSecret: string;
     let firstRetire: Awaited<ReturnType<typeof agentRetireHandler>>;
 
     it("register_agent mints the row, its principal and one credential whose secret is returned once and never stored", async () => {
@@ -260,6 +264,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         principal_id: registered.principalId,
       });
       expect(eventTypes()).toEqual(["agent.registered", "api_key.created"]);
+      // The credential is locked to its purpose: no surface authenticates it
+      // as a bearer, so it never carries its minter's authority (ADR-057 §3).
+      expect(await resolveApiKey(registered.credential.secret)).toEqual({
+        ok: false,
+        kind: "purpose_locked",
+      });
 
       const read = await inScope(owner, () =>
         agentGetHandler({ agentId: "release-bot" }, ctx()),
@@ -294,6 +304,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.credential.id).not.toBe(registered.credential.id);
       expect(out.credential.secret).not.toBe(registered.credential.secret);
       expect(eventTypes()).toEqual(["api_key.revoked", "api_key.created"]);
+      rotatedSecret = out.credential.secret;
+      expect(await resolveApiKey(registered.credential.secret)).toEqual({
+        ok: false,
+        kind: "invalid",
+      });
+      expect(await resolveApiKey(rotatedSecret)).toEqual({
+        ok: false,
+        kind: "purpose_locked",
+      });
       const live = await withSystemDb((tx) =>
         tx
           .select({ publicId: schema.apiKeys.publicId })
@@ -385,6 +404,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(keys.length).toBeGreaterThanOrEqual(3);
       expect(keys.every((k) => k.deletedAt !== null)).toBe(true);
+      expect(await resolveApiKey(rotatedSecret)).toEqual({
+        ok: false,
+        kind: "invalid",
+      });
       const commands = await withSystemDb((tx) =>
         tx
           .select({

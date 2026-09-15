@@ -10,7 +10,7 @@
 
 ## Intent
 
-Stop an agent identity without retiring it (MC spec §6.2; #2956). The principal's status becomes `suspended`, which invalidates every run token at its next call: the one-second revocation the identity half exists for. Credentials, roles and hosts stay as they are, so a resume (`suspended: false`) is one status write back to `active`. Suspending a suspended agent, or resuming an active one, answers the current state without a write.
+Stop an agent identity without retiring it (MC spec §6.2; #2956). The principal's status becomes `suspended`: the runtime builds no run context for a suspended principal (`packages/iam/src/agent-run-context.ts`), so no governed run starts for it and `get_agent_toolbelt` reports an empty belt. Credentials, roles and hosts stay as they are, so a resume (`suspended: false`) is one status write back to `active`. The long-lived credential is locked to the run-token exchange of spec §6.2, which no surface serves yet (ADR-057 §4). Suspending a suspended agent, or resuming an active one, answers the current state without a write.
 
 ## Input
 

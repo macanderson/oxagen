@@ -8,21 +8,16 @@
 // keeps (packages/handlers/src/lib/tacho-enrollment.ts). A caller that could
 // self-assert this purpose could present as an agent principal it never
 // registered.
-import { z } from "zod";
-
 export const AGENT_CREDENTIAL_SCOPE_PURPOSE = "agent_credential_v1" as const;
 
-export const agentCredentialScopeSchema = z
-  .object({
-    purpose: z.literal(AGENT_CREDENTIAL_SCOPE_PURPOSE),
-    /** `agt_…` of the agent the key authenticates. */
-    agent_id: z.string().regex(/^agt_[0-9a-z]+$/),
-    /** `prn_…` of the agent's delegated principal. */
-    principal_id: z.string().regex(/^prn_[0-9a-z]+$/),
-  })
-  .strict();
-
-export type AgentCredentialScope = z.output<typeof agentCredentialScopeSchema>;
+/** The scope `mintAgentCredential` writes; nothing parses it back yet. */
+export interface AgentCredentialScope {
+  purpose: typeof AGENT_CREDENTIAL_SCOPE_PURPOSE;
+  /** `agt_…` of the agent the key authenticates. */
+  agent_id: string;
+  /** `prn_…` of the agent's delegated principal. */
+  principal_id: string;
+}
 
 export function requestsReservedAgentCredentialPurpose(
   scope: unknown,

@@ -4,7 +4,9 @@
  * Covers:
  * - API key malformed/invalid/expired → 401 with distinct messages
  * - Unknown error kind → "Unauthorized" fallback
- * - API key ok → sets orgId/workspaceId, userId=null
+ * - API key ok → sets orgId/workspaceId, userId as the resolver returned it
+ *   (null for a plain key, the approving user for a CLI session key)
+ * - API key locked to another purpose → 401
  * - Session valid → sets userId, apiKeyId=null
  * - No credentials → 401 "Missing credentials"
  * - Expired session (resolveSession returns null) → 401 "Session expired"
@@ -79,6 +81,8 @@ import {
   makeApiKeyInvalid,
   makeApiKeyExpired,
   makeSessionValid,
+  TEST_ORG_ID,
+  TEST_WORKSPACE_ID,
 } from "./_helpers";
 
 // We test via the /v1/organizations POST route (user-scoped, auth only, no org/workspace).
@@ -132,6 +136,25 @@ describe("authMiddleware — API key errors", () => {
     expect(body.error.message).toBe("API key expired");
   });
 
+  it("purpose-locked key → 401 naming the lock", async () => {
+    mocks.resolveApiKey.mockResolvedValue({
+      ok: false,
+      kind: "purpose_locked",
+    });
+    const res = await app.fetch(
+      makeRequest(AUTH_ONLY_PATH, {
+        method: "POST",
+        headers: { authorization: bearerHeader("ox_agentcredential") },
+      }),
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe(
+      "API key is locked to a purpose this surface does not serve",
+    );
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   it("unknown error kind → 401 'Unauthorized' (fallback)", async () => {
     // Return an unrecognised kind not in the messages map
     mocks.resolveApiKey.mockResolvedValue({
@@ -173,6 +196,68 @@ describe("authMiddleware — API key success", () => {
     );
     // If auth passed and invoke returns, we get a 200 (not a 401)
     expect(res.status).not.toBe(401);
+  });
+
+  it("a plain key reaches an org-scoped route with no user on the context", async () => {
+    mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
+    mocks.invoke.mockResolvedValue({});
+    await app.fetch(
+      makeRequest("/v1/acme/main/agents/get", {
+        method: "POST",
+        headers: {
+          authorization: bearerHeader("ox_plainkey"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ agentId: "release-manager" }),
+      }),
+    );
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke.mock.calls[0]?.[2]).toMatchObject({
+      userId: null,
+      apiKeyId: "key-id-test",
+    });
+  });
+
+  it("a CLI session key's approving user reaches register_agent's context and the route answers 200", async () => {
+    mocks.resolveApiKey.mockResolvedValue(
+      makeApiKeyOk({ apiKeyId: "key-cli", userId: "user-cli-approver" }),
+    );
+    const output = {
+      agentId: "agt_0123456789abcdefghjkmn",
+      slug: "release-manager",
+      agentKey: null,
+      principalId: "prn_0123456789abcdefghjkmn",
+      credential: {
+        id: "aky_0123456789abcdefghjkmn",
+        secret: "ox_secret",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+      },
+    };
+    mocks.invoke.mockResolvedValue(output);
+    const res = await app.fetch(
+      makeRequest("/v1/acme/main/agents/register", {
+        method: "POST",
+        headers: {
+          authorization: bearerHeader("ox_clisessionkey"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          slug: "release-manager",
+          name: "Release manager",
+          harness: "stella",
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("register_agent");
+    expect(mocks.invoke.mock.calls[0]?.[2]).toMatchObject({
+      userId: "user-cli-approver",
+      apiKeyId: "key-cli",
+      orgId: TEST_ORG_ID,
+      workspaceId: TEST_WORKSPACE_ID,
+    });
   });
 });
 
