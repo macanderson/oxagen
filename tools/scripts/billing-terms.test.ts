@@ -43,6 +43,25 @@ function fakeInvoke() {
   return { calls, fn };
 }
 
+/**
+ * The recorded call at `index`, or a thrown failure naming the gap.
+ *
+ * `noUncheckedIndexedAccess` (tsconfig.base.json) types an indexed read as
+ * possibly undefined, so reading `.ctx` off `calls[0]` does not compile. A
+ * throw here also reports the right thing when a call is genuinely missing:
+ * "expected a kernel call at index 1" rather than a property access on
+ * undefined several lines later.
+ */
+function callAt(kernel: ReturnType<typeof fakeInvoke>, index: number) {
+  const call = kernel.calls[index];
+  if (!call) {
+    throw new Error(
+      `expected a kernel call at index ${index}; the fake recorded ${kernel.calls.length}`,
+    );
+  }
+  return call;
+}
+
 describe("parseFlags", () => {
   it("reads the three flags in any order", () => {
     expect(
@@ -142,8 +161,8 @@ describe("runBillingTerms", () => {
     });
 
     expect(kernel.calls).toHaveLength(1);
-    expect(kernel.calls[0].name).toBe("set_org_billing_terms");
-    expect(kernel.calls[0].input).toEqual({
+    expect(callAt(kernel, 0).name).toBe("set_org_billing_terms");
+    expect(callAt(kernel, 0).input).toEqual({
       orgId: ORG_ID,
       approvedForInvoiceBilling: true,
       invoiceGauMax: 250_000,
@@ -173,7 +192,7 @@ describe("runBillingTerms", () => {
       requestId: "req-2",
     });
 
-    const ctx = kernel.calls[0].ctx;
+    const ctx = callAt(kernel, 0).ctx;
     expect(isKernelIssuedPlatformOperator(ctx.platformOperator)).toBe(true);
     expect(ctx.platformOperator?.requestId).toBe("req-2");
   });
@@ -187,7 +206,7 @@ describe("runBillingTerms", () => {
       requestId: "req-3",
     });
 
-    const ctx = kernel.calls[0].ctx;
+    const ctx = callAt(kernel, 0).ctx;
     expect(ctx.surface).toBe("runner");
     expect(ctx.requestId).toBe("req-3");
     expect(ctx.orgId).toBe("");
@@ -234,11 +253,11 @@ describe("runBillingTerms", () => {
     await runBillingTerms(flags, deps);
     await runBillingTerms(flags, deps);
 
-    expect(kernel.calls[0].ctx.platformOperator).not.toBe(
-      kernel.calls[1].ctx.platformOperator,
+    expect(callAt(kernel, 0).ctx.platformOperator).not.toBe(
+      callAt(kernel, 1).ctx.platformOperator,
     );
-    expect(kernel.calls[0].ctx.requestId).not.toBe(
-      kernel.calls[1].ctx.requestId,
+    expect(callAt(kernel, 0).ctx.requestId).not.toBe(
+      callAt(kernel, 1).ctx.requestId,
     );
   });
 });
