@@ -225,7 +225,7 @@ describe("thumb bar", () => {
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Organization and Billing, and no audit entry", async () => {
+  it("rises as a bottom sheet carrying Steering, Skills, Organization and Billing, and no audit entry", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -236,6 +236,7 @@ describe("More sheet", () => {
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Steering", "/acme/core-platform/steering"],
+      ["Skills", "/acme/core-platform/skills"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
     ]);

@@ -7,7 +7,8 @@
 // hands its viewer, the data source, the checkout outcome and the invoices
 // cursor to the Billing feature (WL-38); Spend hands its viewer, the data
 // source and the query to its body, and Fleet renders the cost rollup's two
-// tiles under its title (#2962); People renders its sections from org.members.
+// tiles under its title (#2962); People renders its sections from org.members;
+// Skills hands its viewer, the data source and the cursor to its body (#3098).
 // Run and API keys gain their bodies in WL-35 and WL-37, and the rest of Fleet
 // in WL-34.
 import { screen } from "@testing-library/react";
@@ -19,25 +20,38 @@ import {
   routeProps,
 } from "@/test/render-page";
 
-const { requireViewer, Billing, Spend, FleetSpendTiles, members, source } =
-  vi.hoisted(() => {
-    const members = vi.fn();
-    return {
-      requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
-      Billing: vi.fn((_props: Record<string, unknown>) => null),
-      Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
-        <p data-testid="spend-body" data-tab={props.searchParams.tab} />
-      )),
-      FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
-        <p data-testid="fleet-spend" />
-      )),
-      members,
-      source: { org: { members } },
-    };
-  });
+const {
+  requireViewer,
+  Billing,
+  Spend,
+  FleetSpendTiles,
+  Skills,
+  SkillsLoading,
+  members,
+  source,
+} = vi.hoisted(() => {
+  const members = vi.fn();
+  return {
+    requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+    Billing: vi.fn((_props: Record<string, unknown>) => null),
+    Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="spend-body" data-tab={props.searchParams.tab} />
+    )),
+    FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="fleet-spend" />
+    )),
+    Skills: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="skills-body" />
+    )),
+    SkillsLoading: vi.fn(() => null),
+    members,
+    source: { org: { members } },
+  };
+});
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -64,6 +78,8 @@ const GAP_LANE: [string, Load][] = [
 ];
 
 const SPEND: Load = () => import("./[ws]/spend/page");
+
+const SKILLS: Load = () => import("./[ws]/skills/page");
 
 const FLEET: Load = () => import("./[ws]/page");
 
@@ -144,6 +160,39 @@ describe("the Spend page", () => {
   });
 });
 
+describe("the Skills page", () => {
+  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands its body the viewer, the data source and the cursor", async () => {
+    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS, { cursor: "c2" }),
+      title("skills"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(page).toHaveTextContent(
+      "Oxagen does not run a skill — the harness does.",
+    );
+    expect(Skills.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      cursor: "c2",
+    });
+    expect(screen.getByTestId("skills-body")).toBeInTheDocument();
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands its body the first page when the URL names no cursor", async () => {
+    await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS),
+      title("skills"),
+    );
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
+  });
+});
+
 describe("the Fleet page", () => {
   it("resolves the workspace viewer, names the page once and renders the cost rollup's tiles under its title with the viewer and the data source", async () => {
     const viewer = { wsSlug: "core-platform" };
@@ -210,6 +259,7 @@ describe("a person requireViewer refuses", () => {
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
     ["spend", SPEND] as const,
+    ["skills", SKILLS] as const,
     ["fleet", FLEET] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
     ["people", () => import("./page")] as const,

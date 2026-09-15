@@ -21,6 +21,7 @@ type Messages = {
     run: string;
     agents: string;
     tools: string;
+    skills: string;
     steering: string;
     spend: string;
     people: string;
@@ -436,6 +437,7 @@ type Messages = {
       fleet: string;
       agents: string;
       tools: string;
+      skills: string;
       steering: string;
       spend: string;
       organization: string;
@@ -486,6 +488,46 @@ type Messages = {
     drawer: {
       title: string;
       close: string;
+    };
+  };
+  skills: {
+    eyebrow: string;
+    lede: string;
+    loading: string;
+    inventory: {
+      title: string;
+      window: string;
+      reported: string;
+      noneReported: string;
+      notReported: string;
+      list: string;
+      next: string;
+    };
+    row: {
+      sessions: string;
+      lastSeen: string;
+      harnesses: string;
+    };
+    empty: {
+      title: string;
+      hint: string;
+    };
+    failure: {
+      denied: {
+        title: string;
+        body: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        code: string;
+      };
+      retry: string;
+      back: string;
     };
   };
   spend: {

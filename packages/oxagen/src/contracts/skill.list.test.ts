@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import { skillList } from "./skill.list";
+
+const row = {
+  name: "release-notes",
+  sessions: 3,
+  harnesses: ["claude-code"],
+  firstSeenAt: "2026-09-01T09:00:00.000Z",
+  lastSeenAt: "2026-09-14T09:00:00.000Z",
+};
+
+const page = {
+  window: {
+    from: "2026-08-16T00:00:00.000Z",
+    to: "2026-09-15T00:00:00.000Z",
+  },
+  sessions: 5,
+  reportedSessions: 4,
+  notReportedSessions: 1,
+  skills: [row],
+  nextCursor: null,
+};
+
+describe("list_skills contract", () => {
+  it("is an ungated console read", () => {
+    expect(skillList.noBillingGate).toBe(true);
+    expect(skillList.mutates).toBe(false);
+    expect(skillList.scoped).toBe(true);
+  });
+
+  it("defaults the window to 30 days and refuses one past 90", () => {
+    expect(skillList.input.parse({})).toEqual({ windowDays: 30 });
+    expect(skillList.input.safeParse({ windowDays: 90 }).success).toBe(true);
+    expect(skillList.input.safeParse({ windowDays: 91 }).success).toBe(false);
+    expect(skillList.input.safeParse({ windowDays: 0 }).success).toBe(false);
+    expect(skillList.input.safeParse({ limit: 5 }).success).toBe(false);
+  });
+
+  it("carries a null reported count when no session reported an inventory", () => {
+    expect(skillList.output.parse(page)).toEqual(page);
+    expect(
+      skillList.output.parse({
+        ...page,
+        sessions: 2,
+        reportedSessions: null,
+        notReportedSessions: 2,
+        skills: [],
+      }).reportedSessions,
+    ).toBeNull();
+    expect(
+      skillList.output.safeParse({ ...page, reportedSessions: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a row no session reported, a row with no harness, and a field the record does not carry", () => {
+    const withRow = (over: Record<string, unknown>) =>
+      skillList.output.safeParse({ ...page, skills: [{ ...row, ...over }] })
+        .success;
+    expect(withRow({ sessions: 0 })).toBe(false);
+    expect(withRow({ harnesses: [] })).toBe(false);
+    expect(withRow({ name: "" })).toBe(false);
+    expect(withRow({ version: "1.0.0" })).toBe(false);
+  });
+});

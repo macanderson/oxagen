@@ -2,7 +2,7 @@
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet, Run and Organization ports in WL-34 to WL-37, the
-// Billing port in WL-38, the Spend port in #2962.
+// Billing port in WL-38, the Spend port in #2962, the Skills port in #3098.
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   ContractRate,
@@ -16,6 +16,7 @@ import type {
   ShellContext,
   WorkspaceChoice,
 } from "./contracts/shell";
+import type { SkillInventory } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
@@ -90,4 +91,15 @@ export interface DataSource {
   };
   /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
   org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
+  /**
+   * list_skills, one page by name over its default window (noBillingGate;
+   * workspace members, checked in its handler); caller:
+   * features/skills/skills.tsx.
+   */
+  skills: {
+    inventory(
+      ctx: WsCtx,
+      q: { cursor: string | null },
+    ): Promise<Read<SkillInventory>>;
+  };
 }

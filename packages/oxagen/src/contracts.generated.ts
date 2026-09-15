@@ -258,6 +258,7 @@ import "./contracts/secret.key.upsert";
 import "./contracts/secret.reveal";
 import "./contracts/secret.value.set";
 import "./contracts/secret.value.unset";
+import "./contracts/skill.list";
 import "./contracts/spend.drill";
 import "./contracts/spend.get";
 import "./contracts/spend.shared";

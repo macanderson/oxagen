@@ -1032,6 +1032,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_skills",
+    async () =>
+      (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "export_statement",
     async () =>
       (await import("./spend.statement.export"))

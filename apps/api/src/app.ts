@@ -249,6 +249,7 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { skillListRoute } from "./routes/v1/skill.list";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
@@ -470,6 +471,9 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+// The skills a workspace's harness sessions reported at start (#3098): a
+// noBillingGate read of tacho.sessions.
+orgScoped.route("/skills", skillListRoute);
 orgScoped.route("/spend/findings", findingListRoute);
 orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
