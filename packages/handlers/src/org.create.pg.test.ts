@@ -237,7 +237,9 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       );
       expect([...rows][0]?.n, `billing.${name}`).toBe(0);
     }
-  });
+    // A dozen sequential transactions plus one per billing table, run under
+    // coverage beside two other turbo tasks: 5s timed out in CI.
+  }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(
