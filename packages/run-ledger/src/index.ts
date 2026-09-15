@@ -11,6 +11,50 @@
  */
 export { type PlatformSurface } from "./surface";
 
+// Frame bodies and the seal's replay evidence (ADR-058): the body and archive
+// store seams the recorder writes through, and the pure grading helpers.
+export {
+  prepareFrameBody,
+  bodyRetainedByPolicy,
+  deriveCompletenessGaps,
+  deriveSealRollup,
+  gradeSealedAttempt,
+  archiveFrameOf,
+  readArchiveFrame,
+  NO_BODY,
+  type AttemptEventBodyInput,
+  type PreparedFrameBody,
+  type FrameBodyColumns,
+  type FrameFidelity,
+  type RetentionPolicyBinding,
+  type RunBodyStore,
+  type RunArchiveStore,
+  type SealedFrameRow,
+  type SealRollup,
+} from "./frame-body";
+
+// One frame shape for a run from either store, and the pure reads over it:
+// the bisect alignment and the transcript fold (ADR-058).
+export {
+  ledgerFrame,
+  ledgerFrameSummary,
+  tachoFrame,
+  tachoFrameSummary,
+  tachoStage,
+  tachoTimestamp,
+  bisectKey,
+  bisectFrames,
+  foldTranscript,
+  stepKind,
+  type RunFrame,
+  type FrameIdentity,
+  type TachoFrameRowLike,
+  type BisectResult,
+  type TranscriptZoom,
+  type TranscriptEntryKind,
+  type TranscriptFold,
+} from "./run-frames";
+
 // The ledger itself: admission, immutable attempts, fenced appends, seals,
 // terminal outcome, and the read side.
 export {
@@ -47,6 +91,12 @@ export {
   buildListRunAttemptsSql,
   buildListAttemptIdentitySql,
   buildReadAttemptEventsSinceSql,
+  buildListCompactedSealsSql,
+  buildCompactSealedAttemptsSql,
+  buildSetRunSummarySql,
+  framesFromSegment,
+  type GeneratedRunSummary,
+  type CompactedSealRow,
   type RunStore,
   type RunStoreOptions,
   type RunSecurityEventSink,

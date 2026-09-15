@@ -107,6 +107,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "bisect_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "browse_plugin_catalog",
       "reads": [],
@@ -570,6 +580,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "export_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "export_schema",
       "reads": [],
@@ -603,6 +622,15 @@
     {
       "domain": "control",
       "name": "fetch_commands",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "fork_run",
       "reads": [],
       "surfaces": [
         "api"
@@ -1047,6 +1075,26 @@
     {
       "domain": "run",
       "name": "get_run_cost",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_frame_body",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_transcript",
       "reads": [],
       "surfaces": [
         "api",
@@ -2475,6 +2523,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "summarize_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "suspend_agent",
       "reads": [],
@@ -2817,7 +2874,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b66ed4bb4ac8b32e68716b7d7f8180cca2bcc79777496ee9fc3e293aa25762ac",
+  "contentHash": "34e7ec5dfea15f764d22c7e14979e06fb1b24dacbed61f81a6892c46e30915c8",
   "domains": [
     {
       "name": "agent",
@@ -2939,6 +2996,8 @@
       ],
       "tables": [
         "blob:avatar",
+        "blob:evidence_body",
+        "blob:evidence_segment",
         "blob:generated_asset",
         "neo4j:Document",
         "postgres:content.generated_assets"
@@ -2985,7 +3044,8 @@
         "postgres"
       ],
       "tables": [
-        "postgres:evidence.retention_policy_versions"
+        "postgres:evidence.retention_policy_versions",
+        "postgres:evidence.run_exports"
       ]
     },
     {
@@ -3215,7 +3275,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 117
+      "tableCount": 118
     },
     {
       "domains": [
@@ -3250,7 +3310,7 @@
       ],
       "kind": "blob",
       "purpose": "Binary assets — avatars, generated media, uploads; the Postgres row (URL + metadata) is source of truth.",
-      "tableCount": 2
+      "tableCount": 4
     }
   ],
   "tables": [
@@ -3266,6 +3326,36 @@
         "referencedBy": "postgres:agent.agents,postgres:auth.users,postgres:org.organizations,postgres:workspace.workspaces"
       },
       "name": "avatar",
+      "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:evidence_body",
+      "meta": {
+        "access": "private",
+        "assetKinds": "evidence_body",
+        "description": "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<key id>/<sha256>; agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the reference (ADR-058).",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:agent.agent_run_events,postgres:tacho.sessions"
+      },
+      "name": "evidence_body",
+      "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:evidence_segment",
+      "meta": {
+        "access": "private",
+        "assetKinds": "evidence_export,evidence_segment",
+        "description": "Per-seal archive segments (frame envelopes as zstd NDJSON, written once at seal) and export bundles; the seal's archive_segment_ref and run_exports.bundle_ref hold the reference (ADR-058).",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:agent.agent_run_attempt_seals,postgres:evidence.run_exports"
+      },
+      "name": "evidence_segment",
       "store": "blob",
       "tenantScoped": true
     },
@@ -5556,6 +5646,48 @@
           "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "replay_grade",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "completeness_gaps",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "merkle_root",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "archive_segment_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_calls",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_calls",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "turns",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         }
       ],
       "domain": "agent",
@@ -5656,6 +5788,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "citext"
+        },
+        {
+          "name": "forked_from_run_seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
         }
       ],
       "domain": "agent",
@@ -5786,6 +5924,36 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "body_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "body_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "body_bytes",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "redactions",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "fidelity",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -6056,6 +6224,30 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_generated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_model",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "spec_version",
@@ -10923,6 +11115,118 @@
       "domain": "evidence",
       "id": "postgres:evidence.retention_policy_versions",
       "name": "retention_policy_versions",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "requested_by_user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "merkle_root",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "frame_count",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "completed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "evidence",
+      "id": "postgres:evidence.run_exports",
+      "name": "run_exports",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -17660,6 +17964,24 @@
           "type": "uuid"
         },
         {
+          "name": "content_frames",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "body_frames",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_body_frames",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
           "name": "title",
           "nullable": true,
           "primaryKey": false,
@@ -17667,6 +17989,30 @@
         },
         {
           "name": "last_prompt_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_generated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_model",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

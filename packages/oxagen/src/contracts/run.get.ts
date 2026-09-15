@@ -2,12 +2,11 @@
  * `get_run`: the Run page's header and one page of its frames
  * (apps/app/ARCHITECTURE.md §1.2, §3.5, WL-18).
  *
- * The header is the same row `list_runs` returns. Frames exist for ledger runs
- * only: they are the run's V2 events, read newest-last from the run's own
- * `run_seq` behind an opaque cursor this capability owns. A wrapped (tacho)
- * run answers `frames: null` — its events live in ClickHouse `tacho_events`,
- * which has no read seam yet — and the page renders that one slice as not
- * recorded (§3.6 `run.frames_wrapped`).
+ * The header is the same row `list_runs` returns. Frames are the run's V2
+ * events for a ledger run, read from the run's own `run_seq`, and the
+ * session's hash-chained events in ClickHouse `tacho_events` for a wrapped
+ * run, read from its dense `seq`; both sit behind an opaque cursor this
+ * capability owns.
  *
  * The cursor is the SSE resume point (§3.5): each frame carries its own, the
  * page carries the cursor to continue from, and a read that starts at either
@@ -17,11 +16,17 @@
  * than one per client tick. The poll is inside the handler, after the gates,
  * so IAM and the audit emissions happen once per invoke whatever `waitMs` is.
  *
+ * Frames carry their body reference (spec §8.2 `content`): the digest of the
+ * redacted bytes, where they were retained, what was redacted, and the
+ * fidelity the recorder kept. Bodies are never inline; `get_run_frame_body`
+ * reads them on demand (§3.5). Each frame's cost record, when the frame
+ * carried one, is what a transport prefix-sums into cumulative cost (§8.4).
+ *
  * `noBillingGate: true`: an SSE poll is not a governed action (§1.5).
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { runItemSchema, runPublicIdSchema } from "./run.list";
+import { runCostSchema, runItemSchema, runPublicIdSchema } from "./run.list";
 
 /** The most frames one read returns; the default fits one SSE batch. */
 export const FRAME_LIMIT_MAX = 500;
@@ -29,13 +34,44 @@ export const FRAME_LIMIT_DEFAULT = 200;
 /** The longest a read may wait for an event past its cursor. */
 export const WAIT_MS_MAX = 20_000;
 
+export const frameFidelitySchema = z.enum(["full", "digest_only"]);
+
+/**
+ * One removal made before the body was written (§13.5): by the platform's
+ * detectors for a ledger frame, by the host's for a wrapped one, so `reason`
+ * is the redactor's own word.
+ */
+export const frameRedactionSchema = z
+  .object({
+    /** The span removed, e.g. `bytes:12-60` in the original bytes. */
+    path: z.string(),
+    reason: z.string().min(1),
+    /** sha256 of the bytes removed, so an auditor can prove what was cut. */
+    originalDigest: z.string(),
+  })
+  .strict();
+
+export const frameBodySchema = z
+  .object({
+    /** sha256 over the redacted bytes; null when the frame carried no content. */
+    digest: z.string().nullable(),
+    /** Where the bytes were retained; null under `digest_only`. */
+    bytesRef: z.string().nullable(),
+    redactions: z.array(frameRedactionSchema),
+    fidelity: frameFidelitySchema,
+  })
+  .strict();
+
 export const runFrameSchema = z
   .object({
     /** Opaque resume point: pass as `framesAfter` to read what follows. */
     cursor: z.string(),
-    /** The ledger's run-global sequence, as a decimal string. */
+    /**
+     * The frame's position: the ledger's run-global `run_seq`, or a wrapped
+     * session's dense `seq`, as a decimal string.
+     */
     seq: z.string().regex(/^\d+$/),
-    /** The recorded event type, e.g. `model.call_completed`. */
+    /** The recorded event type or kind, e.g. `model.call_completed`, `tool_call`. */
     type: z.string(),
     /** The evidence stage the event belongs to. */
     stage: z.string(),
@@ -49,6 +85,9 @@ export const runFrameSchema = z
      * carries none, or is encrypted.
      */
     summary: z.string(),
+    body: frameBodySchema,
+    /** The frame's own cost record; null when it carried none. */
+    cost: runCostSchema.nullable(),
   })
   .strict();
 
@@ -68,7 +107,7 @@ export const runGet = registerCapability({
   name: "get_run",
   domain: "run",
   description:
-    "Read one run's header and, for an evidence-ledger run, one page of its frames from an opaque cursor, optionally waiting for a new frame; a wrapped-agent run answers its header with frames: null.",
+    "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -99,7 +138,7 @@ export const runGet = registerCapability({
   output: z
     .object({
       run: runItemSchema,
-      frames: runFramePageSchema.nullable(),
+      frames: runFramePageSchema,
     })
     .strict(),
 });

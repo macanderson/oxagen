@@ -924,6 +924,39 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoIncidentListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_frame_body",
+    async () =>
+      (await import("./run.frame_body.get"))
+        .runFrameBodyGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run_transcript",
+    async () =>
+      (await import("./run.transcript.get"))
+        .runTranscriptGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "bisect_runs",
+    async () =>
+      (await import("./run.bisect")).runBisectHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "fork_run",
+    async () =>
+      (await import("./run.fork")).runForkHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "export_run",
+    async () =>
+      (await import("./run.export")).runExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "summarize_run",
+    async () =>
+      (await import("./run.summarize"))
+        .runSummarizeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_cost",
     async () =>
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,

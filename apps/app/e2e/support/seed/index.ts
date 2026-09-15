@@ -42,6 +42,7 @@ import {
   parseRunSpecV2,
   TERMINAL_EVENT_TYPE,
 } from "@oxagen/run-ledger";
+import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
@@ -423,7 +424,12 @@ async function seedRun(scope: Scope, userId: string): Promise<string> {
     tool_policy: { allowlist: [], risk_ceiling: "low" },
   });
 
-  const store = createPostgresRunStore();
+  // The seal writes the attempt's archive segment before the row that names
+  // it, so a sealing store needs an archive; `createPostgresRunStore()` with
+  // none refuses. `ledgerStore()` in @oxagen/inngest-functions is the same
+  // wiring for the durable jobs. The read paths (the live adapter, run.fork,
+  // run-read) construct without one because they never seal.
+  const store = createPostgresRunStore({ archive: evidenceStore() });
   const run = await store.createRun({
     ...scope,
     surface: "external",

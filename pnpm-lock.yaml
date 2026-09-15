@@ -1447,6 +1447,9 @@ importers:
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1713,9 +1716,18 @@ importers:
 
   packages/run-ledger:
     dependencies:
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)

@@ -74,6 +74,8 @@ const ACTIONS = new Set([
   "publish",
   "snapshot",
   "fork",
+  // bisect_runs (#2952): align two recordings and find where they diverge.
+  "bisect",
   "rename",
   "edit",
   "export",

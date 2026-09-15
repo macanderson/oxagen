@@ -28785,6 +28785,32 @@
           ]
         }
       },
+      "bodies": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "event_id_idem": {
+              "type": "string"
+            },
+            "content_type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "bytes_base64": {
+              "type": "string",
+              "maxLength": 1398104
+            }
+          },
+          "required": [
+            "event_id_idem",
+            "content_type",
+            "bytes_base64"
+          ],
+          "additionalProperties": false
+        }
+      },
       "daemon": {
         "type": "object",
         "properties": {
@@ -28860,6 +28886,32 @@
           "required": [
             "session_uuid",
             "at_seq",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "body_rejections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "event_id_idem": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "unknown_event",
+                "digest_mismatch",
+                "credential_detected",
+                "retention_digest_only",
+                "no_content_digest"
+              ]
+            }
+          },
+          "required": [
+            "event_id_idem",
             "reason"
           ],
           "additionalProperties": false
@@ -29031,6 +29083,7 @@
       "accepted",
       "event_ids",
       "chain_breaks",
+      "body_rejections",
       "control"
     ],
     "additionalProperties": false

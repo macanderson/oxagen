@@ -222,6 +222,12 @@ import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
+import { runFrameBodyGetRoute } from "./routes/v1/run.frame_body.get";
+import { runTranscriptGetRoute } from "./routes/v1/run.transcript.get";
+import { runBisectRoute } from "./routes/v1/run.bisect";
+import { runForkRoute } from "./routes/v1/run.fork";
+import { runExportRoute } from "./routes/v1/run.export";
+import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
 import { agentGetRoute } from "./routes/v1/agent.get";
 import { agentRegisterRoute } from "./routes/v1/agent.register";
@@ -439,6 +445,12 @@ orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Fleet list and the Run header with its frame page.
 orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
+orgScoped.route("/runs/frame-body", runFrameBodyGetRoute);
+orgScoped.route("/runs/transcript", runTranscriptGetRoute);
+orgScoped.route("/runs/bisect", runBisectRoute);
+orgScoped.route("/runs/fork", runForkRoute);
+orgScoped.route("/runs/export", runExportRoute);
+orgScoped.route("/runs/summarize", runSummarizeRoute);
 // Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
 // run's cost and the price book. All noBillingGate reads of Postgres rollups.
 orgScoped.route("/spend", spendGetRoute);

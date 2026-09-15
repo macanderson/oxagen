@@ -1,5 +1,5 @@
 {
-  "generatedCount": 262,
+  "generatedCount": 268,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -112,6 +112,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "bisect_runs",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -624,6 +635,16 @@
       "consumes": []
     },
     {
+      "name": "export_run",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "export_schema",
       "domain": "schema",
       "surfaces": [
@@ -660,6 +681,16 @@
     {
       "name": "fetch_commands",
       "domain": "control",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "fork_run",
+      "domain": "run",
       "surfaces": [
         "api"
       ],
@@ -1148,6 +1179,28 @@
     },
     {
       "name": "get_run_cost",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_frame_body",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_transcript",
       "domain": "run",
       "surfaces": [
         "api",
@@ -2713,6 +2766,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "summarize_run",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

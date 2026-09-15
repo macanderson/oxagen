@@ -389,6 +389,18 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // ── Generated summary (Mission Control mockup 2821-2835; G14; ADR-058) ──
+    // Written by `summarize_run`: a light-tier model reads the frames and
+    // writes what changed. Labelled generated wherever it renders and never
+    // standing in for the record; the three summary columns are set together
+    // so a summary always names the model and the instant that produced it.
+    name: text("name"),
+    summary: text("summary"),
+    summaryGeneratedAt: timestamp("summary_generated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    summaryModel: text("summary_model"),
 
     // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
     //
@@ -572,6 +584,10 @@ export const agentRuns = agentSchema.table(
       "agent_runs_next_run_seq_check",
       sql`${t.nextRunSeq} >= 1`,
     ),
+    summaryCheck: check(
+      "agent_runs_summary_check",
+      sql`(${t.summary} IS NULL) = (${t.summaryGeneratedAt} IS NULL) AND (${t.summary} IS NULL) = (${t.summaryModel} IS NULL)`,
+    ),
     // A run may not be its own parent — the cheapest half of cycle prevention
     // (deeper cycles are prevented by the snapshot-narrowing rule in IAM).
     parentRunCheck: check(
@@ -651,6 +667,22 @@ export const agentRunEvents = agentSchema.table(
     payloadInline: jsonb("payload_inline"),
     encryptedPayloadRef: text("encrypted_payload_ref"),
     observedAt: timestamp("observed_at", { withTimezone: true, mode: "date" }),
+
+    // ── Frame body (Mission Control spec §8.2 `content`, §13.1) ──────────────
+    // The payload above is the frame's receipt metadata; the body is the
+    // content the frame is about (the prompt, the model response, the tool
+    // input and output). Bodies are content-addressed, redacted before write
+    // and encrypted in the organisation's object store; the row holds the
+    // reference, the sha256 of the redacted bytes, their length, the
+    // redactions applied, and `fidelity`: `full` when the bytes were retained,
+    // `digest_only` when the run's pinned retention policy kept the digest
+    // alone (a completeness gap the seal grades `inspect`) or the frame
+    // carried no content. ADR-058.
+    bodyRef: text("body_ref"),
+    bodyDigest: text("body_digest"),
+    bodyBytes: integer("body_bytes"),
+    redactions: jsonb("redactions"),
+    fidelity: text("fidelity").notNull().default("digest_only"),
   },
   (t) => ({
     // Partial: legacy rows only. Replaces the former full
@@ -720,6 +752,27 @@ export const agentRunEvents = agentSchema.table(
       "agent_run_events_digest_check",
       sql`(${t.payloadDigest} IS NULL OR ${t.payloadDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.eventDigest} IS NULL OR ${t.eventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
     ),
+    fidelityCheck: check(
+      "agent_run_events_fidelity_check",
+      sql`${t.fidelity} IN ('full', 'digest_only')`,
+    ),
+    // A retained body carries its reference, digest and length together and
+    // is the only `full` frame; a digest-only frame has no reference; a frame
+    // with no content has none of the three and no redactions.
+    bodyShapeCheck: check(
+      "agent_run_events_body_shape_check",
+      sql`(
+        (${t.fidelity} = 'full') = (${t.bodyRef} IS NOT NULL)
+      ) AND (
+        ${t.bodyRef} IS NULL OR (${t.bodyDigest} IS NOT NULL AND ${t.bodyBytes} IS NOT NULL)
+      ) AND (
+        ${t.bodyDigest} IS NOT NULL OR (${t.bodyBytes} IS NULL AND ${t.redactions} IS NULL)
+      ) AND (
+        ${t.bodyDigest} IS NULL OR ${t.bodyDigest} ~ '^sha256:[0-9a-f]{64}$'
+      ) AND (
+        ${t.bodyBytes} IS NULL OR ${t.bodyBytes} >= 0
+      )`,
+    ),
   }),
 );
 
@@ -760,6 +813,12 @@ export const agentRunAttempts = agentSchema.table(
     // provenance chain remains as evidence.
     resumedFromAttemptId: uuid("resumed_from_attempt_id"),
     resumedFromAttemptPublicId: citext("resumed_from_attempt_public_id"),
+    // A fork replay (Mission Control spec §8.4 `fork`, `fork_run`): the
+    // run-global sequence the successor branches from. Frames up to it replay
+    // from the recording; the next model call runs live. Always paired with
+    // the restore tuple, since a fork resumes the attempt that recorded the
+    // frame. ADR-058.
+    forkedFromRunSeq: bigint("forked_from_run_seq", { mode: "number" }),
   },
   (t) => ({
     runAttemptUniq: uniqueIndex("agent_run_attempts_run_attempt_uq").on(
@@ -792,6 +851,10 @@ export const agentRunAttempts = agentSchema.table(
     digestCheck: check(
       "agent_run_attempts_digest_check",
       sql`${t.engineBuildDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    forkCheck: check(
+      "agent_run_attempts_fork_check",
+      sql`${t.forkedFromRunSeq} IS NULL OR (${t.forkedFromRunSeq} >= 1 AND ${t.resumedFromAttemptId} IS NOT NULL)`,
     ),
   }),
 );
@@ -826,8 +889,37 @@ export const agentRunAttemptSeals = agentSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
+    // ── Replay (Mission Control spec §8.3, §8.4, §13.3; ADR-058) ─────────────
+    // The grade computed at seal from the completeness gaps: the strongest
+    // verb a reader can apply to the recording. Never raised afterwards; the
+    // row is immutable. Null only on a seal written before the recorder
+    // graded (a row this migration backfilled), never on a new seal.
+    replayGrade: text("replay_grade"),
+    // The gaps the grade was computed from (closed vocabulary in
+    // @oxagen/tacho COMPLETENESS_GAP_KINDS), as a JSON array of strings.
+    completenessGaps: jsonb("completeness_gaps")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // The RFC 6962 root over the attempt's event digests in run_seq order, and
+    // the archive segment (frame envelopes as zstd NDJSON) written once at
+    // seal. Both present on a graded seal; the segment reference is the
+    // storage key a compacted run reads from.
+    merkleRoot: text("merkle_root"),
+    archiveSegmentRef: text("archive_segment_ref"),
+    // The seal's rollup (spec §13.3): model calls, tool calls and distinct
+    // turns folded from the rows at seal, so a run keeps its counts once
+    // compaction (agent.compact_sealed_attempt_events) has removed its hot
+    // frames. `turns` is null when a model call's payload was encrypted,
+    // because the turn index travels inside it.
+    modelCalls: integer("model_calls"),
+    toolCalls: integer("tool_calls"),
+    turns: integer("turns"),
   },
   (t) => ({
+    rollupCheck: check(
+      "agent_run_attempt_seals_rollup_check",
+      sql`(${t.modelCalls} IS NULL OR ${t.modelCalls} >= 0) AND (${t.toolCalls} IS NULL OR ${t.toolCalls} >= 0) AND (${t.turns} IS NULL OR ${t.turns} >= 0) AND (${t.replayGrade} IS NULL) = (${t.modelCalls} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.toolCalls} IS NULL)`,
+    ),
     // An attempt seals exactly once — this uniqueness is what makes the
     // seal/grant/obligation transaction idempotent under duplicate sweeps.
     attemptUniq: uniqueIndex("agent_run_attempt_seals_attempt_uq").on(
@@ -865,6 +957,16 @@ export const agentRunAttemptSeals = agentSchema.table(
     digestCheck: check(
       "agent_run_attempt_seals_digest_check",
       sql`${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+    replayGradeCheck: check(
+      "agent_run_attempt_seals_replay_grade_check",
+      sql`${t.replayGrade} IS NULL OR ${t.replayGrade} IN ('inspect', 'view', 'fork', 'retry')`,
+    ),
+    // A graded seal carries its Merkle root and its archive segment; an
+    // ungraded (pre-recorder) seal carries neither.
+    replayEvidenceCheck: check(
+      "agent_run_attempt_seals_replay_evidence_check",
+      sql`(${t.replayGrade} IS NULL) = (${t.merkleRoot} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.archiveSegmentRef} IS NULL) AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND jsonb_typeof(${t.completenessGaps}) = 'array'`,
     ),
   }),
 );

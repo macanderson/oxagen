@@ -29,6 +29,12 @@ import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
+import {
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+} from "./functions/evidence.run-export";
+import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
+import { runSummarize } from "./functions/run.summarize";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -61,4 +67,8 @@ export const functions: any[] = [
   schemaReconcile,
   memoryDecayPass,
   observabilityCaptureFailure,
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+  evidenceFrameCompaction,
+  runSummarize,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

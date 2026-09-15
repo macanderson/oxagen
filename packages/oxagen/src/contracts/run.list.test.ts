@@ -14,6 +14,9 @@ const item = {
   taskRef: null,
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
+  replayGrade: null,
+  name: null,
+  summary: null,
 };
 
 describe("list_runs contract", () => {
@@ -50,6 +53,33 @@ describe("list_runs contract", () => {
         ...item,
         cost: { micros: 97937, currency: "USD", basis: "client_attested" },
       }).success,
+    ).toBe(false);
+  });
+
+  it("carries the recorded replay grade or null, never a word outside the ladder (negative)", () => {
+    for (const replayGrade of ["inspect", "view", "fork", "retry"]) {
+      expect(runItemSchema.safeParse({ ...item, replayGrade }).success).toBe(
+        true,
+      );
+    }
+    expect(
+      runItemSchema.safeParse({ ...item, replayGrade: "replay" }).success,
+    ).toBe(false);
+    const { replayGrade: _dropped, ...withoutGrade } = item;
+    expect(runItemSchema.safeParse(withoutGrade).success).toBe(false);
+  });
+
+  it("carries the generated summary with its model and instant, or null", () => {
+    const summary = {
+      text: "Reviewed the PR and left two comments.",
+      generatedAt: "2026-09-08T10:07:00.000Z",
+      model: "anthropic/claude-haiku-4.5",
+    };
+    expect(
+      runItemSchema.parse({ ...item, name: "Review PR 42", summary }).summary,
+    ).toEqual(summary);
+    expect(
+      runItemSchema.safeParse({ ...item, summary: { text: "x" } }).success,
     ).toBe(false);
   });
 

@@ -3439,8 +3439,72 @@
       }
     },
     {
+      "name": "bisect_runs",
+      "file": "run.bisect.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_run_cost",
       "file": "run.cost.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "export_run",
+      "file": "run.export.ts",
+      "domain": "run",
+      "mode": "async",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "fork_run",
+      "file": "run.fork.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_frame_body",
+      "file": "run.frame_body.get.ts",
       "domain": "run",
       "mode": "sync",
       "surfaces": [
@@ -3475,6 +3539,38 @@
     {
       "name": "list_runs",
       "file": "run.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "summarize_run",
+      "file": "run.summarize.ts",
+      "domain": "run",
+      "mode": "async",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_transcript",
+      "file": "run.transcript.get.ts",
       "domain": "run",
       "mode": "sync",
       "surfaces": [

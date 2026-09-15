@@ -14,6 +14,7 @@
  * a caller renders as "not recorded" (§3.4). Nothing here substitutes a zero,
  * a default or a neighbouring column for a value the row does not carry.
  */
+import { REPLAY_GRADES } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { costSchema } from "./spend.shared";
@@ -41,6 +42,28 @@ export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
  */
 export const runCostSchema = costSchema;
 
+/**
+ * The replay grade the seal recorded (spec §8.4): the strongest verb a reader
+ * can apply to the recording. Closed and ordered, weakest first. A caller
+ * renders the recorded word and never a stronger one.
+ */
+export const replayGradeSchema = z.enum(REPLAY_GRADES);
+
+/**
+ * The generated summary (`summarize_run`, G14): a light-tier model's account
+ * of what changed. Labelled generated wherever it renders; the record is the
+ * frames.
+ */
+export const runSummarySchema = z
+  .object({
+    text: z.string(),
+    /** RFC 3339. */
+    generatedAt: z.string().datetime(),
+    /** The model id that wrote it. */
+    model: z.string(),
+  })
+  .strict();
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -67,6 +90,14 @@ export const runItemSchema = z
     startedAt: z.string().datetime(),
     /** RFC 3339; null while the run is live or no seal was recorded. */
     sealedAt: z.string().datetime().nullable(),
+    /**
+     * The grade the seal recorded; null while the run is live or its seal
+     * predates the recorder. Never computed on read.
+     */
+    replayGrade: replayGradeSchema.nullable(),
+    /** The generated name; null until `summarize_run` wrote one. */
+    name: z.string().nullable(),
+    summary: runSummarySchema.nullable(),
   })
   .strict();
 
