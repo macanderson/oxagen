@@ -6,6 +6,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { Command } from "@tauri-apps/plugin-shell";
+import { parseTachoStatus, type TachoStatus } from "./tacho-status";
 
 export interface CliConfigView {
   path: string;
@@ -66,6 +67,18 @@ export interface DesktopState {
   daemon: DaemonStatus | null;
   log_path: string;
   sidecar_dir: string | null;
+  /**
+   * The sidecar directory is gone after this launch (an AppImage mount, a
+   * mounted .dmg, App Translocation): nothing durable may reference it.
+   */
+  sidecar_transient: boolean;
+  /**
+   * The directory hooks and the service may reference: the sidecar
+   * directory, or the durable copy "Link into PATH" made; null while the app
+   * runs from a transient directory with no copy yet (tacho refuses to
+   * enroll until there is one).
+   */
+  bin_dir: string | null;
   oxagen_on_path: string | null;
   tacho_on_path: string | null;
   cli_install_dir: string;
@@ -127,6 +140,7 @@ export async function runSidecar(
   name: Sidecar,
   args: string[],
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
+  options: { timeoutMs?: number } = {},
 ): Promise<RunResult> {
   const command = Command.sidecar(`binaries/${name}`, args);
   let stdout = "";
@@ -140,30 +154,140 @@ export async function runSidecar(
     onLine?.(line, "stderr");
   });
   return new Promise((resolve, reject) => {
+    // A read-only probe (detect, status) gets a deadline: if the child never
+    // reports close, the UI must fail with a message rather than wait.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle =
+      <T>(fn: (v: T) => void) =>
+      (v: T) => {
+        if (timer !== undefined) clearTimeout(timer);
+        fn(v);
+      };
+    const done = settle(resolve);
+    const fail = settle(reject);
     command.on("close", (payload: { code: number | null }) =>
-      resolve({ code: payload.code, stdout, stderr }),
+      done({ code: payload.code, stdout, stderr }),
     );
     command.on("error", (error: unknown) =>
-      reject(error instanceof Error ? error : new Error(String(error))),
+      fail(error instanceof Error ? error : new Error(String(error))),
     );
-    command.spawn().catch(reject);
+    command
+      .spawn()
+      .then((child) => {
+        if (options.timeoutMs !== undefined) {
+          timer = setTimeout(() => {
+            void Promise.resolve(child?.kill?.()).catch(() => undefined);
+            fail(
+              new Error(
+                `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
+              ),
+            );
+          }, options.timeoutMs);
+        }
+      })
+      .catch(fail);
   });
 }
 
-/** `tacho status --json`, the same document the CLI prints. */
-export interface TachoStatus {
-  enrolled: boolean;
-  hooks?: { complete: boolean; present: string[]; missing: string[] };
-  codexHooks?: { complete: boolean; present: string[]; missing: string[] };
-  service?: { kind: string; installed: boolean; running: boolean };
-  wal?: { sessions: number; unshipped: number };
+export type { TachoStatus } from "./tacho-status";
+
+/**
+ * `tacho status --json`, the same document the CLI prints. `status` exits 1
+ * when the machine is not enrolled but still prints the document, so the
+ * exit code alone means nothing; a run that printed no document and either
+ * failed or wrote to stderr (a host.json this build cannot parse, a service
+ * probe that threw) is an error the caller must show, not a silent null.
+ * Null is reserved for a clean run that printed nothing.
+ */
+export async function tachoStatus(): Promise<TachoStatus | null> {
+  const result = await runSidecar("tacho", ["status", "--json"], undefined, {
+    timeoutMs: 20_000,
+  });
+  const status = parseTachoStatus(result.stdout);
+  if (status !== null) return status;
+  const detail = result.stderr.trim();
+  if (detail !== "" || result.code !== 0)
+    throw new Error(
+      detail || `tacho status exited ${result.code ?? "?"} without a document`,
+    );
+  return null;
 }
 
-export async function tachoStatus(): Promise<TachoStatus | null> {
-  const result = await runSidecar("tacho", ["status", "--json"]);
+/** `tacho detect --json`: which harnesses the machine has and which are hooked. */
+export interface DetectedHarness {
+  harness: "claude-code" | "codex";
+  label: string;
+  installed: boolean;
+  path?: string;
+  version?: string;
+  enrolled: boolean;
+}
+export interface DetectReport {
+  enrolled: boolean;
+  harnesses: DetectedHarness[];
+}
+
+/** Two login-shell probes plus two `--version` calls, each bounded to 10 s in tacho. */
+const DETECT_TIMEOUT_MS = 45_000;
+
+export async function detectHarnesses(): Promise<DetectReport | null> {
+  const result = await runSidecar("tacho", ["detect", "--json"], undefined, {
+    timeoutMs: DETECT_TIMEOUT_MS,
+  });
+  return parseDetect(result.stdout);
+}
+
+/** The detect document, or null when the sidecar printed none. */
+export function parseDetect(stdout: string): DetectReport | null {
   try {
-    return JSON.parse(result.stdout) as TachoStatus;
+    const parsed = JSON.parse(stdout) as DetectReport;
+    return Array.isArray(parsed?.harnesses) ? parsed : null;
   } catch {
     return null;
   }
+}
+
+/** `tacho verify --harness <h> --json`: one recorded turn on that harness. */
+export interface ConnectResult {
+  ok: boolean;
+  sessionId?: string;
+  sessionUuid?: string;
+  seq?: number;
+  detail: string;
+}
+
+/** The last JSON line of a `verify --json` run, or a failure built from stderr. */
+export function parseConnect(result: RunResult): ConnectResult {
+  const last = result.stdout
+    .trim()
+    .split("\n")
+    .reverse()
+    .find((line) => line.startsWith("{"));
+  if (last) {
+    try {
+      const parsed = JSON.parse(last) as Partial<ConnectResult>;
+      if (typeof parsed.ok === "boolean" && typeof parsed.detail === "string")
+        return parsed as ConnectResult;
+    } catch {
+      // fall through to the stderr-based failure
+    }
+  }
+  return {
+    ok: false,
+    detail:
+      result.stderr.trim() ||
+      `tacho verify exited ${result.code ?? "?"} without a result`,
+  };
+}
+
+export async function connectRun(
+  harness: "claude-code" | "codex",
+  onLine?: (line: string, stream: "stdout" | "stderr") => void,
+): Promise<ConnectResult> {
+  const result = await runSidecar(
+    "tacho",
+    ["verify", "--harness", harness, "--json"],
+    onLine,
+  );
+  return parseConnect(result);
 }

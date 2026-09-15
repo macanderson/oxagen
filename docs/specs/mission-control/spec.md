@@ -1,12 +1,13 @@
-# Oxagen Mission Control — Product and Technical Specification
+# Oxagen Mission Control: Product and Technical Specification
 
 | | |
 |---|---|
 | **Status** | Draft for review |
 | **Date** | 2026-09-11 |
-| **Author** | Drafted for Mac Anderson |
+| **Owner** | Mac Anderson |
 | **Supersedes** | The `oxagen-platform` and `oxagen` codebases as products. Carries forward the designs named in §16. |
 | **Builds on** | Context Graph Protocol `contextgraph/1.0` and the `contextgraph/lifecycle/1.0-draft` profile (repo at `origin/main`, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under `docs/specs/tacho/`, renamed here). |
+| **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.10 and Appendix E. |
 
 ---
 
@@ -28,7 +29,7 @@ This table lists every decision that shapes the rest of the document, in one pla
 | 10 | A workspace links to one or more GitHub repositories. Exactly one of them is its **main repo**, bound at creation. The main repo is the place where the workspace's steering and configuration are managed in source control. Published steering and every agent definition live there under `.oxagen/`. Stella reads that folder natively through a symlink, a file system pointer to another path. Oxagen mirrors the same folder into each coding harness's own agent format in the same pull request. Linked repos may carry repository-scoped records of their own. A **Context PR** is a GitHub pull request (PR), a proposed change that others review before it is merged. Merge is the promotion event. Nothing steers until it is published. The graph is the system of record. Git is the system of control, which is GitOps: steering changes are managed through git. | §10 |
 | 11 | Oxagen infers ontologies from ingested sources. An ontology is the set of entity types and the relationships between them. Each ontology is proposed, reviewed, and activated as a versioned graph object. Entities carry provenance, a trace back to their source records. Linking a GitHub repo confirms its production branch, subscribes to every relevant event by webhook, imports its issues, and keeps a code graph of the production branch current on every push. A webhook is a call GitHub sends to Oxagen when an event happens. A manual sync is available, and there is no cron (a timer that runs jobs on a schedule). | §11 |
 | 12 | Oxagen governs the toolbelt. An agent sees only the tools it is granted, and it can search them when the belt is large. The agent holds no credentials at all. Every call passes one pipeline: validate, taint-check, decide (allow, approve, or deny, deterministically), broker a per-call credential, dispatch idempotently, validate output, sign a receipt. A taint-check looks for data marked as untrusted or sensitive. Deterministic means the same input always gives the same decision. Idempotent dispatch means a repeated call has the same effect as a single call. A tool's safety classification describes the tool. The customer's approval rules decide, with auto-approval conditions Oxagen can apply to skip the human. Any consequence the customer marks (money, data destruction, production changes, external communication, access changes) requires a human-granted mandate. The mandate sets limits over the tool's declared measures and keeps a ledger. Kill switches exist at every level. Policy is versioned and simulated against real history before activation. An adversarial suite proves the guarantees per release. | §6.5–6.13 |
-| 13 | Oxagen accounts customer spend per model call by normalized token class, including cache reads and writes. It attributes spend up the chain operator → agent → run → turn → step. It reports proven versus unproven spend with a productive ratio and ranked optimization findings. It reconciles spend to the cent against provider statements. Oxagen bills per run on a plan allowance and never marks up tokens. It reports governed actions and retained storage as secondary meters. | §12 |
+| 13 | Oxagen accounts customer spend per model call by normalized token class, including cache reads and writes. It attributes spend up the chain operator → agent → run → turn → step. It reports proven versus unproven spend with a productive ratio and ranked optimization findings. It reconciles spend to the cent against provider statements. Oxagen bills per run on a plan allowance and never marks up tokens. It reports governed actions and retained storage as secondary meters. **Amendment 2026-09-13 (ADR-055):** Oxagen bills governed action units (GAUs) from a monthly bucket on the subscription, sells more in unit quantities at the customer's contracted rate, and never marks up tokens; see §12.1. | §12 |
 | 14 | Audit fidelity: **full bodies, seven years, write-once at seal time**. Seal time is the moment a record is closed and locked against change. Each organization has its own keys. Redaction happens before write. Erasure uses crypto-shredding: destroying the key so the encrypted data can never be read again. Frame nodes stay in the graph for a hot window. The run ledger stays forever. | §13 |
 | 15 | Mission Control is ten pages: seven in a workspace and three for the organization, down from 70. Everything else is deleted. Appendix F says where each old route went. | §14, App. F |
 | 16 | A run is proven only by a **witness** Oxagen wrote. A witness is a test built with one of several deterministic oracles, checkers whose result is fixed for a given input. The witness fails on the PR's target branch and passes on the PR. It runs in a witness runner the worker can never see or reach. The runner reports only pass or fail back to the worker. The flip from fail to pass stamps the run. Stamped runs are the training asset. | §8.5 |
@@ -211,7 +212,7 @@ The in-app agent does three things, in order of importance: **onboarding**, **co
 
 Every model call Oxagen makes on its own behalf goes through one model layer. That layer resolves three things, in order: the organization's **funding source**, the **tier** the caller asked for, and the **provider route** for that tier.
 
-**Funding source** (ADR-053, carried): `platform` or `customer_key`. With the first, Oxagen pays on Oxagen's OpenRouter account. That usage is billed back as assistant usage at vendor cost plus a published markup, capped per organization. With the second, the customer's own OpenRouter or vendor key is used. That key is stored enveloped (encrypted with a key that is itself encrypted), tested before save, and never returned, and every read of it is audited. Its tokens are reported and billed at zero. A new organization starts on `platform`. Every tier's month-to-date use (complex, light, embed, rerank) is one record, the route table, read by both Organization → Funding (the cap's "used") and Spend (the month total and By model), so the two pages report the same month. Vendor neutrality is preserved: a customer key may point at OpenRouter or directly at a vendor, and the route table below is set per organization.
+**Funding source** (ADR-053, carried): `platform` or `customer_key`. With the first, Oxagen pays on Oxagen's OpenRouter account. That usage is billed back as assistant usage at vendor cost plus a published markup, capped per organization. With the second, the customer's own OpenRouter or vendor key is used. That key is stored enveloped (encrypted with a key that is itself encrypted), tested before save, and never returned, and every read of it is audited. Its tokens are reported and billed at zero. A new organization starts on `platform`. Vendor neutrality is preserved: a customer key may point at OpenRouter or directly at a vendor, and the route table below is set per organization.
 
 **Tiers and default routes:**
 
@@ -1053,6 +1054,17 @@ Two different things are tracked, and they are kept apart on purpose:
 
   Why these numbers: the reference customer (50 agents, 5,000 runs a month) pays about $1,200 a month. That is roughly 5 to 10 percent of its token spend, an amount a team lead can approve without procurement. A large division at 50,000 runs a month pays about $10,000 a month, a normal governance line. Oxagen's direct cost per run (graph, storage, reflection, and amortized witness authoring on paid tiers) is one to four cents. Gross margin therefore stays above 80 percent at every tier. The free tier is the whole product, limited by volume and retention, never by features. Developers prove the value in pre-production, and upgrading becomes a volume decision. This replaces the governed-action meter of ADR-052 with the per-run model the positioning states. The governed-action count stays as a reported number.
 
+> **Amendment 2026-09-13 (ADR-055).** The per-run model above, its price table and the "runs this period" meter are superseded. The billable unit is the governed action unit (GAU) of ADR-052, with its four exclusions, and the price is:
+>
+> - **A monthly bucket on the subscription.** The plan row (`billing.plans`) publishes `currency`, `rate_per_gau_micros`, `block_size_gau` and `included_gau_per_month`; a negotiated agreement is one `billing.contract_terms` row per organization with the same four figures. The effective terms are resolved on every read (`resolveContractTerms`), never copied into the organization. Every bucket is one month: for a subscriber, the anniversary-day slice of the current cycle (an annual subscriber gets a monthly allowance like everyone else); for an organization with no subscription, the UTC calendar month. `remaining = included + purchased + carried − used` and may be negative; purchased units carry into the next month, included ones do not.
+> - **Unit-quantity purchases at the contracted rate.** More GAUs are bought in blocks of `block_size_gau` at `rate_per_gau_micros`, through Stripe Checkout, or by auto top-up (`auto_topup_blocks` blocks charged to the saved card when the bucket reaches `remaining ≤ 0`, at most one automatic attempt per exhaustion episode). Nothing sells dollars of usage.
+> - **Two billing modes, decided by a platform operator** (`set_org_billing_terms`, no surface). *Prepaid* (the default): when auto top-up cannot run, the next governed action is refused (`gau_exhausted`). *Invoice billing* (`approved_for_invoice_billing`): consumption is never capped; overage is invoiced at the contracted rate at period end, or as an interim invoice for exactly `invoice_gau_max` GAUs (default 100,000) the day accrued uninvoiced overage reaches it, charged to the saved card that day or sent as a 30-day invoice when there is none; an unpaid invoice leaves the organization running and flagged past due, with no automatic suspension.
+> - **One settlement ledger.** Every block purchase, auto top-up, interim and period-close charge is a Stripe Invoice recorded in `billing.gau_settlements` (`checkout` | `auto_topup` | `interim_invoice` | `period_close`; `pending` | `open` | `paid` | `failed`, with `paid` the only terminal state). Subscription dunning applies to subscription invoices only.
+> - **The page prints the customer's contracted rate** with its source (published tier or negotiated agreement), the block price, the included GAUs per month, the bucket in GAU counts, and the invoices. Tokens are reported at zero and are not on the page; retention is not metered in rev1 and settles later as an invoice line at a contracted per-GB-month rate.
+> - **The Free tier's included allowance replaces "first 1,000 runs free"; `create_org` grants nothing.** The published per-month figures, per-GAU rates and block size live in `docs/specs/governed-action-metering.md` §4.2.
+>
+> The customer-spend half of this section (accounting, attribution, reconciliation, billed at zero) is unchanged.
+
 ### 12.2 Price book
 
 A price book is the table of prices Oxagen applies to each provider and model. `prices.price_books` and `prices.price_entries` hold: provider, model (canonical id and aliases), region, token class (`input`, `output`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `thinking`, `web_search`, …), unit, **micro-USD per million units as an integer**, `effective_from`, `effective_to`, and source (provider list price, negotiated, customer override). A token class is one kind of token a provider charges for. Micro-USD are millionths of a dollar. Cache read tokens are prompt tokens served from a stored copy. Cache write tokens are prompt tokens saved for later reuse. Reasoning tokens (`thinking`) are tokens the model spends thinking before it answers. Organizations may override prices to record negotiated rates. Every cost record names the price entry id it used. A price correction therefore produces a recomputed record, never a silent change.
@@ -1334,7 +1346,7 @@ The wedge ends when Customer 1 is in production, not on a date. M6 produces the 
 ---
 ## 19. Demo Wow! Scenarios
 
-Status: `complete` (2026-09-11, coverage audit, prompt W12).
+Status: `complete` (2026-09-12, coverage audit, prompt W12).
 
 Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in `2026-09-11-oxagen-demo-mockup-prompts.md`, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.
 
@@ -1344,7 +1356,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 | W2 | Stop it. Steer it.: watch fifty agents, pause one, steer it, see the frame that received it; mass steer with @agents | Fleet, Run (live), messages | [W2 mockup](https://claude.ai/code/artifact/0b3eae2f-4fd9-45a5-b667-e04367999d1d) | mocked |
 | W3 | Money asked, a human answered: a mandate-bound payment parks, is approved with the full chain, and the receipt shows the one-call credential | Approvals panel, Run strip, Agents (mandate), Tools (mandates ledger), receipt | [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce) | mocked |
 | W4 | The flight recorder: a sealed run replayed frame by frame with cost, fork, bisect, export | Run (sealed, compacted) | [W4 mockup](https://claude.ai/code/artifact/a4b69d0b-715c-434c-9f4e-80534bf2e462) | mocked |
-| W5 | Proven, not claimed: the witness flipped on main and the PR; the agent saw only "pass". Disclosure model: the worker never runs or sees the witness. A separate witness-runner run authors, fingerprints and runs it; each `verify@1` call from the worker returns the single word pass or fail at grain L0, so the worker fixes its work, not the oracle | Run (proof), witness run, Tools (assurance), Spend (proven) | [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35) | mocked |
+| W5 | Proven, not claimed: the witness flipped on main and the PR; the agent saw only "pass" | Run (proof), witness run, Tools (assurance), Spend (proven) | [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35) | mocked |
 | W6 | It learned, you approved, it changed: record to proposal to Context PR to merge to the next run | Steering, Run, Agents (definition in git) | [W6 mockup](https://claude.ai/code/artifact/2bbadccb-92ff-4ade-8f6d-704d9c66dafe) | mocked |
 | W7 | The shape of your business: the Ontology map, ask in plain English, Cypher shown, versions in git | Ontology (Model, Graph, Sources, Repositories, Versions) | [W7 mockup](https://claude.ai/code/artifact/8692f683-0eab-4a1f-ad66-20f4a1a2db5b) | mocked |
 | W8 | Every dollar, every operator: proven spend, findings ranked by money, reconciled to the cent | Spend, Billing | [W8 mockup](https://claude.ai/code/artifact/6a15975f-6719-4b4c-aae5-4b942dea0bb1) | mocked |
@@ -1864,6 +1876,20 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 
 ### A.8 `billing` (2 tables)
 
+> **Amendment 2026-09-13 (ADR-055).** `included_runs`, `overage_price_micros`, `retention_price_micros_per_gb_month`, `runs_this_period` and `retained_gb` on `billing.subscriptions` are superseded. The subscription row keeps Stripe's own fields (`stripe_subscription_id`, `plan_id`, `status`, `billing_interval`, `current_period_start`, `current_period_end`, `cancel_at_period_end`). The billing schema is:
+>
+> | Table | Class | Columns |
+> |---|---|---|
+> | `billing.plans` | platform | tier, prices, seats, and the published terms `currency`, `rate_per_gau_micros`, `block_size_gau`, `included_gau_per_month`; CHECK `(rate_per_gau_micros * block_size_gau) % 10000 = 0` |
+> | `billing.contract_terms` | `org` | `agreement_ref`, `currency`, `rate_per_gau_micros`, `block_size_gau`, `included_gau_per_month`, `effective_from`, `effective_to` (nullable); at most one row per org with `effective_to IS NULL`; the same CHECK |
+> | `billing.subscriptions` | `org` | as above; the entitled subscription names the plan whose published terms apply when no negotiated row is effective |
+> | `billing.org_billing_settings` | `org` | `stripe_customer_id`; `approved_for_invoice_billing` (default false), `invoice_gau_max` (default 100000, read only when approved); `auto_topup_enabled` (default true), `auto_topup_blocks` (default 1); the existing dunning state |
+> | `billing.gau_buckets` | `org` | `period_start`, `period_end`, `included_gau`, `purchased_gau`, `carried_gau`, `used_gau`, `overage_invoiced_gau`, `interim_seq`, `topup_seq`, `open_topup_settlement_id`, `closed_at`; unique `(org_id, period_start)` |
+> | `billing.gau_settlements` | `org` | `bucket_id`, `kind`, `seq`, `quantity_gau`, `rate_per_gau_micros`, `currency`, `status`, `stripe_checkout_session_id`, `stripe_invoice_id`, `created_at`, `settled_at`; unique `(bucket_id, kind, seq)` and `(stripe_checkout_session_id)` |
+> | `billing.invoices` | `org` | the webhook mirror of Stripe's invoices (amount, status, hosted URL, period), joined to `gau_settlements` on `stripe_invoice_id` by `list_invoices` |
+> | `billing.payment_methods` | `org` | the webhook mirror of the saved cards; the default one is what auto top-up and an interim invoice charge |
+> | `billing.budgets` | `org` | unchanged, below |
+
 **`billing.subscriptions`** (class `org`)
 
 | Column | Type | Notes |
@@ -1944,7 +1970,7 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 | `iam.authorization_decisions` | `policy.decision` frames |
 | `iam.deny_generations` | the two counters on `org.organizations` and `wrk.workspaces` |
 | `schema_registry.*` | ontology versions in the graph, loaded from `.oxagen/ontology/` (§11.8) |
-| `billing.credit_*`, `billing.reseller_*`, `billing.invoices`, `billing.payment_methods` | gone; Stripe holds invoices and cards |
+| `billing.credit_*`, `billing.reseller_*`, `billing.invoices`, `billing.payment_methods` | gone; Stripe holds invoices and cards. **Amendment 2026-09-13 (ADR-055):** `billing.invoices` is retained as the webhook mirror (`list_invoices` reads it and labels each invoice's kind through `gau_settlements`), and `billing.payment_methods` as the mirror of the saved default card that auto top-up charges; Stripe stays the system of record for both. `billing.credit_*` stays only for the ADR-053 platform-funded assistant balance, which starts at zero for a new organization |
 | `security.security_events`, `privacy.*` requests | `audit.audit_events` |
 | `ingestion.*` cursors and health | columns on `wrk.repositories` and `tools.tool_servers`, and `:Source` nodes |
 | `chat.*` conversations | runs of the in-app agent |
@@ -2134,6 +2160,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 
 | Agent tool | Absorbs | Does |
 |---|---|---|
+| `list_api_keys` | list_api_keys | read: the org's keys with principal, grants, last use and expiry; never the secret or its hash (added 2026-09-14 for the API keys page) |
 | `create_api_key` | create_api_key | purpose-locked keys for humans and services |
 | `rotate_api_key` | rotate_api_key | |
 | `revoke_api_key` | revoke_api_key | |
@@ -2231,6 +2258,17 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `set_funding_source` | (new; was implicit in credentials) | platform or customer key |
 | `get_subscription` | get_subscription | |
 | `change_subscription` | start_subscription_upgrade, purchase_credits | |
+
+> **Amendment 2026-09-13 (ADR-055).** Six rows are added to this family (15) and one of today's contracts is retired. `get_action_usage`, which reported the dollar model, is dropped and gains no row. The count line below becomes 11 + 10 + 14 + 17 + 13 + 9 + 15 + 7 + 6 = **102**.
+>
+> | Agent tool | Absorbs | Does |
+> |---|---|---|
+> | `get_gau_bucket` | get_action_usage (retired) | the org's billing mode and the month's bucket: included, purchased, carried, used, remaining (GAU counts); the invoice thresholds and past-due flag in invoice billing; the auto top-up state in prepaid; a read that never writes |
+> | `get_contract_rate` | (new) | the customer's contracted per-GAU rate, block size, block price, currency, included GAUs per month, effective dates and source (published tier or negotiated agreement), from `resolveContractTerms` |
+> | `purchase_gau_bucket` | (new) | buy GAUs in unit quantities of the block size at the contracted rate; returns a Stripe Checkout URL; refuses an invoice-billed org |
+> | `set_auto_topup` | (new) | Owner or Admin: `enabled`, `blocks` (1…100) for the prepaid auto top-up |
+> | `set_org_billing_terms` | (new; headless, platform operator only) | `approved_for_invoice_billing`, `invoice_gau_max`; closes the accrual with an interim invoice when invoice billing is turned off; reachable only through the kernel's platform-operator binding (`pnpm billing:terms`) |
+> | `list_invoices` | (new) | cursor-paged invoices from the webhook mirror with a kind per row (subscription, block purchase, auto top-up, interim, period close), amounts, status and the Stripe-hosted link |
 
 **Audit and compliance (7)**
 
