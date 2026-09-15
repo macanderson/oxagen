@@ -229,7 +229,13 @@ export function describeCliInstall(
     install.skipped.length > 0 ? ` Skipped ${install.skipped.join(", ")}.` : "";
   switch (install.state) {
     case "linked":
-      return `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`;
+      // "linked" with nothing in `files` means every link was already
+      // correct: there was nothing to do, so say that rather than
+      // "Linked nothing into ...". `profile` can still be set (the profile
+      // block is checked every launch regardless), so it still shows.
+      return install.files.length > 0
+        ? `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`
+        : `Already on PATH in ${install.dir}.${profile}${skipped}`;
     case "already":
       // The Rust side leaves `files` empty here: nothing needed linking, so
       // there is nothing to list. Say so plainly rather than "nothing

@@ -309,6 +309,18 @@ describe("describeCliInstall", () => {
     expect(describeCliInstall({ ...base, files: [], state: "already" })).toBe(
       "Already on PATH in /Users/a/.local/bin.",
     );
+    // "linked" can also carry an empty `files` list (every link was already
+    // correct on launch): the same "nothing to report" copy, not "Linked
+    // nothing into ...". The profile check still runs every launch, so a
+    // set profile still shows even when nothing needed linking.
+    expect(
+      describeCliInstall({
+        ...base,
+        files: [],
+        state: "linked",
+        profile: "~/.zshrc",
+      }),
+    ).toBe("Already on PATH in /Users/a/.local/bin. Updated ~/.zshrc.");
     expect(
       describeCliInstall({
         ...base,
