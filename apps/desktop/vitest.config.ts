@@ -1,4 +1,4 @@
-import { coverageConfigDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -15,7 +15,6 @@ export default defineConfig({
       // what is ungated is named below, on purpose.
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
-        ...coverageConfigDefaults.exclude,
         "src/**/*.test.{ts,tsx}",
         // The webview entry: it mounts the React tree and nothing else.
         "src/main.tsx",
