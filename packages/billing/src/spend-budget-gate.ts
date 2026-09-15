@@ -6,7 +6,7 @@
  * config + period spend, both keyed by scope) keep the steady-state guard a
  * sub-millisecond map read; a stubbed-reader timing test asserts the cached path
  * adds <5ms. Spend comes from the recorders' running counter in Postgres
- * (./spend-counter.ts, spec §12.5, ADR-058 §3): the ClickHouse sum it replaced
+ * (./spend-counter.ts, spec §12.5, ADR-060 §5): the ClickHouse sum it replaced
  * stalled with the store and, failing open, zeroed the ceiling while the
  * customer kept being charged (#2820). The gate still FAILS OPEN on a DB
  * error — a degraded store must never block every invocation — but a real

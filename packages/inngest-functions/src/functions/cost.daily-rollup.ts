@@ -16,7 +16,7 @@ const SWEEP_BATCH = 500;
  * is missing or older than its seal (a `cost/run.sealed` event that was lost
  * or failed its retries), then rebuild yesterday's `cost.daily_totals` for
  * every workspace that started a run that day (Mission Control spec §12.3,
- * §12.7; ADR-058 §2). Idempotent: both rebuilds replace what they find.
+ * §12.7; ADR-060 §3). Idempotent: both rebuilds replace what they find.
  */
 export const [costDailyRollup] = createFunction(
   { id: "cost.daily-rollup", retries: 3 },

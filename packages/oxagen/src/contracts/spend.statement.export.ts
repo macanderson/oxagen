@@ -1,6 +1,6 @@
 /**
  * `export_statement`: the monthly statement for this workspace as CSV
- * (Mission Control spec §12.9 "Monthly statement", App. E; ADR-058). One line
+ * (Mission Control spec §12.9 "Monthly statement", App. E; ADR-060). One line
  * per group at every level (operator, agent, model, tool, task) with the
  * month's calls, runs, cost in micros and, on that one line, the cost in
  * cents rounded half to even (spec §12.3: rounding to cents happens once, at
@@ -8,7 +8,7 @@
  *
  * The statement is built and answered in the call. A signed PDF and the
  * export job listed on Audit › exports wait on the audit-exports lane and a
- * signing key (ADR-058 §5).
+ * signing key (ADR-060 §6).
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";

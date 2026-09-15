@@ -32,7 +32,7 @@ export const PG_DOMAINS: readonly string[] = [
   "billing",
   "chat",
   "content",
-  // The price book and the spend rollups (ADR-058).
+  // The price book and the spend rollups (ADR-060).
   "cost",
   "environments",
   // Immutable governed-run evidence (docs/specs/run-evidence-ingress).

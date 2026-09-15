@@ -1,6 +1,6 @@
 // spend.shared.ts — what the spend handlers share: the Postgres reads over the
 // derived rollups (`cost.daily_totals`, `cost.run_totals`) and the mapping
-// from a rollup figure to the contract's money shape (ADR-058).
+// from a rollup figure to the contract's money shape (ADR-060).
 //
 // The handlers read Postgres only. The kernel enters the tenant scope before
 // a handler runs, so every read goes through withTenantDb, whose RLS is the
@@ -86,12 +86,14 @@ export function sumFigures(sources: readonly FigureSource[]): SpendFigure {
     calls += s.calls;
     runs += s.runs;
     if (s.costMicros !== null && s.costBasis !== null) {
-      micros = (micros ?? 0n) + s.costMicros;
+      micros = micros === null ? s.costMicros : micros + s.costMicros;
       bases.push(s.costBasis);
     }
-    if (s.provenMicros !== null) proven = (proven ?? 0n) + s.provenMicros;
+    if (s.provenMicros !== null)
+      proven = proven === null ? s.provenMicros : proven + s.provenMicros;
     if (s.acceptedMicros !== null)
-      accepted = (accepted ?? 0n) + s.acceptedMicros;
+      accepted =
+        accepted === null ? s.acceptedMicros : accepted + s.acceptedMicros;
     if (s.productiveRatio !== null) {
       // Weighted by runs so a group of many runs outweighs one.
       ratioSum += s.productiveRatio * Math.max(1, s.runs);

@@ -1,6 +1,6 @@
 /**
  * `get_spend`: the Spend page's rollup at one level (Mission Control spec
- * §12.7, §12.9, App. E; ADR-058). Reads `cost.daily_totals` for the active
+ * §12.7, §12.9, App. E; ADR-060). Reads `cost.daily_totals` for the active
  * workspace over an inclusive day range, grouped by operator, agent, model,
  * tool or task, and answers the rows with the period's total: the month strip.
  *

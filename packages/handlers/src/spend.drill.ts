@@ -1,6 +1,6 @@
 // audit-exempt: read-only — answers one operator, agent or tool's spend over a trailing window from cost.run_totals; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `get_spend_drill` (ADR-058): the run rows a key attributes to, folded into a
+// `get_spend_drill` (ADR-060): the run rows a key attributes to, folded into a
 // daily series, per-call and per-run averages, the key's share of the
 // workspace's spend over the window, and the tools its runs called. A tool
 // drill carries counts and no money: no frame prices a tool call.
@@ -38,9 +38,11 @@ export function trailingWindow(days: number, now: Date) {
   return { from, to };
 }
 
-/** What a tool drill counts on each run: that tool's own calls. */
+/** What a tool drill counts on each run: that tool's own calls, summed over its breakdown rows. */
 function toolCalls(run: RunTotalsRecord, name: string): number {
-  return run.breakdown.tools.find((t) => t.name === name)?.calls ?? 0;
+  let calls = 0;
+  for (const t of run.breakdown.tools) if (t.name === name) calls += t.calls;
+  return calls;
 }
 
 export function createSpendDrillHandler(

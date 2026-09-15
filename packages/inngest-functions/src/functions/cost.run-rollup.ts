@@ -7,7 +7,7 @@ import { logger } from "../logger";
  * `cost/run.sealed` → rebuild the run's `cost.run_totals` row from its
  * frames, then the daily groups of the workspace-day it started on, so the
  * Spend page's month reads the run within minutes of its seal (Mission
- * Control spec §12.3; ADR-058 §2). The seal writers emit the event: the tacho
+ * Control spec §12.3; ADR-060 §3). The seal writers emit the event: the tacho
  * ingest handler on an `agent_stop`. A run no store has is dropped without a
  * retry; a degraded frame store throws, and Inngest retries.
  *

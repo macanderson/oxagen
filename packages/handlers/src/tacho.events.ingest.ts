@@ -12,9 +12,9 @@
 // What lands: every event in ClickHouse `tacho_events`; the session rows,
 // per-model rollups, files touched, and commands run in Postgres; the host's
 // liveness; and the control envelope in the response. A batch that carried
-// cost adds it to the spend-budget counter (ADR-058 §3), and an `agent_stop`
+// cost adds it to the spend-budget counter (ADR-060 §5), and an `agent_stop`
 // on a root session emits `cost/run.sealed` so the rollup job rebuilds the
-// run's `cost.run_totals` row from its frames (ADR-058 §2).
+// run's `cost.run_totals` row from its frames (ADR-060 §3).
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";

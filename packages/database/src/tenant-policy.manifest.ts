@@ -108,13 +108,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
-  // The recorders' running spend counter (ADR-058 §3): org_id NOT NULL,
+  // The recorders' running spend counter (ADR-060 §5): org_id NOT NULL,
   // workspace_id NULL for a frame outside a workspace → workspace_nullable.
   // Written and summed through withSystemDb with explicit org/workspace
   // predicates, because an org-level ceiling covers every workspace.
   { table: "billing.spend_counters", policyClass: "workspace_nullable" },
 
-  // ── cost.* (ADR-058) ────────────────────────────────────────────────────
+  // ── cost.* (ADR-060) ────────────────────────────────────────────────────
   // The price book: org_id NULL rows are the platform list prices every
   // tenant reads; an org's negotiated rows are its own → org_or_global.
   { table: "cost.price_entries", policyClass: "org_or_global" },

@@ -1,6 +1,6 @@
 /**
  * `list_price_entries`: the price book as the active organization reads it
- * (Mission Control spec §12.2; ADR-058 §1): every list price effective at
+ * (Mission Control spec §12.2; ADR-060 §1): every list price effective at
  * `at` and the organization's own negotiated rows, which win over the list
  * row for the same model and class. Prices are integer micro-USD per one
  * million units; a cost record names the entry ids it was priced with.

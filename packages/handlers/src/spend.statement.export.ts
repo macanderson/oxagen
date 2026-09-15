@@ -1,6 +1,6 @@
 // audit-exempt: read-only — builds the workspace's monthly statement from cost.daily_totals; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `export_statement` (ADR-058): one CSV line per group at every level for the
+// `export_statement` (ADR-060): one CSV line per group at every level for the
 // month, cost in micros and, on that line, in cents rounded half to even
 // once (spec §12.3). Proven and accepted spend stay apart (spec §12.8).
 import type { CapabilityHandler } from "@oxagen/oxagen";

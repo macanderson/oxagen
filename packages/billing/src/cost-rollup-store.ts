@@ -347,21 +347,26 @@ export async function upsertRunTotals(
     cacheHitRate:
       record.cacheHitRate === null ? null : record.cacheHitRate.toFixed(8),
     retries: record.retries,
+    enforcementTier: record.enforcementTier,
+    replayGrade: record.replayGrade,
+    breakdown: serializeBreakdown(record.breakdown),
+    rolledUpAt,
+  };
+  // The proof and value columns belong to other lanes: a first insert carries
+  // what the rollup read (null until those lanes write), and a rebuild leaves
+  // the row's own values in place rather than replaying a stale read.
+  const carried = {
     verdict: record.verdict,
     accepted: record.accepted,
     productiveRatio:
       record.productiveRatio === null
         ? null
         : record.productiveRatio.toFixed(8),
-    enforcementTier: record.enforcementTier,
-    replayGrade: record.replayGrade,
-    breakdown: serializeBreakdown(record.breakdown),
-    rolledUpAt,
   };
   await withSystemDb((tx) =>
     tx
       .insert(totals)
-      .values(values)
+      .values({ ...values, ...carried })
       .onConflictDoUpdate({ target: totals.runId, set: values }),
   );
 }

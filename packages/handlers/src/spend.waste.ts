@@ -1,6 +1,6 @@
 // audit-exempt: read-only — answers wasted spend by cause from cost.run_totals; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `list_waste` (ADR-058): each cause is a pattern read off the run rows with
+// `list_waste` (ADR-060): each cause is a pattern read off the run rows with
 // the money the frames put on it. The one cause the rollup can cost exactly
 // today is a cache written and never read (spec §12.8 "Cache writes never
 // read"): the run wrote prompt-cache tokens and read none, so every cache
@@ -81,7 +81,10 @@ export function createSpendWasteHandler(
     let pricedMicros: bigint | null = null;
     for (const run of runs)
       if (run.costMicros !== null)
-        pricedMicros = (pricedMicros ?? 0n) + run.costMicros;
+        pricedMicros =
+          pricedMicros === null
+            ? run.costMicros
+            : pricedMicros + run.costMicros;
     const share =
       wasted === null || pricedMicros === null || pricedMicros === 0n
         ? null

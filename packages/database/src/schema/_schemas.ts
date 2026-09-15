@@ -46,7 +46,7 @@ export const aiSchema = pgSchema("ai");
 // exclusively through withSystemDb. See schema/ratelimit.ts.
 export const ratelimitSchema = pgSchema("ratelimit");
 // cost — the price book and the derived spend rollups (Mission Control spec
-// App. A.7, ADR-058). `price_entries` is a platform catalog with per-org
+// App. A.7, ADR-060). `price_entries` is a platform catalog with per-org
 // negotiated overrides (org_id nullable); `run_totals` and `daily_totals` are
 // derived indexes rebuilt from frames, never a source of record.
 export const costSchema = pgSchema("cost");

@@ -1,6 +1,6 @@
 /**
  * The vocabulary the spend contracts share (Mission Control spec §12, App. E;
- * ADR-058). Not a capability: this file registers nothing.
+ * ADR-060). Not a capability: this file registers nothing.
  *
  * Money on the wire is integer micro-units as a decimal string with an ISO
  * 4217 currency, and a metered figure carries the basis that says who

@@ -1,6 +1,6 @@
 // audit-exempt: read-only — answers the workspace's spend rollup at one level from cost.daily_totals and cost.run_totals; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `get_spend`: the Spend page's rollup at one level (ADR-058). The rows come
+// `get_spend`: the Spend page's rollup at one level (ADR-060). The rows come
 // from `cost.daily_totals` for the level asked for; the period total comes
 // from the run rows, since a level's groups only hold the runs that name a
 // key at that level (a run with no operator is not attributed to any

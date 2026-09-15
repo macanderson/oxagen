@@ -1,6 +1,6 @@
 /**
  * `get_spend_drill`: one operator, agent or tool over a trailing window
- * (Mission Control spec §12.9 "Operator view", "Agent view"; ADR-058). Reads
+ * (Mission Control spec §12.9 "Operator view", "Agent view"; ADR-060). Reads
  * the run rows (`cost.run_totals`) the key attributes to, in the active
  * workspace: the daily series, the averages per call and per run, the share
  * of the workspace's spend over the window, and the tools those runs called.

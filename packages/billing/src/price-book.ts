@@ -1,5 +1,5 @@
 /**
- * price-book.ts — the price book as data (Mission Control spec §12.2, ADR-058).
+ * price-book.ts — the price book as data (Mission Control spec §12.2, ADR-060).
  *
  * `cost.price_entries` holds every price Oxagen applies to a frame. The list
  * rows (org_id NULL, source `list`) are derived from the in-code rate cards in
@@ -19,7 +19,7 @@
  *
  * `providerCostUsdMicros` keeps charging credits from the in-code card; the
  * card is the price book's seed and the recorder's rate until the rollup is
- * the only reader (ADR-058 §1).
+ * the only reader (ADR-060 §1).
  */
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";

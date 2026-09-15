@@ -2,7 +2,7 @@
 /**
  * price-book-sync — write the list price book (`cost.price_entries`,
  * org_id NULL, source 'list') from the in-code rate cards in
- * `packages/billing/src/pricing.ts` (ADR-058 §1).
+ * `packages/billing/src/pricing.ts` (ADR-060 §1).
  *
  *   pnpm billing:price-book-sync                         # report + DRY-RUN
  *   pnpm billing:price-book-sync --apply                 # write the rows

@@ -7,7 +7,7 @@
 //   tse_…   wrapped agents in `tacho.sessions`, root sessions only (a subagent
 //           chain is part of its parent's run).
 //
-// Cost and basis for both come from the run's `cost.run_totals` row (ADR-058),
+// Cost and basis for both come from the run's `cost.run_totals` row (ADR-060),
 // which the rollup job rebuilds from the run's frames after its seal; a run
 // with no row yet answers `cost: null`. Nothing here reads ClickHouse.
 //

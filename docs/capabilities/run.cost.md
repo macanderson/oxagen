@@ -1,6 +1,6 @@
 # run.cost
 
-The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-058): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames by `cost.run-rollup` after its seal.
+The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-060): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames by `cost.run-rollup` after its seal.
 
 ## Mode
 

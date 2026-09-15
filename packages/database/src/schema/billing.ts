@@ -754,7 +754,7 @@ export const spendBudgets = billingSchema.table(
 // ── spend_counters ───────────────────────────────────────────────────────────
 //
 // The running spend counter the recorders keep for the spend-budget gate
-// (spec §12.5, ADR-058 §3). One row per (org, workspace, UTC day) in micro-USD:
+// (spec §12.5, ADR-060 §5). One row per (org, workspace, UTC day) in micro-USD:
 // every gateway-metered model call (`@oxagen/ai`) and every attested tacho
 // llm_call adds its cost with one INSERT … ON CONFLICT DO UPDATE. The gate and
 // the budget panel sum the rows over the ceiling's window in Postgres, so a

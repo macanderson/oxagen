@@ -1,6 +1,6 @@
 # spend.get
 
-The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-058). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool or task, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse.
+The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool or task, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse.
 
 ## Mode
 

@@ -1,6 +1,6 @@
 /**
  * `get_run_cost`: the Run page's cost strip and Cost tab (Mission Control
- * spec §12.6, §12.7 "Run" row; ADR-058): the run's `cost.run_totals` row.
+ * spec §12.6, §12.7 "Run" row; ADR-060): the run's `cost.run_totals` row.
  * Answers `rollup: null` until the rollup job has rebuilt the run from its
  * frames after its seal; the page renders that slice as not recorded rather
  * than a zero.

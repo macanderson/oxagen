@@ -1,7 +1,7 @@
 /**
  * cost-rollup.ts — the PURE rollup from a run's frames to its `cost.run_totals`
  * row, and from run rows to `cost.daily_totals` (Mission Control spec §12.3,
- * §12.6, §12.7; ADR-058 §2). No I/O: the store (./cost-rollup-store.ts) reads
+ * §12.6, §12.7; ADR-060 §3). No I/O: the store (./cost-rollup-store.ts) reads
  * the frames and writes the rows, and this module is what the tests exercise.
  *
  * Money is integer micro-USD throughout. A frame's cost is

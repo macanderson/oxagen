@@ -1,6 +1,6 @@
 /**
  * cost-frames.ts — the per-frame reads the spend rollup is rebuilt from
- * (Mission Control spec §12.3; ADR-058 §2).
+ * (Mission Control spec §12.3; ADR-060 §3).
  *
  * Two stores hold model-call frames. A gateway-metered call is one
  * `token_usage` row keyed on the run it ran for (`execution_step_id`), priced

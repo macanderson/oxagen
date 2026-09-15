@@ -1,6 +1,6 @@
 // audit-exempt: read-only — answers one run's cost rollup row; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `get_run_cost` (ADR-058): the run's `cost.run_totals` row as the Run page's
+// `get_run_cost` (ADR-060): the run's `cost.run_totals` row as the Run page's
 // cost strip and Cost tab read it. `rollup: null` until the rollup job has
 // rebuilt the run from its frames after its seal.
 import type { CapabilityHandler } from "@oxagen/oxagen";

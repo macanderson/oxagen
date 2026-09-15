@@ -1,6 +1,6 @@
 // audit-exempt: read-only — lists the price book the organization is priced against; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `list_price_entries` (ADR-058 §1): the rows RLS admits to the active tenant
+// `list_price_entries` (ADR-060 §1): the rows RLS admits to the active tenant
 // (the list catalog and its own negotiated rows), effective at `at`.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {

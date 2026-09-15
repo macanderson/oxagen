@@ -1,5 +1,5 @@
 // cost.* — the price book as data and the spend rollups (Mission Control spec
-// §12.2, §12.3, §12.7, App. A.7; ADR-058).
+// §12.2, §12.3, §12.7, App. A.7; ADR-060).
 //
 // `price_entries` holds every price Oxagen applies: the provider list prices
 // `pnpm billing:price-book-sync` writes from packages/billing/src/pricing.ts

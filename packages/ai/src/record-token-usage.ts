@@ -2,7 +2,7 @@
  * record-token-usage.ts — the one place a gateway-metered model call is
  * recorded: the `token_usage` frame in ClickHouse and, in the same breath,
  * the spend-budget counter in Postgres (`@oxagen/billing` recordSpend,
- * Mission Control spec §12.5, ADR-058 §3).
+ * Mission Control spec §12.5, ADR-060 §5).
  *
  * The two writes are independent on purpose. The counter is what the budget
  * gate reads, so a ClickHouse stall must not keep it from moving (#2820: a

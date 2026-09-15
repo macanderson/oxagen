@@ -1,4 +1,4 @@
-# ADR-058: Spend: the price book as data, the rollup store, budgets in micros
+# ADR-060: Spend: the price book as data, the rollup store, budgets in micros
 
 - **Status:** Accepted
 - **Date:** 2026-09-14

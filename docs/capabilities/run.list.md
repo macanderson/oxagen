@@ -40,7 +40,7 @@ Each row:
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps` | integer | model calls plus tool calls |
 | `frames` | integer | recorded events (ledger) or hash-chained events (tacho) |
-| `cost` | object or null | `{ micros, currency, basis }` from the run's `cost.run_totals` row (ADR-058); `basis` is `gateway_observed`, `client_attested`, `mixed` or `estimated`; null until the rollup has priced the run's frames after its seal |
+| `cost` | object or null | `{ micros, currency, basis }` from the run's `cost.run_totals` row (ADR-060); `basis` is `gateway_observed`, `client_attested`, `mixed` or `estimated`; null until the rollup has priced the run's frames after its seal |
 | `taskRef` | string or null | the goal a ledger run was admitted for |
 | `startedAt` | string | RFC 3339 |
 | `sealedAt` | string or null | null while live |

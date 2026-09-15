@@ -34,7 +34,7 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
 export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
 
 /**
- * A metered cost, read from the run's `cost.run_totals` row (ADR-058). `basis`
+ * A metered cost, read from the run's `cost.run_totals` row (ADR-060). `basis`
  * says who observed the figure: the gateway, the harness that ran the agent,
  * both (`mixed`), or nobody with a price for the model (`estimated`). A
  * number never reads stronger than its basis.

@@ -1,6 +1,6 @@
 /**
  * spend-counter.ts — the running spend counter the recorders keep for the
- * spend-budget gate (Mission Control spec §12.5; ADR-058 §3; #2820).
+ * spend-budget gate (Mission Control spec §12.5; ADR-060 §5; #2820).
  *
  * `billing.spend_counters` holds one row per (org, workspace, UTC day) in
  * micro-USD. Every recorder that prices a model call adds to it in the same

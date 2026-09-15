@@ -275,7 +275,7 @@ export type {
   FieldError as SharedFieldError,
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
-// Spend vocabulary (ADR-058): money in micros with a basis, day ranges, token
+// Spend vocabulary (ADR-060): money in micros with a basis, day ranges, token
 // classes. The shared file is not a capability, so it is exported here to
 // satisfy the check-contracts file-coverage guard.
 export {

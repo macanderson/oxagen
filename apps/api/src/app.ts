@@ -418,7 +418,7 @@ orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Fleet list and the Run header with its frame page.
 orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
-// Spend (ADR-058): the rollup by level, the drill, waste, the statement, one
+// Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
 // run's cost and the price book. All noBillingGate reads of Postgres rollups.
 orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);

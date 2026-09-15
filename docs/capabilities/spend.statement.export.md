@@ -1,6 +1,6 @@
 # spend.statement.export
 
-The monthly spend statement for the active workspace as CSV (Mission Control spec §12.9 "Monthly statement", App. E; ADR-058). One line per group at every level (operator, agent, model, tool, task) with the month's runs, calls, cost in micros and, on that same line, the cost in cents rounded half to even once (spec §12.3: rounding to cents happens at the statement line and nowhere earlier). Every line names its basis; proven and accepted spend stay apart.
+The monthly spend statement for the active workspace as CSV (Mission Control spec §12.9 "Monthly statement", App. E; ADR-060). One line per group at every level (operator, agent, model, tool, task) with the month's runs, calls, cost in micros and, on that same line, the cost in cents rounded half to even once (spec §12.3: rounding to cents happens at the statement line and nowhere earlier). Every line names its basis; proven and accepted spend stay apart.
 
 ## Mode
 
@@ -35,4 +35,4 @@ Columns: `level, key, provider, runs, calls, cost_micros, cost_cents, currency, 
 
 ## What waits
 
-A signed PDF and the export job listed on Audit › exports wait on the audit-exports lane and a signing key (ADR-058 §5); the statement is built and answered in the call.
+A signed PDF and the export job listed on Audit › exports wait on the audit-exports lane and a signing key (ADR-060 §6); the statement is built and answered in the call.
