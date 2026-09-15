@@ -288,7 +288,6 @@ export {
   constraintEffectSchema,
   publishedSharingScopeSchema,
   appendKindSchema,
-  appendSharingScopeSchema,
   proposalStatusSchema,
   governanceModeSchema,
   checkNameSchema,

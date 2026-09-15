@@ -5,8 +5,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
   appendKindSchema,
-  appendSharingScopeSchema,
   publishedRecordSchema,
+  publishedSharingScopeSchema,
 } from "./context.steering.shared";
 
 const instant = z.string().datetime({ offset: true });
@@ -44,7 +44,7 @@ export const appendedRecordDetailSchema = z
         kind: appendKindSchema,
         lineageId: z.string(),
         statement: z.string(),
-        sharingScope: appendSharingScopeSchema,
+        sharingScope: publishedSharingScopeSchema,
         recordHash: z.string(),
         sourceRefs: z.array(z.string()),
         evidenceLinks: z.array(z.string()),

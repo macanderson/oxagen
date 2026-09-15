@@ -98,7 +98,7 @@ describe("append_record", () => {
     expect(h.store.proposals).toHaveLength(1);
   });
 
-  it("refuses proposal fields on any other kind, a user-scoped proposal, and a constraint without an effect", async () => {
+  it("refuses proposal fields on any other kind, and a constraint without an effect", async () => {
     const h = harness();
     const handler = createAppendRecordHandler(h);
     await expect(
@@ -107,16 +107,6 @@ describe("append_record", () => {
         ctx(),
       ),
     ).rejects.toMatchObject({ reason: "proposal_fields_refused" });
-    await expect(
-      handler(
-        input({
-          kind: "record_proposal",
-          sharingScope: "user",
-          proposal: { kind: "rule", force: "must", rationale: "x" },
-        }),
-        ctx(),
-      ),
-    ).rejects.toMatchObject({ reason: "proposal_scope_unpublishable" });
     await expect(
       handler(
         input({

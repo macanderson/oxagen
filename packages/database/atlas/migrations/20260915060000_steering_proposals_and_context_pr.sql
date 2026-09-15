@@ -121,7 +121,7 @@ END, public.uuid_generate_v4()),
   CONSTRAINT "context_appends_kind_check" CHECK (kind = ANY (ARRAY['observation'::text, 'memory'::text, 'knowledge'::text, 'evidence'::text, 'record_proposal'::text, 'context_use'::text, 'context_use_feedback'::text])),
   CONSTRAINT "context_appends_proposal_check" CHECK ((proposal_id IS NOT NULL) = (kind = 'record_proposal'::text)),
   CONSTRAINT "context_appends_record_hash_check" CHECK (record_hash ~ '^sha256:[0-9a-f]{64}$'::text),
-  CONSTRAINT "context_appends_sharing_scope_check" CHECK (sharing_scope = ANY (ARRAY['user'::text, 'repository'::text, 'workspace'::text, 'organization'::text]))
+  CONSTRAINT "context_appends_sharing_scope_check" CHECK (sharing_scope = ANY (ARRAY['repository'::text, 'workspace'::text]))
 );
 CREATE INDEX "context_appends_lineage_idx" ON "agent"."context_appends" ("workspace_id", "lineage_id");
 CREATE INDEX "context_appends_org_idx" ON "agent"."context_appends" ("org_id", "workspace_id");

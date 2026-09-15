@@ -38,18 +38,6 @@ export function createAppendRecordHandler(
         message: `A ${kind} carries no proposal; use kind record_proposal`,
       });
     }
-    if (
-      kind === "record_proposal" &&
-      input.sharingScope !== "workspace" &&
-      input.sharingScope !== "repository"
-    ) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "proposal_scope_unpublishable",
-        message:
-          "A proposal asks for workspace or repository scope; that is where a Context PR can publish",
-      });
-    }
     const proposal = input.proposal;
     if (
       proposal &&
@@ -105,7 +93,7 @@ export function createAppendRecordHandler(
             kind: proposal.kind,
             force: proposal.force,
             constraintEffect: proposal.constraintEffect ?? null,
-            sharingScope: input.sharingScope as "workspace" | "repository",
+            sharingScope: input.sharingScope,
             statement: input.statement,
             rationale: proposal.rationale,
             source: undefined,

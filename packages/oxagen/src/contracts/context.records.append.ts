@@ -12,8 +12,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
   appendKindSchema,
-  appendSharingScopeSchema,
   constraintEffectSchema,
+  publishedSharingScopeSchema,
   recordForceSchema,
   recordKindSchema,
 } from "./context.steering.shared";
@@ -51,7 +51,8 @@ export const contextRecordsAppend = registerCapability({
       kind: z.union([appendKindSchema, z.literal("directive")]),
       lineageId: lineageId.describe("The idea this record belongs to"),
       statement: z.string().min(1).max(4000),
-      sharingScope: appendSharingScopeSchema.default("workspace"),
+      /** The scopes a workspace read enforces; the ones a Context PR can publish. */
+      sharingScope: publishedSharingScopeSchema.default("workspace"),
       /** Frames (`frame:<run>/<seq>`) and records this one derives from. */
       sourceRefs: z.array(z.string().min(1).max(512)).max(100).default([]),
       /** Frames or tool outputs by digest that prove it. */

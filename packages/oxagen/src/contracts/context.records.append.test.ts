@@ -45,6 +45,19 @@ describe("append_record contract", () => {
     });
   });
 
+  it("admits only the scopes a workspace read enforces: user and organization are refused", () => {
+    for (const sharingScope of ["repository", "workspace"]) {
+      expect(
+        contextRecordsAppend.input.safeParse({ ...base, sharingScope }).success,
+      ).toBe(true);
+    }
+    for (const sharingScope of ["user", "organization"]) {
+      expect(
+        contextRecordsAppend.input.safeParse({ ...base, sharingScope }).success,
+      ).toBe(false);
+    }
+  });
+
   it("answers the appended id, hash, kind, idempotency and the proposal it opened", () => {
     const out = contextRecordsAppend.output.parse({
       recordId: "cta_1",

@@ -22,7 +22,7 @@ An agent may only propose a directive. `kind: "directive"` is refused with `dire
 | `kind` | `observation \| memory \| knowledge \| evidence \| record_proposal \| context_use \| context_use_feedback` (or `directive`, refused) | The §9 kinds |
 | `lineageId` | `string` | The idea this record belongs to |
 | `statement` | `string` | 1–4000 characters |
-| `sharingScope` | `user \| repository \| workspace \| organization` | Default `workspace` |
+| `sharingScope` | `repository \| workspace` | Default `workspace`; the scopes a workspace read enforces (`user` and `organization` are refused at the schema) |
 | `sourceRefs[]` | `string[]` | Frames (`frame:<run>/<seq>`) and records it derives from |
 | `evidenceLinks[]` | `string[]` | Frames or tool outputs by digest |
 | `proposal` | `{ kind, force, constraintEffect?, rationale }`? | Required on `record_proposal`, refused on every other kind |
@@ -39,7 +39,8 @@ An agent may only propose a directive. `kind: "directive"` is refused with `dire
 
 ## Semantics
 
-- A `record_proposal` also opens a proposal (`agent.context_proposals`, state `proposed`) through the same code path as `propose_record`; its `sharingScope` is `workspace` or `repository`, the scopes a Context PR can publish to.
+- Every append is read back by any principal in its workspace (`get_record`, `list_records`), so the write admits only the scopes that read enforces: `workspace` and `repository`. Spec §9's `user` and `organization` keys are refused by the input schema until a read path enforces them.
+- A `record_proposal` also opens a proposal (`agent.context_proposals`, state `proposed`) through the same code path as `propose_record`; the two scopes are the ones a Context PR can publish to.
 - Two identical appends read the first back; the unique `(workspace_id, record_hash)` index holds the race.
 
 ## Side effects
@@ -52,5 +53,4 @@ One `agent.context_appends` row (INSERT-only for the application role) and, for 
 | --- | --- | --- |
 | `conflict` | `directive_requires_context_pr` | A directive reaches the workspace only through a Context PR. |
 | `conflict` | `proposal_fields_required` / `proposal_fields_refused` | `proposal` is present exactly on `record_proposal`. |
-| `conflict` | `proposal_scope_unpublishable` | A proposal asks for `workspace` or `repository` scope. |
 | `conflict` | `constraint_effect_mismatch` | A constraint declares `require` or `forbid`; no other kind carries an effect. |

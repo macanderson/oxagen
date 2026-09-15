@@ -26,9 +26,12 @@ export const constraintEffectSchema = z.enum(["require", "forbid"]);
 export type ConstraintEffect = z.infer<typeof constraintEffectSchema>;
 
 /**
- * Where a published record applies (spec §10.2): a workspace record lives in
- * the main repo and steers every run; a repository record lives in a linked
- * repo and steers runs on that repo.
+ * Where a record applies (spec §10.2): a workspace record lives in the main
+ * repo and steers every run; a repository record lives in a linked repo and
+ * steers runs on that repo. An append carries the same two scopes: they are
+ * the ones every read enforces through the workspace the caller is in (spec
+ * §9 Scope). The protocol's `user` and `organization` keys have no read path
+ * here and are refused at the schema.
  */
 export const publishedSharingScopeSchema = z.enum(["repository", "workspace"]);
 export type PublishedSharingScope = z.infer<typeof publishedSharingScopeSchema>;
@@ -44,14 +47,6 @@ export const appendKindSchema = z.enum([
   "context_use_feedback",
 ]);
 export type AppendKind = z.infer<typeof appendKindSchema>;
-
-/** The protocol's portable audience keys (spec §9 Scope). */
-export const appendSharingScopeSchema = z.enum([
-  "user",
-  "repository",
-  "workspace",
-  "organization",
-]);
 
 /**
  * The proposal's state machine (spec §10.3). `checks_failed` is the state a

@@ -489,8 +489,7 @@
       "name": "dismiss_proposal",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -1664,8 +1663,7 @@
       "name": "merge_context_pr",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -1674,9 +1672,7 @@
       "name": "open_context_pr",
       "reads": [],
       "surfaces": [
-        "api",
-        "cli",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -2694,7 +2690,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d3fabe9b6d20475b4ff653c95a7efd7bcd8da291f6f6e0b313becfdae41d97d8",
+  "contentHash": "5d162eb92977f0d838f446956f6a9484bc2beea4aab51f5dc2ebb2d8f219b166",
   "domains": [
     {
       "name": "agent",

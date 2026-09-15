@@ -32,10 +32,7 @@ export function createGetRecordHandler(
           kind: row.kind as AppendKind,
           lineageId: row.lineageId,
           statement: row.statement,
-          sharingScope: row.sharingScope as
-            | PublishedSharingScope
-            | "user"
-            | "organization",
+          sharingScope: row.sharingScope as PublishedSharingScope,
           recordHash: row.recordHash,
           sourceRefs: row.sourceRefs,
           evidenceLinks: row.evidenceLinks,

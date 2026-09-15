@@ -1338,7 +1338,7 @@ export const contextAppends = agentSchema.table(
     ),
     sharingScopeCheck: check(
       "context_appends_sharing_scope_check",
-      sql`${t.sharingScope} IN ('user', 'repository', 'workspace', 'organization')`,
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
     ),
     hashCheck: check(
       "context_appends_record_hash_check",

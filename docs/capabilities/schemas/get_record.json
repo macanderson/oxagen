@@ -305,10 +305,8 @@
               "sharingScope": {
                 "type": "string",
                 "enum": [
-                  "user",
                   "repository",
-                  "workspace",
-                  "organization"
+                  "workspace"
                 ]
               },
               "recordHash": {
