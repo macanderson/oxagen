@@ -133,9 +133,28 @@ describe("routes", () => {
     expect(pathOf("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(routes.fleet("a/b", "..")).toBe("/a%2Fb/..");
     expect(routes.people("\\evil")).toBe("/%5Cevil");
+    expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
   });
 
   it("refuses to build a protocol-relative path from an empty first segment (negative)", () => {
     expect(() => routes.fleet("", "evil.example")).toThrow("unsafe_path");
+  });
+
+  it("builds a run and a Spend view with every value encoded", () => {
+    expect(routes.run("acme", "core-platform", "arun_01k5")).toBe(
+      "/acme/core-platform/runs/arun_01k5",
+    );
+    expect(routes.spend("acme", "core-platform", { tab: "waste" })).toBe(
+      "/acme/core-platform/spend?tab=waste",
+    );
+    expect(
+      routes.spend("acme", "core-platform", {
+        tab: "agent",
+        drill: "acme/core-platform/triage&tab=x",
+      }),
+    ).toBe(
+      "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage%26tab%3Dx",
+    );
+    expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });

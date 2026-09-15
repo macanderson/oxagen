@@ -1,0 +1,178 @@
+{
+  "spend": {
+    "period": "{from} to {to}",
+    "notRecorded": "not recorded",
+    "basisNotRecorded": "basis not recorded",
+    "basis": {
+      "gateway_observed": "gateway observed",
+      "client_attested": "client attested",
+      "mixed": "mixed",
+      "estimated": "estimated"
+    },
+    "tabs": {
+      "label": "Spend views",
+      "operator": "By operator",
+      "agent": "By agent",
+      "tool": "By tool",
+      "waste": "Wasted spend",
+      "budgets": "Budgets"
+    },
+    "actions": {
+      "exportReport": "Export report",
+      "setBudget": "Set a budget"
+    },
+    "strip": {
+      "spend": "Spend",
+      "proven": "Proven spend",
+      "provenNote": "runs whose verdict flipped",
+      "accepted": "Accepted, not proven",
+      "acceptedNote": "a human verified it; never folded into proven",
+      "productiveRatio": "Productive ratio",
+      "productiveRatioNote": "steps that advanced the task"
+    },
+    "columns": {
+      "provider": "Provider",
+      "runs": "Runs",
+      "calls": "Calls",
+      "spend": "Spend",
+      "proven": "Proven",
+      "productiveRatio": "Productive ratio"
+    },
+    "groups": {
+      "operator": {
+        "title": "By operator",
+        "key": "Operator",
+        "empty": "No run in this period names an operator."
+      },
+      "agent": {
+        "title": "By agent",
+        "key": "Agent",
+        "empty": "No run in this period names an agent."
+      },
+      "model": {
+        "title": "By model and provider",
+        "key": "Model",
+        "empty": "No model call in this period has been rolled up."
+      },
+      "tool": {
+        "title": "By tool",
+        "key": "Tool",
+        "empty": "No tool call in this period has been rolled up."
+      }
+    },
+    "waste": {
+      "wasted": "Wasted",
+      "share": "Share of spend",
+      "runsWithWaste": "Runs with waste",
+      "largestCause": "Largest cause",
+      "noCause": "No waste found",
+      "byCause": "By cause",
+      "none": "No run in this period shows waste in its frames.",
+      "proof": "Runs that prove it",
+      "cause": {
+        "cache_write_never_read": "Cache written and never read"
+      }
+    },
+    "budgets": {
+      "title": "Budgets",
+      "empty": "No spend ceiling is set for this workspace or its organization.",
+      "scopeColumn": "Scope",
+      "periodColumn": "Period",
+      "limitColumn": "Limit",
+      "spentColumn": "Spent",
+      "positionColumn": "Position",
+      "scope": {
+        "org": "Organization",
+        "workspace": "This workspace"
+      },
+      "monthly": "Monthly",
+      "rolling": "Rolling {days} days",
+      "noLimit": "No ceiling",
+      "disabled": "Not enforced",
+      "position": "{ratio} · {state}",
+      "state": {
+        "ok": "under the ceiling",
+        "threshold_50": "past 50%",
+        "threshold_80": "past 80%",
+        "threshold_95": "past 95%",
+        "exceeded": "over the ceiling"
+      }
+    },
+    "drill": {
+      "title": {
+        "operator": "Operator",
+        "agent": "Agent",
+        "tool": "Tool"
+      },
+      "back": "Back to the table",
+      "perCall": "Average per call",
+      "perRun": "Average per run",
+      "share": "Share of workspace spend",
+      "byDay": "Spend by day",
+      "day": "Day",
+      "tools": "Tools its runs called",
+      "toolsEmpty": "Its runs called no tools in this window."
+    },
+    "failure": {
+      "denied": {
+        "title": "You cannot see this workspace’s spend",
+        "body": "Your roles on this organization do not include {permission}. An owner can grant it, and the grant is recorded as a governed action."
+      },
+      "pending": {
+        "title": "Access to this workspace’s spend is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "Spend could not be loaded",
+        "body": "Nothing was changed. Runs keep recording while this page is down: the gateway writes frames, not Mission Control.",
+        "code": "{code} · {status}"
+      }
+    },
+    "empty": {
+      "title": "No spend to report yet",
+      "body": "Rollups are rebuilt from frames after each run seals. No run in this period has been rolled up, so there is nothing to report and nothing billable.",
+      "back": "Back to Fleet"
+    },
+    "budgetDialog": {
+      "title": "Set a budget",
+      "scope": "Scope",
+      "period": "Period",
+      "rolling": "Rolling window",
+      "windowDays": "Window in days",
+      "limit": "Limit (USD)",
+      "limitHint": "Stored as integer micro-USD. Setting a ceiling replaces the one this scope has.",
+      "enabled": "Enforce the ceiling: a metered run past it is refused before the model call",
+      "submit": "Set it",
+      "pending": "Saving the ceiling",
+      "errors": {
+        "limitInvalid": "Enter an amount above zero, with at most six decimal places.",
+        "windowDaysInvalid": "Enter a whole number of days above zero."
+      },
+      "alert": {
+        "denied": "Your role cannot set this ceiling. An organization owner, admin or billing member sets either ceiling; a workspace owner or admin sets this workspace’s own.",
+        "failed": "The ceiling could not be confirmed. Open the Budgets tab to see what is set; setting it again replaces it."
+      }
+    },
+    "exportDialog": {
+      "title": "Export a spend report",
+      "month": "Month",
+      "monthHint": "A calendar month, as YYYY-MM. The report is a CSV with one line per operator, agent, model, tool and task, and every line names its basis.",
+      "submit": "Download the CSV",
+      "pending": "Building the report",
+      "errors": {
+        "monthInvalid": "Enter a month as YYYY-MM."
+      },
+      "alert": {
+        "denied": "Your roles on this organization do not let you export this workspace’s spend.",
+        "failed": "The report could not be built. Nothing was changed; try again."
+      }
+    },
+    "fleet": {
+      "label": "Spend in this workspace",
+      "spendToday": "Spend today",
+      "spendTodayNote": "{from}, UTC",
+      "cacheHitRate": "Cache hit rate",
+      "cacheHitRateNote": "cache_read ÷ (input_uncached + cache_read)"
+    }
+  }
+}

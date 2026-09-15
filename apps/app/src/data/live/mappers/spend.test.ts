@@ -1,0 +1,255 @@
+// The spend mappers over real contract outputs: each sample is parsed by the
+// contract's own output schema first, and each mapped value by the view model,
+// so neither a sample the contract would refuse nor a view the page would
+// refuse can make a test pass.
+import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
+import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import { describe, expect, it } from "vitest";
+import {
+  FleetSpend,
+  SpendBudgets,
+  SpendDrill,
+  SpendReport,
+  SpendWaste,
+} from "@/data/contracts/spend";
+import {
+  toFleetSpend,
+  toSpendBudgets,
+  toSpendDrill,
+  toSpendReport,
+  toSpendWaste,
+} from "./spend";
+
+const tokens = {
+  input_uncached: 1200,
+  cache_read: 800,
+  cache_write_5m: 0,
+  cache_write_1h: 0,
+  output: 300,
+  reasoning: 0,
+};
+const priced = {
+  micros: "12345678",
+  currency: "USD",
+  basis: "mixed",
+} as const;
+
+const figure = {
+  cost: priced,
+  calls: 40,
+  runs: 12,
+  proven: null,
+  accepted: { micros: "2000000", currency: "USD" },
+  productiveRatio: null,
+};
+
+describe("toSpendReport", () => {
+  it("copies the total and each group with the basis the rollup recorded, and keeps an unpriced group null", () => {
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      groupBy: "model",
+      total: figure,
+      rows: [
+        {
+          ...figure,
+          key: "claude-sonnet-5",
+          provider: "anthropic",
+          tokens,
+        },
+        {
+          ...figure,
+          cost: null,
+          accepted: null,
+          key: "unpriced-model",
+          provider: null,
+          tokens,
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.total).toEqual(figure);
+    expect(view.rows.map((row) => [row.key, row.provider, row.cost])).toEqual([
+      ["claude-sonnet-5", "anthropic", priced],
+      ["unpriced-model", null, null],
+    ]);
+    expect(view.rows[1]?.accepted).toBeNull();
+    expect(view.rows[0]?.proven).toBeNull();
+  });
+});
+
+describe("toFleetSpend", () => {
+  const day = { from: "2026-09-15", to: "2026-09-15" };
+
+  it("copies the day's cost with its basis and divides cache reads by every input token over the model rows", () => {
+    const out = spendGet.output.parse({
+      period: day,
+      groupBy: "model",
+      total: figure,
+      rows: [
+        { ...figure, key: "claude-sonnet-5", provider: "anthropic", tokens },
+        {
+          ...figure,
+          key: "claude-haiku-5",
+          provider: "anthropic",
+          tokens: { ...tokens, input_uncached: 800, cache_read: 1200 },
+        },
+      ],
+    });
+    expect(FleetSpend.parse(toFleetSpend(out))).toEqual({
+      period: day,
+      spend: priced,
+      cacheHitRate: 0.5,
+    });
+  });
+
+  it("answers a null rate for a day with no input token and keeps an unpriced day null, never a zero (negative)", () => {
+    const out = spendGet.output.parse({
+      period: day,
+      groupBy: "model",
+      total: { ...figure, cost: null, calls: 0, runs: 0, accepted: null },
+      rows: [],
+    });
+    expect(FleetSpend.parse(toFleetSpend(out))).toEqual({
+      period: day,
+      spend: null,
+      cacheHitRate: null,
+    });
+  });
+});
+
+describe("toSpendDrill", () => {
+  it("keeps the series, the averages and a tool drill's unpriced money as null", () => {
+    const out = spendDrill.output.parse({
+      kind: "tool",
+      key: "github__create_pull_request",
+      period: { from: "2026-08-17", to: "2026-09-15" },
+      total: { ...figure, cost: null, accepted: null },
+      series: [
+        { day: "2026-09-14", cost: null, calls: 3, runs: 1 },
+        { day: "2026-09-15", cost: null, calls: 0, runs: 0 },
+      ],
+      averages: { perCall: null, perRun: null },
+      share: null,
+      byTool: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+    });
+    const view = SpendDrill.parse(toSpendDrill(out));
+    expect(view).toMatchObject({
+      kind: "tool",
+      key: "github__create_pull_request",
+      perCall: null,
+      perRun: null,
+      share: null,
+      tools: [{ name: "github__create_pull_request", calls: 3, runs: 1 }],
+    });
+    expect(view.series.map((d) => [d.day, d.cost])).toEqual([
+      ["2026-09-14", null],
+      ["2026-09-15", null],
+    ]);
+  });
+
+  it("carries an operator's averages in micros", () => {
+    const out = spendDrill.output.parse({
+      kind: "operator",
+      key: "prn_marcusbell",
+      period: { from: "2026-08-17", to: "2026-09-15" },
+      total: figure,
+      series: [],
+      averages: {
+        perCall: { micros: "4200", currency: "USD" },
+        perRun: { micros: "1028806", currency: "USD" },
+      },
+      share: 0.31,
+      byTool: [],
+    });
+    const view = SpendDrill.parse(toSpendDrill(out));
+    expect(view.perCall).toEqual({ micros: "4200", currency: "USD" });
+    expect(view.perRun).toEqual({ micros: "1028806", currency: "USD" });
+    expect(view.share).toBe(0.31);
+  });
+});
+
+describe("toSpendWaste", () => {
+  it("names each cause's proving runs by their public ids", () => {
+    const out = spendWasteList.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      wasted: { micros: "900000", currency: "USD", basis: "gateway_observed" },
+      share: 0.07,
+      runsWithWaste: 2,
+      largestCause: "cache_write_never_read",
+      causes: [
+        {
+          cause: "cache_write_never_read",
+          wasted: {
+            micros: "900000",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+          runs: 2,
+          runIds: ["arun_01k5rn8f3j", "tse_01k5rn9t4"],
+        },
+      ],
+    });
+    const view = SpendWaste.parse(toSpendWaste(out));
+    expect(view.causes[0]?.provingRuns).toEqual([
+      "arun_01k5rn8f3j",
+      "tse_01k5rn9t4",
+    ]);
+    expect(view.wasted?.basis).toBe("gateway_observed");
+  });
+
+  it("keeps a period with no waste null rather than zero", () => {
+    const out = spendWasteList.output.parse({
+      period: { from: "2026-09-01", to: "2026-09-15" },
+      wasted: null,
+      share: null,
+      runsWithWaste: 0,
+      largestCause: null,
+      causes: [],
+    });
+    expect(SpendWaste.parse(toSpendWaste(out))).toEqual({
+      wasted: null,
+      share: null,
+      runsWithWaste: 0,
+      largestCause: null,
+      causes: [],
+    });
+  });
+});
+
+describe("toSpendBudgets", () => {
+  it("keeps the ceiling, the burn and its position", () => {
+    const out = billingBudgetGet.output.parse({
+      budgets: [
+        {
+          scope: "workspace",
+          publicId: "sbud_core",
+          enabled: true,
+          period: "rolling",
+          windowDays: 7,
+          limit: { micros: "500000000", currency: "USD" },
+          spent: { micros: "410000000", currency: "USD" },
+          projected: { micros: "410000000", currency: "USD" },
+          ratio: 0.82,
+          state: "threshold_80",
+          reachedThreshold: 80,
+          windowStart: "2026-09-08T00:00:00.000Z",
+          windowEnd: "2026-09-15T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(SpendBudgets.parse(toSpendBudgets(out))).toEqual([
+      {
+        scope: "workspace",
+        enabled: true,
+        period: "rolling",
+        windowDays: 7,
+        limit: { micros: "500000000", currency: "USD" },
+        spent: { micros: "410000000", currency: "USD" },
+        ratio: 0.82,
+        state: "threshold_80",
+      },
+    ]);
+  });
+});
