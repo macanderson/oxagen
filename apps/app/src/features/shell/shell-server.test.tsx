@@ -2,7 +2,7 @@
 // The server half: the chrome renders what the source read for the context the
 // layout resolved; the frame streams a skeleton and the pre-paint theme script.
 import { cleanup, render, screen } from "@testing-library/react";
-import { isValidElement, type ReactElement } from "react";
+import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import shellMessages from "../../../messages/shell.json";
 import { shellData } from "./shell.builders";
@@ -66,9 +66,10 @@ describe("ShellFrame", () => {
     const { ShellFrame } = await import("./shell-frame");
     const { THEME_SCRIPT } = await import("./theme");
     const { container } = render(
-      <ShellFrame chrome={<p>chrome</p>}>
-        <main id="main">page</main>
-      </ShellFrame>,
+      await ShellFrame({
+        chrome: <p>chrome</p>,
+        children: <main id="main">page</main>,
+      }),
     );
     expect(screen.getByTestId("shell")).toBeInTheDocument();
     expect(screen.getByText("chrome")).toBeInTheDocument();
@@ -77,8 +78,12 @@ describe("ShellFrame", () => {
   });
 
   it("streams a labelled skeleton while the chrome loads", async () => {
-    const { ChromeSkeleton } = await import("./shell-frame");
-    render(await ChromeSkeleton());
+    const { ShellFrame } = await import("./shell-frame");
+    const pending = new Promise<never>(() => undefined);
+    function PendingChrome(): ReactNode {
+      return use(pending);
+    }
+    render(await ShellFrame({ chrome: <PendingChrome />, children: null }));
     expect(screen.getByTestId("shell-loading")).toHaveTextContent(
       "Loading Mission Control",
     );

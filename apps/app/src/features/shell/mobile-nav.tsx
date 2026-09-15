@@ -15,14 +15,9 @@ import { useShellState } from "./shell-state";
 import { SafeLink } from "@/ui/navigation";
 
 /** The pages the bar carries directly, in order; the rest are one tap away under "More". */
-export const MOBILE_PRIMARY: readonly NavKey[] = [
-  "fleet",
-  "agents",
-  "tools",
-  "spend",
-];
+const MOBILE_PRIMARY: readonly NavKey[] = ["fleet", "agents", "tools", "spend"];
 
-export function mobileItems(sections: readonly NavSection[]): NavItem[] {
+function mobileItems(sections: readonly NavSection[]): NavItem[] {
   const all = sections.flatMap((s) => s.items);
   const primary = MOBILE_PRIMARY.flatMap((key) =>
     all.filter((i) => i.key === key),
@@ -31,14 +26,14 @@ export function mobileItems(sections: readonly NavSection[]): NavItem[] {
   return primary.length > 0 ? primary : all.slice(0, MOBILE_PRIMARY.length);
 }
 
-export type MobileNavProps = {
+type MobileNavProps = {
   items: readonly NavItem[];
   pathname: string;
   onMore: () => void;
 };
 
 /** The seam: a plain bottom bar. Replace the body, keep the props. */
-export function MobileNav({ items, pathname, onMore }: MobileNavProps) {
+function MobileNav({ items, pathname, onMore }: MobileNavProps) {
   const t = useTranslations("shell");
   return (
     <nav

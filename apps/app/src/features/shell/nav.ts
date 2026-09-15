@@ -37,14 +37,14 @@ export const ORG_NAV: readonly OrgNavKey[] = [
  * Static segments directly under `/{org}` (Batch 0 route tree). Any other first
  * segment is a workspace slug, which is why workspace slugs must not take these.
  */
-export const ORG_SEGMENTS = {
+const ORG_SEGMENTS = {
   billing: "billing",
   audit: "audit",
   "api-keys": "apiKeys",
 } as const satisfies Record<string, NavKey>;
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
-export function orgSegmentKey(segment: string): NavKey | null {
+function orgSegmentKey(segment: string): NavKey | null {
   return isOrgSegment(segment) ? ORG_SEGMENTS[segment] : null;
 }
 
@@ -112,7 +112,7 @@ export function parseShellPath(pathname: string): ShellPath {
 }
 
 /** The nav item a pathname belongs to, or null for a path outside the ten pages. */
-export function currentNavKey(pathname: string): NavKey | null {
+function currentNavKey(pathname: string): NavKey | null {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return null;
   const [head] = rest;

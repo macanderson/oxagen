@@ -20,8 +20,8 @@ type SessionUser = {
 
 export type AppSession = { user: SessionUser };
 
-/** Uncached read; use `getSession` in request code. Exported for tests. */
-export async function readSession(): Promise<AppSession | null> {
+/** Uncached read; request code uses `getSession`. */
+async function readSession(): Promise<AppSession | null> {
   const { auth } = await import("@oxagen/auth/server");
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return null;

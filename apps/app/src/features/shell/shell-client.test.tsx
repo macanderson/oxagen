@@ -4,7 +4,6 @@
 // <MobileNav>, driven the way an operator drives them, and the chrome rev1
 // does not render (ARCHITECTURE.md §1.2) asserted absent.
 import {
-  act,
   cleanup,
   render,
   screen,
@@ -14,7 +13,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { MouseEvent, ReactNode } from "react";
-import { pathOf } from "@/shared/safe-path";
+
 import {
   afterEach,
   beforeAll,
@@ -26,7 +25,7 @@ import {
 } from "vitest";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
-import { MobileNav } from "./mobile-nav";
+
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
@@ -243,6 +242,22 @@ describe("command menu", () => {
     });
   });
 
+  it("opens with Ctrl+K as well, and not for K with Shift or Alt, ⌘ with another key, or K alone (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    for (const chord of [
+      "{Control>}{Shift>}k{/Shift}{/Control}",
+      "{Control>}{Alt>}k{/Alt}{/Control}",
+      "{Meta>}j{/Meta}",
+      "k",
+    ]) {
+      await user.keyboard(chord);
+      expect(screen.queryByTestId("command-menu")).toBeNull();
+    }
+    await user.keyboard("{Control>}K{/Control}");
+    expect(await screen.findByTestId("command-menu")).toBeInTheDocument();
+  });
+
   it("opens from the search button, says when nothing matches, and opens a clicked route", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
@@ -320,26 +335,17 @@ describe("phone navigation", () => {
   });
 
   it("falls back to organization pages when there is no workspace", () => {
-    const onMore = vi.fn();
-    render(
-      <NextIntlClientProvider
-        locale="en"
-        messages={{ ...en, ...shellMessages }}
-      >
-        <MobileNav
-          items={[{ key: "billing", href: pathOf("acme", "billing") }]}
-          pathname="/acme/billing"
-          onMore={onMore}
-        />
-      </NextIntlClientProvider>,
-    );
-    expect(screen.getByRole("link", { name: "Billing" })).toHaveAttribute(
+    nav.pathname = "/acme/billing";
+    renderShell(shellData());
+    const bar = screen.getByTestId("mobile-nav");
+    expect(
+      within(bar)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Organization", "Billing", "Audit"]);
+    expect(within(bar).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    act(() => {
-      screen.getByRole("button", { name: "More" }).click();
-    });
-    expect(onMore).toHaveBeenCalled();
   });
 });

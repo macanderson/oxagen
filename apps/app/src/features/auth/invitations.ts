@@ -10,7 +10,7 @@ import { type InvitationRecord, systemLookups } from "@/server/tenancy-lookups";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
-export const INVITATION_NOT_FOUND = "invitation_not_found";
+const INVITATION_NOT_FOUND = "invitation_not_found";
 
 export function isInvitationToken(token: string): boolean {
   return TOKEN_PATTERN.test(token);

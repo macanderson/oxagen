@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
-import {
-  CatalogError,
-  catalogStems,
-  DuplicateNamespaceError,
-  mergeCatalogs,
-  parseCatalog,
-  SHARED_CATALOG,
-} from "./catalogs";
+import { catalogStems, mergeCatalogs, parseCatalog } from "./catalogs";
+
+const INVALID_CATALOG = expect.objectContaining({
+  code: "i18n_catalog_invalid",
+});
 
 describe("catalogStems", () => {
   it("puts the shared catalog first and sorts the rest, whatever the listing order", () => {
@@ -22,7 +19,7 @@ describe("catalogStems", () => {
 
   it("refuses a listing without the shared catalog", () => {
     const run = () => catalogStems(["fleet.json"]);
-    expect(run).toThrow(CatalogError);
+    expect(run).toThrow(INVALID_CATALOG);
     expect(run).toThrow("messages/en.json: the shared catalog is missing");
   });
 
@@ -33,7 +30,7 @@ describe("catalogStems", () => {
     ".json",
     "-x.json",
   ])("refuses %s, a name that is not a kebab-case stem", (entry) => {
-    expect(() => catalogStems(["en.json", entry])).toThrow(CatalogError);
+    expect(() => catalogStems(["en.json", entry])).toThrow(INVALID_CATALOG);
   });
 });
 
@@ -79,7 +76,12 @@ describe("mergeCatalogs", () => {
         ["en", { states: {} }],
         ["fleet", { states: {} }],
       ]);
-    expect(run).toThrow(DuplicateNamespaceError);
+    expect(run).toThrow(
+      expect.objectContaining({
+        code: "i18n_duplicate_namespace",
+        namespace: "states",
+      }),
+    );
     expect(run).toThrow(
       '"states" is declared by both messages/en.json and messages/fleet.json',
     );
@@ -88,7 +90,7 @@ describe("mergeCatalogs", () => {
 
 describe("messages/en.json", () => {
   it("is the shared catalog and carries the shared namespaces", () => {
-    expect(SHARED_CATALOG).toBe("en");
+    expect(catalogStems(["en.json"])).toEqual(["en"]);
     expect(Object.keys(en)).toEqual(
       expect.arrayContaining([
         "app",

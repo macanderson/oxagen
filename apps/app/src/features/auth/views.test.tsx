@@ -4,7 +4,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IntlProvider, translator } from "./test-intl";
+import { IntlProvider, translator } from "@/test/intl";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),

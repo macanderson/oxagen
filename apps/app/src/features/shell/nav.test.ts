@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   breadcrumbs,
-  currentNavKey,
   isNavItemCurrent,
+  type NavKey,
+  ORG_NAV,
   orgHref,
-  orgSegmentKey,
   parseShellPath,
   sidebarSections,
+  WORKSPACE_NAV,
   workspaceHref,
 } from "./nav";
+
+const ALL_KEYS: readonly NavKey[] = [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"];
 
 describe("parseShellPath", () => {
   it("reads organization, workspace and the rest", () => {
@@ -29,9 +32,8 @@ describe("parseShellPath", () => {
   });
 
   it("does not mistake an object prototype key for an organization segment", () => {
-    expect(orgSegmentKey("toString")).toBeNull();
-    expect(orgSegmentKey("constructor")).toBeNull();
     expect(parseShellPath("/acme/toString").ws).toBe("toString");
+    expect(parseShellPath("/acme/constructor").ws).toBe("constructor");
   });
 
   it("ignores the query and hash, decodes segments and survives malformed escapes", () => {
@@ -51,7 +53,7 @@ describe("parseShellPath", () => {
   });
 });
 
-describe("currentNavKey and isNavItemCurrent", () => {
+describe("isNavItemCurrent", () => {
   it.each([
     ["/acme", "organization"],
     ["/acme/billing", "billing"],
@@ -64,13 +66,18 @@ describe("currentNavKey and isNavItemCurrent", () => {
     ["/acme/core-platform/ontology", "ontology"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
-  ])("%s → %s", (path, key) => {
-    expect(currentNavKey(path)).toBe(key);
+  ] as const)("%s → %s", (path, key) => {
+    expect(
+      ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
+    ).toEqual(key === "organization" ? [] : [key]);
+    expect(isNavItemCurrent("organization", path)).toBe(
+      key === "organization" || key === "apiKeys",
+    );
   });
 
-  it("returns null outside the ten pages", () => {
-    expect(currentNavKey("/")).toBeNull();
-    expect(currentNavKey("/acme/core-platform/scenarios")).toBeNull();
+  it("marks nothing current outside the ten pages", () => {
+    for (const path of ["/", "/acme/core-platform/scenarios"])
+      expect(ALL_KEYS.filter((k) => isNavItemCurrent(k, path))).toEqual([]);
   });
 
   it("marks Organization current for its API keys page", () => {

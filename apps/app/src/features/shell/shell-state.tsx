@@ -32,7 +32,7 @@ export function useShellState(): ShellState {
 }
 
 /** ⌘K on macOS, Ctrl+K elsewhere. */
-export function isCommandShortcut(
+function isCommandShortcut(
   e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
 ): boolean {
   return (

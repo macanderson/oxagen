@@ -81,7 +81,7 @@ export const OrganizationForm = z.object({
     },
   ),
 });
-export type OrganizationFormInput = z.input<typeof OrganizationForm>;
+type OrganizationFormInput = z.input<typeof OrganizationForm>;
 export type OrganizationFormValue = z.output<typeof OrganizationForm>;
 export type OrganizationField = keyof OrganizationFormInput;
 
