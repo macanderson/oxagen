@@ -1,4 +1,4 @@
-h1:WXn1WpCpxLhkAka/Az6u3sVbQxl9h1bQv3Q+bObAi7M=
+h1:58kQHhG437ULyeQwvRbiuHYfSMbtf76JEGq0CUbPj0M=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -122,4 +122,6 @@ h1:WXn1WpCpxLhkAka/Az6u3sVbQxl9h1bQv3Q+bObAi7M=
 20260915141000_roles_custom_name_uq.sql h1:rkdYubKyPxIkLTSwYq4/OXsrrT7b4u5wV/Rf/l1E/ms=
 20260915150000_run_recorder_replay.sql h1:iBAGsZi8qIPYBraCSvQ7DDu9XgUUcE0c87KIvVunUDY=
 20260915160000_steering_published_security_event.sql h1:Zr5pDxb8O68HYtqr0gPYf6RjkhyakbVbBaBPMWX5fm8=
-20260915204000_notification_events.sql h1:Y6snE9IOokitFm+bbpUnBBZ93/h8y3KBDm7eiCygpZQ=
+20260915201000_cost_findings.sql h1:TQ4wikkrDSaVQ1pL2CBIuKOLuK3XH1YCInp7QZDXT1I=
+20260915201100_rls_cost_findings.sql h1:x/J684Z4D2zHpm5MWgUR/bIA2GR2c8Y0nTYLOKox3gs=
+20260915204000_notification_events.sql h1:5olqDcfcvfChwVrAApV12DEMwr0cj2RUzz+Uaz2CFtA=
