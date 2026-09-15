@@ -1,0 +1,314 @@
+{
+  "name": "get_finding_evidence",
+  "domain": "spend",
+  "description": "Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "findingId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "findingId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "finding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cache_writes_never_read",
+              "duplicate_tool_calls",
+              "repeated_shell_commands",
+              "unpaged_results"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "tool",
+              "agent",
+              "operator",
+              "workspace"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "saving": {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "gateway_observed",
+                  "client_attested",
+                  "mixed",
+                  "estimated"
+                ]
+              }
+            },
+            "required": [
+              "micros",
+              "currency",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium"
+            ]
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          "why": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          },
+          "runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "applied",
+              "dismissed"
+            ]
+          },
+          "detectedAt": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "appliedActionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "level",
+          "subject",
+          "saving",
+          "confidence",
+          "window",
+          "why",
+          "fix",
+          "runs",
+          "calls",
+          "status",
+          "detectedAt",
+          "decidedAt",
+          "appliedActionId"
+        ],
+        "additionalProperties": false
+      },
+      "evidence": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "coveredCalls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measuredTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "counterfactualTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measured": {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          "counterfactual": {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string"
+                },
+                "startedAt": {
+                  "type": "string"
+                },
+                "calls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "measuredTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "counterfactualTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "measured": {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
+                  "additionalProperties": false
+                },
+                "counterfactual": {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "runId",
+                "startedAt",
+                "calls",
+                "measuredTokens",
+                "counterfactualTokens",
+                "measured",
+                "counterfactual"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "calls",
+          "coveredCalls",
+          "measuredTokens",
+          "counterfactualTokens",
+          "measured",
+          "counterfactual",
+          "runs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "finding",
+      "evidence"
+    ],
+    "additionalProperties": false
+  }
+}

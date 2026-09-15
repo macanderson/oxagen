@@ -14,6 +14,11 @@
 // cost.daily-rollup folds run rows into the workspace's per-day groups. Both
 // tables can be dropped and rebuilt. Every money column is integer micro-USD;
 // a null cost is a run or group no frame priced, never a zero.
+//
+// `findings` is the findings job's output (spec §12.8; ADR-062): one open row
+// per (workspace, kind, subject) the detectors see in the trailing window,
+// replaced on every pass; a row a person applied or dismissed is kept with
+// the decision on it, and the detectors cite only runs that started after it.
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { sql } from "drizzle-orm";
 import {
@@ -31,7 +36,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { costSchema } from "./_schemas";
-import { auditMixin, orgScopeMixin, uuidv7Default } from "./_mixins";
+import { auditMixin, idMixin, orgScopeMixin, uuidv7Default } from "./_mixins";
 import { organizations } from "./org";
 
 /** The token classes a price entry may price (spec §12.6 plus the per-asset media units). */
@@ -317,6 +322,127 @@ export const dailyTotals = costSchema.table(
     countsCheck: check(
       "daily_totals_counts_check",
       sql`${t.runs} >= 0 AND ${t.calls} >= 0`,
+    ),
+  }),
+);
+
+// ── findings ──────────────────────────────────────────────────────────────────
+/**
+ * What the detectors can prove from the recorded frames today (spec §12.8
+ * and the mockup's Spend › Findings; ADR-062's detector table names the
+ * field every other §12.8 row waits on).
+ */
+export const FINDING_KINDS = [
+  "cache_writes_never_read",
+  "duplicate_tool_calls",
+  "repeated_shell_commands",
+  "unpaged_results",
+] as const;
+export type FindingKind = (typeof FINDING_KINDS)[number];
+
+/** Where the fix applies: the level whose key `subject` carries. */
+const FINDING_LEVELS = ["tool", "agent", "operator", "workspace"] as const;
+export type FindingLevel = (typeof FINDING_LEVELS)[number];
+
+/** `high` when the counterfactual covers at least nine in ten cited calls (ADR-062 §3). */
+const FINDING_CONFIDENCES = ["high", "medium"] as const;
+export type FindingConfidence = (typeof FINDING_CONFIDENCES)[number];
+
+const FINDING_STATUSES = ["open", "applied", "dismissed"] as const;
+
+export const findings = costSchema.table(
+  "findings",
+  {
+    ...idMixin("fnd"),
+    ...orgScopeMixin(),
+    kind: text("kind").notNull(),
+    level: text("level").notNull(),
+    // The level's key: a tool name, an agent key (`org_ns.ws_ns.slug`), an
+    // operator's principal public id (`prn_…`), or the workspace id.
+    subject: text("subject").notNull(),
+    // `kind|level|subject`: the identity a pass upserts on while the row is open.
+    fingerprint: text("fingerprint").notNull(),
+    windowStart: timestamp("window_start", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    windowEnd: timestamp("window_end", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    // Measured minus counterfactual over the cited runs, at the price each
+    // call paid (ADR-062 §3); the basis is the fold of the cited runs' bases.
+    estimatedSavingMicros: bigint("estimated_saving_micros", {
+      mode: "bigint",
+    }).notNull(),
+    currency: text("currency").notNull().default("USD"),
+    savingBasis: text("saving_basis").notNull(),
+    confidence: text("confidence").notNull(),
+    why: text("why").notNull(),
+    fix: text("fix").notNull(),
+    citedRuns: text("cited_runs").array().notNull(),
+    // The arithmetic behind the saving: the signal, the counterfactual, the
+    // call counts and one entry per cited run (`FindingEvidence` on the
+    // contract).
+    citedFrames: jsonb("cited_frames").notNull(),
+    status: text("status").notNull().default("open"),
+    detectedAt: timestamp("detected_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true, mode: "date" }),
+    decidedByUserId: uuid("decided_by_user_id"),
+    // The request id of the invocation that applied the fix: the key its
+    // audit row carries. Set with status `applied`, null otherwise.
+    appliedActionId: text("applied_action_id"),
+  },
+  (t) => ({
+    openIdx: uniqueIndex("findings_open_fingerprint_idx")
+      .on(t.workspaceId, t.fingerprint)
+      .where(sql`${t.status} = 'open'`),
+    workspaceStatusIdx: index("findings_workspace_status_idx").on(
+      t.workspaceId,
+      t.status,
+      t.estimatedSavingMicros,
+    ),
+    kindCheck: check(
+      "findings_kind_check",
+      sql`${t.kind} IN (${inList(FINDING_KINDS)})`,
+    ),
+    levelCheck: check(
+      "findings_level_check",
+      sql`${t.level} IN (${inList(FINDING_LEVELS)})`,
+    ),
+    confidenceCheck: check(
+      "findings_confidence_check",
+      sql`${t.confidence} IN (${inList(FINDING_CONFIDENCES)})`,
+    ),
+    statusCheck: check(
+      "findings_status_check",
+      sql`${t.status} IN (${inList(FINDING_STATUSES)})`,
+    ),
+    basisCheck: check(
+      "findings_basis_check",
+      sql`${t.savingBasis} IN (${inList(COST_BASES)})`,
+    ),
+    savingCheck: check(
+      "findings_saving_check",
+      sql`${t.estimatedSavingMicros} > 0`,
+    ),
+    windowCheck: check(
+      "findings_window_check",
+      sql`${t.windowEnd} > ${t.windowStart}`,
+    ),
+    // A finding cites at least one run: one without cited frames is not written.
+    citedCheck: check(
+      "findings_cited_check",
+      sql`cardinality(${t.citedRuns}) > 0`,
+    ),
+    // An open row has no decision; a decided row has one, and only an
+    // applied row carries the action id.
+    decisionCheck: check(
+      "findings_decision_check",
+      sql`(${t.status} = 'open') = (${t.decidedAt} IS NULL) AND (${t.status} = 'applied') = (${t.appliedActionId} IS NOT NULL)`,
     ),
   }),
 );

@@ -62,6 +62,7 @@ describe("ShellChrome", () => {
         contractRate: vi.fn(),
         invoices: vi.fn(),
       },
+      org: { members: vi.fn() },
     };
     const element: ReactElement<{ data: ShellData }> = await ShellChrome({
       ctx,
