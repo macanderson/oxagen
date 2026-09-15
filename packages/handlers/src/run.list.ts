@@ -19,12 +19,21 @@
 // Every field the store may not have recorded maps to null, never to a
 // substitute.
 //
+// The in-app agent's turns are runs too (MC spec §14.1), admitted on the
+// `chat` and `api-chat` surfaces by `openAssistantRun` in @oxagen/agent. The
+// assistant is Oxagen's: the customer talks to it and never owns or manages
+// it, so its runs are recorded and never listed as the customer's (Mockups
+// 71bc546; apps/app/ARCHITECTURE.md §1.2). The page query excludes those two
+// surfaces; `ledgerIdentityQuery` does not, because the flyout's per-turn run
+// link opens the run through `get_run`.
+//
 // Ported from apps/app/src/data/adapters/live/runs.ts and mappers/runs.ts at
 // 27b9d2520 (ARCHITECTURE.md §7.2), minus the view-model concerns that stay
 // in the app.
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
+  IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
   type RunListOutput,
@@ -38,6 +47,7 @@ import {
   inArray,
   isNull,
   lt,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -176,7 +186,7 @@ function ledgerRunsSelect(db: QueryDb) {
     );
 }
 
-/** V2 ledger runs in the workspace, newest first. */
+/** V2 ledger runs in the workspace, newest first, the in-app agent's excluded. */
 export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
   return ledgerRunsSelect(db)
     .where(
@@ -184,6 +194,7 @@ export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(runs.orgId, scope.orgId),
         eq(runs.workspaceId, scope.workspaceId),
         eq(runs.specVersion, 2),
+        notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
       ),
     )

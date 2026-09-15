@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { userPreferencesWrite } from "../user.preferences.write";
 import { userPreferencesRead } from "../user.preferences.read";
 import { userWorkspacePreferencesWrite } from "../user.workspace_preferences.write";
 import { userWorkspacePreferencesRead } from "../user.workspace_preferences.read";
@@ -116,16 +115,18 @@ export const setPreferences = defineTool({
      */
     account: z
       .object({
-        fontSize: userPreferencesWrite.input.shape.fontSize,
-        density: userPreferencesWrite.input.shape.density,
-        enterToSubmit: userPreferencesWrite.input.shape.enterToSubmit,
-        pendingPromptBehavior:
-          userPreferencesWrite.input.shape.pendingPromptBehavior,
+        fontSize: z.enum(["small", "medium", "large"]).optional(),
+        density: z.enum(["compact", "comfortable", "spacious"]).optional(),
+        enterToSubmit: z.boolean().optional(),
+        pendingPromptBehavior: z.enum(["queue", "interrupt"]).optional(),
         /** §4.5's tiers. Null clears it and falls back to workspace routing. */
-        defaultTextTier: userPreferencesWrite.input.shape.defaultTextTier,
-        defaultTextModel: userPreferencesWrite.input.shape.defaultTextModel,
-        timezone: userPreferencesWrite.input.shape.timezone,
-        language: userPreferencesWrite.input.shape.language,
+        defaultTextTier: z
+          .enum(["fast", "balanced", "precise"])
+          .nullable()
+          .optional(),
+        defaultTextModel: z.string().min(1).nullable().optional(),
+        timezone: z.string().min(1).optional(),
+        language: z.string().min(2).optional(),
       })
       .optional(),
 

@@ -7,7 +7,9 @@
 //      allows every capability for a non-enterprise org, so the handler checks.
 //   2. One UPDATE that matches the row by either id form (#2906), inside the
 //      caller's org and workspace, only while it is unexpired and unresolved.
-//   3. No row matched → HandlerError conflict `approval_expired`. The throw
+//   3. A matched row writes the approval.resolved feed row for the person
+//      whose message parked the call, in the same transaction.
+//   4. No row matched → HandlerError conflict `approval_expired`. The throw
 //      leaves through the kernel's catch, so the usage recorder never runs and
 //      the no-op is not a governed action (§3.9 item 15).
 
@@ -17,6 +19,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import { notifyResolution } from "../runtime/approval";
+import { APPROVAL_RESOLVER_ROLES } from "../runtime/approval-roles";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
   AgentApprovalResolveInput,
@@ -32,14 +35,14 @@ export async function agentApprovalResolveHandler(
   const actingUserId = await resolveActingUserId(ctx);
   await assertOrgRole(
     { ...ctx, userId: actingUserId },
-    { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    APPROVAL_RESOLVER_ROLES,
   );
 
   // `approvalId` arrives as the public id (apr_…) or the row uuid (#2906).
   // Reject expired rows atomically: WHERE expires_at > now() guards
   // against a late approver winning the race.
-  const updated = await withTenantDb((tx) =>
-    tx
+  const row = await withTenantDb(async (tx) => {
+    const [matched] = await tx
       .update(schema.approvalRequests)
       .set({
         resolution: input.decision,
@@ -56,10 +59,46 @@ export async function agentApprovalResolveHandler(
           sql`${schema.approvalRequests.resolution} IS NULL`,
         ),
       )
-      .returning({ id: schema.approvalRequests.id }),
-  );
+      .returning({
+        id: schema.approvalRequests.id,
+        messageId: schema.approvalRequests.messageId,
+        capabilityName: schema.approvalRequests.capabilityName,
+      });
+    if (!matched) return null;
 
-  const row = updated[0];
+    // MC spec §7.7 approval.resolved: the person whose message parked the
+    // call hears the decision, written with the decision. A person who
+    // resolves their own approval already knows.
+    const [requester] = await tx
+      .select({ userId: schema.conversations.userId })
+      .from(schema.messages)
+      .innerJoin(
+        schema.conversations,
+        eq(schema.conversations.id, schema.messages.conversationId),
+      )
+      .where(
+        and(
+          eq(schema.messages.id, matched.messageId),
+          eq(schema.messages.orgId, ctx.orgId),
+          eq(schema.messages.workspaceId, ctx.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (requester && requester.userId !== actingUserId) {
+      await tx.insert(schema.notifications).values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: requester.userId,
+        kind: "approval",
+        event: "approval.resolved",
+        title: `Approval ${input.decision}: ${matched.capabilityName}`,
+        body: input.note ?? null,
+        deepLink: null,
+      });
+    }
+    return matched;
+  });
+
   if (!row) {
     throw new HandlerError({
       code: "conflict",

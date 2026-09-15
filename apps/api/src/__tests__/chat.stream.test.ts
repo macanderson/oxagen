@@ -59,6 +59,28 @@ vi.mock("@oxagen/ai", async (importOriginal) => {
   };
 });
 
+// The turn asks as a person. An API key asks as its creator, read from
+// `auth.api_keys`; the one tenant read this file reaches answers that row.
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: () =>
+                Promise.resolve([
+                  { createdByUserId: "55555555-5555-4555-8555-555555555555" },
+                ]),
+            }),
+          }),
+        }),
+      }),
+  };
+});
+
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
   requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
@@ -240,7 +262,7 @@ describe("chat stream: credit admission gate", () => {
     const res = await app.fetch(
       post({
         content: "Hello",
-        conversationId: "conv-1",
+        conversationId: "66666666-6666-4666-8666-666666666666",
         activeServerIds: ["mcp-1"],
         tier: "balanced",
         model: "anthropic/claude-sonnet",

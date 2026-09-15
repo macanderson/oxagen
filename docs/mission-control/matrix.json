@@ -2555,7 +2555,7 @@
     "isNew": false,
     "inherit": {
       "name": "update_user_preferences",
-      "file": "user.preferences.write.ts",
+      "file": "user.preferences.set.ts",
       "domain": "user",
       "mode": "sync",
       "sensitivity": "low",

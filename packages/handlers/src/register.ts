@@ -242,12 +242,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .userPreferencesReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "update_user_preferences",
-    async () =>
-      (await import("./user.preferences.write"))
-        .userPreferencesWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_workspace_user_preferences",
     async () =>
       (await import("./user.workspace_preferences.read"))
@@ -1010,6 +1004,27 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./run.summarize"))
         .runSummarizeHandler as CapabilityHandlerFn,
+  );
+  // The shell (#2968): the command menu's Runs group, the sidebar counts and
+  // the account preferences. The in-app agent's own handlers live in
+  // @oxagen/agent.
+  registerHandler(
+    "list_recent_runs",
+    async () =>
+      (await import("./run.recent.list"))
+        .runRecentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_nav_counts",
+    async () =>
+      (await import("./shell.nav_counts.get"))
+        .shellNavCountsGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_preferences",
+    async () =>
+      (await import("./user.preferences.set"))
+        .userPreferencesSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_run_cost",

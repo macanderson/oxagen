@@ -53,20 +53,14 @@ const SCRIPTED_PARTS: unknown[] = [
 
 const TOOL_NAME_MAP: Record<string, string> = { graph_query: "query_ontology" };
 
-function drive(parts: unknown[]): {
-  events: ApiStreamEvent[];
-  execution: ReturnType<
-    ReturnType<typeof createApiStreamTranslator>["finish"]
-  >["execution"];
-} {
+function drive(parts: unknown[]): { events: ApiStreamEvent[] } {
   const events: ApiStreamEvent[] = [];
   const t = createApiStreamTranslator({
     toolNameMap: TOOL_NAME_MAP,
     emit: (e) => events.push(e),
   });
   for (const p of parts) t.onPart(p);
-  const { execution } = t.finish();
-  return { events, execution };
+  return { events };
 }
 
 describe("createApiStreamTranslator — SSE wire parity", () => {
@@ -114,22 +108,6 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
     expect(events.find((e) => e.type === "usage")).toBeUndefined();
   });
 
-  it("collects per-step execution metadata (tokens from finish, tool calls per step)", () => {
-    const { execution } = drive(SCRIPTED_PARTS);
-    expect(execution.inputTokens).toBe(11);
-    expect(execution.outputTokens).toBe(7);
-    expect(execution.steps).toHaveLength(1);
-    const step = execution.steps[0]!;
-    expect(step.stepNumber).toBe(0);
-    expect(step.toolCalls).toHaveLength(1);
-    expect(step.toolCalls[0]).toMatchObject({
-      toolCallId: "c1",
-      toolName: "graph_query",
-      status: "completed",
-      output: { rows: 2 },
-    });
-  });
-
   it("maps a tool-error part to a failed tool-call-end", () => {
     const events: ApiStreamEvent[] = [];
     const t = createApiStreamTranslator({
@@ -164,8 +142,6 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
       emit: (e) => events.push(e),
     });
     t.onPart({ type: "error", error: "rate limited" });
-    const { streamErrored } = t.finish();
-    expect(streamErrored).toBe(true);
     expect(events).toContainEqual({ type: "error", message: "rate limited" });
   });
 

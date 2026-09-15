@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**270 capabilities across 38 domains.**
+**276 capabilities across 40 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -81,6 +81,11 @@ Capabilities granted to an agent as a set have a page of their own:
 - [api.key.list](api.key.list.md) — List the API keys in scope with their metadata; never returns a key's secret or its hash
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
+
+## Assistant (2)
+
+- [assistant.ask](assistant.ask.md) — Take one turn with the in-app agent on stella-serve: the message appended to a conversation, the turn recorded and sealed as a run of its own, the reply returned with its run id and any governed write parked for a person
+- [assistant.engine.get](assistant.engine.get.md) — Probe the in-app agent's engine: the readiness state it reported, or unreachable after three attempts, with the host the probe was aimed at
 
 ## Asset (1)
 
@@ -294,7 +299,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
-## Run (9)
+## Run (10)
 
 - [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
 - [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
@@ -303,6 +308,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
 - [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
 - [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+- [run.recent.list](run.recent.list.md) — The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded
 - [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
 - [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds
 
@@ -331,6 +337,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.diff](schema.version.diff.md) — Structural diff of two schema versions: added/removed/changed schemas, labels, types, and properties
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
+
+## Shell (1)
+
+- [shell.nav_counts.get](shell.nav_counts.get.md) — The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist
 
 ## Spend (4)
 
@@ -373,17 +383,19 @@ Capabilities granted to an agent as a set have a page of their own:
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
 - [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
-## Tool (2)
+## Tool (4)
 
 - [tool.declaration.list](tool.declaration.list.md) — List the tool declarations registered in the active workspace with their pinned version facts
 - [tool.declaration.publish](tool.declaration.publish.md) — Publish a tool declaration into the workspace agent-asset registry, versioned and idempotent
+- [tools.load](tools.load.md) — Return the full definitions of capabilities the in-app agent may call, by name; a name outside that set is reported as unknown
+- [tools.search](tools.search.md) — Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals; at most eight rows with ids
 
 ## User (4)
 
 - [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
-- [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
+- [user.preferences.set](user.preferences.set.md) — Set the calling user's account preferences (locale, theme, timezone) as a partial write and return the whole set
 
 ## Workspace (11)
 

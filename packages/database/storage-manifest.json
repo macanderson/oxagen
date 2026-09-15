@@ -78,6 +78,16 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "ask_assistant",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -701,6 +711,16 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "get_assistant_engine",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "get_auth_alerts",
       "reads": [],
@@ -944,6 +964,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "shell",
+      "name": "get_nav_counts",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1722,6 +1752,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "list_recent_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "list_records",
       "reads": [],
@@ -1829,6 +1869,17 @@
     {
       "domain": "workspace",
       "name": "list_workspaces",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tools",
+      "name": "load_tools",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2370,6 +2421,17 @@
       "writes": []
     },
     {
+      "domain": "tools",
+      "name": "search_tools",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "chat",
       "name": "send_message",
       "reads": [],
@@ -2486,6 +2548,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "set_preferences",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2820,17 +2892,6 @@
       "writes": []
     },
     {
-      "domain": "user",
-      "name": "update_user_preferences",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "workspace",
       "name": "update_workspace_settings",
       "reads": [],
@@ -2965,7 +3026,7 @@
       "writes": []
     }
   ],
-  "contentHash": "51b3e475a2b1ddbc5e135f565028938d3632246bbd2291dbacb6993e06ad5b45",
+  "contentHash": "2e0e925ed5561ac18a372a6e9bde179eb96f52f1808077f798daca5c2844a585",
   "domains": [
     {
       "name": "agent",
@@ -14391,6 +14452,12 @@
         {
           "name": "kind",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

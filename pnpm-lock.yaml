@@ -863,6 +863,12 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/run-evidence':
+        specifier: workspace:*
+        version: link:../run-evidence
+      '@oxagen/run-ledger':
+        specifier: workspace:*
+        version: link:../run-ledger
       '@oxagen/stella-engine-client':
         specifier: workspace:*
         version: link:../stella-engine-client

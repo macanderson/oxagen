@@ -15,6 +15,9 @@ export const workspaceBudgetPolicyRead = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
+  // A settings read the in-app agent makes before every turn is never a
+  // governed action (ADR-052 exclusion 2).
+  noBillingGate: true,
   mutates: false,
   defaultEffect: "deny",
   defaultRoles: {

@@ -56,7 +56,7 @@ describe("kernel tenant scope", () => {
   });
 
   it("skips the tenant-scope wrapper for unscoped capabilities (scoped:false)", async () => {
-    // Regression: user.preferences.write is scoped:false (keyed on the user, not
+    // Regression: the account-preferences write (now set_preferences) is scoped:false (keyed on the user, not
     // an org) and is invoked with empty org/workspace ids. The kernel must NOT
     // wrap it in runInTenantScope — doing so threw TenantScopeError on the empty
     // ids and silently broke "Save preferences". The handler must run, and see

@@ -66,9 +66,17 @@ type Tenant = {
   workspaceRole: string | null;
   /** The uuid RETURNING yields when the UPDATE matched a row; null for no match. */
   matchedRowId: string | null;
+  /** The user whose conversation holds the parked message; null when no message matches. */
+  requesterUserId: string | null;
 };
 
-type Captured = { set: Record<string, unknown> | null; where: SQL | null };
+type Captured = {
+  set: Record<string, unknown> | null;
+  where: SQL | null;
+  notification: Record<string, unknown> | null;
+  /** The WHERE of the requester lookup on `chat.messages`. */
+  requesterWhere: SQL | null;
+};
 
 /**
  * Answers the role lookups by the table read and the scope the WHERE pinned
@@ -109,6 +117,14 @@ function makeTx(tenant: Tenant, captured: Captured) {
             if (table === schema.principalRoleAssignments) {
               return Promise.resolve(roleRows(lastWhere));
             }
+            if (table === schema.messages) {
+              captured.requesterWhere = lastWhere;
+              return Promise.resolve(
+                tenant.requesterUserId
+                  ? [{ userId: tenant.requesterUserId }]
+                  : [],
+              );
+            }
             throw new Error("unexpected table");
           },
         };
@@ -127,7 +143,15 @@ function makeTx(tenant: Tenant, captured: Captured) {
               return {
                 returning: () =>
                   Promise.resolve(
-                    tenant.matchedRowId ? [{ id: tenant.matchedRowId }] : [],
+                    tenant.matchedRowId
+                      ? [
+                          {
+                            id: tenant.matchedRowId,
+                            messageId: MESSAGE_UUID,
+                            capabilityName: "set_budget",
+                          },
+                        ]
+                      : [],
                   ),
               };
             },
@@ -135,9 +159,19 @@ function makeTx(tenant: Tenant, captured: Captured) {
         },
       };
     },
+    insert: (table: unknown) => {
+      if (table !== schema.notifications) throw new Error("unexpected table");
+      return {
+        values: (values: Record<string, unknown>) => {
+          captured.notification = values;
+          return Promise.resolve();
+        },
+      };
+    },
   };
 }
 
+const MESSAGE_UUID = "7c1e0a2b-3d4f-4a5b-8c6d-9e0f1a2b3c4d";
 const ROW_UUID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
 const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
 
@@ -148,9 +182,15 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     orgRole: "Owner",
     workspaceRole: null,
     matchedRowId: ROW_UUID,
+    requesterUserId: "u_asker",
     ...overrides,
   };
-  const captured: Captured = { set: null, where: null };
+  const captured: Captured = {
+    set: null,
+    where: null,
+    notification: null,
+    requesterWhere: null,
+  };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx(tenant, captured))),
   );
@@ -319,6 +359,48 @@ describe("resolve_approval — the UPDATE", () => {
     });
     expect(res).toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
   });
+
+  it("tells the person whose message parked the call, with the decision and the note", async () => {
+    const captured = setup();
+    await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied", note: "over budget" },
+      CTX,
+    );
+    expect(captured.notification).toEqual({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+      userId: "u_asker",
+      kind: "approval",
+      event: "approval.resolved",
+      title: "Approval denied: set_budget",
+      body: "over budget",
+      deepLink: null,
+    });
+    // The asker is found through the message the approval row carries, which
+    // the in-app agent's turn sets to the persisted user message's id
+    // (assistant-turn.test.ts pins that side), inside the caller's tenant.
+    const lookup = render(captured.requesterWhere!);
+    expect(lookup.sql).toMatch(/"messages"\."id" = \$/);
+    expect(lookup.sql).toMatch(/"messages"\."org_id" = \$/);
+    expect(lookup.sql).toMatch(/"messages"\."workspace_id" = \$/);
+    expect(lookup.params).toContain(MESSAGE_UUID);
+  });
+
+  it.each([
+    ["the resolver is the person who asked", { requesterUserId: "u_1" }],
+    ["no chat message backs the approval", { requesterUserId: null }],
+    ["no row matched", { matchedRowId: null }],
+  ])(
+    "writes no approval.resolved row when %s (negative)",
+    async (_why, overrides) => {
+      const captured = setup(overrides);
+      await agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ).catch(() => undefined);
+      expect(captured.notification).toBeNull();
+    },
+  );
 
   it("throws conflict approval_expired when no row matched, and notifies nobody", async () => {
     setup({ matchedRowId: null });

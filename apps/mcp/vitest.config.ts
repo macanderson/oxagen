@@ -75,7 +75,6 @@ export default defineConfig({
         "src/tools/org.create.ts",
         "src/tools/workspace.create.ts",
         "src/tools/user.preferences.read.ts",
-        "src/tools/user.preferences.write.ts",
         "src/tools/workspace.model_settings.read.ts",
         "src/tools/workspace.model_settings.write.ts",
         "src/tools/system.install.instructions.ts",

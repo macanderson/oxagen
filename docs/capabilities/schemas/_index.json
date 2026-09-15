@@ -1,5 +1,5 @@
 {
-  "generatedCount": 277,
+  "generatedCount": 283,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -80,6 +80,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ask_assistant",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -768,6 +779,17 @@
       "consumes": []
     },
     {
+      "name": "get_assistant_engine",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_auth_alerts",
       "domain": "plugin",
       "surfaces": [
@@ -1034,6 +1056,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_nav_counts",
+      "domain": "shell",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1892,6 +1925,17 @@
       "consumes": []
     },
     {
+      "name": "list_recent_runs",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_records",
       "domain": "context",
       "surfaces": [
@@ -2009,6 +2053,18 @@
     {
       "name": "list_workspaces",
       "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "load_tools",
+      "domain": "tools",
       "surfaces": [
         "api",
         "mcp",
@@ -2605,6 +2661,18 @@
       "consumes": []
     },
     {
+      "name": "search_tools",
+      "domain": "tools",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "send_message",
       "domain": "chat",
       "surfaces": [
@@ -2733,6 +2801,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_preferences",
+      "domain": "user",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3086,18 +3165,6 @@
     },
     {
       "name": "update_user_budget",
-      "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "update_user_preferences",
       "domain": "user",
       "surfaces": [
         "api",

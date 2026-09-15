@@ -1,108 +1,70 @@
 /**
  * chat.stream.test.ts
  *
- * The REST chat surface is a THIN adapter over `runGovernedTurn`
- * (@oxagen/agent). These tests lock in the adapter's contract — the published
- * ingress, the pre-turn credit gate, and that the turn reaches the governed
- * loop with the materialised tools, the governance system prompt and a stream
- * that is translated to this surface's SSE wire format — without ever touching
- * a model, a database or Postgres.
+ * The REST chat surface is the streaming adapter of `ask_assistant`: it
+ * publishes the ingress, invokes the contract through the kernel with the
+ * stream beside the invoke (`streamAssistantTurn`, @oxagen/agent), answers a
+ * refusal before the turn is prepared through the error middleware, and
+ * translates the turn's parts and output into this surface's SSE wire format.
+ * The kernel is a fake here; the handler's own tests are
+ * packages/agent/src/handlers/assistant.ask.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Hono as HonoType } from "hono";
+
+interface Stream {
+  overrides: Record<string, unknown>;
+  hooks: {
+    onTools?: (m: Record<string, string>) => void;
+    onRun?: (r: { runId: string }) => void;
+    onPart?: (p: unknown) => void;
+    onApprovalRequired?: (e: unknown) => void;
+    onBudgetNotice?: (n: unknown) => void;
+    onUsage?: (u: unknown) => void;
+  };
+  onPrepared: () => void;
+}
 
 const mocks = vi.hoisted(() => ({
-  invoke: vi.fn(),
   capabilityContext: vi.fn(),
-  materializeTools: vi.fn(),
-  runGovernedTurn: vi.fn(),
-  buildChatSystemPrompt: vi.fn(),
-  createApprovalRequest: vi.fn(),
-  waitForApproval: vi.fn(),
-  evaluateTurnCreditGate: vi.fn(),
-  createTurnBudgetGuard: vi.fn(),
-  withTenantDb: vi.fn(),
-  budgetPolicyReadHandler: vi.fn(),
-  recallWorkspaceMemoryMessage: vi.fn(),
-  loadWorkspacePromptConfigSafe: vi.fn(),
-  loadEffectiveModelDefaults: vi.fn(),
-  selectModel: vi.fn(),
-  resolveModelFundingSource: vi.fn(),
+  invoke: vi.fn(),
+  stream: null as Stream | null,
 }));
 
-vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../../lib/context", () => ({
   capabilityContext: mocks.capabilityContext,
 }));
+vi.mock("../../middleware/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 vi.mock("@oxagen/agent", () => ({
-  materializeTools: mocks.materializeTools,
-  runGovernedTurn: mocks.runGovernedTurn,
-  buildChatSystemPrompt: mocks.buildChatSystemPrompt,
-  createApprovalRequest: mocks.createApprovalRequest,
-  waitForApproval: mocks.waitForApproval,
-}));
-vi.mock("@oxagen/ai", () => ({
-  selectModel: mocks.selectModel,
-  modelIdOf: (m: unknown) => (m as { modelId: string }).modelId,
-  supportsReasoning: () => true,
-  resolvePrompt: (a: { baseline: string }) => a.baseline,
-  loadWorkspacePromptConfigSafe: mocks.loadWorkspacePromptConfigSafe,
-  loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
-  resolveModelFundingSource: mocks.resolveModelFundingSource,
-  PLATFORM_FUNDING: { fundedBy: "platform" },
-}));
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  schema: {
-    messages: {
-      role: "role",
-      content: "content",
-      conversationId: "conversationId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      createdAt: "createdAt",
-    },
-    agents: {
-      id: "id",
-      activeVersionId: "activeVersionId",
-      workspaceId: "workspaceId",
-      slug: "slug",
-    },
-    conversations: { id: "id" },
-    organizations: { id: "id", name: "name" },
-    workspaces: { id: "id", name: "name" },
+  streamAssistantTurn: (stream: Stream, invokeTurn: () => Promise<unknown>) => {
+    mocks.stream = stream;
+    return invokeTurn();
   },
 }));
-vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: <T>(_s: unknown, fn: () => Promise<T> | T) => fn(),
-}));
-vi.mock("@oxagen/billing", async () => {
-  const { z } = await import("zod");
-  return {
-    evaluateTurnCreditGate: mocks.evaluateTurnCreditGate,
-    createTurnBudgetGuard: mocks.createTurnBudgetGuard,
-    formatBudgetUsd: (n: number) => `$${n}`,
-    governedBudgetFromRead: () => null,
-    requestTurnBudgetSchema: z.object({}).passthrough(),
-    resolveEffectiveTurnBudget: (p: unknown) => p,
-    resolveTurnBudgetPolicy: (p: unknown) => p,
-    turnBudgetPolicyFromSaved: (p: unknown) => p,
-    TURN_BUDGET_OFF: { enabled: false, limitUsd: 0 },
-  };
+vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
+  return { ...real, invoke: mocks.invoke };
 });
-vi.mock("@oxagen/handlers/budget.policy.read", () => ({
-  budgetPolicyReadHandler: mocks.budgetPolicyReadHandler,
-}));
-vi.mock("./chat-memory", () => ({
-  recallWorkspaceMemoryMessage: mocks.recallWorkspaceMemoryMessage,
-}));
 
 const { Hono } = await import("hono");
+const { HandlerError } = await import("@oxagen/oxagen");
+const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+const { errorMiddleware } = await import("../../middleware/error");
 const { chatStreamRoute } = await import("./chat.stream");
+const { assistantAskRoute } = await import("./assistant.ask");
 
-// Mount exactly as apps/api does, so `org_slug` / `workspace_slug` resolve the
-// same way the real surface resolves them.
 const app = new Hono();
-app.route("/v1/:org_slug/:workspace_slug/chat/stream", chatStreamRoute);
+app.onError(errorMiddleware as never);
+app.route(
+  "/v1/:org_slug/:workspace_slug/chat/stream",
+  chatStreamRoute as unknown as HonoType,
+);
+app.route(
+  "/v1/:org_slug/:workspace_slug/assistant/ask",
+  assistantAskRoute as unknown as HonoType,
+);
 
 const CTX = {
   orgId: "11111111-1111-1111-1111-111111111111",
@@ -115,10 +77,22 @@ const CTX = {
   clientIp: null,
 };
 
-/** POST a body at the mounted route. */
-async function post(body: unknown | string): Promise<Response> {
+const OUTPUT = {
+  conversationId: "55555555-5555-4555-8555-555555555555",
+  userMessageId: "66666666-6666-4666-8666-666666666666",
+  assistantMessageId: "77777777-7777-4777-8777-777777777777",
+  runId: "arun_0123456789abcdef012345",
+  reply: "hello world",
+  parkedCard: null,
+};
+
+async function post(
+  body: unknown | string,
+  route: "chat/stream" | "assistant/ask" = "chat/stream",
+): Promise<Response> {
+  mocks.stream = null;
   return app.fetch(
-    new Request("http://localhost/v1/acme/main/chat/stream", {
+    new Request(`http://localhost/v1/acme/main/${route}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: typeof body === "string" ? body : JSON.stringify(body),
@@ -126,328 +100,266 @@ async function post(body: unknown | string): Promise<Response> {
   );
 }
 
-/**
- * Drain the SSE body. The route returns its Response as soon as the stream is
- * constructed — the turn runs inside `start()` — so a test that asserts on what
- * the turn did MUST read the body to completion first.
- */
-async function drain(res: Response): Promise<string> {
-  return res.text();
+/** The `data:` payloads in order, the terminal `done` event last. */
+async function readSse(
+  res: Response,
+): Promise<{ events: Array<Record<string, unknown>>; done: unknown }> {
+  const text = await res.text();
+  const events: Array<Record<string, unknown>> = [];
+  let done: unknown = undefined;
+  for (const block of text.split("\n\n")) {
+    if (block.startsWith("event: done")) {
+      const data = block.split("\n")[1]!.slice("data: ".length);
+      done = data === "[DONE]" ? "[DONE]" : JSON.parse(data);
+    } else if (block.startsWith("data: ")) {
+      events.push(JSON.parse(block.slice("data: ".length)));
+    }
+  }
+  return { events, done };
 }
 
-/** Drain and decode the JSON `data:` payloads (the `[DONE]` sentinel is not one). */
-async function readSse(res: Response): Promise<Array<{ type: string }>> {
-  const text = await drain(res);
-  return text
-    .split("\n")
-    .filter((l) => l.startsWith("data: ") && l !== "data: [DONE]")
-    .map((l) => JSON.parse(l.slice(6)) as { type: string });
+/** A fake kernel invoke: the turn prepared, then its hooks, then the output. */
+async function fakeTurn(): Promise<unknown> {
+  const stream = mocks.stream;
+  stream?.onPrepared();
+  stream?.hooks.onTools?.({ graph_query: "query_ontology" });
+  stream?.hooks.onRun?.({ runId: OUTPUT.runId });
+  stream?.hooks.onPart?.({ type: "start-step" });
+  stream?.hooks.onPart?.({
+    type: "tool-call",
+    toolCallId: "c1",
+    toolName: "graph_query",
+    input: { q: "x" },
+  });
+  stream?.hooks.onPart?.({ type: "text-delta", text: "hello world" });
+  stream?.hooks.onUsage?.({
+    inputTokens: 11,
+    outputTokens: 7,
+    totalTokens: 18,
+    cachedInputTokens: 0,
+  });
+  return OUTPUT;
 }
 
-function governedTurn(parts: unknown[]) {
-  return {
-    fullStream: (async function* () {
-      for (const p of parts) yield p;
-    })(),
-    finalText: Promise.resolve(""),
-    usage: Promise.resolve({
-      inputTokens: 11,
-      outputTokens: 7,
-      totalTokens: 18,
-      cachedInputTokens: 0,
-    }),
-    modelId: "anthropic/claude-sonnet-5",
-    budgeted: false,
-    maxSteps: 12,
+/** A turn that fails after it was prepared: the stream is open. */
+function failAfterPrepared(err: unknown): () => Promise<unknown> {
+  return async () => {
+    mocks.stream?.onPrepared();
+    throw err;
   };
 }
-
-/** An organisation's own key, as `resolveModelFundingSource` answers it. */
-const ORG_CREDENTIAL = {
-  provider: "openrouter" as const,
-  apiKey: "sk-or-v1-THE-SECRET-KEY",
-  digest: "d1g3st",
-};
-const ORG_FUNDING = {
-  fundedBy: "org" as const,
-  credential: ORG_CREDENTIAL,
-  keyHint: "sk-or-…-KEY",
-};
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.capabilityContext.mockReturnValue(CTX);
-  mocks.selectModel.mockReturnValue({ modelId: "anthropic/claude-sonnet-5" });
-  mocks.resolveModelFundingSource.mockResolvedValue({ fundedBy: "platform" });
-  mocks.evaluateTurnCreditGate.mockResolvedValue({ ok: true });
-  mocks.materializeTools.mockResolvedValue({
-    tools: { list_executions: {} },
-    nameMap: { list_executions: "list_executions" },
-    mutatingToolNames: [],
-  });
-  mocks.loadWorkspacePromptConfigSafe.mockResolvedValue({});
-  mocks.recallWorkspaceMemoryMessage.mockResolvedValue(null);
-  mocks.budgetPolicyReadHandler.mockResolvedValue({ enabled: false });
-  mocks.invoke.mockResolvedValue({});
-  mocks.createTurnBudgetGuard.mockReturnValue(undefined);
-  mocks.buildChatSystemPrompt.mockReturnValue("GOVERNANCE PROMPT");
-  // No conversationId in these tests ⇒ no history / persistence reads.
-  mocks.withTenantDb.mockImplementation(async () => []);
-  mocks.runGovernedTurn.mockResolvedValue(governedTurn([]));
+  mocks.invoke.mockImplementation(fakeTurn);
 });
 
 describe("POST chat/stream — ingress", () => {
   it("rejects a malformed JSON body with 400", async () => {
     const res = await post("{not json");
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Invalid JSON body" });
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("rejects an empty message with 400 and never opens a turn", async () => {
-    const res = await post({ content: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
-  });
-
-  it("rejects a message over the shared ingress cap with 400", async () => {
-    const res = await post({ content: "x".repeat(200_000) });
-    expect(res.status).toBe(400);
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+  it("rejects an empty message, an oversized one and a non-uuid conversation with 400 (negative)", async () => {
+    expect((await post({ content: "" })).status).toBe(400);
+    expect((await post({ content: "x".repeat(32_769) })).status).toBe(400);
+    expect(
+      (await post({ content: "hi", conversationId: "conv_1" })).status,
+    ).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 
-describe("POST chat/stream — credit admission gate", () => {
-  it("answers 402 and never calls the model when the org is out of credits", async () => {
-    mocks.evaluateTurnCreditGate.mockResolvedValue({
-      ok: false,
-      code: "insufficient_credits",
-      message: "Insufficient credits",
-    });
+describe("ask_assistant — the same gates on both adapters", () => {
+  it.each([
+    [
+      "a role the contract does not grant",
+      () =>
+        new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+      403,
+    ],
+    [
+      "an IAM denial",
+      () => new CapabilityError("ask_assistant", "authz_denied", "denied"),
+      403,
+    ],
+    [
+      "the assistant spend cap",
+      () =>
+        Object.assign(new Error("the assistant spend cap is reached"), {
+          code: "assistant_spend_cap",
+        }),
+      402,
+    ],
+    [
+      "a caller with no person to ask as",
+      () => new HandlerError({ code: "forbidden", reason: "no_principal" }),
+      403,
+    ],
+  ])(
+    "refuses %s before the stream opens, with the status and envelope POST /assistant/ask answers",
+    async (_why, refusal, status) => {
+      mocks.invoke.mockImplementation(async () => {
+        throw refusal();
+      });
+      const stream = await post({ content: "hi" });
+      const ask = await post({ content: "hi" }, "assistant/ask");
+      expect(stream.status).toBe(status);
+      expect(ask.status).toBe(status);
+      expect(stream.headers.get("content-type")).toContain("application/json");
+      expect(await stream.json()).toEqual(await ask.json());
+      expect(mocks.invoke.mock.calls.map((c) => c[0])).toEqual([
+        "ask_assistant",
+        "ask_assistant",
+      ]);
+    },
+  );
 
-    const res = await post({ content: "how much did we spend?" });
+  it.each([
+    ["engine_unavailable", 503],
+    ["assistant_run_not_recorded", 503],
+    ["engine_aborted", 409],
+  ] as const)(
+    "POST /assistant/ask answers the turn failure %s with %i and its code, never a 500",
+    async (code, status) => {
+      mocks.invoke.mockRejectedValueOnce(
+        Object.assign(new Error(`turn failed: ${code}`), { code }),
+      );
+      const res = await post({ content: "hi" }, "assistant/ask");
+      expect(res.status).toBe(status);
+      expect(await res.json()).toMatchObject({
+        error: { code, message: `turn failed: ${code}` },
+      });
+    },
+  );
+});
 
-    expect(res.status).toBe(402);
-    expect(await res.json()).toEqual({
-      error: { code: "insufficient_credits", message: "Insufficient credits" },
-    });
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
-    expect(mocks.materializeTools).not.toHaveBeenCalled();
-  });
-
-  it("answers 402 for a suspended org", async () => {
-    mocks.evaluateTurnCreditGate.mockResolvedValue({
-      ok: false,
-      code: "billing_suspended",
-      message: "Billing suspended",
-    });
-    const res = await post({ content: "hi" });
-    expect(res.status).toBe(402);
-  });
-
-  it("answers 402 naming the cap when a platform-funded org is over its assistant spend cap", async () => {
-    mocks.evaluateTurnCreditGate.mockResolvedValue({
-      ok: false,
-      code: "assistant_spend_cap",
-      message: "Assistant spend cap of $20.00 reached",
-    });
-    const res = await post({ content: "hi" });
-    expect(res.status).toBe(402);
-    expect(await res.json()).toEqual({
-      error: {
-        code: "assistant_spend_cap",
-        message: "Assistant spend cap of $20.00 reached",
+describe("POST chat/stream — the turn on the wire", () => {
+  it("invokes ask_assistant through the kernel with the contract's input, and carries the overrides beside it", async () => {
+    await post({
+      content: "hi",
+      pageContext: { route: "fleet", orgSlug: "acme", workspaceSlug: "main" },
+      tier: "fast",
+    }).then((r) => r.text());
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "ask_assistant",
+      {
+        conversationId: null,
+        content: "hi",
+        pageContext: {
+          route: "fleet",
+          orgSlug: "acme",
+          workspaceSlug: "main",
+          entityId: null,
+        },
       },
-    });
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST chat/stream — who pays for the tokens (ADR-053)", () => {
-  it("with a stored key: the gate hears org funding, the model is built on the key, the turn is org-funded", async () => {
-    mocks.resolveModelFundingSource.mockResolvedValue(ORG_FUNDING);
-
-    await drain(await post({ content: "hi" }));
-
-    expect(mocks.resolveModelFundingSource).toHaveBeenCalledWith(CTX.orgId);
-    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith(CTX.orgId, {
-      fundedBy: "org",
-    });
-    expect(mocks.selectModel).toHaveBeenCalledWith(
-      expect.objectContaining({ credential: ORG_CREDENTIAL }),
+      CTX,
+      { surface: "api" },
     );
-    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
-    expect(input["fundedBy"]).toBe("org");
+    expect(mocks.stream!.overrides).toEqual({
+      activeServerIds: [],
+      tier: "fast",
+      model: null,
+      effort: null,
+      budget: null,
+    });
   });
 
-  it("resolves funding BEFORE the gate decides, so the cap can be scoped to platform-funded turns", async () => {
-    const order: string[] = [];
-    mocks.resolveModelFundingSource.mockImplementation(async () => {
-      order.push("funding");
-      return ORG_FUNDING;
-    });
-    mocks.evaluateTurnCreditGate.mockImplementation(async () => {
-      order.push("gate");
-      return { ok: true };
-    });
-
-    await drain(await post({ content: "hi" }));
-
-    expect(order).toEqual(["funding", "gate"]);
-  });
-
-  it("with no stored key: platform funding, and no credential reaches selectModel", async () => {
-    await drain(await post({ content: "hi" }));
-
-    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith(CTX.orgId, {
-      fundedBy: "platform",
-    });
-    expect(mocks.selectModel).toHaveBeenCalledTimes(1);
-    expect(mocks.selectModel.mock.calls[0]![0]).not.toHaveProperty(
-      "credential",
-    );
-    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
-    expect(input["fundedBy"]).toBe("platform");
-  });
-
-  it("a failed funding read fails the turn before the gate, the model or the loop", async () => {
-    // Never answered as "platform": that would move an organisation with its
-    // own key onto Oxagen's billed key for the length of a database outage.
-    // Hono's default handler answers the throw with a 500 here; the real app
-    // routes it through errorMiddleware (apps/api/src/app.ts).
-    mocks.resolveModelFundingSource.mockRejectedValue(new Error("db down"));
-
+  it("streams the run, the translated parts, one usage event, then the output as the terminal", async () => {
     const res = await post({ content: "hi" });
-
-    expect(res.status).toBe(500);
-    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
-    expect(mocks.selectModel).not.toHaveBeenCalled();
-    expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
-  });
-
-  it("logs the key hint for an org-funded turn and never the key", async () => {
-    mocks.resolveModelFundingSource.mockResolvedValue(ORG_FUNDING);
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
-
-    await drain(await post({ content: "hi" }));
-
-    const modelLog = info.mock.calls.find(
-      (c) => c[0] === "[chat.stream] turn model",
-    );
-    expect(modelLog?.[1]).toMatchObject({
-      fundedBy: "org",
-      keyHint: ORG_FUNDING.keyHint,
-    });
-    expect(JSON.stringify(info.mock.calls)).not.toContain(
-      ORG_CREDENTIAL.apiKey,
-    );
-    info.mockRestore();
-  });
-});
-
-describe("POST chat/stream — the governed turn", () => {
-  it("streams SSE and terminates with the [DONE] sentinel", async () => {
-    mocks.runGovernedTurn.mockResolvedValue(
-      governedTurn([{ type: "text-delta", text: "42 runs" }]),
-    );
-
-    const res = await post({ content: "how many runs?" });
-
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/event-stream");
-    const body = await res.text();
-    expect(body).toContain('data: {"type":"text","text":"42 runs"}');
-    expect(body.trimEnd().endsWith("event: done\ndata: [DONE]")).toBe(true);
-  });
-
-  it("hands runGovernedTurn the materialised tools and the governance prompt", async () => {
-    await drain(await post({ content: "what is pending approval?" }));
-
-    expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
-    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
-    expect(Object.keys(input["tools"] as object)).toEqual(["list_executions"]);
-    expect(input["system"]).toBe("GOVERNANCE PROMPT");
-    expect(input["instruction"]).toBe("what is pending approval?");
-    expect(input["telemetry"]).toEqual({
-      orgId: CTX.orgId,
-      workspaceId: CTX.workspaceId,
-      surface: "api",
-      messageId: CTX.requestId,
-    });
-  });
-
-  it("names the URL scope in the system prompt it builds", async () => {
-    await drain(await post({ content: "hi" }));
-    expect(mocks.buildChatSystemPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "main" }),
-    );
-  });
-
-  it("injects recalled workspace memory as a per-turn context message", async () => {
-    mocks.recallWorkspaceMemoryMessage.mockResolvedValue({
-      role: "user",
-      content: "## Recalled workspace memory",
-    });
-
-    await drain(await post({ content: "what did we learn?" }));
-
-    const input = mocks.runGovernedTurn.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
-    expect(input["contextMessages"]).toEqual([
-      { role: "user", content: "## Recalled workspace memory" },
+    const { events, done } = await readSse(res);
+    expect(events.map((e) => e.type)).toEqual([
+      "run",
+      "step-start",
+      "tool-call-start",
+      "text",
+      "usage",
     ]);
-  });
-
-  it("emits ONE aggregated usage event from the turn's own totals", async () => {
-    const events = (await readSse(await post({ content: "hi" }))) as Array<{
-      type: string;
-      usage?: unknown;
-    }>;
-    const usageEvents = events.filter((e) => e.type === "usage");
-    expect(usageEvents).toHaveLength(1);
-    expect(usageEvents[0]!.usage).toEqual({
-      promptTokens: 11,
-      completionTokens: 7,
-      totalTokens: 18,
+    expect(events[0]).toEqual({ type: "run", runId: OUTPUT.runId });
+    // The translator names the call by the capability the turn mapped it to.
+    expect(events[2]).toMatchObject({ capability: "query_ontology" });
+    expect(events.at(-1)).toEqual({
+      type: "usage",
+      usage: { promptTokens: 11, completionTokens: 7, totalTokens: 18 },
     });
+    expect(done).toEqual(OUTPUT);
   });
 
-  it("surfaces a turn failure as a typed error event, still terminating the stream", async () => {
-    mocks.runGovernedTurn.mockRejectedValue(new Error("gateway unreachable"));
-
-    const res = await post({ content: "hi" });
-    const body = await res.text();
-
-    expect(res.status).toBe(200);
-    expect(body).toContain('"type":"error"');
-    expect(body).toContain("gateway unreachable");
-    expect(body).toContain("[DONE]");
+  it("forwards approval and budget notices as their SSE events", async () => {
+    const parked = {
+      approvalId: "apr_1",
+      capability: "set_budget",
+      expiresAt: "2026-09-14T10:05:00.000Z",
+    };
+    mocks.invoke.mockImplementationOnce(async () => {
+      mocks.stream!.onPrepared();
+      mocks.stream!.hooks.onApprovalRequired?.({
+        ...parked,
+        inputPreview: { usd: 5 },
+        riskLevel: "high",
+      });
+      mocks.stream!.hooks.onBudgetNotice?.({
+        state: "within_grace",
+        costUsd: 1.2,
+        limitUsd: 1,
+        mode: "grace",
+      });
+      return { ...OUTPUT, parkedCard: parked };
+    });
+    const { events, done } = await readSse(await post({ content: "hi" }));
+    expect(events[0]).toMatchObject({
+      type: "approval-required",
+      approvalId: "apr_1",
+      capability: "set_budget",
+    });
+    expect(events[1]).toEqual({
+      type: "budget-notice",
+      state: "within_grace",
+      costUsd: 1.2,
+      limitUsd: 1,
+      mode: "grace",
+    });
+    expect((done as { parkedCard: unknown }).parkedCard).toEqual(parked);
   });
 
-  it("forwards a per-turn budget guard only when one is configured", async () => {
-    await drain(await post({ content: "hi" }));
-    expect(
-      mocks.runGovernedTurn.mock.calls[0]![0] as Record<string, unknown>,
-    ).not.toHaveProperty("budgetGuard");
-
-    const guard = vi.fn();
-    mocks.createTurnBudgetGuard.mockReturnValue(guard);
-    await drain(await post({ content: "hi" }));
-    expect(
-      (mocks.runGovernedTurn.mock.calls[1]![0] as Record<string, unknown>)[
-        "budgetGuard"
-      ],
-    ).toBe(guard);
-  });
+  it.each([
+    [
+      "the engine unavailable",
+      Object.assign(new Error("the assistant engine is unavailable"), {
+        code: "engine_unavailable",
+      }),
+      "engine_unavailable",
+    ],
+    [
+      "an unrecorded run",
+      Object.assign(new Error("could not be recorded"), {
+        code: "assistant_run_not_recorded",
+      }),
+      "assistant_run_not_recorded",
+    ],
+    [
+      "an unknown conversation",
+      new HandlerError({ code: "not_found", reason: "conversation_not_found" }),
+      "conversation_not_found",
+    ],
+    [
+      "an error with no stable code",
+      Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+      undefined,
+    ],
+  ])(
+    "surfaces %s after the stream opened as a typed error, and still terminates (negative)",
+    async (_why, err, code) => {
+      mocks.invoke.mockImplementationOnce(failAfterPrepared(err));
+      const { events, done } = await readSse(await post({ content: "hi" }));
+      expect(events).toEqual([
+        { type: "error", message: (err as Error).message, code },
+      ]);
+      expect(done).toBe("[DONE]");
+    },
+  );
 });

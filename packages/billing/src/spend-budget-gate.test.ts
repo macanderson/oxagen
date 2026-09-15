@@ -7,6 +7,7 @@ vi.mock("./spend-counter", () => ({
 
 import {
   assertWithinSpendBudget,
+  budgetThresholdNotificationRows,
   clearSpendBudgetCaches,
   getSpendBudgetStatuses,
   invalidateSpendBudgetScope,
@@ -169,6 +170,47 @@ describe("assertWithinSpendBudget — threshold notifications", () => {
     await assertWithinSpendBudget(args, d);
     await new Promise((r) => setTimeout(r, 0));
     expect(claimThreshold).not.toHaveBeenCalled();
+  });
+});
+
+describe("budgetThresholdNotificationRows", () => {
+  const verdict = (ratio: number, reachedThreshold: 80 | 100) => ({
+    state:
+      reachedThreshold >= 100
+        ? ("exceeded" as const)
+        : ("threshold_80" as const),
+    overLimit: reachedThreshold >= 100,
+    ratio,
+    reachedThreshold,
+    spentMicros: 10_200_000n,
+    limitMicros: 10_000_000n,
+  });
+
+  it("reports budget.breached to every admin when the ceiling is reached", () => {
+    const rows = budgetThresholdNotificationRows(
+      { budget: budgetRow(), threshold: 100, verdict: verdict(1.02, 100) },
+      ["u_owner", "u_billing"],
+    );
+    expect(rows.map((r) => r.userId)).toEqual(["u_owner", "u_billing"]);
+    for (const r of rows) {
+      expect(r).toMatchObject({
+        orgId: "org-1",
+        kind: "security",
+        event: "budget.breached",
+        title: "Spend budget reached for this organization",
+      });
+    }
+  });
+
+  it("reports no event for a warning below the ceiling (negative)", () => {
+    const [row] = budgetThresholdNotificationRows(
+      { budget: budgetRow(), threshold: 80, verdict: verdict(0.85, 80) },
+      ["u_owner"],
+    );
+    expect(row).toMatchObject({
+      event: null,
+      title: "Spend budget at 80% for this organization",
+    });
   });
 });
 

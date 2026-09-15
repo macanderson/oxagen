@@ -78,6 +78,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   revoke_agent_role: () => import("./agent.role.revoke"),
   list_agent_roles: () => import("./agent.role.list"),
   get_agent_role: () => import("./agent.role.get"),
+  // The in-app agent on stella-serve (#2968, ADR-053): the turn, the engine
+  // probe, and the two belt meta-tools outside a turn.
+  ask_assistant: () => import("./assistant.ask"),
+  get_assistant_engine: () => import("./assistant.engine.get"),
+  search_tools: () => import("./tools.search"),
+  load_tools: () => import("./tools.load"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

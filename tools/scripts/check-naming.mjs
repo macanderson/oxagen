@@ -130,6 +130,8 @@ const ACTIONS = new Set([
   "pin",
   "purchase",
   "load",
+  // the in-app agent's turn (MC spec App. E, #2968)
+  "ask",
   "map",
   "diff",
   "patch",

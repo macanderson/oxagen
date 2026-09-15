@@ -25,6 +25,7 @@ import {
   governedActionUnits,
   invoke,
   registerHandler,
+  runOutsideGovernedAction,
   setUsageRecorder,
   type GovernedActionRecord,
 } from "./kernel";
@@ -151,6 +152,30 @@ describe("kernel governed-action usage recorder", () => {
     expect(recorded[0]?.capability).toBe("accrual_outer");
   });
 
+  it("bills each invoke started outside the governed-action frame as a top-level action", async () => {
+    // The in-app agent's turn (`ask_assistant`) is not a governed action; each
+    // tool call it answers is one (ADR-053 §1), whichever adapter invoked it.
+    defineCap({ name: "accrual_turn", noBillingGate: true });
+    defineCap({ name: "accrual_tool" });
+    registerHandler("accrual_tool", async () => async () => ({ tool: true }));
+    registerHandler("accrual_turn", async () => async () => {
+      await runOutsideGovernedAction(async () => {
+        await invoke("accrual_tool", {}, ctx, { surface: "api" });
+        await invoke("accrual_tool", {}, ctx, { surface: "api" });
+      });
+      // Back inside the turn's frame: nested, so not billed (negative).
+      await invoke("accrual_tool", {}, ctx, { surface: "api" });
+      return { turn: true };
+    });
+
+    await invoke("accrual_turn", {}, ctx, { surface: "api" });
+
+    expect(recorded.map((r) => r.capability)).toEqual([
+      "accrual_tool",
+      "accrual_tool",
+    ]);
+  });
+
   it("bills two sequential top-level calls twice — nesting is per call tree, not per process", async () => {
     defineCap({ name: "accrual_seq" });
     registerHandler("accrual_seq", async () => async () => ({ ok: true }));
@@ -168,10 +193,9 @@ describe("kernel governed-action usage recorder", () => {
     // charged the customer twice for one action.
     defineCap({ name: "accrual_unscoped_outer" });
     defineCap({ name: "accrual_unscoped_inner" });
-    registerHandler(
-      "accrual_unscoped_inner",
-      async () => async () => ({ inner: true }),
-    );
+    registerHandler("accrual_unscoped_inner", async () => async () => ({
+      inner: true,
+    }));
     registerHandler("accrual_unscoped_outer", async () => async () => {
       await invoke("accrual_unscoped_inner", {}, ctx, { surface: "api" });
       return { outer: true };
@@ -257,9 +281,14 @@ describe("kernel governed-action usage recorder", () => {
     defineCap({ name: "accrual_no_org" });
     registerHandler("accrual_no_org", async () => async () => ({ ok: true }));
 
-    await invoke("accrual_no_org", {}, { ...ctx, orgId: "" }, {
-      surface: "api",
-    });
+    await invoke(
+      "accrual_no_org",
+      {},
+      { ...ctx, orgId: "" },
+      {
+        surface: "api",
+      },
+    );
 
     expect(recorder).not.toHaveBeenCalled();
   });
@@ -271,10 +300,9 @@ describe("kernel governed-action usage recorder", () => {
     // Failing now would trade a missed charge for a broken request.
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     defineCap({ name: "accrual_recorder_throws" });
-    registerHandler(
-      "accrual_recorder_throws",
-      async () => async () => ({ ok: true }),
-    );
+    registerHandler("accrual_recorder_throws", async () => async () => ({
+      ok: true,
+    }));
     clearUsageRecorder();
     setUsageRecorder(() => {
       throw new Error("ledger is down");
@@ -339,7 +367,10 @@ describe("governedActionUnits", () => {
     // A zero or negative divisor would make the charge infinite or negative.
     for (const unitsPerAction of [0, -1, Number.NaN, 0.5]) {
       expect(
-        governedActionUnits({ unitsFrom: "rows", unitsPerAction }, { rows: 500 }),
+        governedActionUnits(
+          { unitsFrom: "rows", unitsPerAction },
+          { rows: 500 },
+        ),
       ).toBe(1);
     }
   });
