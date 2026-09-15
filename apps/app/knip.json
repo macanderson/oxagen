@@ -13,7 +13,8 @@
   "ignore": [
     "src/test/**",
     "src/**/*.builders.ts",
-    "src/server/viewer.testing.ts"
+    "src/server/viewer.testing.ts",
+    "src/**/*.type-test.ts"
   ],
   "preprocessor": "./knip.preprocessor.ts"
 }

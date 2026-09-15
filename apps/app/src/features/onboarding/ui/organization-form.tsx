@@ -2,7 +2,8 @@
 // Create an organization (mockup `obOrg` @ mc-baseline-w1): name it, its
 // address and immutable namespace, and the first workspace. The address and
 // namespace follow the name until someone edits them by hand. A created
-// organization lands on its first workspace's Fleet page.
+// organization lands on its first workspace's Fleet page, or on `destination`
+// when the page was given one (the CLI consent page).
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -15,6 +16,7 @@ import {
   OrganizationForm as Schema,
   type OrganizationField,
   type OrgFormErrorKey,
+  organizationFieldErrors,
   suggestNamespace,
   toSlug,
 } from "../org-form";
@@ -23,8 +25,11 @@ type Values = Record<OrganizationField, string>;
 
 export function OrganizationForm({
   initialName = "",
+  destination,
 }: {
   initialName?: string;
+  /** A same-origin path, already sanitised by the screen, to go to instead of the Fleet page. */
+  destination?: string;
 }) {
   const t = useTranslations("onboarding");
   const router = useRouter();
@@ -67,12 +72,7 @@ export function OrganizationForm({
     setFailed(false);
     const parsed = Schema.safeParse(values);
     if (!parsed.success) {
-      const next: Partial<Record<OrganizationField, OrgFormErrorKey>> = {};
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0] as OrganizationField;
-        next[field] ??= issue.message as OrgFormErrorKey;
-      }
-      setErrors(next);
+      setErrors(organizationFieldErrors(parsed.error.issues));
       return;
     }
     setErrors({});
@@ -80,7 +80,7 @@ export function OrganizationForm({
     try {
       const result = await createOrganizationAction(values);
       if (result.ok) {
-        router.push(result.to);
+        router.push(destination ?? result.to);
         return;
       }
       setErrors(result.fields ?? {});

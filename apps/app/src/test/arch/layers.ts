@@ -140,12 +140,22 @@ const ALLOWED: Record<
 export const testOnlyTarget = (target: string): boolean =>
   /\.builders$/.test(target) || target === "server/viewer.testing";
 
+/** INV-02: the module that exports the MINT token. */
+export const MINT_MODULE = "server/viewer-mint";
+
+/** INV-02: the only modules that may hold the MINT token, test files included. */
+export const MINT_IMPORTERS: readonly string[] = [
+  "server/viewer",
+  "server/viewer.testing",
+];
+
 /** INV-07: does the §2 row of `from` admit an internal edge to `target`? */
 export function layerAllows(
   from: Importer,
   target: string,
   edge: ImportEdge,
 ): boolean {
+  if (target === MINT_MODULE) return MINT_IMPORTERS.includes(from.file);
   if (testOnlyTarget(target)) return false;
   const layer = layerOf(from.file);
   return layer !== null && ALLOWED[layer](from, target, edge);

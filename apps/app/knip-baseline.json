@@ -13,7 +13,6 @@
   "exports src/features/auth/github-setup.ts NO_ORGANIZATION_TARGET",
   "exports src/features/auth/github-setup.ts repositoriesPath",
   "exports src/features/auth/github-setup.ts sourcesPath",
-  "exports src/features/auth/index.ts DEFAULT_NEXT",
   "exports src/features/auth/invitations.ts INVITATION_NOT_FOUND",
   "exports src/features/auth/safe-next.ts MAX_NEXT_LENGTH",
   "exports src/features/auth/schemas.ts PASSWORD_MAX",
@@ -35,8 +34,6 @@
   "exports src/server/errors.ts CAPABILITY_ERROR_STATUS",
   "exports src/server/errors.ts toActionFailure",
   "exports src/server/mfa-gate.ts MFA_PRIVILEGED_ROLES",
-  "exports src/server/scope.ts ORG_ONLY_WS",
-  "exports src/server/scope.ts requestUrl",
   "exports src/server/session.ts readSession",
   "exports src/server/viewer-resolution.ts SLUG_PATTERN",
   "exports src/server/viewer-resolution.ts isValidSlug",
@@ -56,6 +53,5 @@
   "types src/features/onboarding/org-form.ts OrganizationFormInput",
   "types src/features/shell/index.ts MobileNavProps",
   "types src/features/shell/mobile-nav.tsx MobileNavProps",
-  "types src/server/errors.ts ActionFailure",
-  "types src/server/scope.ts Scope"
+  "types src/server/errors.ts ActionFailure"
 ]

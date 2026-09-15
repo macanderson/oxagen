@@ -3,9 +3,8 @@
 // for the invariants. Approve mints a single-use code bound to the chosen scope
 // and the CLI's PKCE challenge, then sends the browser to the loopback listener.
 import { redirect } from "next/navigation";
+import { requireUser } from "@/server/viewer";
 import { authorizeParamErrors, loadCliScopes } from "./cli-authorize";
-import { ORG_ONLY_WS } from "@/server/tenant-scope";
-import { getAuthUser } from "./session";
 
 export type CliErrorKey =
   | "notMember"
@@ -25,8 +24,7 @@ export async function approveCliAuth(
   _prev: CliActionState,
   form: FormData,
 ): Promise<CliActionState> {
-  const user = await getAuthUser();
-  if (!user) redirect("/login");
+  const { userId } = await requireUser();
 
   const params = {
     redirectUri: field(form, "redirect_uri"),
@@ -42,7 +40,7 @@ export async function approveCliAuth(
 
   // Resolve the selection against the user's own memberships: an id the client
   // did not get from us, or a workspace they are not a member of, never resolves.
-  const scopes = await loadCliScopes(user.id);
+  const scopes = await loadCliScopes(userId);
   const org = scopes.find((o) => o.slug === orgSlug);
   const workspace = org?.workspaces.find((w) => w.slug === workspaceSlug);
   if (!org || !workspace) return { error: "notMember" };
@@ -55,16 +53,18 @@ export async function approveCliAuth(
         import("@oxagen/tenancy"),
         import("@oxagen/auth/cli-auth"),
       ]);
+    // An organization role assignment carries a null workspace_id, which the
+    // IAM tables' RLS admits under any workspace of the organization.
     const canManage = await runInTenantScope(
-      { orgId: org.id, workspaceId: ORG_ONLY_WS },
-      () => actorCanManageApiKeys(org.id, user.id),
+      { orgId: org.id, workspaceId: workspace.id },
+      () => actorCanManageApiKeys(org.id, userId),
     );
     if (!canManage) return { error: "notPermitted" };
     code = cliAuth.generateCliAuthCode();
     await cliAuth.createCliAuthCode(
       code,
       {
-        userId: user.id,
+        userId,
         orgId: org.id,
         workspaceId: workspace.id,
         orgSlug,

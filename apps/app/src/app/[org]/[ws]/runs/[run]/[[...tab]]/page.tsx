@@ -1,8 +1,13 @@
 import { getTranslations } from "next-intl/server";
+import { requireViewer } from "@/server/viewer";
 import { PageHeader } from "@/ui/page-header";
 
 // The title alone until WL-35 builds the Run page (ARCHITECTURE.md §8).
-export default async function RunPage() {
+export default async function RunPage({
+  params,
+}: PageProps<"/[org]/[ws]/runs/[run]/[[...tab]]">) {
+  const { org, ws } = await params;
+  await requireViewer(org, ws);
   const t = await getTranslations("routes");
   return (
     <main
