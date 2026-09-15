@@ -92,8 +92,6 @@ export const routes = {
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),
-  run: (org: string, ws: string, run: string): SafePath =>
-    pathOf(org, ws, "runs", run),
   /** Billing; `cursor` opens a later page of its invoices. */
   billing: (org: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, "billing"), { cursor: q?.cursor }),

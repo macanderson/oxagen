@@ -37,6 +37,8 @@ const refuse = () => Promise.reject(new Error("not a Fleet spend read"));
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: { context: refuse },
+  runs: { list: refuse },
+  approvals: { pending: refuse },
   billing: {
     plan: refuse,
     bucket: refuse,
