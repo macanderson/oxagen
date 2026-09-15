@@ -187,6 +187,13 @@ export function field(o) {
         (cx - o.focus.x) / o.clear.x,
         (cy - o.focus.y) / o.clear.y,
       );
+      // the gold cell is picked from every position in a band beside the
+      // clearing, drawn or not, so every seed has exactly one; the band
+      // sits in the middle of the picture, where every crop and every mask
+      // a page lays over it still shows the cell whole
+      if (d > 1.1 && d < 1.75 && u > 0.5 && u < 0.97 && v > 0.2 && v < 0.62) {
+        candidates.push([cx, cy]);
+      }
       // the clearing, with a ragged edge
       if (d < 1 + 0.3 * wv) continue;
       const hush = unit((quiet - u) / quiet);
@@ -195,7 +202,6 @@ export function field(o) {
       const near = unit((1.6 - d) / 0.6);
       const points = hexPoints(cx, cy, rx, ry);
       if (d > 1.15 && hush < 0.5) {
-        if (d < 1.6 && u > 0.5) candidates.push(points);
         if (wv > 0.76) {
           blocks[wv > 0.87 ? t.rule : t.line].push(points);
           continue;
@@ -218,10 +224,10 @@ export function field(o) {
   for (const [fill, cells] of Object.entries(blocks)) {
     out.push(`<g fill="${fill}" stroke="none">${polys(cells)}</g>`);
   }
-  if (candidates.length) {
-    const gold = candidates[Math.floor(rand() * candidates.length)];
-    out.push(`<polygon points="${gold}" fill="${t.gold}" stroke="none"/>`);
-  }
+  const [gx, gy] = candidates[Math.floor(rand() * candidates.length)];
+  out.push(
+    `<polygon points="${hexPoints(gx, gy, rx, ry)}" fill="${t.gold}" stroke="none"/>`,
+  );
   return out.join("");
 }
 

@@ -221,21 +221,31 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 68% 50%;
+  object-position: 70% 50%;
+  /* the fade is measured from the page's centre, where the reading column
+     is, so the words keep the same clear ink at every viewport width */
   -webkit-mask-image:
-    linear-gradient(to right, transparent 4%, #000 46%),
-    linear-gradient(to top, transparent 0, #000 42%);
+    linear-gradient(
+      to right,
+      transparent calc(50% - 80px),
+      #000 calc(50% + 260px)
+    ),
+    linear-gradient(to top, transparent 0, #000 40%);
   mask-image:
-    linear-gradient(to right, transparent 4%, #000 46%),
-    linear-gradient(to top, transparent 0, #000 42%);
+    linear-gradient(
+      to right,
+      transparent calc(50% - 80px),
+      #000 calc(50% + 260px)
+    ),
+    linear-gradient(to top, transparent 0, #000 40%);
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }
 @media (max-width: 720px) {
   .hero-art img {
-    object-position: 62% 0;
-    -webkit-mask-image: linear-gradient(to top, transparent 28%, #000 78%);
-    mask-image: linear-gradient(to top, transparent 28%, #000 78%);
+    object-position: 76% 0;
+    -webkit-mask-image: linear-gradient(to top, transparent 24%, #000 66%);
+    mask-image: linear-gradient(to top, transparent 24%, #000 66%);
   }
 }
 
@@ -243,11 +253,11 @@
 .pillar-hero {
   display: flex;
   align-items: flex-end;
-  min-height: clamp(420px, 56vh, 620px);
-  padding: calc(var(--nav-h) + 96px) 0 56px;
+  min-height: clamp(480px, 66vh, 680px);
+  padding: calc(var(--nav-h) + 112px) 0 56px;
 }
 .pillar-hero-copy {
-  max-width: 640px;
+  max-width: 600px;
 }
 .pillar-hero-copy h1 {
   font-size: clamp(32px, 4.6vw, 52px);
@@ -310,7 +320,7 @@
   padding: calc(var(--nav-h) + 112px) 0 64px;
 }
 .post-head-in {
-  max-width: 680px;
+  max-width: 640px;
 }
 .post-head h1 {
   font-size: clamp(30px, 4.4vw, 50px);

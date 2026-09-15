@@ -29,8 +29,8 @@ export const THUMB = { w: 960, h: 480 };
  * centre, so a page can set its title over the quiet left and let the
  * picture come through on the right. The clearing is the drawing's box.
  */
-export const FOCUS = { x: 0.68, y: 0.5 };
-export const CLEAR = { x: 0.27, y: 0.34 };
+export const FOCUS = { x: 0.7, y: 0.5 };
+export const CLEAR = { x: 0.26, y: 0.34 };
 export const OG = { w: 1200, h: 630 };
 
 const WORDMARK_FILE = path.resolve(

@@ -178,22 +178,30 @@ are the YAML.**
   ```
 
 - **Images are generated, not stored.** For every post and pillar the build
-  draws a banner (1600×900), a thumbnail (800×450) and a share card
+  draws a banner (2400×1200), a thumbnail (960×480) and a share card
   (1200×630) into `dist/blog/<slug>/`. Every image is on ink, whatever the
   viewer's system prefers: the site is ink, and an ink image reads on a
-  paper ground where a paper image on paper would wash out. The art is the
-  site's own construction — the house honeycomb (`oxagen-house-brand`'s
-  cell) tiled faintly across the ink the way the hero's `.tex-hex` is, and
-  one raised panel with the terminal's title bar (two dim dots, one gold)
-  holding one of seven line drawings — a knowledge graph, an ontology, an
-  agent's loop, a tool call, a policy gate, an audit ledger, a meter — chosen
-  by the post's slug and fixed per pillar with `treatment:`. Everything is a
-  pure function of slug and text (`scripts/lib/images.mjs`), so a rebuild
-  reproduces every pixel and nothing binary is committed. The share card
-  carries the title, the description, the wordmark and the post's date and
-  reading time, set in Space Grotesk as outlines, so the build needs no
-  fonts or tools installed beyond `pnpm install`.
-
+  paper ground where a paper image on paper would wash out. The banner is a
+  full-bleed field built from the site's own construction: the house
+  honeycomb (`oxagen-house-brand`'s cell) as a weather of hairline rings and
+  flat blocks that clusters differently for every slug, quiet on the left
+  and gathered on the right, with exactly one cell in gold; hairline halo
+  rings in the cell's own shape stepping out from a focus right of centre;
+  and in the clearing at that focus one of seven line drawings — a
+  knowledge graph, an ontology, an agent's loop, a tool call, a policy
+  gate, an audit ledger, a meter — chosen by the post's slug and fixed per
+  pillar with `treatment:`. The post and pillar pages lay this picture
+  behind the title (`.hero-field` in `assets/blog.css`): it fills the
+  section edge to edge and a mask, measured from the page's centre, fades
+  it out under the words and into the body below, so the prose reads on
+  plain ink at every width and the drawing comes through beside it. The
+  share card keeps a raised panel with the terminal's title bar, since it
+  carries the title itself. Everything is a pure function of slug and text
+  (`scripts/lib/images.mjs`), so a rebuild reproduces every pixel and
+  nothing binary is committed. The share card carries the title, the
+  description, the wordmark and the post's date and reading time, set in
+  Space Grotesk as outlines, so the build needs no fonts or tools installed
+  beyond `pnpm install`.
 - The body is Markdown with GFM (tables, footnotes) and two components:
   `<Callout kind="note|warn" title="…">` and `<Figure src alt caption />`.
   Citations are GFM footnotes (`claim.[^3]` … `[^3]: Authors (Year). *Title*.
