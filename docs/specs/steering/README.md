@@ -55,7 +55,7 @@ force = "should"
   the branch is `context/<lineage>`.
 - `set_id` is the repository's full name with `/` as `.`.
 - `origin` is `user` for a proposal a person raised and `inferred` for one an
-  agent raised over an API key (the proposal has no `created_by_user_id`),
+  agent raised over an API key (the proposal has no `created_by_id`),
   whoever opens the PR.
 - Only members Stella's `Record` struct carries enter the file. Stella
   re-serializes the typed struct before it recomputes the hash and would drop

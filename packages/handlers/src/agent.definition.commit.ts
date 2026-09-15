@@ -283,7 +283,7 @@ async function insertVersionRow(
           isPublished: false,
           checksum: null,
           config: latest?.config ?? {},
-          createdByUserId: row.userId,
+          createdById: row.userId,
           definitionPath: row.path,
           definitionDigest: row.digest,
           definitionSource: row.source,

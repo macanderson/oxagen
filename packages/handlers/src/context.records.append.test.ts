@@ -76,7 +76,7 @@ describe("append_record", () => {
     );
     expect(again).toEqual({ ...first, appended: false });
     expect(h.store.appends).toHaveLength(1);
-    expect(h.store.appends[0]?.createdByUserId).toBe(AUTHOR);
+    expect(h.store.appends[0]?.createdById).toBe(AUTHOR);
     const changed = await handler(
       input({ statement: "It stopped flaking in September." }),
       ctx(),

@@ -27,7 +27,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const rowsFor = (table: unknown): unknown[] => {
     if (table === real.schema.apiKeys)
-      return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
+      return tenant.keyCreator ? [{ createdById: tenant.keyCreator }] : [];
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)

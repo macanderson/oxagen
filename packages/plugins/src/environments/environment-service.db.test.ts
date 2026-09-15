@@ -114,7 +114,7 @@ describe("setDefaultEnvironment — atomic swap", () => {
 });
 
 describe("setDefaultEnvironment — actor without userId / missing row", () => {
-  it("sets updatedByUserId to null on both updates when the actor has no userId", async () => {
+  it("sets updatedById to null on both updates when the actor has no userId", async () => {
     const { setDefaultEnvironment } = await import("./environment-service");
     const actorNoUser = { orgId: "o1", workspaceId: "w1" };
     state.selectRows = [
@@ -143,8 +143,8 @@ describe("setDefaultEnvironment — actor without userId / missing row", () => {
     await setDefaultEnvironment(actorNoUser, { environmentId: "env_pub_1" });
 
     expect(state.updates).toHaveLength(2);
-    expect(state.updates[0]!.set.updatedByUserId).toBeNull();
-    expect(state.updates[1]!.set.updatedByUserId).toBeNull();
+    expect(state.updates[0]!.set.updatedById).toBeNull();
+    expect(state.updates[1]!.set.updatedById).toBeNull();
   });
 
   it("throws when the promote update returns no row", async () => {

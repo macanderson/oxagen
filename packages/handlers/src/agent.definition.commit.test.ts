@@ -99,7 +99,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         const rows =
           table === real.schema.apiKeys
             ? gate.keyCreator
-              ? [{ createdByUserId: gate.keyCreator }]
+              ? [{ createdById: gate.keyCreator }]
               : []
             : table === real.schema.principals
               ? [{ id: "prn_row" }]
@@ -288,7 +288,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             configuredDefaultRef: defaultRef,
             observedAt: new Date(),
             version: 1,
-            createdByUserId: t.userId,
+            createdById: t.userId,
           })
           .returning({
             id: schema.repositoryBindings.id,
@@ -598,8 +598,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: ownerRoleId,
           capabilityId: "create_api_key",
           effect: "allow",
-          createdByUserId: tenant.userId,
-          updatedByUserId: tenant.userId,
+          createdById: tenant.userId,
+          updatedById: tenant.userId,
         }),
       );
       const out = await commit(

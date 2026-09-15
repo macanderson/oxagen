@@ -20,7 +20,7 @@ import { logger } from "./logger";
  *
  * Auth: supports both session auth (ctx.userId set) and API-key auth
  * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
- * is resolved from the key's created_by_user_id, matching the IAM layer's
+ * is resolved from the key's created_by_id, matching the IAM layer's
  * "API key authorizes as its creator" invariant.
  */
 function notAMember(): HandlerError {
@@ -39,7 +39,7 @@ export const workspaceListHandler: CapabilityHandler<
   if (!userId && ctx.apiKeyId) {
     const keyRow = await withSystemDb((tx) =>
       tx
-        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .select({ createdById: schema.apiKeys.createdById })
         .from(schema.apiKeys)
         .where(
           and(
@@ -50,7 +50,7 @@ export const workspaceListHandler: CapabilityHandler<
         .limit(1)
         .then((rows) => rows[0] ?? null),
     );
-    userId = keyRow?.createdByUserId ?? null;
+    userId = keyRow?.createdById ?? null;
   }
 
   if (!userId) {

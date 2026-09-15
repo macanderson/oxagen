@@ -93,7 +93,7 @@ const ROLE_FIXTURES = [
     isSystemDefault: true,
     version: "1",
     createdAt: CREATED_AT,
-    createdByUserId: "usr-bootstrap",
+    createdById: "usr-bootstrap",
   },
   {
     id: "uuid-custom",
@@ -104,7 +104,7 @@ const ROLE_FIXTURES = [
     isSystemDefault: false,
     version: "1",
     createdAt: CREATED_AT,
-    createdByUserId: "usr-priya",
+    createdById: "usr-priya",
   },
   {
     id: "uuid-owner",
@@ -115,7 +115,7 @@ const ROLE_FIXTURES = [
     isSystemDefault: true,
     version: "1",
     createdAt: CREATED_AT,
-    createdByUserId: "usr-bootstrap",
+    createdById: "usr-bootstrap",
   },
   {
     id: "uuid-agent-op",
@@ -126,7 +126,7 @@ const ROLE_FIXTURES = [
     isSystemDefault: true,
     version: "1",
     createdAt: CREATED_AT,
-    createdByUserId: "usr-bootstrap",
+    createdById: "usr-bootstrap",
   },
 ];
 

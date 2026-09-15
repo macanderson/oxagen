@@ -85,8 +85,8 @@ authCliTokenRoute.post("/token", async (c) => {
       keyHash,
       name: data.label,
       scope: { purpose: CLI_SESSION_SCOPE_PURPOSE },
-      createdByUserId: data.userId,
-      updatedByUserId: data.userId,
+      createdById: data.userId,
+      updatedById: data.userId,
     });
   });
 

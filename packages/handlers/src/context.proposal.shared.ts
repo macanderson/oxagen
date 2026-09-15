@@ -54,6 +54,6 @@ export function createProposal(
     supportAgents: input.support.agents,
     supportingRecordIds: input.support.recordIds,
     evidenceLinks: input.support.evidenceLinks,
-    createdByUserId: ctx.userId ?? null,
+    createdById: ctx.userId ?? null,
   });
 }

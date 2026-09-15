@@ -126,7 +126,7 @@ export function createAppendRecordHandler(
       sourceRefs: input.sourceRefs,
       evidenceLinks: input.evidenceLinks,
       proposalId: proposalRow?.id ?? null,
-      createdByUserId: ctx.userId ?? null,
+      createdById: ctx.userId ?? null,
     });
 
     let proposalPublicId = proposalRow?.publicId ?? null;

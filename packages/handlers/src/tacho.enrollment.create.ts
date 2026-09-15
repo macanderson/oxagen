@@ -175,8 +175,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
             host_enrollment_id: hostEnrollmentId,
           },
           expiresAt,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning({
           id: schema.apiKeys.id,
@@ -236,8 +236,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
           expiresAt,
           managed: input.managed,
           mode: "observe",
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning();
       if (!inserted) {

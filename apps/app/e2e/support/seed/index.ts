@@ -330,7 +330,7 @@ async function retentionPolicy(
         retainedContentClasses: policy.retained_content_classes,
         ttlDays: policy.ttl_days,
         policyDigest: digest,
-        createdByUserId: userId,
+        createdById: userId,
       })
       .onConflictDoNothing();
     const [row] = await tx

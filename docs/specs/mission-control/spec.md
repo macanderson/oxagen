@@ -1398,10 +1398,12 @@ Thirty-five tables in nine schemas in the wedge, thirty-seven for the full produ
 | `id` | uuid (v7) | all | primary key; never shown outside the system |
 | `public_id` | citext | all | prefixed (`org_`, `wrk_`, `agt_`, …), unique; the only id shown in the API and the UI |
 | `created_at`, `updated_at` | timestamptz | all | |
-| `created_by`, `updated_by` | uuid → `auth.users` | tables a person edits | |
-| `deleted_at`, `deleted_by` | timestamptz, uuid | tables a person edits | rows are never hard-deleted |
+| `created_by_id`, `updated_by_id` | uuid → `auth.users` | tables a person edits | |
+| `deleted_at`, `deleted_by_id` | timestamptz, uuid | tables a person edits | rows are never hard-deleted |
 | `org_id` | uuid → `org.organizations` | tenant class `org` and `workspace` | required; enforced by the policies in §5.2 |
 | `workspace_id` | uuid → `wrk.workspaces` | tenant class `workspace` | required; enforced by the policies in §5.2 |
+
+> **Amendment 2026-09-15 (ADR-065).** Attribution columns end in `_id` like every other reference column: `created_by_id`, `updated_by_id`, `deleted_by_id`, and the per-table `<verb>_by` columns below (`invited_by`, `granted_by`, `issued_by`, `approved_by`, `revoked_by`, `placed_by`, `released_by`) are `<verb>_by_id` when they hold a user or principal id. `control.approvals.resolved_by` keeps its name: it is text that may hold `policy:<rule id>`, not a reference. `createdBy` without a suffix is reserved for a resolved display name in a contract output (`iam.role.list`), never a column.
 
 Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets are `bytea` ciphertext with `key_id` and `digest` beside them (the envelope pattern). Every `jsonb` column is validated against a schema in code before it is written. Enumerations are `text` with a check constraint; their values are listed in the Notes column.
 

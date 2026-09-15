@@ -79,7 +79,7 @@ function stubRole(
 ) {
   const rowsFor = (table: unknown): unknown[] => {
     if (table === schema.apiKeys)
-      return keyCreator ? [{ createdByUserId: keyCreator }] : [];
+      return keyCreator ? [{ createdById: keyCreator }] : [];
     if (table === schema.principals) return [{ id: "prn_1" }];
     if (table === schema.principalRoleAssignments)
       return roleName ? [{ roleName }] : [];

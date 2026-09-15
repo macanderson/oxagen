@@ -102,7 +102,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             const rows = (): unknown[] => {
               if (table === real.schema.apiKeys)
                 return mocks.tenant.keyCreator
-                  ? [{ createdByUserId: mocks.tenant.keyCreator }]
+                  ? [{ createdById: mocks.tenant.keyCreator }]
                   : [];
               if (table === real.schema.principals)
                 return mocks.tenant.principalId

@@ -57,9 +57,9 @@ export async function agentRoleRevokeHandler(
       .update(schema.principalRoleAssignments)
       .set({
         deletedAt: new Date(),
-        deletedByUserId: actorUserId,
+        deletedById: actorUserId,
         updatedAt: new Date(),
-        updatedByUserId: actorUserId,
+        updatedById: actorUserId,
       })
       .where(
         and(

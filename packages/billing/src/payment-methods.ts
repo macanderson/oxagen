@@ -220,7 +220,7 @@ export async function syncPaymentMethodsFromStripe(
             expYear: pm.expYear,
             isDefault: pm.id === defaultPmId,
             deletedAt: null,
-            deletedByUserId: null,
+            deletedById: null,
           })),
         )
         .onConflictDoUpdate({
@@ -233,7 +233,7 @@ export async function syncPaymentMethodsFromStripe(
             expYear: sql`excluded.exp_year`,
             isDefault: sql`excluded.is_default`,
             deletedAt: null, // Un-soft-delete if it re-appears.
-            deletedByUserId: null,
+            deletedById: null,
             updatedAt: new Date(),
           },
         }),

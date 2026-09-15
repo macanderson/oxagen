@@ -90,7 +90,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         supportAgents: [],
         supportingRecordIds: [],
         evidenceLinks: [],
-        createdByUserId: userId,
+        createdById: userId,
         ...over,
       }),
     );
@@ -316,7 +316,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       sourceRefs: ["frame:run_1/12"],
       evidenceLinks: [],
       proposalId: null,
-      createdByUserId: userId,
+      createdById: userId,
     };
     const first = await inScope(() => store.insertAppend(values));
     expect(first.appended).toBe(true);

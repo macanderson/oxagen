@@ -200,7 +200,7 @@ function fakeDb(): FakeDb {
         mode: "observe",
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         bundleVersionServed: null,
-        createdByUserId: ENROLLER_USER_ID,
+        createdById: ENROLLER_USER_ID,
       },
     ],
     principals: [
@@ -546,7 +546,7 @@ describe("ingest_tacho_events", () => {
 
   it("attributes nobody when the host has no enroller or the enroller has no principal", async () => {
     const orphan = fakeDb();
-    (orphan.hosts[0] as Record<string, unknown>)["createdByUserId"] = null;
+    (orphan.hosts[0] as Record<string, unknown>)["createdById"] = null;
     wire(orphan);
     await tachoEventsIngestHandler(
       {

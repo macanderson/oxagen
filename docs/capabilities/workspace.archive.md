@@ -40,5 +40,5 @@ Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate` (a sett
 
 ## Side effects
 
-- Postgres: `archived_at`, `archived_by_user_id`, `updated_at`, `updated_by_user_id` on the workspace row.
+- Postgres: `archived_at`, `archived_by_user_id`, `updated_at`, `updated_by_id` on the workspace row.
 - `security.security_events`: `workspace.archived`.

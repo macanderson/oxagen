@@ -76,8 +76,8 @@ export const auditMixin = () => ({
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
-  updatedByUserId: uuid("updated_by_user_id"),
+  createdById: uuid("created_by_id"),
+  updatedById: uuid("updated_by_id"),
 });
 
 /** append_only_audit_mixin — created timestamp and authoring user only (no updated fields). */
@@ -85,13 +85,13 @@ export const appendOnlyAuditMixin = () => ({
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
+  createdById: uuid("created_by_id"),
 });
 
 /** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-  deletedByUserId: uuid("deleted_by_user_id"),
+  deletedById: uuid("deleted_by_id"),
 });
 
 /** org_scope_mixin — required on every org-owned table. */

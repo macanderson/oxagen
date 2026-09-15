@@ -76,8 +76,8 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     checksum,
     isLatest: true,
     publishedAt: sql`now()`,
-    createdByUserId: ctx.userId ?? undefined,
-    updatedByUserId: ctx.userId ?? undefined,
+    createdById: ctx.userId ?? undefined,
+    updatedById: ctx.userId ?? undefined,
   };
 
   // Version-publish path against an existing identity row: idempotent when the
@@ -149,7 +149,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
           activeVersionId: versionRow.id,
           activatedByUserId: ctx.userId ?? undefined,
           activatedAt: sql`now()`,
-          updatedByUserId: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
           updatedAt: sql`now()`,
         })
         .where(eq(schema.tools.id, existing.id));
@@ -189,8 +189,8 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
           description: input.description,
           source: input.source,
           enabled: true,
-          createdByUserId: ctx.userId ?? undefined,
-          updatedByUserId: ctx.userId ?? undefined,
+          createdById: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
         })
         .returning({
           id: schema.tools.id,

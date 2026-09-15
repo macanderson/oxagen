@@ -59,8 +59,8 @@ export const contextRecordPublishHandler: CapabilityHandler<
     provenance,
     isLatest: true,
     publishedAt: sql`now()`,
-    createdByUserId: ctx.userId ?? undefined,
-    updatedByUserId: ctx.userId ?? undefined,
+    createdById: ctx.userId ?? undefined,
+    updatedById: ctx.userId ?? undefined,
   };
 
   // Version-publish path against an existing record row: idempotent when the
@@ -130,7 +130,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           activeVersionId: versionRow.id,
           activatedByUserId: ctx.userId ?? undefined,
           activatedAt: sql`now()`,
-          updatedByUserId: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
           updatedAt: sql`now()`,
         })
         .where(eq(schema.contextRecords.id, existing.id));
@@ -167,8 +167,8 @@ export const contextRecordPublishHandler: CapabilityHandler<
           slug,
           title: input.title,
           status: "active",
-          createdByUserId: ctx.userId ?? undefined,
-          updatedByUserId: ctx.userId ?? undefined,
+          createdById: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
         })
         .returning({
           id: schema.contextRecords.id,

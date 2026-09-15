@@ -59,8 +59,8 @@ describe("org.model_credential.delete handler — a key was stored", () => {
     expect(mocks.update).toHaveBeenCalledTimes(1);
     const written = mocks.update.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(written.deletedAt).toBeInstanceOf(Date);
-    expect(written.deletedByUserId).toBe(CTX.userId);
-    expect(written.updatedByUserId).toBe(CTX.userId);
+    expect(written.deletedById).toBe(CTX.userId);
+    expect(written.updatedById).toBe(CTX.userId);
   });
 
   it("invalidates the resolver cache for exactly this org", async () => {

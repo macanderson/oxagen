@@ -264,7 +264,7 @@ export async function assertWithinDelegationCeiling(
 /**
  * Resolve the effective assigning user for the ceiling: the session user, or
  * — on the machine-to-machine surface — the API key's creator
- * (api_keys.created_by_user_id), exactly how packages/iam/fetch-authz.ts
+ * (api_keys.created_by_id), exactly how packages/iam/fetch-authz.ts
  * authorizes keys. An unresolvable key fails closed.
  */
 export async function resolveEffectiveAssigner(
@@ -274,7 +274,7 @@ export async function resolveEffectiveAssigner(
   if (ctx.userId) return ctx.userId;
   if (ctx.apiKeyId) {
     const [keyRow] = await tx
-      .select({ createdByUserId: schema.apiKeys.createdByUserId })
+      .select({ createdById: schema.apiKeys.createdById })
       .from(schema.apiKeys)
       .where(
         and(
@@ -284,7 +284,7 @@ export async function resolveEffectiveAssigner(
         ),
       )
       .limit(1);
-    if (keyRow?.createdByUserId) return keyRow.createdByUserId;
+    if (keyRow?.createdById) return keyRow.createdById;
   }
   throw new Error("Unauthorized: no authenticated principal");
 }

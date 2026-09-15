@@ -23,9 +23,9 @@ export const conversationDeleteHandler: CapabilityHandler<
       .update(schema.conversations)
       .set({
         deletedAt: now,
-        deletedByUserId: userId,
+        deletedById: userId,
         updatedAt: now,
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(
         and(

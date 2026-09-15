@@ -36,8 +36,8 @@ export const agentExecutionRecordHandler: CapabilityHandler<
           input.estimatedCostUsd != null
             ? String(input.estimatedCostUsd)
             : null,
-        createdByUserId: ctx.userId ?? null,
-        updatedByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
+        updatedById: ctx.userId ?? null,
       })
       .returning({
         id: schema.agentExecutions.id,
@@ -69,8 +69,8 @@ export const agentExecutionRecordHandler: CapabilityHandler<
             latencyMs: step.latencyMs ?? null,
             inputTokens: step.inputTokens ?? null,
             outputTokens: step.outputTokens ?? null,
-            createdByUserId: ctx.userId ?? null,
-            updatedByUserId: ctx.userId ?? null,
+            createdById: ctx.userId ?? null,
+            updatedById: ctx.userId ?? null,
           })),
         )
         .returning({ id: schema.agentExecutionSteps.id });

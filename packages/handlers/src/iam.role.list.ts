@@ -45,7 +45,7 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
         isSystemDefault: schema.roles.isSystemDefault,
         version: schema.roles.version,
         createdAt: schema.roles.createdAt,
-        createdByUserId: schema.roles.createdByUserId,
+        createdById: schema.roles.createdById,
       })
       .from(schema.roles)
       .where(and(...roleConds));
@@ -120,8 +120,8 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
     const creatorIds = [
       ...new Set(
         page
-          .filter((r) => !r.isSystemDefault && r.createdByUserId !== null)
-          .map((r) => r.createdByUserId as string),
+          .filter((r) => !r.isSystemDefault && r.createdById !== null)
+          .map((r) => r.createdById as string),
       ),
     ];
     const creatorNames = new Map<string, string>();
@@ -143,9 +143,9 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
         { ...r, scopeKind: r.scopeKind as IamRoleRow["scopeKind"] },
         grantsByRole.get(r.id) ?? [],
         counts.get(r.id) ?? 0,
-        r.isSystemDefault || r.createdByUserId === null
+        r.isSystemDefault || r.createdById === null
           ? null
-          : (creatorNames.get(r.createdByUserId) ?? null),
+          : (creatorNames.get(r.createdById) ?? null),
       ),
     );
 

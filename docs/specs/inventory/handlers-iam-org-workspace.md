@@ -152,7 +152,7 @@ When an authenticated principal declines a pending invitation by publicId, the i
 <!-- test: org.member.invite.decline.test.ts -->
 
 - **WHEN** ctx.userId or ctx.apiKeyId is set AND invitation.status === "pending"
-- **THEN** mark invitations row status="declined", updatedAt=now, updatedByUserId=actorId; return {invitationPublicId, status: "declined"}
+- **THEN** mark invitations row status="declined", updatedAt=now, updatedById=actorId; return {invitationPublicId, status: "declined"}
 
 #### Scenario: Invitation not found
 <!-- test: org.member.invite.decline.test.ts -->
@@ -339,7 +339,7 @@ When an authenticated user creates a workspace for ctx.orgId, the system SHALL c
 <!-- test: workspace.create.test.ts:workspace created successfully -->
 
 - **WHEN** ctx.userId is set AND ctx.orgId is set AND no workspace exists with (orgId=ctx.orgId, slug=input.slug)
-- **THEN** insert workspaces row (orgId, name, slug, createdByUserId, updatedByUserId); insert workspace_users row (workspaceId, userId, role="owner", joinedAt=now); call bootstrapWorkspaceAgents (idempotent seed); call seedWorkspaceDefaultRegistry (idempotent seed); call seedWorkspaceDefaultCapabilities (idempotent seed); call seedWorkspaceDefaultSkills (idempotent seed); emit workspace.created event; return {publicId, name, slug, orgSlug, createdAt as ISO string}
+- **THEN** insert workspaces row (orgId, name, slug, createdById, updatedById); insert workspace_users row (workspaceId, userId, role="owner", joinedAt=now); call bootstrapWorkspaceAgents (idempotent seed); call seedWorkspaceDefaultRegistry (idempotent seed); call seedWorkspaceDefaultCapabilities (idempotent seed); call seedWorkspaceDefaultSkills (idempotent seed); emit workspace.created event; return {publicId, name, slug, orgSlug, createdAt as ISO string}
 
 #### Scenario: Slug collision (race condition)
 <!-- test: workspace.create.test.ts:slug conflict (race) -->
@@ -526,13 +526,13 @@ When an authenticated user writes user.preferences, the system SHALL upsert the 
 <!-- test: user.preferences.write.test.ts:preferences updated -->
 
 - **WHEN** ctx.userId is set AND no user_preferences row exists AND input provides some fields
-- **THEN** build insertValues with userId, createdByUserId, updatedByUserId, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
+- **THEN** build insertValues with userId, createdById, updatedById, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
 
 #### Scenario: User updates existing preferences (update)
 <!-- test: user.preferences.write.test.ts -->
 
 - **WHEN** ctx.userId is set AND user_preferences row exists AND input provides some fields
-- **THEN** build updateSet with only provided fields (undefined fields skipped) plus updatedByUserId=ctx.userId; execute upsert onConflictDoUpdate set updateSet; re-read row; return full state
+- **THEN** build updateSet with only provided fields (undefined fields skipped) plus updatedById=ctx.userId; execute upsert onConflictDoUpdate set updateSet; re-read row; return full state
 
 #### Scenario: Unauthenticated user attempts write
 <!-- test: user.preferences.write.test.ts -->
@@ -630,7 +630,7 @@ When a user accepts an invitation, provisionMemberPrincipal creates a least-priv
 <!-- entities: PrincipalRoleAssignment -->
 <!-- enforced: org.member.remove.orgMemberRemoveHandler(), org.member.role.change.orgMemberRoleChangeHandler() -->
 
-When role assignments are revoked (due to member removal or role change), the system soft-deletes the principal_role_assignments row (sets deletedAt, deletedByUserId, updatedAt, updatedByUserId) rather than hard-deleting. This preserves the audit trail for compliance.
+When role assignments are revoked (due to member removal or role change), the system soft-deletes the principal_role_assignments row (sets deletedAt, deletedById, updatedAt, updatedById) rather than hard-deleting. This preserves the audit trail for compliance.
 
 ---
 

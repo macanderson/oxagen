@@ -88,7 +88,7 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<
           itemType: input.itemType ?? existing.itemType,
           constraints: input.constraints ?? existing.constraints,
           example: input.example ?? existing.example,
-          updatedByUserId: ctx.userId,
+          updatedById: ctx.userId,
         })
         .where(eq(db.schemaProperties.id, existing.id))
         .returning();
@@ -115,8 +115,8 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<
         itemType: input.itemType,
         constraints: input.constraints ?? {},
         example: input.example,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .returning();
 

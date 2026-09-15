@@ -237,11 +237,11 @@ async function enrollingPrincipalId(
   ctx: Scope,
   host: TachoHostRow,
 ): Promise<string | null> {
-  if (!host.createdByUserId) return null;
+  if (!host.createdById) return null;
   const principal = await tx.query.principals.findFirst({
     where: and(
       eq(schema.principals.orgId, ctx.orgId),
-      eq(schema.principals.parentUserId, host.createdByUserId),
+      eq(schema.principals.parentUserId, host.createdById),
       eq(schema.principals.kind, "human"),
     ),
     columns: { id: true },

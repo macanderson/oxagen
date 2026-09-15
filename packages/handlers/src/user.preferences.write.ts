@@ -20,8 +20,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<
   // fall back to the schema default so the upsert is always valid on first insert.
   const insertValues: NewUserPreferences = {
     userId,
-    createdByUserId: userId,
-    updatedByUserId: userId,
+    createdById: userId,
+    updatedById: userId,
     // Non-nullable columns: use provided value or schema default on first insert.
     fontSize: input.fontSize ?? "medium",
     density: input.density ?? "comfortable",
@@ -40,8 +40,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<
 
   // Build the partial update set — only update fields that were explicitly provided.
   // "not provided" leaves the existing column value unchanged.
-  const updateSet: Partial<NewUserPreferences> & { updatedByUserId: string } = {
-    updatedByUserId: userId,
+  const updateSet: Partial<NewUserPreferences> & { updatedById: string } = {
+    updatedById: userId,
   };
 
   if (input.fontSize !== undefined) updateSet.fontSize = input.fontSize;

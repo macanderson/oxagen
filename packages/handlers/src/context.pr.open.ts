@@ -152,7 +152,7 @@ export function createOpenContextPrHandler(
         sharingScope: row.sharingScope as PublishedSharingScope,
         statement: row.statement,
         // Who raised the proposal: a person, or an agent over an API key.
-        origin: row.createdByUserId ? "user" : "inferred",
+        origin: row.createdById ? "user" : "inferred",
         proposalPublicId: row.publicId,
         setId: setIdFor(repo),
       });
@@ -192,7 +192,7 @@ export function createOpenContextPrHandler(
           stampedRecordId: record.record_id,
           recordHash: record.record_hash,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedById: ctx.userId ?? null,
         },
         ["proposed"],
       );
@@ -205,7 +205,7 @@ export function createOpenContextPrHandler(
           governanceMode: mode,
           headSha: pr.headSha,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedById: ctx.userId ?? null,
         },
         OPEN_PR,
       );

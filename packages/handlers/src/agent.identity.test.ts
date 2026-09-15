@@ -55,7 +55,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         const rows =
           table === real.schema.apiKeys
             ? mocks.gate.keyCreator
-              ? [{ createdByUserId: mocks.gate.keyCreator }]
+              ? [{ createdById: mocks.gate.keyCreator }]
               : []
             : table === real.schema.principals
               ? mocks.gate.principalId

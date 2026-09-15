@@ -41,8 +41,8 @@ function makeRow(
     contentBlocks: overrides.contentBlocks ?? null,
     branchReason: overrides.branchReason ?? null,
     metadata: overrides.metadata ?? {},
-    createdByUserId: overrides.createdByUserId ?? "user-1",
-    updatedByUserId: overrides.updatedByUserId ?? "user-1",
+    createdById: overrides.createdById ?? "user-1",
+    updatedById: overrides.updatedById ?? "user-1",
     createdAt: overrides.createdAt ?? new Date(),
     updatedAt: overrides.updatedAt ?? new Date(),
   } as DbMessageRow;

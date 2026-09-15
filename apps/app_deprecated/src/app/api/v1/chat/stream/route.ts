@@ -657,8 +657,8 @@ export async function POST(request: NextRequest): Promise<Response> {
                     metadata: receipt
                       ? { status: "complete", receipt }
                       : { status: "complete" },
-                    createdByUserId: session.user.id,
-                    updatedByUserId: session.user.id,
+                    createdById: session.user.id,
+                    updatedById: session.user.id,
                   })
                   .returning({ id: schema.messages.id });
                 if (assistantMsg) {

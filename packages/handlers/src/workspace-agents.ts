@@ -110,8 +110,8 @@ async function bootstrapWorkspaceAgentsWithTx(
         agentType: INTERACTIVE_AGENT_TYPE,
         status: "active",
         deploymentStatus: "active",
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .onConflictDoNothing()
       .returning({ id: schema.agents.id });
@@ -178,7 +178,7 @@ async function bootstrapWorkspaceAgentsWithTx(
         isPublished: true,
         checksum,
         config,
-        createdByUserId: userId,
+        createdById: userId,
       })
       .onConflictDoNothing()
       .returning({ id: schema.agentVersions.id });
@@ -212,7 +212,7 @@ async function bootstrapWorkspaceAgentsWithTx(
       activeVersionId: versionId,
       status: "active",
       deploymentStatus: "active",
-      updatedByUserId: userId,
+      updatedById: userId,
     })
     .where(eq(schema.agents.id, agentId));
 

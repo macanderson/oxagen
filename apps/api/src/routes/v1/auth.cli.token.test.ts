@@ -142,8 +142,8 @@ describe("POST /token — happy path", () => {
         keyHash: "sha256hexhash",
         name: VALID_CODE_DATA.label,
         scope: { purpose: "cli_session_v1" },
-        createdByUserId: VALID_CODE_DATA.userId,
-        updatedByUserId: VALID_CODE_DATA.userId,
+        createdById: VALID_CODE_DATA.userId,
+        updatedById: VALID_CODE_DATA.userId,
       }),
     );
   });

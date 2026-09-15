@@ -77,7 +77,7 @@ export async function saveMfaPolicyAction(
           orgId,
           mfaRequired,
           mfaGraceHours,
-          updatedByUserId: session.user.id,
+          updatedById: session.user.id,
           createdAt: now,
           updatedAt: now,
         })
@@ -86,7 +86,7 @@ export async function saveMfaPolicyAction(
           set: {
             mfaRequired,
             mfaGraceHours,
-            updatedByUserId: session.user.id,
+            updatedById: session.user.id,
             updatedAt: now,
           },
         }),

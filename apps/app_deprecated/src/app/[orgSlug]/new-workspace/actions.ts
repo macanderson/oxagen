@@ -156,8 +156,8 @@ export async function createWorkspaceAction(
                 name: parsed.data.name,
                 slug: parsed.data.slug,
                 namespace,
-                createdByUserId: session.user.id,
-                updatedByUserId: session.user.id,
+                createdById: session.user.id,
+                updatedById: session.user.id,
               })
               .returning({
                 id: schema.workspaces.id,
@@ -170,8 +170,8 @@ export async function createWorkspaceAction(
               userId: session.user.id,
               role: "owner",
               joinedAt: new Date(),
-              createdByUserId: session.user.id,
-              updatedByUserId: session.user.id,
+              createdById: session.user.id,
+              updatedById: session.user.id,
             });
 
             // Bootstrap the built-in qa-chat agent atomically with workspace creation

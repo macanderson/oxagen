@@ -122,7 +122,7 @@ describe("updateOrgGeneralAction", () => {
     expect(dbState.updateValues[0]).toMatchObject({
       name: "Acme Renamed",
       slug: "acme",
-      updatedByUserId: "user-1",
+      updatedById: "user-1",
     });
     expect(mockRevalidatePath).toHaveBeenCalledTimes(1);
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/settings/general");

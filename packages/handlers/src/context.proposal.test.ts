@@ -70,7 +70,7 @@ describe("propose_record", () => {
       supportAgents: ["a-intel.core.cc"],
       evidenceLinks: ["fnd_01K5RT6C"],
       source: `user:${AUTHOR}`,
-      createdByUserId: AUTHOR,
+      createdById: AUTHOR,
     });
     const labelled = await createProposeRecordHandler(h)(
       proposal({ source: "findings job · fnd_01K5RT6C" }),

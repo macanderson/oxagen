@@ -76,7 +76,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         .set({
           status: "expired",
           updatedAt: new Date(),
-          updatedByUserId: ctx.userId,
+          updatedById: ctx.userId,
         })
         .where(eq(schema.invitations.id, invitation.id)),
     ).catch((err) =>
@@ -136,7 +136,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         status: "accepted",
         acceptedUserId: ctx.userId,
         updatedAt: joinedAt,
-        updatedByUserId: ctx.userId,
+        updatedById: ctx.userId,
       })
       .where(eq(schema.invitations.id, invitation.id));
 
@@ -148,8 +148,8 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         userId: ctx.userId!,
         role: invitation.role,
         joinedAt,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .onConflictDoNothing()
       .returning({ publicId: schema.orgUsers.publicId });
@@ -206,8 +206,8 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
           roleId: roleRow.id,
           orgId: invitation.orgId,
           assignedBy: ctx.userId,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .onConflictDoNothing();
     } else {
