@@ -8,7 +8,7 @@
  * the user gets a clean client-side validation message instead of a
  * round-trip server error for the same rule.
  */
-import type { Money } from "@oxagen/oxagen/money";
+import type { Money } from "@oxagen/oxagen/contracts/spend.shared";
 import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
 
 export type SpendBudgetPeriod = "monthly" | "rolling";

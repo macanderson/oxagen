@@ -67,6 +67,9 @@ describe("commit_agent_definition contract", () => {
       "x.lock",
       "has space",
       "~tilde",
+      "refs/heads/main",
+      "heads/main",
+      "refs/tags/v1",
     ]) {
       expect(branchNameSchema.safeParse(bad).success, bad).toBe(false);
     }

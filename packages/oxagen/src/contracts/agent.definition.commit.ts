@@ -28,13 +28,18 @@ import { registerCapability } from "../registry";
 export const AGENT_DEFINITION_SCHEMA = "agent-definition/v0.1";
 export const AGENT_DEFINITION_DIR = ".oxagen/agents";
 
-/** A git branch name: word characters, dots, slashes and hyphens; no `..`, `//`, trailing `/` or `.lock`. */
+/**
+ * A short git branch name: word characters, dots, slashes and hyphens; no
+ * `..`, `//`, trailing `/` or `.lock`, and no `refs/` or `heads/` qualifier.
+ * GitHub resolves `refs/heads/main` to `main`, so a qualified name would pass
+ * the handler's string comparison with the default branch and write it.
+ */
 export const branchNameSchema = z
   .string()
   .min(1)
   .max(200)
   .regex(
-    /^(?!.*(\.\.|\/\/|\/$|\.lock$))[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+    /^(?!refs\/|heads\/)(?!.*(\.\.|\/\/|\/$|\.lock$))[A-Za-z0-9][A-Za-z0-9._/-]*$/,
     "a git branch name",
   );
 

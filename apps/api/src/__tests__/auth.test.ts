@@ -7,6 +7,8 @@
  * - API key ok → sets orgId/workspaceId, userId as the resolver returned it
  *   (null for a plain key, the approving user for a CLI session key)
  * - API key locked to another purpose → 401
+ * - A removed member's CLI session key (the resolver answers invalid) → 401
+ *   on /workspace/invite/send, and the capability is never invoked
  * - Session valid → sets userId, apiKeyId=null
  * - No credentials → 401 "Missing credentials"
  * - Expired session (resolveSession returns null) → 401 "Session expired"
@@ -258,6 +260,26 @@ describe("authMiddleware — API key success", () => {
       orgId: TEST_ORG_ID,
       workspaceId: TEST_WORKSPACE_ID,
     });
+  });
+});
+
+describe("authMiddleware — a removed member's CLI session key", () => {
+  it("is refused on /workspace/invite/send before the capability runs", async () => {
+    // resolveApiKey answers invalid for a CLI session key whose creator is no
+    // longer an org or workspace member (packages/auth resolvers.test.ts).
+    mocks.resolveApiKey.mockResolvedValue(makeApiKeyInvalid());
+    const res = await app.fetch(
+      makeRequest("/v1/acme/main/workspace/invite/send", {
+        method: "POST",
+        headers: {
+          authorization: bearerHeader("ox_removedmemberclikey"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: "x@example.com", role: "owner" }),
+      }),
+    );
+    expect(res.status).toBe(401);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 

@@ -4,7 +4,10 @@
 // its currency (ADR-057 decision 2, INV-09): the store keeps `limit_micros`
 // bigint and nothing here divides by a million.
 import type { SpendBudgetStatus } from "@oxagen/billing";
-import { microsString, type Money } from "@oxagen/oxagen/money";
+import {
+  microsString,
+  type Money,
+} from "@oxagen/oxagen/contracts/spend.shared";
 import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
 
 /** `billing.spend_budgets.limit_micros` and `token_usage.cost_usd_micros` are micro-USD. */

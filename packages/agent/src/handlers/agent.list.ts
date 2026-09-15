@@ -8,7 +8,7 @@ import type {
   AgentListOutput,
 } from "@oxagen/oxagen/contracts/agent.list";
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
-import { microsString } from "@oxagen/oxagen/money";
+import { microsString } from "@oxagen/oxagen/contracts/spend.shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import {

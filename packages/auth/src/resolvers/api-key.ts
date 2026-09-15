@@ -16,7 +16,9 @@
  *
  * The key's scope purpose decides who the bearer is. A CLI session key
  * (`cli_session_v1`, minted by the token exchange) authenticates as the user
- * who approved the authorize flow, so `userId` is the key's creator. An agent
+ * who approved the authorize flow, so `userId` is the key's creator, and it is
+ * refused as `invalid` once that user is no longer a member of the key's org
+ * or workspace. An agent
  * credential (`agent_credential_v1`, minted by `register_agent`) is locked to
  * the run-token exchange of MC spec §6.2, which no surface serves yet, so it
  * is refused with `purpose_locked` rather than authorizing as its creator.
@@ -148,14 +150,48 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     return { ok: false, kind: "purpose_locked" };
   }
 
+  if (purpose !== CLI_SESSION_SCOPE_PURPOSE) {
+    return {
+      ok: true,
+      apiKeyId: row.id,
+      orgId: row.orgId,
+      workspaceId: row.workspaceId,
+      userId: null,
+    };
+  }
+
+  // A CLI session key speaks for its creator only while the creator is still a
+  // member of the key's org and workspace. The bearer path skips the org and
+  // workspace middleware's membership checks, so this is where a removed
+  // member's key stops working.
+  const creatorId = row.createdByUserId;
+  if (!creatorId) return { ok: false, kind: "invalid" };
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
+  const member = await withSystemDb(async (tx) => {
+    const orgMember = await tx.query.orgUsers.findFirst({
+      where: and(
+        eq(schema.orgUsers.orgId, row.orgId),
+        eq(schema.orgUsers.userId, creatorId),
+      ),
+      columns: { id: true },
+    });
+    if (!orgMember) return false;
+    const workspaceMember = await tx.query.workspaceUsers.findFirst({
+      where: and(
+        eq(schema.workspaceUsers.workspaceId, row.workspaceId),
+        eq(schema.workspaceUsers.userId, creatorId),
+      ),
+      columns: { id: true },
+    });
+    return workspaceMember !== undefined;
+  });
+  if (!member) return { ok: false, kind: "invalid" };
+
   return {
     ok: true,
     apiKeyId: row.id,
     orgId: row.orgId,
     workspaceId: row.workspaceId,
-    userId:
-      purpose === CLI_SESSION_SCOPE_PURPOSE
-        ? (row.createdByUserId ?? null)
-        : null,
+    userId: creatorId,
   };
 }

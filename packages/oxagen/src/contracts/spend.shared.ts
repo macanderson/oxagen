@@ -28,12 +28,26 @@ export const moneySchema = z
     currency: z.string().length(3),
   })
   .strict();
+export type Money = z.output<typeof moneySchema>;
 
 /** A metered cost: money plus who observed it. */
 export const costSchema = moneySchema
   .extend({ basis: costBasisSchema })
   .strict();
 export type Cost = z.output<typeof costSchema>;
+
+/** A bigint or integer number of micros as the wire string. */
+export function microsString(micros: bigint | number): string {
+  if (typeof micros === "number" && !Number.isSafeInteger(micros)) {
+    throw new RangeError(`micros must be a safe integer: ${String(micros)}`);
+  }
+  return String(micros);
+}
+
+/** The wire string back to a bigint. `microsSchema` has already refused a non-integer. */
+export function parseMicros(micros: string): bigint {
+  return BigInt(micros);
+}
 
 /** `YYYY-MM-DD`, a UTC calendar day. */
 export const daySchema = z

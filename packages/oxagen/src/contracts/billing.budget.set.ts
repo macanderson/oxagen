@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { moneySchema } from "../money";
+import { moneySchema } from "./spend.shared";
 import {
   spendBudgetStatus,
   spendPeriod,

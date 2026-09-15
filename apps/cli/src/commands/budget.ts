@@ -40,7 +40,7 @@ export type SpendBudgetState =
   | "exceeded";
 
 /** Money on the wire: integer micro-units in a decimal string with its currency. */
-export interface Money {
+interface Money {
   micros: string;
   currency: string;
 }
@@ -68,7 +68,7 @@ interface SpendBudgetGetResult {
 const pct = (ratio: number): string => `${Math.round(ratio * 100)}%`;
 
 /** Display only: the wire carries micros, the terminal prints dollars. */
-export function formatMoney(money: Money): string {
+function formatMoney(money: Money): string {
   return formatUsd(Number(money.micros) / 1_000_000);
 }
 
@@ -77,7 +77,7 @@ export function formatMoney(money: Money): string {
  * string, never through a float multiply, so `--limit 0.07` is exactly
  * 70,000 micros. More than six fractional digits is refused.
  */
-export function usdFlagToMicros(raw: string): string | null {
+function usdFlagToMicros(raw: string): string | null {
   const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(raw.trim());
   if (!m) return null;
   const whole = m[1]!;

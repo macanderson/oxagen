@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { moneySchema } from "../money";
+import { moneySchema } from "./spend.shared";
 
 // The window a ceiling is measured over. Mirrors SpendBudgetPeriod in
 // @oxagen/billing (kept as a literal here to keep the contract layer
 // dependency-light — the values are a locked API surface).
 export const spendPeriod = z.enum(["monthly", "rolling"]);
 export const spendScope = z.enum(["org", "workspace"]);
-export const spendState = z.enum([
+const spendState = z.enum([
   "ok",
   "threshold_50",
   "threshold_80",

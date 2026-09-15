@@ -24,13 +24,13 @@ import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 // ── Wire shapes (mirror the agent.{register,get} and tacho.enrollment.revoke contracts) ──
 
-export const AGENT_HARNESSES = [
+const AGENT_HARNESSES = [
   "stella",
   "claude-code",
   "claude-agent-sdk",
   "custom",
 ] as const;
-export type AgentHarness = (typeof AGENT_HARNESSES)[number];
+type AgentHarness = (typeof AGENT_HARNESSES)[number];
 
 export interface AgentRegisterResult {
   agentId: string;
@@ -40,7 +40,7 @@ export interface AgentRegisterResult {
   credential: { id: string; secret: string; expiresAt: string };
 }
 
-export interface AgentCredential {
+interface AgentCredential {
   id: string;
   name: string;
   prefix: string;
@@ -50,7 +50,7 @@ export interface AgentCredential {
   revokedAt: string | null;
 }
 
-export interface AgentHost {
+interface AgentHost {
   hostEnrollmentId: string;
   hostname: string;
   platform: string;
@@ -95,7 +95,7 @@ export interface AgentGetResult {
   } | null;
 }
 
-export interface TachoRevokeResult {
+interface TachoRevokeResult {
   hostEnrollmentId: string;
   status: "revoked";
   revokedAt: string;

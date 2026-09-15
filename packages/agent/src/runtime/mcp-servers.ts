@@ -5,7 +5,7 @@
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
 
-export interface McpServerFilter {
+interface McpServerFilter {
   orgId: string;
   workspaceId: string;
   /** Public ids the chat composer toggled active; empty or absent loads every server. */

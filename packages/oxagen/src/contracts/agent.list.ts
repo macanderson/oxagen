@@ -14,7 +14,7 @@
 // that do not exist, so null.
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { costSchema } from "../money";
+import { costSchema } from "./spend.shared";
 
 const instant = z.string().datetime({ offset: true });
 

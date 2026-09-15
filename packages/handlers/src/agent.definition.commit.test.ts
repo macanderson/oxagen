@@ -23,7 +23,10 @@ import {
 } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
 import { schema } from "@oxagen/database";
-import { AGENT_DEFINITION_SCHEMA } from "@oxagen/oxagen/contracts/agent.definition.commit";
+import {
+  AGENT_DEFINITION_SCHEMA,
+  agentDefinitionCommit,
+} from "@oxagen/oxagen/contracts/agent.definition.commit";
 
 const gh = vi.hoisted(() => ({
   defaultBranch: "main",
@@ -390,6 +393,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
           source: SOURCE("release-bot"),
         }),
       ).rejects.toSatisfy(conflict("branch_is_default"));
+      expect(gh.calls).toEqual([]);
+    });
+
+    it("a refs/- or heads/-qualified default branch is refused by the input the kernel parses, and GitHub is never called", () => {
+      // kernel.ts parses `cap.input` before the handler runs, so the handler
+      // never sees a name its default-branch comparison would miss.
+      for (const branch of ["refs/heads/main", "heads/main"]) {
+        const parsed = agentDefinitionCommit.input.safeParse({
+          agentId: "release-bot",
+          branch,
+          source: SOURCE("release-bot"),
+        });
+        expect(parsed.success, branch).toBe(false);
+      }
       expect(gh.calls).toEqual([]);
     });
 

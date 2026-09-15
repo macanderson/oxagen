@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
-import { parseMicros } from "@oxagen/oxagen/money";
+import { parseMicros } from "@oxagen/oxagen/contracts/spend.shared";
 import {
   getSpendBudget,
   getSpendBudgetStatuses,
