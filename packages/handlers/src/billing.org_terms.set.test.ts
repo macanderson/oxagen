@@ -5,16 +5,19 @@
  * the kernel owns that (INV-31, kernel.test.ts). What is asserted here is the
  * rest of the contract's promise — the row is keyed on the INPUT's orgId
  * rather than on any tenant the context might carry, the stored row is what
- * comes back, and the mutation is audited against the target org.
+ * comes back, and the mutation is audited against the target org before the
+ * handler resolves (the caller is a process that exits on return).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const mocks = vi.hoisted(() => ({ emitSecurityEvent: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  emitSecurityEventAsync: vi.fn<() => Promise<void>>(async () => {}),
+}));
 
 vi.mock("@oxagen/database/security", () => ({
-  emitSecurityEvent: mocks.emitSecurityEvent,
+  emitSecurityEventAsync: mocks.emitSecurityEventAsync,
 }));
 
 import {
@@ -57,6 +60,7 @@ function makeStore(seed: Record<string, StoredTerms> = {}) {
 describe("set_org_billing_terms handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.emitSecurityEventAsync.mockResolvedValue(undefined);
   });
 
   it("approves an org for invoice billing and returns the stored row", async () => {
@@ -152,7 +156,7 @@ describe("set_org_billing_terms handler", () => {
       operatorCtx(),
     );
 
-    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+    expect(mocks.emitSecurityEventAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         capability: "set_org_billing_terms",
         orgId: ORG,
@@ -161,6 +165,51 @@ describe("set_org_billing_terms handler", () => {
         outcome: "success",
       }),
     );
+  });
+
+  it("does not resolve until the audit row is written", async () => {
+    let releaseAudit: () => void = () => {};
+    mocks.emitSecurityEventAsync.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseAudit = resolve;
+      }),
+    );
+    const store = makeStore();
+    const handler = createBillingOrgTermsSetHandler(store.write);
+
+    let resolved = false;
+    const run = handler(
+      { orgId: ORG, approvedForInvoiceBilling: true, invoiceGauMax: 10 },
+      operatorCtx(),
+    ).then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.write).toHaveBeenCalledOnce();
+    expect(mocks.emitSecurityEventAsync).toHaveBeenCalledOnce();
+    expect(resolved).toBe(false);
+
+    releaseAudit();
+    await run;
+    expect(resolved).toBe(true);
+  });
+
+  it("fails when the audit row cannot be written, after the terms are stored", async () => {
+    mocks.emitSecurityEventAsync.mockRejectedValue(
+      new Error("security_events insert failed after 3 attempts"),
+    );
+    const store = makeStore();
+    const handler = createBillingOrgTermsSetHandler(store.write);
+
+    await expect(
+      handler(
+        { orgId: ORG, approvedForInvoiceBilling: true, invoiceGauMax: 10 },
+        operatorCtx(),
+      ),
+    ).rejects.toThrow(/security_events insert failed/);
+    expect(store.rows.get(ORG)?.approvedForInvoiceBilling).toBe(true);
   });
 
   it("does not audit a write that failed", async () => {
@@ -175,6 +224,6 @@ describe("set_org_billing_terms handler", () => {
         operatorCtx(),
       ),
     ).rejects.toThrow();
-    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEventAsync).not.toHaveBeenCalled();
   });
 });

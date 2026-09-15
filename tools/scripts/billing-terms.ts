@@ -14,11 +14,15 @@
  * `pnpm billing:stripe-sync` and db-migrate.yml are.
  *
  * It goes through the kernel rather than writing the row itself, so the
- * decision leaves a capability audit row like every other governed write. The
- * capability (`set_org_billing_terms`) is `platformOnly`, which the kernel
- * refuses without a binding minted by `createPlatformOperatorContext`; this
- * script is the only place that mints one (INV-31,
- * packages/oxagen/src/test/platform-operator-field.test.ts).
+ * decision leaves the same two audit rows as every other governed write: the
+ * kernel's `capability.invoke_allowed` / `invoke_denied` row, written by the
+ * emitter this script registers (the API and MCP servers register theirs at
+ * bootstrap; nothing does it for a script), and the handler's
+ * `billing.plan_changed` row. The run awaits both before the pool closes and
+ * the process exits. The capability (`set_org_billing_terms`) is
+ * `platformOnly`, which the kernel refuses without a binding minted by
+ * `createPlatformOperatorContext`; this script is the only place that mints
+ * one (INV-31, packages/oxagen/src/test/platform-operator-field.test.ts).
  *
  * `surface` is the CapabilityContext field, not `opts.surface`: the contract
  * declares `surfaces: []`, and any `opts.surface` would be refused as
@@ -32,8 +36,17 @@ import kleur from "kleur";
 import { requireEnv } from "@oxagen/config/env";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { invoke } from "@oxagen/oxagen/kernel";
+import { makeSecurityEventInserter } from "@oxagen/database/security";
+import {
+  invoke,
+  setSecurityEventEmitter,
+  type KernelSecurityEvent,
+} from "@oxagen/oxagen/kernel";
 import { createPlatformOperatorContext } from "@oxagen/oxagen/platform-operator";
+import {
+  recordSecurityEventAsync,
+  type SecurityEventInput,
+} from "@oxagen/telemetry";
 import {
   billingOrgTermsSet,
   type BillingOrgTermsSetOutput,
@@ -103,21 +116,60 @@ export function parseFlags(argv: string[]): BillingTermsFlags {
 
 // ── The run ───────────────────────────────────────────────────────────────────
 
-/** What the run needs from the outside: the slug lookup and the kernel. */
-export interface BillingTermsDeps {
+/**
+ * What the run needs from the outside: the slug lookup, the kernel, the
+ * kernel's emitter hook and the audit inserter.
+ */
+interface BillingTermsDeps {
   resolveOrgId: (slug: string) => Promise<string | null>;
   invoke: (
     name: string,
     input: unknown,
     ctx: CapabilityContext,
   ) => Promise<unknown>;
+  /** The kernel's `setSecurityEventEmitter`; the run registers before it invokes. */
+  setSecurityEventEmitter: (
+    emitter: (event: KernelSecurityEvent) => void,
+  ) => void;
+  /** Writes one `security_events` row; the run awaits every row it produces. */
+  recordSecurityEvent: (event: SecurityEventInput) => Promise<void>;
   /** Injected so a test can pin the correlation key. */
   requestId?: string;
 }
 
 /**
- * Resolve the slug, mint a platform-operator binding, and invoke the
- * capability. The returned row is what the database holds afterwards.
+ * The kernel's authz outcome as a `security_events` row, the mapping
+ * apps/api/src/bootstrap.ts registers. `orgId` is the organisation the
+ * decision is about: the context carries no tenant (`ctx.orgId` is ""), and
+ * the column is a non-null uuid.
+ */
+function kernelAuditRow(
+  event: KernelSecurityEvent,
+  orgId: string,
+): SecurityEventInput {
+  return {
+    eventType:
+      event.outcome === "allow"
+        ? "capability.invoke_allowed"
+        : event.outcome === "deny"
+          ? "capability.invoke_denied"
+          : "capability.invoke_error",
+    actorUserId: event.actorUserId,
+    orgId,
+    workspaceId: null,
+    capability: event.capability,
+    outcome: event.outcome,
+    ip: null,
+    userAgent: null,
+    requestId: event.requestId,
+  };
+}
+
+/**
+ * Resolve the slug, register the kernel's audit emitter, mint a
+ * platform-operator binding, and invoke the capability. Every audit row the
+ * kernel emits is awaited before the run settles, on the deny path too. The
+ * returned row is what the database holds afterwards.
  */
 export async function runBillingTerms(
   flags: BillingTermsFlags,
@@ -125,6 +177,11 @@ export async function runBillingTerms(
 ): Promise<BillingOrgTermsSetOutput> {
   const orgId = await deps.resolveOrgId(flags.orgSlug);
   if (!orgId) throw new Error(`no organisation with slug "${flags.orgSlug}"`);
+
+  const audits: Promise<void>[] = [];
+  deps.setSecurityEventEmitter((event) => {
+    audits.push(deps.recordSecurityEvent(kernelAuditRow(event, orgId)));
+  });
 
   const requestId = deps.requestId ?? randomUUID();
   const ctx: CapabilityContext = {
@@ -140,15 +197,20 @@ export async function runBillingTerms(
     platformOperator: createPlatformOperatorContext({ requestId }),
   };
 
-  const output = await deps.invoke(
-    billingOrgTermsSet.name,
-    {
-      orgId,
-      approvedForInvoiceBilling: flags.approvedForInvoiceBilling,
-      invoiceGauMax: flags.invoiceGauMax,
-    },
-    ctx,
-  );
+  let output: unknown;
+  try {
+    output = await deps.invoke(
+      billingOrgTermsSet.name,
+      {
+        orgId,
+        approvedForInvoiceBilling: flags.approvedForInvoiceBilling,
+        invoiceGauMax: flags.invoiceGauMax,
+      },
+      ctx,
+    );
+  } finally {
+    await Promise.all(audits);
+  }
   return billingOrgTermsSet.output.parse(output);
 }
 
@@ -184,6 +246,7 @@ async function main(): Promise<void> {
   // the capability has a contract and no handler.
   await import("@oxagen/handlers/register");
 
+  const insert = makeSecurityEventInserter();
   const stored = await runBillingTerms(flags, {
     resolveOrgId: async (slug) => {
       const row = await withSystemDb((tx) =>
@@ -195,6 +258,8 @@ async function main(): Promise<void> {
       return row?.id ?? null;
     },
     invoke: (name, input, ctx) => invoke(name, input, ctx),
+    setSecurityEventEmitter,
+    recordSecurityEvent: (event) => recordSecurityEventAsync(insert, event),
   });
 
   console.log(

@@ -26,7 +26,7 @@ import {
   type BillingOrgTermsSetOutput,
 } from "@oxagen/oxagen/contracts/billing.org_terms.set";
 import { setOrgBillingTerms, type OrgBillingTerms } from "@oxagen/billing";
-import { emitSecurityEvent } from "@oxagen/database/security";
+import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { logger } from "./logger";
 
 /** The one write the handler makes. Runs with no tenant scope. */
@@ -50,7 +50,13 @@ export function createBillingOrgTermsSetHandler(
     // taxonomy's `billing.plan_changed` is the "the org's commercial terms
     // moved" event; actorUserId is null because an operator script has no
     // session, and requestId is the operator run's own correlation key.
-    emitSecurityEvent({
+    //
+    // Awaited: the caller is a process that exits as soon as the invoke
+    // returns, and a fire-and-forget insert would race `closeDatabase()` and
+    // `process.exit`. A row that fails all its retries rejects here, after the
+    // terms are stored; the operator sees the failure and re-runs the
+    // idempotent upsert.
+    await emitSecurityEventAsync({
       eventType: "billing.plan_changed",
       actorUserId: null,
       orgId: stored.orgId,

@@ -43,7 +43,7 @@ The stored row: `orgId`, `approvedForInvoiceBilling`, `invoiceGauMax`.
 
 ## Side effects
 
-One upsert on `billing.org_billing_settings`, on `withSystemDb`, keyed on the input's `orgId`. Audited: `emitSecurityEvent` writes a `billing.plan_changed` row naming the target org, this capability and the operator run's request id; `actorUserId` is null, because an operator script has no session.
+One upsert on `billing.org_billing_settings`, on `withSystemDb`, keyed on the input's `orgId`. Audited twice: the handler awaits `emitSecurityEventAsync` for a `billing.plan_changed` row naming the target org, this capability and the operator run's request id (`actorUserId` is null, because an operator script has no session), and the kernel's `capability.invoke_allowed` / `invoke_denied` row is written by the emitter `pnpm billing:terms` registers before it invokes, with the target org as the row's `orgId`. The script awaits both rows before it closes the pool and exits.
 
 Switching invoice billing off on an organization with uninvoiced overage must also close the accrual — `claimInterimInvoice` plus the settlement sequence. That lands in WL-31 with the rest of `gau_settlements` in motion.
 

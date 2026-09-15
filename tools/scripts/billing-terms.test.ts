@@ -8,10 +8,17 @@
  * platform-operator binding with `surface: "runner"` and no tenant. The kernel
  * side of that bargain — refusing the call without the binding — is asserted
  * in packages/oxagen/src/kernel.test.ts.
+ *
+ * The audit half is asserted against fakes of the kernel's emitter hook and
+ * the row inserter: the emitter is registered before the invoke, the row the
+ * kernel's event becomes names the target org, and the run does not settle
+ * until that row's insert has.
  */
 import { describe, expect, it, vi } from "vitest";
 import { isKernelIssuedPlatformOperator } from "@oxagen/oxagen/platform-operator";
+import type { KernelSecurityEvent } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import type { SecurityEventInput } from "@oxagen/telemetry";
 import {
   describeTarget,
   parseFlags,
@@ -27,20 +34,93 @@ const flags: BillingTermsFlags = {
   invoiceGauMax: 250_000,
 };
 
-/** A fake kernel that records what it was called with and echoes the input. */
-function fakeInvoke() {
+/** The kernel event a fake invoke emits for the call it received. */
+function kernelEvent(
+  ctx: CapabilityContext,
+  outcome: KernelSecurityEvent["outcome"],
+): KernelSecurityEvent {
+  return {
+    capability: "set_org_billing_terms",
+    outcome,
+    surface: ctx.surface,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    actorUserId: ctx.userId,
+    requestId: ctx.requestId,
+    errorCode: outcome === "allow" ? null : "authz_denied",
+    durationMs: 1,
+  };
+}
+
+/**
+ * A fake kernel: records what it was called with, emits one security event
+ * through whatever emitter the run registered (as the real kernel does, right
+ * before it returns or throws), and echoes the input. The audit fakes record
+ * every row and let a test hold the insert open.
+ */
+function fakeInvoke(opts: { outcome?: KernelSecurityEvent["outcome"] } = {}) {
+  const outcome = opts.outcome ?? "allow";
   const calls: {
     name: string;
     input: unknown;
     ctx: CapabilityContext;
+    emitterRegistered: boolean;
   }[] = [];
+  let emitter: ((event: KernelSecurityEvent) => void) | null = null;
+  const rows: SecurityEventInput[] = [];
+  const pending: (() => void)[] = [];
   const fn = vi.fn(
     async (name: string, input: unknown, ctx: CapabilityContext) => {
-      calls.push({ name, input, ctx });
+      calls.push({ name, input, ctx, emitterRegistered: emitter !== null });
+      emitter?.(kernelEvent(ctx, outcome));
+      if (outcome !== "allow") throw new Error("authz_denied");
       return input;
     },
   );
-  return { calls, fn };
+  return {
+    calls,
+    fn,
+    rows,
+    setSecurityEventEmitter: vi.fn(
+      (e: (event: KernelSecurityEvent) => void) => {
+        emitter = e;
+      },
+    ),
+    recordSecurityEvent: vi.fn(
+      (row: SecurityEventInput) =>
+        new Promise<void>((resolve) => {
+          rows.push(row);
+          pending.push(resolve);
+        }),
+    ),
+    /** Settle every held insert. */
+    releaseAudits: () => {
+      for (const resolve of pending.splice(0)) resolve();
+    },
+  };
+}
+
+/** The deps a run needs, with every audit insert released as it arrives. */
+function depsOf(
+  kernel: ReturnType<typeof fakeInvoke>,
+  overrides: {
+    resolveOrgId?: () => Promise<string | null>;
+    requestId?: string;
+  } = {},
+) {
+  return {
+    resolveOrgId: overrides.resolveOrgId ?? (async () => ORG_ID),
+    invoke: kernel.fn,
+    setSecurityEventEmitter: kernel.setSecurityEventEmitter,
+    recordSecurityEvent: vi.fn(async (row: SecurityEventInput) => {
+      const held = kernel.recordSecurityEvent(row);
+      kernel.releaseAudits();
+      await held;
+    }),
+    ...(overrides.requestId === undefined
+      ? {}
+      : { requestId: overrides.requestId }),
+  };
 }
 
 /**
@@ -154,11 +234,10 @@ describe("runBillingTerms", () => {
   it("invokes set_org_billing_terms with the resolved org id and the flags", async () => {
     const kernel = fakeInvoke();
 
-    const stored = await runBillingTerms(flags, {
-      resolveOrgId: async () => ORG_ID,
-      invoke: kernel.fn,
-      requestId: "req-1",
-    });
+    const stored = await runBillingTerms(
+      flags,
+      depsOf(kernel, { requestId: "req-1" }),
+    );
 
     expect(kernel.calls).toHaveLength(1);
     expect(callAt(kernel, 0).name).toBe("set_org_billing_terms");
@@ -178,7 +257,7 @@ describe("runBillingTerms", () => {
     const kernel = fakeInvoke();
     const resolveOrgId = vi.fn(async () => ORG_ID);
 
-    await runBillingTerms(flags, { resolveOrgId, invoke: kernel.fn });
+    await runBillingTerms(flags, depsOf(kernel, { resolveOrgId }));
 
     expect(resolveOrgId).toHaveBeenCalledWith("acme");
   });
@@ -186,11 +265,7 @@ describe("runBillingTerms", () => {
   it("carries a kernel-minted platform-operator binding on the context", async () => {
     const kernel = fakeInvoke();
 
-    await runBillingTerms(flags, {
-      resolveOrgId: async () => ORG_ID,
-      invoke: kernel.fn,
-      requestId: "req-2",
-    });
+    await runBillingTerms(flags, depsOf(kernel, { requestId: "req-2" }));
 
     const ctx = callAt(kernel, 0).ctx;
     expect(isKernelIssuedPlatformOperator(ctx.platformOperator)).toBe(true);
@@ -200,11 +275,7 @@ describe("runBillingTerms", () => {
   it("names the runner surface on the context and no tenant", async () => {
     const kernel = fakeInvoke();
 
-    await runBillingTerms(flags, {
-      resolveOrgId: async () => ORG_ID,
-      invoke: kernel.fn,
-      requestId: "req-3",
-    });
+    await runBillingTerms(flags, depsOf(kernel, { requestId: "req-3" }));
 
     const ctx = callAt(kernel, 0).ctx;
     expect(ctx.surface).toBe("runner");
@@ -217,10 +288,7 @@ describe("runBillingTerms", () => {
   it("passes no opts argument, which surfaces: [] would refuse", async () => {
     const kernel = fakeInvoke();
 
-    await runBillingTerms(flags, {
-      resolveOrgId: async () => ORG_ID,
-      invoke: kernel.fn,
-    });
+    await runBillingTerms(flags, depsOf(kernel));
 
     expect(kernel.fn.mock.calls[0]).toHaveLength(3);
   });
@@ -229,18 +297,20 @@ describe("runBillingTerms", () => {
     const kernel = fakeInvoke();
 
     await expect(
-      runBillingTerms(flags, {
-        resolveOrgId: async () => null,
-        invoke: kernel.fn,
-      }),
+      runBillingTerms(
+        flags,
+        depsOf(kernel, { resolveOrgId: async () => null }),
+      ),
     ).rejects.toThrow(/no organisation with slug "acme"/);
     expect(kernel.fn).not.toHaveBeenCalled();
+    expect(kernel.setSecurityEventEmitter).not.toHaveBeenCalled();
   });
 
   it("refuses an output the contract does not describe", async () => {
+    const kernel = fakeInvoke();
     await expect(
       runBillingTerms(flags, {
-        resolveOrgId: async () => ORG_ID,
+        ...depsOf(kernel),
         invoke: async () => ({ orgId: ORG_ID }),
       }),
     ).rejects.toThrow();
@@ -248,7 +318,7 @@ describe("runBillingTerms", () => {
 
   it("mints a distinct binding per run", async () => {
     const kernel = fakeInvoke();
-    const deps = { resolveOrgId: async () => ORG_ID, invoke: kernel.fn };
+    const deps = depsOf(kernel);
 
     await runBillingTerms(flags, deps);
     await runBillingTerms(flags, deps);
@@ -259,6 +329,88 @@ describe("runBillingTerms", () => {
     expect(callAt(kernel, 0).ctx.requestId).not.toBe(
       callAt(kernel, 1).ctx.requestId,
     );
+  });
+});
+
+describe("runBillingTerms — the kernel audit row", () => {
+  it("registers the kernel emitter before the invoke", async () => {
+    const kernel = fakeInvoke();
+
+    await runBillingTerms(flags, depsOf(kernel));
+
+    expect(kernel.setSecurityEventEmitter).toHaveBeenCalledOnce();
+    expect(callAt(kernel, 0).emitterRegistered).toBe(true);
+  });
+
+  it("writes the allow row against the target org, with no tenant on the row", async () => {
+    const kernel = fakeInvoke();
+
+    await runBillingTerms(flags, depsOf(kernel, { requestId: "req-4" }));
+
+    expect(kernel.rows).toEqual([
+      {
+        eventType: "capability.invoke_allowed",
+        actorUserId: null,
+        orgId: ORG_ID,
+        workspaceId: null,
+        capability: "set_org_billing_terms",
+        outcome: "allow",
+        ip: null,
+        userAgent: null,
+        requestId: "req-4",
+      },
+    ]);
+  });
+
+  it("does not settle until the row's insert has", async () => {
+    const kernel = fakeInvoke();
+    let settled = false;
+    const run = runBillingTerms(flags, {
+      ...depsOf(kernel),
+      recordSecurityEvent: kernel.recordSecurityEvent,
+    }).then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(kernel.fn).toHaveBeenCalledOnce();
+    expect(kernel.rows).toHaveLength(1);
+    expect(settled).toBe(false);
+
+    kernel.releaseAudits();
+    await run;
+    expect(settled).toBe(true);
+  });
+
+  it("writes and awaits the deny row when the kernel refuses the call", async () => {
+    const kernel = fakeInvoke({ outcome: "deny" });
+    const deps = depsOf(kernel);
+
+    await expect(runBillingTerms(flags, deps)).rejects.toThrow(/authz_denied/);
+
+    expect(kernel.rows).toEqual([
+      expect.objectContaining({
+        eventType: "capability.invoke_denied",
+        outcome: "deny",
+        orgId: ORG_ID,
+      }),
+    ]);
+    expect(deps.recordSecurityEvent).toHaveBeenCalledOnce();
+  });
+
+  it("fails the run when the row cannot be written", async () => {
+    const kernel = fakeInvoke();
+
+    await expect(
+      runBillingTerms(flags, {
+        ...depsOf(kernel),
+        recordSecurityEvent: async () => {
+          throw new Error("security_events insert failed after 3 attempts");
+        },
+      }),
+    ).rejects.toThrow(/security_events insert failed/);
   });
 });
 
