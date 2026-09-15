@@ -2136,6 +2136,10 @@
    "port": 3002
   },
   {
+   "host": "internal.oxagen.sh",
+   "port": 3003
+  },
+  {
    "host": "mcp.oxagen.sh",
    "port": 4100
   },

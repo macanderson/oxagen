@@ -1,13 +1,13 @@
 ---
 title: Managed policy
-description: Organization-level control over which MCP servers and tools are allowed — for enterprise governance.
+description: Organization-level control over which MCP servers and tools are allowed, for enterprise governance.
 ---
 
 Managed policies let organization admins control which external MCP servers developers can connect and which tools are allowed or blocked. This is the enterprise governance layer that cannot be overridden by individual user or project settings.
 
 ## How it works
 
-The managed config is stored at `~/.config/oxagen/managed.json` and synced automatically from the platform (on login and periodically in the background). This file acts as an **unoverridable floor** — its rules take precedence over all user/project/local settings.
+The managed config is stored at `~/.config/oxagen/managed.json` and synced automatically from the platform (on login and periodically in the background). This file acts as an **unoverridable floor**: its rules take precedence over all user/project/local settings.
 
 ## Managed config structure
 
@@ -82,7 +82,7 @@ URLs matching `deniedServerUrls` are always blocked, even if they match the allo
 }
 ```
 
-This blocks all non-TLS servers — a common enterprise requirement.
+This blocks all non-TLS servers: a common enterprise requirement.
 
 ### Command allowlist (for stdio)
 

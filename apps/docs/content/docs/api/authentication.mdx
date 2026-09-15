@@ -5,7 +5,7 @@ description: How to create, use, rotate, and revoke API keys for the Oxagen REST
 
 ## API keys
 
-API keys are the authentication mechanism for the REST API and MCP server. Each key is tied to a specific organization and workspace at creation time — there is no concept of an "org-only" key that applies across workspaces.
+API keys are the authentication mechanism for the REST API and MCP server. Each key is tied to a specific organization and workspace at creation time: there is no concept of an "org-only" key that applies across workspaces.
 
 Keys use the format `ox_…` (the prefix `ox_` followed by a base64url-encoded 32-byte random value). There is no test-mode key variant.
 
@@ -14,7 +14,7 @@ Keys use the format `ox_…` (the prefix `ox_` followed by a base64url-encoded 3
 1. Go to **Organization → Developer → Tokens**.
 2. Click **Create API key**.
 3. Enter a descriptive name (e.g., "CI integration", "Slack bot").
-4. Click **Create**. Copy the key — it is shown only once.
+4. Click **Create**. Copy the key: it is shown only once.
 
 A key acts with the access of the user who created it. See [What a key is allowed to do](#what-a-key-is-allowed-to-do).
 
@@ -41,7 +41,7 @@ Authorization: Bearer ox_…
 
 ## Scope and org/workspace resolution
 
-The key carries org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies or query strings — the API resolves them from the key automatically.
+The key carries org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies or query strings: the API resolves them from the key automatically.
 
 When a key is used:
 
@@ -51,7 +51,7 @@ When a key is used:
 
 ## Revoking a key
 
-Go to **Organization → Developer → Tokens** and click **Revoke** next to the key. Revocation is immediate — the next request with the revoked key returns `401 Unauthorized`. An `api_key.revoked` security event is written.
+Go to **Organization → Developer → Tokens** and click **Revoke** next to the key. Revocation is immediate: the next request with the revoked key returns `401 Unauthorized`. An `api_key.revoked` security event is written.
 
 Alternatively, use the `revoke_api_key` capability:
 
@@ -76,10 +76,10 @@ Keys cannot yet be narrowed to a subset of capabilities. The create call accepts
 
 ## Key rotation
 
-Keys do not expire automatically. To rotate a key, click **Rotate** next to it in **Organization → Developer → Tokens**. Rotation issues a replacement key (shown once), carries over the old key's expiry, and revokes the old key in the same step — so update your integration with the new key immediately, because the old one stops working at once.
+Keys do not expire automatically. To rotate a key, click **Rotate** next to it in **Organization → Developer → Tokens**. Rotation issues a replacement key (shown once), carries over the old key's expiry, and revokes the old key in the same step, so update your integration with the new key immediately, because the old one stops working at once.
 
 ## Security notes
 
 - Never commit an API key to source control. Use environment variables.
-- Keys should not be used in client-side browser code — they carry org and workspace scope and must be kept server-side.
+- Keys should not be used in client-side browser code: they carry org and workspace scope and must be kept server-side.
 - If you suspect a key has been compromised, revoke it immediately and create a new one.

@@ -1,6 +1,6 @@
 ---
 title: Schema registry
-description: Define and enforce the workspace ontology — node labels, properties, and relationship types — with drafts, versions, and AI-assisted setup.
+description: "Define and enforce the workspace ontology: node labels, properties, and relationship types, with drafts, versions, and AI-assisted setup."
 ---
 
 The **schema registry** defines what your knowledge graph is allowed to contain: the node labels (entity types), their typed properties, and the relationship types between them. Extraction, ingestion, and validation all read from the pinned schema version, so the graph stays consistent no matter which source or agent writes to it.
@@ -21,13 +21,13 @@ Manage it in **Workspace → Knowledge → Ontology**.
 
 You do not have to author a schema by hand:
 
-1. **Recommend** — Oxagen reads your existing graph (node counts, observed labels, sampled entities) and proposes a starter schema or additions to it.
-2. **Refine in chat** — an iterative builder takes plain-language instructions ("split Contact into Lead and Customer", "add a renewal_date to Contract") and returns proposed mutations to the draft.
-3. **Activate** — the draft becomes the pinned version.
+1. **Recommend**: Oxagen reads your existing graph (node counts, observed labels, sampled entities) and proposes a starter schema or additions to it.
+2. **Refine in chat**: an iterative builder takes plain-language instructions ("split Contact into Lead and Customer", "add a renewal_date to Contract") and returns proposed mutations to the draft.
+3. **Activate**: the draft becomes the pinned version.
 
 ## Enforcement
 
-Validation runs when nodes and relationships are written, returning a conformance score and field-level errors. Enforcement has three modes — `strict` (reject nonconforming writes), `lenient` (accept and flag), and `off`. Property descriptions and examples double as few-shot grounding for extraction, so a well-described schema directly improves extraction quality.
+Validation runs when nodes and relationships are written, returning a conformance score and field-level errors. Enforcement has three modes: `strict` (reject nonconforming writes), `lenient` (accept and flag), and `off`. Property descriptions and examples double as few-shot grounding for extraction, so a well-described schema directly improves extraction quality.
 
 ## Why it matters
 

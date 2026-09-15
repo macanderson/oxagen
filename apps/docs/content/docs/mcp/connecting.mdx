@@ -150,7 +150,7 @@ const result = await client.callTool({
 });
 ```
 
-A tool is named after the capability behind it, with no translation step — verb-first snake_case, such as `recall_memory` or `list_agent_tools`. See [MCP tools](/docs/mcp/tools) for the list.
+A tool is named after the capability behind it, with no translation step: verb-first snake_case, such as `recall_memory` or `list_agent_tools`. See [MCP tools](/docs/mcp/tools) for the list.
 
 ## Scope and isolation
 
@@ -175,6 +175,6 @@ Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `
 
 **Tool call refused:** On an Enterprise organization, the user who created the key lacks a role grant for that capability, or the grant requires approval. Check the key creator's role under **Governance → Policies**. Refusals are recorded as `capability.invoke_denied` events in **Organization → Security → Audit**.
 
-**Tool not in list:** The tool list is not filtered per key — authorization happens when a tool is called. A missing tool is not exposed on the MCP surface; see [MCP tools](/docs/mcp/tools).
+**Tool not in list:** The tool list is not filtered per key, authorization happens when a tool is called. A missing tool is not exposed on the MCP surface; see [MCP tools](/docs/mcp/tools).
 
-**Connection drops after 25 seconds:** Your client may be on a platform with a short serverless function timeout. The MCP server is deployed on Vercel Functions. Long-running tool calls (background task start, video generation) are designed to return immediately with a task ID — the actual work runs asynchronously via Inngest.
+**Connection drops after 25 seconds:** Your client may be on a platform with a short serverless function timeout. The MCP server is deployed on Vercel Functions. Long-running tool calls (background task start, video generation) are designed to return immediately with a task ID: the actual work runs asynchronously via Inngest.

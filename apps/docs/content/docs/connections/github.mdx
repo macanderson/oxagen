@@ -5,8 +5,8 @@ description: Authorize Oxagen to ingest governed repository and delivery metadat
 
 ## Overview
 
-The **GitHub connection** lets Oxagen ingest stable provider metadata — repositories,
-configured refs, commits, pull requests, issues, releases, and workflow activity — into your
+The **GitHub connection** lets Oxagen ingest stable provider metadata: repositories,
+configured refs, commits, pull requests, issues, releases, and workflow activity: into your
 workspace context graph. Agents can use that shared metadata with RBAC-scoped context while
 the exact live code graph stays local to their checkout or worktree.
 
@@ -30,7 +30,7 @@ imports, or uncommitted state into the workspace graph.
 
 - You need a workspace in Oxagen and permission to add connections to it.
 - You need to be able to **install a GitHub App** on the GitHub account or organization that
-  owns the repositories — that usually means you are an owner or admin of that GitHub org, or
+  owns the repositories: that usually means you are an owner or admin of that GitHub org, or
   it is your personal account.
 
 ## Connect a repository
@@ -40,7 +40,7 @@ imports, or uncommitted state into the workspace graph.
 3. Click **Authorize GitHub**. You'll be sent to GitHub to sign in and approve access.
 4. On GitHub, choose where to install the Oxagen app:
    - Pick the **account or organization** that owns the repositories.
-   - Choose **All repositories** or **Only select repositories** — selecting only the repos
+   - Choose **All repositories** or **Only select repositories**: selecting only the repos
      you want to ingest is recommended.
    - Review the read-only permissions and click **Install & Authorize**.
 5. GitHub returns you to Oxagen. You'll see the **installations** available to you.
@@ -76,7 +76,7 @@ When you connect a repository, Oxagen performs a first pass over provider record
 - It resolves the repository's actual default branch and records repository, ref, commit,
   pull-request, issue, and release metadata.
 - Provider records are projected into the workspace graph through the governed ingestion path.
-- Larger repositories are processed in batches. The sync runs in the background — you can
+- Larger repositories are processed in batches. The sync runs in the background: you can
   leave the page and come back.
 
 The connection's status moves to **Connected** once the sync has started. You can re-run a sync
@@ -84,7 +84,7 @@ at any time from the source's settings.
 
 ### Staying up to date automatically
 
-After the initial sync, Oxagen keeps provider metadata current as the repository changes — new
+After the initial sync, Oxagen keeps provider metadata current as the repository changes: new
 commits, pull requests, issues, comments, releases, and workflow events are ingested as they
 happen. Records are added for the activity types your workspace has chosen to ingest; you can
 also trigger a manual **Re-sync** at any time.
@@ -120,7 +120,7 @@ also trigger a manual **Re-sync** at any time.
 
 | Problem | What to do |
 | --- | --- |
-| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment — the error names the missing one. Contact your Oxagen admin. |
+| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment: the error names the missing one. Contact your Oxagen admin. |
 | No installations appear after authorizing | Make sure you completed the **Install & Authorize** step on GitHub for the account that owns your repos. |
 | A repository is missing from the list | The Oxagen app may not have access to it. On GitHub, open the Oxagen app's configuration and add the repository, then return to Oxagen. |
 | Sync seems stuck | Large repositories take longer. If it doesn't progress, re-run the sync from the source settings or contact support. |
