@@ -117,10 +117,10 @@ describe("setAutoTopup", () => {
     "saves the setting for an %s in the organization it resolved and returns the values as stored",
     async (role) => {
       signedInAs(role);
-      invoke.mockResolvedValue({ enabled: false, blocks: 100 });
+      invoke.mockResolvedValue({ enabled: true, blocks: 3 });
       expect(
         await setAutoTopup("acme", { enabled: false, blocks: 100 }),
-      ).toEqual({ ok: true, value: { enabled: false, blocks: 100 } });
+      ).toEqual({ ok: true, value: { enabled: true, blocks: 3 } });
       expect(invoke).toHaveBeenCalledOnce();
       expect(invoke).toHaveBeenCalledWith(
         billingAutoTopupSet.name,
