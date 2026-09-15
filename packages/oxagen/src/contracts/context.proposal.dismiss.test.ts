@@ -10,7 +10,7 @@ describe("dismiss_proposal contract", () => {
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow" },
     });
-    // The role gate needs a signed-in user; an API key carries none.
+    // Dismissed from Mission Control; the MCP tool is a lane of its own.
     expect(contextProposalDismiss.surfaces).toEqual(["api"]);
     expect(contextProposalDismiss.layers).not.toContain("mcp");
     expect(

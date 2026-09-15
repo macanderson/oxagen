@@ -1,7 +1,8 @@
 // audit-exempt: a dismissed proposal steered nothing and publishes nothing; the kernel capability.invoke_* audit records who dismissed it.
 //
 // dismiss_proposal (ADR-061): Owner/Admin (or the workspace Owner) rejects a
-// proposal with a reason. A proposal that started a Context PR has the PR
+// proposal with a reason; the acting user is the signed-in user or the
+// creator of the API key (resolveActingUserId). A proposal that started a Context PR has the PR
 // closed and its branch deleted first, so the next proposal on the lineage
 // opens a fresh branch and PR; that includes a proposal whose open failed
 // after GitHub opened the PR, whose PR is found on its branch and named in
