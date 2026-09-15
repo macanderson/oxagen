@@ -51,6 +51,7 @@ import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -68,6 +69,8 @@ import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
+import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
@@ -95,6 +98,7 @@ import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
+import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -113,6 +117,8 @@ import { contextPrGetRoute } from "./context.pr.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
+import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
+import { tachoCommandListRoute } from "./tacho.command.list";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
 
 const CTX = {
@@ -513,6 +519,14 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "billing.contract_rate.get",
+    route: billingContractRateGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: billingContractRateGet.name,
+    expectedInput: {},
+    status: 200,
+  },
+  {
     file: "billing.invoice.list",
     route: billingInvoiceListRoute as unknown as Hono<never>,
     method: "POST",
@@ -631,6 +645,38 @@ const ROUTES: ThinRoute[] = [
     capability: conversationChat.name,
     body: { conversation_id: "cnv_1", message: "hello" },
     invalidBody: { message: "hello" },
+    status: 200,
+  },
+  {
+    file: "tacho.command.dispatch",
+    route: tachoCommandDispatchRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoCommandDispatch.name,
+    body: { target: { kind: "run", id: "tse_a1b2c3" }, command: "pause" },
+    // `expiresInMs` defaults in the contract, so the handler sees a field the
+    // request never sent — assert the resolved input, not the body.
+    expectedInput: {
+      target: { kind: "run", id: "tse_a1b2c3" },
+      command: "pause",
+      expiresInMs: 3_600_000,
+    },
+    // `steer` carries prompt content, so the contract's cross-field refine
+    // refuses it with no payload. A shape error would be caught by any
+    // invalid body; this one proves the refine runs in the adapter too.
+    invalidBody: {
+      target: { kind: "run", id: "tse_a1b2c3" },
+      command: "steer",
+    },
+    status: 201,
+  },
+  {
+    file: "tacho.command.list",
+    route: tachoCommandListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoCommandList.name,
+    body: { runId: "tse_a1b2c3" },
+    expectedInput: { runId: "tse_a1b2c3", limit: 50 },
+    invalidBody: { runId: "not-a-run-id" },
     status: 200,
   },
   {

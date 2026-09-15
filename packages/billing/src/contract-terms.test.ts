@@ -81,12 +81,18 @@ const { resolveContractTerms, resolveGauEntitlement, FREE_PLAN_SLUG } =
 
 const NOW = new Date("2026-09-14T12:00:00.000Z");
 
+/** When the seeded Free plan row was last written. */
+const FREE_PLAN_WRITTEN = new Date("2026-09-14T00:00:00.000Z");
+/** When the Scale plan row was last written — a different instant. */
+const SCALE_PLAN_WRITTEN = new Date("2026-08-01T00:00:00.000Z");
+
 const FREE_PLAN = {
   tier: "free",
   currency: "usd",
   ratePerGauMicros: 5_000n,
   blockSizeGau: 5_000,
   includedGauPerMonth: 5_000,
+  updatedAt: FREE_PLAN_WRITTEN,
 };
 
 const SCALE_SUB = {
@@ -95,6 +101,7 @@ const SCALE_SUB = {
   ratePerGauMicros: 5_000n,
   blockSizeGau: 5_000,
   includedGauPerMonth: 300_000,
+  updatedAt: SCALE_PLAN_WRITTEN,
   billingInterval: "year",
   currentPeriodStart: new Date("2026-01-31T00:00:00.000Z"),
   currentPeriodEnd: new Date("2027-01-31T00:00:00.000Z"),
@@ -223,6 +230,8 @@ describe("resolveContractTerms — which row answers", () => {
       ratePerGauMicros: 5_000n,
       blockSizeGau: 5_000,
       includedGauPerMonth: 300_000,
+      effectiveFrom: SCALE_PLAN_WRITTEN,
+      effectiveTo: null,
     });
   });
 
@@ -261,7 +270,16 @@ describe("resolveContractTerms — which row answers", () => {
   it("an org with no entitled subscription gets the Free plan's published terms", async () => {
     setup();
     const terms = await resolveContractTerms("org-1", NOW);
-    expect(terms).toEqual({ source: "published_tier", ...FREE_PLAN });
+    expect(terms).toEqual({
+      source: "published_tier",
+      tier: FREE_PLAN.tier,
+      currency: FREE_PLAN.currency,
+      ratePerGauMicros: FREE_PLAN.ratePerGauMicros,
+      blockSizeGau: FREE_PLAN.blockSizeGau,
+      includedGauPerMonth: FREE_PLAN.includedGauPerMonth,
+      effectiveFrom: FREE_PLAN_WRITTEN,
+      effectiveTo: null,
+    });
   });
 
   it("a legacy organizations.plan_type row resolves through its subscription or Free, never through plan_type", async () => {

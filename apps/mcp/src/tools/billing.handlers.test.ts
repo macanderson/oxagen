@@ -115,6 +115,54 @@ describe("billing.subscription.read handler", () => {
   });
 });
 
+// ── billing.contract_rate.get ────────────────────────────────────────────────
+
+import handler_billingContractRateGet, {
+  metadata as billingContractRateGetMetadata,
+} from "./billing.contract_rate.get";
+
+describe("billing.contract_rate.get handler", () => {
+  const rate = {
+    source: "negotiated",
+    agreementRef: "MSA-2026-017",
+    tier: "enterprise",
+    currency: "usd",
+    ratePerGauMicros: "7500",
+    blockSizeGau: 10_000,
+    includedGauPerMonth: 1_000_000,
+    effectiveFrom: "2026-06-01T00:00:00.000Z",
+    effectiveTo: null,
+  };
+
+  it("is registered under the contract's name", () => {
+    expect(billingContractRateGetMetadata.name).toBe("get_contract_rate");
+    expect(billingContractRateGetMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("invokes get_contract_rate with no arguments on the mcp surface and forwards the terms", async () => {
+    mocks.invoke.mockResolvedValue(rate);
+
+    const out = await handler_billingContractRateGet({});
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_contract_rate",
+      {},
+      fakeCtx,
+      {
+        surface: "mcp",
+      },
+    );
+    expect(out).toEqual(rate);
+  });
+
+  it("refuses a rate that arrives as a number", async () => {
+    mocks.invoke.mockResolvedValue({ ...rate, ratePerGauMicros: 7500 });
+
+    await expect(handler_billingContractRateGet({})).rejects.toThrow();
+  });
+});
+
 // ── billing.subscription.upgrade.start ───────────────────────────────────────
 
 import handler_billingSubscriptionUpgradeStart, {

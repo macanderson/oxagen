@@ -422,13 +422,8 @@ export async function startDaemon(
         refreshBundle: async () => {
           await refreshBundle();
         },
-        onMessageDelivered: (commandId, sessionUuid, seq) => {
-          pendingAcks.push({
-            command_id: commandId,
-            outcome: "applied",
-            session_uuid: sessionUuid,
-            applied_at_seq: seq,
-          });
+        acknowledge: (ack) => {
+          pendingAcks.push(ack);
         },
         now,
       },

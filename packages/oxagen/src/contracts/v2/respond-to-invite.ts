@@ -34,7 +34,11 @@ export const respondToInvite = defineTool({
   // Sources disagree only on sensitivity: accept is "medium" (it provisions IAM
   // and creates a principal-bearing membership), decline is "low". The stricter
   // wins. Everything else is identical in both.
-  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "organization",
+  },
   sensitivity: "medium", // accept_member_invite
   /**
    * `allow`, carried from both sources, and the one capability in this group

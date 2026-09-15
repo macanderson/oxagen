@@ -113,6 +113,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .billingSubscriptionReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_contract_rate",
+    async () =>
+      (await import("./billing.contract_rate.get"))
+        .billingContractRateGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_usage_breakdown",
     async () =>
       (await import("./billing.usage.breakdown"))
@@ -869,16 +875,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoBundleGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "dispatch_tacho_command",
+    "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
         .tachoCommandDispatchHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "fetch_tacho_commands",
+    "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))
         .tachoCommandFetchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_commands",
+    async () =>
+      (await import("./tacho.command.list"))
+        .tachoCommandListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_runs",

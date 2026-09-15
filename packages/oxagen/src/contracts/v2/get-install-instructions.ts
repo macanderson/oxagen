@@ -45,7 +45,7 @@ export const getInstallInstructions = defineTool({
       from: "client",
       source: "get_install_instructions",
       to: "harness",
-      why: "§3 fixes *harness* as the word for the thing an agent runs inside, and §7.2 (\"Adapters and supported agents\") is written entirely in those terms. The enum is carried by reference, so nothing but the key changes — and the output key changes with it, because a request and its echo must not disagree about what the thing is called.",
+      why: '§3 fixes *harness* as the word for the thing an agent runs inside, and §7.2 ("Adapters and supported agents") is written entirely in those terms. The enum is carried by reference, so nothing but the key changes — and the output key changes with it, because a request and its echo must not disagree about what the thing is called.',
     },
   ],
   drops: [],

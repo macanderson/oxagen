@@ -1,187 +1,104 @@
-import { z } from "zod";
 import { defineTool } from "./_define";
-import { tachoCommandDispatch } from "../tacho.command.dispatch";
-import { tachoCommandSchema } from "../../tacho/schemas";
-
-/**
- * The closed command-status vocabulary of §7.4, shared by commands and
- * messages so one delivery report reads the same whatever was sent. Declared
- * fresh because no absorbed contract has it: v1's `tachoCommandOutcomeSchema`
- * is `pending | delivered | applied | expired | failed`, which collapses the
- * two distinctions the spec says must survive.
- *
- * - `delivered` merges `sent`, `received` and `acknowledged`. §7.4: "`applied`
- *   is the difference between *the harness has it* and *the model saw it*" —
- *   and answering that is the promise §7.6 makes about every message.
- * - `pending` merges `draft` and `queued`, hiding whether a command ever left
- *   an interface.
- * - `cancelled` had nowhere to go at all, so "the operator changed their mind"
- *   and "the run never reached a boundary" both read as `expired`. §7.4 calls
- *   that the difference between an operator's mistake and a fleet problem.
- *
- * Appendix A.6 stores exactly these nine on `control.commands.status`. The
- * spec is stricter than the code, so the spec wins (carry rule F).
- *
- * Exported for `fetch_commands`, which acknowledges against the same words.
- */
-export const commandStatusSchema = z.enum([
-  "draft",
-  "queued",
-  "sent",
-  "received",
-  "acknowledged",
-  "applied",
-  "cancelled",
-  "expired",
-  "failed",
-]);
-
-/**
- * §7.3's delivery modes. Also new: v1 queued a command with no way to say which
- * model request it should ride. The mode does not choose *where* a steer lands
- * — steering is prompt content, so it always lands on a `model.request` — it
- * chooses which request, and whether Oxagen cuts the current step short to
- * reach one sooner.
- */
-export const deliveryModeSchema = z.enum([
-  /** Default. The current step finishes; the steer rides the next request. Costs nothing. */
-  "next_step",
-  /** In-flight response stopped and billed, pending tool call abandoned. For harm in progress. */
-  "interrupt",
-  /** Waits for `turn_end`. For a change of priority that should not land mid-plan. */
-  "turn_boundary",
-]);
+import { tachoCommandDispatch as live } from "../tacho.command.dispatch";
 
 /**
  * Appendix E: `dispatch_command` — "pause, resume, steer, cancel, revoke".
  * Absorbs `dispatch_tacho_command`.
  *
- * Two changes where the spec is stricter than the code it absorbs.
+ * This tool is live: issue #2953 registered it in place, in
+ * ../tacho.command.dispatch.ts, under its Appendix E name, and the v1
+ * `dispatch_tacho_command` no longer exists. The descriptor composes from the
+ * live contract so the carry checks in this directory keep reading one
+ * schema, and it is not registered a second time.
  *
- * 1. **`steer` exists and `kill` does not.** v1's command enum is `pause,
- *    resume, cancel, message, revoke, refresh_bundle, kill` — it has no
- *    `steer`, which is the single most important command in §7.3 and §7.4 and
- *    the first word in this tool's `Does` column. It is added. `kill` is
- *    removed: §7.4 folds process termination into `cancel` ("the collector
- *    sends SIGTERM where it owns the process"), and Appendix A.6's command
- *    vocabulary has `kill_switch_on`/`kill_switch_off` instead — those are
- *    §6.11 kill switches at tool, connection, agent, workspace or class level
- *    and belong to `set_kill_switch`, not to a per-host command.
+ * What changed from the absorbed contract, each declared:
  *
- * 2. **The outcome is a status from a nine-word vocabulary.** See
- *    `commandStatusSchema` above.
- *
- * **Why the target stays host-and-run.** Appendix A.6 allows nine
- * `target_kind`s on `control.commands`. The ones above host and run —
- * workspace, org, class, tool server, connection — are blast-radius denies and
- * belong to `set_kill_switch` (§6.11); `@<agent-slug>` and `@agents` addressing
- * belongs to `send_message` (§7.6). What is left, and what §7.4's guarantee
- * table is written against, is a command to one host or one run on it.
+ * 1. **The target is a run, an agent or the workspace, never a host.** §7.6
+ *    addresses a run id, `@<agent-slug>` or `@agents`; the host is where a
+ *    command is delivered, resolved from the run. Host-level `revoke` is
+ *    `revoke_enrollment`'s job (it queues the host command itself), and
+ *    `refresh_bundle` is redundant with the etag on every control envelope.
+ * 2. **`steer` exists and `kill` does not.** §7.4 folds process termination
+ *    into `cancel` (SIGTERM where the collector owns the process). Appendix
+ *    A.6's `kill_switch_on`/`kill_switch_off` belong to `set_kill_switch`.
+ * 3. **A delivery mode on the commands that carry prompt content** (§7.3),
+ *    requested on the input and recorded beside the mode achieved.
+ * 4. **The output is one id per recipient**, and the status lives on the
+ *    delivery report (`list_commands`) in §7.4's nine-word vocabulary.
  */
 export const dispatchCommand = defineTool({
-  name: "dispatch_command",
-  domain: "control",
-  description:
-    "Queue a pause, resume, steer, cancel, revoke, message, or refresh_bundle command for a host or one run on it, with a §7.3 delivery mode.",
-  mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
-  scoped: true,
-  noBillingGate: true,
+  name: live.name,
+  domain: live.domain,
+  description: live.description,
+  mode: live.mode,
+  surfaces: live.surfaces,
+  layers: live.layers,
+  scoped: live.scoped,
+  noBillingGate: live.noBillingGate,
 
   absorbs: ["dispatch_tacho_command"],
   renames: [
     {
       from: "sessionUuid",
       source: "dispatch_tacho_command",
-      to: "runId",
-      why: "§3's locked vocabulary — *session* survives only as the harness's synonym for a run, and an interface field says `run`. Carried by reference from `dispatch_tacho_command.input.shape.sessionUuid`, so the uuid bound and the optionality (omitted targets the host) travel with the new name.",
+      to: "target",
+      why: "§3's locked vocabulary — *session* survives only as the harness's synonym for a run. The run is named by its public id under `target: { kind: 'run', id }`, the same id `list_runs` reports.",
+    },
+    {
+      from: "expiresInS",
+      source: "dispatch_tacho_command",
+      to: "expiresInMs",
+      why: "milliseconds, the unit every other duration in the app's contracts carries; same 10 s to 24 h bounds and one-hour default.",
     },
   ],
   drops: [
     {
+      field: "hostEnrollmentId",
+      from: "dispatch_tacho_command",
+      why: "a command is addressed to a run, an agent or the workspace (§7.6); the host that carries it is resolved from the run's session row, so the caller never names one.",
+    },
+    {
       field: 'command: "kill"',
       from: "dispatch_tacho_command",
-      why: "§7.4 folds process kill into `cancel` (SIGTERM where the collector owns the process, best effort and recorded). Appendix A.6's `kill_switch_on`/`kill_switch_off` are §6.11 blast-radius denies and belong to `set_kill_switch`.",
+      why: "§7.4 folds process kill into `cancel` (SIGTERM where the collector owns the process, best effort and recorded).",
+    },
+    {
+      field: 'command: "revoke"',
+      from: "dispatch_tacho_command",
+      why: "host revocation is `revoke_enrollment`'s job; it retires the key, flips the host status and queues the host-level `revoke` itself.",
+    },
+    {
+      field: 'command: "refresh_bundle"',
+      from: "dispatch_tacho_command",
+      why: "every control envelope carries the bundle etag and a host refetches on mismatch; a command to do the same adds nothing.",
     },
     {
       field: "outcome (output)",
       from: "dispatch_tacho_command",
-      why: "replaced by `status` on §7.4's nine-word closed vocabulary — `pending`/`delivered` collapse the distinctions §7.4 and §7.6 exist to preserve. See commandStatusSchema.",
+      why: "replaced by `commandIds` (one per recipient run); the status is read from `list_commands` in §7.4's closed vocabulary, so a broadcast's report is a list of runs rather than one word.",
+    },
+    {
+      field: "issuedAt (output)",
+      from: "dispatch_tacho_command",
+      why: "on the delivery report (`list_commands`), which every caller reads next.",
+    },
+    {
+      field: "expiresAt (output)",
+      from: "dispatch_tacho_command",
+      why: "on the delivery report (`list_commands`), which every caller reads next.",
     },
   ],
 
-  /**
-   * v1 declared no agent metadata because it was API-only. Exposing it on MCP
-   * means a model can reach it, so a grade is required: high, and approval is
-   * required. `cancel` revokes a run token and `revoke` kills a credential —
-   * an agent that can issue either can halt the fleet, which is precisely the
-   * §6.11 blast radius a human is meant to decide on.
-   */
-  agent: { requiresApproval: true, riskLevel: "high", category: "control" },
-  sensitivity: "high",
-  defaultEffect: "deny",
-  defaultRoles: {
-    org: { Owner: "allow", Admin: "allow" },
-    workspace: {},
-  },
-  // Writes a control.commands row (Appendix A.6).
-  mutates: true,
-
-  input: z.object({
-    // Required, as in v1. A command is delivered through a connection point,
-    // and the host is what owns one — a run id alone does not say where to
-    // deliver.
-    hostEnrollmentId: tachoCommandDispatch.input.shape.hostEnrollmentId,
-    /**
-     * Carried from `sessionUuid` under §3's vocabulary ("avoid *session* except
-     * as the harness's synonym for run"). Optional: omitted targets the host,
-     * which is how `revoke` and `refresh_bundle` are addressed.
-     */
-    runId: tachoCommandDispatch.input.shape.sessionUuid,
-
-    /**
-     * The v1 enum minus `kill`, plus `steer`. Composed rather than retyped so
-     * that adding a command to the wire enum reaches this tool automatically.
-     */
-    command: z.union([
-      tachoCommandSchema.exclude(["kill"]),
-      z.literal("steer"),
-    ]),
-
-    /**
-     * §7.3. Ignored for commands that carry no prompt content (`pause`,
-     * `resume`, `cancel`, `revoke`, `refresh_bundle`) — those land at the next
-     * boundary by definition. First-class rather than a `payload` key because
-     * the mode is a governed choice with a cost: `interrupt` bills partial
-     * model output and abandons tool work, and it degrades to `next_step`
-     * behind an irreversible tool call or at `harness` tier.
-     */
-    deliveryMode: deliveryModeSchema.default("next_step"),
-
-    /** `steer` and `message` carry `{ text }`; `pause` and `cancel` may carry `{ reason }`. */
-    payload: tachoCommandDispatch.input.shape.payload,
-
-    /**
-     * 10s to 24h, default one hour. The ceiling matters: §7.4 distinguishes
-     * `expired` ("the run never reached a boundary") from `cancelled`, and a
-     * command with no expiry could never reach the first.
-     */
-    expiresInS: tachoCommandDispatch.input.shape.expiresInS,
-  }),
-
-  output: z.object({
-    commandId: tachoCommandDispatch.output.shape.commandId,
-    /**
-     * At dispatch this is `queued` or `failed`; it advances on the control
-     * channel as the host takes and applies the command. `applied` is the only
-     * success status.
-     */
-    status: commandStatusSchema,
-    issuedAt: tachoCommandDispatch.output.shape.issuedAt,
-    expiresAt: tachoCommandDispatch.output.shape.expiresAt,
-  }),
+  agent: live.agent,
+  sensitivity: live.sensitivity,
+  defaultEffect: live.defaultEffect,
+  defaultRoles: live.defaultRoles,
+  mutates: live.mutates,
+  input: live.input,
+  output: live.output,
 });
 
-export type DispatchCommandInput = z.output<typeof dispatchCommand.input>;
-export type DispatchCommandOutput = z.output<typeof dispatchCommand.output>;
+export type {
+  DispatchCommandInput,
+  DispatchCommandOutput,
+} from "../tacho.command.dispatch";

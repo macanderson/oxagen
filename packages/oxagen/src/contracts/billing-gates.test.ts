@@ -10,15 +10,18 @@
  *
  * Both lists are read from the registry by name, so a contract renamed or
  * unregistered fails here rather than silently leaving the list. The INV-27
- * list grows with WL-26…WL-30 (`get_gau_bucket`, `get_contract_rate`,
- * `list_invoices`, `purchase_gau_bucket`, `set_auto_topup`).
+ * list grows with WL-27…WL-30 (`get_gau_bucket`, `list_invoices`,
+ * `purchase_gau_bucket`, `set_auto_topup`).
  */
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import "./index";
 
 /** INV-27: a billing-page read and the two billing writes. */
-const BILLING_PAGE_CONTRACTS = ["get_subscription"] as const;
+const BILLING_PAGE_CONTRACTS = [
+  "get_subscription",
+  "get_contract_rate",
+] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */
 const CONSOLE_CONTRACTS = [
@@ -31,7 +34,11 @@ const CONSOLE_CONTRACTS = [
   "list_workspaces",
   "create_api_key",
   "revoke_api_key",
-  "dispatch_tacho_command",
+  // `dispatch_tacho_command` until this lane renamed it, with no alias
+  // (ADR-025). `list_commands` is the delivery report beside it and is a
+  // console read by the same argument, so it belongs on this list too.
+  "dispatch_command",
+  "list_commands",
   "authorize_cli",
   "change_member_role",
   "remove_org_member",

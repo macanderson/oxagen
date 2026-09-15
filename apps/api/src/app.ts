@@ -19,6 +19,7 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
@@ -215,6 +216,7 @@ import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest"
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
+import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
 import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
@@ -413,7 +415,10 @@ orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
 // fleet. Session auth with the org role checked in the handlers.
 orgScoped.route("/tacho/enrollments", tachoEnrollmentCreateRoute);
 orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
-orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
+// Run controls (dispatch_command, list_commands): addressed to runs, agents
+// and the workspace rather than to a host, so they sit beside /runs.
+orgScoped.route("/commands", tachoCommandDispatchRoute);
+orgScoped.route("/commands/list", tachoCommandListRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
@@ -423,6 +428,7 @@ orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
+orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",
   billingSubscriptionUpgradeStartRoute,
