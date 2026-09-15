@@ -50,7 +50,9 @@ describe("evidence body store", () => {
     expect(ref).toBe(evidenceBodyRef(crypto.keyId, digest.slice(7)));
 
     // The object at rest is not the plaintext.
-    const stored = await fs.get(evidenceBodyKey(scope, digest.slice(7)));
+    const stored = await fs.get(
+      evidenceBodyKey(scope, crypto.keyId, digest.slice(7)),
+    );
     const chunks: Uint8Array[] = [];
     const reader = stored.body.getReader();
     for (;;) {
@@ -73,10 +75,51 @@ describe("evidence body store", () => {
     expect(() => parseFrameBodyPlaintext(new Uint8Array([0, 9, 1]))).toThrow(
       /out of range/,
     );
-    expect(evidenceKeyScope(evidenceBodyKey(scope, "0".repeat(64)))).toEqual(
-      scope,
+    expect(
+      evidenceKeyScope(evidenceBodyKey(scope, crypto.keyId, "0".repeat(64))),
+    ).toEqual(scope);
+    expect(evidenceBodyKey(scope, "ingestion:env:v1", "0".repeat(64))).toBe(
+      `evidence/${scope.orgId}/${scope.workspaceId}/bodies/ingestion_env_v1/${"0".repeat(64)}`,
     );
     expect(evidenceKeyScope("privacy-exports/x.zip")).toBeNull();
+  });
+
+  it("keeps a body written under an earlier KEK readable after the write key changes", async () => {
+    const a = { adapter: kms, keyId: "ingestion:env:v1" };
+    const b = {
+      adapter: createLocalKmsAdapter(randomBytes(32)),
+      keyId: "ingestion:kms:v1",
+    };
+    const keys = new Map([
+      [a.keyId, a],
+      [b.keyId, b],
+    ]);
+    let write = a;
+    const migrating = createEvidenceStore({
+      storage: fs,
+      writeCrypto: () => write,
+      readCrypto: (keyId) => {
+        const found = keys.get(keyId);
+        if (!found) throw new Error(`unknown key ${keyId}`);
+        return found;
+      },
+    });
+    const bytes = enc.encode("same bytes, two providers");
+    const digest = digestBytes(bytes);
+    const body = { ...scope, runId, digest, contentType: "text/plain", bytes };
+
+    const first = await migrating.put(body);
+    write = b;
+    const second = await migrating.put(body);
+    expect(first.ref).toBe(evidenceBodyRef(a.keyId, digest.slice(7)));
+    expect(second.ref).toBe(evidenceBodyRef(b.keyId, digest.slice(7)));
+
+    for (const ref of [first.ref, second.ref]) {
+      const back = await migrating.getBody(scope, ref);
+      expect(new TextDecoder().decode(back.bytes)).toBe(
+        "same bytes, two providers",
+      );
+    }
   });
 
   it("keys a body by its tenant, so another tenant's reference does not resolve", async () => {

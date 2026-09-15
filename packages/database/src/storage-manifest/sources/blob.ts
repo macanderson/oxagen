@@ -92,7 +92,7 @@ export const BLOB_ASSETS: readonly BlobAssetSpec[] = [
     access: "private",
     description:
       "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, " +
-      "envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<sha256>; " +
+      "envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<key id>/<sha256>; " +
       "agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the " +
       "reference (ADR-058).",
   },

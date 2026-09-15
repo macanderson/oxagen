@@ -40,4 +40,4 @@ A caller can recompute `digest` over the decoded bytes: what it read is what was
 
 ## Storage
 
-Bodies are content-addressed under `evidence/<org>/<workspace>/bodies/<sha256 hex>` in the object store, encrypted per object under the platform KEK the reference names (`evb:v1:<key id>:<hex>`), with the content type framed inside the encrypted plaintext. The tenant is the key prefix, so a reference from another tenant cannot resolve inside this one.
+Bodies are content-addressed under `evidence/<org>/<workspace>/bodies/<key id>/<sha256 hex>` in the object store, encrypted per object under the platform KEK both the key and the reference name (`evb:v1:<key id>:<hex>`), so a body written after the KEK changes lands beside the earlier one, with the content type framed inside the encrypted plaintext. The tenant is the key prefix, so a reference from another tenant cannot resolve inside this one.

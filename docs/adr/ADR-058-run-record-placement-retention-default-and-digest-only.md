@@ -50,10 +50,12 @@ projection is built with it. Nothing in this revision reads a run from the
 graph, so a projection written now would be unbound code.
 
 Every object is keyed tenant-first
-(`evidence/<orgId>/<workspaceId>/bodies/<sha256>`), so a reference cannot
-resolve inside another tenant's prefix, and a body reference
+(`evidence/<orgId>/<workspaceId>/bodies/<key id>/<sha256>`), so a reference
+cannot resolve inside another tenant's prefix, and a body reference
 (`evb:v1:<key id>:<sha256>`) carries the id of the key-encryption key that
-wrapped its data key. The blob store is one shared driver today: the
+wrapped its data key. The key id is part of the object key as well, so the
+same bytes written under a later KEK land beside the earlier object and an
+older reference keeps resolving to an envelope its key id opens. The blob store is one shared driver today: the
 data-plane resolver (`packages/tenancy/src/data-plane.ts`) names Postgres,
 Neo4j and ClickHouse planes and no blob plane, and this revision does not add
 one. When ADR-042 gains a blob plane and a per-organisation KEK, an existing

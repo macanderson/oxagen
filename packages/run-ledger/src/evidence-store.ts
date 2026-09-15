@@ -16,8 +16,12 @@
 // the bytes it describes, authenticated under the same GCM tag, and no row in
 // either store has to carry it. The recorded digest is over the bytes alone.
 //
-// The same plaintext under the same tenant lands on the same key, so a retried
-// append rewrites an equivalent object rather than minting a second one.
+// The object key names the KEK too, so a body written after the crypto
+// provider flips (@oxagen/crypto's env->kms lazy migration) lands beside the
+// earlier one instead of over it, and every older reference still resolves to
+// an envelope its own key id can open. The same plaintext under the same
+// tenant and KEK lands on the same key, so a retried append rewrites an
+// equivalent object rather than minting a second one.
 //
 // The module lives in @oxagen/run-ledger so the ingest handlers, the read
 // handlers and the durable jobs (@oxagen/inngest-functions) share one store.
@@ -62,11 +66,22 @@ export function parseEvidenceBodyRef(
   return { keyId: match[1] as string, digestHex: match[2] as string };
 }
 
+/**
+ * The key id as a path segment. @oxagen/crypto mints ids of the form
+ * `ingestion:<provider>:v<n>` and refuses any other on the read path, so
+ * mapping the colons keeps the segment safe for every storage driver without
+ * two live ids sharing one.
+ */
+function keyIdSegment(keyId: string): string {
+  return keyId.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
 export function evidenceBodyKey(
   scope: EvidenceScope,
+  keyId: string,
   digestHex: string,
 ): string {
-  return `evidence/${scope.orgId}/${scope.workspaceId}/bodies/${digestHex}`;
+  return `evidence/${scope.orgId}/${scope.workspaceId}/bodies/${keyIdSegment(keyId)}/${digestHex}`;
 }
 
 function evidenceSegmentKey(
@@ -178,7 +193,7 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
         keyId,
         { adapter },
       );
-      const key = evidenceBodyKey(input, digestHex);
+      const key = evidenceBodyKey(input, keyId, digestHex);
       const written = await deps.storage.put({
         key,
         body: ciphertext,
@@ -199,7 +214,7 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
         throw new TypeError(`not an evidence body reference: ${ref}`);
       const { adapter } = deps.readCrypto(parsed.keyId);
       const object = await deps.storage.get(
-        evidenceBodyKey(scope, parsed.digestHex),
+        evidenceBodyKey(scope, parsed.keyId, parsed.digestHex),
       );
       const ciphertext = await readAll(object.body);
       const plaintext = await decrypt(Buffer.from(ciphertext), parsed.keyId, {
