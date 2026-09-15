@@ -6,7 +6,7 @@ import {
   describeCliInstall,
   HARNESS_LABEL,
   HARNESSES,
-  missionControlUrl,
+  workspaceUrl,
   wizardStep,
   enrollArgs,
   loginArgs,
@@ -259,12 +259,12 @@ describe("wizard and de-register", () => {
     });
   });
 
-  it("links Mission Control for the workspace the host reports to", () => {
-    expect(missionControlUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
-      "https://app.oxagen.sh/acme/core/runs",
+  it("links the workspace root the host reports to, not the nonexistent /runs", () => {
+    expect(workspaceUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
+      "https://app.oxagen.sh/acme/core",
     );
-    expect(missionControlUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
-      "https://app.oxagen.sh/a%20b/c%2Fd/runs",
+    expect(workspaceUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
+      "https://app.oxagen.sh/a%20b/c%2Fd",
     );
   });
 
@@ -307,20 +307,32 @@ describe("describeCliInstall", () => {
       "oxagen, tacho already on PATH in /Users/a/.local/bin.",
     );
     expect(
-      describeCliInstall({ ...base, state: "skipped", note: "no writable bin dir" }),
+      describeCliInstall({
+        ...base,
+        state: "skipped",
+        note: "no writable bin dir",
+      }),
     ).toBe("Skipped linking on launch: no writable bin dir");
     expect(
-      describeCliInstall({ ...base, state: "opted_out", note: "OXAGEN_NO_PATH_LINK set" }),
+      describeCliInstall({
+        ...base,
+        state: "opted_out",
+        note: "OXAGEN_NO_PATH_LINK set",
+      }),
     ).toBe("Not linked: you opted out. OXAGEN_NO_PATH_LINK set");
     expect(
-      describeCliInstall({ ...base, state: "failed", note: "permission denied" }),
+      describeCliInstall({
+        ...base,
+        state: "failed",
+        note: "permission denied",
+      }),
     ).toBe("Could not link into /Users/a/.local/bin: permission denied");
     expect(describeCliInstall({ ...base, state: "pending" })).toBe(
       "Linking on launch…",
     );
-    expect(
-      describeCliInstall({ ...base, files: [], state: "already" }),
-    ).toBe("nothing already on PATH in /Users/a/.local/bin.");
+    expect(describeCliInstall({ ...base, files: [], state: "already" })).toBe(
+      "nothing already on PATH in /Users/a/.local/bin.",
+    );
     // An unrecognized state (a newer CLI, an older app) falls back to its note.
     expect(
       describeCliInstall({

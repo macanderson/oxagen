@@ -4,7 +4,7 @@
  * First run (no enrollment on this machine): a five-step wizard — sign in,
  * pick the org and workspace the operator can see, register the agents the
  * machine has (Claude Code, Codex; detected, all ticked by default), the
- * outcome, then a recorded first run and the door to Mission Control.
+ * outcome, then a recorded first run and the door to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
  * host reports to, one de-register per wrapped agent, change of workspace,
@@ -17,7 +17,13 @@
  */
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   type ConnectResult,
@@ -48,12 +54,12 @@ import {
   HARNESSES,
   type Harness,
   loginArgs,
-  missionControlUrl,
   needsWorkspacePick,
   pendingChange,
   reassignArgs,
   unenrollArgs,
   wizardStep,
+  workspaceUrl,
 } from "./commands";
 import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 
@@ -415,14 +421,10 @@ export function App() {
     await refresh(true);
   }
 
-  const openMissionControl = () => {
+  const openWorkspace = () => {
     if (!state || !host) return;
     void openUrl(
-      missionControlUrl(
-        state.config.app_url,
-        host.org_slug,
-        host.workspace_slug,
-      ),
+      workspaceUrl(state.config.app_url, host.org_slug, host.workspace_slug),
     );
   };
 
@@ -1014,7 +1016,7 @@ export function App() {
                 <p className="sub">
                   Oxagen sends each registered agent one small prompt ("reply
                   OK") and confirms the run was recorded and sealed. That is
-                  your first data in Mission Control.
+                  your first data in the workspace.
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
@@ -1063,10 +1065,10 @@ export function App() {
                   <button
                     type="button"
                     className={ranOnce ? "primary" : ""}
-                    onClick={openMissionControl}
+                    onClick={openWorkspace}
                     disabled={!ranOnce}
                   >
-                    Open Mission Control
+                    Open this workspace in Oxagen
                   </button>
                   <button
                     type="button"
@@ -1133,8 +1135,8 @@ export function App() {
           </dd>
         </dl>
         <div className="row">
-          <button type="button" onClick={openMissionControl}>
-            Open Mission Control
+          <button type="button" onClick={openWorkspace}>
+            Open this workspace in Oxagen
           </button>
           {loggedIn ? (
             <button
@@ -1163,11 +1165,10 @@ export function App() {
           Wrapped agents
         </p>
         <p className="sub">
-          Every agent Oxagen records on this machine, and any script or
-          in-house agent reporting through <code>tacho hook</code>.
-          De-registering removes Oxagen's hooks from that agent's settings.
-          The last one also stops the collector and deletes the host
-          credentials.
+          Every agent Oxagen records on this machine, and any script or in-house
+          agent reporting through <code>tacho hook</code>. De-registering
+          removes Oxagen's hooks from that agent's settings. The last one also
+          stops the collector and deletes the host credentials.
         </p>
         <div className="agents">
           {agentRows.map((row) => {
@@ -1176,7 +1177,10 @@ export function App() {
               .filter(Boolean)
               .join(" · ");
             return (
-              <div key={row.key} className={`agent ${row.wrapped ? "" : "absent"}`}>
+              <div
+                key={row.key}
+                className={`agent ${row.wrapped ? "" : "absent"}`}
+              >
                 <span className="name">{row.label}</span>
                 <span
                   className={`badge health-${row.health}`}

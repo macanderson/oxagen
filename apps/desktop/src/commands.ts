@@ -169,13 +169,18 @@ export function deregisterArgs(
   };
 }
 
-/** Mission Control for the workspace the host reports to. */
-export function missionControlUrl(
+/**
+ * The workspace root in the Oxagen app, where the host reports to. Not
+ * `/runs`: that route does not exist in `apps/app` (its workspace sections
+ * are `knowledge`, `marketplace`, `sessions`, `settings`, `workbench`, plus
+ * the workspace root itself), so a `/runs` link 404s.
+ */
+export function workspaceUrl(
   appUrl: string,
   org: string,
   workspace: string,
 ): string {
-  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}/runs`;
+  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}`;
 }
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
