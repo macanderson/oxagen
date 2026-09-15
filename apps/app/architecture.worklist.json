@@ -1459,6 +1459,28 @@
       "dependsOn": [],
       "acceptance": "transportType accepts 'sse' and healthStatus accepts 'unknown', matching packages/database/src/schema/mcp.ts:170-184. A contract test parses a row with each value.",
       "estimateLinesDelta": 15
+    },
+    {
+      "id": "WL-55",
+      "title": "Write: upgrade to Build or Scale from the Billing page — kernelWrite(start_subscription_upgrade) → parseCheckoutUrl → redirectToCheckout on the synced Stripe prices; Enterprise has no Checkout",
+      "kind": "build",
+      "paths": [
+        "packages/oxagen/src/contracts/billing.subscription_upgrade.start.ts",
+        "packages/oxagen/src/contracts/billing.subscription_upgrade.start.test.ts",
+        "packages/handlers/src/billing.subscription_upgrade.start.ts",
+        "packages/handlers/src/billing.subscription_upgrade.start.test.ts",
+        "packages/handlers/src/role-check.test.ts",
+        "docs/capabilities/billing.subscription_upgrade.start.md",
+        "apps/app/src/features/billing/actions.ts",
+        "apps/app/src/features/billing/actions.test.ts",
+        "apps/app/src/features/billing/plan.tsx",
+        "apps/app/src/features/billing/billing.test.tsx",
+        "apps/app/messages/billing.json",
+        "apps/app/ARCHITECTURE.md"
+      ],
+      "dependsOn": ["WL-44"],
+      "acceptance": "Contract: start_subscription_upgrade declares mutates: true and noBillingGate: true, and INV-27 names it (an upgrade is never refused for lack of GAUs and is not a governed action, §1.5); input { planSlug: z.enum([\"build\", \"scale\"]), interval, successPath, cancelPath } with the app-relative path rule purchase_gau_bucket uses, the handler prefixing NEXT_PUBLIC_APP_URL (today it takes absolute successUrl and cancelUrl); an enterprise slug does not parse, because Enterprise is negotiated only; the schema has no money field. Handler: resolveActingUserId → assertOrgRole org Owner or Billing (INV-29; role-check.test.ts gains the contract) in place of the principal check that throws untyped Errors (billing.subscription_upgrade.start.ts:13-28); the Checkout uses the plan row’s synced Stripe price for the interval; handler tests on a tier-free org: Admin → forbidden, a key whose creator is Billing → a session, Owner → a session on the synced price. App: upgradePlan is a \"use server\" export beside purchaseGau: requireViewer(org) → validates planSlug and interval (else {reason:invalid} with no kernel call) → kernelWrite(billingSubscriptionUpgradeStart, {planSlug, interval, successPath: routes.billing(org,{checkout:success}), cancelPath: …cancel}) → parseCheckoutUrl → redirectToCheckout. Unit tests: invalid plan; Admin → denied; a returned non-checkout.stripe.com URL → {reason:unavailable} and no redirect; ok → redirectToCheckout. Plan card: Owner and Billing on a published-tier Free org see Build and Scale, on Build see Scale, on Scale or a negotiated org (get_contract_rate.source negotiated) see none; other roles see who can upgrade; component tests per state with expectNoAxe; no <Money> on the Plan card (INV-25). No app layer is added here (WL-50); `pnpm check:ui-parity --strict` passes with APP_DIR unchanged.",
+      "estimateLinesDelta": 300
     }
   ],
   "openQuestions": [
@@ -1471,7 +1493,7 @@
     "set_org_billing_terms is invoked only by the operator script `pnpm billing:terms` run with production credentials from Parameter Store (the db-migrate.yml / billing:stripe-sync pattern), through a `platformOnly` kernel check that no surface can satisfy (INV-31). Confirm this as the platform-scoped path for rev1, or ask for an operator role and an API route.",
     "Retention is off the page (R3-A3): get_evidence_retention returns unmeasured values for every org; no retention rate is stored, printed or charged; chargeEvidenceRetention is deleted. Confirm, or name the lane that measures per-org evidence volume and meters retention at a contracted per-GB-month rate as an invoice line.",
     "Who may buy GAUs (decision N-GAU): the design lets every tier, including Free, buy a GAU block at its contracted rate, because a block is a unit purchase, not a credit pack, and the direction names no tier gate; the credits Free-tier gate (packages/billing/src/entitlements.ts:125-127) stays only on the credits path the app no longer uses. Answered 2026-09-14: ratified as the card-saving path — every tier with a saved payment method may buy a block, and the Checkout that buys the first one saves the card, so a Free org with no card may purchase; only the recorder's auto top-up needs a card already on file (ADR-055 §6).",
-    "No subscription-upgrade path exists in the app in rev1: the Plan card shows tier and status, a Free org can buy GAU blocks, but changing tier from the app returns with a later billing lane (start_subscription_upgrade stays unbound; its subscription-mode checkout needs a real Stripe Price the seed does not have, seed.ts:35-37). The maintainer's phrase for pay was 'the billing upgrade/checkout path'; the design reads the GAU purchase as that path. Confirm this rev1 shape.",
+    "No subscription-upgrade path in the app in rev1 — answered 2026-09-15 by the maintainer: rev1 keeps an in-app Build and Scale upgrade through Stripe Checkout on the prices pnpm billing:stripe-sync writes to billing.plans, so start_subscription_upgrade is not retired (WL-55 binds it); purchase_credits is not retired, because credit packs are the in-app agent’s top-up (the #2968 lane); Enterprise is negotiated on its contract_terms row, with no Checkout. The pay e2e stays the GAU purchase. Recorded in §9 (2026-09-15).",
     "Ratify dropping governed_action_counters, plans.included_actions_annual, get_action_usage (with the deprecated governed-actions panel, before cutover, WL-27) and the credit debit from the governed-action path (WL-25), and superseding MC spec §12.1's per-run model (spec:1052-1054), A.8 included_runs and the App. E billing rows with the GAU bucket model. This is the zero-customer window.",
     "list_invoices reads the webhook-mirrored billing.invoices table (kept current by syncInvoiceFromStripe, packages/billing/src/invoices.ts:32-80), which keeps a table MC spec App. A:1947 says is gone; GAU purchases become Stripe Invoices via invoice_creation so they appear there with receipts. Recommendation: keep the mirror and amend App. A in WL-23.",
     "The pay e2e needs a repository secret STRIPE_TEST_SECRET_KEY (a test-mode key from the Oxagen Stripe account) scoped to the e2e job (WL-48). The job is fail-closed: until the secret exists, every push to main and every same-repo PR fails at the 'Stripe test key present' step. Confirm the account and who sets the secret before WL-48 merges.",
