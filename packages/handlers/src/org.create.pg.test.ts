@@ -242,7 +242,10 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       );
       expect([...rows][0]?.n, `billing.${name}`).toBe(0);
     }
-  });
+    // The IAM bootstrap seeds role_grants one insert per capability role
+    // (iam-provision.ts step d): 3.8 s on a loaded CI runner at app-rebuild
+    // 340420f10 and past the 5 s default on the next two runs.
+  }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(
