@@ -16,7 +16,6 @@ describe("buildCommands", () => {
       "/acme/core-platform/spend",
       "/acme",
       "/acme/api-keys",
-      "/acme/roles",
       "/acme/billing",
       "/acme/audit",
     ]);
@@ -29,7 +28,6 @@ describe("buildCommands", () => {
     expect(orgOnly.map((c) => c.href)).toEqual([
       "/acme",
       "/acme/api-keys",
-      "/acme/roles",
       "/acme/billing",
       "/acme/audit",
     ]);

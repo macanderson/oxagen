@@ -4,12 +4,12 @@
 // production edge to a `*.builders` module.
 import type { ShellData } from "./shell-data";
 
-export const SHELL_VIEWER = {
+const SHELL_VIEWER = {
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
 } as const;
 
-export const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;
+const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;
 
 /** The shell data the layout's viewer yields, with any field overridden. */
 export function shellData(overrides: Partial<ShellData> = {}): ShellData {

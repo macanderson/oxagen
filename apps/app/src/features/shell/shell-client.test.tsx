@@ -231,7 +231,6 @@ describe("command menu", () => {
       "Spend",
       "Organization",
       "API keys",
-      "Roles",
       "Billing",
       "Audit",
     ]);
