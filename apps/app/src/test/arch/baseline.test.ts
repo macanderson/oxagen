@@ -13,16 +13,9 @@ const REMOVED_BY: Readonly<Record<string, readonly string[]>> = {
     "e2e-files apps/app/e2e missing-entry:routes.ts",
   ],
   "WL-48": ["e2e-files apps/app/e2e missing-entry:pay.spec.ts"],
-  // The invitations.ts entry leaves as #3049 decides, the instrumentation.ts
-  // entries as #3048 decides.
   "WL-50": [
     "e2e-files apps/app_deprecated/e2e spec-outside-apps-app",
     "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app",
-    "layer src/features/auth/invitations.ts:9 @/server/tenancy-lookups",
-    "platform instrumentation.ts:59 @oxagen/telemetry",
-    "platform instrumentation.ts:81 @oxagen/telemetry",
-    "platform instrumentation.ts:83 @oxagen/database/security",
-    "platform instrumentation.ts:85 @oxagen/database",
   ],
 };
 

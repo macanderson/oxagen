@@ -59,6 +59,7 @@ import {
   OrgCtx,
   type OrgFields,
   PretenantCtx,
+  readInvitation,
   requireInvitee,
   requireUser,
   requireViewer,
@@ -291,6 +292,38 @@ describe("requireUser", () => {
     expect(nav.redirect).toHaveBeenCalledWith(
       "/login?next=%2Fcli%2Fauthorize%3Fstate%3Dst_1",
     );
+  });
+});
+
+describe("readInvitation", () => {
+  it("reads the invitation behind a token with no session and no interrupt", async () => {
+    invitationByToken.mockResolvedValue(invitation);
+    await expect(readInvitation("invi_live")).resolves.toBe(invitation);
+    expect(invitationByToken).toHaveBeenCalledWith("invi_live");
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an expired invitation as stored, for the page to close as expired", async () => {
+    const expired = {
+      ...invitation,
+      expiresAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    invitationByToken.mockResolvedValue(expired);
+    await expect(readInvitation("invi_old")).resolves.toBe(expired);
+  });
+
+  it("reads an unknown token as null, without an interrupt (negative)", async () => {
+    invitationByToken.mockResolvedValue(null);
+    await expect(readInvitation("invi_nope")).resolves.toBeNull();
+    expect(nav.notFound).not.toHaveBeenCalled();
+    expect(nav.redirect).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed token before any lookup (negative)", async () => {
+    await expect(readInvitation("../../etc")).resolves.toBeNull();
+    await expect(readInvitation("")).resolves.toBeNull();
+    await expect(readInvitation("a".repeat(65))).resolves.toBeNull();
+    expect(invitationByToken).not.toHaveBeenCalled();
   });
 });
 
