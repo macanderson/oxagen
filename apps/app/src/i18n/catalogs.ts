@@ -1,6 +1,6 @@
 // Message catalogs (spec §15 "Language"): ICU MessageFormat, English source, no
 // locale routing. Each JSON file directly under messages/ holds top-level
-// namespaces. `en.json` carries the shared ones (app, routes, states); each page
+// namespaces. `en.json` carries the shared ones (app, routes, unrecorded); each page
 // lane adds messages/<page>.json with its own namespace and nothing else. The
 // directory is the list: no shared array names the files, so two lanes adding
 // catalogs never edit the same line. No two files may declare one namespace.

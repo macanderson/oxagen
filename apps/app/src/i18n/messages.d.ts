@@ -5,40 +5,9 @@ type Messages = {
   app: {
     name: string;
     description: string;
-    skipToContent: string;
   };
   routes: {
     home: {
-      title: string;
-    };
-    login: {
-      title: string;
-    };
-    signup: {
-      title: string;
-    };
-    verify: {
-      title: string;
-    };
-    twoFactor: {
-      title: string;
-    };
-    forgotPassword: {
-      title: string;
-    };
-    resetPassword: {
-      title: string;
-    };
-    invite: {
-      title: string;
-    };
-    newOrganization: {
-      title: string;
-    };
-    cliAuthorize: {
-      title: string;
-    };
-    githubSetup: {
       title: string;
     };
     organization: {
@@ -48,9 +17,6 @@ type Messages = {
       title: string;
     };
     billing: {
-      title: string;
-    };
-    audit: {
       title: string;
     };
     fleet: {
@@ -63,9 +29,6 @@ type Messages = {
       title: string;
     };
     tools: {
-      title: string;
-    };
-    ontology: {
       title: string;
     };
     steering: {
@@ -84,19 +47,6 @@ type Messages = {
       frames_wrapped: string;
     };
   };
-  states: {
-    denied: {
-      title: string;
-      body: string;
-    };
-    error: {
-      title: string;
-      body: string;
-    };
-    empty: {
-      title: string;
-    };
-  };
   notFound: {
     title: string;
     body: string;
@@ -110,7 +60,6 @@ type Messages = {
   auth: {
     shell: {
       brand: string;
-      home: string;
       tags: {
         free: string;
         markup: string;

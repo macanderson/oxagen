@@ -95,7 +95,7 @@ describe("messages/en.json", () => {
       expect.arrayContaining([
         "app",
         "routes",
-        "states",
+        "unrecorded",
         "notFound",
         "globalError",
       ]),
