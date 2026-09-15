@@ -543,6 +543,61 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.record.promote"))
         .contextRecordPromoteHandler as CapabilityHandlerFn,
   );
+  // Steering: records → proposals → Context PR (ADR-061).
+  registerHandler(
+    "list_records",
+    async () =>
+      (await import("./context.records.list"))
+        .listRecordsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_record",
+    async () =>
+      (await import("./context.records.get"))
+        .getRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "append_record",
+    async () =>
+      (await import("./context.records.append"))
+        .appendRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "propose_record",
+    async () =>
+      (await import("./context.proposal.create"))
+        .proposeRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_proposals",
+    async () =>
+      (await import("./context.proposal.list"))
+        .listProposalsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_proposal",
+    async () =>
+      (await import("./context.proposal.dismiss"))
+        .dismissProposalHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "open_context_pr",
+    async () =>
+      (await import("./context.pr.open"))
+        .openContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_context_pr",
+    async () =>
+      (await import("./context.pr.get"))
+        .getContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "merge_context_pr",
+    async () =>
+      (await import("./context.pr.merge"))
+        .mergeContextPrHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "record_execution",
     async () =>

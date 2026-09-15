@@ -44,6 +44,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_records", policyClass: "standard" },
   { table: "agent.context_record_versions", policyClass: "standard" },
   { table: "agent.context_promotions", policyClass: "standard" },
+  // Steering proposals and the Context PR state machine, and the records
+  // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
+  { table: "agent.context_proposals", policyClass: "standard" },
+  { table: "agent.context_appends", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

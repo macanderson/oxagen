@@ -1,0 +1,99 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  buildRecordFile,
+  contextBranch,
+  lineageSlug,
+  parseRecordFile,
+  recordFilePath,
+  serializeRecordFile,
+  stampRecordObject,
+} from "./context.steering.file";
+
+// A record Stella stamped itself (macanderson/stella, .stella/rules/), copied
+// verbatim: its record_id and record_hash are the values Stella's loader
+// accepts, so recomputing them here proves the two sides hash the same bytes.
+const STELLA_FILE = readFileSync(
+  join(__dirname, "fixtures/steering/stella-stamped-record.toml"),
+  "utf8",
+);
+
+describe("record file", () => {
+  it("recomputes the record_id and record_hash Stella stamped on its own file", () => {
+    const tree = parseRecordFile(STELLA_FILE) as {
+      record: Record<string, unknown>[];
+    };
+    const record = tree.record[0]!;
+    expect(record.record_id).toBe(
+      "rec_macanderson_stella_search_before_filing_issue_4d4aa206f0bb",
+    );
+    expect(stampRecordObject(record)).toEqual({
+      record_id: record.record_id,
+      record_hash: record.record_hash,
+    });
+  });
+
+  it("derives the file stem, the branch and Stella's slug from the lineage", () => {
+    expect(recordFilePath("ctx.release.no-reread-changelog")).toBe(
+      ".oxagen/rules/ctx.release.no-reread-changelog.toml",
+    );
+    expect(contextBranch("ctx.release.no-reread-changelog")).toBe(
+      "context/ctx.release.no-reread-changelog",
+    );
+    expect(lineageSlug("ctx.release.no-reread-changelog")).toBe(
+      "release_no_reread_changelog",
+    );
+  });
+
+  it("writes one stamped record in Stella's layout and reads it back unchanged", () => {
+    const file = buildRecordFile({
+      lineageId: "ctx.release.no-reread-changelog",
+      kind: "rule",
+      force: "should",
+      sharingScope: "workspace",
+      statement: 'Do not re-read "CHANGELOG.md" more than once in a run.',
+      origin: "user",
+      proposalPublicId: "prp_1",
+      setId: "a-intel.platform",
+    });
+    const text = serializeRecordFile(file);
+    expect(text).toContain('schema = "context-record/v0.1"');
+    expect(text).toContain("[[record]]");
+    expect(text).toContain("[record.provenance]");
+    expect(text).toContain('force = "should"');
+    const back = parseRecordFile(text) as typeof file;
+    expect(back).toEqual(file);
+    const record = file.record[0]!;
+    expect(record.record_id).toMatch(
+      /^rec_release_no_reread_changelog_[0-9a-f]{12}$/,
+    );
+    expect(
+      stampRecordObject(back.record[0] as unknown as Record<string, unknown>),
+    ).toEqual({
+      record_id: record.record_id,
+      record_hash: record.record_hash,
+    });
+  });
+
+  it("changes the identity when the statement changes and keeps it when the hash field is edited", () => {
+    const a = buildRecordFile({
+      lineageId: "ctx.a",
+      kind: "fact",
+      force: "info",
+      sharingScope: "repository",
+      statement: "one",
+      origin: "inferred",
+      proposalPublicId: "prp_1",
+      setId: "o.r",
+    }).record[0]!;
+    const b = { ...a, statement: "two" };
+    expect(stampRecordObject(b).record_hash).not.toBe(a.record_hash);
+    expect(stampRecordObject({ ...a, record_hash: "sha256:tampered" })).toEqual(
+      {
+        record_id: a.record_id,
+        record_hash: a.record_hash,
+      },
+    );
+  });
+});

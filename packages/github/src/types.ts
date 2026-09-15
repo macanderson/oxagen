@@ -247,6 +247,36 @@ export interface GitHubClient {
    * 100). Stops early once a page returns fewer than 100 entries.
    */
   listBranches(args: { owner: string; repo: string }): Promise<GitHubBranch[]>;
+
+  /**
+   * Create a completed check run on a commit (Checks API). Needs a GitHub App
+   * installation token with `checks: write`; an OAuth or personal token is
+   * refused by GitHub with 403, which surfaces as the thrown error.
+   */
+  createCheckRun(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    headSha: string;
+    conclusion: "success" | "failure";
+    title: string;
+    summary: string;
+    startedAt: string;
+    completedAt: string;
+  }): Promise<{ id: number; htmlUrl: string }>;
+
+  /**
+   * Merge a pull request. GitHub refuses with 405 when a required review or
+   * status is missing and with 409 when the head moved; both surface as the
+   * thrown error with GitHub's message.
+   */
+  mergePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    mergeMethod?: "merge" | "squash" | "rebase";
+    commitTitle?: string;
+  }): Promise<{ sha: string; merged: boolean }>;
 }
 
 /** Options accepted by createGitHubClient. */

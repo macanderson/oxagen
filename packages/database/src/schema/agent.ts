@@ -1035,9 +1035,15 @@ export const toolVersions = agentSchema.table(
   }),
 );
 
-// Steering/context records — Stella keeps these as .stella/rules/*.toml, one
-// record per file; the slug is the file stem. Lifecycle (status) is driven by
-// the append-only contextPromotions ledger below, never edited directly.
+// Steering/context records — the published registry. Stella keeps these as
+// .oxagen/rules/<lineage>.toml, one record per file; the slug is the file stem
+// and the lineage id (MC spec §10.2). Lifecycle (status) is driven by the
+// append-only contextPromotions ledger below, never edited directly.
+//
+// The classification columns (kind, force, constraint_effect, statement) and
+// the publication columns (commit_sha, path, published_at) are written by
+// merge_context_pr (ADR-061). A record published through publish_context_record
+// carries only the body and has NULL in each of them.
 export const contextRecords = agentSchema.table(
   "context_records",
   {
@@ -1057,6 +1063,25 @@ export const contextRecords = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The six kinds of context-record/v0.1 (Stella's file surface).
+    kind: text("kind"),
+    // How hard the record steers: must | should | may | info.
+    force: text("force"),
+    // require | forbid on a constraint; NULL on every other kind. `allow` is
+    // unrepresentable: a record never grants authority (spec §10.3).
+    constraintEffect: text("constraint_effect"),
+    // repository | workspace (spec §9 Scope, §10.2).
+    sharingScope: text("sharing_scope").notNull().default("workspace"),
+    // The single-sentence claim, as it appears in the file.
+    statement: text("statement"),
+    // The merge commit on the production branch that published this record,
+    // and the file's path in that repository.
+    commitSha: text("commit_sha"),
+    path: text("path"),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     workspaceSlugIdx: uniqueIndex("context_records_workspace_slug_idx").on(
@@ -1070,6 +1095,26 @@ export const contextRecords = agentSchema.table(
     statusCheck: check(
       "context_records_status_check",
       sql`${t.status} IN ('active', 'retired', 'superseded')`,
+    ),
+    kindCheck: check(
+      "context_records_kind_check",
+      sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_records_force_check",
+      sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_records_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
+    ),
+    sharingScopeCheck: check(
+      "context_records_sharing_scope_check",
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
+    ),
+    commitShaCheck: check(
+      "context_records_commit_sha_check",
+      sql`${t.commitSha} IS NULL OR ${t.commitSha} ~ '^[0-9a-f]{7,40}$'`,
     ),
   }),
 );
@@ -1141,6 +1186,167 @@ export const contextPromotions = agentSchema.table(
     chainCheck: check(
       "context_promotions_chain_check",
       sql`${t.chainDigest} ~ '^[0-9a-f]{64}$' AND (${t.prevChainDigest} IS NULL OR ${t.prevChainDigest} ~ '^[0-9a-f]{64}$') AND ((${t.seq} = 1) = (${t.prevChainDigest} IS NULL))`,
+    ),
+  }),
+);
+
+// A record proposal and the Context PR that publishes it (ADR-061, MC spec
+// §9.2, §10.3). One row is one concern: it carries the record it proposes,
+// the support it cites, and the state machine
+//   proposed → pr_open → checks_running → checks_passed | checks_failed → merged
+// with rejected reachable from proposed and from any open-PR state through
+// dismiss_proposal. The promotion event a merge writes is a contextPromotions
+// row (promotion_event_id), never a field here: the ledger is append-only and
+// this row is not.
+export const contextProposals = agentSchema.table(
+  "context_proposals",
+  {
+    ...idMixin("prp"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    lineageId: citext("lineage_id").notNull(),
+    kind: text("kind").notNull(),
+    force: text("force").notNull(),
+    constraintEffect: text("constraint_effect"),
+    sharingScope: text("sharing_scope").notNull(),
+    statement: text("statement").notNull(),
+    rationale: text("rationale").notNull(),
+    // Who raised it, as a label the page prints: `user:<uuid>`,
+    // `api_key:<uuid>`, or the caller's own attribution (a job, a run).
+    source: text("source").notNull(),
+    supportRuns: text("support_runs").array().notNull().default(sql`'{}'`),
+    supportAgents: text("support_agents").array().notNull().default(sql`'{}'`),
+    supportingRecordIds: text("supporting_record_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    evidenceLinks: text("evidence_links").array().notNull().default(sql`'{}'`),
+    status: text("status").notNull().default("proposed"),
+    // ── The Context PR, set by open_context_pr ──────────────────────────────
+    // The governance mode read from .oxagen/rules/governance.toml when the PR
+    // was opened; merge_context_pr reads the file again.
+    governanceMode: text("governance_mode"),
+    repository: text("repository"),
+    baseRef: text("base_ref"),
+    branch: text("branch"),
+    path: text("path"),
+    prNumber: integer("pr_number"),
+    prUrl: text("pr_url"),
+    headSha: text("head_sha"),
+    // The record's stamped identity in the committed file.
+    stampedRecordId: text("stamped_record_id"),
+    recordHash: text("record_hash"),
+    // [{ name, status, summary, detailsUrl, startedAt, completedAt }], one
+    // entry per §10.3 check, in the order they run.
+    checks: jsonb("checks").notNull().default(sql`'[]'::jsonb`),
+    // ── The merge, set by merge_context_pr ──────────────────────────────────
+    mergedCommit: text("merged_commit"),
+    mergedAt: timestamp("merged_at", { withTimezone: true, mode: "date" }),
+    mergedByUserId: uuid("merged_by_user_id"),
+    publishedRecordId: uuid("published_record_id"),
+    promotionEventId: uuid("promotion_event_id"),
+    // ── The dismissal, set by dismiss_proposal ──────────────────────────────
+    dismissedAt: timestamp("dismissed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    dismissedReason: text("dismissed_reason"),
+  },
+  (t) => ({
+    orgIdx: index("context_proposals_org_idx").on(t.orgId, t.workspaceId),
+    lineageIdx: index("context_proposals_lineage_idx").on(
+      t.workspaceId,
+      t.lineageId,
+    ),
+    // One concern, one pull request: at most one open PR per lineage.
+    openPrIdx: uniqueIndex("context_proposals_open_pr_idx")
+      .on(t.workspaceId, t.lineageId)
+      .where(
+        sql`status IN ('pr_open', 'checks_running', 'checks_passed', 'checks_failed')`,
+      ),
+    kindCheck: check(
+      "context_proposals_kind_check",
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_proposals_force_check",
+      sql`${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_proposals_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} <> 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
+    ),
+    sharingScopeCheck: check(
+      "context_proposals_sharing_scope_check",
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
+    ),
+    statusCheck: check(
+      "context_proposals_status_check",
+      sql`${t.status} IN ('proposed', 'pr_open', 'checks_running', 'checks_passed', 'checks_failed', 'merged', 'rejected')`,
+    ),
+    governanceModeCheck: check(
+      "context_proposals_governance_mode_check",
+      sql`${t.governanceMode} IS NULL OR ${t.governanceMode} IN ('solo', 'team', 'regulated')`,
+    ),
+    mergedCheck: check(
+      "context_proposals_merged_check",
+      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND ${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// Records agents append through append_record — the protocol's
+// `context/append` (MC spec §9): observations, memories, knowledge, evidence,
+// context-use records and record proposals, content-addressed by
+// record_hash. Append-only: a correction is a new record on the same lineage
+// and superseded is derived, never stored. A `directive` never lands here;
+// it reaches the workspace only through a Context PR.
+export const contextAppends = agentSchema.table(
+  "context_appends",
+  {
+    ...idMixin("cta"),
+    ...appendOnlyAuditMixin(),
+    ...orgScopeMixin(),
+    kind: text("kind").notNull(),
+    lineageId: citext("lineage_id").notNull(),
+    statement: text("statement").notNull(),
+    sharingScope: text("sharing_scope").notNull(),
+    // `sha256:<64 hex>` over the record's canonical preimage
+    // (packages/run-evidence record-hash.ts).
+    recordHash: text("record_hash").notNull(),
+    // ContextProvenanceV1-style source refs: frames (`frame:<run>/<seq>`) and
+    // records the appended record derives from.
+    sourceRefs: text("source_refs").array().notNull().default(sql`'{}'`),
+    evidenceLinks: text("evidence_links").array().notNull().default(sql`'{}'`),
+    // The proposal a `record_proposal` append opened; NULL on every other kind.
+    proposalId: uuid("proposal_id"),
+  },
+  (t) => ({
+    orgIdx: index("context_appends_org_idx").on(t.orgId, t.workspaceId),
+    lineageIdx: index("context_appends_lineage_idx").on(
+      t.workspaceId,
+      t.lineageId,
+    ),
+    // Re-appending identical content is idempotent.
+    hashIdx: uniqueIndex("context_appends_workspace_hash_idx").on(
+      t.workspaceId,
+      t.recordHash,
+    ),
+    kindCheck: check(
+      "context_appends_kind_check",
+      sql`${t.kind} IN ('observation', 'memory', 'knowledge', 'evidence', 'record_proposal', 'context_use', 'context_use_feedback')`,
+    ),
+    sharingScopeCheck: check(
+      "context_appends_sharing_scope_check",
+      sql`${t.sharingScope} IN ('user', 'repository', 'workspace', 'organization')`,
+    ),
+    hashCheck: check(
+      "context_appends_record_hash_check",
+      sql`${t.recordHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    proposalCheck: check(
+      "context_appends_proposal_check",
+      sql`(${t.proposalId} IS NOT NULL) = (${t.kind} = 'record_proposal')`,
     ),
   }),
 );

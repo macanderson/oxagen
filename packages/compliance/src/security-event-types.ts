@@ -145,6 +145,9 @@ export const SECURITY_EVENT_TYPES = [
   "privacy.export_requested",
   "privacy.erasure_requested",
   "privacy.org_erasure_requested",
+  // Steering (ADR-061): a Context PR merged and published a record — the
+  // bundle a workspace's agents read changed. Emitted by merge_context_pr.
+  "steering.published",
 ] as const;
 
 // ---------------------------------------------------------------------------

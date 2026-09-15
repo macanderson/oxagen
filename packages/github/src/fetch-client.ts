@@ -48,6 +48,16 @@ interface GHErrorBody {
   message?: string;
 }
 
+interface GHCheckRun {
+  id: number;
+  html_url: string;
+}
+
+interface GHMerge {
+  sha: string;
+  merged: boolean;
+}
+
 interface GHContentsFile {
   type: string;
   encoding: string;
@@ -665,6 +675,51 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return branches;
   }
 
+  async function createCheckRun(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    headSha: string;
+    conclusion: "success" | "failure";
+    title: string;
+    summary: string;
+    startedAt: string;
+    completedAt: string;
+  }): Promise<{ id: number; htmlUrl: string }> {
+    const data = await request<GHCheckRun>(
+      "POST",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/check-runs`,
+      {
+        name: args.name,
+        head_sha: args.headSha,
+        status: "completed",
+        conclusion: args.conclusion,
+        started_at: args.startedAt,
+        completed_at: args.completedAt,
+        output: { title: args.title, summary: args.summary },
+      },
+    );
+    return { id: data.id, htmlUrl: data.html_url };
+  }
+
+  async function mergePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    mergeMethod?: "merge" | "squash" | "rebase";
+    commitTitle?: string;
+  }): Promise<{ sha: string; merged: boolean }> {
+    const body: Record<string, unknown> = {};
+    if (args.mergeMethod !== undefined) body.merge_method = args.mergeMethod;
+    if (args.commitTitle !== undefined) body.commit_title = args.commitTitle;
+    const data = await request<GHMerge>(
+      "PUT",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${args.number}/merge`,
+      body,
+    );
+    return { sha: data.sha, merged: data.merged };
+  }
+
   return {
     getAuthenticatedUser,
     getRepoInfo,
@@ -680,6 +735,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listCiChecks,
     listPullRequestFiles,
     listBranches,
+    createCheckRun,
+    mergePullRequest,
   };
 }
 
