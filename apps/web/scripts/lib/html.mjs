@@ -241,12 +241,23 @@ export function picture(src, o) {
 }
 
 /**
+ * A page's banner laid behind its title: the picture fills the section and
+ * the stylesheet masks it out toward the words, so the prose sits on ink
+ * and the drawing comes through beside it. Decorative, so hidden from
+ * readers who hear the page.
+ * @param {string} src
+ */
+export function heroArt(src) {
+  return `<div class="hero-art" aria-hidden="true">${picture(src, { alt: "", width: 2400, height: 1200, priority: true })}</div>`;
+}
+
+/**
  * @param {object} post with `images` from the build
  * @param {Array<{slug: string, name: string}>} pillars
  */
 export function postCard(post, pillars) {
   return `<article class="post-card">
-  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true">${picture(post.images.thumb, { alt: "", width: 800, height: 450, lazy: true })}</a>
+  <a class="post-card-shot" href="${urls.post(post.slug)}" tabindex="-1" aria-hidden="true">${picture(post.images.thumb, { alt: "", width: 960, height: 480, lazy: true })}</a>
   <div class="post-card-meta">
     ${pillarChips(pillars, post.pillars)}
     <h3><a href="${urls.post(post.slug)}">${esc(post.title)}</a></h3>
@@ -273,7 +284,7 @@ export function indexPage({ pillars, posts, wordmark, image }) {
 ${pillars
   .map(
     (p) => `        <a class="pillar-card" href="${urls.pillar(p.slug)}">
-          ${picture(p.images.thumb, { alt: "", width: 640, height: 360, lazy: true })}
+          ${picture(p.images.thumb, { alt: "", width: 960, height: 480, lazy: true })}
           <div class="pillar-card-body"><h3>${esc(p.name)}</h3><p>${esc(p.tagline)}</p><span class="pillar-count">${posts.filter((x) => x.pillars.includes(p.slug)).length} posts</span></div>
         </a>`,
   )
@@ -312,14 +323,14 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
 /** @param {{ pillar: object, pillars: object[], posts: object[], wordmark: string }} o */
 export function pillarPage({ pillar, pillars, posts, wordmark }) {
   const body = `
-  <section class="pillar-hero">
-    <div class="pillar-hero-shot">${picture(pillar.images.banner, { alt: "", width: 1600, height: 900, priority: true })}</div>
-    <div class="wrap pillar-hero-copy">
+  <section class="pillar-hero hero-field">
+    ${heroArt(pillar.images.banner)}
+    <div class="wrap"><div class="pillar-hero-copy">
       <p class="eyebrow"><a href="${urls.blog()}">Research</a> · Pillar</p>
       <h1>${esc(pillar.name)}</h1>
       <p class="pillar-tagline">${esc(pillar.tagline)}</p>
       <p class="pillar-desc">${esc(pillar.description)}</p>
-    </div>
+    </div></div>
   </section>
   <section class="sec-tight sec-alt">
     <div class="wrap">
@@ -369,8 +380,9 @@ export function postPage({ post, html, headings, pillars, related, wordmark }) {
   const primary = pillars.find((p) => p.slug === post.pillars[0]);
   const body = `
   <article class="post">
-    <header class="post-head">
-      <div class="wrap post-head-in">
+    <header class="post-head hero-field">
+      ${heroArt(post.images.banner)}
+      <div class="wrap"><div class="post-head-in">
         <p class="eyebrow"><a href="${urls.blog()}">Research</a> · <a href="${urls.pillar(primary.slug)}">${esc(primary.name)}</a></p>
         <h1>${esc(post.title)}</h1>
         <p class="post-sub">${esc(post.description)}</p>
@@ -380,10 +392,7 @@ export function postPage({ post, html, headings, pillars, related, wordmark }) {
           <span>${post.readingMinutes} min read</span>
         </p>
         ${pillarChips(pillars, post.pillars)}
-      </div>
-      <figure class="post-hero">
-        ${picture(post.images.banner, { alt: "", width: 1600, height: 900, priority: true })}
-      </figure>
+      </div></div>
     </header>
     <div class="wrap post-body">
       ${toc.length > 1 ? `<nav class="toc" aria-label="In this post"><p class="mono">In this post</p><ol>${toc.map((h) => `<li><a href="#${esc(h.id)}">${esc(h.text)}</a></li>`).join("")}</ol></nav>` : ""}
