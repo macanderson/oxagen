@@ -46,6 +46,8 @@
     "@eslint-react/eslint-plugin": "5.19.0",
     "@eslint/js": "10.0.1",
     "@next/eslint-plugin-next": "16.3.5",
+    "@oxagen/agent": "workspace:*",
+    "@oxagen/run-ledger": "workspace:*",
     "@playwright/test": "1.63.0",
     "@storybook/addon-a11y": "10.6.0",
     "@storybook/nextjs-vite": "10.6.0",
