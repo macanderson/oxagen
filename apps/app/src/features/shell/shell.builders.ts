@@ -23,6 +23,7 @@ export function shellData(overrides: Partial<ShellData> = {}): ShellData {
     org: SHELL_ORG,
     viewer: SHELL_VIEWER,
     context: SHELL_CONTEXT,
+    fleetWaiting: null,
     ...overrides,
   };
 }

@@ -50,6 +50,7 @@ describe("shellSource", () => {
       org: { slug: "acme", name: "Acme Robotics" },
       viewer: { name: "Marcus Bell", email: "marcus.bell@acme.example" },
       context: listed,
+      fleetWaiting: null,
     });
     expect(context).toHaveBeenCalledWith(ctx);
   });

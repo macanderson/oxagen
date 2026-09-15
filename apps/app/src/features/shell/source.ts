@@ -23,5 +23,6 @@ export async function shellSource(
     org: { slug: ctx.orgSlug, name: ctx.orgName },
     viewer: { name: user.name || null, email: user.email },
     context,
+    fleetWaiting: null,
   };
 }

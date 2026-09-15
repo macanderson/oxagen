@@ -5,7 +5,7 @@ import { Menu, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
-import { breadcrumbs } from "./nav";
+import { breadcrumbs, parseShellPath } from "./nav";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { UserMenu } from "./user-menu";
@@ -17,8 +17,13 @@ const iconButton =
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const pathname = usePathname();
-  // The workspace's name arrives with `shell.context` (WL-11); the slug stands in.
-  const crumbs = breadcrumbs(pathname, { org: data.org.name, ws: null });
+  const { ws } = parseShellPath(pathname);
+  const { context } = data;
+  // A workspace `shell.context` does not list keeps its slug as the crumb.
+  const wsName = context.ok
+    ? (context.value.workspaces.find((w) => w.slug === ws)?.name ?? null)
+    : null;
+  const crumbs = breadcrumbs(pathname, { org: data.org.name, ws: wsName });
   return (
     <nav aria-label={t("topbar.breadcrumbs")} className="min-w-0 flex-1">
       <ol className="flex min-w-0 items-center gap-1.5 text-sm">

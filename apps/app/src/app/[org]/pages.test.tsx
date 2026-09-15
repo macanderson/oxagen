@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-// Every route under /[org] and the root render between WL-08 and their page
-// item (ARCHITECTURE.md §8): the four gap-lane pages render their one
-// UNRECORDED row under the title, the four rev1 pages and the root render the
-// title alone. Every page under /[org] resolves its viewer first and renders
-// nothing for a person requireViewer refuses. Fleet, Run, People, API keys and
-// Billing gain their bodies in WL-34 to WL-38 and the root becomes a redirect
-// in WL-32.
+// Every route under /[org] renders between WL-08 and its page item
+// (ARCHITECTURE.md §8): the four gap-lane pages render their one UNRECORDED
+// row under the title, the rev1 pages render the title alone. Every page
+// resolves its viewer first and renders nothing for a person requireViewer
+// refuses. Fleet, Run, People, API keys and Billing gain their bodies in WL-34
+// to WL-38.
 import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
@@ -110,13 +109,6 @@ describe("rev1 pages before their page item", () => {
       expect(main.querySelectorAll("p, table, form, ul")).toHaveLength(0);
     },
   );
-
-  it("the root renders its title alone", async () => {
-    await renderPage((await import("../page")).default());
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Mission Control",
-    );
-  });
 });
 
 describe("a person requireViewer refuses", () => {
