@@ -42,6 +42,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { moneyFromUsd } from "./spend-budget-format";
 import type { SpendBudgetStatus } from "./spend-budget-format";
 
 const { mockSetSpendBudgetAction } = vi.hoisted(() => ({
@@ -147,9 +148,9 @@ function workspaceBudget(
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limit: { micros: "100000000", currency: "USD" },
-    spent: { micros: "25000000", currency: "USD" },
-    projected: { micros: "50000000", currency: "USD" },
+    limit: moneyFromUsd(100),
+    spent: moneyFromUsd(25),
+    projected: moneyFromUsd(50),
     ratio: 0.25,
     state: "ok",
     reachedThreshold: 0,
@@ -197,8 +198,8 @@ describe("ScopeBudgetCard — monthly save happy path", () => {
   it("calls setSpendBudgetAction with the mapped input and notifies onSaved", async () => {
     const onSaved = vi.fn();
     const saved = workspaceBudget({
-      limit: { micros: "250000000", currency: "USD" },
-      spent: { micros: "0", currency: "USD" },
+      limit: moneyFromUsd(250),
+      spent: moneyFromUsd(0),
       ratio: 0,
     });
     mockSetSpendBudgetAction.mockResolvedValue({ ok: true, budget: saved });
@@ -221,7 +222,7 @@ describe("ScopeBudgetCard — monthly save happy path", () => {
       enabled: true,
       period: "monthly",
       windowDays: null,
-      limit: { micros: "250000000", currency: "USD" },
+      limit: moneyFromUsd(250),
     });
     expect(onSaved).toHaveBeenCalledWith("workspace", saved);
 
@@ -300,7 +301,7 @@ describe("ScopeBudgetCard — rolling period", () => {
       budget: workspaceBudget({
         period: "rolling",
         windowDays: 14,
-        limit: { micros: "100000000", currency: "USD" },
+        limit: moneyFromUsd(100),
       }),
     });
     await userEvent.type(
@@ -317,7 +318,7 @@ describe("ScopeBudgetCard — rolling period", () => {
       enabled: true,
       period: "rolling",
       windowDays: 14,
-      limit: { micros: "100000000", currency: "USD" },
+      limit: moneyFromUsd(100),
     });
   });
 });
@@ -325,8 +326,8 @@ describe("ScopeBudgetCard — rolling period", () => {
 describe("ScopeBudgetCard — configured ceiling, exceeded state", () => {
   it("renders the status view plus an unmistakable exceeded alert banner", () => {
     const exceeded = workspaceBudget({
-      limit: { micros: "100000000", currency: "USD" },
-      spent: { micros: "140000000", currency: "USD" },
+      limit: moneyFromUsd(100),
+      spent: moneyFromUsd(140),
       ratio: 1.4,
       state: "exceeded",
       reachedThreshold: 100,
@@ -422,7 +423,7 @@ describe("ScopeBudgetCard — disabled ceiling", () => {
       enabled: false,
       state: "exceeded",
       ratio: 1.4,
-      spent: { micros: "140000000", currency: "USD" },
+      spent: moneyFromUsd(140),
     });
     render(
       <ScopeBudgetCard {...baseProps({ budget: disabledButOverLimit })} />,

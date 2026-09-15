@@ -13,7 +13,7 @@
  *     ratio, window, state), with an "exceeded" ceiling getting a dedicated
  *     alert banner (agent runs are being denied right now),
  * plus, in every case, an inline edit form (enabled / period / windowDays /
- * limit in dollars, sent as micros) that mirrors the contract's rolling/monthly refine client-side —
+ * limitUsd) that mirrors the contract's rolling/monthly refine client-side —
  * gated behind `canManage` (a Member can view the burn but not edit it; the
  * real enforcement is setSpendBudgetAction's server-side billing-manager gate,
  * this is UI-gating only).
@@ -46,16 +46,16 @@ import { setSpendBudgetAction } from "./actions";
 import {
   formatMoney,
   formatWindow,
-  moneyToUsd,
+  moneyFromUsd,
   SCOPE_DESCRIPTION,
   SCOPE_LABEL,
   STATE_META,
+  usdFromMoney,
   validateLimitUsd,
   validateWindowDays,
   type SpendBudgetPeriod,
   type SpendBudgetScope,
   type SpendBudgetStatus,
-  usdToMoney,
 } from "./spend-budget-format";
 
 const MANAGE_DENIED_NOTE =
@@ -101,7 +101,7 @@ export function ScopeBudgetCard({
     budget?.windowDays ?? null,
   );
   const [limitUsd, setLimitUsd] = React.useState<number | null>(
-    budget?.limit ? moneyToUsd(budget.limit) : null,
+    budget?.limit ? usdFromMoney(budget.limit) : null,
   );
   const [formError, setFormError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -114,7 +114,7 @@ export function ScopeBudgetCard({
     setEnabled(budget?.enabled ?? true);
     setPeriod(budget?.period ?? "monthly");
     setWindowDays(budget?.windowDays ?? null);
-    setLimitUsd(budget?.limit ? moneyToUsd(budget.limit) : null);
+    setLimitUsd(budget?.limit ? usdFromMoney(budget.limit) : null);
     setFormError(null);
     setIsEditing(true);
   }
@@ -144,7 +144,7 @@ export function ScopeBudgetCard({
         enabled,
         period,
         windowDays: period === "rolling" ? windowDays : null,
-        limit: usdToMoney(limitUsd as number),
+        limit: moneyFromUsd(limitUsd as number),
       });
       if (result.ok) {
         onSaved(scope, result.budget);
@@ -252,7 +252,7 @@ export function ScopeBudgetCard({
               <div>
                 <p className="text-xs text-muted-foreground">Limit</p>
                 <p className="font-medium text-foreground">
-                  {budget.limit ? formatMoney(budget.limit) : "—"}
+                  {budget.limit != null ? formatMoney(budget.limit) : "—"}
                 </p>
               </div>
               <div>

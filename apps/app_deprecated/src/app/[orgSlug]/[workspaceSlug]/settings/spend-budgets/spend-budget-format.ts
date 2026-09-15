@@ -8,8 +8,8 @@
  * the user gets a clean client-side validation message instead of a
  * round-trip server error for the same rule.
  */
-import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
 import type { Money } from "@oxagen/oxagen/money";
+import type { SpendBudgetStatusDto } from "@oxagen/oxagen/contracts/billing.budget.get";
 
 export type SpendBudgetPeriod = "monthly" | "rolling";
 export type SpendBudgetScope = "org" | "workspace";
@@ -33,32 +33,47 @@ export function formatUsd(amount: number): string {
   return USD_FORMATTER.format(amount);
 }
 
-/**
- * The wire carries money as integer micro-units in a decimal string
- * (`{ micros, currency }`, ADR-057 decision 2). This panel edits and shows
- * dollars, so the conversion happens once at this boundary and nowhere else
- * in the page.
- */
-export function moneyToUsd(money: Money): number {
-  return Number(money.micros) / 1_000_000;
-}
-
-/** Money → "$1,234.56". */
-export function formatMoney(money: Money): string {
-  return formatUsd(moneyToUsd(money));
-}
+const MICROS_PER_UNIT = 1_000_000n;
 
 /**
- * A dollar amount from the form → wire micros. The amount is rendered to six
- * decimals as a string and the point dropped, so `0.07` is exactly `70000`
- * micros and no float multiply rounds the value.
+ * Money (integer micro-units in a decimal string, ADR-057 decision 2) → a
+ * plain major-unit number.
+ *
+ * The integer part is taken with BigInt so the whole dollars are exact at any
+ * magnitude, and only the six-digit fraction goes through a double. That makes
+ * the result exact to the cent for every ceiling and burn this panel renders;
+ * a figure past 2^53 major units would lose precision in the addition, and
+ * there is no such budget. The wire figure stays the micros either way — this
+ * is the display and edit-form encoding, not the one that round-trips.
  */
-export function usdToMoney(usd: number): Money {
-  const micros = usd
-    .toFixed(6)
-    .replace(".", "")
-    .replace(/^0+(?=\d)/, "");
-  return { micros, currency: "USD" };
+export function usdFromMoney(amount: Money): number {
+  const value = BigInt(amount.micros);
+  const negative = value < 0n;
+  const magnitude = negative ? -value : value;
+  const whole = Number(magnitude / MICROS_PER_UNIT);
+  const fraction = Number(magnitude % MICROS_PER_UNIT) / 1e6;
+  return (negative ? -1 : 1) * (whole + fraction);
+}
+
+/** Money → "$1,234.56", in the amount's own currency. */
+export function formatMoney(amount: Money): string {
+  const major = usdFromMoney(amount);
+  if (amount.currency === "USD") return USD_FORMATTER.format(major);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: amount.currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(major);
+}
+
+/**
+ * The edit form's major-unit number → Money. `validateLimitUsd` has already
+ * refused a non-finite or non-positive amount, so the rounding here is the
+ * cent-level rounding a currency input implies, not a silent repair.
+ */
+export function moneyFromUsd(amount: number, currency = "USD"): Money {
+  return { micros: String(Math.round(amount * 1e6)), currency };
 }
 
 /**
@@ -113,7 +128,7 @@ export function validateWindowDays(
     : null;
 }
 
-/** Mirrors the contract's positive-micros refine on `limit`, in dollars. */
+/** Mirrors the contract's `limitUsd: z.number().positive()`. */
 export function validateLimitUsd(limitUsd: number | null): string | null {
   if (limitUsd == null || !Number.isFinite(limitUsd) || limitUsd <= 0) {
     return "Limit must be a dollar amount greater than $0.";

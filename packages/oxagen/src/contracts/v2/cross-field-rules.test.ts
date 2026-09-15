@@ -250,6 +250,8 @@ describe("get_spend input", () => {
 });
 
 describe("set_budget input", () => {
+  // The ceiling is Money since ADR-057 decision 2: micro-units in a decimal
+  // string with their currency, never a float.
   const base = {
     enabled: true,
     limit: { micros: "250000000", currency: "USD" },

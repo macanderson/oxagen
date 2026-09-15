@@ -41,11 +41,14 @@ import { workspaceBudgetPolicyRead } from "../workspace.budget_policy.read";
  *    new state without a second round trip. That is v1 `set_spend_budget`'s
  *    round-trip behaviour, widened to the levels §12.5 adds.
  *
- * The ceiling is `Money` — integer micro-units in a decimal string with its
- * currency — carried by import from `set_spend_budget` (ADR-057 decision 2,
- * apps/app/ARCHITECTURE.md INV-09). `update_user_budget`'s `limitUsd` float is
- * the same ceiling under the old shape and carries as a rename onto `limit`;
- * the surface that takes dollars from a human converts once at its boundary.
+ * Amounts are `Money` — integer micro-units in a decimal string with their
+ * currency — carried from `set_spend_budget`, which moved to that shape with
+ * the rest of the billing contracts (ADR-057 decision 2). A ceiling is A.8's
+ * `limit_micros` on the way in as well as on the way out, so §12.3's
+ * integer-micro rule now governs the ceiling a human types the same way it
+ * governs the cost records it is compared against, and no float sits between
+ * the two. `update_user_budget`'s plain-USD `limitUsd` carries into it as a
+ * rename, declared below.
  */
 
 // Carried by import and widened per §12.5: "Each budget belongs to an
@@ -136,7 +139,7 @@ export const setBudget = defineTool({
   name: "set_budget",
   domain: "billing",
   description:
-    "Set the spend ceiling for any level — organization, workspace, operator, or agent (§12.5). Choose the period (turn, daily, monthly, or a trailing rolling window), the limit in micro-units, whether the ceiling is hard (enforced at the model proxy before the call) or soft, what happens at the ceiling, and the notification thresholds. Returns every ceiling now governing the scope with its live burn.",
+    "Set the spend ceiling for any level — organization, workspace, operator, or agent (§12.5). Choose the period (turn, daily, monthly, or a trailing rolling window), the USD limit, whether the ceiling is hard (enforced at the model proxy before the call) or soft, what happens at the ceiling, and the notification thresholds. Returns every ceiling now governing the scope with its live burn.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -157,7 +160,7 @@ export const setBudget = defineTool({
       from: "limitUsd",
       source: "update_user_budget",
       to: "limit",
-      why: "The per-turn ceiling was a USD float; `set_spend_budget` moved its ceiling to `Money` micro-units (ADR-057 decision 2, INV-09) and this tool carries that field by import, so the absorbed float lands on the same `limit` rather than a second amount field in a second unit",
+      why: "The ceiling is `Money` — integer micro-units with a currency (ADR-057 decision 2) — carried by import from `set_spend_budget`, whose own `limitUsd` moved to `limit` in the same change. `update_user_budget`'s plain-USD number is the same ceiling in the weaker encoding, so this is a rename onto the carried field, not a second amount",
     },
   ],
   drops: [

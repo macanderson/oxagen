@@ -71,7 +71,7 @@
   "exports src/data/adapters/live/mappers/spend.ts UNRECORDED_MODEL_PATHS",
   "exports src/data/adapters/live/mappers/spend.ts cacheHitRate",
   "exports src/data/adapters/live/mappers/spend.ts moneyFromMicros",
-  "exports src/data/adapters/live/mappers/spend.ts moneyFromUsd",
+  "exports src/data/adapters/live/mappers/spend.ts moneyFromWire",
   "exports src/data/adapters/live/mappers/steering.ts MAX_TOML_NESTING",
   "exports src/data/adapters/live/mappers/steering.ts RECORD_BODY_INVALID",
   "exports src/data/adapters/live/mappers/steering.ts RECORD_SCHEMA",

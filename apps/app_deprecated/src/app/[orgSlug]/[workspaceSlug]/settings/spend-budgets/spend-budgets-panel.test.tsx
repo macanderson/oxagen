@@ -10,6 +10,7 @@
 import * as React from "react";
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { moneyFromUsd, usdFromMoney } from "./spend-budget-format";
 import type {
   SpendBudgetScope,
   SpendBudgetStatus,
@@ -29,7 +30,7 @@ vi.mock("./scope-budget-card", () => ({
   }) => (
     <div data-testid={`mock-card-${scope}`}>
       <span data-testid={`mock-card-${scope}-limit`}>
-        {budget?.limit ? Number(budget.limit.micros) / 1_000_000 : "empty"}
+        {budget?.limit ? usdFromMoney(budget.limit) : "empty"}
       </span>
       <span data-testid={`mock-card-${scope}-can-manage`}>
         {String(canManage)}
@@ -43,9 +44,9 @@ vi.mock("./scope-budget-card", () => ({
             enabled: true,
             period: "monthly",
             windowDays: null,
-            limit: { micros: "999000000", currency: "USD" },
-            spent: { micros: "0", currency: "USD" },
-            projected: { micros: "0", currency: "USD" },
+            limit: moneyFromUsd(999),
+            spent: moneyFromUsd(0),
+            projected: moneyFromUsd(0),
             ratio: 0,
             state: "ok",
             reachedThreshold: 0,
@@ -74,9 +75,9 @@ function budget(scope: SpendBudgetScope, limitUsd: number): SpendBudgetStatus {
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limit: { micros: String(limitUsd * 1_000_000), currency: "USD" },
-    spent: { micros: "0", currency: "USD" },
-    projected: { micros: "0", currency: "USD" },
+    limit: moneyFromUsd(limitUsd),
+    spent: moneyFromUsd(0),
+    projected: moneyFromUsd(0),
     ratio: 0,
     state: "ok",
     reachedThreshold: 0,
@@ -114,11 +115,9 @@ describe("SpendBudgetsPanel", () => {
         canManage={true}
       />,
     );
-    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent(
-      /^1000$/,
-    );
+    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
     expect(screen.getByTestId("mock-card-workspace-limit")).toHaveTextContent(
-      /^100$/,
+      "100",
     );
   });
 
@@ -141,12 +140,10 @@ describe("SpendBudgetsPanel", () => {
     );
 
     expect(screen.getByTestId("mock-card-workspace-limit")).toHaveTextContent(
-      /^999$/,
+      "999",
     );
     // Org scope's original value is unaffected by the workspace-scope save.
-    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent(
-      /^1000$/,
-    );
+    expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
   });
 
   it("threads canManage to both scope cards", () => {
