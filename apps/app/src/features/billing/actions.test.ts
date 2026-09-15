@@ -137,11 +137,17 @@ describe("purchaseGau", () => {
 
   it("returns the handler's role refusal to an admin as denied, with no redirect (negative)", async () => {
     orgRole.mockResolvedValue("admin");
-    invoke.mockRejectedValue(new kernel.HandlerError({ code: "forbidden" }));
+    // The refusal assertOrgRole throws for a role outside Owner and Billing.
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
     expect(await purchaseGau("acme", 5000, null, quantity("10000"))).toEqual({
       ok: false,
       reason: "denied",
-      code: "forbidden",
+      code: "org_role_required",
     });
     expect(redirect).not.toHaveBeenCalled();
   });
