@@ -1,0 +1,17 @@
+/* Oxagen design tokens. Source of truth: the approved September 2026 system (w12-coverage-audit.html). */
+:root{
+  --ink:#10100F; --void:#0A0A09; --panel:#181715; --hl:#201F1C; --border:#292722; --rule:#34322D;
+  --fg:#F2EEE5; --body:#DDD8CD; --muted:#9B958A; --dim:#6E6A62;
+  --gold:#D6962C; --gold-bright:#F1C364; --gold-deep:#8B5E1A; --accent-text:#D6962C; --on-gold:#10100F;
+  --st-allowed:#57A97C; --st-approval:#5B93D6; --st-denied:#C66A4A;
+  --st-proven:#3FA2A2; --st-failed:#C0453C; --st-critical:#D6455E;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --font:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
+  --radius:12px; --wrap:1120px;
+}
+:root[data-theme="light"], @media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --ink:#F2EEE5; --void:#E9E3D8; --panel:#F8F5EE; --hl:#EFEAE0; --border:#D8CDBD; --rule:#C9BFAE;
+  --fg:#10100F; --body:#2A2823; --muted:#6B665C; --dim:#8C877C; --accent-text:#8B5E1A;
+  --st-allowed:#2F7D52; --st-approval:#2E6BA8; --st-denied:#9B4526;
+  --st-proven:#1F7676; --st-failed:#992F28; --st-critical:#AE2540;
+}}

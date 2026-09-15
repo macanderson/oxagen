@@ -1,43 +1,43 @@
 ---
 title: SOC 2 controls mapping
-description: How Oxagen's architecture maps to SOC 2 Trust Service Criteria — CC6, CC7, CC8, CC9, and availability.
+description: How Oxagen's architecture maps to SOC 2 Trust Service Criteria, CC6, CC7, CC8, CC9, and availability.
 ---
 
 Oxagen is designed SOC 2-first. The controls described here are architectural properties of the platform, not compliance checkboxes bolted on after the fact. This page maps Oxagen capabilities to the SOC 2 Trust Service Criteria (TSC) so your security team, auditors, and procurement reviewers have a concrete starting point.
 
-## CC6 — Logical and physical access controls
+## CC6: Logical and physical access controls
 
-### CC6.1 — Access control policies and procedures
+### CC6.1: Access control policies and procedures
 
 Oxagen enforces role-based access control through a single IAM resolver that runs at the `invoke()` boundary. On Enterprise organizations, and for every agent principal on any plan, a capability call is decided by:
 
-1. The principal's role grants for the capability — across roles, deny wins over require-approval, which wins over allow.
+1. The principal's role grants for the capability: across roles, deny wins over require-approval, which wins over allow.
 2. The system org Owner role, if no role grant decided.
-3. The capability's declared `defaultEffect` — `deny` for most capabilities.
+3. The capability's declared `defaultEffect`: `deny` for most capabilities.
 
 On Free, Build, and Scale, human and API-key calls are allowed at the IAM layer and recorded with `tier_gate` as the deciding rule. The resolver also contains rules for workspace grants and org-enforced policies, but their tables were removed, so they decide nothing today; there is no policy editor. Roles and their grants are listed read-only at **Governance → Policies**. See [RBAC and roles](/docs/governance/rbac).
 
 **Auditor evidence:** `capability.invoke_allowed` and `capability.invoke_denied` events in `security.security_events`. Every IAM decision is also written to ClickHouse `audit_events` with the resolver's trace, which names the rule that decided.
 
-### CC6.2 — New user provisioning
+### CC6.2: New user provisioning
 
 Users are provisioned through the invite flow at **Organization → Members**. An invite cannot be sent without a role (Owner, Admin, Member, or Billing). There is no self-service role escalation path: only an Owner or Admin can change a role. SSO and SCIM provisioning are not available.
 
 **Auditor evidence:** `org.member_invited` and `org.role_changed` events in `security.security_events`.
 
-### CC6.3 — Role assignment and modification
+### CC6.3: Role assignment and modification
 
 A role change (`change_member_role`) requires the acting user to hold the Owner or Admin role, checked against their role assignments. The change soft-deletes the previous assignment, stamping who removed it and when, and inserts a new one, so earlier assignments stay on record. A change that would leave the organization without an Owner is refused.
 
 **Auditor evidence:** `org.role_changed` security events.
 
-### CC6.5 — Access revocation
+### CC6.5: Access revocation
 
-Owners and Admins can revoke any member's session at **Organization → Access → Sessions**. API keys can be revoked at **Organization → Developer → Tokens** (`revoke_api_key` capability). Revocation is immediate — the next request with a revoked token returns 401.
+Owners and Admins can revoke any member's session at **Organization → Access → Sessions**. API keys can be revoked at **Organization → Developer → Tokens** (`revoke_api_key` capability). Revocation is immediate: the next request with a revoked token returns 401.
 
 **Auditor evidence:** `security.session_revoked` and `api_key.revoked` events. A session revocation record names the acting user, the revoked session id, and the time; it does not record an IP address or user agent.
 
-### CC6.6 — Authentication mechanisms
+### CC6.6: Authentication mechanisms
 
 Supported authentication factors:
 
@@ -48,24 +48,24 @@ MFA enforcement, passkeys (WebAuthn), SSO via SAML 2.0/OIDC, and SCIM directory 
 
 **Auditor evidence:** `auth.sign_in`, `auth.sign_in_failed`, and `auth.sign_out` events. `auth.token_refreshed`, `auth.password_changed`, and `auth.email_verified` are reserved names with no emitter yet, so querying them returns nothing.
 
-### CC6.7 — Data transmission protection
+### CC6.7: Data transmission protection
 
 All data is transmitted over TLS 1.2 or higher. The API and MCP server enforce HTTPS. There is no unencrypted path to customer data.
 
-### CC6.8 — Malicious software and unauthorized code prevention
+### CC6.8: Malicious software and unauthorized code prevention
 
-Oxagen is a governance plane, not an execution runtime: it holds no sandbox, no file system, and no arbitrary-code-execution surface for the platform to compromise (ADR-043, `docs/adr/ADR-043-runtime-excision.md`). The agents Oxagen governs run in a customer's own infrastructure or in the reference coding agent (Stella); Oxagen never runs their code itself. Third-party MCP server tools invoked through the governed gateway pass through IAM, entitlement, and audit checks identical to any other capability call — there is no unmediated code path into the platform.
+Oxagen is a governance plane, not an execution runtime: it holds no sandbox, no file system, and no arbitrary-code-execution surface for the platform to compromise (ADR-043, `docs/adr/ADR-043-runtime-excision.md`). The agents Oxagen governs run in a customer's own infrastructure or in the reference coding agent (Stella); Oxagen never runs their code itself. Third-party MCP server tools invoked through the governed gateway pass through IAM, entitlement, and audit checks identical to any other capability call: there is no unmediated code path into the platform.
 
 ---
 
-## CC7 — System operations and monitoring
+## CC7: System operations and monitoring
 
-### CC7.1 — Detection of anomalies and security events
+### CC7.1: Detection of anomalies and security events
 
 Oxagen maintains two independent audit stores optimized for different query patterns:
 
-- **Postgres `security.security_events`** — relational, queryable, indexed by org and event kind. 7-year retention via monthly RANGE partitions. Used for compliance dashboards and point lookups.
-- **ClickHouse `audit_events`** — `ReplacingMergeTree`, one row per IAM decision, 7-year TTL. Each row stores a SHA-256 chain hash over the previous row's hash (for the same org and capability), its own event id, and the capability, so a removed or inserted row breaks the chain. The hash does not cover the other fields, concurrent calls can fork the chain, and there is no built-in verifier yet.
+- **Postgres `security.security_events`**: relational, queryable, indexed by org and event kind. 7-year retention via monthly RANGE partitions. Used for compliance dashboards and point lookups.
+- **ClickHouse `audit_events`**: `ReplacingMergeTree`, one row per IAM decision, 7-year TTL. Each row stores a SHA-256 chain hash over the previous row's hash (for the same org and capability), its own event id, and the capability, so a removed or inserted row breaks the chain. The hash does not cover the other fields, concurrent calls can fork the chain, and there is no built-in verifier yet.
 
 54 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Adding an event type is a one-file edit; a test fails if the database CHECK constraint drifts from the file. Eight of the 54 are reserved names that nothing emits yet; they are marked below. The taxonomy covers:
 
@@ -85,21 +85,21 @@ Oxagen maintains two independent audit stores optimized for different query patt
 
 **Auditor evidence:** **Organization → Security → Audit** shows `security.security_events` and exports it as an HMAC-signed CSV or NDJSON file (Owner or Admin, Enterprise plan). ClickHouse `audit_events` is not shown in the app; query it directly.
 
-### CC7.2 — Security incident monitoring and response
+### CC7.2: Security incident monitoring and response
 
 Real-time audit logs are available at **Organization → Security → Audit** filtered by event kind, principal, or time range. There is no incident register in the app, and no per-event-kind alert subscriptions; the one alert setting is MCP authentication alerts, under **Governance → Policies**.
 
 SIEM export (Splunk, Datadog, S3, JSONL webhook) is not yet available. Audit events can be queried via `POST /v1/{orgSlug}/{workspaceSlug}/audit/log/query` (`query_audit_log`) and pulled into an external SIEM on a schedule.
 
-### CC7.3 — Security event analysis
+### CC7.3: Security event analysis
 
 Every IAM decision row in ClickHouse `audit_events` carries the resolver's trace, naming the rule that decided (including `tier_gate` on plans where the resolver does not run). An access-control investigation can read why a call was allowed or denied from the stored trace rather than reconstructing it.
 
 ---
 
-## CC8 — Change management
+## CC8: Change management
 
-### CC8.1 — Authorized changes to infrastructure and software
+### CC8.1: Authorized changes to infrastructure and software
 
 Schema changes are applied via versioned migrations. Migrations follow the expand-then-contract pattern: additive changes first, then removal in a subsequent migration once all callers are updated. No migration is edited after it has been applied; CI verifies checksums.
 
@@ -107,13 +107,13 @@ Code changes to the audit, IAM, and billing paths require explicit review. The S
 
 ---
 
-## CC9 — Risk mitigation
+## CC9: Risk mitigation
 
-### CC9.1 — Risk assessment
+### CC9.1: Risk assessment
 
 High-risk capabilities (deleting an agent definition, changing a member's org role, publishing a steering context record or tool declaration) are tagged `riskLevel: high` in the contract registry. Capabilities that declare `requiresApproval` pause the in-app agent's turn and render an approval card; the user confirms or denies, and an unanswered request expires after five minutes. Capabilities that are high-risk, destructive, or approval-required are never admitted to the agent's automatically granted tool set.
 
-### CC9.2 — Vendor and third-party risk
+### CC9.2: Vendor and third-party risk
 
 Sub-processors are listed in [Data handling](/docs/security/data-handling). Oxagen uses vendor-neutral adapters for all storage and compute dependencies, enabling migration away from any sub-processor without application code changes.
 
@@ -121,7 +121,7 @@ Sub-processors are listed in [Data handling](/docs/security/data-handling). Oxag
 
 ## Availability
 
-Oxagen targets 99.9% uptime on the Scale tier with a documented SLA. The platform is stateless at the compute layer (Vercel Functions); state is durably held in Postgres, ClickHouse, and Neo4j — all of which run on managed services with their own availability guarantees.
+Oxagen targets 99.9% uptime on the Scale tier with a documented SLA. The platform is stateless at the compute layer (Vercel Functions); state is durably held in Postgres, ClickHouse, and Neo4j: all of which run on managed services with their own availability guarantees.
 
 Audit and security event writes are non-blocking relative to the primary capability handler: a telemetry write failure does not cause a capability call to fail. The audit write path has independent retry logic.
 
