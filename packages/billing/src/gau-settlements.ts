@@ -114,10 +114,10 @@ const UUID_RE =
 /**
  * The purchase the session metadata describes. The session is self-sufficient
  * (the handler inserts nothing pending), so the metadata is the only record
- * of what was sold, and a session that claims to be a GAU purchase without
- * saying what it sold is refused rather than guessed at: the webhook records
- * the error and an operator reads it, instead of a paid purchase being
- * dropped or granted at a figure nobody set.
+ * of what was sold. A session that claims to be a GAU purchase without
+ * saying what it sold is refused: the webhook records the error for an
+ * operator to read, and no purchase is dropped or granted at a figure nobody
+ * set.
  */
 function parseGauPurchase(session: BillingCheckoutSession): GauPurchase {
   const m = session.metadata;
@@ -164,7 +164,7 @@ function parseGauPurchase(session: BillingCheckoutSession): GauPurchase {
  * accordingly. This step runs on every delivery, so a redelivery after a
  * provider failure here still saves the card. A Free org's first purchase
  * therefore leaves it with a default card, and its next exhaustion takes the
- * auto top-up path rather than the add-a-card refusal.
+ * auto top-up path (ADR-055 §6).
  *
  * An unpaid session (`payment_status` other than `paid`) grants nothing:
  * Stripe fires `checkout.session.completed` for an async payment method
