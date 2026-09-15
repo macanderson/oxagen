@@ -4,7 +4,9 @@
 // `.oxagen/rules/`, the PR with its body, then the six §10.3 checks one at a
 // time, each mirrored as a GitHub check run. Calling it again on a proposal
 // whose PR is open re-runs the checks on the same PR: one concern, one pull
-// request.
+// request. The handler gates on the caller's org or workspace role, which
+// only a signed-in user holds; an API key carries no user, so the MCP and CLI
+// surfaces (API-key auth) are not declared.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
@@ -25,7 +27,8 @@ export const contextPrSchema = z
     proposalId: z.string(),
     lineageId: z.string(),
     status: proposalStatusSchema,
-    governanceMode: governanceModeSchema,
+    /** Read from governance.toml when the PR opens; null before. */
+    governanceMode: governanceModeSchema.nullable(),
     pr: z
       .object({
         number: z.number().int().positive(),
@@ -64,8 +67,8 @@ export const contextPrSchema = z
         bundleVersion: z
           .object({ current: z.number().int(), afterMerge: z.number().int() })
           .strict(),
-        /** Who may merge under the governance mode, and the separation rule. */
-        review: z.string(),
+        /** Who may merge under the governance mode, and the separation rule; null until the mode is read. */
+        review: z.string().nullable(),
       })
       .strict(),
     merged: z
@@ -88,8 +91,8 @@ export const contextPrOpen = registerCapability({
   description:
     "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

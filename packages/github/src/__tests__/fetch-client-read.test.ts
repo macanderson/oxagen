@@ -82,6 +82,7 @@ describe("getPullRequest", () => {
       baseRef: "main",
       headRef: "feature/hello",
       headSha: "abc123",
+      mergeCommitSha: null,
       additions: 40,
       deletions: 2,
       changedFiles: 3,

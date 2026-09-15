@@ -49,6 +49,12 @@ describe("open_context_pr contract", () => {
     });
   });
 
+  it("is reachable only where a signed-in user exists: the handler's role gate refuses an API key", () => {
+    expect(contextPrOpen.surfaces).toEqual(["api"]);
+    expect(contextPrOpen.layers).not.toContain("mcp");
+    expect(contextPrOpen.layers).not.toContain("cli");
+  });
+
   it("takes only the proposal id", () => {
     expect(contextPrOpen.input.safeParse({ proposalId: "prp_1" }).success).toBe(
       true,
@@ -61,6 +67,15 @@ describe("open_context_pr contract", () => {
 
   it("answers the Context PR: state, PR, stamped record, checks, what merge will do", () => {
     expect(contextPrSchema.safeParse(contextPrFixture).success).toBe(true);
+    // Before the PR opens nothing has read governance.toml.
+    expect(
+      contextPrSchema.safeParse({
+        ...contextPrFixture,
+        status: "proposed",
+        governanceMode: null,
+        onMerge: { ...contextPrFixture.onMerge, review: null },
+      }).success,
+    ).toBe(true);
     expect(
       contextPrSchema.safeParse({ ...contextPrFixture, status: "candidate" })
         .success,

@@ -8,6 +8,9 @@ describe("merge_context_pr contract", () => {
     expect(contextPrMerge.noBillingGate).toBe(true);
     expect(contextPrMerge.agent?.requiresApproval).toBe(true);
     expect(contextPrMerge.sensitivity).toBe("high");
+    // The reviewer is a signed-in user; an API key carries none.
+    expect(contextPrMerge.surfaces).toEqual(["api"]);
+    expect(contextPrMerge.layers).not.toContain("mcp");
   });
 
   it("answers the published record, the merge commit, the promotion event and the version bump", () => {

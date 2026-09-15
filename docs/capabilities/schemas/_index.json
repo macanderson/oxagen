@@ -534,8 +534,7 @@
       "name": "dismiss_proposal",
       "domain": "context",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -1826,8 +1825,7 @@
       "name": "merge_context_pr",
       "domain": "context",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -1837,9 +1835,7 @@
       "name": "open_context_pr",
       "domain": "context",
       "surfaces": [
-        "api",
-        "mcp",
-        "cli"
+        "api"
       ],
       "component": null,
       "produces": [],

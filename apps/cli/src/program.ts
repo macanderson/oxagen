@@ -174,46 +174,43 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── context: steering proposals → Context PRs (open_context_pr) ─────────────
+  // ── context: a steering proposal on a lineage (propose_record) ──────────────
 
   const contextCmd = program
     .command("context")
-    .description("Steering: open a record proposal as a Context PR");
+    .description("Steering: record a proposal on a lineage");
   contextCmd
-    .command("propose [proposalId]")
+    .command("propose")
     .description(
-      "Open the Context PR for a proposal (branch, record file, PR, checks); with --lineage… records the proposal first",
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
     )
-    .option(
+    .requiredOption(
       "--lineage <id>",
       "The lineage id (the file stem under .oxagen/rules/)",
     )
-    .option(
+    .requiredOption(
       "--kind <kind>",
       "rule | constraint | procedure | fact | memory | preference",
     )
-    .option("--force <force>", "must | should | may | info")
-    .option("--scope <scope>", "workspace | repository")
-    .option("--statement <text>", "The single-sentence claim")
-    .option("--rationale <text>", "Why the record should be published")
+    .requiredOption("--force <force>", "must | should | may | info")
+    .requiredOption("--scope <scope>", "workspace | repository")
+    .requiredOption("--statement <text>", "The single-sentence claim")
+    .requiredOption("--rationale <text>", "Why the record should be published")
     .option("--effect <effect>", "require | forbid — a constraint only")
     .option("--json", "Output JSON")
     .action(
-      async (
-        proposalId: string | undefined,
-        opts: {
-          lineage?: string;
-          kind?: string;
-          force?: string;
-          scope?: string;
-          statement?: string;
-          rationale?: string;
-          effect?: string;
-          json?: boolean;
-        },
-      ) => {
+      async (opts: {
+        lineage: string;
+        kind: string;
+        force: string;
+        scope: string;
+        statement: string;
+        rationale: string;
+        effect?: string;
+        json?: boolean;
+      }) => {
         const { contextPropose } = await import("./commands/context.js");
-        await contextPropose({ proposalId, ...opts });
+        await contextPropose(opts);
       },
     );
 

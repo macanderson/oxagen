@@ -4,9 +4,7 @@
   "description": "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp",
-    "cli"
+    "api"
   ],
   "sensitivity": "high",
   "agent": {
@@ -56,11 +54,18 @@
         ]
       },
       "governanceMode": {
-        "type": "string",
-        "enum": [
-          "solo",
-          "team",
-          "regulated"
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
+          },
+          {
+            "type": "null"
+          }
         ]
       },
       "pr": {
@@ -302,7 +307,14 @@
             "additionalProperties": false
           },
           "review": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

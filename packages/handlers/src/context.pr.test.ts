@@ -23,9 +23,12 @@ import { createGetContextPrHandler } from "./context.pr.get";
 import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListRecordsHandler } from "./context.records.list";
+import { stringify } from "smol-toml";
 import { parseChecked } from "./context.steering.checks";
+import { stampRecordObject } from "./context.steering.file";
 import {
   AUTHOR,
+  REPO,
   REVIEWER,
   ctx,
   harness,
@@ -78,7 +81,7 @@ describe("open_context_pr", () => {
     expect(h.github.commits).toEqual([
       { path: PATH, branch: BRANCH, message: `steering: propose ${LINEAGE}` },
     ]);
-    const committed = h.github.files.get(`${BRANCH}:${PATH}`)!;
+    const committed = (await h.github.readFile(REPO, PATH, BRANCH))!;
     const parsed = parseChecked(committed);
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
@@ -197,27 +200,71 @@ describe("open_context_pr", () => {
     expect(h.github.pulls).toHaveLength(1);
   });
 
-  it("checks the file as it sits on the branch: a later edit fails the hash on a re-run, on the same PR", async () => {
+  it("checks the file at the PR's current head: a later edit fails the hash on a re-run, on the same PR, with the check runs on the new head", async () => {
     const h = harness();
     const proposalId = await proposed(h);
     const open = createOpenContextPrHandler(h);
     const first = await open({ proposalId }, ctx());
     expect(first.status).toBe("checks_passed");
+    expect(first.pr?.headSha).toBe("head1");
 
-    const edited = h.github.files
-      .get(`${BRANCH}:${PATH}`)!
-      .replace("cache the first read", "cache every read");
-    h.github.files.set(`${BRANCH}:${PATH}`, edited);
+    const edited = (await h.github.readFile(REPO, PATH, BRANCH))!.replace(
+      "cache the first read",
+      "cache every read",
+    );
+    h.github.commit(BRANCH, PATH, edited);
     const second = await open({ proposalId }, ctx());
     expect(h.github.pulls).toHaveLength(1);
     expect(h.github.commits).toHaveLength(1);
     expect(second.pr?.number).toBe(first.pr?.number);
+    expect(second.pr?.headSha).toBe("head2");
     expect(second.status).toBe("checks_failed");
     expect(second.checks.find((c) => c.name === "record_hash")).toMatchObject({
       status: "failed",
       summary: expect.stringContaining("does not match the file's"),
     });
     expect(h.github.checkRuns).toHaveLength(12);
+    expect(h.github.checkRuns.slice(6).map((c) => c.headSha)).toEqual(
+      Array(6).fill("head2"),
+    );
+  });
+
+  it("a re-run on a branch edit that re-stamps the record passes and the row carries the file's identity", async () => {
+    const h = harness();
+    const proposalId = await proposed(h);
+    const open = createOpenContextPrHandler(h);
+    const first = await open({ proposalId }, ctx());
+    // The author fixes the file on the branch and stamps it as Stella would;
+    // only the provenance moves, the classification stays the proposal's.
+    const committed = parseChecked(
+      (await h.github.readFile(REPO, PATH, BRANCH))!,
+    );
+    if (!committed.ok) throw new Error(committed.reason);
+    const raw = committed.file.raw[0]!;
+    const moved = {
+      ...raw,
+      provenance: { source_kind: "proposal", source_uri: "oxagen:proposal/x" },
+    };
+    const restamped = { ...moved, ...stampRecordObject(moved) };
+    h.github.commit(
+      BRANCH,
+      PATH,
+      `${stringify({
+        schema: "context-record/v0.1",
+        set_id: committed.file.set_id,
+        record: [restamped],
+      })}\n`,
+    );
+    const second = await open({ proposalId }, ctx());
+    expect(second.status).toBe("checks_passed");
+    expect(second.pr?.headSha).toBe("head2");
+    expect(second.record?.recordHash).toBe(restamped.record_hash);
+    expect(second.record?.recordHash).not.toBe(first.record?.recordHash);
+    expect(h.store.proposals[0]).toMatchObject({
+      headSha: "head2",
+      stampedRecordId: restamped.record_id,
+      recordHash: restamped.record_hash,
+    });
   });
 
   it("refuses a second PR on a lineage that has one open, a merged or rejected proposal, and a workspace with no repository", async () => {
@@ -304,12 +351,14 @@ describe("get_context_pr", () => {
     const before = await get({ proposalId: a }, ctx());
     expect(before).toMatchObject({
       status: "proposed",
+      governanceMode: null,
       pr: null,
       record: null,
       body: null,
       checks: [],
       merged: null,
     });
+    expect(before.onMerge.review).toBeNull();
     expect(before.onMerge.bundleVersion).toEqual({ current: 0, afterMerge: 1 });
     await expect(get({ proposalId: "prp_nope" }, ctx())).rejects.toMatchObject({
       code: "not_found",
@@ -416,8 +465,13 @@ describe("merge_context_pr", () => {
     );
 
     expect(h.github.merges).toEqual([
-      { number: 519, commitTitle: `steering: publish ${LINEAGE} (#519)` },
+      {
+        number: 519,
+        commitTitle: `steering: publish ${LINEAGE} (#519)`,
+        sha: "head1",
+      },
     ]);
+    expect(h.github.deletedBranches).toEqual([BRANCH]);
     expect(out).toMatchObject({
       status: "merged",
       record: { lineageId: LINEAGE, version: 1, path: PATH },
@@ -439,7 +493,9 @@ describe("merge_context_pr", () => {
       version: 1,
     });
     expect(record.publishedAt).toBeInstanceOf(Date);
-    expect(h.store.versions[0]!.body).toBe(h.github.files.get(`main:${PATH}`));
+    expect(h.store.versions[0]!.body).toBe(
+      await h.github.readFile(REPO, PATH, "main"),
+    );
     expect(h.store.ledger).toHaveLength(1);
     expect(h.store.ledger[0]).toMatchObject({
       seq: 1,
@@ -503,6 +559,72 @@ describe("merge_context_pr", () => {
     expect(out.bundleVersion).toEqual({ before: 1, after: 2 });
     expect(h.store.records).toHaveLength(1);
     expect(h.store.ledger[1]!.prev).toBe(h.store.ledger[0]!.chainDigest);
+    // The first merge deleted its branch, so the second branched from the
+    // production branch that already held the squash: no add/add conflict.
+    expect(h.github.branches).toEqual([
+      { branch: BRANCH, from: "main" },
+      { branch: BRANCH, from: "main" },
+    ]);
+    expect(h.github.deletedBranches).toEqual([BRANCH, BRANCH]);
+    expect(h.github.pulls.map((p) => p.number)).toEqual([519, 520]);
+  });
+
+  it("is refused when the head moved after the checks passed, and publishes nothing", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const pushed = (await h.github.readFile(REPO, PATH, BRANCH))!.replace(
+      "cache the first read",
+      "see ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD",
+    );
+    h.github.commit(BRANCH, PATH, pushed);
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+      message: expect.stringContaining("head2"),
+    });
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.github.deletedBranches).toHaveLength(0);
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
+  it("resumes a merge GitHub already holds: the publication that failed lands on a retry with the same commit, once", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let fail = true;
+    store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.github.deletedBranches).toEqual([BRANCH]);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+    expect(h.store.records).toHaveLength(0);
+
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(out.mergedCommit).toBe("merge519");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.ledger).toHaveLength(1);
+    expect(h.store.records).toHaveLength(1);
+    expect(h.store.versions[0]!.body).toBe(
+      await h.github.readFile(REPO, PATH, "head1"),
+    );
   });
 
   it("publishes nothing when GitHub refuses the merge", async () => {

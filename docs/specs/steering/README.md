@@ -77,23 +77,33 @@ rejected
 commits the single file, opens the PR (its body: the record, the rationale,
 the supporting records, runs and agents, the evidence links, the check list)
 and runs the checks. On a row whose PR is open it runs the checks again on the
-same PR. At most one proposal per lineage is in an open-PR state
+same PR, against its current head (`head_sha` re-read from GitHub). At most
+one proposal per lineage is in an open-PR state
 (`context_proposals_open_pr_idx`).
 
-`merge_context_pr` is refused until `checks_passed`, and unless the caller is
-a reviewer the governance mode allows. GitHub merges first (squash); only a
-confirmed merge publishes: the registry row, a new immutable version holding
-the merged file, the promotion event on the ledger (`agent.context_promotions`,
-`action = promote`, `policy_version = governance:<mode>`), the proposal to
-`merged`, and the `steering.published` audit event. The workspace's steering
-version is the ledger length.
+`merge_context_pr` is refused until `checks_passed`, unless the caller is a
+reviewer the governance mode allows, and when the PR's head is no longer the
+commit the checks ran on (`head_moved`). GitHub merges first (squash, pinned
+to that commit); a PR GitHub already holds merged is resumed from its merge
+commit. The head branch is deleted, then a confirmed merge publishes: the
+registry row, a new immutable version holding the file at that commit, the
+promotion event on the ledger (`agent.context_promotions`, `action = promote`,
+`policy_version = governance:<mode>`), the proposal to `merged`, and the
+`steering.published` audit event. The workspace's steering version is the
+ledger length. `dismiss_proposal` closes an open PR and deletes its branch.
+
+`open_context_pr`, `merge_context_pr` and `dismiss_proposal` gate on the
+caller's role and so need a signed-in user; they declare the `api` surface
+only, since an API key (the MCP and CLI bearer) carries no user.
 
 ## The checks
 
 `packages/handlers/src/context.steering.checks.ts`, in order, one at a time,
 each written to the proposal before the next starts and mirrored as a GitHub
 check run `Oxagen · <title>` on the head commit. The file checked is the one
-read back from the branch. Every check runs even after a failure.
+read back at that commit, and once every check passes the proposal carries
+the `record_id` and `record_hash` stamped in it. Every check runs even after
+a failure.
 
 | # | name | what passes | what fails |
 | --- | --- | --- | --- |
@@ -102,7 +112,7 @@ read back from the branch. Every check runs even after a failure.
 | 3 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes | an edit after stamping |
 | 4 | `secret_pii_scan` | no credential token (vendor prefix, JWT, high-entropy blob), sensitive-key value or PEM block; no email, SSN or Luhn-valid card number — in the statement, rationale, evidence and file | any finding, named by field |
 | 5 | `conflict_against_active` | no active constraint of the opposite effect on the same lineage, or on the same statement under another lineage | a `forbid` against an active `require` |
-| 6 | `constraint_effect` | the file's kind is the proposal's; a constraint carries `require` or `forbid`; no other kind carries an effect | `allow` is unrepresentable; a constraint without an effect; an effect on a rule |
+| 6 | `constraint_effect` | the file's kind, `steering.force`, `sharing_scope` and statement are the proposal's; a constraint carries `require` or `forbid`; no other kind carries an effect | a file re-stamped with another statement, force or scope; `allow` is unrepresentable; a constraint without an effect; an effect on a rule |
 
 Truth probes (spec §10.3) are not declared by the files this lane writes and
 are not a check here.

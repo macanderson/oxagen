@@ -4,8 +4,7 @@
   "description": "Reject a record proposal with a reason. Refused once the proposal has merged.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "mcp"
+    "api"
   ],
   "sensitivity": "medium",
   "agent": {

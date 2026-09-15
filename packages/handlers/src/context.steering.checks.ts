@@ -18,12 +18,12 @@ import {
   type RecordFileRecord,
 } from "./context.steering.file";
 
-export interface CheckOutcome {
+interface CheckOutcome {
   ok: boolean;
   summary: string;
 }
 
-export interface ActiveRecordRef {
+interface ActiveRecordRef {
   lineageId: string;
   kind: RecordKind | null;
   constraintEffect: ConstraintEffect | null;
@@ -201,7 +201,7 @@ export function parseChecked(fileText: string):
   };
 }
 
-export function checkSchema(ctx: CheckContext): CheckOutcome {
+function checkSchema(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
   const n = parsed.file.record.length;
@@ -212,7 +212,7 @@ export function checkSchema(ctx: CheckContext): CheckOutcome {
   };
 }
 
-export function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
+function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
   if (parsed.file.record.length !== 1) {
@@ -253,7 +253,7 @@ export function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
   };
 }
 
-export function checkRecordHash(ctx: CheckContext): CheckOutcome {
+function checkRecordHash(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
   const record = parsed.file.record[0]!;
@@ -412,7 +412,7 @@ export function findSecretsAndPii(text: string): string[] {
   return findings;
 }
 
-export function scanForSecretsAndPii(fields: Record<string, string>): string[] {
+function scanForSecretsAndPii(fields: Record<string, string>): string[] {
   const findings: string[] = [];
   for (const [field, text] of Object.entries(fields)) {
     for (const label of findSecretsAndPii(text))
@@ -421,7 +421,7 @@ export function scanForSecretsAndPii(fields: Record<string, string>): string[] {
   return findings;
 }
 
-export function checkSecretPiiScan(ctx: CheckContext): CheckOutcome {
+function checkSecretPiiScan(ctx: CheckContext): CheckOutcome {
   const findings = scanForSecretsAndPii({
     statement: ctx.proposal.statement,
     rationale: ctx.proposal.rationale,
@@ -442,7 +442,7 @@ export function checkSecretPiiScan(ctx: CheckContext): CheckOutcome {
 
 const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-export function checkConflictAgainstActive(ctx: CheckContext): CheckOutcome {
+function checkConflictAgainstActive(ctx: CheckContext): CheckOutcome {
   const others = ctx.activeRecords.filter(
     (r) => r.lineageId !== ctx.proposal.lineageId,
   );
@@ -481,14 +481,33 @@ export function checkConflictAgainstActive(ctx: CheckContext): CheckOutcome {
   };
 }
 
-export function checkConstraintEffect(ctx: CheckContext): CheckOutcome {
+/**
+ * The file's classification is the proposal's: kind, force, sharing scope
+ * and statement. The registry is written from the proposal row at merge, so
+ * a file that disagrees with it must not pass.
+ */
+function checkConstraintEffect(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
-  const kind = parsed.file.record[0]!.kind;
-  if (kind !== ctx.proposal.kind) {
+  const record = parsed.file.record[0]!;
+  const kind = record.kind;
+  const disagreements = (
+    [
+      ["kind", kind, ctx.proposal.kind],
+      ["steering.force", record.steering.force, ctx.proposal.force],
+      ["sharing_scope", record.sharing_scope, ctx.proposal.sharingScope],
+      ["statement", record.statement, ctx.proposal.statement],
+    ] as const
+  ).filter(([, inFile, inProposal]) => inFile !== inProposal);
+  if (disagreements.length > 0) {
     return {
       ok: false,
-      summary: `the file's kind is ${kind}; the proposal's is ${ctx.proposal.kind}`,
+      summary: disagreements
+        .map(
+          ([field, inFile, inProposal]) =>
+            `the file's ${field} is ${JSON.stringify(inFile)}; the proposal's is ${JSON.stringify(inProposal)}`,
+        )
+        .join("; "),
     };
   }
   const effect = ctx.proposal.constraintEffect;

@@ -55,11 +55,18 @@
         ]
       },
       "governanceMode": {
-        "type": "string",
-        "enum": [
-          "solo",
-          "team",
-          "regulated"
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
+          },
+          {
+            "type": "null"
+          }
         ]
       },
       "pr": {
@@ -301,7 +308,14 @@
             "additionalProperties": false
           },
           "review": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

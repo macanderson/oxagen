@@ -113,7 +113,7 @@ describe("the GitHub seam", () => {
     });
   });
 
-  it("merges with squash and surfaces GitHub's refusal", async () => {
+  it("merges with squash pinned to the head sha and surfaces GitHub's refusal", async () => {
     const mergePullRequest = vi
       .fn()
       .mockResolvedValueOnce({ sha: "m1", merged: true })
@@ -124,21 +124,75 @@ describe("the GitHub seam", () => {
       );
     const { gh } = seam(fakeClient({ mergePullRequest }));
     const repo = await gh.resolveRepository(SCOPE);
-    expect(
-      await gh.mergePullRequest(repo, { number: 519, commitTitle: "t" }),
-    ).toEqual({ sha: "m1" });
+    const args = { number: 519, commitTitle: "t", sha: "head1" };
+    expect(await gh.mergePullRequest(repo, args)).toEqual({ sha: "m1" });
     expect(mergePullRequest).toHaveBeenCalledWith({
       owner: "a-intel",
       repo: "platform",
       number: 519,
       mergeMethod: "squash",
       commitTitle: "t",
+      sha: "head1",
     });
-    await expect(
-      gh.mergePullRequest(repo, { number: 519, commitTitle: "t" }),
-    ).rejects.toMatchObject({
+    await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
       reason: "github_refused",
       message: expect.stringContaining("approving review"),
+    });
+  });
+
+  it("reads a PR's head and merge commit, and wraps a GitHub refusal", async () => {
+    const getPullRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        headSha: "head2",
+        merged: true,
+        mergeCommitSha: "m2",
+      })
+      .mockRejectedValueOnce(new Error("GitHub API error 404: Not Found"));
+    const { gh } = seam(fakeClient({ getPullRequest }));
+    const repo = await gh.resolveRepository(SCOPE);
+    expect(await gh.getPullRequest(repo, 519)).toEqual({
+      headSha: "head2",
+      merged: true,
+      mergeCommitSha: "m2",
+    });
+    expect(getPullRequest).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      number: 519,
+    });
+    await expect(gh.getPullRequest(repo, 519)).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+  });
+
+  it("closes a PR, deletes a branch, treats a branch already gone as deleted, and wraps any other refusal", async () => {
+    const closePullRequest = vi.fn().mockResolvedValueOnce(undefined);
+    const deleteBranch = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new Error("GitHub API error 422: Reference does not exist"),
+      )
+      .mockRejectedValueOnce(new Error("GitHub API error 403: Forbidden"));
+    const { gh } = seam(fakeClient({ closePullRequest, deleteBranch }));
+    const repo = await gh.resolveRepository(SCOPE);
+    await expect(gh.closePullRequest(repo, 519)).resolves.toBeUndefined();
+    expect(closePullRequest).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      number: 519,
+    });
+    await expect(gh.deleteBranch(repo, "context/x")).resolves.toBeUndefined();
+    await expect(gh.deleteBranch(repo, "context/x")).resolves.toBeUndefined();
+    await expect(gh.deleteBranch(repo, "context/x")).rejects.toMatchObject({
+      reason: "github_refused",
+      message: "GitHub API error 403: Forbidden",
+    });
+    expect(deleteBranch).toHaveBeenLastCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      branch: "context/x",
     });
   });
 

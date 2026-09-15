@@ -1,7 +1,7 @@
 /**
- * `oxagen context propose` output-discipline tests: the two entry forms, the
- * client-side flag rules (no wasted round trip), `--json` as the exact payload,
- * and API failures on stderr.
+ * `oxagen context propose` output-discipline tests: the flag rules (no wasted
+ * round trip), the one call it makes, `--json` as the exact payload, and API
+ * failures on stderr.
  */
 import {
   afterEach,
@@ -16,7 +16,7 @@ import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({ apiPostOrThrow: vi.fn() }));
 
-import { contextPropose, type ContextPrResult } from "../context.js";
+import { contextPropose, type ProposalResult } from "../context.js";
 import { apiPostOrThrow } from "../../lib/api.js";
 
 function memoryWriter(): {
@@ -40,25 +40,20 @@ function memoryWriter(): {
   };
 }
 
-const PR: ContextPrResult = {
-  proposalId: "prp_1",
-  lineageId: "ctx.release.no-reread-changelog",
-  status: "checks_passed",
-  governanceMode: "team",
-  pr: {
-    number: 519,
-    url: "https://github.com/a-intel/platform/pull/519",
-    repository: "a-intel/platform",
-    branch: "context/ctx.release.no-reread-changelog",
-  },
-  checks: [
-    { name: "schema", status: "passed", summary: "context-record/v0.1 valid" },
-    { name: "record_hash", status: "passed", summary: "matches the file" },
-  ],
-  onMerge: {
-    review: "team: …",
-    bundleVersion: { current: 41, afterMerge: 42 },
-  },
+const FLAGS = {
+  lineage: "ctx.a",
+  kind: "constraint",
+  force: "must",
+  scope: "workspace",
+  statement: "x",
+  rationale: "y",
+  effect: "forbid",
+};
+
+const PROPOSAL: ProposalResult = {
+  proposalId: "prp_9",
+  lineageId: "ctx.a",
+  status: "proposed",
 };
 
 beforeEach(() => {
@@ -70,68 +65,35 @@ afterEach(() => {
 });
 
 describe("oxagen context propose", () => {
-  it("opens the PR for an existing proposal and prints the PR, the checks and what merge does", async () => {
-    (apiPostOrThrow as Mock).mockResolvedValueOnce(PR);
+  it("records the proposal through propose_record and says where its Context PR is opened", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(PROPOSAL);
     const { writer, out, err } = memoryWriter();
-    await contextPropose({ proposalId: "prp_1" }, writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("context/prs/open", {
-      proposalId: "prp_1",
+    await contextPropose(FLAGS, writer);
+    expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
+    expect(apiPostOrThrow).toHaveBeenCalledWith("context/proposals/create", {
+      record: {
+        lineageId: "ctx.a",
+        kind: "constraint",
+        force: "must",
+        sharingScope: "workspace",
+        statement: "x",
+        constraintEffect: "forbid",
+      },
+      rationale: "y",
+      source: "oxagen context propose",
     });
-    expect(out[0]).toBe(
-      "ctx.release.no-reread-changelog · prp_1 · checks_passed",
-    );
-    expect(out[1]).toContain("a-intel/platform#519");
-    expect(out).toContain("checks: 2 / 2");
-    expect(out.at(-1)).toBe(
-      "merge from Mission Control publishes it as steering v42",
-    );
+    expect(out).toEqual([
+      "ctx.a · prp_9 · proposed",
+      "open its Context PR from Mission Control → Steering; merge there publishes it",
+    ]);
     expect(err).toEqual([]);
   });
 
-  it("records the proposal first when given the record flags, then opens it", async () => {
-    (apiPostOrThrow as Mock)
-      .mockResolvedValueOnce({ proposalId: "prp_9" })
-      .mockResolvedValueOnce(PR);
-    const { writer } = memoryWriter();
-    await contextPropose(
-      {
-        lineage: "ctx.a",
-        kind: "constraint",
-        force: "must",
-        scope: "workspace",
-        statement: "x",
-        rationale: "y",
-        effect: "forbid",
-        json: true,
-      },
-      writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(
-      1,
-      "context/proposals/create",
-      {
-        record: {
-          lineageId: "ctx.a",
-          kind: "constraint",
-          force: "must",
-          sharingScope: "workspace",
-          statement: "x",
-          constraintEffect: "forbid",
-        },
-        rationale: "y",
-        source: "oxagen context propose",
-      },
-    );
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(2, "context/prs/open", {
-      proposalId: "prp_9",
-    });
-  });
-
   it("--json emits the exact payload as one line", async () => {
-    (apiPostOrThrow as Mock).mockResolvedValueOnce(PR);
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(PROPOSAL);
     const { writer, out } = memoryWriter();
-    await contextPropose({ proposalId: "prp_1", json: true }, writer);
-    expect(out).toEqual([JSON.stringify(PR)]);
+    await contextPropose({ ...FLAGS, json: true }, writer);
+    expect(out).toEqual([JSON.stringify(PROPOSAL)]);
   });
 
   it("refuses a bad flag set before any call: missing flags, a bad kind, an effect on a rule", async () => {
@@ -141,42 +103,21 @@ describe("oxagen context propose", () => {
       "--kind, --force, --scope, --statement, --rationale",
     );
     expect(process.exitCode).toBe(2);
-    await contextPropose(
-      {
-        lineage: "ctx.a",
-        kind: "directive",
-        force: "must",
-        scope: "workspace",
-        statement: "x",
-        rationale: "y",
-      },
-      writer,
-    );
+    await contextPropose({ ...FLAGS, kind: "directive" }, writer);
     expect(err.at(-2)).toContain("--kind is one of");
-    await contextPropose(
-      {
-        lineage: "ctx.a",
-        kind: "rule",
-        force: "must",
-        scope: "workspace",
-        statement: "x",
-        rationale: "y",
-        effect: "forbid",
-      },
-      writer,
-    );
+    await contextPropose({ ...FLAGS, kind: "rule" }, writer);
     expect(err.at(-2)).toContain("a constraint takes --effect");
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 
   it("routes an API failure to stderr with exit code 1", async () => {
     (apiPostOrThrow as Mock).mockRejectedValueOnce(
-      new Error("HTTP 409: lineage_pr_open"),
+      new Error("HTTP 403: no_principal"),
     );
     const { writer, out, err } = memoryWriter();
-    await contextPropose({ proposalId: "prp_1" }, writer);
+    await contextPropose(FLAGS, writer);
     expect(out).toEqual([]);
-    expect(err.join("\n")).toContain("lineage_pr_open");
+    expect(err.join("\n")).toContain("no_principal");
     expect(process.exitCode).toBe(1);
   });
 });

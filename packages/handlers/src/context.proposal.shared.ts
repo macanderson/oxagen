@@ -10,7 +10,7 @@ import type {
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import type { ProposalRow, SteeringStore } from "./context.steering.store";
 
-export interface CreateProposalInput {
+interface CreateProposalInput {
   lineageId: string;
   kind: RecordKind;
   force: RecordForce;
@@ -28,7 +28,7 @@ export interface CreateProposalInput {
 }
 
 /** Who raised it, when the caller gave no attribution. */
-export function principalLabel(ctx: CapabilityContext): string {
+function principalLabel(ctx: CapabilityContext): string {
   if (ctx.userId) return `user:${ctx.userId}`;
   if (ctx.apiKeyId) return `api_key:${ctx.apiKeyId}`;
   return `surface:${ctx.surface}`;

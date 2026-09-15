@@ -19,7 +19,7 @@ import {
 } from "drizzle-orm";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 
-export interface SteeringScope {
+interface SteeringScope {
   orgId: string;
   workspaceId: string;
 }
@@ -29,7 +29,7 @@ export type ProposalRow = Omit<
   "checks"
 > & { checks: CheckResult[] };
 
-export type ProposalInsert = Pick<
+type ProposalInsert = Pick<
   ProposalRow,
   | "orgId"
   | "workspaceId"
@@ -49,7 +49,7 @@ export type ProposalInsert = Pick<
 >;
 
 /** The columns a handler may change after insert. */
-export type ProposalPatch = Partial<
+type ProposalPatch = Partial<
   Pick<
     ProposalRow,
     | "status"
@@ -75,7 +75,7 @@ export type PublishedRecordRow = typeof schema.contextRecords.$inferSelect & {
   checksum: string | null;
 };
 
-export interface PublishedRecordVersion {
+interface PublishedRecordVersion {
   publicId: string;
   version: number;
   checksum: string;
@@ -85,7 +85,7 @@ export interface PublishedRecordVersion {
 
 export type AppendRow = typeof schema.contextAppends.$inferSelect;
 
-export type AppendInsert = Pick<
+type AppendInsert = Pick<
   AppendRow,
   | "orgId"
   | "workspaceId"
@@ -100,7 +100,7 @@ export type AppendInsert = Pick<
   | "createdByUserId"
 >;
 
-export interface RecordFilter {
+interface RecordFilter {
   kind?: string;
   sharingScope?: string;
   status?: string;
@@ -112,7 +112,7 @@ export interface Page {
   offset: number;
 }
 
-export interface PublishMergeInput {
+interface PublishMergeInput {
   scope: SteeringScope;
   proposal: ProposalRow;
   /** The committed file's text: the version body. */
@@ -127,7 +127,7 @@ export interface PublishMergeInput {
   policyVersion: string;
 }
 
-export interface PublishMergeResult {
+interface PublishMergeResult {
   recordId: string;
   recordPublicId: string;
   versionId: string;

@@ -4,7 +4,7 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp (CLI: `oxagen context propose`)
+**Surfaces:** api — the handler's role gate needs a signed-in user; an API key (the MCP and CLI bearer) carries none and is refused `no_principal`, so neither surface is declared. `oxagen context propose` records the proposal (`propose_record`); the PR is opened from Mission Control.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
@@ -20,7 +20,7 @@ The pull request that publishes a proposal ([ADR-061](../adr/ADR-061-steering-go
 4. the PR, whose body carries the rationale, the supporting records, runs and agents, the evidence links and the check list;
 5. the six §10.3 checks, one at a time — each outcome is written to the proposal before the next check starts and mirrored to GitHub as a check run (`Oxagen · <check>`) on the head commit. The file that is checked is the one read back from the branch.
 
-On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`, `checks_failed`) the checks run again on the same PR. One concern, one pull request: a second proposal on a lineage with an open PR is refused.
+On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`, `checks_failed`) the checks run again on the same PR, against its current head: `headSha` is re-read from GitHub, the file is read at that commit and the check runs are posted to it. Once every check passes the row carries the `record_id` and `record_hash` stamped in that file, and `merge_context_pr` merges that commit and no other. One concern, one pull request: a second proposal on a lineage with an open PR is refused.
 
 ## The checks
 
@@ -31,7 +31,7 @@ On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`,
 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes |
 | `secret_pii_scan` | No credential token, JWT, high-entropy blob, sensitive-key value or PEM block, and no email, SSN or Luhn-valid card number in the statement, rationale, evidence or file |
 | `conflict_against_active` | No active constraint of the opposite effect on the same lineage, or on the same statement under another lineage |
-| `constraint_effect` | The file's kind is the proposal's; a constraint carries `require` or `forbid` and no other kind carries an effect |
+| `constraint_effect` | The file's kind, `steering.force`, `sharing_scope` and statement are the proposal's (the registry is written from the proposal at merge); a constraint carries `require` or `forbid` and no other kind carries an effect |
 
 ## Input
 
@@ -39,7 +39,7 @@ On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`,
 
 ## Output
 
-The Context PR (`contextPrSchema`, shared with `get_context_pr`): `status`, `governanceMode`, `pr` (number, url, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode), `merged` (null until merged).
+The Context PR (`contextPrSchema`, shared with `get_context_pr`): `status`, `governanceMode` (null until this call reads governance.toml), `pr` (number, url, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode — `review` null until the mode is read), `merged` (null until merged).
 
 ## Side effects
 
@@ -51,4 +51,4 @@ A branch, a commit and a pull request on the workspace's repository; up to six G
 | --- | --- | --- |
 | `forbidden` | `org_role_required` / `no_principal` | |
 | `not_found` | `proposal_not_found` / `workspace_repository_missing` | No connected GitHub repository (MC spec §10.1). |
-| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `record_file_missing` / `github_refused` | GitHub's message travels on `github_refused`. |
+| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `head_unknown` / `record_file_missing` / `github_refused` | GitHub's message travels on `github_refused`; `head_unknown` when GitHub reports no head commit for the PR. |

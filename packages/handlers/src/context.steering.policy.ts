@@ -37,7 +37,7 @@ export function parseGovernanceMode(
   };
 }
 
-export interface MergeActor {
+interface MergeActor {
   userId: string | null;
   orgRole: string | null;
   workspaceRole: string | null;

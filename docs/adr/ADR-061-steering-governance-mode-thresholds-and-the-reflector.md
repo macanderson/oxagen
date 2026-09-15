@@ -61,6 +61,36 @@ branch protection on the merge Oxagen requests; Oxagen's side of it is the
 second person. GitHub's refusal (a required review missing) surfaces as
 `github_refused` and publishes nothing.
 
+The merge is pinned to the commit the checks ran on. `open_context_pr`
+records the PR's head (`head_sha`) when it commits the file and, on a re-run,
+re-reads it from GitHub; the checks read the file at that commit and the
+check runs are posted to it; once every check passes the row carries the
+`record_id` and `record_hash` stamped in that file, and check 6 holds the
+file's kind, force, scope and statement to the proposal's, so the registry
+row written from the proposal at merge describes the file. `merge_context_pr`
+refuses `head_moved` when GitHub's head is no longer `head_sha`, sends that
+sha with the merge (GitHub answers 409 on a race), and publishes the file at
+that commit. A PR GitHub already reports merged — an earlier call whose
+publication failed — is resumed from its merge commit, so a retry publishes
+once and never asks GitHub to merge again.
+
+The branch `context/<lineage>` lives as long as its PR. The merge deletes
+it before publishing, and `dismiss_proposal` closes an open PR and deletes
+its branch before writing `rejected`; the next proposal on the lineage
+branches from the production branch that already holds the squash, so
+there is no add/add conflict and no "a pull request already exists" 422.
+
+The three writes that gate on a role — `open_context_pr`,
+`merge_context_pr`, `dismiss_proposal` — declare the `api` surface only.
+The API's bearer path (`apps/api/src/middleware/auth.ts`), every MCP
+context (`apps/mcp/src/context.ts`) and the CLI's token are an API key,
+which carries no user; `assertOrgRole` and the merge gate refuse such a
+context with `no_principal` before anything is read. The CLI's `oxagen
+context propose` therefore records the proposal (`propose_record`, no role
+gate); the PR is opened, checked and merged from Mission Control. Mapping an
+API key to its creator for these writes would be a decision of its own,
+not taken here.
+
 **`promotions.jsonl` is not written.** Stella's ledger records enforcement
 grants (`advisory → blocking`) and retirements, chained by line digest; a
 first publication is the file's existence on the production branch. This
@@ -165,14 +195,17 @@ call recorded there, not here.
 
 - Nine capabilities: `list_records`, `get_record`, `append_record`,
   `propose_record`, `list_proposals`, `dismiss_proposal`, `open_context_pr`,
-  `get_context_pr`, `merge_context_pr`; routes, MCP tools, docs;
-  `oxagen context propose` over `open_context_pr`.
+  `get_context_pr`, `merge_context_pr`; routes and docs for all nine, MCP
+  tools for the six an API key can call; `oxagen context propose` over
+  `propose_record`.
 - `agent.context_records` gains `kind`, `force`, `constraint_effect`,
   `sharing_scope`, `statement`, `commit_sha`, `path`, `published_at` (null on
   a record `publish_context_record` published). `agent.context_proposals`
   and `agent.context_appends` are new; the latter is INSERT-only for the
   application role. `steering.published` joins the security event taxonomy.
-- `packages/github` gains `createCheckRun` and `mergePullRequest`.
+- `packages/github` gains `createCheckRun`, `mergePullRequest` (pinned to
+  a head sha), `closePullRequest` and `deleteBranch`; `getPullRequest`
+  carries `mergeCommitSha`.
 - A workspace-scoped record file declares `sharing_scope = "workspace"`
   per spec §10.2, which Stella's file-surface `SharingScope` does not accept
   yet. Until Stella adds it (its ledger vocabulary already has `workspace`),

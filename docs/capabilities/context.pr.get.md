@@ -19,7 +19,7 @@ One proposal's Context PR ([ADR-061](../adr/ADR-061-steering-governance-mode-thr
 
 ## Output
 
-`contextPrSchema` — see [context.pr.open](context.pr.open.md). `onMerge.bundleVersion.current` is the workspace's steering version: the length of the promotions ledger (`agent.context_promotions`); `afterMerge` is one more until the proposal is merged. `merged` carries the merge commit, the time, the merger, the promotion event (`ctp_…`) and the published record (`ctr_…`).
+`contextPrSchema` — see [context.pr.open](context.pr.open.md). On a `proposed` row `governanceMode` and `onMerge.review` are null: governance.toml is read when the PR opens, and the view carries what was read or nothing. `onMerge.bundleVersion.current` is the workspace's steering version: the length of the promotions ledger (`agent.context_promotions`); `afterMerge` is one more until the proposal is merged. `merged` carries the merge commit, the time, the merger, the promotion event (`ctp_…`) and the published record (`ctr_…`).
 
 ## Errors
 

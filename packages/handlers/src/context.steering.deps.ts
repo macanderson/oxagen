@@ -16,7 +16,7 @@ import {
   type SteeringStore,
 } from "./context.steering.store";
 
-export interface RoleReader {
+interface RoleReader {
   orgRole(orgId: string, userId: string): Promise<string | null>;
   workspaceRole(
     orgId: string,

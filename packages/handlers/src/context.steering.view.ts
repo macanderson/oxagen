@@ -13,10 +13,7 @@ import {
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { recordFilePath } from "./context.steering.file";
-import {
-  DEFAULT_GOVERNANCE_MODE,
-  REVIEW_BY_MODE,
-} from "./context.steering.policy";
+import { REVIEW_BY_MODE } from "./context.steering.policy";
 import type { ProposalRow, PublishedRecordRow } from "./context.steering.store";
 
 export function proposalView(row: ProposalRow): ProposalView {
@@ -86,8 +83,8 @@ export function contextPrView(
   ledgerLength: number,
   merged: { promotionEventPublicId: string; recordPublicId: string } | null,
 ): ContextPr {
-  const mode =
-    (row.governanceMode as GovernanceMode | null) ?? DEFAULT_GOVERNANCE_MODE;
+  // Read from governance.toml when the PR opens; null until then.
+  const mode = (row.governanceMode as GovernanceMode | null) ?? null;
   const path = row.path ?? recordFilePath(row.lineageId);
   const isMerged = row.status === "merged";
   return {
@@ -132,7 +129,7 @@ export function contextPrView(
         current: ledgerLength,
         afterMerge: isMerged ? ledgerLength : ledgerLength + 1,
       },
-      review: REVIEW_BY_MODE[mode],
+      review: mode ? REVIEW_BY_MODE[mode] : null,
     },
     merged:
       isMerged && row.mergedCommit && row.mergedAt && merged

@@ -5,8 +5,10 @@
 // record file, the PR, then the six checks one at a time — each outcome is
 // written to the row before the next check starts, and mirrored to GitHub as
 // a check run. On a row whose PR is already open the checks run again on the
-// same PR. The file that is checked is the one read back from the branch,
-// never the text this process built.
+// same PR, against its current head. The file that is checked is the one read
+// back from that head, never the text this process built, and once every
+// check passes the row carries the identity stamped in that file: the merge
+// gate pins the merge to this head and the registry is written from the row.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import {
@@ -21,6 +23,7 @@ import {
 import { assertOrgRole } from "@oxagen/iam/org-role";
 import {
   CHECK_TITLES,
+  parseChecked,
   runChecks,
   type CheckContext,
 } from "./context.steering.checks";
@@ -57,7 +60,7 @@ const pendingChecks = (): CheckResult[] =>
   }));
 
 /** The set id Stella writes at the top of the file: the repository, dotted. */
-export function setIdFor(repo: SteeringRepository): string {
+function setIdFor(repo: SteeringRepository): string {
   return repo.fullName.replace(/\//g, ".");
 }
 
@@ -160,20 +163,30 @@ export function createOpenContextPrHandler(
         updatedByUserId: ctx.userId ?? null,
       });
     } else {
+      const pr = await deps.github.getPullRequest(repo, row.prNumber!);
       row = await deps.store.updateProposal(row.id, {
         governanceMode: mode,
+        headSha: pr.headSha,
         checks: pendingChecks(),
         updatedByUserId: ctx.userId ?? null,
       });
     }
 
     row = await deps.store.updateProposal(row.id, { status: "checks_running" });
-    const fileText = await deps.github.readFile(repo, path, branch);
+    const headSha = row.headSha;
+    if (!headSha) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "head_unknown",
+        message: `${row.prUrl ?? row.publicId} reports no head commit`,
+      });
+    }
+    const fileText = await deps.github.readFile(repo, path, headSha);
     if (fileText === null) {
       throw new HandlerError({
         code: "conflict",
         reason: "record_file_missing",
-        message: `${path} is not on ${branch}`,
+        message: `${path} is not at ${headSha} on ${branch}`,
       });
     }
     const [published, active] = await Promise.all([
@@ -206,7 +219,6 @@ export function createOpenContextPrHandler(
       })),
     };
 
-    const headSha = row.headSha;
     const setCheck = async (name: CheckName, patch: Partial<CheckResult>) => {
       const checks = row!.checks.map((c) =>
         c.name === name ? { ...c, ...patch } : c,
@@ -225,17 +237,15 @@ export function createOpenContextPrHandler(
           row!.checks.find((c) => c.name === name)?.startedAt ??
           deps.now().toISOString();
         const completedAt = deps.now().toISOString();
-        const detailsUrl = headSha
-          ? await deps.github.reportCheckRun(repo, {
-              name: `Oxagen · ${CHECK_TITLES[name]}`,
-              headSha,
-              conclusion: outcome.ok ? "success" : "failure",
-              title: CHECK_TITLES[name],
-              summary: outcome.summary,
-              startedAt,
-              completedAt,
-            })
-          : null;
+        const detailsUrl = await deps.github.reportCheckRun(repo, {
+          name: `Oxagen · ${CHECK_TITLES[name]}`,
+          headSha,
+          conclusion: outcome.ok ? "success" : "failure",
+          title: CHECK_TITLES[name],
+          summary: outcome.summary,
+          startedAt,
+          completedAt,
+        });
         await setCheck(name, {
           status: outcome.ok ? "passed" : "failed",
           summary: outcome.summary,
@@ -245,8 +255,17 @@ export function createOpenContextPrHandler(
       },
     });
 
+    // Every check passed, so the file parses and its stamp recomputes: the
+    // row now describes the record at this head, the one the merge publishes.
+    const parsed = allPassed ? parseChecked(fileText) : null;
     row = await deps.store.updateProposal(row.id, {
       status: allPassed ? "checks_passed" : "checks_failed",
+      ...(parsed?.ok
+        ? {
+            stampedRecordId: parsed.file.record[0]!.record_id,
+            recordHash: parsed.file.record[0]!.record_hash,
+          }
+        : {}),
     });
     return contextPrView(row, await deps.store.ledgerLength(scope), null);
   };

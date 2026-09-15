@@ -19,6 +19,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
+import { createOpenContextPrHandler } from "./context.pr.open";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListProposalsHandler } from "./context.proposal.list";
 import { createDismissProposalHandler } from "./context.proposal.dismiss";
@@ -144,6 +145,49 @@ describe("dismiss_proposal", () => {
     ).rejects.toMatchObject({
       code: "not_found",
     });
+  });
+
+  it("closes an open Context PR and deletes its branch, so the next proposal on the lineage opens a fresh one", async () => {
+    const h = harness();
+    const open = createOpenContextPrHandler(h);
+    const propose = createProposeRecordHandler(h);
+    const { proposalId: first } = await propose(proposal(), ctx());
+    await open({ proposalId: first }, ctx());
+    expect(h.github.pulls[0]).toMatchObject({ number: 519, state: "open" });
+
+    await createDismissProposalHandler(h)(
+      { proposalId: first, reason: "wrong lineage" },
+      ctx(),
+    );
+    expect(h.github.pulls[0]).toMatchObject({
+      number: 519,
+      state: "closed",
+      merged: false,
+    });
+    expect(h.github.deletedBranches).toEqual([
+      "context/ctx.platform.migration-order",
+    ]);
+    expect(h.store.proposals[0]!.status).toBe("rejected");
+
+    const { proposalId: second } = await propose(proposal(), ctx());
+    const out = await open({ proposalId: second }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr?.number).toBe(520);
+    expect(h.github.branches).toHaveLength(2);
+  });
+
+  it("touches GitHub not at all for a proposal that has no PR", async () => {
+    const h = harness();
+    h.github.repository = null;
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    const out = await createDismissProposalHandler(h)(
+      { proposalId, reason: "x" },
+      ctx(),
+    );
+    expect(out.status).toBe("rejected");
   });
 
   it("is refused for a role the gate excludes, before any row changes", async () => {

@@ -399,9 +399,16 @@ export const REPO: SteeringRepository = {
   defaultBranch: "main",
 };
 
+/**
+ * A GitHub with commits: every branch head is a sha, a file is read at a sha
+ * or at a branch (its head), a merge is pinned to the head it was asked for,
+ * a second PR on a head is refused, and a branch stays until it is deleted.
+ */
 export class FakeGitHub implements SteeringGitHub {
-  /** `${ref}:${path}` → content. */
+  /** `${sha}:${path}` → content. */
   files = new Map<string, string>();
+  /** branch → head sha. */
+  heads = new Map<string, string>();
   branches: { branch: string; from: string }[] = [];
   commits: { path: string; branch: string; message: string }[] = [];
   pulls: {
@@ -410,6 +417,11 @@ export class FakeGitHub implements SteeringGitHub {
     head: string;
     base: string;
     body: string;
+    state: "open" | "closed";
+    merged: boolean;
+    mergeCommitSha: string | null;
+    /** The head sha at close or merge; the branch may be gone after. */
+    headSha: string;
   }[] = [];
   checkRuns: {
     name: string;
@@ -417,7 +429,8 @@ export class FakeGitHub implements SteeringGitHub {
     conclusion: string;
     summary: string;
   }[] = [];
-  merges: { number: number; commitTitle: string }[] = [];
+  merges: { number: number; commitTitle: string; sha: string }[] = [];
+  deletedBranches: string[] = [];
   /** Set to make check-run creation answer like a non-App token (403). */
   checksRefused = false;
   /** Set to make the merge refused by GitHub (a required review). */
@@ -427,7 +440,41 @@ export class FakeGitHub implements SteeringGitHub {
   private commitNo = 0;
 
   constructor(files: Record<string, string> = {}) {
-    for (const [k, v] of Object.entries(files)) this.files.set(k, v);
+    this.heads.set(REPO.defaultBranch, "base0");
+    for (const [k, v] of Object.entries(files)) {
+      const [ref, path] = [
+        k.slice(0, k.indexOf(":")),
+        k.slice(k.indexOf(":") + 1),
+      ];
+      this.files.set(`${this.heads.get(ref) ?? ref}:${path}`, v);
+    }
+  }
+  private refused(message: string): Promise<never> {
+    return import("@oxagen/oxagen").then(({ HandlerError }) => {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "github_refused",
+        message,
+      });
+    });
+  }
+  private shaOf(ref: string): string {
+    return this.heads.get(ref) ?? ref;
+  }
+  private nextSha(): string {
+    this.commitNo += 1;
+    return `head${this.commitNo}`;
+  }
+  /** A commit on a branch, as anyone with push access makes one. */
+  commit(branch: string, path: string, content: string): string {
+    const parent = this.shaOf(branch);
+    const sha = this.nextSha();
+    for (const [key, c] of this.files)
+      if (key.startsWith(`${parent}:`))
+        this.files.set(`${sha}:${key.slice(parent.length + 1)}`, c);
+    this.files.set(`${sha}:${path}`, content);
+    this.heads.set(branch, sha);
+    return sha;
   }
   async resolveRepository() {
     if (!this.repository) {
@@ -440,38 +487,62 @@ export class FakeGitHub implements SteeringGitHub {
     return this.repository;
   }
   async readFile(_repo: SteeringRepository, path: string, ref: string) {
-    return this.files.get(`${ref}:${path}`) ?? null;
+    return this.files.get(`${this.shaOf(ref)}:${path}`) ?? null;
   }
   async ensureBranch(_repo: SteeringRepository, branch: string, from: string) {
-    if (this.branches.some((b) => b.branch === branch)) return;
+    if (this.heads.has(branch)) return;
     this.branches.push({ branch, from });
-    for (const [key, content] of this.files) {
-      if (key.startsWith(`${from}:`))
-        this.files.set(`${branch}:${key.slice(from.length + 1)}`, content);
-    }
+    this.heads.set(branch, this.shaOf(from));
   }
   async putFile(
     _repo: SteeringRepository,
     args: { path: string; content: string; message: string; branch: string },
   ) {
-    this.files.set(`${args.branch}:${args.path}`, args.content);
+    const commitSha = this.commit(args.branch, args.path, args.content);
     this.commits.push({
       path: args.path,
       branch: args.branch,
       message: args.message,
     });
-    this.commitNo += 1;
-    return { commitSha: `head${this.commitNo}` };
+    return { commitSha };
   }
   async openPullRequest(
     _repo: SteeringRepository,
     args: { title: string; head: string; base: string; body: string },
   ) {
+    const open = this.pulls.find(
+      (p) => p.head === args.head && p.state === "open",
+    );
+    if (open) {
+      return this.refused(
+        `GitHub API error 422: A pull request already exists for ${args.head}.`,
+      );
+    }
     this.prNumber += 1;
-    this.pulls.push({ number: this.prNumber, ...args });
+    this.pulls.push({
+      number: this.prNumber,
+      ...args,
+      state: "open",
+      merged: false,
+      mergeCommitSha: null,
+      headSha: this.shaOf(args.head),
+    });
     return {
       number: this.prNumber,
       htmlUrl: `https://github.com/a-intel/platform/pull/${this.prNumber}`,
+    };
+  }
+  private pull(number: number) {
+    const pr = this.pulls.find((p) => p.number === number);
+    if (!pr) throw new Error(`no PR #${number}`);
+    return pr;
+  }
+  async getPullRequest(_repo: SteeringRepository, number: number) {
+    const pr = this.pull(number);
+    return {
+      headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
+      merged: pr.merged,
+      mergeCommitSha: pr.mergeCommitSha,
     };
   }
   async reportCheckRun(
@@ -494,28 +565,39 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async mergePullRequest(
     _repo: SteeringRepository,
-    args: { number: number; commitTitle: string },
+    args: { number: number; commitTitle: string; sha: string },
   ) {
-    if (this.mergeRefusedWith) {
-      const { HandlerError } = await import("@oxagen/oxagen");
-      throw new HandlerError({
-        code: "conflict",
-        reason: "github_refused",
-        message: this.mergeRefusedWith,
-      });
+    if (this.mergeRefusedWith) return this.refused(this.mergeRefusedWith);
+    const pr = this.pull(args.number);
+    if (pr.state !== "open") {
+      return this.refused(
+        "GitHub API error 405: Pull Request is not mergeable",
+      );
+    }
+    const head = this.shaOf(pr.head);
+    if (head !== args.sha) {
+      return this.refused("GitHub API error 409: Head branch was modified");
     }
     this.merges.push(args);
-    const pr = this.pulls.find((p) => p.number === args.number);
-    if (pr) {
-      for (const [key, content] of this.files) {
-        if (key.startsWith(`${pr.head}:`))
-          this.files.set(
-            `${pr.base}:${key.slice(pr.head.length + 1)}`,
-            content,
-          );
-      }
-    }
-    return { sha: `merge${args.number}` };
+    const mergeSha = `merge${args.number}`;
+    for (const [key, content] of this.files)
+      if (key.startsWith(`${head}:`))
+        this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
+    this.heads.set(pr.base, mergeSha);
+    Object.assign(pr, {
+      state: "closed",
+      merged: true,
+      mergeCommitSha: mergeSha,
+      headSha: head,
+    });
+    return { sha: mergeSha };
+  }
+  async closePullRequest(_repo: SteeringRepository, number: number) {
+    const pr = this.pull(number);
+    Object.assign(pr, { state: "closed", headSha: this.shaOf(pr.head) });
+  }
+  async deleteBranch(_repo: SteeringRepository, branch: string) {
+    if (this.heads.delete(branch)) this.deletedBranches.push(branch);
   }
 }
 

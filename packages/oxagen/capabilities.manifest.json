@@ -1611,13 +1611,11 @@
       "domain": "context",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -1628,14 +1626,11 @@
       "domain": "context",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp",
-        "cli"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -1664,13 +1659,11 @@
       "domain": "context",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }

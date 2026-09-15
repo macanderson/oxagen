@@ -1,5 +1,6 @@
-// The two Checks/merge calls the Context PR (ADR-061) needs: a completed
-// check run on a commit, and a pull request merge.
+// The calls the Context PR (ADR-061) needs beyond the read client: a
+// completed check run on a commit, a pull request merge pinned to a head
+// commit, a close, and a branch delete.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGitHubClient } from "../fetch-client";
 
@@ -86,7 +87,7 @@ describe("createCheckRun", () => {
 });
 
 describe("mergePullRequest", () => {
-  it("PUTs the merge and returns the merge commit sha", async () => {
+  it("PUTs the merge pinned to the head sha and returns the merge commit sha", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(makeResponse({ sha: "7d2e91a", merged: true }));
@@ -99,6 +100,7 @@ describe("mergePullRequest", () => {
       number: 519,
       mergeMethod: "squash",
       commitTitle: "steering: publish ctx.x",
+      sha: "abc123",
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -107,8 +109,24 @@ describe("mergePullRequest", () => {
     expect(JSON.parse(init.body as string)).toEqual({
       merge_method: "squash",
       commit_title: "steering: publish ctx.x",
+      sha: "abc123",
     });
     expect(out).toEqual({ sha: "7d2e91a", merged: true });
+  });
+
+  it("surfaces a moved head (409) with GitHub's message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeResponse({ message: "Head branch was modified" }, 409),
+        ),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.mergePullRequest({ owner: "o", repo: "r", number: 1, sha: "x" }),
+    ).rejects.toThrow("GitHub API error 409: Head branch was modified");
   });
 
   it("surfaces a required-review refusal (405) with GitHub's message", async () => {
@@ -129,5 +147,93 @@ describe("mergePullRequest", () => {
     ).rejects.toThrow(
       "GitHub API error 405: At least 1 approving review is required",
     );
+  });
+});
+
+describe("getPullRequest", () => {
+  it("carries the merge commit once GitHub reports the PR merged", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        makeResponse({
+          number: 519,
+          title: "t",
+          html_url: "u",
+          state: "closed",
+          merged: true,
+          merge_commit_sha: "7d2e91a",
+          user: null,
+          created_at: "a",
+          updated_at: "b",
+          body: null,
+          base: { ref: "main" },
+          head: { ref: "context/x", sha: "abc123" },
+        }),
+      ),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    const pr = await client.getPullRequest({
+      owner: "o",
+      repo: "r",
+      number: 519,
+    });
+    expect(pr).toMatchObject({
+      merged: true,
+      mergeCommitSha: "7d2e91a",
+      headSha: "abc123",
+    });
+  });
+});
+
+describe("closePullRequest", () => {
+  it("PATCHes the state to closed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ number: 519, html_url: "u" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    await client.closePullRequest({ owner: "o", repo: "r", number: 519 });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/o/r/pulls/519");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ state: "closed" });
+  });
+});
+
+describe("deleteBranch", () => {
+  it("DELETEs the ref segment by segment and accepts the bodiless 204", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      statusText: "No Content",
+      json: async () => {
+        throw new Error("no body");
+      },
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.deleteBranch({ owner: "o", repo: "r", branch: "context/ctx.x" }),
+    ).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.github.com/repos/o/r/git/refs/heads/context/ctx.x",
+    );
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("surfaces a branch already gone (422) with GitHub's message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeResponse({ message: "Reference does not exist" }, 422),
+        ),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.deleteBranch({ owner: "o", repo: "r", branch: "context/ctx.x" }),
+    ).rejects.toThrow("GitHub API error 422: Reference does not exist");
   });
 });

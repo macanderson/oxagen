@@ -16,9 +16,9 @@ import type {
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 
 export const RECORD_SCHEMA_TAG = "context-record/v0.1";
-export const RULES_DIR = ".oxagen/rules";
+const RULES_DIR = ".oxagen/rules";
 
-export interface RecordFileInput {
+interface RecordFileInput {
   lineageId: string;
   kind: RecordKind;
   force: RecordForce;
@@ -46,7 +46,7 @@ export interface RecordFileRecord {
   steering: { force: string };
 }
 
-export interface RecordFile {
+interface RecordFile {
   schema: string;
   set_id: string;
   record: RecordFileRecord[];
@@ -86,7 +86,7 @@ export function stampRecordObject(raw: Record<string, unknown>): {
 }
 
 /** Stamp a record Oxagen builds, keeping Stella's field order in the file. */
-export function stampRecord(
+function stampRecord(
   r: Omit<RecordFileRecord, "record_id" | "record_hash">,
 ): RecordFileRecord {
   const { record_id, record_hash } = stampRecordObject({ ...r });

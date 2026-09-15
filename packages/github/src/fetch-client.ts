@@ -113,6 +113,7 @@ interface GHPullDetail {
   body: string | null;
   base: { ref: string };
   head: { ref: string; sha: string | null };
+  merge_commit_sha?: string | null;
   additions?: number;
   deletions?: number;
   changed_files?: number;
@@ -267,6 +268,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       throw new Error(`GitHub API error ${res.status}: ${message}`);
     }
 
+    // A DELETE answers 204 with no body.
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   }
 
@@ -536,6 +539,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       baseRef: data.base.ref,
       headRef: data.head.ref,
       headSha: data.head.sha,
+      mergeCommitSha: data.merge_commit_sha ?? null,
       additions: data.additions ?? 0,
       deletions: data.deletions ?? 0,
       changedFiles: data.changed_files ?? 0,
@@ -708,16 +712,41 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     number: number;
     mergeMethod?: "merge" | "squash" | "rebase";
     commitTitle?: string;
+    sha?: string;
   }): Promise<{ sha: string; merged: boolean }> {
     const body: Record<string, unknown> = {};
     if (args.mergeMethod !== undefined) body.merge_method = args.mergeMethod;
     if (args.commitTitle !== undefined) body.commit_title = args.commitTitle;
+    if (args.sha !== undefined) body.sha = args.sha;
     const data = await request<GHMerge>(
       "PUT",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${args.number}/merge`,
       body,
     );
     return { sha: data.sha, merged: data.merged };
+  }
+
+  async function closePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<void> {
+    await request<GHPull>(
+      "PATCH",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}`,
+      { state: "closed" },
+    );
+  }
+
+  async function deleteBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<void> {
+    await request<void>(
+      "DELETE",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/git/refs/heads/${filePath(args.branch)}`,
+    );
   }
 
   return {
@@ -737,6 +766,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listBranches,
     createCheckRun,
     mergePullRequest,
+    closePullRequest,
+    deleteBranch,
   };
 }
 

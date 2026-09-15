@@ -1,6 +1,8 @@
 // dismiss_proposal — reject a proposal with a reason (ADR-061; App. E). A
-// proposal with an open Context PR is rejected here too; the PR stays open on
-// GitHub for its author to close, and the branch is never deleted.
+// proposal with an open Context PR has the PR closed and its branch deleted.
+// The handler gates on the caller's org or workspace role, which only a
+// signed-in user holds; an API key carries no user, so the MCP surface
+// (API-key auth) is not declared.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
@@ -10,8 +12,8 @@ export const contextProposalDismiss = registerCapability({
   description:
     "Reject a record proposal with a reason. Refused once the proposal has merged.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

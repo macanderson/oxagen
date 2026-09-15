@@ -208,7 +208,7 @@ describe("the six §10.3 checks", () => {
     expect(fine.summary).toContain("1 active record checked");
   });
 
-  it("constraint_effect: refuses a constraint without an effect, an effect on a rule, and a kind the file disagrees on", () => {
+  it("constraint_effect: refuses a constraint without an effect, an effect on a rule, and a file whose kind, force, scope or statement is not the proposal's", () => {
     const noEffect = CHECKS.constraint_effect(
       ctx({
         fileText: file({ kind: "constraint" }),
@@ -231,6 +231,25 @@ describe("the six §10.3 checks", () => {
       ctx({ fileText: file({ kind: "procedure" }) }),
     );
     expect(disagree.ok).toBe(false);
+    expect(disagree.summary).toBe(
+      'the file\'s kind is "procedure"; the proposal\'s is "rule"',
+    );
+    // The registry is written from the proposal row: a branch commit that
+    // re-stamps the file with another statement, force or scope passes the
+    // hash check and fails here.
+    const restamped = CHECKS.constraint_effect(
+      ctx({
+        fileText: file({
+          statement: "Re-read CHANGELOG.md on every turn.",
+          force: "must",
+          sharingScope: "repository",
+        }),
+      }),
+    );
+    expect(restamped.ok).toBe(false);
+    expect(restamped.summary).toContain("the file's steering.force is");
+    expect(restamped.summary).toContain("the file's sharing_scope is");
+    expect(restamped.summary).toContain("the file's statement is");
     const forbid = CHECKS.constraint_effect(
       ctx({
         fileText: file({ kind: "constraint" }),

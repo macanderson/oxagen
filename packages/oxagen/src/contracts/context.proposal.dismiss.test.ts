@@ -10,6 +10,9 @@ describe("dismiss_proposal contract", () => {
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow" },
     });
+    // The role gate needs a signed-in user; an API key carries none.
+    expect(contextProposalDismiss.surfaces).toEqual(["api"]);
+    expect(contextProposalDismiss.layers).not.toContain("mcp");
     expect(
       contextProposalDismiss.input.safeParse({ proposalId: "prp_1" }).success,
     ).toBe(false);

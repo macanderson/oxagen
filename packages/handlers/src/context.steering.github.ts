@@ -42,6 +42,15 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     args: { title: string; head: string; base: string; body: string },
   ): Promise<{ number: number; htmlUrl: string }>;
+  /** The PR's head commit and, once GitHub merged it, the merge commit. */
+  getPullRequest(
+    repo: SteeringRepository,
+    number: number,
+  ): Promise<{
+    headSha: string | null;
+    merged: boolean;
+    mergeCommitSha: string | null;
+  }>;
   /** The check run's URL, or null when GitHub refuses the token (not an App). */
   reportCheckRun(
     repo: SteeringRepository,
@@ -55,10 +64,14 @@ export interface SteeringGitHub {
       completedAt: string;
     },
   ): Promise<string | null>;
+  /** Squash-merge, pinned to `sha`: GitHub refuses when the head moved past it. */
   mergePullRequest(
     repo: SteeringRepository,
-    args: { number: number; commitTitle: string },
+    args: { number: number; commitTitle: string; sha: string },
   ): Promise<{ sha: string }>;
+  closePullRequest(repo: SteeringRepository, number: number): Promise<void>;
+  /** Delete the branch; a branch already gone is not an error. */
+  deleteBranch(repo: SteeringRepository, branch: string): Promise<void>;
 }
 
 interface DeliveryConfig {
@@ -67,7 +80,7 @@ interface DeliveryConfig {
 }
 
 /** The workspace's connected GitHub repository, from its source connection. */
-export async function readGitHubConnection(scope: {
+async function readGitHubConnection(scope: {
   orgId: string;
   workspaceId: string;
 }): Promise<{ owner: string; repo: string } | null> {
@@ -93,7 +106,7 @@ export async function readGitHubConnection(scope: {
 }
 
 /** What the seam is built from; the tests pass fakes. */
-export interface SteeringGitHubDeps {
+interface SteeringGitHubDeps {
   readConnection: typeof readGitHubConnection;
   resolveToken: (scope: {
     orgId: string;
@@ -195,6 +208,22 @@ export function createSteeringGitHub(
         throw githubRefused(err);
       }
     },
+    async getPullRequest(repo, number) {
+      try {
+        const pr = await clientFor(repo).getPullRequest({
+          owner: repo.owner,
+          repo: repo.repo,
+          number,
+        });
+        return {
+          headSha: pr.headSha,
+          merged: pr.merged,
+          mergeCommitSha: pr.mergeCommitSha,
+        };
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
     async reportCheckRun(repo, args) {
       try {
         const out = await clientFor(repo).createCheckRun({
@@ -220,9 +249,37 @@ export function createSteeringGitHub(
           number: args.number,
           mergeMethod: "squash",
           commitTitle: args.commitTitle,
+          sha: args.sha,
         });
         return { sha: out.sha };
       } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async closePullRequest(repo, number) {
+      try {
+        await clientFor(repo).closePullRequest({
+          owner: repo.owner,
+          repo: repo.repo,
+          number,
+        });
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async deleteBranch(repo, branch) {
+      try {
+        await clientFor(repo).deleteBranch({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch,
+        });
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          /Reference does not exist/i.test(err.message)
+        )
+          return;
         throw githubRefused(err);
       }
     },

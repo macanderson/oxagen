@@ -15,6 +15,8 @@ export interface GitHubPullRequest {
   baseRef: string;
   headRef: string;
   headSha: string | null;
+  /** The merge commit once `merged` is true; null before. */
+  mergeCommitSha: string | null;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -266,9 +268,10 @@ export interface GitHubClient {
   }): Promise<{ id: number; htmlUrl: string }>;
 
   /**
-   * Merge a pull request. GitHub refuses with 405 when a required review or
-   * status is missing and with 409 when the head moved; both surface as the
-   * thrown error with GitHub's message.
+   * Merge a pull request. `sha` pins the merge to that head commit: GitHub
+   * refuses with 409 when the head has moved past it. GitHub refuses with 405
+   * when a required review or status is missing, or the PR is already
+   * merged; every refusal surfaces as the thrown error with GitHub's message.
    */
   mergePullRequest(args: {
     owner: string;
@@ -276,7 +279,28 @@ export interface GitHubClient {
     number: number;
     mergeMethod?: "merge" | "squash" | "rebase";
     commitTitle?: string;
+    sha?: string;
   }): Promise<{ sha: string; merged: boolean }>;
+
+  /**
+   * Close a pull request without merging it (PATCH state=closed).
+   */
+  closePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<void>;
+
+  /**
+   * Delete a branch (DELETE /git/refs/heads/{branch}). GitHub answers 422
+   * "Reference does not exist" for a branch already gone; that surfaces as
+   * the thrown error.
+   */
+  deleteBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<void>;
 }
 
 /** Options accepted by createGitHubClient. */
