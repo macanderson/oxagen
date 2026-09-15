@@ -1,5 +1,5 @@
 {
-  "generatedCount": 247,
+  "generatedCount": 248,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -529,22 +529,23 @@
       "consumes": []
     },
     {
-      "name": "dispatch_schema_reconcile",
-      "domain": "schema",
+      "name": "dispatch_command",
+      "domain": "control",
       "surfaces": [
         "api",
-        "mcp",
-        "cli"
+        "mcp"
       ],
       "component": null,
       "produces": [],
       "consumes": []
     },
     {
-      "name": "dispatch_tacho_command",
-      "domain": "tacho",
+      "name": "dispatch_schema_reconcile",
+      "domain": "schema",
       "surfaces": [
-        "api"
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -610,8 +611,8 @@
       "consumes": []
     },
     {
-      "name": "fetch_tacho_commands",
-      "domain": "tacho",
+      "name": "fetch_commands",
+      "domain": "control",
       "surfaces": [
         "api"
       ],
@@ -1373,6 +1374,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_commands",
+      "domain": "control",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

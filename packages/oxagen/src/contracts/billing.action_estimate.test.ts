@@ -59,7 +59,9 @@ describe("billing.action_estimate contract", () => {
 
   it("refuses a run volume that is zero, negative or fractional", () => {
     for (const runsPerYear of [0, -1, 2.5]) {
-      expect(() => billingActionEstimate.input.parse({ runsPerYear })).toThrow();
+      expect(() =>
+        billingActionEstimate.input.parse({ runsPerYear }),
+      ).toThrow();
     }
   });
 
@@ -83,7 +85,10 @@ describe("billing.action_estimate contract", () => {
       }),
     ).toThrow();
     expect(() =>
-      billingActionEstimate.input.parse({ runsPerYear: 1000, tier: "platinum" }),
+      billingActionEstimate.input.parse({
+        runsPerYear: 1000,
+        tier: "platinum",
+      }),
     ).toThrow();
   });
 

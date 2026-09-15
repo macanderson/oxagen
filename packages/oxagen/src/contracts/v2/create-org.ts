@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import {
-  organizationCreate,
-  organizationCreateInputBase,
-} from "../org.create";
+import { organizationCreate, organizationCreateInputBase } from "../org.create";
 
 /**
  * Appendix E: `create_org` — "organization, Neo4j database, keys, billing

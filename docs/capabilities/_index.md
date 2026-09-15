@@ -323,8 +323,9 @@ Capabilities granted to an agent as a set have a page of their own:
 ## Tacho (10)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
-- [tacho.command.dispatch](tacho.command.dispatch.md) — Queue a control command for a host or one of its sessions (docs/specs/tacho/spec
-- [tacho.command.fetch](tacho.command.fetch.md) — The idle-host control poll: acknowledge the outcomes of commands the collector applied, and receive pending ones together with the same control envelope every ingest carries
+- [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
+- [tacho.command.fetch](tacho.command.fetch.md) — `fetch_commands`: the idle-host control poll; acknowledge in the §7.4 status vocabulary and receive queued commands with their modes and the control envelope
+- [tacho.command.list](tacho.command.list.md) — `list_commands`: the delivery report for one run, newest first, with the status, the requested and achieved delivery mode, and the frame an applied command landed on
 - [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
 - [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
 - [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1

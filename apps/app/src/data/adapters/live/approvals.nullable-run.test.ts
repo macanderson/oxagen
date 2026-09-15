@@ -92,7 +92,6 @@ function port(publicIds: string[]) {
     openApprovals: vi.fn(() =>
       Promise.resolve({ workspaceSlug: "core-platform", rows }),
     ),
-    commands: vi.fn(() => Promise.resolve([])),
   };
   return createLiveApprovals(store, () => NOW);
 }

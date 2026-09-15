@@ -86,6 +86,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       const live = await tx
         .select({
           id: schema.tachoHosts.id,
+          publicId: schema.tachoHosts.publicId,
           apiKeyId: schema.tachoHosts.apiKeyId,
         })
         .from(schema.tachoHosts)

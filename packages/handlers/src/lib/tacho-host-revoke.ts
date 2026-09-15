@@ -11,6 +11,7 @@ const REVOKE_COMMAND_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface RevocableHost {
   id: string;
+  publicId: string;
   apiKeyId: string;
 }
 
@@ -49,8 +50,11 @@ export async function revokeHostEnrollment(
     orgId: args.orgId,
     workspaceId: args.workspaceId,
     hostId: host.id,
+    targetKind: "host",
+    targetId: host.publicId,
     command: "revoke",
     payload: { reason: args.reason ?? "revoked by operator" },
+    reason: args.reason,
     issuedByUserId: args.userId,
     issuedAt: args.now,
     expiresAt: new Date(args.now.getTime() + REVOKE_COMMAND_TTL_MS),
