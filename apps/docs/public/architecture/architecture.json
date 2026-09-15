@@ -11751,6 +11751,7 @@
   "infra/stacks-new/oxagen/data-services.tf",
   "infra/stacks-new/oxagen/dns-oxagen-ai.tf",
   "infra/stacks-new/oxagen/dns.tf",
+  "infra/stacks-new/oxagen/downloads.tf",
   "infra/stacks-new/oxagen/main.tf",
   "infra/stacks-new/oxagen/observability.tf",
   "infra/stacks-new/oxagen/outputs.tf",
