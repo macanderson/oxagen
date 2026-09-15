@@ -73,7 +73,18 @@ export async function seedPlatform(): Promise<void> {
       await tx
         .insert(plans)
         .values(plan)
-        .onConflictDoNothing({ target: plans.slug });
+        // The published GAU terms follow this file on every run; a row seeded
+        // under earlier figures would otherwise keep billing at them.
+        .onConflictDoUpdate({
+          target: plans.slug,
+          set: {
+            currency: plan.currency,
+            ratePerGauMicros: plan.ratePerGauMicros,
+            blockSizeGau: plan.blockSizeGau,
+            includedGauPerMonth: plan.includedGauPerMonth,
+            updatedAt: new Date(),
+          },
+        });
     }
   });
 }
