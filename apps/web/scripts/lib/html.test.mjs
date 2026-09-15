@@ -184,7 +184,7 @@ describe("pages", () => {
       '<time datetime="2026-09-09">September 9, 2026</time> · 5 min read',
     );
     expect(card).toContain(
-      '<img src="/blog/my-post/thumb.png" alt="" width="800" height="450" loading="lazy"',
+      '<img src="/blog/my-post/thumb.png" alt="" width="960" height="480" loading="lazy"',
     );
   });
 
@@ -199,7 +199,7 @@ describe("pages", () => {
       '<meta property="og:image" content="https://oxagen.sh/blog/og.png">',
     );
     expect(html).toContain(
-      '<img src="/blog/pillars/alpha/thumb.png" alt="" width="640" height="360"',
+      '<img src="/blog/pillars/alpha/thumb.png" alt="" width="960" height="480"',
     );
     expect(html).toContain(
       `<title>${BLOG_TITLE}: the science of ontologies, agents, and self-improving systems</title>`,
@@ -227,7 +227,7 @@ describe("pages", () => {
       'href="/blog/pillars/alpha">Alpha</a>\n      </nav>',
     );
     expect(withPosts).toContain(
-      '<div class="pillar-hero-shot"><img src="/blog/pillars/alpha/banner.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high"></div>',
+      '<section class="pillar-hero hero-field">\n    <div class="hero-art" aria-hidden="true"><img src="/blog/pillars/alpha/banner.png" alt="" width="2400" height="1200" decoding="async" fetchpriority="high"></div>',
     );
     expect(withPosts).toContain(
       '<meta property="og:image" content="https://oxagen.sh/blog/pillars/alpha/og.png">',
@@ -280,8 +280,10 @@ describe("pages", () => {
     expect(html).toContain('"@type": "BlogPosting"');
     expect(html).toContain('"wordCount": 1200');
     expect(html).toContain(
-      '<figure class="post-hero">\n        <img src="/blog/my-post/banner.png" alt="" width="1600" height="900" decoding="async" fetchpriority="high">',
+      '<header class="post-head hero-field">\n      <div class="hero-art" aria-hidden="true"><img src="/blog/my-post/banner.png" alt="" width="2400" height="1200" decoding="async" fetchpriority="high"></div>',
     );
+    expect(html).toContain('<div class="wrap"><div class="post-head-in">');
+    expect(html).not.toContain("post-hero");
     expect(html).toContain(
       '<meta property="og:image" content="https://oxagen.sh/blog/my-post/og.png">',
     );
@@ -307,7 +309,7 @@ describe("pages", () => {
     });
     expect(html).not.toContain('class="toc"');
     expect(html).toContain(
-      '<figure class="post-hero">\n        <img src="/own.jpg" alt="" width="1600" height="900" decoding="async" fetchpriority="high">',
+      '<div class="hero-art" aria-hidden="true"><img src="/own.jpg" alt="" width="2400" height="1200" decoding="async" fetchpriority="high"></div>',
     );
     expect(html).not.toContain("<picture>");
     expect(html).not.toContain('class="tags');
