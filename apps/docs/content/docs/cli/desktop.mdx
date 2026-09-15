@@ -1,23 +1,25 @@
 ---
 title: Desktop app
-description: "Install the Oxagen app: it ships the oxagen CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an organization, and sets or changes the workspace its agents report to."
+description: "Install the Oxagen app: it links the oxagen and tacho CLIs onto your PATH on first launch, wraps Claude Code, Codex, and Stella, signs a machine in to an organization, and sets or changes the workspace its agents report to."
 ---
 
-The Oxagen app puts one machine under Oxagen control. It installs the `oxagen` CLI and the Tacho wrapper for Claude Code and Codex, signs the machine in to an organization, enrolls it against a workspace, and gives you one window to see the connection, move the host to another workspace or org, add or drop a wrapper, sign out, and unenroll.
+The Oxagen app puts one machine under Oxagen control. On first launch it links the `oxagen` CLI and the `tacho` wrapper onto your PATH, then signs the machine in to an organization, enrolls it against a workspace, and gives you one window to see the connection, move the host to another workspace or org, add or drop a wrapper for Claude Code, Codex, or Stella, sign out, and unenroll. Any other agent wraps too, by calling `tacho hook` directly; see [Wrap an agent](/docs/cli/wrap-an-agent).
 
 The app owns no state. Every panel reads the files the CLIs already write (`~/.config/oxagen/config.json`, `~/.config/oxagen/tacho/host.json`, the collector's `/status` on loopback), and every action runs one of the two CLIs bundled inside the app. Whatever you do in the app, you can do from the terminal, and `tacho status` and the app's Connection panel can never disagree.
 
 <Callout type="info">
-The app does not run agents; it records, gates and evidences the Claude Code and Codex sessions that already run on the machine. Hook-based control is `client_attested`: the app's This machine panel says so.
+The app does not run agents; it records, gates and evidences the Claude Code, Codex, and Stella sessions, and any wrapped custom agent, that already run on the machine. Hook-based control is `client_attested`: the app's This machine panel says so.
 </Callout>
 
-## First launch: the setup wizard
+## First launch: linking the CLIs, then the setup wizard
 
-On a machine with no enrollment the app opens a five-step wizard on a single pane; a machine that is already enrolled skips it and opens the management panels described below.
+The first time the app opens on a machine, before any wizard step, it links `oxagen` and `tacho` onto your PATH the same way **Link** in the Command line panel does (see below), so a terminal opened right after first launch already resolves both. It never overwrites an `oxagen` the app did not install; if one is already on your PATH from somewhere else, the app leaves it alone and says so in the Command line panel. **Remove links** in that panel is also an opt-out: once you remove the links, the app does not relink them on a later launch.
+
+On a machine with no enrollment the app then opens a five-step wizard on a single pane; a machine that is already enrolled skips it and opens the management panels described below.
 
 1. **Authenticate with Oxagen.** **Sign in** runs `oxagen login --browser`; **Create an account** runs the same with `--signup`, which opens the sign-up page first. A new account names its organization and first workspace in the browser, then lands on the consent page, and the app picks the session up from there.
 2. **Select an organization and workspace.** Only the organizations and workspaces you belong to are listed.
-3. **Register the agents on this machine.** The app runs `tacho detect` to find Claude Code and Codex (it checks your login shell's `PATH` and the usual install directories, so a Finder launch still finds `~/.local/bin/claude`). Every agent found is ticked; confirm, and it runs `tacho enroll … --harness …`, which writes Oxagen's hooks into each agent's settings.
+3. **Register the agents on this machine.** The app runs `tacho detect` to find Claude Code, Codex, and Stella (it checks your login shell's `PATH` and the usual install directories, so a Finder launch still finds `~/.local/bin/claude`). Every agent found is ticked; confirm, and it runs `tacho enroll … --harness …`, which writes Oxagen's hooks into each agent's settings.
 4. **Confirmation**, or the error and how to retry.
 5. **Record a first run.** One small prompt per registered agent (`tacho verify --harness <agent>`), confirmed recorded, then **Open Mission Control** to see it.
 
@@ -61,10 +63,10 @@ If a saved session is stale, the first picker call gets a 401, the Account panel
 With a session in place, pick the org and workspace in the This machine panel and press **Enroll this machine**. The app runs
 
 ```bash
-tacho enroll --org <org> --workspace <workspace> --harness claude-code,codex
+tacho enroll --org <org> --workspace <workspace> --harness claude-code,codex,stella
 ```
 
-`enroll` generates an Ed25519 device key, mints a host API key for that workspace, writes `~/.config/oxagen/tacho/host.json`, installs the collector (`tachod`) as a user service, launchd on macOS, a systemd user unit on Linux, a per-user Task Scheduler task on Windows, and merges Tacho's hook entries into each harness's settings without touching an entry it did not write. From then on every Claude Code and Codex session on the machine is chained and shipped, and the panel shows the agent key, the org and workspace the host reports to, the enrollment id, the bundle version, collector uptime, spool depth and last ingest.
+`enroll` generates an Ed25519 device key, mints a host API key for that workspace, writes `~/.config/oxagen/tacho/host.json`, installs the collector (`tachod`) as a user service, launchd on macOS, a systemd user unit on Linux, a per-user Task Scheduler task on Windows, and merges Tacho's hook entries into each harness's settings without touching an entry it did not write. From then on every Claude Code, Codex, and Stella session on the machine is chained and shipped, and the panel shows the agent key, the org and workspace the host reports to, the enrollment id, the bundle version, collector uptime, spool depth and last ingest.
 
 The gold button is always the next step: **Sign in** when there is no session, **Enroll this machine** when there is no enrollment, **Reassign** or **Apply** when a picker differs from the host, and nothing otherwise.
 
@@ -80,32 +82,43 @@ The host API key is minted for the workspace at enrollment, so a move is a revok
 
 Two scopes coexist and the app shows both: the org and workspace in `config.json` are the CLI's default for its other commands; the pair in `host.json` is where this machine's sessions land. Reassigning changes the second. The CLI default stays until you run `oxagen login` again.
 
-## Wrappers: Claude Code and Codex
+## Wrapped agents: Claude Code, Codex, Stella, and your own
 
-The Wrappers panel shows each harness with its detected version and whether every hook is present. Tick or untick a harness (the list never empties) and press **Apply wrappers**; the app runs
+The Wrapped agents panel lists Claude Code, Codex, Stella, and every custom agent the collector has seen, each with a health state:
+
+| State | Means |
+| --- | --- |
+| healthy | runs recorded and delivered to Oxagen |
+| pending | recorded, waiting to send |
+| degraded | hooks missing, Oxagen refused or was unreachable, or something has been pending more than 10 minutes |
+| down | the collector is not answering |
+| idle | wrapped, no runs yet |
+| not wrapped | the harness has never called the hook |
+
+Tick or untick a harness (the list never empties) and press **Apply wrappers**; the app runs
 
 ```bash
-tacho reassign --harness claude-code,codex
+tacho reassign --harness claude-code,codex,stella
 ```
 
-with the list you chose. This is the one way to drop a wrapper: `enroll` may add a harness on a re-apply but never removes one.
+with the list you chose. This is the one way to drop a wrapper: `enroll` may add a harness on a re-apply but never removes one. A custom agent is not ticked here; it appears once it calls `tacho hook --agent <name>` on its own, per [Wrap an agent](/docs/cli/wrap-an-agent).
 
-| | Claude Code | Codex CLI |
-| --- | --- | --- |
-| Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) |
-| Enforcement | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest and Stop as command hooks; allow or deny with a reason; fail closed | same events, same decision shape |
-| Telemetry | 28 events as `http` hooks straight to the daemon, plus OpenTelemetry export | PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd and Interrupt as command hooks; no OTel |
-| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` |
-| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` |
+| | Claude Code | Codex CLI | Stella |
+| --- | --- | --- | --- |
+| Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) | `~/.stella/stella.toml`, or `~/.stella/settings.json` when that is the only one present (`STELLA_HOME`) |
+| Enforcement | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest and Stop as command hooks; allow or deny with a reason; fail closed | same events, same decision shape | SessionStart, UserPromptSubmit, PreToolUse and Stop; same decision shape; no PermissionRequest hook |
+| Telemetry | 28 events as `http` hooks straight to the daemon, plus OpenTelemetry export | PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd and Interrupt as command hooks; no OTel | PostToolUse, PreCompact, SubagentStart and SubagentStop as command hooks; no PostCompact, SessionEnd, Interrupt, or OTel |
+| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` | `tacho hook --enrollment tch_… --harness stella` |
+| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` | `agent.harness = stella`, `runtime = stella`; the session closes on process exit, since Stella sends no session id and no SessionEnd |
 
 ## Put the CLIs on your PATH
 
-The Command line panel shows where `oxagen` and `tacho` currently resolve. **Link** puts them on your PATH without elevating:
+The app does this on first launch, and the Command line panel shows where `oxagen` and `tacho` currently resolve. Press **Link** yourself if you removed the links, or if first launch found an `oxagen` it did not install and left it alone. Linking puts the CLIs on your PATH without elevating:
 
 - macOS and Linux: symlinks in `~/.local/bin` to the binaries inside the app.
 - Windows: `oxagen.cmd` and `tacho.cmd` shims in `%LOCALAPPDATA%\Oxagen\bin`, and that directory is added to your user PATH. Open a new terminal afterwards.
 
-**Remove links** deletes them again; the binaries stay with the app.
+**Remove links** deletes them again, the binaries stay with the app, and it opts you out: the app does not relink on a later launch until you press **Link** again.
 
 Once linked, the terminal and the app share the same files, so `oxagen tacho status` and the panels agree.
 
@@ -113,7 +126,7 @@ Once linked, the terminal and the app share the same files, so `oxagen tacho sta
 
 Uninstall in this order; the Uninstall panel walks through it and only offers the second step once the first is done.
 
-1. **Unenroll.** In This machine, choose **Unenroll…** and confirm. The app runs `tacho unenroll`, which strips the hooks from both harnesses, stops and removes the service, revokes the enrollment on the control plane and deletes the host credentials. Tick *also delete the local event log* to add `--purge`, which drops the local WAL, spool and quarantine.
+1. **Unenroll.** In This machine, choose **Unenroll…** and confirm. The app runs `tacho unenroll`, which strips the hooks from every wrapped harness, stops and removes the service, revokes the enrollment on the control plane and deletes the host credentials. Tick *also delete the local event log* to add `--purge`, which drops the local WAL, spool and quarantine.
 2. **Remove local data.** Deletes `~/.config/oxagen`: the CLI session and whatever Tacho left behind. Refused while `host.json` still exists.
 3. **The platform uninstaller.** Drag `Oxagen.app` to the Trash on macOS, use *Apps & features* (or the NSIS uninstaller) on Windows, or `apt remove` / `dnf remove` (or delete the AppImage) on Linux.
 
@@ -124,7 +137,7 @@ If you linked the CLIs, press **Remove links** first, or delete the symlinks and
 The same installers push through MDM. A post-install script enrolls silently with a platform token instead of a browser sign-in:
 
 ```bash
-tacho enroll --token <apiKey> --org <org> --workspace <workspace> --managed --harness claude-code,codex
+tacho enroll --token <apiKey> --org <org> --workspace <workspace> --managed --harness claude-code,codex,stella
 ```
 
 `--managed` also prints the managed settings document; `tacho enroll --print-managed` renders only that document, which locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`.
