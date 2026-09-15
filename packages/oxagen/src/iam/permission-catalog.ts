@@ -191,10 +191,11 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description: "Read the subscription, invoices, rates and usage",
     capabilities: [
       "get_subscription",
+      "get_gau_bucket",
+      "get_contract_rate",
       "list_invoices",
       "get_rate_card",
       "get_usage_breakdown",
-      "get_action_usage",
       "preview_action_cost",
     ],
   },
