@@ -229,6 +229,61 @@ describe("stella answer", () => {
     );
   });
 
+  it("never fails open when an answer carries two decisions: deny > ask > stop > allow", () => {
+    const allow = { permissionDecision: "allow" };
+    expect(
+      stellaAnswer(
+        { continue: false, hookSpecificOutput: allow },
+        "PreToolUse",
+      ),
+    ).toBe('{"action":"deny","reason":"Stopped by Oxagen policy."}\n');
+    expect(
+      stellaAnswer(
+        { decision: "block", reason: "paused", hookSpecificOutput: allow },
+        "UserPromptSubmit",
+      ),
+    ).toBe('{"action":"deny","reason":"paused"}\n');
+    expect(
+      stellaAnswer(
+        {
+          continue: false,
+          stopReason: "stop",
+          hookSpecificOutput: {
+            permissionDecision: "ask",
+            permissionDecisionReason: "a human decides",
+          },
+        },
+        "PreToolUse",
+      ),
+    ).toBe('{"action":"require_approval","reason":"a human decides"}\n');
+    expect(
+      stellaAnswer(
+        {
+          continue: false,
+          hookSpecificOutput: {
+            permissionDecision: "deny",
+            permissionDecisionReason: "no",
+          },
+        },
+        "PreToolUse",
+      ),
+    ).toBe('{"action":"deny","reason":"no"}\n');
+    // On SessionStart a stop outranks both an allow and bundle context.
+    expect(
+      stellaAnswer(
+        {
+          continue: false,
+          stopReason: "Host revoked.",
+          hookSpecificOutput: { ...allow, additionalContext: "ctx" },
+        },
+        "SessionStart",
+      ),
+    ).toBe("Oxagen: Host revoked. Tool calls will be refused.\n");
+    expect(stellaAnswer({ decision: "block" }, "SessionStart")).toBe(
+      "Oxagen: This session is stopped by its Oxagen operator. Tool calls will be refused.\n",
+    );
+  });
+
   it("answers context as SessionStart text and nothing else as {}", () => {
     expect(
       stellaAnswer(

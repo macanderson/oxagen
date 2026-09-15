@@ -212,18 +212,29 @@ function normalizeKey(key: string): string {
 }
 
 /**
- * The hook events an appended `[[hooks.<Event>]]` would collide with:
- * the file defines them as a key (`hooks.PreToolUse = [...]` at the root,
- * `PreToolUse = [...]` under `[hooks]`, `hooks = { ... }`) or as a
- * standard table (`[hooks.PreToolUse]`). Array-of-tables definitions
- * elsewhere in the file are compatible and not reported. Managed blocks are
- * ignored; lines inside multi-line strings are skipped.
+ * The hook events an appended `[[hooks.<Event>]]` would collide with.
+ * TOML lets an array of tables grow only if nothing made that path a plain
+ * table first, so these are conflicts:
+ *
+ *   - a key: `hooks.PreToolUse = [...]` at the root, `PreToolUse = [...]`
+ *     under `[hooks]`, `hooks = { ... }`, or a dotted key below the event;
+ *   - a standard table `[hooks.PreToolUse]`;
+ *   - a child table, `[hooks.Stop.hooks]` or `[[hooks.Stop.hooks]]`, that
+ *     no earlier `[[hooks.Stop]]` owns: it defines `hooks.Stop` as a table.
+ *
+ * `[[hooks.Stop]]`, and any table under it after it, belongs to that array
+ * and its last element; an appended element leaves both alone (checked
+ * against Python's tomllib). Managed blocks are ignored; lines inside
+ * multi-line strings are skipped.
  */
 export function stellaTomlConflicts(text: string): StellaHookEventName[] {
   const conflicts = new Set<StellaHookEventName>();
+  // Events this file already made arrays with `[[hooks.<Event>]]`.
+  const arrayEvents = new Set<StellaHookEventName>();
   const stripped = stripStellaTomlBlocks(text);
   let header = "";
-  let arrayHeader = false;
+  // Keys under this header belong to an array element, not a static path.
+  let inElement = false;
   let inMultiline: '"""' | "'''" | undefined;
   for (const rawLine of stripped.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -235,15 +246,27 @@ export function stellaTomlConflicts(text: string): StellaHookEventName[] {
     const arrayMatch = /^\[\[\s*([^\]]+?)\s*\]\]/.exec(line);
     if (arrayMatch !== null) {
       header = normalizeKey(arrayMatch[1] as string);
-      arrayHeader = true;
+      inElement = true;
+      for (const event of STELLA_HOOK_EVENTS) {
+        if (header === `hooks.${event}`) arrayEvents.add(event);
+        else if (
+          header.startsWith(`hooks.${event}.`) &&
+          !arrayEvents.has(event)
+        )
+          conflicts.add(event);
+      }
       continue;
     }
     const tableMatch = /^\[\s*([^\]]+?)\s*\]/.exec(line);
     if (tableMatch !== null) {
       header = normalizeKey(tableMatch[1] as string);
-      arrayHeader = false;
+      inElement = false;
       for (const event of STELLA_HOOK_EVENTS) {
         if (header === `hooks.${event}`) conflicts.add(event);
+        else if (header.startsWith(`hooks.${event}.`)) {
+          if (arrayEvents.has(event)) inElement = true;
+          else conflicts.add(event);
+        }
       }
       continue;
     }
@@ -256,9 +279,7 @@ export function stellaTomlConflicts(text: string): StellaHookEventName[] {
     for (const quote of ['"""', "'''"] as const) {
       if (value.split(quote).length % 2 === 0) inMultiline = quote;
     }
-    // A key inside an array-of-tables element belongs to that element, not
-    // to a static path an appended table could collide with.
-    if (arrayHeader) continue;
+    if (inElement) continue;
     const key = normalizeKey(keyMatch[1] as string);
     const full = header.length > 0 ? `${header}.${key}` : key;
     for (const event of STELLA_HOOK_EVENTS) {

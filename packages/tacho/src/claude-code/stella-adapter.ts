@@ -141,17 +141,18 @@ function reasonOf(value: unknown, fallback: string): string {
 
 /**
  * Claude Code's answer as Stella's stdout (with its trailing newline, or
- * empty). The mapping, first match wins:
+ * empty). Precedence runs from most to least restrictive, so a document
+ * carrying two answers never fails open: deny > require_approval > stop >
+ * allow.
  *
  *   - `permissionDecision: "deny"` → `deny` with the reason;
  *   - `permissionDecision: "ask"` → `require_approval`;
+ *   - a stop (`continue: false`, or `decision: "block"`): on SessionStart
+ *     the reason as prompt text ("Oxagen: <reason> Tool calls will be
+ *     refused."), because Stella cannot veto a session start and PreToolUse
+ *     refuses every call for a suspended, revoked or paused host and a
+ *     paused or cancelled session; on any other event `deny`;
  *   - `permissionDecision: "allow"` → `allow`;
- *   - `decision: "block"` (UserPromptSubmit) → `deny`;
- *   - SessionStart `continue: false` → the stop reason as prompt text
- *     ("Oxagen: <reason> Tool calls will be refused."): Stella cannot veto
- *     a session start, and PreToolUse refuses every call for a suspended,
- *     revoked or paused host and a paused or cancelled session;
- *   - `continue: false` on any other event → `deny` with the stop reason;
  *   - SessionStart `additionalContext` → that text, which Stella adds to the
  *     system prompt;
  *   - anything else → `{}` (no decision), or nothing for SessionStart.
@@ -165,32 +166,32 @@ export function stellaAnswer(
     : {};
   const permission = specific["permissionDecision"];
   const permissionReason = specific["permissionDecisionReason"];
-  if (event === "SessionStart" && response["continue"] === false) {
-    return `Oxagen: ${reasonOf(response["stopReason"], "This session is stopped by its Oxagen operator.")} Tool calls will be refused.\n`;
-  }
-  let decision: Record<string, unknown> | undefined;
+  const decide = (decision: Record<string, unknown>): string =>
+    `${JSON.stringify(decision)}\n`;
   if (permission === "deny")
-    decision = {
+    return decide({
       action: "deny",
       reason: reasonOf(permissionReason, "Denied by Oxagen policy."),
-    };
-  else if (permission === "ask")
-    decision = {
+    });
+  if (permission === "ask")
+    return decide({
       action: "require_approval",
       reason: reasonOf(permissionReason, "Oxagen policy asks for approval."),
-    };
-  else if (permission === "allow") decision = { action: "allow" };
-  else if (response["decision"] === "block")
-    decision = {
+    });
+  const stopped = response["continue"] === false;
+  if (stopped || response["decision"] === "block") {
+    const reason = stopped ? response["stopReason"] : response["reason"];
+    if (event === "SessionStart")
+      return `Oxagen: ${reasonOf(reason, "This session is stopped by its Oxagen operator.")} Tool calls will be refused.\n`;
+    return decide({
       action: "deny",
-      reason: reasonOf(response["reason"], "Blocked by Oxagen policy."),
-    };
-  else if (response["continue"] === false)
-    decision = {
-      action: "deny",
-      reason: reasonOf(response["stopReason"], "Stopped by Oxagen policy."),
-    };
-  if (decision !== undefined) return `${JSON.stringify(decision)}\n`;
+      reason: reasonOf(
+        reason,
+        stopped ? "Stopped by Oxagen policy." : "Blocked by Oxagen policy.",
+      ),
+    });
+  }
+  if (permission === "allow") return decide({ action: "allow" });
   if (event === "SessionStart") {
     const context = specific["additionalContext"];
     return typeof context === "string" && context.length > 0

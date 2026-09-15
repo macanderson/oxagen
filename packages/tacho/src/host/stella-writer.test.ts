@@ -232,6 +232,12 @@ describe("stella writer", () => {
       // A child table makes hooks.Stop a table an array cannot extend.
       ['[hooks.Stop.hooks]\ntype = "command"\n', "Stop"],
       ["[hooks.PreCompact.extra]\na = 1\n", "PreCompact"],
+      // A child table with no key under it still defines hooks.Stop.
+      ["[hooks.Stop.hooks]\n", "Stop"],
+      // An array child with no [[hooks.Stop]] before it does too.
+      ["[[hooks.Stop.hooks]]\n", "Stop"],
+      // A parent that comes after its child is too late.
+      ["[hooks.Stop.hooks]\n[[hooks.Stop]]\n", "Stop"],
     ];
     for (const [text, event] of refused) {
       expect(stellaTomlConflicts(text)).toEqual([event]);
@@ -243,6 +249,26 @@ describe("stella writer", () => {
     }
     // Text that only mentions a hook key inside a string is not a definition.
     expect(stellaTomlConflicts("note = 'hooks.Stop = []'\n")).toEqual([]);
+  });
+
+  it("accepts tables under an earlier [[hooks.<Event>]], which an appended element leaves valid", () => {
+    // tomllib parses each of these with the managed block appended
+    // (verified 2026-09-15): the child tables belong to the operator's own
+    // array element, not to a static path.
+    const compatible = [
+      "[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = 'command'\ncommand = 'a'\n",
+      "[[hooks.Stop]]\n[hooks.Stop.extra]\ny = 1\n",
+      "[[hooks.Stop]]\n[other]\nz = 1\n[[hooks.Stop.hooks]]\ncommand = 'a'\n",
+    ];
+    for (const text of compatible) {
+      expect(stellaTomlConflicts(text)).toEqual([]);
+      const merged = mergedText(toml(text));
+      expect(stripStellaHooks(toml(merged)).file.text).toBe(text);
+    }
+    // The owning parent is per event: [[hooks.Stop]] does not own PreCompact.
+    expect(
+      stellaTomlConflicts("[[hooks.Stop]]\n[hooks.PreCompact.extra]\n"),
+    ).toEqual(["PreCompact"]);
   });
 
   it("merges, strips and reads presence in the legacy settings.json", () => {
