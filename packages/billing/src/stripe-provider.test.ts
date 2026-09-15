@@ -765,6 +765,7 @@ describe("StripeProvider", () => {
         ],
         metadata,
         invoice_creation: { enabled: true, invoice_data: { metadata } },
+        payment_method_types: ["card"],
         payment_intent_data: { setup_future_usage: "off_session" },
         success_url: "https://app.example.com/acme/billing?checkout=success",
         cancel_url: "https://app.example.com/acme/billing?checkout=cancel",

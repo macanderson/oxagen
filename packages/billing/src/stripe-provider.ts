@@ -728,8 +728,14 @@ export class StripeProvider implements BillingProvider {
       ],
       metadata,
       invoice_creation: { enabled: true, invoice_data: { metadata } },
-      // The card Checkout collects is attached to the customer for the
-      // recorder's off-session auto top-up; Checkout tells the customer so.
+      // Card only: a delayed-notification method (ACH, SEPA, BACS) completes
+      // the session unpaid and settles later on
+      // `checkout.session.async_payment_succeeded`, which the webhook does
+      // not dispatch; the grant reads `payment_status` on
+      // `checkout.session.completed` alone. The card Checkout collects is
+      // attached to the customer for the recorder's off-session auto top-up;
+      // Checkout tells the customer so.
+      payment_method_types: ["card"],
       payment_intent_data: { setup_future_usage: "off_session" },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,

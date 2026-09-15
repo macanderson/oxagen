@@ -440,6 +440,35 @@ describe("grantGauPurchaseForCheckout", () => {
     expect(store.paymentMethods[0]!.isDefault).toBe(true);
   });
 
+  it("marks the card default on a redelivery after the Stripe update committed and the mirror write failed", async () => {
+    // First delivery: the grant commits, Stripe takes the card as default,
+    // then the mirror transaction fails.
+    const tx = makeFakeGauTx(store);
+    mocks.withSystemDb
+      .mockImplementationOnce(async (fn: (t: unknown) => unknown) => fn(tx))
+      .mockRejectedValueOnce(new Error("connection reset"));
+    await expect(grantGauPurchaseForCheckout(paidSession())).rejects.toThrow(
+      "connection reset",
+    );
+    expect(mocks.provider.setDefaultPaymentMethod).toHaveBeenCalledOnce();
+    expect(store.settlements).toHaveLength(1);
+    expect(store.paymentMethods).toHaveLength(0);
+
+    // Redelivery: the customer's default is already this card.
+    mocks.withSystemDb.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
+    mocks.provider.getDefaultPaymentMethodId.mockResolvedValue(
+      "pm_checkout_001",
+    );
+    await grantGauPurchaseForCheckout(paidSession());
+
+    expect(mocks.provider.setDefaultPaymentMethod).toHaveBeenCalledOnce();
+    expect(store.settlements).toHaveLength(1);
+    expect(store.paymentMethods).toHaveLength(1);
+    expect(store.paymentMethods[0]!.isDefault).toBe(true);
+  });
+
   it("a Free org's first purchase leaves it with a default card, so its next exhaustion is refused with no free_no_payment_method reason", async () => {
     const bucket = seedBucket({ usedGau: 5_000 });
     // Before the purchase: exhausted, no card — the add-a-card refusal.

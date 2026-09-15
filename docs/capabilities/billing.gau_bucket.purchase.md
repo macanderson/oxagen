@@ -8,8 +8,22 @@
 
 Buy governed action units (GAUs) in block quantities at the organisation's
 contracted rate, through a Stripe Checkout Session (ADR-055 §6). The
-billing page's "Buy governed action units" form calls it; the API and MCP
-surfaces expose it to Owners and Billing users directly.
+billing page's "Buy governed action units" form and session-authenticated
+API callers reach it. The MCP tool (`purchase_gau_bucket`) and API-key
+callers are refused `forbidden / no_principal`: MCP and API-key contexts
+carry no user (`apps/mcp/src/context.ts`, `apps/api/src/middleware/auth.ts`),
+and the role gate runs before any read. Whether an API key may buy as its
+creator is undecided.
+
+## Surface
+
+- API: `POST /v1/:org_slug/:workspace_slug/billing/gau-bucket/purchase`
+- MCP: `purchase_gau_bucket`
+- Authentication: session; the handler requires org Owner or Billing (`assertOrgRole`, INV-29) — the kernel's IAM check enforces `defaultRoles` for enterprise organisations only
+- Capability name: `purchase_gau_bucket`
+- Not billed (`noBillingGate: true`, INV-27); IAM default-deny; high sensitivity; agent surface requires approval
+
+## Behaviour
 
 The handler prices the purchase at submit time: `resolveContractTerms`
 answers with the negotiated `billing.contract_terms` row when one is in

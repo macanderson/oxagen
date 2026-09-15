@@ -160,9 +160,10 @@ function parseGauPurchase(session: BillingCheckoutSession): GauPurchase {
  *
  * After the commit, the card Checkout collected is saved: it becomes the
  * customer's default when the customer had none, and the
- * `billing.payment_methods` mirror row is upserted with `is_default` set
- * accordingly. This step runs on every delivery, so a redelivery after a
- * provider failure here still saves the card. A Free org's first purchase
+ * `billing.payment_methods` mirror row is upserted with `is_default` taken
+ * from the provider's default after this step. The step runs on every
+ * delivery, so a redelivery after a provider or database failure here still
+ * saves the card and still marks it default. A Free org's first purchase
  * therefore leaves it with a default card, and its next exhaustion takes the
  * auto top-up path (ADR-055 §6).
  *
@@ -251,9 +252,11 @@ export async function grantGauPurchaseForCheckout(
 /**
  * Save the card a paid Checkout collected (`setup_future_usage:
  * "off_session"` attached it to the customer): the customer default when
- * none is set, and the mirror row with `is_default` to match. Idempotent:
- * on a redelivery the customer already has the default and the upsert only
- * refreshes the card details.
+ * none is set, and the mirror row with `is_default` equal to whether the
+ * card is the provider's default once this step has run. The flag comes
+ * from the provider's answer rather than from whether this run set it, so a
+ * redelivery after the Stripe update committed and the mirror write failed
+ * still lands `is_default = true`.
  */
 async function saveCheckoutCard(
   session: BillingCheckoutSession,
@@ -265,12 +268,13 @@ async function saveCheckoutCard(
   const pm = await provider.getCheckoutPaymentMethod(session.id);
   if (pm === null) return;
 
-  const madeDefault =
-    (await provider.getDefaultPaymentMethodId(customerId)) === null;
+  const existingDefault = await provider.getDefaultPaymentMethodId(customerId);
+  const madeDefault = existingDefault === null;
   if (madeDefault) await provider.setDefaultPaymentMethod(customerId, pm.id);
+  const isDefault = madeDefault || existingDefault === pm.id;
 
   await withSystemDb(async (tx) => {
-    if (madeDefault) {
+    if (isDefault) {
       await tx
         .update(schema.paymentMethods)
         .set({ isDefault: false, updatedAt: new Date() })
@@ -292,7 +296,7 @@ async function saveCheckoutCard(
         last4: pm.last4,
         expMonth: pm.expMonth,
         expYear: pm.expYear,
-        isDefault: madeDefault,
+        isDefault,
       })
       .onConflictDoUpdate({
         target: schema.paymentMethods.stripePaymentMethodId,
@@ -304,13 +308,13 @@ async function saveCheckoutCard(
           deletedAt: null,
           deletedByUserId: null,
           updatedAt: new Date(),
-          ...(madeDefault ? { isDefault: true } : {}),
+          ...(isDefault ? { isDefault: true } : {}),
         },
       });
   });
 
   logger.info(
-    { orgId, sessionId: session.id, paymentMethodId: pm.id, madeDefault },
+    { orgId, sessionId: session.id, paymentMethodId: pm.id, isDefault },
     "billing: checkout card saved",
   );
 }
