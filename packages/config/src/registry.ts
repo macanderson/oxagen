@@ -1874,7 +1874,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_HOUSE_BRAND: {
     group: "Operator scripts",
     description:
-      "Path to the oxagen-house-brand checkout sync-brand-assets.mjs copies marks from. " +
+      "Path to the house brand kit checkout (oxagenai/oxagen-brand) sync-brand-assets.mjs copies marks and the branding skill from. " +
       "Defaults to a sibling directory of this repository.",
     secret: false,
     clientExposed: false,

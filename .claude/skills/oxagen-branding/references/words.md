@@ -27,11 +27,18 @@ The product's vocabulary is Mission Control's vocabulary (spec §3). Use each wo
 | wrapper | the hooks or SDK adapter beside the agent | harness (the harness is Claude Code itself), plugin, agent |
 | seal | the signed close of a run | finalize, commit |
 | export | the file a run produces for offline verification | report, bundle, artifact |
-| Spend, Run, Fleet | the pages, capitalized | dashboards |
+| Spend, Run, Fleet, Access | the pages, capitalized | dashboards |
+| mandate | the one object an agent runs under: access, budget and rules, equipment, record | policy, config, profile, permission set |
+| clause | one of the four parts of a mandate, owned by one team | section, setting, module |
+| request | an agent asking for a system, scope, or action at the moment of use | grant, token, permission (as the thing handed over) |
+| rule | what answers a request: allow, deny, or route to a person | policy (as the answer), guardrail, filter, approval workflow |
+| allowed, denied, routed | the three answers a rule gives | approved (fine for the person's act), blocked, escalated, flagged |
+| connection | a system Oxagen reaches on the agent's behalf, credential held by Oxagen | integration (as the noun), the agent's API key, service account |
+| credential | the secret Oxagen holds and the agent never sees | key (except in the line that says not to hand it over), secret (fine in docs) |
 
 ## Verbs that carry the brand
 
-lock, block, hold, break, settle, verify, wrap, record, seal, decide, read, show, cost
+ask, request, allow, deny, route, answer, lock, block, hold, break, settle, verify, wrap, record, seal, decide, read, show, cost
 
 ## Avoid these
 
@@ -59,6 +66,9 @@ session, trace (as a noun for a run), attempt, execution, invocation, span, acti
 ### Product words we do not use
 AI-powered, LLM-powered, autonomous (as a compliment), agentic (as an adjective for the product), copilot, assistant
 
+### Words that hand over the keys
+connect your agent to, give the agent access to, full access, the agent's API key, the agent's token, service account (for an agent), one-click connect, auto-approve (as a feature), hand over (except in the line that says not to), least privilege (say what it means: the agent asks for what the task needs, when it needs it)
+
 ### Filler that opens sentences
 In today's world, As AI agents become, With the rise of, It's no secret that, We believe, We're on a mission
 
@@ -70,7 +80,13 @@ In today's world, As AI agents become, With the rise of, It's no secret that, We
 | seamless integration with Claude Code | two hooks in Claude Code |
 | AI-powered verification | a pure function of the run's frames |
 | comprehensive observability | every frame with its cost beside it |
-| enterprise-grade security | the agent holds no credentials |
+| enterprise-grade security | the agent never sees the key |
+| connect your agent to GitHub | the agent can request GitHub |
+| the agent has access to Slack | Slack is in the agent's mandate |
+| securely stores your keys | the credential stays in Oxagen |
+| auto-approved | allowed by rule |
+| escalated to a human | routed to a person |
+| least-privilege access | the agent asks for what the task needs, when it needs it |
 | gain visibility into | see |
 | leverage | use |
 | enable you to | lets you, or cut it |

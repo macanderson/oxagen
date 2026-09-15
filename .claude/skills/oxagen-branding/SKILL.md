@@ -11,30 +11,36 @@ Read this whole file first. Then read the reference for what you are making:
 |---|---|
 | Anything with words in it | `references/voice.md`, then `references/words.md` |
 | A headline, hero, ad, tagline, or the first sentence of anything | `references/positioning.md` |
+| Anything about access, credentials, connections, permissions, or tools | `references/positioning.md`, the section *The keys stay with you* |
 | A page, ad, deck, or UI | `references/system.md` and `assets/tokens.css` |
 | Copy for a specific surface (site, ad, email, docs, UI, launch) | `references/examples.md` |
 
+## Where this skill lives
+
+The source of truth is `skills/oxagen-branding/` in the house brand kit, `oxagenai/oxagen-brand`, beside the marks, tokens, ads, and content cards it describes. The oxagen repo vendors a copy at `.claude/skills/oxagen-branding/` through `tools/scripts/sync-brand-assets.mjs`, and `pnpm check:brand` fails on drift. Edit the kit, run the sync, commit both. Never edit the vendored copy alone.
+
 ## What Oxagen is, in one sentence
 
-Oxagen is the control plane for agent work: it locks a definition of done into every run before the agent's first tool call, blocks the run from ending until that definition holds, and settles the result into a signed record anyone can verify offline.
+Oxagen is the control plane for the agents an enterprise runs. Every agent operates under a mandate: its access, its budget, its tools, its rules, set by the teams accountable for it and enforced on every run.
 
-Every piece of copy is downstream of that sentence. If a line does not connect to it, cut the line.
+Every piece of copy is downstream of that sentence. A mandate has four clauses, and every claim belongs to one of them: access (security sets it), budget and rules (FinOps sets it), equipment (engineering sets it), and the record (the platform keeps it). If a line does not connect to a clause, cut the line. The definition of done is a mechanism inside the record clause, not the sentence.
 
-## The five rules that never bend
+## The six rules that never bend
 
 1. **Gold is identity, plus at most one action per screen.** Gold never carries state and never fills a surface. State is carried by shape: double border for held, dashed for pending, single for broken.
 2. **No em dashes in anything a customer reads.** Use a period, a comma, or a colon. This includes UI strings, docs, ads, and specs.
 3. **Sentence case headings.** Always.
 4. **Wordmarks are lowercase: oxagen, stella.** In prose they are names and take a capital: Oxagen, Stella.
-5. **Mission Control vocabulary is the product's vocabulary.** Run, turn, step, frame, operator, agent, workspace, governed action. Never session, trace, attempt, execution, or invocation in customer-facing prose. See `references/words.md`.
+5. **Mission Control vocabulary is the product's vocabulary.** Run, turn, step, frame, operator, agent, workspace, governed action, mandate, request, rule. Never session, trace, attempt, execution, or invocation in customer-facing prose. See `references/words.md`.
+6. **The agent asks, the rule decides, the record keeps the answer.** Copy never describes an agent that holds a key, a token, or a standing grant. Access is requested at the moment of use and answered by a rule the owning team wrote: allowed, denied, or routed to a named person. Never write "connect your agent to X" or "give the agent access to X". See *The keys stay with you* in `references/positioning.md`.
 
 ## Positioning, the short version
 
-Every other tool watches the agent and reports. Oxagen decides when the agent is done and can prove it to someone who does not trust you.
+Every other layer covers one clause of the mandate and stops. Identity says who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds all of it into one object and enforces it on every call, then keeps the record.
 
-The category is **the control plane for agent work**. Do not say observability, governance, or evals; those are owned, and all three mean watch and report.
+The category is **the agent control plane**, the control plane for every agent an enterprise runs, whoever built it. Do not say observability, governance, or evals as the category; those are owned, and all three mean watch and report.
 
-The lead line today is **Can you explain your AI bill? Neither can your provider.** The dod line, **The agent doesn't get to decide it's done.**, is held until the dod ships. The full table and the decision are in `references/positioning.md`.
+The lead line today is **Can you explain your AI bill? Neither can your provider.** For the security reader, the access line is **Don't hand your agents the keys.** The dod line, **The agent doesn't get to decide it's done.**, is held until the dod ships. The full table and the decision are in `references/positioning.md`.
 
 ## Voice, the short version
 
@@ -44,12 +50,12 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 
 ## Prose rules that apply everywhere
 
-- Actor first. "The wrapper locks the dod" not "The dod is locked by the wrapper."
-- Concrete verbs. Lock, block, settle, verify, hold, break. Not enable, empower, leverage, ensure.
+- Actor first. "The rule denies the push" not "The push is denied by the rule."
+- Concrete verbs. Ask, allow, deny, route, lock, block, settle, verify, hold, break. Not enable, empower, leverage, ensure.
 - One idea per sentence. If a sentence has a semicolon, it is two sentences.
 - Numbers over adjectives. "Blocked once, held on the second stop" beats "reliable."
 - A feature pairs with what it does for the reader in the same sentence.
-- Never strengthen a claim past the evidence. A held dod means done, not proven. Proven is the witness's word.
+- Never strengthen a claim past the evidence. A held dod means done, not proven. Proven is the witness's word. An allowed request means a rule allowed it, not that the action was safe.
 - Cut "very", "really", "seamless", "robust", "powerful", "revolutionary", and every word in `references/words.md` under avoid.
 - Say Oxagen, not "we", in product copy. Say "you", never "users", when addressing the reader.
 
@@ -61,7 +67,8 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 - [ ] Headings in sentence case
 - [ ] oxagen and stella lowercase as marks, capitalized in prose
 - [ ] No forbidden vocabulary (`references/words.md`)
-- [ ] First sentence connects to the positioning sentence
+- [ ] First sentence connects to the positioning sentence and names a mandate clause
+- [ ] No agent holds a key, a token, or standing access anywhere in the copy; it asks, a rule answers
 - [ ] Every claim is one the record can back
 - [ ] Space Grotesk for everything; system mono for data, digests, and commands
 - [ ] 12px card radius, 1120px wrap, dark first with the parchment light theme intact
