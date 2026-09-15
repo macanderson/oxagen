@@ -8,6 +8,20 @@ export const BLOG_TITLE = "Oxagen Research";
 export const BLOG_DESCRIPTION =
   "Research notes on ontologies, AI agents, coding agents, self-improving models, and self-evolving agents. What the papers show, where it breaks, and what it takes to govern it.";
 
+/**
+ * The theme head, the same on every page (index.html and products/ carry
+ * their own copy): both schemes declared, and a blocking script that sets
+ * `.js` and re-applies a pinned theme before first paint. See the theme
+ * model in assets/oxagen.css.
+ */
+export const THEME_HEAD = `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2EEE5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10100F">
+<meta name="color-scheme" content="light dark">
+<script>(function(d){d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.classList.add(t);document.querySelector('meta[name="color-scheme"]').content=t}}catch(e){}})(document.documentElement)</script>`;
+
+/** The nav's theme toggle: a sun and a moon, wired by assets/oxagen.js. */
+export const THEME_TOGGLE = `<button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme"><svg class="tt-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="tt-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></button>`;
+
 /** @param {unknown} value */
 export function esc(value) {
   return String(value ?? "")
@@ -75,6 +89,7 @@ export function siteHeader({ wordmark, current }) {
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
     </nav>
     <div class="nav-cta">
+      ${THEME_TOGGLE}
       <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
       <a class="btn btn-primary btn-sm" href="/#demo">Get a demo</a>
       <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
@@ -158,8 +173,7 @@ export function layout(o) {
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(url)}">
-<meta name="theme-color" content="#10100F">
-<meta name="color-scheme" content="dark">
+${THEME_HEAD}
 <meta property="og:type" content="${o.type ?? "website"}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:site_name" content="Oxagen">
@@ -183,7 +197,6 @@ export function layout(o) {
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 ${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
-<script>document.documentElement.classList.add("js")</script>
 <link rel="stylesheet" href="/assets/oxagen.css">
 <link rel="stylesheet" href="/assets/blog.css">
 ${o.extraHead ?? ""}
@@ -215,9 +228,10 @@ export function pillarChips(pillars, slugs) {
 }
 
 /**
- * A generated image. There is one rendering, on ink: the site is ink, and an
- * ink image reads on a paper ground where a paper image on paper would not,
- * so nothing is offered to a viewer who prefers light.
+ * A generated image. There is one rendering, on ink: an ink image reads on a
+ * paper ground where a paper image on paper would not. A banner laid behind a
+ * title is the exception the stylesheet handles: on the paper theme,
+ * --art-filter and --art-blend invert it into the page (assets/blog.css).
  * @param {string} src
  * @param {{ alt: string, width: number, height: number, lazy?: boolean, priority?: boolean }} o
  */

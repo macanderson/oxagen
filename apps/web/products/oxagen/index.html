@@ -6,8 +6,9 @@
 <title>Oxagen, the control plane for agent work</title>
 <meta name="description" content="Oxagen prices every model call by token class, attributes it to the person, the agent, the run, the turn, and the step, caps spend with a hard ceiling, and keeps every run on the record. One place to watch, direct, and answer for a fleet.">
 <link rel="canonical" href="https://oxagen.sh/products/oxagen">
-<meta name="theme-color" content="#10100F">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2EEE5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10100F">
+<meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/products/oxagen">
 <meta property="og:site_name" content="Oxagen">
@@ -24,7 +25,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
-<script>document.documentElement.classList.add("js")</script>
+<script>(function(d){d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.classList.add(t);document.querySelector('meta[name="color-scheme"]').content=t}}catch(e){}})(document.documentElement)</script>
 <link rel="stylesheet" href="/assets/oxagen.css">
 <style>
 .hero{position:relative;padding:calc(var(--nav-h) + 68px) 0 72px;overflow:clip}
@@ -47,6 +48,64 @@
 .surface{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);padding:16px}
 .surface b{display:block;font-size:15px;margin-bottom:5px}
 .surface span{font-size:13px;color:var(--ink-3)}
+
+/* the illustrations: drawn in HTML and SVG on the theme tokens, so they follow
+   the page between paper and ink. Status is carried by shape (a dashed line is
+   something that did not happen), colour only repeats it. */
+.viz{line-height:1.5;padding:16px 18px 18px;display:grid;gap:12px;overflow-x:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--ink-2)}
+.viz svg{width:100%;height:auto}
+.viz .ok{color:var(--pass)}
+.viz .no{color:var(--fail)}
+.gv text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;fill:var(--ink-2)}
+.gv .lab-q{fill:var(--ink-3)}
+.gv .e{stroke:var(--ink-3);stroke-width:1.2;fill:none}
+.gv .e-cut{stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:3 4;fill:none}
+.gv .e-off{stroke:var(--rule);stroke-width:1.2;stroke-dasharray:3 4;fill:none}
+.gv .stop{stroke:var(--fail);stroke-width:2;stroke-linecap:round}
+.gv .n{fill:var(--panel);stroke:var(--ink-3);stroke-width:1.2}
+.gv .n-me{fill:var(--ink)}
+.gv .n-off{fill:none;stroke:var(--rule);stroke-width:1.2;stroke-dasharray:3 3}
+.gv .zone{fill:none;stroke:var(--rule);stroke-width:1;stroke-dasharray:6 5}
+.vrows{display:grid}
+.vrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line);white-space:nowrap}
+.vrow .src{color:var(--ink)}
+.vrow .tail{margin-left:auto;color:var(--ink-3)}
+.iss{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.iss-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;
+  padding:10px 12px;border-top:1px solid var(--line);background:var(--panel)}
+.iss-row:first-child{border-top:0}
+.iss-row .k{color:var(--ink-3)}
+.iss-row .t{color:var(--ink);font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif;font-size:14px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-s{font-size:11px;padding:2px 9px;border:1px solid var(--rule);border-radius:var(--r-pill);color:var(--ink-3);white-space:nowrap}
+.chip-s.live{border-color:var(--pass);color:var(--pass)}
+.chip-s.bad{border-style:dashed;border-color:var(--fail);color:var(--fail)}
+.iss-run{display:grid;gap:8px;padding:11px 14px 13px 30px;border-top:1px solid var(--line);background:var(--ground)}
+.iss-run .meta{color:var(--ink-3)}
+.iss-run ol{list-style:none;margin:0;padding:0 0 0 16px;border-left:1px solid var(--rule);display:grid;gap:6px}
+.iss-run li{position:relative}
+.iss-run li::before{content:"";position:absolute;left:-20px;top:.5em;width:7px;height:7px;border-radius:50%;
+  background:var(--ground);border:1px solid var(--ink-3)}
+.iss-run li.done::before{background:var(--ink-3)}
+.iss-run .sum{display:flex;flex-wrap:wrap;gap:16px;color:var(--ink-3)}
+.iss-run .sum b{color:var(--ink);font-weight:560}
+@media (max-width:520px){.iss-row{grid-template-columns:auto minmax(0,1fr)}.iss-row .chip-s{grid-column:1/-1;justify-self:start}}
+.vt{width:100%;border-collapse:collapse}
+.vt th{font-weight:500;text-align:left;color:var(--ink-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:0 8px 8px}
+.vt td{padding:9px 8px;border-top:1px solid var(--line);white-space:nowrap}
+.vt th:first-child,.vt td:first-child{padding-left:0}
+.vt th:last-child,.vt td:last-child{padding-right:0}
+.vt .name{color:var(--ink)}
+.vt .num{text-align:right}
+.vt tr.flag .name,.vt tr.flag .warn{color:var(--warn)}
+.rt{display:flex;align-items:center;gap:9px}
+.bar{display:block;flex:1;min-width:64px;height:6px;border-radius:var(--r-pill);background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:calc(var(--w,0) * 100%);background:var(--ink-3)}
+.flag .bar{border-style:dashed;border-color:var(--warn)}
+.flag .bar i{background:var(--warn)}
+.vnote{color:var(--ink-3)}
+@media (max-width:560px){.vt .hide-sm{display:none}}
 </style>
 </head>
 <body>
@@ -64,6 +123,7 @@
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
     </nav>
     <div class="nav-cta">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme"><svg class="tt-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="tt-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></button>
       <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
       <a class="btn btn-primary btn-sm" href="#demo">Get a demo</a>
       <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
@@ -216,9 +276,36 @@
       </div>
       <figure class="app reveal reveal-d1">
         <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
-          <span class="app-title">graph · free-form query</span><span class="app-meta">438 nodes · 12ms</span></div>
-        <div class="app-view">
-          <img src="/assets/tui/04-graph.svg" width="680" height="468" loading="lazy" alt="A graph query against a source file, returning its symbols, structs, enums and functions, in 12 milliseconds, with the currently-edited symbol marked hot.">
+          <span class="app-title">graph · scoped retrieval</span><span class="app-meta">agent/researcher · 12ms</span></div>
+        <div class="app-view viz" role="img" aria-label="An agent queries the graph. Three nodes inside its contract come back, each cited. The edges into a subgraph outside the contract are cut at its boundary, and none of its three nodes leave the store.">
+          <svg class="gv" viewBox="0 0 640 250" aria-hidden="true">
+            <rect class="zone" x="400" y="14" width="226" height="222" rx="12"/>
+            <text class="lab-q" x="416" y="36">outside contract</text>
+            <path class="e" d="M92 125 L239 62 M92 125 L239 125 M92 125 L239 188"/>
+            <path class="e-cut" d="M257 125 L398 125 M257 192 L398 180"/>
+            <path class="stop" d="M400 115 v20 M400 170 v20"/>
+            <path class="e-off" d="M479 125 L566 84 M479 125 L566 166 M575 93 V157"/>
+            <circle class="n-me" cx="80" cy="125" r="12"/>
+            <circle class="n" cx="248" cy="58" r="9"/>
+            <circle class="n" cx="248" cy="125" r="9"/>
+            <circle class="n" cx="248" cy="192" r="9"/>
+            <circle class="n-off" cx="470" cy="125" r="9"/>
+            <circle class="n-off" cx="575" cy="84" r="9"/>
+            <circle class="n-off" cx="575" cy="166" r="9"/>
+            <text x="80" y="156" text-anchor="middle">agent/researcher</text>
+            <text x="248" y="40" text-anchor="middle">billing-policy.md</text>
+            <text x="248" y="107" text-anchor="middle">team/payments</text>
+            <text x="248" y="220" text-anchor="middle">OXA-121</text>
+            <text class="lab-q" x="470" y="107" text-anchor="middle">hr/comp-bands</text>
+            <text class="lab-q" x="575" y="66" text-anchor="middle">payroll.xlsx</text>
+            <text class="lab-q" x="575" y="194" text-anchor="middle">vault/prod</text>
+          </svg>
+          <div class="vrows" aria-hidden="true">
+            <div class="vrow"><span class="ok">✓</span><span class="src">billing-policy.md</span><span>owners</span><span class="tail">cited</span></div>
+            <div class="vrow"><span class="ok">✓</span><span class="src">team/payments</span><span>owns billing</span><span class="tail">cited</span></div>
+            <div class="vrow"><span class="ok">✓</span><span class="src">OXA-121</span><span>last policy change</span><span class="tail">cited</span></div>
+            <div class="vrow"><span class="no">■</span><span class="src">3 nodes</span><span>outside contract</span><span class="tail">never left the store</span></div>
+          </div>
           <span class="app-sweep" aria-hidden="true"></span>
         </div>
         <div class="app-foot" aria-hidden="true"><span class="pr">q</span>
@@ -235,9 +322,22 @@
     <div class="wrap split split-flip">
       <figure class="app reveal">
         <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
-          <span class="app-title">issues · backlog</span><span class="app-meta">14 open</span></div>
-        <div class="app-view">
-          <img src="/assets/tui/07-issues.svg" width="680" height="470" loading="lazy" alt="A backlog pulled from Linear, filtered to the current user and sorted by heat: one issue in progress with a live plan, one in triage, one blocked by a red gate.">
+          <span class="app-title">issues · runs attached</span><span class="app-meta">14 open</span></div>
+        <div class="app-view viz" role="img" aria-label="Three issues from the tracker. One is in progress with its run attached: the agent, the operator, three turns ending in a pull request, the step count and what the run cost. One is blocked by its e2e gate, which is red. One is in triage.">
+          <div class="iss" aria-hidden="true">
+            <div class="iss-row"><span class="k">OXA-142</span><span class="t">Flaky checkout test on main</span><span class="chip-s live">in progress</span></div>
+            <div class="iss-run">
+              <span class="meta">run_01J9AB3K · agent/ci-fixer · operator ada@acme</span>
+              <ol>
+                <li class="done">turn 1 · read the failing test, plan r3</li>
+                <li class="done">turn 2 · pnpm test checkout, red then green</li>
+                <li>turn 3 · opened PR #212 with the evidence</li>
+              </ol>
+              <span class="sum"><span><b>41</b> steps</span><span><b>$1.84</b> attributed</span><span>on the issue</span></span>
+            </div>
+            <div class="iss-row"><span class="k">OXA-148</span><span class="t">Retry policy for the webhook sender</span><span class="chip-s bad">blocked · gate e2e red</span></div>
+            <div class="iss-row"><span class="k">OXA-151</span><span class="t">Rate card for a new model tier</span><span class="chip-s">triage</span></div>
+          </div>
           <span class="app-sweep" aria-hidden="true"></span>
         </div>
         <div class="app-foot" aria-hidden="true"><span class="pr">▸</span>
@@ -279,9 +379,18 @@
       </div>
       <figure class="app reveal reveal-d1">
         <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
-          <span class="app-title">mcp · servers</span><span class="app-meta">4 · 3 connected</span></div>
-        <div class="app-view">
-          <img src="/assets/tui/06-mcp.svg" width="680" height="420" loading="lazy" alt="Four tool servers with their transport, tool count, round-trip latency and authentication state; one is pinned to the workspace.">
+          <span class="app-title">tool servers · workspace</span><span class="app-meta">4 · 3 connected</span></div>
+        <div class="app-view viz" role="img" aria-label="Four tool servers configured once for the workspace, each with its transport, tool count, round-trip time and authentication state. Three answer in milliseconds. One takes over a second and is flagged as slow.">
+          <table class="vt" aria-hidden="true">
+            <thead><tr><th>server</th><th class="hide-sm">transport</th><th class="num">tools</th><th>round trip</th><th>auth</th></tr></thead>
+            <tbody>
+              <tr><td class="name">graph</td><td class="hide-sm">stdio</td><td class="num">14</td><td><span class="rt"><span class="bar"><i style="--w:.04"></i></span>8ms</span></td><td><span class="ok">✓</span> key</td></tr>
+              <tr><td class="name">linear</td><td class="hide-sm">http</td><td class="num">9</td><td><span class="rt"><span class="bar"><i style="--w:.14"></i></span>42ms</span></td><td><span class="ok">✓</span> oauth</td></tr>
+              <tr><td class="name">github</td><td class="hide-sm">http</td><td class="num">12</td><td><span class="rt"><span class="bar"><i style="--w:.2"></i></span>61ms</span></td><td><span class="ok">✓</span> app</td></tr>
+              <tr class="flag"><td class="name">docs-search</td><td class="hide-sm">http</td><td class="num">5</td><td><span class="rt"><span class="bar"><i style="--w:1"></i></span><span class="warn">1.4s slow</span></span></td><td><span class="no">■</span> expired</td></tr>
+            </tbody>
+          </table>
+          <p class="vnote" aria-hidden="true">configured once · inherited by the terminal, the web app, the API and the editor</p>
           <span class="app-sweep" aria-hidden="true"></span>
         </div>
         <div class="app-foot" aria-hidden="true"><span class="pr">◆</span>
@@ -296,9 +405,18 @@
     <div class="wrap split split-flip">
       <figure class="app reveal">
         <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
-          <span class="app-title">skills · installed</span><span class="app-meta">43 · 2 match</span></div>
-        <div class="app-view">
-          <img src="/assets/tui/05-skills.svg" width="680" height="480" loading="lazy" alt="Installed skills with their version, source, one-line description, how many times each was used and the average tokens it injects.">
+          <span class="app-title">skills · this repository</span><span class="app-meta">43 installed</span></div>
+        <div class="app-view viz" role="img" aria-label="Four skills with their version, how many times each fired in the last thirty days and the average tokens it adds when it loads. Three fire regularly. One never fired and still adds the most tokens, and is flagged.">
+          <table class="vt" aria-hidden="true">
+            <thead><tr><th>skill</th><th class="hide-sm">version</th><th>fired · 30 days</th><th class="num">avg tokens</th></tr></thead>
+            <tbody>
+              <tr><td class="name">rust-async-patterns</td><td class="hide-sm">v4</td><td><span class="rt"><span class="bar"><i style="--w:.9"></i></span>18×</span></td><td class="num">0.9k</td></tr>
+              <tr><td class="name">oxagen-testing</td><td class="hide-sm">v2</td><td><span class="rt"><span class="bar"><i style="--w:.35"></i></span>7×</span></td><td class="num">0.6k</td></tr>
+              <tr><td class="name">migration-safety</td><td class="hide-sm">v3</td><td><span class="rt"><span class="bar"><i style="--w:.25"></i></span>5×</span></td><td class="num">1.1k</td></tr>
+              <tr class="flag"><td class="name">legacy-style-guide</td><td class="hide-sm">v1</td><td><span class="rt"><span class="bar"><i style="--w:0"></i></span><span class="warn">0×</span></span></td><td class="num warn">1.4k</td></tr>
+            </tbody>
+          </table>
+          <p class="vnote" aria-hidden="true"><span class="no">■</span> legacy-style-guide never fired in 30 days and adds 1.4k tokens each time it loads</p>
           <span class="app-sweep" aria-hidden="true"></span>
         </div>
         <div class="app-foot" aria-hidden="true"><span class="pr">✦</span>

@@ -30,7 +30,18 @@ committed.
   build step. Every animation that would otherwise run forever (typewriters,
   terminal replay) is started and stopped by an IntersectionObserver, so a
   page of them costs nothing below the fold.
-- `assets/tui/*.svg` — the four terminal-deck renderings used as screenshots.
+- **Themes.** Every page ships the paper (light) and ink (dark) themes that
+  docs.oxagen.sh ships, and follows the visitor's system until they press the
+  sun/moon toggle in the nav, the same toggle the docs carry. The tokens and
+  the theme model are at the top of `assets/oxagen.css`; each page's `<head>`
+  carries a blocking one-line script that re-applies a pinned theme before
+  first paint (the blog's copy is `THEME_HEAD` in `scripts/lib/html.mjs`), and
+  `assets/oxagen.js` wires the toggle. The dark theme is declared twice, once
+  pinned and once for the system preference; `scripts/theme-tokens.test.mjs`
+  fails when the two drift. A terminal (`.term`) is always dark, as on the
+  docs site.
+- `products/oxagen/` illustrations are drawn in HTML and inline SVG on the
+  theme tokens, not screenshots, so they follow the page between themes.
 - `index.html` — the marketing one-pager: the hero, the terminal CLI section, the
   platform, a `#field-manual` section with the ebook lead-capture form, and the
   "Get a demo" lead form.
@@ -98,10 +109,14 @@ whole discipline:
 Reskinning means repointing an alias. It never means re-hexing a primitive, and
 it never means writing a colour into a rule or a page.
 
-The same table is what `assets/tui/*.svg` is drawn in, which is the point: the
-product screenshots and the page around them are one surface. Gold (`--gold`,
-`#D6962C`) is identity and at most one action per screen, never a state and
-never a surface; `--pass` and `--fail` carry state.
+Every semantic has a paper value on `:root` and an ink value in the dark
+blocks, so a page that names semantics is right in both themes for free. The
+product page's illustrations are drawn in the same semantics, which is the
+point: the illustrations and the page around them are one surface. Gold
+(`--gold`) is identity and at most one action per screen, never a state and
+never a surface; `--pass` and `--fail` carry state. On paper `--gold` is the
+metal's deep shade (`#8B5E1A`), because the metal itself is 2.2:1 there; type
+on a gold fill takes `--on-gold`, which is ink in both themes.
 
 Four rules hold the look together. Breaking one is a review question, not a
 matter of taste:
@@ -176,9 +191,11 @@ are the YAML.**
 
 - **Images are generated, not stored.** For every post and pillar the build
   draws a banner (2400×1200), a thumbnail (960×480) and a share card
-  (1200×630) into `dist/blog/<slug>/`. Every image is on ink, whatever the
-  viewer's system prefers: the site is ink, and an ink image reads on a
-  paper ground where a paper image on paper would wash out. The banner is a
+  (1200×630) into `dist/blog/<slug>/`. Every image is drawn on ink, whatever
+  the viewer's theme: an ink image reads on a paper ground where a paper
+  image on paper would wash out. The one exception is the banner behind a
+  title on the paper theme, which `--art-filter` inverts and `--art-blend`
+  darkens into the page, so the title still reads on plain paper. The banner is a
   full-bleed field built from the site's own construction: the house
   honeycomb (`oxagen-house-brand`'s cell) as a weather of hairline rings and
   flat blocks that clusters differently for every slug, quiet on the left

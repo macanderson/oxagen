@@ -6,8 +6,9 @@
 <title>Oxagen: the control plane for agent work</title>
 <meta name="description" content="Can you explain your AI bill? Oxagen prices every model call by token class, attributes it to the person, the agent, the run, the turn, and the step, and stops a run between steps when it hits a hard ceiling. Wrap Claude Code in sixty seconds.">
 <link rel="canonical" href="https://oxagen.sh/">
-<meta name="theme-color" content="#10100F">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2EEE5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10100F">
+<meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/">
 <meta property="og:site_name" content="Oxagen">
@@ -50,7 +51,7 @@
   ]
 }
 </script>
-<script>document.documentElement.classList.add("js")</script>
+<script>(function(d){d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.classList.add(t);document.querySelector('meta[name="color-scheme"]').content=t}}catch(e){}})(document.documentElement)</script>
 <link rel="stylesheet" href="/assets/oxagen.css">
 <style>
 /* ---- page-specific: hero, product strip, field manual, demo ---- */
@@ -74,7 +75,7 @@
 .book{
   width:min(320px,78%);aspect-ratio:10/15;border-radius:var(--r-lg);position:relative;
   background:var(--ground);border:1px solid var(--rule);
-  box-shadow:22px 32px 66px -30px rgba(0,0,0,.9);
+  box-shadow:22px 32px 66px -30px var(--shadow);
   transform:rotateY(-9deg) rotateX(2deg);transition:transform .45s var(--ease);
   padding:26px 24px;display:flex;flex-direction:column;overflow:hidden;
 }
@@ -136,6 +137,7 @@
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
     </nav>
     <div class="nav-cta">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme"><svg class="tt-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="tt-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></button>
       <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
       <a class="btn btn-primary btn-sm" href="#demo">Get a demo</a>
       <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>

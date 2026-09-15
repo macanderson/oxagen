@@ -20,8 +20,8 @@
      The house table, byte-for-byte off tokens/house-tokens.css, so the site,
      the app and the terminal all name the same colours the same way. This is
      the ONLY place a hex appears.
-     The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
-     is dark-only, and a paper ramp here would be tokens nothing can consume. */
+     Ink first, then the paper ramp the light theme is drawn in: the same
+     warm axis, which is what lets one gold read as metal on both. */
   --st-void: #0A0A09; /* below the canvas */
   --st-bg: #10100F; /* the canvas */
   --st-panel: #181715; /* panels, cards, code blocks */
@@ -45,26 +45,73 @@
   --st-amber-ink: #8a3f00;
   --st-diff-add: #10201a;
   --st-diff-del: #241019;
+  /* the paper ramp (light theme). The page itself is --st-paper-text: the
+     dark theme's ink is the light theme's ground, one off-white for both. */
+  --st-paper-panel: #F8F5EE; /* light panels, cards */
+  --st-paper-hl: #E5DED1; /* selected and hover rows on paper */
+  --st-paper-border: #D8CDBD; /* hairlines on paper */
+  --st-paper-rule: #C9BFAE; /* section rules on paper */
+  --st-ink-body: #2A2823; /* body text on paper */
+  --st-muted-ink: #6B665C; /* secondary text on paper */
 
   /* ── LAYER 2 · SEMANTIC ──────────────────────────────────────────────────
      The names the rest of this stylesheet and every page actually consume.
-     Each is an alias onto the table above — repoint here, never re-hex. */
-  --ground: var(--st-bg);
-  --panel: var(--st-panel);
-  --raised: var(--st-hl);
-  --line: var(--st-border);
-  --rule: var(--st-rule);
-  --gold: var(--st-gold);
-  --gold-hi: var(--st-gold-bright);
-  --gold-ink: var(--st-gold-ink);
-  --ink: var(--st-paper-text);
-  --ink-2: var(--st-silver-type);
-  --ink-3: var(--st-silver);
+     Each is an alias onto the table above — repoint here, never re-hex.
+
+     THEME MODEL, the same one docs.oxagen.sh runs on (@oxagen/ui):
+       :root                    LIGHT, the paper theme (below)
+       :root.dark               DARK, pinned by the toggle
+       :root:not(.light) in a   DARK for a visitor whose system prefers it,
+       prefers-color-scheme     with no script at all
+     The two dark blocks further down must declare the same tokens with the
+     same values; scripts/theme-tokens.test.mjs fails when they drift.
+     The choice is stored under localStorage "theme", as next-themes does. */
+  color-scheme: light dark;
+  --ground: var(--st-paper-text);
+  --panel: var(--st-paper-panel);
+  --raised: var(--st-paper-hl);
+  --line: var(--st-paper-border);
+  --rule: var(--st-paper-rule);
+  /* gold as a mark on paper is 2.2:1; its deep shade is 4.9:1, so every gold
+     mark and gold word on paper takes the deep shade (the kit's rule) */
+  --gold: var(--st-gold-ink);
+  --gold-hi: var(--st-gold);
+  --ink: var(--st-bg);
+  --ink-2: var(--st-ink-body);
+  --ink-3: var(--st-muted-ink);
   --muted: var(--st-muted);
-  --faint: var(--st-dim);
-  --pass: var(--st-green);
-  --fail: var(--st-red);
-  --warn: var(--st-amber);
+  --faint: var(--st-muted);
+  --pass: var(--st-green-ink);
+  --fail: var(--st-red-ink);
+  --warn: var(--st-amber-ink);
+  /* window chrome: the edge along a window, the light along its top, the
+     shadow beneath it, and the ember lighting it from below */
+  --edge: color-mix(in srgb, var(--st-bg) 12%, transparent);
+  --shine: color-mix(in srgb, var(--st-paper-panel) 70%, transparent);
+  --shadow: color-mix(in srgb, var(--st-bg) 22%, transparent);
+  --glow: color-mix(in srgb, var(--st-gold-bright) 30%, transparent);
+  /* a headline's accent word: on paper the sheen stays in the deep shade
+     until its last stretch, or the bright end washes out */
+  --grad-text: linear-gradient(
+    100deg,
+    var(--st-gold-ink) 0%,
+    var(--st-gold-ink) 45%,
+    var(--st-gold) 100%
+  );
+  --tex-hex: var(--tex-hex-ink);
+  /* the theme toggle: which of its two glyphs is lit */
+  --tt-light-bg: var(--raised);
+  --tt-light-fg: var(--ink);
+  --tt-dark-bg: transparent;
+  --tt-dark-fg: var(--ink-3);
+  /* a generated banner is drawn on ink; on paper it is inverted and laid
+     under the page with darken, so its ground disappears into the paper */
+  --art-filter: invert(1) hue-rotate(180deg);
+  --art-blend: darken;
+
+  /* theme-independent */
+  --gold-ink: var(--st-gold-ink);
+  --on-gold: var(--st-bg); /* type on a gold fill: 7.5:1 in both themes */
   --add-bg: var(--st-diff-add);
   --del-bg: var(--st-diff-del);
 
@@ -101,6 +148,8 @@
      this site and docs.oxagen.sh sit on one field. It is an image, so the
      paper and the gold sheen are written into it; they are the kit's own
      values (--st-paper-text, --st-gold-ink / --st-gold / --st-gold-bright).
+     It is drawn twice, paper strokes for the ink theme and ink strokes for
+     the paper theme; --tex-hex names whichever the theme on screen needs.
      --tex-orb is the ember light behind the hero (.lp-orb). ---- */
   --tex-grid:
     linear-gradient(
@@ -113,13 +162,88 @@
       color-mix(in srgb, var(--ink) 7%, transparent) 1px,
       transparent 1px
     );
-  --tex-hex: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238B5E1A'/><stop offset='.5' stop-color='%23D6962C'/><stop offset='1' stop-color='%23F1C364'/></linearGradient></defs><g fill='none' stroke='%23F2EEE5' stroke-opacity='.14' stroke-width='1'><polygon points='90.0 80.0 116.0 95.0 116.0 125.0 90.0 140.0 64.0 125.0 64.0 95.0'/><polygon points='150.0 180.0 176.0 195.0 176.0 225.0 150.0 240.0 124.0 225.0 124.0 195.0'/><polygon points='90.0 280.0 116.0 295.0 116.0 325.0 90.0 340.0 64.0 325.0 64.0 295.0'/><polygon points='210.0 80.0 236.0 95.0 236.0 125.0 210.0 140.0 184.0 125.0 184.0 95.0'/><polygon points='210.0 280.0 236.0 295.0 236.0 325.0 210.0 340.0 184.0 325.0 184.0 295.0'/><polygon points='270.0 180.0 296.0 195.0 296.0 225.0 270.0 240.0 244.0 225.0 244.0 195.0'/><polygon points='270.0 380.0 296.0 395.0 296.0 425.0 270.0 440.0 244.0 425.0 244.0 395.0'/><polygon points='330.0 80.0 356.0 95.0 356.0 125.0 330.0 140.0 304.0 125.0 304.0 95.0'/><polygon points='1110.0 98.0 1137.7 114.0 1137.7 146.0 1110.0 162.0 1082.3 146.0 1082.3 114.0'/><polygon points='1110.0 298.0 1137.7 314.0 1137.7 346.0 1110.0 362.0 1082.3 346.0 1082.3 314.0'/><polygon points='990.0 98.0 1017.7 114.0 1017.7 146.0 990.0 162.0 962.3 146.0 962.3 114.0'/><polygon points='930.0 198.0 957.7 214.0 957.7 246.0 930.0 262.0 902.3 246.0 902.3 214.0'/><polygon points='930.0 398.0 957.7 414.0 957.7 446.0 930.0 462.0 902.3 446.0 902.3 414.0'/><polygon points='1050.0 398.0 1077.7 414.0 1077.7 446.0 1050.0 462.0 1022.3 446.0 1022.3 414.0'/><polygon points='600.0 18.0 619.1 29.0 619.1 51.0 600.0 62.0 580.9 51.0 580.9 29.0'/><polygon points='540.0 518.0 559.1 529.0 559.1 551.0 540.0 562.0 520.9 551.0 520.9 529.0'/></g><g fill='url(%23g)' opacity='.45'><polygon points='1050.0 198.0 1077.7 214.0 1077.7 246.0 1050.0 262.0 1022.3 246.0 1022.3 214.0'/><polygon points='990.0 298.0 1017.7 314.0 1017.7 346.0 990.0 362.0 962.3 346.0 962.3 314.0'/><polygon points='660.0 518.0 679.1 529.0 679.1 551.0 660.0 562.0 640.9 551.0 640.9 529.0'/></g></svg>");
+  --tex-hex-paper: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238B5E1A'/><stop offset='.5' stop-color='%23D6962C'/><stop offset='1' stop-color='%23F1C364'/></linearGradient></defs><g fill='none' stroke='%23F2EEE5' stroke-opacity='.14' stroke-width='1'><polygon points='90.0 80.0 116.0 95.0 116.0 125.0 90.0 140.0 64.0 125.0 64.0 95.0'/><polygon points='150.0 180.0 176.0 195.0 176.0 225.0 150.0 240.0 124.0 225.0 124.0 195.0'/><polygon points='90.0 280.0 116.0 295.0 116.0 325.0 90.0 340.0 64.0 325.0 64.0 295.0'/><polygon points='210.0 80.0 236.0 95.0 236.0 125.0 210.0 140.0 184.0 125.0 184.0 95.0'/><polygon points='210.0 280.0 236.0 295.0 236.0 325.0 210.0 340.0 184.0 325.0 184.0 295.0'/><polygon points='270.0 180.0 296.0 195.0 296.0 225.0 270.0 240.0 244.0 225.0 244.0 195.0'/><polygon points='270.0 380.0 296.0 395.0 296.0 425.0 270.0 440.0 244.0 425.0 244.0 395.0'/><polygon points='330.0 80.0 356.0 95.0 356.0 125.0 330.0 140.0 304.0 125.0 304.0 95.0'/><polygon points='1110.0 98.0 1137.7 114.0 1137.7 146.0 1110.0 162.0 1082.3 146.0 1082.3 114.0'/><polygon points='1110.0 298.0 1137.7 314.0 1137.7 346.0 1110.0 362.0 1082.3 346.0 1082.3 314.0'/><polygon points='990.0 98.0 1017.7 114.0 1017.7 146.0 990.0 162.0 962.3 146.0 962.3 114.0'/><polygon points='930.0 198.0 957.7 214.0 957.7 246.0 930.0 262.0 902.3 246.0 902.3 214.0'/><polygon points='930.0 398.0 957.7 414.0 957.7 446.0 930.0 462.0 902.3 446.0 902.3 414.0'/><polygon points='1050.0 398.0 1077.7 414.0 1077.7 446.0 1050.0 462.0 1022.3 446.0 1022.3 414.0'/><polygon points='600.0 18.0 619.1 29.0 619.1 51.0 600.0 62.0 580.9 51.0 580.9 29.0'/><polygon points='540.0 518.0 559.1 529.0 559.1 551.0 540.0 562.0 520.9 551.0 520.9 529.0'/></g><g fill='url(%23g)' opacity='.45'><polygon points='1050.0 198.0 1077.7 214.0 1077.7 246.0 1050.0 262.0 1022.3 246.0 1022.3 214.0'/><polygon points='990.0 298.0 1017.7 314.0 1017.7 346.0 990.0 362.0 962.3 346.0 962.3 314.0'/><polygon points='660.0 518.0 679.1 529.0 679.1 551.0 660.0 562.0 640.9 551.0 640.9 529.0'/></g></svg>");
+  --tex-hex-ink: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238B5E1A'/><stop offset='.5' stop-color='%23D6962C'/><stop offset='1' stop-color='%23F1C364'/></linearGradient></defs><g fill='none' stroke='%2310100F' stroke-opacity='.12' stroke-width='1'><polygon points='90.0 80.0 116.0 95.0 116.0 125.0 90.0 140.0 64.0 125.0 64.0 95.0'/><polygon points='150.0 180.0 176.0 195.0 176.0 225.0 150.0 240.0 124.0 225.0 124.0 195.0'/><polygon points='90.0 280.0 116.0 295.0 116.0 325.0 90.0 340.0 64.0 325.0 64.0 295.0'/><polygon points='210.0 80.0 236.0 95.0 236.0 125.0 210.0 140.0 184.0 125.0 184.0 95.0'/><polygon points='210.0 280.0 236.0 295.0 236.0 325.0 210.0 340.0 184.0 325.0 184.0 295.0'/><polygon points='270.0 180.0 296.0 195.0 296.0 225.0 270.0 240.0 244.0 225.0 244.0 195.0'/><polygon points='270.0 380.0 296.0 395.0 296.0 425.0 270.0 440.0 244.0 425.0 244.0 395.0'/><polygon points='330.0 80.0 356.0 95.0 356.0 125.0 330.0 140.0 304.0 125.0 304.0 95.0'/><polygon points='1110.0 98.0 1137.7 114.0 1137.7 146.0 1110.0 162.0 1082.3 146.0 1082.3 114.0'/><polygon points='1110.0 298.0 1137.7 314.0 1137.7 346.0 1110.0 362.0 1082.3 346.0 1082.3 314.0'/><polygon points='990.0 98.0 1017.7 114.0 1017.7 146.0 990.0 162.0 962.3 146.0 962.3 114.0'/><polygon points='930.0 198.0 957.7 214.0 957.7 246.0 930.0 262.0 902.3 246.0 902.3 214.0'/><polygon points='930.0 398.0 957.7 414.0 957.7 446.0 930.0 462.0 902.3 446.0 902.3 414.0'/><polygon points='1050.0 398.0 1077.7 414.0 1077.7 446.0 1050.0 462.0 1022.3 446.0 1022.3 414.0'/><polygon points='600.0 18.0 619.1 29.0 619.1 51.0 600.0 62.0 580.9 51.0 580.9 29.0'/><polygon points='540.0 518.0 559.1 529.0 559.1 551.0 540.0 562.0 520.9 551.0 520.9 529.0'/></g><g fill='url(%23g)' opacity='.45'><polygon points='1050.0 198.0 1077.7 214.0 1077.7 246.0 1050.0 262.0 1022.3 246.0 1022.3 214.0'/><polygon points='990.0 298.0 1017.7 314.0 1017.7 346.0 990.0 362.0 962.3 346.0 962.3 314.0'/><polygon points='660.0 518.0 679.1 529.0 679.1 551.0 660.0 562.0 640.9 551.0 640.9 529.0'/></g></svg>");
   --tex-orb: radial-gradient(
     ellipse 410px 260px at 50% 14%,
     color-mix(in srgb, var(--ember-b) 34%, transparent) 0%,
     color-mix(in srgb, var(--ember-c) 14%, transparent) 40%,
     transparent 70%
   );
+}
+
+/* ── DARK ──────────────────────────────────────────────────────────────────
+   The ink theme. Declared on the pinned class and, below, for a system that
+   prefers dark; the two lists must match (scripts/theme-tokens.test.mjs).
+   .term is here too: a terminal is always dark, on paper as on ink, the way
+   the terminal on docs.oxagen.sh is. Every token is re-declared against the
+   primitives, so the island resolves its own values rather than inheriting
+   the page's. */
+:root.dark,
+.term {
+  color-scheme: dark;
+  --ground: var(--st-bg);
+  --panel: var(--st-panel);
+  --raised: var(--st-hl);
+  --line: var(--st-border);
+  --rule: var(--st-rule);
+  --gold: var(--st-gold);
+  --gold-hi: var(--st-gold-bright);
+  --ink: var(--st-paper-text);
+  --ink-2: var(--st-silver-type);
+  --ink-3: var(--st-silver);
+  --muted: var(--st-muted);
+  --faint: var(--st-dim);
+  --pass: var(--st-green);
+  --fail: var(--st-red);
+  --warn: var(--st-amber);
+  --edge: color-mix(in srgb, var(--st-paper-text) 12%, transparent);
+  --shine: color-mix(in srgb, var(--st-paper-text) 6%, transparent);
+  --shadow: color-mix(in srgb, var(--st-void) 70%, transparent);
+  --glow: color-mix(in srgb, var(--st-gold-bright) 42%, transparent);
+  --grad-text: var(--grad-ember);
+  --tex-hex: var(--tex-hex-paper);
+  --tt-light-bg: transparent;
+  --tt-light-fg: var(--ink-3);
+  --tt-dark-bg: var(--raised);
+  --tt-dark-fg: var(--ink);
+  --art-filter: none;
+  --art-blend: normal;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --ground: var(--st-bg);
+    --panel: var(--st-panel);
+    --raised: var(--st-hl);
+    --line: var(--st-border);
+    --rule: var(--st-rule);
+    --gold: var(--st-gold);
+    --gold-hi: var(--st-gold-bright);
+    --ink: var(--st-paper-text);
+    --ink-2: var(--st-silver-type);
+    --ink-3: var(--st-silver);
+    --muted: var(--st-muted);
+    --faint: var(--st-dim);
+    --pass: var(--st-green);
+    --fail: var(--st-red);
+    --warn: var(--st-amber);
+    --edge: color-mix(in srgb, var(--st-paper-text) 12%, transparent);
+    --shine: color-mix(in srgb, var(--st-paper-text) 6%, transparent);
+    --shadow: color-mix(in srgb, var(--st-void) 70%, transparent);
+    --glow: color-mix(in srgb, var(--st-gold-bright) 42%, transparent);
+    --grad-text: var(--grad-ember);
+    --tex-hex: var(--tex-hex-paper);
+    --tt-light-bg: transparent;
+    --tt-light-fg: var(--ink-3);
+    --tt-dark-bg: var(--raised);
+    --tt-dark-fg: var(--ink);
+    --art-filter: none;
+    --art-blend: normal;
+  }
+}
+:root.light {
+  color-scheme: light;
 }
 
 /* Space Grotesk — the house typeface, self-hosted. Four static weights, the
@@ -355,7 +479,7 @@ hr {
 h1 .gold,
 h2 .gold,
 .grad-text {
-  background-image: var(--grad-ember);
+  background-image: var(--grad-text);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -437,7 +561,7 @@ h2 .gold,
 .btn-primary {
   background-color: var(--gold);
   background-image: var(--grad-ember);
-  color: var(--ground);
+  color: var(--on-gold);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .btn-primary:hover {
@@ -552,6 +676,46 @@ h2 .gold,
 .nav-cta .login:hover {
   color: var(--ink);
 }
+/* the theme toggle, the one docs.oxagen.sh carries (Fumadocs' ThemeToggle):
+   a sun and a moon in a pill, the glyph for the theme on screen lit. Which
+   one is lit comes from the theme tokens, so it is right before any script
+   runs; assets/oxagen.js only flips the theme. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: none;
+  cursor: pointer;
+  transition: border-color 0.16s;
+}
+.theme-toggle:hover {
+  border-color: var(--rule);
+}
+.theme-toggle svg {
+  width: 26px;
+  height: 26px;
+  padding: 6px;
+  border-radius: var(--r-pill);
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    background-color 0.16s,
+    color 0.16s;
+}
+.theme-toggle .tt-light {
+  background: var(--tt-light-bg);
+  color: var(--tt-light-fg);
+}
+.theme-toggle .tt-dark {
+  background: var(--tt-dark-bg);
+  color: var(--tt-dark-fg);
+}
 .ext::after {
   content: "↗";
   font-size: 0.8em;
@@ -590,7 +754,7 @@ h2 .gold,
   padding: 6px;
   display: grid;
   gap: 2px;
-  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 24px 60px -28px var(--shadow);
   opacity: 0;
   visibility: hidden;
   transform: translateY(-5px);
@@ -700,6 +864,17 @@ h2 .gold,
 .drawer {
   display: none;
 }
+/* the burger and the toggle keep their size; on the narrowest phones the
+   nav's demo button yields its place to them (the drawer carries it) */
+.burger,
+.brand svg {
+  flex: none;
+}
+@media (max-width: 400px) {
+  .nav-cta .btn-sm {
+    display: none;
+  }
+}
 @media (max-width: 900px) {
   .nav-links {
     display: none;
@@ -764,13 +939,13 @@ h2 .gold,
 .app {
   margin: 0;
   background: var(--ground);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
   border-radius: var(--r-lg);
   overflow: hidden;
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
+    0 1px 0 0 var(--shine) inset,
+    0 30px 80px -28px var(--glow),
+    0 18px 50px -30px var(--shadow);
 }
 .app-bar {
   display: flex;
@@ -840,7 +1015,7 @@ h2 .gold,
   top: 0;
   height: 64px;
   pointer-events: none;
-  background: rgba(239, 197, 63, 0.045);
+  background: color-mix(in srgb, var(--gold-hi) 5%, transparent);
   animation: sweep 7.5s var(--ease) infinite;
 }
 @keyframes sweep {
@@ -922,11 +1097,19 @@ figcaption b {
   color: var(--ink-3);
   font-weight: 520;
 }
+/* a caption inside a window sits in the window's own footer, not flush
+   against its edge */
+.app > figcaption {
+  padding: 10px 13px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
 
 /* ============ terminal (typed, no image) ============ */
 .term {
   background: var(--ground);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+  border: 1px solid var(--edge);
   border-radius: var(--r-lg);
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -935,9 +1118,9 @@ figcaption b {
   display: flex;
   flex-direction: column;
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
+    0 1px 0 0 var(--shine) inset,
+    0 30px 80px -28px var(--glow),
+    0 18px 50px -30px var(--shadow);
 }
 .term-body {
   padding: 16px 18px;
@@ -1188,9 +1371,9 @@ figcaption b {
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
+    0 1px 0 0 var(--shine) inset,
+    0 30px 80px -28px var(--glow),
+    0 18px 50px -30px var(--shadow);
 }
 .panel-bar {
   display: flex;

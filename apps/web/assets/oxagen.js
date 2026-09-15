@@ -57,6 +57,62 @@
     onScroll();
   }
 
+  /* ---------- theme toggle ----------
+     The page follows the system until someone presses the toggle. A press
+     flips to the other theme; if that is the system's own theme the pin is
+     dropped and the page goes back to following the system, otherwise the
+     choice is pinned as a class on <html> and kept in localStorage "theme"
+     (the key next-themes uses on docs.oxagen.sh). The inline script in each
+     page's <head> re-applies a pin before first paint. Which glyph is lit is
+     pure CSS (the --tt-* tokens), so nothing here has to repaint the button. */
+  var root = document.documentElement;
+  var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+  var schemeMeta = document.querySelector('meta[name="color-scheme"]');
+
+  function currentTheme() {
+    if (root.classList.contains("dark")) {
+      return "dark";
+    }
+    if (root.classList.contains("light")) {
+      return "light";
+    }
+    return systemDark.matches ? "dark" : "light";
+  }
+
+  function pinTheme(theme) {
+    root.classList.remove("light", "dark");
+    if (theme) {
+      root.classList.add(theme);
+    }
+    if (schemeMeta) {
+      schemeMeta.content = theme || "light dark";
+    }
+    try {
+      if (theme) {
+        localStorage.setItem("theme", theme);
+      } else {
+        localStorage.removeItem("theme");
+      }
+    } catch (_) {
+      /* storage blocked: the choice lasts for this page only */
+    }
+  }
+
+  document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var next = currentTheme() === "dark" ? "light" : "dark";
+      var system = systemDark.matches ? "dark" : "light";
+      pinTheme(next === system ? null : next);
+    });
+  });
+
+  // another tab pressed the toggle
+  window.addEventListener("storage", function (e) {
+    if (e.key === "theme") {
+      pinTheme(e.newValue === "light" || e.newValue === "dark" ? e.newValue : null);
+    }
+  });
+
   /* ---------- nav: mark the page we are on ---------- */
   var here = location.pathname.replace(/\/$/, "") || "/";
   document

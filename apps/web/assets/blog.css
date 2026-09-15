@@ -216,11 +216,15 @@
   z-index: -1;
   pointer-events: none;
   line-height: 0;
+  /* the banner is drawn on ink; on paper, --art-filter inverts it and
+     darken drops its ground into the page, leaving only the drawing */
+  mix-blend-mode: var(--art-blend);
 }
 .hero-art img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: var(--art-filter);
   object-position: 70% 50%;
   /* the fade is measured from the page's centre, where the reading column
      is, so the words keep the same clear ink at every viewport width */
