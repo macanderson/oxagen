@@ -1392,4 +1392,42 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./model.capability.list"))
         .modelCapabilityListHandler as CapabilityHandlerFn,
   );
+
+  // ── Onboarding gate and the one-time enrollment token (#2967) ─────────────
+  registerHandler(
+    "get_onboarding_state",
+    async () =>
+      (await import("./onboarding.state.get"))
+        .onboardingStateGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "advance_onboarding",
+    async () =>
+      (await import("./onboarding.advance"))
+        .onboardingAdvanceHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_first_frame",
+    async () =>
+      (await import("./onboarding.first_frame.get"))
+        .onboardingFirstFrameGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "bind_main_repository",
+    async () =>
+      (await import("./repository.main.bind"))
+        .repositoryMainBindHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_enrollment_token",
+    async () =>
+      (await import("./tacho.enrollment_token.create"))
+        .tachoEnrollmentTokenCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "enroll_host",
+    async () =>
+      (await import("./tacho.host.enroll"))
+        .tachoHostEnrollHandler as CapabilityHandlerFn,
+  );
 });

@@ -12,6 +12,7 @@
  * See actions.ts for the server actions wired to the Approve / Cancel buttons.
  */
 
+import type { JSX } from "react";
 import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
@@ -58,7 +59,7 @@ export default async function CliAuthorizePage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}): Promise<JSX.Element> {
   const params = await searchParams;
 
   const redirectUri = Array.isArray(params.redirect_uri)

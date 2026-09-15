@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   withSystemDbFn: vi.fn(),
   bootstrapOrgIAM: vi.fn(),
   bootstrapWorkspace: vi.fn(),
+  openOnboardingGate: vi.fn(),
 }));
 
 const ORG_ROW = {
@@ -91,6 +92,9 @@ vi.mock("./iam-provision", () => ({
 mocks.bootstrapWorkspace.mockResolvedValue(WORKSPACE_ROW);
 vi.mock("./workspace-bootstrap", () => ({
   bootstrapWorkspace: mocks.bootstrapWorkspace,
+}));
+vi.mock("./lib/onboarding", () => ({
+  openOnboardingGate: mocks.openOnboardingGate,
 }));
 
 import { organizationCreateHandler } from "./org.create";
@@ -238,6 +242,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     const wsTx = mocks.bootstrapWorkspace.mock.calls[0]?.[0]?.tx;
     expect(iamTx).toBeDefined();
     expect(wsTx).toBe(iamTx);
+    // The onboarding gate opens on the same transaction, on the first
+    // workspace, timed from the organization's own creation (#2967).
+    expect(mocks.openOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.openOnboardingGate.mock.calls[0]?.[0]).toBe(iamTx);
+    expect(mocks.openOnboardingGate.mock.calls[0]?.[1]).toEqual({
+      orgId: "internal_org_id",
+      workspaceId: "internal_ws_id",
+      now: ORG_ROW.createdAt,
+    });
 
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledWith(
       expect.objectContaining({

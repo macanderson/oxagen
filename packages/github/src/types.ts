@@ -105,6 +105,17 @@ export interface GitHubBranch {
  * Swap the backing by providing a different createGitHubClient
  * implementation without changing callers.
  */
+export interface GitHubRepoInfo {
+  /** GitHub's numeric repository id, as text; immutable across renames and transfers. */
+  id: string;
+  /** The owner login and repository name as GitHub reports them. */
+  owner: string;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  defaultBranch: string;
+}
+
 export interface GitHubClient {
   /**
    * Create a new repository.
@@ -189,12 +200,10 @@ export interface GitHubClient {
 
   /**
    * Return basic repository metadata, including the default branch — the
-   * lookup behind the never-write-to-default-branch guard.
+   * lookup behind the never-write-to-default-branch guard — and the numeric
+   * repository id a binding pins.
    */
-  getRepoInfo(args: {
-    owner: string;
-    repo: string;
-  }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }>;
+  getRepoInfo(args: { owner: string; repo: string }): Promise<GitHubRepoInfo>;
 
   /**
    * Return the raw UTF-8 content of a file at the given path and optional ref.

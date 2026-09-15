@@ -9,6 +9,7 @@ export type {
   GitHubCiChecks,
   GitHubPrFile,
   GitHubBranch,
+  GitHubRepoInfo,
 } from "./types";
 export { createGitHubClient, GitHubApiError } from "./fetch-client";
 export type {

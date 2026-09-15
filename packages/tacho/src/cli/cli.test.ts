@@ -145,6 +145,33 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         text: async () => JSON.stringify(enrollmentResponse(signer, workspace)),
       };
     }
+    if (url.endsWith("/v1/tacho/enroll")) {
+      const body = JSON.parse(init.body ?? "{}") as { token?: string };
+      if (body.token !== "oxe_1time_0123456789abcdefghjkmnpqrs") {
+        return {
+          ok: false,
+          status: 409,
+          text: async () =>
+            JSON.stringify({
+              code: "conflict",
+              reason: "token_used",
+              message: "This enrollment token was used",
+            }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        text: async () =>
+          JSON.stringify({
+            ...enrollmentResponse(signer, "core"),
+            agentKey: "acme.core.release-manager",
+            agentId: "agt_0123456789",
+            orgSlug: "acme",
+            workspaceSlug: "core",
+          }),
+      };
+    }
     if (url.endsWith("/tacho/enrollments/revoke")) {
       return {
         ok: true,
@@ -434,6 +461,60 @@ describe("enroll → status → unenroll", () => {
       ok: true,
       settingsChanged: false,
     });
+  });
+
+  it("enrolls with a one-time token and no session, recording the tenant the control plane answered", async () => {
+    const d = deps({
+      exec: (command, args) =>
+        command === "git"
+          ? {
+              status: 0,
+              stdout: "git@github.com:acme/widgets.git\n",
+              stderr: "",
+            }
+          : { status: 0, stdout: "/usr/local/bin/claude\n", stderr: "" },
+    });
+    const result = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(d.requests[0]).toMatchObject({
+      url: "https://api.test/v1/tacho/enroll",
+      body: {
+        token: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        hostname: "laptop",
+        harnesses: ["claude-code"],
+        repositoryRemote: "git@github.com:acme/widgets.git",
+      },
+    });
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      agent_key: "acme.core.release-manager",
+      org_slug: "acme",
+      workspace_slug: "core",
+      api_url: "https://api.test",
+    });
+    expect(d.lines.join("\n")).toContain(
+      "Presenting the one-time enrollment token",
+    );
+
+    const used = deps();
+    const refused = await enroll(
+      {
+        enrollmentToken: "oxe_1time_zzzzzzzzzzzzzzzzzzzzzzzzzz",
+        apiUrl: "https://api.test",
+      },
+      used,
+    );
+    expect(refused.ok).toBe(false);
+    expect(used.errors.join("\n")).toContain(
+      "rejected the enrollment token (409)",
+    );
+    expect(used.errors.join("\n")).toContain("token_used");
+    expect(existsSync(used.paths.hostFile)).toBe(false);
   });
 
   it("fails clearly without credentials, on a refusal, and on a bad bundle", async () => {
@@ -817,6 +898,35 @@ describe("harnesses and reassign", () => {
       harnesses: ["claude-code"],
       revoked_at: null,
     });
+  });
+
+  it("refuses a harness addition on the one-time token path, since a token cannot revoke the live enrollment", async () => {
+    const d = deps();
+    await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    const before = readHostFile(d.paths.hostFile);
+    d.requests.length = 0;
+    const refused = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(refused.ok).toBe(false);
+    expect(d.errors.join("\n")).toContain(
+      "Adding a harness to an enrolled host needs the CLI's session",
+    );
+    // Nothing was revoked or minted, and the live enrollment is untouched.
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)).toEqual(before);
   });
 
   it("reassigns to another workspace keeping the device key and port", async () => {
