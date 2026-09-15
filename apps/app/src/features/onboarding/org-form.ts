@@ -66,7 +66,6 @@ export const OrganizationForm = z.object({
   ),
 });
 export type OrganizationFormInput = z.input<typeof OrganizationForm>;
-export type OrganizationFormValue = z.output<typeof OrganizationForm>;
 export type OrganizationField = keyof OrganizationFormInput;
 
 /** Each field's first error from a failed parse, as a catalog key; an issue outside both sets is dropped. */
