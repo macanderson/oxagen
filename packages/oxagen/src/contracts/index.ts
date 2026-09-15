@@ -15,6 +15,15 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
+import { agentList } from "./agent.list";
+import { agentGet } from "./agent.get";
+import { agentRegister } from "./agent.register";
+import { agentCredentialRotate } from "./agent.credential.rotate";
+import { agentSuspend } from "./agent.suspend";
+import { agentRetire } from "./agent.retire";
+import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentToolbeltGet } from "./agent.toolbelt.get";
+import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -412,6 +421,15 @@ export {
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -675,6 +693,15 @@ export const contracts: readonly CapabilityDeclaration[] = [
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,

@@ -61,6 +61,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { orgMemberRemoveHandler } = await import("./org.member.remove");
+const { schema } = await import("@oxagen/database");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -282,5 +283,14 @@ describe("orgMemberRemoveHandler", () => {
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");
     expect(event.capability).toBe("remove_org_member");
+
+    // The target's CLI session keys are soft-deleted with the membership.
+    expect(mockTx.update).toHaveBeenCalledWith(schema.apiKeys);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deletedAt: expect.any(Date),
+        deletedByUserId: "actor-user-id",
+      }),
+    );
   });
 });

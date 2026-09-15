@@ -44,11 +44,13 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { setSpendBudgetAction } from "./actions";
 import {
-  formatUsd,
+  formatMoney,
   formatWindow,
+  moneyFromUsd,
   SCOPE_DESCRIPTION,
   SCOPE_LABEL,
   STATE_META,
+  usdFromMoney,
   validateLimitUsd,
   validateWindowDays,
   type SpendBudgetPeriod,
@@ -99,7 +101,7 @@ export function ScopeBudgetCard({
     budget?.windowDays ?? null,
   );
   const [limitUsd, setLimitUsd] = React.useState<number | null>(
-    budget?.limitUsd ?? null,
+    budget?.limit ? usdFromMoney(budget.limit) : null,
   );
   const [formError, setFormError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -112,7 +114,7 @@ export function ScopeBudgetCard({
     setEnabled(budget?.enabled ?? true);
     setPeriod(budget?.period ?? "monthly");
     setWindowDays(budget?.windowDays ?? null);
-    setLimitUsd(budget?.limitUsd ?? null);
+    setLimitUsd(budget?.limit ? usdFromMoney(budget.limit) : null);
     setFormError(null);
     setIsEditing(true);
   }
@@ -142,7 +144,7 @@ export function ScopeBudgetCard({
         enabled,
         period,
         windowDays: period === "rolling" ? windowDays : null,
-        limitUsd: limitUsd as number,
+        limit: moneyFromUsd(limitUsd as number),
       });
       if (result.ok) {
         onSaved(scope, result.budget);
@@ -250,19 +252,19 @@ export function ScopeBudgetCard({
               <div>
                 <p className="text-xs text-muted-foreground">Limit</p>
                 <p className="font-medium text-foreground">
-                  {budget.limitUsd != null ? formatUsd(budget.limitUsd) : "—"}
+                  {budget.limit != null ? formatMoney(budget.limit) : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Spent</p>
                 <p className="font-medium text-foreground">
-                  {formatUsd(budget.spentUsd)}
+                  {formatMoney(budget.spent)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Projected</p>
                 <p className="font-medium text-foreground">
-                  {formatUsd(budget.projectedUsd)}
+                  {formatMoney(budget.projected)}
                 </p>
               </div>
               <div>

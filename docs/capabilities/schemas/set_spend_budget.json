@@ -1,7 +1,7 @@
 {
   "name": "set_spend_budget",
   "domain": "billing",
-  "description": "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the USD limit, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
+  "description": "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the limit in micro-units, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -53,16 +53,28 @@
           }
         ]
       },
-      "limitUsd": {
-        "type": "number",
-        "minimum": 0
+      "limit": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
       "scope",
       "enabled",
       "period",
-      "limitUsd"
+      "limit"
     ],
     "additionalProperties": false
   },
@@ -108,24 +120,60 @@
           }
         ]
       },
-      "limitUsd": {
+      "limit": {
         "anyOf": [
           {
-            "type": "number",
-            "minimum": 0
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
           },
           {
             "type": "null"
           }
         ]
       },
-      "spentUsd": {
-        "type": "number",
-        "minimum": 0
+      "spent": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ],
+        "additionalProperties": false
       },
-      "projectedUsd": {
-        "type": "number",
-        "minimum": 0
+      "projected": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ],
+        "additionalProperties": false
       },
       "ratio": {
         "type": "number",
@@ -158,9 +206,9 @@
       "enabled",
       "period",
       "windowDays",
-      "limitUsd",
-      "spentUsd",
-      "projectedUsd",
+      "limit",
+      "spent",
+      "projected",
       "ratio",
       "state",
       "reachedThreshold",

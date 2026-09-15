@@ -967,6 +967,9 @@ importers:
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../notifications
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

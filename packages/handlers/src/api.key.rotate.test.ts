@@ -226,6 +226,66 @@ describe("api.key.rotate handler — protected Stella telemetry scope", () => {
   });
 });
 
+describe("api.key.rotate handler — protected CLI session scope", () => {
+  it("refuses to rotate a CLI session key: `oxagen login` mints its replacement", async () => {
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const protectedRow: OldRow = {
+      ...OLD_ROW,
+      scope: { purpose: "cli_session_v1" },
+    };
+    vi.clearAllMocks();
+    setupHappyPath(
+      "Owner",
+      protectedRow,
+      NEW_ROW,
+      vi.fn(),
+      insertSpy,
+      updateSpy,
+    );
+
+    await expect(
+      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("api.key.rotate handler — protected agent credential scope", () => {
+  it("refuses to rotate an agent credential: rotate_agent_credential owns that key", async () => {
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const protectedRow: OldRow = {
+      ...OLD_ROW,
+      scope: {
+        purpose: "agent_credential_v1",
+        agent_id: "agt_0123456789abcdefghjkmn",
+        principal_id: "prn_0123456789abcdefghjkmn",
+      },
+    };
+    vi.clearAllMocks();
+    setupHappyPath(
+      "Owner",
+      protectedRow,
+      NEW_ROW,
+      vi.fn(),
+      insertSpy,
+      updateSpy,
+    );
+
+    await expect(
+      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("api.key.rotate handler — happy path", () => {
   beforeEach(() => {
     vi.clearAllMocks();

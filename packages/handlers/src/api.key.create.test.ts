@@ -407,6 +407,38 @@ describe("api.key.create handler — protected Stella telemetry scope", () => {
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
+  it("rejects attempts to mint the reserved agent credential purpose", async () => {
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Unauthorized agent credential",
+          scope: {
+            purpose: "agent_credential_v1",
+            agent_id: "agt_0123456789abcdefghjkmn",
+            principal_id: "prn_0123456789abcdefghjkmn",
+          },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects attempts to mint the reserved CLI session purpose", async () => {
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Unauthorized CLI session",
+          scope: { purpose: "cli_session_v1" },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
   it("continues to allow unrelated arbitrary scope", async () => {
     const result = await apiKeyCreateHandler(
       {
