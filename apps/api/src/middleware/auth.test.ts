@@ -1,8 +1,9 @@
 // The bearer path of the real auth middleware: an API key binds the org and
-// workspace and no user. A handler that gates on the caller's role
-// (`assertOrgRole`) refuses this context with `no_principal`, which is why
-// `open_context_pr`, `merge_context_pr` and `dismiss_proposal` declare the
-// `api` surface only and the CLI (an API key too) does not call them.
+// workspace and the user the resolver returns, which is null for every key but
+// one minted by the CLI authorize flow. A handler that gates on the caller's
+// role (`assertOrgRole`) refuses a null user with `no_principal`, which is why
+// `open_context_pr`, `merge_context_pr` and `dismiss_proposal` do not declare
+// the `mcp` surface.
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppEnv } from "../app";
@@ -43,6 +44,7 @@ describe("authMiddleware", () => {
   it("binds an API key's org and workspace and no user", async () => {
     mocks.resolveApiKey.mockResolvedValueOnce({
       ok: true,
+      userId: null,
       apiKeyId: "key_1",
       orgId: "org_1",
       workspaceId: "ws_1",

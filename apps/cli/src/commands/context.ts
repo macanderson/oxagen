@@ -8,7 +8,7 @@
  *
  * The Context PR is opened, checked and merged from Mission Control
  * (`open_context_pr`, `merge_context_pr`): both gate on the caller's org or
- * workspace role, which the CLI's bearer token — an API key — does not carry.
+ * workspace role and declare only the `api` surface.
  *
  * Output discipline (ADR-023 §4): `--json` emits the contract payload as one
  * line on stdout; pretty mode prints the proposal id and where it is opened;
