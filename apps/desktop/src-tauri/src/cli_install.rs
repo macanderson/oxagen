@@ -10,9 +10,9 @@
 //! are exercised through the Tauri commands and `ensure_cli_installed`. The
 //! functions that decide *what to do* — given what is already on disk — are
 //! plain, pure and unit-tested below: `decide_symlink_action`,
-//! `decide_shim_action`, `is_oxagen_managed_path`, `upsert_path_block`,
-//! `remove_path_block`, `profile_path_for`, `detect_shell_kind`,
-//! `path_var_contains`, `auto_link_cli_enabled`.
+//! `decide_shim_action`, `decide_path_precedence`, `is_oxagen_managed_path`,
+//! `upsert_path_block`, `remove_path_block`, `profile_path_for`,
+//! `detect_shell_kind`, `path_var_contains`, `auto_link_cli_enabled`.
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -101,21 +101,30 @@ pub fn export_bin_dir() {
     }
 }
 
-pub fn on_path(name: &str) -> Option<String> {
-    let path = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path) {
+/// Search a `PATH`-shaped string for an executable named `name`, the way a
+/// shell's own lookup would: first directory that has it wins. Shared by
+/// `on_path` (the current process's own PATH, for `desktop_state`) and the
+/// shadow check in `install_cli_core` (the *login shell's* PATH, which can
+/// differ from this process's own).
+fn resolve_in_path_var(name: &str, path_var: &str) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_var) {
         let candidate = dir.join(exe(name));
         if candidate.is_file() {
-            return Some(candidate.display().to_string());
+            return Some(candidate);
         }
         if cfg!(windows) {
             let cmd = dir.join(format!("{name}.cmd"));
             if cmd.is_file() {
-                return Some(cmd.display().to_string());
+                return Some(cmd);
             }
         }
     }
     None
+}
+
+pub fn on_path(name: &str) -> Option<String> {
+    let path = std::env::var_os("PATH")?;
+    resolve_in_path_var(name, &path.to_string_lossy()).map(|p| p.display().to_string())
 }
 
 /// Where the PATH links go: a directory the user owns on every platform.
@@ -236,6 +245,35 @@ pub fn decide_symlink_action(existing: &ExistingLink, target: &Path) -> LinkActi
                 LinkAction::Skip
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathPrecedence {
+    /// Nothing on PATH claims this name yet: safe to link.
+    Clear,
+    /// Whatever already claims this name is ours — our own link inside
+    /// `install_dir`, or (once a symlink is followed through) an
+    /// Oxagen-owned location — so linking/replacing is safe.
+    Ours,
+    /// Something else already claims this name (a Homebrew install, a
+    /// manual copy, anything not ours). Linking would shadow it in every
+    /// new terminal, since the install dir gets prepended to PATH — leave
+    /// it alone.
+    Shadowed,
+}
+
+/// Decide whether it's safe to link `name` given what it already resolves
+/// to on PATH. `resolved` should be the *canonicalized* (symlinks followed)
+/// path a PATH lookup for `name` found, if any — canonicalizing is what lets
+/// a `~/.local/bin/oxagen` symlink that ultimately points at the app bundle
+/// read as `Ours` even though canonicalizing walks it outside `install_dir`.
+pub fn decide_path_precedence(resolved: Option<&Path>, install_dir: &Path) -> PathPrecedence {
+    match resolved {
+        None => PathPrecedence::Clear,
+        Some(p) if p.starts_with(install_dir) => PathPrecedence::Ours,
+        Some(p) if is_oxagen_managed_path(p) => PathPrecedence::Ours,
+        Some(_) => PathPrecedence::Shadowed,
     }
 }
 
@@ -574,14 +612,31 @@ fn login_shell_path() -> Option<String> {
     }
 }
 
+/// The PATH the shadow check and the profile-block decision both reason
+/// about: the login shell's PATH on Unix (a Tauri app never sources shell
+/// profiles itself, so this process's own PATH is not what a new terminal
+/// sees), or simply the process's own PATH on Windows, where there is no
+/// equivalent login-shell/process split. Computed once per install pass —
+/// `login_shell_path` spawns a shell and waits up to 5s, so callers share
+/// this rather than each probing separately.
+fn effective_path_var() -> String {
+    #[cfg(not(windows))]
+    {
+        login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+    }
+    #[cfg(windows)]
+    {
+        std::env::var("PATH").unwrap_or_default()
+    }
+}
+
 /// Add (or move) the marker block into the right profile file for the
-/// user's login shell, unless `dir` is already on the login-shell PATH.
-/// Returns the profile file touched, or an error note when the shell isn't
-/// one we know how to edit.
+/// user's login shell, unless `dir` is already on `path_var`. Returns the
+/// profile file touched, or an error note when the shell isn't one we know
+/// how to edit.
 #[cfg(not(windows))]
-fn ensure_profile_block(dir: &Path) -> Result<Option<String>, String> {
-    let path_var = login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
-    if path_var_contains(&path_var, dir) {
+fn ensure_profile_block(dir: &Path, path_var: &str) -> Result<Option<String>, String> {
+    if path_var_contains(path_var, dir) {
         return Ok(None);
     }
     let shell = std::env::var("SHELL").unwrap_or_default();
@@ -634,7 +689,12 @@ fn remove_all_profile_blocks() -> Vec<String> {
 
 fn note_for(state: &str, view: &CliInstallView) -> String {
     match state {
-        "already" => "The bundled binaries are already on PATH.".to_string(),
+        // Two routes land here: the bundled sidecar dir itself already on
+        // PATH (Linux .deb/.rpm — dir is overridden to that bundled dir
+        // before this is called), or both names already resolving to our
+        // own link in cli_install_dir(). Either way view.dir is already the
+        // right directory to name by the time this runs.
+        "already" => format!("oxagen and tacho are on PATH from {}.", view.dir),
         "opted_out" => "Automatic linking is turned off; use \"Link into PATH\" to link manually.".to_string(),
         "linked" => {
             if let Some(profile) = &view.profile {
@@ -713,11 +773,39 @@ fn install_cli_core() -> CliInstallView {
         return view;
     }
 
+    // What a *new terminal* would resolve each name to, computed once
+    // (login_shell_path spawns a shell). Linking into `dir` and then
+    // prepending `dir` to PATH would silently shadow anything else that
+    // already claims the name — e.g. a Homebrew `oxagen` ahead of `dir` on
+    // PATH — in every terminal opened from then on, even though the link
+    // itself never overwrites a file. So a name that already resolves to
+    // something that isn't ours is left alone entirely: not linked, and
+    // (below) not allowed to trigger the profile-PATH edit on its own.
+    let path_var = effective_path_var();
+    let mut shadowed = Vec::new();
     for name in ["oxagen", "tacho"] {
+        let Some(found) = resolve_in_path_var(name, &path_var) else {
+            continue;
+        };
+        let canonical = fs::canonicalize(&found).unwrap_or_else(|_| found.clone());
+        if decide_path_precedence(Some(&canonical), &dir) == PathPrecedence::Shadowed {
+            view.skipped.push(format!("{name} already on PATH at {}; left in place", found.display()));
+            shadowed.push(name);
+        }
+    }
+
+    let mut any_ours = false;
+    for name in ["oxagen", "tacho"] {
+        if shadowed.contains(&name) {
+            continue;
+        }
         let target = sidecars.join(exe(name));
         match link_one(&dir, name, &target) {
-            LinkOutcome::Linked(path) => view.files.push(path),
-            LinkOutcome::AlreadyCorrect => {}
+            LinkOutcome::Linked(path) => {
+                view.files.push(path);
+                any_ours = true;
+            }
+            LinkOutcome::AlreadyCorrect => any_ours = true,
             LinkOutcome::Skipped(note) => view.skipped.push(note),
             LinkOutcome::Failed(err) => {
                 view.state = "failed".to_string();
@@ -727,26 +815,35 @@ fn install_cli_core() -> CliInstallView {
         }
     }
 
-    #[cfg(windows)]
-    {
-        let already = std::env::var_os("PATH")
-            .map(|p| path_var_contains(&p.to_string_lossy(), &dir))
-            .unwrap_or(false);
-        if !already {
-            if let Err(e) = add_to_user_path_windows(&dir.display().to_string()) {
-                view.skipped.push(format!("user PATH: {e}"));
+    // The profile/user-PATH edit only makes sense when at least one name
+    // actually is (or now is) ours to answer for; if every name was
+    // shadowed or otherwise skipped, touching PATH would only get a
+    // still-foreign binary found faster, not fix anything.
+    if any_ours {
+        #[cfg(windows)]
+        {
+            let already = std::env::var_os("PATH")
+                .map(|p| path_var_contains(&p.to_string_lossy(), &dir))
+                .unwrap_or(false);
+            if !already {
+                if let Err(e) = add_to_user_path_windows(&dir.display().to_string()) {
+                    view.skipped.push(format!("user PATH: {e}"));
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            match ensure_profile_block(&dir, &path_var) {
+                Ok(profile) => view.profile = profile,
+                Err(note) => view.skipped.push(note),
             }
         }
     }
-    #[cfg(not(windows))]
-    {
-        match ensure_profile_block(&dir) {
-            Ok(profile) => view.profile = profile,
-            Err(note) => view.skipped.push(note),
-        }
-    }
 
-    view.state = if view.files.is_empty() && !view.skipped.is_empty() {
+    view.state = if view.files.is_empty() && view.skipped.is_empty() {
+        // Both names already resolved to us: nothing changed this launch.
+        "already".to_string()
+    } else if view.files.is_empty() && !any_ours {
         "skipped".to_string()
     } else {
         "linked".to_string()
@@ -905,6 +1002,34 @@ mod tests {
         // A Homebrew install: not recognized, leave it.
         let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
         assert_eq!(decide_symlink_action(&ExistingLink::Symlink(foreign), target), LinkAction::Skip);
+    }
+
+    // ---- decide_path_precedence (PATH-shadow avoidance) ----
+
+    #[test]
+    fn path_precedence_covers_every_branch() {
+        let install_dir = Path::new("/home/dev/.local/bin");
+
+        // Nothing on PATH claims the name yet: fine to link.
+        assert_eq!(decide_path_precedence(None, install_dir), PathPrecedence::Clear);
+
+        // The existing resolution IS our own link in ~/.local/bin (the raw,
+        // pre-canonicalize resolution would look like this on Windows,
+        // where a shim is a regular file with no further symlink to
+        // follow; a canonicalized Unix symlink through our own link would
+        // instead show its ultimate target, covered by the next case).
+        let ours_in_install_dir = install_dir.join("oxagen");
+        assert_eq!(decide_path_precedence(Some(&ours_in_install_dir), install_dir), PathPrecedence::Ours);
+
+        // Canonicalizing our own symlink walks it through to the app
+        // bundle or the durable copy, outside install_dir — still ours,
+        // recognized via is_oxagen_managed_path.
+        let ours_elsewhere = PathBuf::from("/Applications/Oxagen.app/Contents/MacOS/oxagen");
+        assert_eq!(decide_path_precedence(Some(&ours_elsewhere), install_dir), PathPrecedence::Ours);
+
+        // A Homebrew install (or any other third party): shadowed, leave it.
+        let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
+        assert_eq!(decide_path_precedence(Some(&foreign), install_dir), PathPrecedence::Shadowed);
     }
 
     // ---- decide_shim_action / windows_shim_content ----
