@@ -343,6 +343,10 @@ export function harnessFacts(
   platform: NodeJS.Platform = process.platform,
   env: Record<string, string | undefined> = process.env,
   home: string = env["HOME"] ?? env["USERPROFILE"] ?? "",
+  // The disk check for the well-known directories. Injected so a test is
+  // not answered by whatever happens to be installed on the machine running
+  // it (/opt/homebrew/bin and /usr/local/bin are absolute, not under home).
+  exists: (candidate: string) => boolean = existsSync,
 ): HarnessFacts {
   let path: string | undefined;
   if (platform === "win32") {
@@ -360,7 +364,7 @@ export function harnessFacts(
     outer: for (const dir of wellKnownBinDirs(home, platform, env)) {
       for (const file of names) {
         const candidate = `${dir}${sep}${file}`;
-        if (existsSync(candidate)) {
+        if (exists(candidate)) {
           path = candidate;
           break outer;
         }

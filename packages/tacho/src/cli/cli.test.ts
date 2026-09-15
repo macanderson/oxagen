@@ -1173,16 +1173,25 @@ describe("harnesses and reassign", () => {
       ),
     ).toEqual({ path: "/opt/homebrew/bin/codex", version: "9.9.9" });
     expect(calls.slice(0, 2)).toEqual(["/bin/zsh -lc", "sh -lc"]);
-    // Then the well-known directories, checked on disk.
+    // Then the well-known directories, checked on disk. The disk check only
+    // sees the scratch home: /opt/homebrew/bin and /usr/local/bin are real
+    // directories on a developer's machine, and a `codex` installed there
+    // must not decide this test.
+    const onScratchDisk = (candidate: string): boolean =>
+      candidate.startsWith(home) && existsSync(candidate);
     mkdirSync(join(home, ".local", "bin"), { recursive: true });
     writeFileSync(join(home, ".local", "bin", "claude"), "");
-    expect(harnessFacts(answering({}), "claude", "darwin", env)).toEqual({
+    expect(
+      harnessFacts(answering({}), "claude", "darwin", env, home, onScratchDisk),
+    ).toEqual({
       path: join(home, ".local", "bin", "claude"),
       version: "9.9.9",
     });
     // Nothing anywhere: not found, no --version call.
     calls.length = 0;
-    expect(harnessFacts(answering({}), "codex", "darwin", env)).toEqual({});
+    expect(
+      harnessFacts(answering({}), "codex", "darwin", env, home, onScratchDisk),
+    ).toEqual({});
     expect(calls.some((c) => c.endsWith("--version"))).toBe(false);
     // A probe that timed out (status null) reads as not found, not as a hang.
     expect(
@@ -1191,14 +1200,25 @@ describe("harnesses and reassign", () => {
         "codex",
         "darwin",
         env,
+        home,
+        onScratchDisk,
       ),
     ).toEqual({});
+    // The default disk check is the real one: an absolute install directory
+    // is found without any shell answering.
+    expect(
+      harnessFacts(answering({}), "claude", "darwin", env, home).path,
+    ).toBe(join(home, ".local", "bin", "claude"));
     // /bin/sh as the login shell is not asked twice.
     calls.length = 0;
-    harnessFacts(answering({}), "codex", "darwin", {
-      HOME: home,
-      SHELL: "/bin/sh",
-    });
+    harnessFacts(
+      answering({}),
+      "codex",
+      "darwin",
+      { HOME: home, SHELL: "/bin/sh" },
+      home,
+      onScratchDisk,
+    );
     expect(calls.filter((c) => c.startsWith("sh "))).toHaveLength(1);
   });
 });
