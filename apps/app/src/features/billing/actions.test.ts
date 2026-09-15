@@ -125,11 +125,11 @@ describe("purchaseGau", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("refuses more than the contract admits on the quantity field before the handler runs (negative)", async () => {
+  it("refuses whole blocks above the contract's maximum with their own code, calling no capability (negative)", async () => {
     expect(await purchaseGau("acme", 5000, null, quantity("1005000"))).toEqual({
       ok: false,
       reason: "invalid",
-      code: "invalid_input",
+      code: "quantity_above_max",
       field: "quantityGau",
     });
     expect(invoke).not.toHaveBeenCalled();

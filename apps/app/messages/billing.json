@@ -88,6 +88,7 @@
       "denied": "An owner or a billing member can buy governed action units.",
       "errors": {
         "invalid": "Choose a whole number of blocks.",
+        "aboveMax": "You can buy at most {max} GAU at once.",
         "denied": "Your role cannot buy governed action units. An owner or a billing member can.",
         "conflict": "This organization is billed by invoice, so it does not buy units in blocks.",
         "unavailable": "Checkout could not be opened. Nothing was charged."

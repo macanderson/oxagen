@@ -4,9 +4,11 @@
 // contracted rate, and a button that opens Stripe Checkout through the
 // purchase action. The total is mulMicros over the per-GAU rate, shown by the
 // one <Money> on the page outside the rate block and the invoices (INV-25);
-// the browser's step validation decides whether a quantity is whole blocks. A
-// prepaid organization with no saved card, a Free one included, is offered
-// the purchase, because the Checkout saves the card it collects (spec §4.2,
+// the browser's step, min and max validation decides whether a quantity is
+// whole blocks within the most one purchase buys. The picker is controlled, so
+// the form reset React runs after the action leaves the picker and the total
+// on the same quantity. A prepaid organization with no saved card, a Free one
+// included, is offered the purchase, because the Checkout saves the card it collects (spec §4.2,
 // ADR-055 §6). Owners and billing members buy; anyone else who can read the
 // bucket sees who can. Nothing renders in invoice mode, or when the bucket or
 // the rate could not be read: those sections say why.
@@ -28,7 +30,9 @@ function failureKey(state: PurchaseState) {
   if (state === null || state.ok) return null;
   switch (state.reason) {
     case "invalid":
-      return "errors.invalid";
+      return state.code === "quantity_above_max"
+        ? "errors.aboveMax"
+        : "errors.invalid";
     case "denied":
       return "errors.denied";
     case "conflict":
@@ -41,14 +45,17 @@ function failureKey(state: PurchaseState) {
 function QuantityPicker({
   org,
   rate,
+  maxGau,
   savesCard,
 }: {
   org: string;
   rate: ContractRate;
+  maxGau: number;
   savesCard: boolean;
 }) {
   const t = useTranslations("billing.purchase");
   const locale = useLocale();
+  const [text, setText] = useState(String(rate.blockSizeGau));
   const [quantityGau, setQuantityGau] = useState<number | null>(
     rate.blockSizeGau,
   );
@@ -60,7 +67,9 @@ function QuantityPicker({
   return (
     <SafeForm action={action} className="flex flex-col gap-3">
       {failure === null ? null : (
-        <FormAlert testId="purchase-error">{t(failure)}</FormAlert>
+        <FormAlert testId="purchase-error">
+          {t(failure, { max: formatCount(maxGau, locale) })}
+        </FormAlert>
       )}
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <label htmlFor="purchase-quantity">{t("quantity")}</label>
@@ -70,12 +79,14 @@ function QuantityPicker({
           type="number"
           required
           min={rate.blockSizeGau}
+          max={Math.floor(maxGau / rate.blockSizeGau) * rate.blockSizeGau}
           step={rate.blockSizeGau}
-          defaultValue={rate.blockSizeGau}
+          value={text}
           aria-describedby="purchase-step"
           className={`${inputBase} w-36`}
           onChange={(event) => {
             const input = event.currentTarget;
+            setText(input.value);
             setQuantityGau(
               input.validity.valid && Number.isSafeInteger(input.valueAsNumber)
                 ? input.valueAsNumber
@@ -116,11 +127,14 @@ export function PurchaseForm({
   org,
   bucket,
   rate,
+  maxGau,
   allowed,
 }: {
   org: string;
   bucket: Read<GauBucket>;
   rate: Read<ContractRate>;
+  /** The most GAU one purchase buys (PURCHASE_GAU_MAX); the action checks it again. */
+  maxGau: number;
   /** Owner and Billing buy; the handler checks it again. */
   allowed: boolean;
 }) {
@@ -136,6 +150,7 @@ export function PurchaseForm({
         <QuantityPicker
           org={org}
           rate={rate.value}
+          maxGau={maxGau}
           savesCard={bucket.value.autoTopup?.paymentMethod === null}
         />
       ) : (

@@ -322,6 +322,7 @@ type Messages = {
       denied: string;
       errors: {
         invalid: string;
+        aboveMax: string;
         denied: string;
         conflict: string;
         unavailable: string;

@@ -46,7 +46,13 @@ function renderForm({
 } = {}) {
   render(
     <IntlProvider>
-      <PurchaseForm org="acme" bucket={bucket} rate={rate} allowed={allowed} />
+      <PurchaseForm
+        org="acme"
+        bucket={bucket}
+        rate={rate}
+        maxGau={1_000_000}
+        allowed={allowed}
+      />
     </IntlProvider>,
   );
 }
@@ -84,6 +90,7 @@ describe("PurchaseForm", () => {
     expect(picker()).toHaveValue(10000);
     expect(picker()).toHaveAttribute("step", "10000");
     expect(picker()).toHaveAttribute("min", "10000");
+    expect(picker()).toHaveAttribute("max", "1000000");
     expect(region()).toHaveTextContent("in blocks of 10,000 GAU");
     expect(total()).toHaveTextContent(/^\$32\.10$/);
     expect(within(region()).getAllByTestId("money")).toHaveLength(1);
@@ -94,6 +101,7 @@ describe("PurchaseForm", () => {
   it("prices the published tier's rate the same way", async () => {
     renderForm({ rate: readOk(PUBLISHED_BUILD) });
     expect(picker()).toHaveAttribute("step", "5000");
+    expect(picker()).toHaveAttribute("max", "1000000");
     expect(total()).toHaveTextContent(/^\$25\.00$/);
     await setQuantity("15000");
     expect(total()).toHaveTextContent(/^\$75\.00$/);
@@ -102,6 +110,7 @@ describe("PurchaseForm", () => {
   it.each([
     ["between blocks", "15000"],
     ["under one block", "5000"],
+    ["of whole blocks above the most one purchase buys", "1010000"],
     ["empty", ""],
   ])("shows no total for a quantity %s (negative)", async (_case, value) => {
     renderForm();
@@ -138,6 +147,16 @@ describe("PurchaseForm", () => {
       "Choose a whole number of blocks.",
     ],
     [
+      "above the maximum",
+      {
+        ok: false,
+        reason: "invalid",
+        code: "quantity_above_max",
+        field: "quantityGau",
+      },
+      "You can buy at most 1,000,000 GAU at once.",
+    ],
+    [
       "denied",
       { ok: false, reason: "denied", code: "forbidden" },
       "Your role cannot buy governed action units. An owner or a billing member can.",
@@ -165,6 +184,22 @@ describe("PurchaseForm", () => {
       );
     },
   );
+
+  it("keeps the picker and the total on the quantity sent after a refusal (negative)", async () => {
+    purchaseGau.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "checkout_url_refused",
+    });
+    renderForm();
+    await setQuantity("30000");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue to Checkout" }),
+    );
+    await screen.findByTestId("purchase-error");
+    expect(picker()).toHaveValue(30000);
+    expect(total()).toHaveTextContent(/^\$96\.30$/);
+  });
 
   it("offers a Free organization with no saved card and nothing left the purchase, under the anchor the bucket meter links to, saying Checkout saves the card", () => {
     renderForm({ bucket: readOk(freeNoCardBucket()) });

@@ -3,6 +3,7 @@
 // whether auto top-up refills it, the rate it pays, buying more units and its
 // invoices. The page makes four reads; money appears only in the rate block,
 // the purchase total and the invoices.
+import { PURCHASE_GAU_MAX } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
 import { AutoTopup } from "./auto-topup";
@@ -49,6 +50,7 @@ export async function Billing({
         org={ctx.orgSlug}
         bucket={bucket}
         rate={rate}
+        maxGau={PURCHASE_GAU_MAX}
         allowed={ctx.orgRole === "owner" || ctx.orgRole === "billing"}
       />
       <Invoices invoices={invoices} cursor={cursor} org={ctx.orgSlug} />

@@ -3,9 +3,14 @@
 // write. The quantity must be a whole number of blocks at the block size the
 // page read from get_contract_rate; purchase_gau_bucket prices the blocks from
 // the terms in force at submit time and refuses a quantity that is not a
-// multiple of them. Checkout returns to the Billing page's ?checkout= banner,
-// and the browser is sent on only to a URL parseCheckoutUrl accepts.
-import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
+// multiple of them. A quantity above PURCHASE_GAU_MAX is refused here with its
+// own code, so the form can say so. Checkout returns to the Billing page's
+// ?checkout= banner, and the browser is sent on only to a URL parseCheckoutUrl
+// accepts.
+import {
+  billingGauBucketPurchase,
+  PURCHASE_GAU_MAX,
+} from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { captureError } from "@oxagen/telemetry";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -43,6 +48,14 @@ export async function purchaseGau(
       ok: false,
       reason: "invalid",
       code: "invalid_input",
+      field: "quantityGau",
+    };
+  }
+  if (quantityGau > PURCHASE_GAU_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "quantity_above_max",
       field: "quantityGau",
     };
   }
