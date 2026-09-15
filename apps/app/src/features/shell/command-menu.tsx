@@ -3,7 +3,7 @@
 // Arrow keys move, Enter opens, Esc closes.
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useRef, useState } from "react";
 import {
@@ -15,6 +15,7 @@ import {
 import { parseShellPath } from "./nav";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { useNavigate } from "@/ui/navigation";
 
 export function CommandMenu({ data }: { data: ShellData }) {
   const { commandOpen, setCommandOpen } = useShellState();
@@ -44,7 +45,7 @@ function CommandPalette({
   onClose: () => void;
 }) {
   const t = useTranslations("shell");
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   const ws = parseShellPath(pathname).ws;
   const [query, setQuery] = useState("");
@@ -67,7 +68,7 @@ function CommandPalette({
 
   const open = (c: Command) => {
     onClose();
-    router.push(c.href);
+    navigate.push(c.href);
   };
 
   return (

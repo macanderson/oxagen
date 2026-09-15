@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { TwoFactorForm, nextParam, sanitizeNext } from "@/features/auth";
+import { TwoFactorForm } from "@/features/auth";
+import { readNext } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,
@@ -26,7 +27,7 @@ async function TwoFactor({
   searchParams: PageProps<"/two-factor">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(nextParam(params));
+  const next = readNext(params);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

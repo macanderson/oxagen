@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "../../auth/test-intl";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
@@ -112,7 +113,7 @@ describe("OrganizationForm", () => {
     renderWithIntl(
       <OrganizationForm
         initialName="Acme Robotics"
-        destination="/cli/authorize?state=abc"
+        destination={routes.cliAuthorize({ state: "abc" })}
       />,
     );
     await userEvent.type(

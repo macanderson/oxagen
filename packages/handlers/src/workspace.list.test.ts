@@ -141,4 +141,62 @@ describe("workspaceListHandler", () => {
     // No DB calls for unauthenticated requests.
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
+
+  // ── membership gate ──────────────────────────────────────────────────────────
+
+  describe("membership gate", () => {
+    const org = {
+      id: "org_1",
+      publicId: "pub_1",
+      slug: "acme",
+      namespace: "acme",
+      name: "Acme Corp",
+    };
+
+    function runInTx(found: {
+      org: typeof org | undefined;
+      membership: { role: string } | undefined;
+    }) {
+      const tx = {
+        query: {
+          organizations: { findFirst: vi.fn().mockResolvedValue(found.org) },
+          orgUsers: { findFirst: vi.fn().mockResolvedValue(found.membership) },
+        },
+        select: vi.fn(),
+      };
+      mocks.withSystemDb.mockImplementationOnce(
+        (fn: (t: typeof tx) => unknown) => fn(tx),
+      );
+      return tx;
+    }
+
+    const session = makeCTX({
+      userId: "usr_session",
+      apiKeyId: null,
+      orgId: "",
+      workspaceId: "",
+    });
+
+    it("refuses an organization the caller is not a member of as forbidden, listing nothing (negative)", async () => {
+      const tx = runInTx({ org, membership: undefined });
+      await expect(
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "acme" },
+          session,
+        ),
+      ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
+      expect(tx.select).not.toHaveBeenCalled();
+    });
+
+    it("refuses an unknown organization with the same refusal (negative)", async () => {
+      const tx = runInTx({ org: undefined, membership: undefined });
+      await expect(
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "nope" },
+          session,
+        ),
+      ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
+      expect(tx.query.orgUsers.findFirst).not.toHaveBeenCalled();
+    });
+  });
 });

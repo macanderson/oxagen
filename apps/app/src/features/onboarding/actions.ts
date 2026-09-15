@@ -1,8 +1,8 @@
 "use server";
 // The organization form's write: creates the tenant (create-organization.ts)
 // and names the Fleet page of its first workspace as where to go next.
-import { redirect } from "next/navigation";
-import { getAuthUser } from "../auth/session";
+import { requireUser } from "@/server/viewer";
+import { routes, type SafePath } from "@/shared/safe-path";
 import {
   OrganizationForm,
   type OrganizationField,
@@ -11,22 +11,17 @@ import {
 } from "./org-form";
 
 export type CreateOrganizationState =
-  | { ok: true; to: string }
+  | { ok: true; to: SafePath }
   | {
       ok: false;
       fields?: Partial<Record<OrganizationField, OrgFormErrorKey>>;
       error?: "failed";
     };
 
-function fleetPath(orgSlug: string, wsSlug: string): string {
-  return `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(wsSlug)}`;
-}
-
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
 ): Promise<CreateOrganizationState> {
-  const user = await getAuthUser();
-  if (!user) redirect("/login?next=%2Fnew-organization");
+  const { userId } = await requireUser(routes.newOrganization());
 
   const parsed = OrganizationForm.safeParse(input);
   if (!parsed.success) {
@@ -34,9 +29,9 @@ export async function createOrganizationAction(
   }
 
   const { createOrganization } = await import("./create-organization");
-  const result = await createOrganization(user.id, parsed.data);
+  const result = await createOrganization(userId, parsed.data);
   if (result.ok)
-    return { ok: true, to: fleetPath(result.orgSlug, result.workspaceSlug) };
+    return { ok: true, to: routes.fleet(result.orgSlug, result.workspaceSlug) };
   if (result.error === "slugTaken")
     return { ok: false, fields: { slug: "slugTaken" } };
   if (result.error === "slugReserved")

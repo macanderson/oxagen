@@ -1,15 +1,7 @@
-import Link from "next/link";
-
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  AFTER_SIGNUP,
-  OAuthButtons,
-  SignupForm,
-  sanitizeNext,
-  nextParam,
-  withNext,
-} from "@/features/auth";
+import { AFTER_SIGNUP, OAuthButtons, SignupForm } from "@/features/auth";
+import { readNext, routes } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,
@@ -17,6 +9,7 @@ import {
   AuthSkeleton,
 } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
 
 export default function SignupPage(props: PageProps<"/signup">) {
   return (
@@ -32,7 +25,7 @@ async function Signup({
   searchParams: PageProps<"/signup">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(nextParam(params), AFTER_SIGNUP);
+  const next = readNext(params, AFTER_SIGNUP);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>
@@ -47,12 +40,12 @@ async function Signup({
       </div>
       <AuthFooter>
         {t("signup.haveAccount")}{" "}
-        <Link
-          href={withNext("/login", next === AFTER_SIGNUP ? "/" : next)}
+        <SafeLink
+          to={routes.login(next === AFTER_SIGNUP ? routes.root() : next)}
           className={linkText}
         >
           {t("signup.logIn")}
-        </Link>
+        </SafeLink>
       </AuthFooter>
       <ul
         className="flex flex-wrap justify-center gap-2"

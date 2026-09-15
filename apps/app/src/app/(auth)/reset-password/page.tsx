@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { ResetPasswordForm, firstParam } from "@/features/auth";
+import { ResetPasswordForm } from "@/features/auth";
+import { firstParam } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,

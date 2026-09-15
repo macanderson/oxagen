@@ -14,6 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { MouseEvent, ReactNode } from "react";
+import { pathOf } from "@/shared/safe-path";
 import {
   afterEach,
   beforeAll,
@@ -42,7 +43,6 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("next/link", () => ({
   default: ({
-    href,
     children,
     onClick,
     ...rest
@@ -52,7 +52,6 @@ vi.mock("next/link", () => ({
     onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
   }) => (
     <a
-      href={href}
       {...rest}
       onClick={(e) => {
         e.preventDefault(); // jsdom cannot navigate documents
@@ -328,7 +327,7 @@ describe("phone navigation", () => {
         messages={{ ...en, ...shellMessages }}
       >
         <MobileNav
-          items={[{ key: "billing", href: "/acme/billing" }]}
+          items={[{ key: "billing", href: pathOf("acme", "billing") }]}
           pathname="/acme/billing"
           onMore={onMore}
         />

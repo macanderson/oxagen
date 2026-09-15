@@ -2,12 +2,8 @@ import Link from "next/link";
 
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  AFTER_SIGNUP,
-  VerifyPanel,
-  firstParam,
-  sanitizeNext,
-} from "@/features/auth";
+import { AFTER_SIGNUP, VerifyPanel } from "@/features/auth";
+import { firstParam, readNext } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,
@@ -36,7 +32,7 @@ async function Verify({
   // Shown back to the person who typed it, never looked up: a malformed value is simply not echoed.
   const email = EMAIL_SHAPE.test(raw) ? raw : null;
   const expired = firstParam(params.error) !== undefined;
-  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const next = readNext(params, AFTER_SIGNUP);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>
@@ -48,7 +44,7 @@ async function Verify({
       <VerifyPanel email={email} expired={expired} next={next} />
       <AuthFooter>
         {t("verify.wrongAddress")}{" "}
-        <Link href={"/signup"} className={linkText}>
+        <Link href="/signup" className={linkText}>
           {t("verify.startOver")}
         </Link>
       </AuthFooter>

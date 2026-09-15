@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, ne } from "drizzle-orm";
@@ -10,8 +10,10 @@ import { logger } from "./logger";
  * tenancy: system bypass via withSystemDb — this is a pre-workspace call (the
  * user picked an org but hasn't scoped to a workspace yet). We MUST gate it
  * explicitly: resolve the org by slug, then confirm the caller has an org_users
- * row before listing any workspace. A non-member gets a not-a-member error, so
- * the bypass can never leak another tenant's workspaces. The caller's own
+ * row before listing any workspace. A non-member gets HandlerError forbidden
+ * (not_a_member), so the bypass can never leak another tenant's workspaces; an
+ * unknown slug gets the same refusal, so the answer does not reveal which
+ * organization slugs exist. The caller's own
  * workspace role is left-joined (null when they're an org admin with no direct
  * workspace membership).
  *
@@ -20,6 +22,14 @@ import { logger } from "./logger";
  * is resolved from the key's created_by_user_id, matching the IAM layer's
  * "API key authorizes as its creator" invariant.
  */
+function notAMember(): HandlerError {
+  return new HandlerError({
+    code: "forbidden",
+    reason: "not_a_member",
+    message: "You are not a member of this organization",
+  });
+}
+
 export const workspaceListHandler: CapabilityHandler<
   typeof workspaceList
 > = async (input, ctx) => {
@@ -64,9 +74,7 @@ export const workspaceListHandler: CapabilityHandler<
         name: true,
       },
     });
-    if (!org) {
-      throw new Error(`Organization "${input.orgSlug}" not found`);
-    }
+    if (!org) throw notAMember();
     // Authorization gate: the caller must be a member of this org.
     const membership = await tx.query.orgUsers.findFirst({
       where: and(
@@ -75,11 +83,7 @@ export const workspaceListHandler: CapabilityHandler<
       ),
       columns: { role: true },
     });
-    if (!membership) {
-      throw new Error(
-        `You are not a member of organization "${input.orgSlug}"`,
-      );
-    }
+    if (!membership) throw notAMember();
     // Archived workspaces leave the switcher and the CLI picker; the
     // Organization › Workspaces section asks for them (archive_workspace).
     const rows = await tx
