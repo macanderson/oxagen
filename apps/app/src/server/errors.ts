@@ -9,12 +9,9 @@
 // the framework, and an unknown failure belongs to onRequestError, not to a
 // toast.
 
-export type AppErrorCode =
-  | "tool_not_registered"
-  | "contract_output_mismatch"
-  | "invalid_stream_cursor";
+type AppErrorCode = "tool_not_registered" | "contract_output_mismatch";
 
-export abstract class AppError extends Error {
+abstract class AppError extends Error {
   abstract readonly code: AppErrorCode;
   abstract readonly status: number;
 }
@@ -46,17 +43,6 @@ export class ContractOutputMismatch extends AppError {
       `agent tool "${tool}" returned output that does not match its contract (${String(issues.length)} issue(s))`,
     );
     this.name = "ContractOutputMismatch";
-  }
-}
-
-/** An SSE cursor (`Last-Event-ID` or `after`) that is not a decimal run_seq. */
-export class InvalidStreamCursor extends AppError {
-  readonly code = "invalid_stream_cursor";
-  readonly status = 400;
-
-  constructor(readonly cursor: string) {
-    super(`stream cursor must be a non-negative decimal sequence`);
-    this.name = "InvalidStreamCursor";
   }
 }
 

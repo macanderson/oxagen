@@ -5,10 +5,10 @@ import { generateObject, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import {
   hashPrompt,
-  insertTokenUsage,
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
+import { recordTokenUsage } from "./record-token-usage";
 import {
   chargeUsageCredits,
   providerCostUsdMicros,
@@ -333,7 +333,7 @@ export async function generateObjectFor<T>(
   // still gets the object back (same contract as stream.ts).
   try {
     const promptHash = cachePromptHash ?? (await hashPrompt(promptTextForHash));
-    await insertTokenUsage([
+    await recordTokenUsage([
       {
         execution_step_id: args.telemetry.messageId,
         org_id: args.telemetry.orgId,

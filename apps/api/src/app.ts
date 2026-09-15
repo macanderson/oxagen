@@ -19,14 +19,15 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
+import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { billingActionRateCardRoute } from "./routes/v1/billing.action_rate_card";
-import { billingActionUsageRoute } from "./routes/v1/billing.action_usage";
 import { billingActionEstimateRoute } from "./routes/v1/billing.action_estimate";
 import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_retention";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
@@ -225,6 +226,12 @@ import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
+import { spendGetRoute } from "./routes/v1/spend.get";
+import { spendDrillRoute } from "./routes/v1/spend.drill";
+import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { runCostGetRoute } from "./routes/v1/run.cost";
+import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
   Variables: {
@@ -426,7 +433,17 @@ orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Fleet list and the Run header with its frame page.
 orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
+// Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
+// run's cost and the price book. All noBillingGate reads of Postgres rollups.
+orgScoped.route("/spend", spendGetRoute);
+orgScoped.route("/spend/drill", spendDrillRoute);
+orgScoped.route("/spend/waste", spendWasteListRoute);
+orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
+orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(
@@ -436,10 +453,10 @@ orgScoped.route(
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 // Governed-action meter (ADR-052, docs/specs/governed-action-metering.md):
-// the rate card, this org's usage against it, the run->action estimator, and
-// evidence-retention posture. All four are noBillingGate reads.
+// the rate card, the run->action estimator, and evidence-retention posture.
+// All three are noBillingGate reads. This org's position against its own
+// terms is /billing/gau-bucket (ADR-055).
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
-orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
 orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);

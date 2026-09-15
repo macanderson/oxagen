@@ -19,13 +19,12 @@
  * depends on how long a run took or how many tokens it spent, because under
  * ADR-043 nothing in this repo costs more for either.
  *
- * The rate card and the annual allowances below are what the rate-card,
- * estimate and usage capabilities publish; the recorder prices nothing by
- * them. Rates: docs/specs/governed-action-metering.md §4.
+ * The rate card and the annual allowances below are what the rate-card and
+ * estimate capabilities publish; the recorder prices nothing by them. Rates:
+ * docs/specs/governed-action-metering.md §4.
  */
 
-import { and, eq, sql } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { readOrgBillingSettings } from "./billing-settings";
 import { resolveGauEntitlement } from "./contract-terms";
@@ -37,7 +36,6 @@ import {
 } from "./gau-bucket";
 import { claimAutoTopup, type GauSettlementRow } from "./gau-settlements";
 import { readDefaultPaymentMethod } from "./payment-methods";
-import { CREDIT_VALUE_USD } from "./pricing";
 import { logger } from "./logger";
 
 // ── The rate card (spec §4.1) ───────────────────────────────────────────────
@@ -126,10 +124,10 @@ export function resolveActionBand(annualActions: number): ActionRateBand {
 /**
  * Included governed actions per entitlement year, by subscription tier.
  *
- * These are the DEFAULTS. The authoritative figure is
- * `billing.plans.included_actions_annual` on the organisation's own plan row,
- * which is what a negotiated enterprise commitment writes to. This table is
- * what an organisation with no plan row falls back to, and what the rate-card
+ * These are the DEFAULTS. The authoritative figure is the organisation's own
+ * plan row, read as `included_gau_per_month × 12`
+ * (`resolveOrgActionEntitlement`, plan-allowance.ts). This table is what an
+ * organisation with no plan row falls back to, and what the rate-card
  * capability publishes.
  *
  * Enterprise is `null` — negotiated (spec §7.3). `null` means "read the plan
@@ -155,8 +153,9 @@ export const TIER_ACTION_ALLOWANCES: Readonly<Record<PlanTier, number | null>> =
 export const ENTERPRISE_FALLBACK_ALLOWANCE = 1_500_000;
 
 /**
- * Included actions for a tier, given the plan row's stored figure if there is
- * one. `planIncluded` comes from `billing.plans.included_actions_annual`.
+ * Included actions for a tier, given the plan row's own figure if there is
+ * one. `planIncluded` comes from `resolveOrgActionEntitlement`, which reads it
+ * as `billing.plans.included_gau_per_month × 12`.
  */
 export function resolveActionAllowance(
   tier: PlanTier,
@@ -174,7 +173,7 @@ export function resolveActionAllowance(
   if (fromTier !== null) return fromTier;
   logger.warn(
     { tier, alert: "billing_enterprise_allowance_missing" },
-    "billing: enterprise plan carries no included_actions_annual; falling back to the scale allowance rather than treating it as unlimited",
+    "billing: enterprise plan carries no annual allowance; falling back to the scale allowance rather than treating it as unlimited",
   );
   return ENTERPRISE_FALLBACK_ALLOWANCE;
 }
@@ -187,130 +186,19 @@ export const RETENTION_INCLUDED_MONTHS = 12;
 /** USD per GB-month for evidence held beyond {@link RETENTION_INCLUDED_MONTHS}. */
 export const RETENTION_USD_PER_GB_MONTH = 0.08;
 
-// ── Pricing actions (spec §4.1) ─────────────────────────────────────────────
-
-/**
- * What `count` governed actions are worth in whole credits at `band` — the
- * DISPLAY figure (a quote, a usage readout), rounded up. Published by the
- * rate-card and usage capabilities; the recorder charges nothing by it.
- */
-export function creditsForActions(
-  count: number,
-  band: ActionRateBand = ACTION_RATE_BANDS[0] as ActionRateBand,
-): bigint {
-  if (!Number.isFinite(count) || count <= 0) return 0n;
-  const credits = (count * band.usdPer1000) / 1000 / CREDIT_VALUE_USD;
-  return credits <= 0 ? 0n : BigInt(Math.ceil(credits));
-}
-
-/**
- * What a whole annual volume costs, priced at the single band the total lands
- * in — the §4.1 rule as written, in whole credits. A report figure:
- * `get_action_usage` prints it beside the annual counter until WL-27 retires
- * both with the dollar model they describe.
- */
-export function priceAnnualVolumeCredits(annualActions: number): bigint {
-  return creditsForActions(annualActions, resolveActionBand(annualActions));
-}
-
 // ── The entitlement period ──────────────────────────────────────────────────
 
 /**
  * First instant of the entitlement year containing `now`, UTC.
  *
- * The calendar year, because both the allowances (§4.2) and the volume bands
- * (§4.1) are annual and a calendar year needs no per-org state to compute. An
- * organisation on an annual contract with a different anniversary reconciles at
- * contract term (§6 step 5); the meter's own window does not have to match it
- * for the count to be right.
+ * The calendar year, because the published volume bands (§4.1) are annual and
+ * a calendar year needs no per-org state to compute. The GAU bucket the
+ * recorder debits has nothing to do with this window — it runs on the
+ * organisation's own month (`periodFor`, gau-bucket.ts). What is left here is
+ * the evidence-retention window `get_evidence_retention` reports.
  */
 export function actionPeriodStart(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-}
-
-// ── The counter ─────────────────────────────────────────────────────────────
-
-export interface ActionCounterState {
-  /** Actions taken in the period BEFORE this increment. */
-  before: number;
-  /** Actions taken in the period INCLUDING this increment. */
-  after: number;
-}
-
-/**
- * Add `actions` to the organisation's counter for the current period and return
- * the totals either side of the increment.
- *
- * One statement. The upsert takes the row lock, so a concurrent action for the
- * same organisation blocks and reads the post-write total rather than racing
- * it — which is what makes the allowance boundary exact under concurrency
- * instead of letting two calls both see themselves as the last free one.
- *
- * Reads through `withTenantDb`, so the caller must be inside a tenant scope.
- */
-export async function incrementActionCounter(
-  orgId: string,
-  actions: number,
-  chargedActions: number,
-  now: Date = new Date(),
-): Promise<ActionCounterState> {
-  const periodStart = actionPeriodStart(now);
-  const delta = BigInt(Math.max(0, Math.floor(actions)));
-  const chargedDelta = BigInt(Math.max(0, Math.floor(chargedActions)));
-
-  const rows = await withTenantDb((tx) =>
-    tx
-      .insert(schema.governedActionCounters)
-      .values({
-        orgId,
-        periodStart,
-        actionsUsed: delta,
-        actionsCharged: chargedDelta,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.governedActionCounters.orgId,
-          schema.governedActionCounters.periodStart,
-        ],
-        set: {
-          actionsUsed: sql`${schema.governedActionCounters.actionsUsed} + ${delta}`,
-          actionsCharged: sql`${schema.governedActionCounters.actionsCharged} + ${chargedDelta}`,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ actionsUsed: schema.governedActionCounters.actionsUsed }),
-  );
-
-  const after = Number(rows[0]?.actionsUsed ?? delta);
-  return { before: after - Number(delta), after };
-}
-
-/** Read the counter without changing it. Returns zeroes when no row exists. */
-export async function readActionCounter(
-  orgId: string,
-  now: Date = new Date(),
-): Promise<{ periodStart: Date; actionsUsed: number; actionsCharged: number }> {
-  const periodStart = actionPeriodStart(now);
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        actionsUsed: schema.governedActionCounters.actionsUsed,
-        actionsCharged: schema.governedActionCounters.actionsCharged,
-      })
-      .from(schema.governedActionCounters)
-      .where(
-        and(
-          eq(schema.governedActionCounters.orgId, orgId),
-          eq(schema.governedActionCounters.periodStart, periodStart),
-        ),
-      )
-      .limit(1),
-  );
-  return {
-    periodStart,
-    actionsUsed: Number(rows[0]?.actionsUsed ?? 0n),
-    actionsCharged: Number(rows[0]?.actionsCharged ?? 0n),
-  };
 }
 
 // ── The recorder ────────────────────────────────────────────────────────────
@@ -390,9 +278,6 @@ export async function recordGovernedAction(
 
   let autoTopup: GauSettlementRow | null = null;
   try {
-    // The annual counter `get_action_usage` reports until WL-27 retires both.
-    await incrementActionCounter(args.orgId, actions, 0, now);
-
     // c. Prepaid: at most one auto top-up episode at a time.
     if (mode === "prepaid" && remaining <= 0 && settings.autoTopupEnabled) {
       const card = await readDefaultPaymentMethod(args.orgId);

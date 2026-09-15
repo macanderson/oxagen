@@ -537,3 +537,31 @@ describe("buildContext", () => {
     expect(ctx.messageId).toBeNull();
   });
 });
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field; the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("buildContext and the platform-operator binding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("builds no platformOperator key at all", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
+
+    expect("platformOperator" in ctx).toBe(false);
+  });
+});

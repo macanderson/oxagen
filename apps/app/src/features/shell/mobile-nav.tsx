@@ -10,12 +10,7 @@ import { useTranslations } from "next-intl";
 import type { NavItem, NavKey, NavSection } from "./nav";
 import { isNavItemCurrent } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
-import {
-  SidebarFooter,
-  SidebarHeader,
-  SidebarNav,
-  useSidebarSections,
-} from "./sidebar";
+import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 
@@ -118,7 +113,6 @@ export function NavDrawer({ data }: { data: ShellData }) {
           </div>
           <SidebarHeader data={data} />
           <SidebarNav data={data} onNavigate={close} />
-          <SidebarFooter data={data} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

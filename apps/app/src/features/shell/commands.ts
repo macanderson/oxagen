@@ -33,7 +33,6 @@ export function buildCommands(
     go(key, orgHref(org, key));
     if (key === "organization") {
       go("apiKeys", orgHref(org, "apiKeys"));
-      go("roles", orgHref(org, "roles"));
     }
   }
   return out;

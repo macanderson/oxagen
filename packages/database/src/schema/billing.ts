@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -58,17 +59,6 @@ export const plans = billingSchema.table(
     annualCents: integer("annual_cents"),
     includedCreditCents: integer("included_credit_cents").notNull().default(0),
     includedSeats: integer("included_seats").notNull().default(1),
-    /**
-     * ADR-052 §4.2: governed actions included in this plan per entitlement
-     * year. Stored rather than implied — an absent allowance is
-     * indistinguishable from an unlimited one, and enterprise's "negotiated"
-     * figure has to live somewhere a query can read it. CHECK: >= 0.
-     */
-    includedActionsAnnual: bigint("included_actions_annual", {
-      mode: "bigint",
-    })
-      .notNull()
-      .default(sql`25000`),
     // ADR-055 §2: the published GAU terms of the tier. seed.ts writes them for
     // Free; pricing.ts writes them for the paid plans through
     // `pnpm billing:stripe-sync`. resolveContractTerms reads them live for an
@@ -750,66 +740,42 @@ export const spendBudgets = billingSchema.table(
   }),
 );
 
-// ── governed_action_counters ─────────────────────────────────────────────────
+// ── spend_counters ───────────────────────────────────────────────────────────
 //
-// ADR-052: the running count of governed actions an organisation has taken in
-// its current entitlement year, and how many of those were charged as overage.
+// The running spend counter the recorders keep for the spend-budget gate
+// (spec §12.5, ADR-060 §5). One row per (org, workspace, UTC day) in micro-USD:
+// every gateway-metered model call (`@oxagen/ai`) and every attested tacho
+// llm_call adds its cost with one INSERT … ON CONFLICT DO UPDATE. The gate and
+// the budget panel sum the rows over the ceiling's window in Postgres, so a
+// ClickHouse stall neither zeroes a ceiling nor denies a call (#2820).
 //
-// This is transactional state, not analytics, and the distinction is load
-// bearing. Deciding whether THIS action falls inside the allowance needs the
-// count INCLUDING this action, atomically. The recorder does one
-// INSERT … ON CONFLICT DO UPDATE … RETURNING, which takes the row lock and
-// answers in a single round trip on the invoke() hot path. The equivalent
-// ClickHouse read would be eventually consistent and a second query per
-// action; the per-capability breakdown stays there, where append-only
-// analytics belongs.
-//
-// `actionsUsed` counts free actions too. Without that an organisation could
-// not see how close it is to its allowance, because the ledger only records
-// what it was charged for.
-export const governedActionCounters = billingSchema.table(
-  "governed_action_counters",
+// workspace_id is NULL for a frame that carried no workspace (a gateway call
+// outside a workspace scope); an org-level ceiling sums every row, a workspace
+// ceiling the rows that name it.
+export const spendCounters = billingSchema.table(
+  "spend_counters",
   {
     id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — CASCADE so the counter vanishes with the org.
     orgId: uuid("org_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    /** First instant of the entitlement year this row counts, UTC. */
-    periodStart: timestamp("period_start", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    /** Governed actions taken in the period, allowance-covered ones included. */
-    actionsUsed: bigint("actions_used", { mode: "bigint" })
+    workspaceId: uuid("workspace_id"),
+    day: date("day", { mode: "string" }).notNull(),
+    // `sql\`0\``: drizzle-kit export cannot serialize a BigInt literal default.
+    spentMicros: bigint("spent_micros", { mode: "bigint" })
       .notNull()
       .default(sql`0`),
-    /** Of those, the ones charged as overage past the allowance. */
-    actionsCharged: bigint("actions_charged", { mode: "bigint" })
-      .notNull()
-      .default(sql`0`),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },
   (t) => ({
-    // The ON CONFLICT arbiter for the recorder's upsert, and the only read
-    // path, so one index covers both.
-    orgPeriodIdx: uniqueIndex("governed_action_counters_org_period_idx").on(
+    scopeDayIdx: uniqueIndex("spend_counters_scope_day_idx").on(
       t.orgId,
-      t.periodStart,
+      sql`coalesce(${t.workspaceId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      t.day,
     ),
-    nonNegativeCheck: check(
-      "governed_action_counters_used_non_negative",
-      sql`${t.actionsUsed} >= 0 AND ${t.actionsCharged} >= 0`,
-    ),
-    chargedWithinUsedCheck: check(
-      "governed_action_counters_charged_within_used",
-      sql`${t.actionsCharged} <= ${t.actionsUsed}`,
-    ),
+    spentCheck: check("spend_counters_spent_check", sql`${t.spentMicros} >= 0`),
   }),
 );
 

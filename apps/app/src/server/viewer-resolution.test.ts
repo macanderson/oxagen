@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { readError } from "@/data/not-backed";
+import { readError } from "@/data/read";
 import type { MfaPolicy } from "./mfa-gate";
 import type { AppSession } from "./session";
 import type { SystemLookups } from "./tenancy-lookups";

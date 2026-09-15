@@ -370,3 +370,39 @@ describe("capabilityContext requireOrg", () => {
     expect(body.userId).toBe("user-123");
   });
 });
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field, and the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("capabilityContext and the platform-operator binding", () => {
+  it("builds no platformOperator key at all", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({ hasKey: "platformOperator" in capabilityContext(c) }),
+      { orgId: "o1", workspaceId: "w1", userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+
+  it("builds no platformOperator key on the bootstrap shape either", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({
+        hasKey:
+          "platformOperator" in capabilityContext(c, { requireOrg: false }),
+      }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+});
