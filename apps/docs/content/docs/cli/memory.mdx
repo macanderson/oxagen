@@ -1,32 +1,32 @@
 ---
 title: Memory from the CLI
-description: Engram, the workspace's experiential memory — capture and recall lessons from the CLI, the OBSERVATION → RULE → FACT confidence ladder, and how memory is distinct from the knowledge graph.
+description: "Engram, the workspace's experiential memory: capture and recall lessons from the CLI, the OBSERVATION → RULE → FACT confidence ladder, and how memory is distinct from the knowledge graph."
 ---
 
-As the agent works, it learns things: that a test is flaky for a specific reason, that your team always uses `withTenantDb`, that the staging database is on an unusual port. **Agent memory** — powered by Oxagen's memory engine, **Engram** — is where those lessons live. Before starting new work the agent recalls the relevant ones, so it doesn't re-discover the same gotcha twice. This is the flywheel that makes the agent get better in *your* workspace over time.
+As the agent works, it learns things: that a test is flaky for a specific reason, that your team always uses `withTenantDb`, that the staging database is on an unusual port. **Agent memory**, powered by Oxagen's memory engine, **Engram**, is where those lessons live. Before starting new work the agent recalls the relevant ones, so it doesn't re-discover the same gotcha twice. This is the flywheel that makes the agent get better in *your* workspace over time.
 
-Memory is **workspace-scoped**: shared across every session, one-shot run, and fleet subagent in the workspace — not per-conversation, and never leaked across workspaces or organizations.
+Memory is **workspace-scoped**: shared across every session, one-shot run, and fleet subagent in the workspace, not per-conversation, and never leaked across workspaces or organizations.
 
 <Callout type="info">
-**Memory is not the knowledge graph.** Agent memory is *experiential* — what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural* — what your code and entities **are**. An agent draws on both: memory tells it what worked last time, the graph tells it how the system is wired.
+**Memory is not the knowledge graph.** Agent memory is *experiential*: what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural*: what your code and entities **are**. An agent draws on both: memory tells it what worked last time, the graph tells it how the system is wired.
 </Callout>
 
 ## The two axes
 
 Every memory has two independent axes, so "how sure are we it's true" is kept separate from "what is it about":
 
-- **Class** — the epistemic ladder, from tentative to settled: **OBSERVATION → RULE → FACT**.
-  - `OBSERVATION` — something noticed in passing.
-  - `RULE` — a distilled instruction the agent should follow, with an enforcement strength.
-  - `FACT` — settled ground truth (promotion to FACT requires human confirmation).
-- **Kind** — the content domain, an open label like `gotcha`, `convention-deviation`, `bug-root-cause`, `preference`, or `constraint`.
+- **Class**: the epistemic ladder, from tentative to settled: **OBSERVATION → RULE → FACT**.
+  - `OBSERVATION`: something noticed in passing.
+  - `RULE`: a distilled instruction the agent should follow, with an enforcement strength.
+  - `FACT`: settled ground truth (promotion to FACT requires human confirmation).
+- **Kind**: the content domain, an open label like `gotcha`, `convention-deviation`, `bug-root-cause`, `preference`, or `constraint`.
 
 And two independent scores:
 
-- **Confidence** (0–100) — how sure the memory is *true*. It decays over time and recovers when re-confirmed.
-- **Enforcement** (1–100, RULE only) — how strongly it *should* be followed.
+- **Confidence** (0–100): how sure the memory is *true*. It decays over time and recovers when re-confirmed.
+- **Enforcement** (1–100, RULE only): how strongly it *should* be followed.
 
-Frequently-cited, outcome-positive memories resist decay; unused ones fade and are archived (recoverable, not deleted). Citations create the pressure that surfaces promotion candidates — the self-improvement loop.
+Frequently-cited, outcome-positive memories resist decay; unused ones fade and are archived (recoverable, not deleted). Citations create the pressure that surfaces promotion candidates: the self-improvement loop.
 
 ## Capture a memory
 
@@ -37,7 +37,7 @@ From the REPL, `/remember` infers the class and kind from your text:
 ◇ saved RULE · gotcha
 ```
 
-Or from the shell, with `oxagen remember` — pin the class and enforcement when you want to:
+Or from the shell, with `oxagen remember`: pin the class and enforcement when you want to:
 
 ```bash
 oxagen remember "the staging DB listens on port 5433"
@@ -76,7 +76,7 @@ oxagen memory rm mem_01H…                           # delete
 
 ### Promote up the ladder
 
-When an observation has proven itself, promote it — this records an auditable event. The `--rationale` flag is optional; promotion needs nothing beyond the command itself:
+When an observation has proven itself, promote it: this records an auditable event. The `--rationale` flag is optional; promotion needs nothing beyond the command itself:
 
 ```bash
 oxagen memory promote mem_01H… --to rule --enforcement 80
@@ -88,7 +88,7 @@ oxagen memory promote mem_01H… --to fact \
 
 ### Demote back down
 
-The audited inverse of promote — for rules that stopped earning their citations or facts that turned out to be wrong. Direction is strictly downward; demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
+The audited inverse of promote: for rules that stopped earning their citations or facts that turned out to be wrong. Direction is strictly downward; demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
 
 ```bash
 oxagen memory demote mem_01H… --to observation
@@ -98,7 +98,7 @@ oxagen memory demote mem_01H… --to rule --enforcement 60 \
 
 ### Dismiss a promotion suggestion
 
-`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable — the memory stays active and recallable, but it leaves the queue permanently and the next candidate takes its slot:
+`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable: the memory stays active and recallable, but it leaves the queue permanently and the next candidate takes its slot:
 
 ```bash
 oxagen memory dismiss mem_01H…            # silence the suggestion
@@ -107,7 +107,7 @@ oxagen memory dismiss mem_01H… --restore  # let it re-qualify later
 
 ### Citation analytics
 
-A workspace-wide rollup of which memories and graph nodes agents actually cite, how useful those citations were, and where promoted rules get violated — the terminal view of the **Knowledge → Citations** dashboard:
+A workspace-wide rollup of which memories and graph nodes agents actually cite, how useful those citations were, and where promoted rules get violated: the terminal view of the **Knowledge → Citations** dashboard:
 
 ```bash
 oxagen memory citations                   # 30-day window, top 10 per list
@@ -131,9 +131,9 @@ The CLI commands on this page are the **curation** surface for that loop: review
 
 ## Governance
 
-Memory writes are governed by the same IAM model as every capability and produce an audit record — including both the human principal and the agent when written in delegated context. Because memory lives in the workspace graph, it is portable: a workspace's memories travel with the workspace, not locked to Oxagen's storage.
+Memory writes are governed by the same IAM model as every capability and produce an audit record: including both the human principal and the agent when written in delegated context. Because memory lives in the workspace graph, it is portable: a workspace's memories travel with the workspace, not locked to Oxagen's storage.
 
 ## Related
 
-- [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the structural context memory sits alongside.
-- [In-app agent memory](/docs/agent/memory) — the same memory, viewed and managed from the web app.
+- [Knowledge graph from the CLI](/docs/cli/knowledge-graph): the structural context memory sits alongside.
+- [In-app agent memory](/docs/agent/memory): the same memory, viewed and managed from the web app.

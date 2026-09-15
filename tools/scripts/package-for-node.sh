@@ -64,6 +64,9 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # `http://127.0.0.1:4300`, which is `STELLA_SERVE_URL`'s static value in
 # @oxagen/config's registry — the same number, held in two places, and a
 # mismatch shows up as "the assistant engine is unavailable" (ADR-053 §4).
+#
+# 3003 is taken outside this script: `internal-docs` is packaged and shipped by
+# infra/tools/deploy-internal-docs.sh, not built here. Do not hand it out.
 port_for() {
   case $1 in
     app)          echo 3000 ;;

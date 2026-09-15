@@ -1,4 +1,4 @@
--- Organization: roles and workspaces (issue #2964; ADR-057).
+-- Organization: roles and workspaces (issue #2964; ADR-063).
 --
 -- iam.roles: one role of each name per scope kind in an org (#2158). The
 -- seeded set carries an org "Owner" and a workspace "Owner", so the key is

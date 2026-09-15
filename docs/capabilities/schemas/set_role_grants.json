@@ -53,7 +53,7 @@
             "frame.read"
           ]
         },
-        "description": "Catalogue permission ids the role allows (ADR-057)"
+        "description": "Catalogue permission ids the role allows (ADR-063)"
       }
     },
     "required": [

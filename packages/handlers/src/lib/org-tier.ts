@@ -1,4 +1,4 @@
-// org-tier.ts — whether the kernel enforces roles for an org (ADR-057).
+// org-tier.ts — whether the kernel enforces roles for an org (ADR-063).
 //
 // `checkIAM` runs the resolver only when `canAccessACL(tier)` holds, the
 // enterprise tier (packages/iam/src/check-iam.ts; apps/app/ARCHITECTURE.md

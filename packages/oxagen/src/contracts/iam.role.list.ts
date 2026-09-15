@@ -10,7 +10,7 @@ import { PERMISSION_GROUPS } from "../iam/permission-catalog";
  * (allow / deny / require_approval), which catalogue permissions those grants
  * cover, and how many principals hold each role. The output carries the
  * permission catalogue the editor speaks and whether the kernel enforces
- * roles for this org's tier (ADR-057). `create_role`, `set_role_grants` and
+ * roles for this org's tier (ADR-063). `create_role`, `set_role_grants` and
  * `delete_role` are the writes.
  *
  * Powers the Organization › Roles page.

@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Delete a custom IAM role nobody holds (ADR-057). Mounted on the org-scoped router behind session auth. */
+/** Delete a custom IAM role nobody holds (ADR-063). Mounted on the org-scoped router behind session auth. */
 export const iamRoleDeleteRoute = new Hono<AppEnv>();
 
 iamRoleDeleteRoute.post("/", async (c) => {

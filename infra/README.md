@@ -206,7 +206,9 @@ plans, and the next merge applies. Nothing in the workflow needs to change.
 ## Serving from the node
 
 `stella.oxagen.sh`, `docs.oxagen.sh` and the platform's `app`, `api` and `mcp`
-are Node processes on the shared instance behind Caddy, not Lambda. **CloudFront
+are Node processes on the shared instance behind Caddy, not Lambda. `internal.oxagen.sh`
+(the password-protected internal docs) is a static export served by its own
+Caddy container on the same node; see `tools/node/README.md`. **CloudFront
 in front of a Lambda Function URL returns 403 for every request in this
 account** — ruled out: the resource policy, `RESPONSE_STREAM` invoke mode, a
 stale URL, and org SCPs (the account is in no Organization). A brand-new

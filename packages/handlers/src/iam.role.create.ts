@@ -1,4 +1,4 @@
-// `create_role`: a custom role from the permission catalogue (ADR-057).
+// `create_role`: a custom role from the permission catalogue (ADR-063).
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the
 //      signed-in user or the creator of the API key (resolveActingUserId).

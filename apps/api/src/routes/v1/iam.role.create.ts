@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Create a custom IAM role from the permission catalogue (ADR-057). Mounted on the org-scoped router behind session auth. */
+/** Create a custom IAM role from the permission catalogue (ADR-063). Mounted on the org-scoped router behind session auth. */
 export const iamRoleCreateRoute = new Hono<AppEnv>();
 
 iamRoleCreateRoute.post("/", async (c) => {

@@ -7,13 +7,13 @@ description: The tools exposed by the Oxagen MCP server, how they are named, and
 
 An MCP tool is named after the capability behind it, with no translation step. The capability `recall_memory` is the tool `recall_memory`.
 
-Capability names are verb-first snake_case — an imperative verb, then the thing it acts on, joined by underscores. See [Capability naming](/docs/api/capabilities#capability-naming) for the full rule. Because these names contain no dots, they are already legal MCP tool names, so what you call is exactly what the contract registry declares.
+Capability names are verb-first snake_case: an imperative verb, then the thing it acts on, joined by underscores. See [Capability naming](/docs/api/capabilities#capability-naming) for the full rule. Because these names contain no dots, they are already legal MCP tool names, so what you call is exactly what the contract registry declares.
 
 ## Available tools
 
 Every capability that lists `mcp` in its `surfaces` array becomes a tool. The table below covers the common ones; the [capabilities reference](/docs/api/capabilities) is the fuller list, and the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry.
 
-Your MCP client can also just ask. Call `tools/list` after connecting and the server returns every tool your API key is allowed to use, with its input schema — that answer is always current, and this page is not.
+Your MCP client can also just ask. Call `tools/list` after connecting and the server returns every tool your API key is allowed to use, with its input schema: that answer is always current, and this page is not.
 
 ### Agent
 
@@ -95,7 +95,7 @@ Your MCP client can also just ask. Call `tools/list` after connecting and the se
 
 ## Parity model
 
-The tool list is built from the same contract registry as the REST API. A capability that declares `mcp` in its `surfaces` array becomes a tool; one that does not is left out. Nobody keeps the two surfaces in sync by hand — the registry is the only list.
+The tool list is built from the same contract registry as the REST API. A capability that declares `mcp` in its `surfaces` array becomes a tool; one that does not is left out. Nobody keeps the two surfaces in sync by hand: the registry is the only list.
 
 ## Known gaps
 

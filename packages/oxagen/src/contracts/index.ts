@@ -15,6 +15,15 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
+import { agentList } from "./agent.list";
+import { agentGet } from "./agent.get";
+import { agentRegister } from "./agent.register";
+import { agentCredentialRotate } from "./agent.credential.rotate";
+import { agentSuspend } from "./agent.suspend";
+import { agentRetire } from "./agent.retire";
+import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentToolbeltGet } from "./agent.toolbelt.get";
+import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -90,6 +99,7 @@ import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
+import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
 import { billingInvoiceList } from "./billing.invoice.list";
 import { billingOrgTermsSet } from "./billing.org_terms.set";
 import { billingSubscriptionRead } from "./billing.subscription.read";
@@ -415,6 +425,15 @@ export {
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -488,6 +507,7 @@ export {
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingOrgTermsSet,
   billingSubscriptionRead,
@@ -681,6 +701,15 @@ export const contracts: readonly CapabilityDeclaration[] = [
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -751,6 +780,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingOrgTermsSet,
   billingSubscriptionRead,

@@ -1,5 +1,5 @@
 // The Organization › Roles and Workspaces backend against a real Postgres
-// (issue #2964, ADR-057): an enterprise org's Admin creates a custom role
+// (issue #2964, ADR-063): an enterprise org's Admin creates a custom role
 // over the catalogue, reads it back folded into permissions, is refused a
 // second custom role of the same name in either scope kind by the unique
 // indexes, replaces the grants, is refused a delete

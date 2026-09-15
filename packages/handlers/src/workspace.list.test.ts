@@ -177,6 +177,24 @@ describe("workspaceListHandler", () => {
       workspaceId: "",
     });
 
+    it("lists the organization's workspaces in creation order, so the first is its first workspace", async () => {
+      const { schema } = await import("@oxagen/database");
+      const { asc } = await import("drizzle-orm");
+      const orderBy = vi.fn().mockResolvedValue([]);
+      const tx = runInTx({ org, membership: { role: "owner" } });
+      tx.select.mockReturnValue({
+        from: () => ({ leftJoin: () => ({ where: () => ({ orderBy }) }) }),
+      });
+      await workspaceListHandler(
+        { includeArchived: false, orgSlug: "acme" },
+        session,
+      );
+      expect(orderBy).toHaveBeenCalledWith(
+        asc(schema.workspaces.createdAt),
+        asc(schema.workspaces.slug),
+      );
+    });
+
     it("refuses an organization the caller is not a member of as forbidden, listing nothing (negative)", async () => {
       const tx = runInTx({ org, membership: undefined });
       await expect(

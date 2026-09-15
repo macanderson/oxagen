@@ -1,7 +1,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -15,7 +15,8 @@ import { logger } from "./logger";
  * unknown slug gets the same refusal, so the answer does not reveal which
  * organization slugs exist. The caller's own
  * workspace role is left-joined (null when they're an org admin with no direct
- * workspace membership).
+ * workspace membership). Rows come in creation order, so the first is the
+ * organization's first workspace, the one the app's `/` landing opens.
  *
  * Auth: supports both session auth (ctx.userId set) and API-key auth
  * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
@@ -111,7 +112,8 @@ export const workspaceListHandler: CapabilityHandler<
               eq(schema.workspaces.orgId, org.id),
               isNull(schema.workspaces.archivedAt),
             ),
-      );
+      )
+      .orderBy(asc(schema.workspaces.createdAt), asc(schema.workspaces.slug));
     return {
       organization: {
         id: org.id,

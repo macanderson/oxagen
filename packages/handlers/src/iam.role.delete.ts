@@ -1,4 +1,4 @@
-// `delete_role`: remove a custom role nobody holds (ADR-057). Org Owner or
+// `delete_role`: remove a custom role nobody holds (ADR-063). Org Owner or
 // Admin; a system role is refused (`conflict`, `system_role_readonly`) and so
 // is a role with an active assignment (`conflict`, `role_in_use`) — a role is
 // never deleted out from under a holder. No tier gate: a custom role exists

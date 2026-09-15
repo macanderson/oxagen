@@ -1,5 +1,5 @@
 // `set_role_grants`: replace a custom role's grants with a permission set
-// (ADR-057). The same four steps as `create_role` — role gate, tier gate,
+// (ADR-063). The same four steps as `create_role` — role gate, tier gate,
 // delegation ceiling, one transaction — over an existing role, which must
 // be one of the org's (`not_found`) and not a system role (`conflict`,
 // `system_role_readonly`: built-in roles are read-only; duplicating is the

@@ -1,5 +1,5 @@
 // create_role, set_role_grants and delete_role over a fake role store
-// (ADR-057). The role gate reads the fake database by table, as in the other
+// (ADR-063). The role gate reads the fake database by table, as in the other
 // INV-29 handler tests; the store, the ceiling reads and the tier are fakes
 // the tests set per case. Every guard has its negative.
 import { beforeEach, describe, expect, it, vi } from "vitest";

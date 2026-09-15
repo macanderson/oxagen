@@ -1,6 +1,6 @@
 # iam.role.create
 
-`create_role`: a custom IAM role from the permission catalogue (ADR-057). One `allow` grant is written to `iam.role_grants` per capability the chosen permissions name, in the same transaction as the `iam.roles` row. Custom roles are agent roles: only `assign_agent_role` binds them; the seven membership roles stay the seeded system set.
+`create_role`: a custom IAM role from the permission catalogue (ADR-063). One `allow` grant is written to `iam.role_grants` per capability the chosen permissions name, in the same transaction as the `iam.roles` row. Custom roles are agent roles: only `assign_agent_role` binds them; the seven membership roles stay the seeded system set.
 
 ## Mode
 

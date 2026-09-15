@@ -5,8 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { type ReactNode, Suspense } from "react";
 import { THEME_SCRIPT } from "./theme";
 
-export async function ChromeSkeleton() {
-  const t = await getTranslations("shell");
+function ChromeSkeleton({ loading }: { loading: string }) {
   return (
     <>
       <div
@@ -22,7 +21,7 @@ export async function ChromeSkeleton() {
         data-testid="shell-loading"
         className="sticky top-0 z-30 flex h-[53px] items-center border-b border-app-topbar-border bg-app-topbar-bg px-4 md:col-start-2 md:row-start-1"
       >
-        <span className="sr-only">{t("loading")}</span>
+        <span className="sr-only">{loading}</span>
         <div
           aria-hidden="true"
           className="h-4 w-48 animate-pulse rounded bg-muted motion-reduce:animate-none"
@@ -32,13 +31,14 @@ export async function ChromeSkeleton() {
   );
 }
 
-export function ShellFrame({
+export async function ShellFrame({
   chrome,
   children,
 }: {
   chrome: ReactNode;
   children: ReactNode;
 }) {
+  const t = await getTranslations("shell");
   return (
     <div
       data-testid="shell"
@@ -50,8 +50,13 @@ export function ShellFrame({
         // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- constant pre-paint theme script, no user input
         dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }}
       />
-      <Suspense fallback={<ChromeSkeleton />}>{chrome}</Suspense>
-      <div className="min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0">
+      <Suspense fallback={<ChromeSkeleton loading={t("loading")} />}>
+        {chrome}
+      </Suspense>
+      <div
+        data-shell-page=""
+        className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
+      >
         {children}
       </div>
     </div>

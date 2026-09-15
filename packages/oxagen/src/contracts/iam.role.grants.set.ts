@@ -5,7 +5,7 @@ import { roleRow } from "./iam.role.list";
 
 /**
  * set_role_grants — replace a custom role's grants with the permission set
- * given (ADR-057).
+ * given (ADR-063).
  *
  * Every grant the role carried is removed and one `allow` grant per
  * capability the permissions name is written, in one transaction, so a

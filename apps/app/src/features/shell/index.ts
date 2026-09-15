@@ -3,10 +3,8 @@
 //
 // Server entries: the organization layout renders <ShellFrame> with
 // <ShellChrome ctx>, handing it the context it resolved. The workspace layout
-// resolves its viewer itself and renders nothing from here.
+// resolves its viewer itself and renders nothing from here. The root page
+// renders <Landing>, which redirects to the viewer's first workspace.
+export { Landing } from "./landing";
 export { ShellChrome } from "./shell-chrome";
 export { ShellFrame } from "./shell-frame";
-
-// The phone navigation seam (feedback 3, plan §6 Q3): the design replaces the
-// body of <MobileNav> and keeps its props.
-export { MobileNav, type MobileNavProps } from "./mobile-nav";

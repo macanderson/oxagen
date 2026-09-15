@@ -1,6 +1,6 @@
 -- Admit workspace.archived, iam.role_created, iam.role_grants_set and
 -- iam.role_deleted to the security_events event_type CHECK (issue #2964,
--- ADR-057).
+-- ADR-063).
 --
 -- Archiving a workspace and changing a role definition are privileged
 -- configuration changes (SOC2 CC6.1): the first freezes a tenant's workspace,

@@ -20,8 +20,8 @@ vi.mock("@oxagen/auth/route", () => ({ handleAuthRequest: route }));
 import { routes } from "@/shared/safe-path";
 import {
   getAuthUser,
+  getSession,
   handleAuthRequest,
-  readSession,
   requestPasswordReset,
   resetPassword,
   sendVerificationEmail,
@@ -31,13 +31,13 @@ beforeEach(() => {
   for (const fn of [...Object.values(api), route]) fn.mockReset();
 });
 
-describe("readSession", () => {
+describe("getSession", () => {
   it("returns the Better Auth user, normalised", async () => {
     api.getSession.mockResolvedValue({
       user: { id: "u1", email: "a@b.c", name: "", image: undefined },
       session: { id: "s1" },
     });
-    await expect(readSession()).resolves.toEqual({
+    await expect(getSession()).resolves.toEqual({
       user: { id: "u1", email: "a@b.c", name: null, image: null },
     });
     expect(api.getSession).toHaveBeenCalledWith({ headers: requestHeaders });
@@ -45,7 +45,7 @@ describe("readSession", () => {
 
   it("returns null when Better Auth has no session (negative)", async () => {
     api.getSession.mockResolvedValue(null);
-    await expect(readSession()).resolves.toBeNull();
+    await expect(getSession()).resolves.toBeNull();
   });
 });
 

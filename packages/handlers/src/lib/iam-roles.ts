@@ -1,4 +1,4 @@
-// iam-roles.ts — the store the role editor writes through (ADR-057).
+// iam-roles.ts — the store the role editor writes through (ADR-063).
 //
 // `create_role`, `set_role_grants` and `delete_role` run their whole check
 // and write inside one `withTenantDb` transaction through this interface, so

@@ -54,7 +54,73 @@ const EVERYWHERE: readonly Placement[] = [
   { at: "src/ui/navigation.tsx", fails: true },
   { at: "src/server/viewer.ts", fails: true },
 ];
+/** INV-12: interface prose everywhere under src/ but test-only modules. */
+const PROSE_SINK: readonly Placement[] = [
+  { at: "src/features/shell/sidebar.tsx", fails: true },
+  { at: "src/ui/page-header.tsx", fails: true },
+  { at: "src/app/[org]/billing/page.tsx", fails: true },
+  { at: "src/features/shell/shell-client.test.tsx", fails: false },
+];
+/** INV-09: a number is formatted only in src/ui/money-format.ts. */
+const FORMAT_SINK: readonly Placement[] = [
+  { at: "src/features/billing/invoices.tsx", fails: true },
+  { at: "src/ui/money.tsx", fails: true },
+  { at: "src/data/contracts/money.ts", fails: true },
+  { at: "src/ui/money-format.ts", fails: false },
+];
+/** INV-09: BigInt only in src/data/contracts/money.ts. */
+const BIGINT_SINK: readonly Placement[] = [
+  { at: "src/ui/money-format.ts", fails: true },
+  { at: "src/features/billing/purchase-form.tsx", fails: true },
+  { at: "src/data/contracts/money.ts", fails: false },
+];
 const PROBES: Readonly<Record<string, Probe>> = {
+  "prose-text.tsx": { rule: "invariants/prose", placements: PROSE_SINK },
+  "prose-attribute.tsx": { rule: "invariants/prose", placements: PROSE_SINK },
+  "prose-attribute-expression.tsx": {
+    rule: "invariants/prose",
+    placements: PROSE_SINK,
+  },
+  "translated-prose.tsx": {
+    rule: "invariants/prose",
+    placements: [
+      { at: "src/features/shell/sidebar.tsx", fails: false },
+      { at: "src/app/[org]/billing/page.tsx", fails: false },
+    ],
+  },
+  "number-format-new.ts": {
+    rule: "invariants/number-format",
+    placements: FORMAT_SINK,
+  },
+  "number-format-call.ts": {
+    rule: "invariants/number-format",
+    placements: FORMAT_SINK,
+  },
+  "to-fixed.ts": { rule: "invariants/number-format", placements: FORMAT_SINK },
+  "to-locale-string.ts": {
+    rule: "invariants/number-format",
+    placements: FORMAT_SINK,
+  },
+  "get-formatter-number.ts": {
+    rule: "invariants/formatter-number",
+    placements: FORMAT_SINK,
+  },
+  "bound-formatter-number.ts": {
+    rule: "invariants/formatter-number",
+    placements: FORMAT_SINK,
+  },
+  "destructured-formatter-number.ts": {
+    rule: "invariants/formatter-number",
+    placements: FORMAT_SINK,
+  },
+  "other-number-calls.ts": {
+    rule: "invariants/formatter-number",
+    placements: [
+      { at: "src/features/billing/invoices.tsx", fails: false },
+      { at: "src/data/contracts/money.ts", fails: false },
+    ],
+  },
+  "bigint.ts": { rule: "invariants/bigint", placements: BIGINT_SINK },
   "type-assertion.ts": {
     rule: "@typescript-eslint/consistent-type-assertions",
     placements: VIEWER_SEAM,

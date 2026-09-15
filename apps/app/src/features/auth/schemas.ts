@@ -6,20 +6,23 @@ import { z } from "zod";
 
 /** Better Auth's own bounds (packages/auth/src/auth.ts minPasswordLength, reset action max). */
 export const PASSWORD_MIN = 8;
-export const PASSWORD_MAX = 128;
+const PASSWORD_MAX = 128;
 
-export type AuthErrorKey =
-  | "emailRequired"
-  | "emailInvalid"
-  | "passwordRequired"
-  | "passwordTooShort"
-  | "passwordTooLong"
-  | "passwordsDiffer"
-  | "nameRequired"
-  | "nameTooLong"
-  | "codeInvalid"
-  | "backupCodeInvalid"
-  | "tokenMissing";
+/** The catalog keys under `auth.errors.*` a schema issue may carry. */
+const AUTH_ERROR_KEYS = [
+  "emailRequired",
+  "emailInvalid",
+  "passwordRequired",
+  "passwordTooShort",
+  "passwordTooLong",
+  "passwordsDiffer",
+  "nameRequired",
+  "nameTooLong",
+  "codeInvalid",
+  "backupCodeInvalid",
+  "tokenMissing",
+] as const;
+export type AuthErrorKey = (typeof AUTH_ERROR_KEYS)[number];
 
 const email = z
   .string()
@@ -43,7 +46,6 @@ export const LoginSchema = z.object({
     .max(PASSWORD_MAX, { error: "passwordTooLong" }),
   rememberMe: z.boolean().default(true),
 });
-export type LoginInput = z.input<typeof LoginSchema>;
 
 export const SignupSchema = z.object({
   name: z
@@ -54,9 +56,8 @@ export const SignupSchema = z.object({
   email,
   password: newPassword,
 });
-export type SignupInput = z.input<typeof SignupSchema>;
 
-export const TOTP_PATTERN = /^\d{6}$/;
+const TOTP_PATTERN = /^\d{6}$/;
 
 export const TwoFactorSchema = z.discriminatedUnion("method", [
   z.object({
@@ -71,10 +72,8 @@ export const TwoFactorSchema = z.discriminatedUnion("method", [
       .regex(/^[A-Za-z0-9-]{6,32}$/, { error: "backupCodeInvalid" }),
   }),
 ]);
-export type TwoFactorInput = z.input<typeof TwoFactorSchema>;
 
 export const ForgotPasswordSchema = z.object({ email });
-export type ForgotPasswordInput = z.input<typeof ForgotPasswordSchema>;
 
 export const ResendVerificationSchema = z.object({ email });
 
@@ -88,17 +87,20 @@ export const ResetPasswordSchema = z
     path: ["confirmPassword"],
     error: "passwordsDiffer",
   });
-export type ResetPasswordInput = z.input<typeof ResetPasswordSchema>;
 
 /** Field → first error key, for rendering one message under each field. */
-export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
+export type FieldErrors<K extends string = string> = Partial<
+  Record<K, AuthErrorKey>
+>;
 
+/** Each field's first error as a catalog key; an issue outside the catalog keys is dropped. */
 export function fieldErrors(error: z.ZodError): FieldErrors {
   const out: FieldErrors = {};
   for (const issue of error.issues) {
     const field = issue.path[0];
-    if (typeof field !== "string") continue;
-    out[field] ??= issue.message;
+    const key = AUTH_ERROR_KEYS.find((k) => k === issue.message);
+    if (typeof field !== "string" || key === undefined) continue;
+    out[field] ??= key;
   }
   return out;
 }

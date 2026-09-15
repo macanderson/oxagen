@@ -1,7 +1,7 @@
 // delegation-ceiling.ts — a granter cannot hand out more than they hold.
 //
 // The one implementation of the rule the mockup states on every role
-// screen and ADR-057 records: a role about to be attached to an agent
+// screen and ADR-063 records: a role about to be attached to an agent
 // (`assign_agent_role`) or written by the role editor (`create_role`,
 // `set_role_grants`) may not confer, for any capability, an outcome less
 // restrictive than the granting user's own. The granter is resolved per

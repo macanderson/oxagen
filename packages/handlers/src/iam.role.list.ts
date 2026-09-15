@@ -17,7 +17,7 @@ import { logger } from "./logger";
  * Reads the org's IAM roles, their capability grants, the catalogue
  * permissions those grants cover, who created each role, and the count of
  * active principal assignments per role — with the permission catalogue and
- * whether the kernel enforces roles for the org's tier (ADR-057). The IAM
+ * whether the kernel enforces roles for the org's tier (ADR-063). The IAM
  * tables live in the dedicated `iam` Postgres schema and are read through
  * withSystemDb, so tenant isolation is enforced HERE explicitly: every query
  * filters by ctx.orgId. Never relax this — role/grant data is the org's

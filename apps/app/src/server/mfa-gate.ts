@@ -9,10 +9,7 @@
 import { routes } from "@/shared/safe-path";
 
 /** Roles the hard gate applies to (lowercase). */
-export const MFA_PRIVILEGED_ROLES: ReadonlySet<string> = new Set([
-  "owner",
-  "admin",
-]);
+const MFA_PRIVILEGED_ROLES: ReadonlySet<string> = new Set(["owner", "admin"]);
 
 /**
  * Where an unenrolled privileged member is sent. It lives outside `[org]`, so

@@ -1,4 +1,4 @@
--- Organization: one custom role per name in an org (issue #2964; ADR-057).
+-- Organization: one custom role per name in an org (issue #2964; ADR-063).
 --
 -- `roles_org_scope_name_uq` (20260915140000) keys names per scope kind, which
 -- admits a custom org role and a custom workspace role of the same name.

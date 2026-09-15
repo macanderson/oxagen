@@ -150,6 +150,15 @@
     },
     {
       "domain": "agent",
+      "name": "commit_agent_definition",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "commit_memory_import",
       "reads": [],
       "surfaces": [
@@ -602,6 +611,17 @@
     },
     {
       "domain": "agent",
+      "name": "get_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "get_agent_def",
       "reads": [],
       "surfaces": [
@@ -617,6 +637,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "get_agent_toolbelt",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1259,6 +1289,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_agents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "api_key",
       "name": "list_api_keys",
       "reads": [],
@@ -1393,6 +1433,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1837,6 +1887,17 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "purchase_gau_bucket",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "purge_conversations",
       "reads": [],
@@ -1912,6 +1973,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "register_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -2002,6 +2073,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "retire_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "reveal_secret",
       "reads": [],
@@ -2058,6 +2138,15 @@
     {
       "domain": "tacho",
       "name": "revoke_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "rotate_agent_credential",
       "reads": [],
       "surfaces": [
         "api"
@@ -2382,6 +2471,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suspend_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -2719,7 +2817,7 @@
       "writes": []
     }
   ],
-  "contentHash": "056b5613a8dda525702a3bbe3c85a659cacadc3426480f055e22becae850c5df",
+  "contentHash": "b66ed4bb4ac8b32e68716b7d7f8180cca2bcc79777496ee9fc3e293aa25762ac",
   "domains": [
     {
       "name": "agent",
@@ -6268,6 +6366,42 @@
           "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "definition_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -6403,6 +6537,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",

@@ -15,12 +15,6 @@ type Failure = "denied" | "closed" | "failed";
 const failureOf = (reason: string): Failure =>
   reason === "denied" ? "denied" : reason === "conflict" ? "closed" : "failed";
 
-const FAILURE_COPY = {
-  denied: "denied",
-  closed: "closedTitle",
-  failed: "failed",
-} as const satisfies Record<Failure, string>;
-
 export function InviteDecision({
   token,
   orgName,
@@ -71,7 +65,11 @@ export function InviteDecision({
     <div className="flex flex-col gap-3">
       {failure ? (
         <FormAlert testId="invite-failure">
-          {t(FAILURE_COPY[failure])}
+          {failure === "denied"
+            ? t("denied")
+            : failure === "closed"
+              ? t("closedTitle")
+              : t("failed")}
         </FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,5 @@
 // permission-catalog.ts — the permission catalogue the role editor speaks
-// (ADR-057; Mission Control mockup `PERMS`, `mc.html`).
+// (ADR-063; Mission Control mockup `PERMS`, `mc.html`).
 //
 // A permission is a named bundle of registered capabilities in one of seven
 // groups. The catalogue is the vocabulary of `create_role` and

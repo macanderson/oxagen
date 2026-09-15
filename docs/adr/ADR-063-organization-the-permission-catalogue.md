@@ -1,4 +1,4 @@
-# ADR-057: Organization: the permission catalogue
+# ADR-063: Organization: the permission catalogue
 
 - **Status:** Accepted
 - **Date:** 2026-09-15

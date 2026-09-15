@@ -1,25 +1,23 @@
 ---
-title: Oxagen for the enterprise
-description: Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. One typed contract, not a log file to reconstruct after the fact.
+title: Oxagen docs
+description: Oxagen is the control plane for agent work. Wrap the agents you already run, put every run on the record with its cost, and decide what each agent may do before it does it.
 ---
 
-## The problem your organization already has
+## Where you are
 
-AI adoption is accelerating faster than governance can follow. Engineers connect directly to OpenAI. Sales teams paste customer data into ChatGPT. Finance analysts build automations in LLM notebooks no one approved. Every one of those interactions is invisible to your security team, unaudited, and unaccountable.
-
-This is shadow AI — and the exposure it creates is real: data sent to unknown models, no audit trail for your next SOC 2 review, no way to enforce which teams can do what, no metering to understand what you are actually spending. The agent doesn't know your business either, so it starts every job from zero and forgets what it learned by morning. You rent intelligence by the token and own none of it.
+Your team runs coding agents in terminals today. Each one holds a key, acts as whoever installed it, and reports done when it decides it is done. Afterward, nobody can say what it read, what it changed, or what it cost.
 
 ## What Oxagen does
 
-Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. Four jobs, one platform, one loop: what a proven run teaches feeds back into what the next run is taught.
+Oxagen sits beside the agents you already run. It does not run them and it does not replace them. Claude Code, Codex, SDK agents, and agents you wrote yourself keep working the way they work today.
 
-### Teach
+### Wrap
 
-Oxagen gives every agent your company's knowledge and rules at run time, from a typed knowledge graph — not by training a model. The agent starts each job already knowing your customers, your code, and how you work. See [the knowledge graph](/docs/knowledge).
+`oxagen tacho enroll` installs hooks in Claude Code and Codex on one machine. From then on, every run on that machine is recorded as a hash-chained sequence of frames and shipped to your workspace: what the agent was told, every tool call, every model call, every decision. The hooks answer in under 50 milliseconds and keep answering if the collector is down. See [the Oxagen app](/docs/cli/desktop) and [the CLI](/docs/cli).
 
 ### Govern
 
-Every agent gets an identity, a role, and a budget. Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary that checks it against those before the action runs, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural. See [governance and RBAC](/docs/governance/overview).
+Every agent has an identity, a role, and a budget. Every capability, whether a model call, a tool call, or a memory write, passes one `invoke()` boundary that checks identity, role, budget, and entitlement before the handler runs, then writes the audit record. There is no second path, so a new integration cannot skip it by accident. See [governance and RBAC](/docs/governance/overview).
 
 <Mermaid chart={`
 flowchart TD
@@ -34,34 +32,25 @@ flowchart TD
 
 *The order `invoke()` runs in. Every gate sits before the handler, so a refused call never touches data, and both outcomes leave an audit record.*
 
-### Explain
+### Record
 
-Oxagen saves every run as a trace next to the data it touched. Anyone with the right role can see who asked, what the agent read, what it changed, what proved it, and what it cost. See [audit logging](/docs/security/audit-logging).
+Every run is saved next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores hold it, one in Postgres with seven-year retention and one in ClickHouse with chain-hash tamper evidence. See [audit logging](/docs/security/audit-logging).
 
-### Learn
+### Spend
 
-Proven runs write skills, tools, and tuned settings back to the graph the next run starts with. Over time, the proven runs can train a model you own. See [agent memory](/docs/agent/memory).
+Every model call and tool call is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
 
-## Built for the enterprise security review
+### Ground
 
-### Tenant isolation with row-level security
+A typed knowledge graph hands an agent your company's facts and rules at run time, scoped to what the caller may see, with a citation on every answer. See [the knowledge graph](/docs/knowledge).
 
-Every row in every tenant-scoped table carries `org_id` and `workspace_id` columns, and Postgres row-level security (RLS) is enforced by the database itself — not by application-layer predicates a developer might forget. The non-superuser `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows, not another tenant's rows.
+### Remember
 
-The same principle extends to Neo4j (scoped session guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). A cross-tenant data exposure is structurally impossible at every layer.
+What a run learned is written back as memory the next run reads, with a count of how often each memory fired and what it cost. See [agent memory](/docs/agent/memory).
 
-### SOC 2-aligned controls
+## One capability model, three surfaces
 
-Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The Trust Service Criteria are architectural requirements:
-
-- **CC6 (access control):** role-based IAM — org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer) — resolved per capability at the `invoke()` boundary on Enterprise organizations, recorded access requests for approval-gated capabilities, member access reviews, and force-revoke on any session.
-- **CC7 (monitoring):** two independent audit stores — a Postgres `security.security_events` table with 7-year retention and a ClickHouse `audit_events` table with chain-hash tamper evidence — covering 40 typed event kinds from every auth, billing, and capability invocation.
-- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
-- **CC9 (risk mitigation):** no first-party agent-execution runtime for the platform itself to compromise — Oxagen governs agents, it does not run them; capabilities with high blast radius require explicit user approval before they run.
-
-### Parity across API, MCP, and in-app agent
-
-Every capability is declared once in the contract registry and exposed identically across three programmable surfaces: the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Running a compliance check, firing an automation, or writing agent memory produces the same audit record regardless of which surface the action came from. Your governance model does not have gaps.
+Every capability is declared once in the contract registry and exposed identically across the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Running a compliance check, firing an automation, or writing agent memory produces the same audit record whichever surface the action came from.
 
 <Mermaid chart={`
 flowchart LR
@@ -73,9 +62,28 @@ flowchart LR
   K --> CH[("ClickHouse<br/>audit_events")]
 `} />
 
+## Built for the security review
+
+### Tenant isolation with row-level security
+
+Every row in every tenant-scoped table carries `org_id` and `workspace_id`, and Postgres row-level security is enforced by the database itself, not by application predicates a developer might forget. The `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows.
+
+The same rule holds in Neo4j (a scoped session guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). See [tenant isolation](/docs/security/tenant-isolation-rls).
+
+### SOC 2 controls
+
+The Trust Service Criteria are architectural requirements, not a retrofit:
+
+- **CC6 (access control):** role-based IAM with org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer), resolved per capability at the `invoke()` boundary, recorded access requests for approval-gated capabilities, member access reviews, and force-revoke on any login session.
+- **CC7 (monitoring):** two independent audit stores covering 40 typed event kinds from every auth, billing, and capability call.
+- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
+- **CC9 (risk mitigation):** Oxagen governs agents and does not run them, so there is no first-party agent runtime to compromise. Capabilities with a high blast radius need explicit approval before they run.
+
+See [the SOC 2 controls mapping](/docs/security/soc2).
+
 ## Where to start
 
-- [Getting started](/docs/getting-started) — sign up, create your organization and workspace, send your first message.
-- [Security overview](/docs/security/overview) — the full controls picture for your security team.
-- [SOC 2 controls mapping](/docs/security/soc2) — how Oxagen controls map to Trust Service Criteria.
-- [Enterprise use cases](/docs/enterprise/use-cases) — concrete scenarios for CIOs: stopping shadow AI, passing your next audit, isolating business units, bringing your own models.
+- [Getting started](/docs/getting-started): sign up, create your organization and workspace, wrap one machine.
+- [The CLI](/docs/cli): query the graph, cap spend, read a run, and manage keys from the terminal.
+- [Security overview](/docs/security/overview): the full controls picture for your security team.
+- [Enterprise use cases](/docs/enterprise/use-cases): what a CIO uses Oxagen for.

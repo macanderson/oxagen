@@ -3,12 +3,18 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../messages/en.json";
 import { UNRECORDED, type UnrecordedKey } from "@/data/unrecorded";
 import { NotRecorded } from "./not-recorded";
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: the NotRecorded state is checked by axe in each test.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 function renderWithIntl(element: ReactElement) {

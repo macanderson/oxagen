@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Replace a custom IAM role's grants with a permission set (ADR-057). Mounted on the org-scoped router behind session auth. */
+/** Replace a custom IAM role's grants with a permission set (ADR-063). Mounted on the org-scoped router behind session auth. */
 export const iamRoleGrantsSetRoute = new Hono<AppEnv>();
 
 iamRoleGrantsSetRoute.post("/", async (c) => {

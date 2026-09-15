@@ -1,43 +1,9 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run.",
-    "skipToContent": "Skip to content"
+    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
   },
   "routes": {
-    "home": {
-      "title": "Mission Control"
-    },
-    "login": {
-      "title": "Log in"
-    },
-    "signup": {
-      "title": "Create your account"
-    },
-    "verify": {
-      "title": "Verify your email"
-    },
-    "twoFactor": {
-      "title": "Two-factor authentication"
-    },
-    "forgotPassword": {
-      "title": "Reset your password"
-    },
-    "resetPassword": {
-      "title": "Choose a new password"
-    },
-    "invite": {
-      "title": "Accept your invitation"
-    },
-    "newOrganization": {
-      "title": "Create your organization"
-    },
-    "cliAuthorize": {
-      "title": "Authorize the Oxagen CLI"
-    },
-    "githubSetup": {
-      "title": "Finish connecting GitHub"
-    },
     "organization": {
       "title": "Organization"
     },
@@ -46,9 +12,6 @@
     },
     "billing": {
       "title": "Billing"
-    },
-    "audit": {
-      "title": "Audit"
     },
     "fleet": {
       "title": "Fleet"
@@ -61,9 +24,6 @@
     },
     "tools": {
       "title": "Tools"
-    },
-    "ontology": {
-      "title": "Ontology"
     },
     "steering": {
       "title": "Steering"
@@ -79,19 +39,6 @@
     "spend": "Spend by operator and agent, and costed findings, are not recorded here yet.",
     "run": {
       "frames_wrapped": "Frames of a wrapped run are not recorded yet."
-    }
-  },
-  "states": {
-    "denied": {
-      "title": "You do not have access",
-      "body": "This needs the {permission} permission. Ask an organization admin to grant it."
-    },
-    "error": {
-      "title": "This could not load",
-      "body": "Error {code} (HTTP {status}). Try again in a moment."
-    },
-    "empty": {
-      "title": "Nothing here yet"
     }
   },
   "notFound": {

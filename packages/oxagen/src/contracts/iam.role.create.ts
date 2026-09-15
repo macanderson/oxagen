@@ -16,10 +16,10 @@ export const roleNameSchema = z
 export const rolePermissionsSchema = z
   .array(z.enum(PERMISSION_IDS))
   .min(1, "A role with no permissions grants nothing — pick at least one")
-  .describe("Catalogue permission ids the role allows (ADR-057)");
+  .describe("Catalogue permission ids the role allows (ADR-063)");
 
 /**
- * create_role — a custom role from the permission catalogue (ADR-057).
+ * create_role — a custom role from the permission catalogue (ADR-063).
  *
  * One `allow` grant is written per capability the chosen permissions name.
  * The handler refuses a granter who does not hold every one of those

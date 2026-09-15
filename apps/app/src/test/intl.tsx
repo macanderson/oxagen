@@ -3,10 +3,10 @@
 // arguments the simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
-import auth from "../../../messages/auth.json";
-import en from "../../../messages/en.json";
-import onboarding from "../../../messages/onboarding.json";
-import ui from "../../../messages/ui.json";
+import auth from "../../messages/auth.json";
+import en from "../../messages/en.json";
+import onboarding from "../../messages/onboarding.json";
+import ui from "../../messages/ui.json";
 
 export const messages = { ...en, ...auth, ...onboarding, ...ui };
 

@@ -6,10 +6,8 @@ import {
   Fingerprint,
   KeyRound,
   type LucideIcon,
-  Network,
   Radar,
   Receipt,
-  ScrollText,
   Wrench,
 } from "lucide-react";
 import type { NavKey } from "./nav";
@@ -18,11 +16,9 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   fleet: Radar,
   agents: Fingerprint,
   tools: Wrench,
-  ontology: Network,
   steering: Compass,
   spend: Coins,
   organization: Building2,
   billing: Receipt,
-  audit: ScrollText,
   apiKeys: KeyRound,
 };

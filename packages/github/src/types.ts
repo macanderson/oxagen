@@ -168,6 +168,19 @@ export interface GitHubClient {
   }): Promise<{ number: number; htmlUrl: string }>;
 
   /**
+   * List pull requests, narrowed by head branch and state. `head` is
+   * `owner:branch`, the filter GitHub applies to `GET /pulls`. The one
+   * `POST /pulls` refuses with 422 — a head that already has an open pull
+   * request — is the one this finds first.
+   */
+  listPullRequests(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    state: "open" | "closed" | "all";
+  }): Promise<{ number: number; htmlUrl: string }[]>;
+
+  /**
    * Return the login of the authenticated user.
    */
   getAuthenticatedUser(): Promise<{ login: string }>;

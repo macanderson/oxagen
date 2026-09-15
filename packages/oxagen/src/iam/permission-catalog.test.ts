@@ -1,4 +1,4 @@
-// The catalogue's three shape rules (ADR-057) and the two folds the role
+// The catalogue's three shape rules (ADR-063) and the two folds the role
 // editor and the roles read use.
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";

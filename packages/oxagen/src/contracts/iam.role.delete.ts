@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /**
- * delete_role — remove a custom role nobody holds (ADR-057).
+ * delete_role — remove a custom role nobody holds (ADR-063).
  *
  * The role row and its grants go; the audit record keeps the definition and
  * every grant it carried (the kernel's `capability.invoke_*` events). The

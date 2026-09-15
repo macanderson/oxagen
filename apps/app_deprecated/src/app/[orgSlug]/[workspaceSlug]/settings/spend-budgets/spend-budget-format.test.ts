@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatMoney,
   formatUsd,
   formatWindow,
+  moneyFromUsd,
+  usdFromMoney,
   validateLimitUsd,
   validateWindowDays,
 } from "./spend-budget-format";
@@ -89,5 +92,72 @@ describe("validateLimitUsd", () => {
 
   it("NaN is invalid", () => {
     expect(validateLimitUsd(Number.NaN)).not.toBeNull();
+  });
+});
+
+describe("usdFromMoney", () => {
+  it("converts whole micro-units to major units", () => {
+    expect(usdFromMoney({ micros: "250000000", currency: "USD" })).toBe(250);
+  });
+
+  it("keeps the sub-dollar remainder", () => {
+    expect(usdFromMoney({ micros: "1234500000", currency: "USD" })).toBe(
+      1234.5,
+    );
+  });
+
+  it("keeps whole dollars exact past what a float division would hold", () => {
+    // 10^15 micros is $10^9; the integer part is taken with BigInt, so the
+    // dollars survive rather than being rounded by `Number(micros) / 1e6`.
+    expect(usdFromMoney({ micros: "1000000000000000", currency: "USD" })).toBe(
+      1_000_000_000,
+    );
+  });
+
+  it("carries the sign of a negative amount", () => {
+    expect(usdFromMoney({ micros: "-1500000", currency: "USD" })).toBe(-1.5);
+  });
+
+  it("converts zero", () => {
+    expect(usdFromMoney({ micros: "0", currency: "USD" })).toBe(0);
+  });
+});
+
+describe("moneyFromUsd", () => {
+  it("converts major units to micro-units as a decimal string", () => {
+    expect(moneyFromUsd(250)).toEqual({
+      micros: "250000000",
+      currency: "USD",
+    });
+  });
+
+  it("rounds a sub-micro amount to the nearest micro rather than truncating", () => {
+    expect(moneyFromUsd(0.0000005).micros).toBe("1");
+  });
+
+  it("round-trips through usdFromMoney", () => {
+    expect(usdFromMoney(moneyFromUsd(1234.56))).toBe(1234.56);
+  });
+
+  it("takes a non-USD currency when one is given", () => {
+    expect(moneyFromUsd(10, "EUR").currency).toBe("EUR");
+  });
+});
+
+describe("formatMoney", () => {
+  it("formats a USD amount the way formatUsd formats the same figure", () => {
+    expect(formatMoney({ micros: "1234500000", currency: "USD" })).toBe(
+      formatUsd(1234.5),
+    );
+  });
+
+  it("formats zero", () => {
+    expect(formatMoney({ micros: "0", currency: "USD" })).toBe("$0.00");
+  });
+
+  it("formats in the amount's own currency, not always USD", () => {
+    const formatted = formatMoney({ micros: "1000000", currency: "EUR" });
+    expect(formatted).toContain("1.00");
+    expect(formatted).not.toContain("$");
   });
 });
