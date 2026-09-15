@@ -13,6 +13,7 @@ import {
   privacyErasureExecuteOnFailure,
 } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
+import { mandateExpiry } from "./functions/mandate.expiry";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
 import {
   ingestionDeleteConnection,
@@ -54,6 +55,7 @@ export const functions: any[] = [
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
   authSessionExpiryAudit,
+  mandateExpiry,
   ingestionPipeline,
   ingestionDeleteConnection,
   ingestionDeleteConnectionOnFailure,

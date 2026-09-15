@@ -6,6 +6,7 @@ import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal
 
 const gate = vi.hoisted(() => ({ refuse: false }));
 vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
   assertOrgRole: async () => {

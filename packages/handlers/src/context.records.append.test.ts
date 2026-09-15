@@ -5,6 +5,7 @@ import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.a
 // The role gate reads iam.principal_role_assignments; the tests decide it.
 const gate = vi.hoisted(() => ({ refuse: false }));
 vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
   assertOrgRole: async () => {

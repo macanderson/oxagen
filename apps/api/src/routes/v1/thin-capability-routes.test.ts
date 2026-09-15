@@ -95,6 +95,19 @@ import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
+import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
+import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
+import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
+import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
+import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
+import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
+import { runGet } from "@oxagen/oxagen/contracts/run.get";
+import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { tachoEnrollmentCreate } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
+import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
+import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
+import { tachoSessionGet } from "@oxagen/oxagen/contracts/tacho.session.get";
+import { tachoSessionList } from "@oxagen/oxagen/contracts/tacho.session.list";
 
 import { agentCredentialRotateRoute } from "./agent.credential.rotate";
 import { agentDefinitionCommitRoute } from "./agent.definition.commit";
@@ -164,6 +177,19 @@ import { iamRoleDeleteRoute } from "./iam.role.delete";
 import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
+import { mandateGetRoute } from "./mandate.get";
+import { mandateGrantRoute } from "./mandate.grant";
+import { mandateLimitsUpdateRoute } from "./mandate.limits.update";
+import { mandateListRoute } from "./mandate.list";
+import { mandateRequestRoute } from "./mandate.request";
+import { mandateRevokeRoute } from "./mandate.revoke";
+import { runGetRoute } from "./run.get";
+import { runListRoute } from "./run.list";
+import { tachoEnrollmentCreateRoute } from "./tacho.enrollment.create";
+import { tachoEnrollmentRevokeRoute } from "./tacho.enrollment.revoke";
+import { tachoHostListRoute } from "./tacho.host.list";
+import { tachoSessionGetRoute } from "./tacho.session.get";
+import { tachoSessionListRoute } from "./tacho.session.list";
 
 const CTX = {
   orgId: "11111111-1111-1111-1111-111111111111",
@@ -177,6 +203,15 @@ const CTX = {
 
 const UUID = "33333333-3333-4333-8333-333333333333";
 const OUTPUT = { ok: true };
+const HOST_ENROLLMENT_ID = "tch_0123456789abcdefghijkl";
+/** A Tacho enrollment's required fields; the contract defaults the rest. */
+const ENROLLMENT_BODY = {
+  hostname: "build-01.acme.internal",
+  osUser: "runner",
+  platform: "darwin",
+  devicePublicKey: `ed25519:${"A".repeat(42)}==`,
+  harnesses: ["claude-code"],
+};
 
 interface ThinRoute {
   /** Route file stem — the test name, so a failure names the file. */
@@ -191,6 +226,12 @@ interface ThinRoute {
   expectedInput?: unknown;
   /** A body the contract must reject. Omitted for bodyless GET routes. */
   invalidBody?: unknown;
+  /**
+   * The handler wraps `c.req.json()` in a try/catch that answers 400 rather
+   * than letting a parse error reach the error middleware. Set it where the
+   * handler has that guard, and a malformed body is asserted to stop there.
+   */
+  jsonGuard?: true;
   status: number;
 }
 
@@ -704,6 +745,7 @@ const ROUTES: ThinRoute[] = [
     capability: billingInvoiceList.name,
     body: { limit: 10 },
     invalidBody: { limit: 0 },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -713,6 +755,7 @@ const ROUTES: ThinRoute[] = [
     capability: billingAutoTopupSet.name,
     body: { enabled: true, blocks: 2 },
     invalidBody: { enabled: true, blocks: 0 },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -847,6 +890,7 @@ const ROUTES: ThinRoute[] = [
       target: { kind: "run", id: "tse_a1b2c3" },
       command: "steer",
     },
+    jsonGuard: true,
     status: 201,
   },
   {
@@ -857,6 +901,7 @@ const ROUTES: ThinRoute[] = [
     body: { runId: "tse_a1b2c3" },
     expectedInput: { runId: "tse_a1b2c3", limit: 50 },
     invalidBody: { runId: "not-a-run-id" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -930,6 +975,10 @@ const ROUTES: ThinRoute[] = [
       source: "builtin",
       manifest: { v: 1 },
       read_only: false,
+      // Both carry a schema default, so the parsed input the route dispatches
+      // holds them even when the body declares neither (ADR-059 decision 6).
+      consequence_tags: [],
+      measures: {},
     },
     invalidBody: {
       name: "read_file",
@@ -954,6 +1003,7 @@ const ROUTES: ThinRoute[] = [
       period: { from: "2026-09-30", to: "2026-09-01" },
       groupBy: "operator",
     },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -964,6 +1014,7 @@ const ROUTES: ThinRoute[] = [
     body: { kind: "agent", key: "acme.core.cc" },
     expectedInput: { kind: "agent", key: "acme.core.cc", days: 30 },
     invalidBody: { kind: "model", key: "claude-sonnet-5" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -973,6 +1024,7 @@ const ROUTES: ThinRoute[] = [
     capability: spendWasteList.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-02-30", to: "2026-03-01" } },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -983,6 +1035,7 @@ const ROUTES: ThinRoute[] = [
     body: { month: "2026-09" },
     expectedInput: { month: "2026-09", format: "csv" },
     invalidBody: { month: "2026-13" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -992,6 +1045,7 @@ const ROUTES: ThinRoute[] = [
     capability: runCostGet.name,
     body: { runId: "tse_0192d4a87c1e7a0080000000" },
     invalidBody: { runId: "run_1" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -1001,6 +1055,254 @@ const ROUTES: ThinRoute[] = [
     capability: costPriceEntryList.name,
     body: { at: "2026-09-14T00:00:00.000Z" },
     invalidBody: { at: "yesterday" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "mandate.get",
+    route: mandateGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateGet.name,
+    body: { mandateId: "mnd_01j9k3" },
+    expectedInput: { mandateId: "mnd_01j9k3", ledgerLimit: 100 },
+    // A memory id, not a mandate public id: the contract owns the prefix.
+    invalidBody: { mandateId: "m_1" },
+    status: 200,
+  },
+  {
+    file: "mandate.grant",
+    route: mandateGrantRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateGrant.name,
+    body: {
+      agentId: "agt_1",
+      consequenceTags: ["moves_money"],
+      limits: {
+        refund_amount: {
+          perCall: "50000000",
+          perPeriod: "500000000",
+          period: "daily",
+          currencyOrUnit: "USD",
+        },
+      },
+      tools: ["stripe.refund@1"],
+      purpose: "issue refunds under fifty dollars without waking a person",
+      validFrom: "2026-09-01T00:00:00.000Z",
+      validTo: "2026-12-01T00:00:00.000Z",
+    },
+    expectedInput: {
+      agentId: "agt_1",
+      consequenceTags: ["moves_money"],
+      limits: {
+        refund_amount: {
+          perCall: "50000000",
+          perPeriod: "500000000",
+          period: "daily",
+          currencyOrUnit: "USD",
+        },
+      },
+      targets: {},
+      tools: ["stripe.refund@1"],
+      approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
+      purpose: "issue refunds under fifty dollars without waking a person",
+      validFrom: "2026-09-01T00:00:00.000Z",
+      validTo: "2026-12-01T00:00:00.000Z",
+    },
+    // validTo before validFrom — the body's cross-field refinement.
+    invalidBody: {
+      ...{
+        agentId: "agt_1",
+        consequenceTags: ["moves_money"],
+        limits: {
+          refund_amount: {
+            perCall: "50000000",
+            perPeriod: "500000000",
+            period: "daily",
+            currencyOrUnit: "USD",
+          },
+        },
+        tools: ["stripe.refund@1"],
+        purpose: "issue refunds under fifty dollars without waking a person",
+        validFrom: "2026-09-01T00:00:00.000Z",
+        validTo: "2026-12-01T00:00:00.000Z",
+      },
+      validTo: "2026-08-01T00:00:00.000Z",
+    },
+    status: 200,
+  },
+  {
+    file: "mandate.limits.update",
+    route: mandateLimitsUpdateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateLimitsUpdate.name,
+    body: { mandateId: "mnd_01j9k3", validTo: "2026-12-31T00:00:00.000Z" },
+    // Names no change: the contract refuses an update that updates nothing.
+    invalidBody: { mandateId: "mnd_01j9k3" },
+    status: 200,
+  },
+  {
+    file: "mandate.list",
+    route: mandateListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateList.name,
+    body: {},
+    expectedInput: { limit: 50 },
+    // "paused" is not one of draft/active/expired/revoked.
+    invalidBody: { status: "paused" },
+    status: 200,
+  },
+  {
+    file: "mandate.request",
+    route: mandateRequestRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateRequest.name,
+    body: {
+      agentId: "agt_1",
+      consequenceTags: ["moves_money"],
+      limits: {
+        refund_amount: {
+          perCall: "50000000",
+          perPeriod: "500000000",
+          period: "daily",
+          currencyOrUnit: "USD",
+        },
+      },
+      tools: ["stripe.refund@1"],
+      purpose: "issue refunds under fifty dollars without waking a person",
+      validFrom: "2026-09-01T00:00:00.000Z",
+      validTo: "2026-12-01T00:00:00.000Z",
+    },
+    expectedInput: {
+      agentId: "agt_1",
+      consequenceTags: ["moves_money"],
+      limits: {
+        refund_amount: {
+          perCall: "50000000",
+          perPeriod: "500000000",
+          period: "daily",
+          currencyOrUnit: "USD",
+        },
+      },
+      targets: {},
+      tools: ["stripe.refund@1"],
+      approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
+      purpose: "issue refunds under fifty dollars without waking a person",
+      validFrom: "2026-09-01T00:00:00.000Z",
+      validTo: "2026-12-01T00:00:00.000Z",
+    },
+    // A mandate over no tool pattern grants nothing and is refused.
+    invalidBody: {
+      ...{
+        agentId: "agt_1",
+        consequenceTags: ["moves_money"],
+        limits: {
+          refund_amount: {
+            perCall: "50000000",
+            perPeriod: "500000000",
+            period: "daily",
+            currencyOrUnit: "USD",
+          },
+        },
+        tools: ["stripe.refund@1"],
+        purpose: "issue refunds under fifty dollars without waking a person",
+        validFrom: "2026-09-01T00:00:00.000Z",
+        validTo: "2026-12-01T00:00:00.000Z",
+      },
+      tools: [],
+    },
+    status: 200,
+  },
+  {
+    file: "mandate.revoke",
+    route: mandateRevokeRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: mandateRevoke.name,
+    body: { mandateId: "mnd_01j9k3", reason: "the agent shipped its refund" },
+    // Revoking is a recorded act: an empty reason is refused.
+    invalidBody: { mandateId: "mnd_01j9k3", reason: "" },
+    status: 200,
+  },
+  {
+    file: "run.get",
+    route: runGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runGet.name,
+    body: { runId: "tse_0192d4a87c1e7a0080000000" },
+    expectedInput: {
+      runId: "tse_0192d4a87c1e7a0080000000",
+      frameLimit: 200,
+      waitMs: 0,
+    },
+    // waitMs is a long-poll budget the handler holds open: it is capped.
+    invalidBody: { runId: "tse_0192d4a87c1e7a0080000000", waitMs: 60_000 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "run.list",
+    route: runListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runList.name,
+    body: {},
+    expectedInput: { limit: 50 },
+    invalidBody: { limit: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tacho.enrollment.create",
+    route: tachoEnrollmentCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoEnrollmentCreate.name,
+    body: ENROLLMENT_BODY,
+    expectedInput: { ...ENROLLMENT_BODY, managed: false, validityDays: 180 },
+    // Not an Ed25519 key: an enrollment without one can sign nothing.
+    invalidBody: { ...ENROLLMENT_BODY, devicePublicKey: "ed25519:short" },
+    jsonGuard: true,
+    status: 201,
+  },
+  {
+    file: "tacho.enrollment.revoke",
+    route: tachoEnrollmentRevokeRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoEnrollmentRevoke.name,
+    body: { hostEnrollmentId: HOST_ENROLLMENT_ID, reason: "laptop returned" },
+    invalidBody: { hostEnrollmentId: "tch_1" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tacho.host.list",
+    route: tachoHostListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoHostList.name,
+    body: {},
+    expectedInput: { limit: 50 },
+    // "retired" is not one of active/paused/suspended/revoked.
+    invalidBody: { status: "retired" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tacho.session.get",
+    route: tachoSessionGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoSessionGet.name,
+    body: { sessionUuid: UUID },
+    invalidBody: { sessionUuid: "session-1" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tacho.session.list",
+    route: tachoSessionListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoSessionList.name,
+    body: {},
+    expectedInput: { includeChildren: false, limit: 50 },
+    // "finished" is not one of running/completed/aborted/crashed/unknown.
+    invalidBody: { outcome: "finished" },
+    jsonGuard: true,
     status: 200,
   },
 ];
@@ -1021,6 +1323,17 @@ async function call(entry: ThinRoute, body: unknown): Promise<Response> {
           body: JSON.stringify(body),
         };
   return await entry.route.fetch(new Request("http://localhost/", init));
+}
+
+/** The same request, but the body is not JSON at all. */
+async function callMalformed(entry: ThinRoute): Promise<Response> {
+  return await entry.route.fetch(
+    new Request("http://localhost/", {
+      method: entry.method,
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    }),
+  );
 }
 
 describe("thin capability routes", () => {
@@ -1050,4 +1363,14 @@ describe("thin capability routes", () => {
     expect(res.status).not.toBe(entry.status);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
+
+  it.each(ROUTES.filter((r) => r.jsonGuard).map((r) => [r.file, r] as const))(
+    "%s answers 400 for a body that is not JSON",
+    async (_file, entry) => {
+      const res = await callMalformed(entry);
+
+      expect(res.status).toBe(400);
+      expect(mocks.invoke).not.toHaveBeenCalled();
+    },
+  );
 });

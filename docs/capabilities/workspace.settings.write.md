@@ -14,13 +14,17 @@ set it, pass `null` (description and avatarUrl only) to clear it. The target
 is the active workspace, or the one `workspaceId` names in the organization
 (the Organization › Workspaces section edits from an org scope). Routes the
 workspace settings edit through the capability kernel so the same fields are
-reachable from the agent, MCP, and CLI with consistent audit.
+reachable from the agent, MCP, and CLI with consistent audit. It also carries
+the workspace's consequence-role overrides for mandates.
 
 The handler checks roles (`assertOrgRole`, INV-29). Org Owners and Admins edit
 any workspace of the organization. The Owner or Admin of the workspace the call
 is scoped to edits that workspace only: a call that sets `workspaceId` requires
 an org Owner or Admin and is refused with `forbidden` / `org_role_required`
-otherwise. `noBillingGate`:
+otherwise. `consequenceRoles` is the org Owner's alone, because the map decides
+who may grant a mandate over money and the other consequences (ADR-059
+decision 1); any other acting user is refused with `forbidden` /
+`org_role_required` and nothing is written. `noBillingGate`:
 a settings write, never a governed action (ADR-052 exclusion 2).
 
 ## Input
@@ -32,6 +36,7 @@ a settings write, never a governed action (ADR-052 exclusion 2).
 | slug        | string (1–100, kebab-case), optional | New URL slug; must be unique within the org                                                                         |
 | description | string (≤2000) \| null, optional     | Free-text description; `null` clears it                                                                             |
 | avatarUrl   | string \| null, optional             | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
+| consequenceRoles | Record<tag, OrgRole[]>, optional | The consequence-role overrides for mandates (ADR-059 decision 1); replaces the stored overrides as a whole, a tag left out falls back to the default; org Owner only |
 
 ## Output
 
@@ -41,6 +46,7 @@ a settings write, never a governed action (ADR-052 exclusion 2).
 | slug        | string         | URL slug after the update                  |
 | description | string \| null | Description after the update               |
 | avatarUrl   | string \| null | Avatar after the update; `null` when unset |
+| consequenceRoles | Record<tag, OrgRole[]> | The effective map after the update, as `get_workspace_settings` returns it |
 
 ## Side effects
 
@@ -51,7 +57,7 @@ ClickHouse observes the invocation via the kernel; the change is audit-logged.
 
 | code            | reason                               | when                                                                                                                                          |
 | --------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `forbidden`     | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside the accepted roles |
+| `forbidden`     | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside the accepted roles; `org_role_required` also when `consequenceRoles` comes from an acting user who is not an org Owner |
 | `not_found`     | `workspace_not_found`                | no workspace with that public id in the org, or the active one is not in the org                                                              |
 | `conflict`      | `slug_taken`                         | the slug is already used by another workspace in the org                                                                                      |
 | `invalid_input` | —                                    | the slug fails the contract's validator (kernel)                                                                                              |

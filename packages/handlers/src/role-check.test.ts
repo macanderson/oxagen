@@ -29,6 +29,9 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "request_mandate",
+  "publish_tool_declaration",
+  "update_workspace_settings",
 ] as const;
 
 const SRC = join(__dirname);
