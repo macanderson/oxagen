@@ -229,6 +229,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     let registered: Awaited<ReturnType<typeof agentRegisterHandler>>;
+    let firstRetire: Awaited<ReturnType<typeof agentRetireHandler>>;
 
     it("register_agent mints the row, its principal and one credential whose secret is returned once and never stored", async () => {
       registered = await inScope(owner, () =>
@@ -352,6 +353,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const out = await inScope(owner, () =>
         agentRetireHandler({ agentId: "release-bot", reason: "done" }, ctx()),
       );
+      firstRetire = out;
       expect(out).toMatchObject({
         agentId: registered.agentId,
         status: "retired",
@@ -405,15 +407,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(read.hosts.map((h) => h.revokedAt !== null)).toEqual([true]);
     });
 
-    it("a retired identity answers retire again without a write and refuses rotate and suspend", async () => {
+    it("a retired identity answers retire again with the recorded instant, without a write, and refuses rotate and suspend", async () => {
       mocks.emitSecurityEvent.mockClear();
       const again = await inScope(owner, () =>
         agentRetireHandler({ agentId: "release-bot" }, ctx()),
       );
-      expect(again).toMatchObject({
+      expect(again).toEqual({
+        agentId: registered.agentId,
         status: "retired",
         revokedCredentials: 0,
         revokedHosts: 0,
+        retiredAt: firstRetire.retiredAt,
       });
       expect(eventTypes()).toEqual([]);
       const retired = (err: unknown) =>

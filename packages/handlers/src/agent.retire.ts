@@ -41,7 +41,15 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
     if (agent.status === "archived") {
-      return { agent, already: true, credentials: 0, hosts: 0, retiredAt: now };
+      // The retirement below is the last identity write an archived agent
+      // takes, so its `updated_at` is the instant recorded then.
+      return {
+        agent,
+        already: true,
+        credentials: 0,
+        hosts: 0,
+        retiredAt: agent.updatedAt,
+      };
     }
 
     await tx

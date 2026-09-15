@@ -29,6 +29,8 @@ export interface AgentIdentityRow {
   harness: string;
   status: string;
   createdAt: Date;
+  /** The last identity write; for an archived agent, the retirement. */
+  updatedAt: Date;
   principalId: string | null;
   principalPublicId: string | null;
   principalStatus: string | null;
@@ -44,6 +46,7 @@ const identityColumns = {
   harness: schema.agents.harness,
   status: schema.agents.status,
   createdAt: schema.agents.createdAt,
+  updatedAt: schema.agents.updatedAt,
   principalId: schema.agents.principalId,
   principalPublicId: schema.principals.publicId,
   principalStatus: schema.principals.status,
