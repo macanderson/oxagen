@@ -32,6 +32,12 @@ vi.mock("./logger", () => ({
   logger: { error: loggerError, warn: loggerWarn, info: loggerInfo },
 }));
 
+// `bootstrap` wires `checkMandate` into the gate but never calls it here.
+// Without this mock every `freshModule()` re-imports the real mandate
+// module graph after `vi.resetModules()`, and the first test pays that
+// cold import: past vitest's 5s timeout under CI coverage instrumentation.
+vi.mock("./mandates", () => ({ checkMandate: vi.fn() }));
+
 const RULES: RuleSet = {
   schema: "oxagen.decision-rules.v1",
   rules: [
