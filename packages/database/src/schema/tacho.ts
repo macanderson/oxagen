@@ -47,12 +47,22 @@ export const TACHO_HOST_STATUSES = [
   "revoked",
 ] as const;
 export const TACHO_HOST_MODES = ["observe", "enforce"] as const;
+/**
+ * The runtimes `tacho.sessions.runtime` is CHECKed to. Mirrored by
+ * `TACHO_RUNTIMES` in `packages/tacho/src/envelope.ts` (a leaf package that
+ * cannot import this one); `packages/handlers/src/tacho.runtimes.test.ts`
+ * fails when the two lists drift, and `packages/database/src/schema/tacho.test.ts`
+ * fails when the latest migration redefining `tacho_sessions_runtime_check`
+ * does not carry every value here. Widening this list is a new Atlas
+ * migration that drops and re-adds that constraint.
+ */
 export const TACHO_RUNTIMES = [
   "claude-code",
   "claude-agent-sdk",
   "custom",
   "stella",
   "proxy",
+  "codex",
 ] as const;
 export const TACHO_SESSION_OUTCOMES = [
   "running",

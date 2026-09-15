@@ -52,9 +52,12 @@ const PROVIDER_LABEL: Record<
 export function NewOrgForm({
   action,
   prefill,
+  returnTo = null,
 }: {
   action: NewOrgAction;
   prefill?: OrgSignupPrefill;
+  /** Same-origin path to land on instead of the new workspace (validated by the page). */
+  returnTo?: string | null;
 }) {
   // The default account type drives which name the form seeds: a business org
   // name (derived from the email domain) for "business", the user's own name
@@ -142,7 +145,9 @@ export function NewOrgForm({
       // renders the new org/workspace tree from scratch on the server, so the
       // org appears in the switcher with no stale App Router cache and no race.
       // This path runs once per org create, so the full reload cost is moot.
-      window.location.assign(`/${res.orgSlug}/${res.workspaceSlug}`);
+      window.location.assign(
+        returnTo ?? `/${res.orgSlug}/${res.workspaceSlug}`,
+      );
     });
   };
 

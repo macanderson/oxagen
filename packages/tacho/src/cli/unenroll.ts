@@ -3,6 +3,12 @@
  * entries and env keys (every foreign entry survives), stop and remove the
  * service, revoke the enrollment on the control plane, and delete the host
  * key and credentials. The WAL stays for inspection unless `--purge`.
+ *
+ * `revoked_at` in host.json means "retired on this machine at": the hooks
+ * are gone and no `enroll` re-applies them. It says nothing about the
+ * control plane — a revoke that could not be made (offline, no token) is
+ * retried by the next `unenroll` or `reassign`, and the handler answers
+ * idempotently for one that already went through.
  */
 import { existsSync, rmSync, unlinkSync } from "node:fs";
 import { stripCodexHooks } from "../host/codex-writer";
@@ -83,28 +89,44 @@ export async function revokeOnControlPlane(
   return false;
 }
 
-export async function unenroll(
-  options: UnenrollOptions,
+/**
+ * Revoke on the control plane (a retry when host.json is already marked)
+ * and record the enrollment as retired locally, so a later `enroll` takes
+ * the fresh path instead of re-applying this enrollment's hooks. Returns
+ * whether the control plane confirmed.
+ */
+export async function revokeAndMark(
+  host: HostFile,
+  options: CredentialOptions & { reason?: string },
   deps: CliDeps,
-): Promise<UnenrollResult> {
-  const warnings: string[] = [];
-  const host = readHostFile(deps.paths.hostFile);
+  warnings: string[],
+): Promise<boolean> {
+  const revoked = await revokeOnControlPlane(host, options, deps, warnings);
+  if (host.revoked_at === null) {
+    writeHostFile(deps.paths.hostFile, {
+      ...host,
+      revoked_at: toProtocolTimestamp(deps.now()),
+    });
+  }
+  return revoked;
+}
 
-  deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
-  const current = deps.readSettings();
+/**
+ * Remove one enrollment's hook entries from every harness file, keeping
+ * every foreign entry. Codex is stripped whether or not host.json lists it:
+ * a host.json lost mid-way must not leave hooks behind.
+ */
+export function stripEnrollmentHooks(
+  host: Pick<HostFile, "host_enrollment_id" | "displaced_env"> | undefined,
+  deps: CliDeps,
+): { settingsChanged: boolean; codexChanged: boolean } {
   const stripped = stripTachoSettings(
-    current,
+    deps.readSettings(),
     host?.host_enrollment_id,
     host?.displaced_env ?? {},
   );
-  if (stripped.changed) {
-    deps.writeSettings(stripped.settings);
-    deps.out("      removed; every non-Tacho entry kept");
-  } else {
-    deps.out("      nothing to remove");
-  }
-  // Codex hooks are stripped whether or not host.json lists the harness: a
-  // host.json lost mid-way must not leave hooks behind.
+  if (stripped.changed) deps.writeSettings(stripped.settings);
+  let codexChanged = false;
   const codexCurrent = deps.readCodexHooks();
   if (codexCurrent !== undefined) {
     const codexStripped = stripCodexHooks(
@@ -113,8 +135,28 @@ export async function unenroll(
     );
     if (codexStripped.changed) {
       deps.writeCodexHooks(codexStripped.settings);
-      deps.out(`      removed from ${deps.paths.codexHooks} too`);
+      codexChanged = true;
     }
+  }
+  return { settingsChanged: stripped.changed, codexChanged };
+}
+
+export async function unenroll(
+  options: UnenrollOptions,
+  deps: CliDeps,
+): Promise<UnenrollResult> {
+  const warnings: string[] = [];
+  const host = readHostFile(deps.paths.hostFile);
+
+  deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
+  const stripped = stripEnrollmentHooks(host, deps);
+  if (stripped.settingsChanged) {
+    deps.out("      removed; every non-Tacho entry kept");
+  } else {
+    deps.out("      nothing to remove");
+  }
+  if (stripped.codexChanged) {
+    deps.out(`      removed from ${deps.paths.codexHooks} too`);
   }
 
   deps.out(`[2/4] Stopping the ${deps.serviceManager.kind} service`);
@@ -129,24 +171,23 @@ export async function unenroll(
   let revoked = false;
   if (host === undefined) {
     deps.out("[3/4] No enrollment on this machine; nothing to revoke");
-  } else if (host.revoked_at !== null) {
-    deps.out(`[3/4] Enrollment already revoked at ${host.revoked_at}`);
-    revoked = true;
   } else {
-    deps.out(`[3/4] Revoking ${host.host_enrollment_id} on ${host.api_url}`);
-    revoked = await revokeOnControlPlane(
+    // A host.json already marked retired is one whose revoke did not go
+    // through last time (a fleet-page revoke reaches the host as
+    // host_status, never as revoked_at): ask the control plane again. The
+    // handler is idempotent, so a revoke that did land costs one request.
+    deps.out(
+      host.revoked_at !== null
+        ? `[3/4] Finishing the revoke of ${host.host_enrollment_id} pending since ${host.revoked_at}`
+        : `[3/4] Revoking ${host.host_enrollment_id} on ${host.api_url}`,
+    );
+    revoked = await revokeAndMark(
       host,
       { ...options, reason: options.reason ?? "tacho unenroll" },
       deps,
       warnings,
     );
     if (revoked) deps.out("      revoked");
-    if (!revoked) {
-      writeHostFile(deps.paths.hostFile, {
-        ...host,
-        revoked_at: toProtocolTimestamp(deps.now()),
-      });
-    }
   }
 
   deps.out(`[4/4] Removing host credentials under ${deps.paths.root}`);
@@ -162,7 +203,7 @@ export async function unenroll(
     if (existsSync(deps.paths.hostFile)) unlinkSync(deps.paths.hostFile);
   } else {
     deps.out(
-      "      host.json kept (marked revoked locally) so a later `tacho unenroll` can finish the server-side revoke",
+      "      host.json kept (marked retired locally) so a later `tacho unenroll` can finish the server-side revoke",
     );
   }
   if (options.purge === true) {
@@ -178,5 +219,10 @@ export async function unenroll(
     deps.out(`      WAL kept at ${deps.paths.wal} (pass --purge to delete)`);
   }
   for (const warning of warnings) deps.err(`warning: ${warning}`);
-  return { ok: true, settingsChanged: stripped.changed, revoked, warnings };
+  return {
+    ok: true,
+    settingsChanged: stripped.settingsChanged,
+    revoked,
+    warnings,
+  };
 }

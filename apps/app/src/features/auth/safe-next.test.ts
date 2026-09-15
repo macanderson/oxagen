@@ -3,6 +3,7 @@ import {
   DEFAULT_NEXT,
   MAX_NEXT_LENGTH,
   firstParam,
+  nextParam,
   sanitizeNext,
   withNext,
 } from "./safe-next";
@@ -63,6 +64,16 @@ describe("firstParam", () => {
     expect(firstParam(["/a", "/b"])).toBe("/a");
     expect(firstParam("/a")).toBe("/a");
     expect(firstParam(undefined)).toBeUndefined();
+  });
+});
+
+describe("nextParam", () => {
+  it("reads next, falling back to the CLI's returnTo", () => {
+    const authorize = "/cli/authorize?state=abc&label=laptop";
+    expect(nextParam({ returnTo: authorize })).toBe(authorize);
+    expect(nextParam({ next: "/acme", returnTo: authorize })).toBe("/acme");
+    expect(nextParam({ returnTo: ["/a", "/b"] })).toBe("/a");
+    expect(nextParam({})).toBeUndefined();
   });
 });
 

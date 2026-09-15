@@ -41,9 +41,9 @@ for (const c of audited.audit?.corrections ?? []) {
 }
 
 const esc = (s) => String(s ?? "").replace(/\|/g, "\\|");
-const code = (xs) => (xs?.length ? xs.map((x) => `\`${x}\``).join(" ") : "—");
+const code = (xs) => (xs?.length ? xs.map((x) => `\`${x}\``).join(" ") : "none");
 
-let md = `# Mission Control — traceability matrix
+let md = `# Oxagen Mission Control: traceability matrix
 
 Every target tool in Appendix E, traced to the code it replaces, the screen that surfaces it,
 the mockup function that draws it, the tables it touches, and the milestone that ships it.
@@ -54,10 +54,10 @@ audited adversarially by a sixth. **The matrix is generated; do not hand-edit it
 
 | Column | Source | Mechanical? |
 |---|---|---|
-| Tool | Appendix E | yes — literal |
-| Absorbs | joined on \`registerCapability({name})\` in \`packages/oxagen/src/contracts/\` | yes — literal |
+| Tool | Appendix E | yes, literal |
+| Absorbs | joined on \`registerCapability({name})\` in \`packages/oxagen/src/contracts/\` | yes, literal |
 | Screen | §14's ten screens and their primary actions | assigned + audited |
-| Mockup fn | \`mc.html\`'s \`render()\` dispatch | yes — literal |
+| Mockup fn | \`mc.html\`'s \`render()\` dispatch | yes, literal |
 | Tables | Appendix A's 37 tables | assigned + audited |
 | Milestone | §17 M0–M6 | assigned + audited |
 
@@ -104,12 +104,12 @@ for (const g of groups) {
     const a = assign.get(r.tool);
     const absorbs = r.absorbs.length
       ? r.absorbs.map((x) => `\`${x.file ?? x.name}\``).join("<br>")
-      : "— *new*";
+      : "*new*";
     const fns = r.renderFns.length
       ? r.renderFns.map((f) => `\`${f.fn}\`:${f.line}`).join("<br>")
-      : "—";
+      : "none";
     const flag = a?.corrected ? " ⚑" : a?.confidence === "low" ? " ?" : "";
-    md += `| \`${r.tool}\` | ${r.grade} | ${absorbs} | ${esc((a?.screens ?? []).join(", ")) || "—"}${flag} | ${fns} | ${code(a?.tables)} | ${a?.milestone ?? "?"} |\n`;
+    md += `| \`${r.tool}\` | ${r.grade} | ${absorbs} | ${esc((a?.screens ?? []).join(", ")) || "none"}${flag} | ${fns} | ${code(a?.tables)} | ${a?.milestone ?? "?"} |\n`;
   }
 }
 
@@ -134,7 +134,7 @@ const untouched = TABLES.filter((t) => !touched.has(t));
 md += `\n\n### Appendix A coverage\n\n`;
 md += `${touched.size} of ${TABLES.length} target tables are read or written by at least one tool.\n\n`;
 if (untouched.length) {
-  md += `Untouched — either a missing tool or a table that should not be in Appendix A:\n\n`;
+  md += `Untouched: either a missing tool or a table that should not be in Appendix A:\n\n`;
   md += untouched.map((t) => `- \`${t}\``).join("\n");
 }
 md += `\n`;

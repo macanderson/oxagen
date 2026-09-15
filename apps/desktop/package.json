@@ -11,19 +11,23 @@
     "build:vite": "vite build",
     "sidecars": "node scripts/sidecars.mjs",
     "bundle": "node scripts/sidecars.mjs && tauri build",
-    "bundle:dmg": "node scripts/sidecars.mjs && tauri build --bundles dmg",
+    "bundle:dmg": "node scripts/sidecars.mjs && tauri build --bundles app dmg",
     "icons": "node scripts/icons.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "publish:downloads": "node scripts/publish-downloads.mjs",
+    "smoke:e2e": "node scripts/e2e-smoke.mjs"
   },
   "dependencies": {
     "@oxagen/ui": "workspace:*",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-opener": "2.5.5",
+    "@tauri-apps/plugin-process": "2.3.1",
     "@tauri-apps/plugin-shell": "2.3.6",
+    "@tauri-apps/plugin-updater": "2.11.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -32,8 +36,8 @@
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
-    "typescript": "6.0.3",
     "@vitest/coverage-v8": "2.1.9",
+    "typescript": "6.0.3",
     "vite": "6.4.3",
     "vitest": "2.1.9"
   }

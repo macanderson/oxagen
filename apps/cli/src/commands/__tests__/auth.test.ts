@@ -376,6 +376,227 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
   });
 });
 
+// ── handleLogin — rescope over the saved session ─────────────────────────────
+
+describe("handleLogin — rescope (--org/--workspace, no --token, saved session)", () => {
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    // A TTY is the case that used to open the browser; rescope must not.
+    origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+    mockBrowserLogin.mockReset();
+    mockReadConfig.mockReturnValue({
+      token: "tok_saved",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+      appUrl: "https://app.oxagen.sh",
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: origIsTTY,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it("re-uses the saved token on a TTY: whoami probe, linker on the slugs, config rewritten, no browser", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("acme", "edge"));
+
+    await handleLogin({ org: "acme", workspace: "edge" });
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://api.oxagen.sh/v1/auth/whoami",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer tok_saved",
+        }),
+      }),
+    );
+    expect(mockResolveLinkedAccount).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      workspaceSlug: "edge",
+      isTTY: true,
+    });
+    expect(mockWriteConfig).toHaveBeenLastCalledWith({
+      token: "tok_saved",
+      orgSlug: "acme",
+      workspaceSlug: "edge",
+      appUrl: "https://app.oxagen.sh",
+    });
+    expect(stdout).toContain("Re-using the saved session");
+    expect(stdout).toContain("workspace: edge");
+    expect(process.exitCode).toBeFalsy();
+  });
+
+  it("works with only --workspace (the org comes from the linker)", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("acme", "edge"));
+
+    await handleLogin({ workspace: "edge" });
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(mockResolveLinkedAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ orgSlug: undefined, workspaceSlug: "edge" }),
+    );
+    expect(mockWriteConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "edge" }),
+    );
+  });
+
+  it("keeps the saved session when the slug is wrong (picker fails) — never signs the user out", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockRejectedValue(
+      new Error('Workspace "nope" not found in org "acme".'),
+    );
+
+    await handleLogin({ org: "acme", workspace: "nope" });
+
+    expect(mockWriteConfig).not.toHaveBeenCalledWith(
+      expect.objectContaining({ token: undefined }),
+    );
+    expect(stderr).toContain('Workspace "nope" not found');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("refuses an expired saved token (401) without touching config", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 401 });
+
+    await handleLogin({ org: "acme", workspace: "edge" });
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(mockResolveLinkedAccount).not.toHaveBeenCalled();
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(stderr).toContain("Token validation failed");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("still opens the browser for the slugs when there is no saved session", async () => {
+    mockReadConfig.mockReturnValue({});
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_b",
+      orgSlug: "acme",
+      workspaceSlug: "edge",
+    });
+
+    await handleLogin({ org: "acme", workspace: "edge" });
+
+    expect(mockBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockResolveLinkedAccount).not.toHaveBeenCalled();
+  });
+
+  it("bare login on a TTY with a saved session still reports the session, not a rescope", async () => {
+    mockGetToken.mockReturnValue("tok_saved");
+
+    await handleLogin({});
+
+    expect(stdout).toContain("Logged in to Oxagen");
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+  });
+});
+
+// ── handleLogin --browser: the desktop app's Sign in / Switch organization ───
+
+describe("handleLogin — --browser forces the PKCE flow off a TTY", () => {
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    // The desktop app spawns `oxagen login --browser` through a piped
+    // sidecar: stdin is never a TTY there.
+    origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: false,
+      configurable: true,
+      writable: true,
+    });
+    mockBrowserLogin.mockReset();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: origIsTTY,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it("opens the browser with no TTY and no saved session, and persists the result", async () => {
+    mockReadConfig.mockReturnValue({});
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_pkce",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+    });
+
+    await handleLogin({ browser: true });
+
+    expect(mockBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: "tok_pkce",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+      appUrl: "https://app.oxagen.sh",
+    });
+    expect(stdout).toContain("Logged in to Oxagen");
+    expect(stderr).not.toContain("No token provided");
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("replaces a saved session instead of reporting it (Switch organization)", async () => {
+    mockGetToken.mockReturnValue("tok_saved");
+    mockReadConfig.mockReturnValue({
+      token: "tok_saved",
+      orgSlug: "acme",
+      workspaceSlug: "core",
+    });
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_other",
+      orgSlug: "beta",
+      workspaceSlug: "edge",
+    });
+
+    await handleLogin({ browser: true });
+
+    expect(mockBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(stdout).not.toContain("Run `oxagen logout`");
+    expect(mockWriteConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "tok_other", orgSlug: "beta" }),
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed browser flow as exit 1 without touching config", async () => {
+    mockReadConfig.mockReturnValue({});
+    mockBrowserLogin.mockRejectedValue(new Error("cancelled"));
+
+    await handleLogin({ browser: true });
+
+    expect(stderr).toContain("cancelled");
+    expect(process.exitCode).toBe(1);
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it("a bare login off a TTY still refuses: the flag is the only way in", async () => {
+    mockReadConfig.mockReturnValue({});
+
+    await handleLogin({});
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(stderr).toContain("No token provided");
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 // ── runBrowserLogin — the UI-agnostic core the REPL's Ink /login panel uses ─
 
 describe("runBrowserLogin", () => {

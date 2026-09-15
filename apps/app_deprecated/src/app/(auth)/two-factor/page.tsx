@@ -1,5 +1,6 @@
 import { OxagenWordmark } from "@/components/ui/brand";
 import { TwoFactorForm } from "./two-factor-form";
+import { safeReturnTo } from "@/lib/return-to";
 
 /**
  * /two-factor — sign-in second factor step. Public route (the user has only the
@@ -7,7 +8,12 @@ import { TwoFactorForm } from "./two-factor-form";
  * A user who reaches this page with no pending 2FA challenge simply can't
  * verify; Better Auth rejects the attempt and they return to /login.
  */
-export default function TwoFactorPage() {
+export default async function TwoFactorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const returnTo = safeReturnTo((await searchParams)["returnTo"]);
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
@@ -24,7 +30,7 @@ export default function TwoFactorPage() {
           </p>
         </div>
 
-        <TwoFactorForm />
+        <TwoFactorForm returnTo={returnTo} />
       </div>
 
       <p className="text-center text-xs text-muted-foreground">

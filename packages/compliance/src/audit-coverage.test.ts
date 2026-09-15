@@ -107,7 +107,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "org.model_credential.", // customer model-vendor key set / delete (get + verify are audit-exempt)
   "billing.", // billing mutations (checkout, plan/seat/subscription)
   "plugin.org.", // org-level plugin governance (install / uninstall / enable)
-  "plugin.workspace.", // workspace-level plugin enable/disable
+  "plugin.set_enabled", // org- and workspace-level plugin enable/disable (one handler, both scopes)
   "plugin.credential.", // plugin credential set / reauth
   "secret.", // workspace secret reveal / export / set / unset / delete / import
   "plugin.registry.", // MCP registry source add / remove

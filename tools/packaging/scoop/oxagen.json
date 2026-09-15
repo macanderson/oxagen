@@ -1,0 +1,62 @@
+{
+  "##": [
+    "Scoop manifest for the two compiled CLIs on Windows: tacho and oxagen,",
+    "each a Node single-executable the Desktop workflow builds on",
+    "windows-latest and attaches to the desktop-v<version> release next to",
+    "an <asset>.sha256 file. The desktop app itself is the .msi / -setup.exe",
+    "on the same release. This is a template until a bucket exists;",
+    "tools/packaging/stamp.mjs fills the version and the digests from the",
+    "release .sha256 files (tools/packaging/README.md)."
+  ],
+  "version": "{{version}}",
+  "description": "Tacho wrapper for Claude Code and Codex, with the oxagen CLI",
+  "homepage": "https://oxagen.sh/",
+  "license": {
+    "identifier": "Proprietary",
+    "url": "https://github.com/macanderson/oxagen/blob/main/LICENSE"
+  },
+  "architecture": {
+    "64bit": {
+      "url": [
+        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/tacho-x86_64-pc-windows-msvc.exe",
+        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/oxagen-x86_64-pc-windows-msvc.exe"
+      ],
+      "hash": [
+        "{{sha256:tacho-x86_64-pc-windows-msvc.exe}}",
+        "{{sha256:oxagen-x86_64-pc-windows-msvc.exe}}"
+      ]
+    }
+  },
+  "bin": [
+    ["tacho-x86_64-pc-windows-msvc.exe", "tacho"],
+    ["oxagen-x86_64-pc-windows-msvc.exe", "oxagen"]
+  ],
+  "pre_uninstall": [
+    "if (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\\host.json\") { & \"$dir\\tacho-x86_64-pc-windows-msvc.exe\" unenroll }"
+  ],
+  "checkver": {
+    "url": "https://github.com/macanderson/oxagen/releases.atom",
+    "regex": "desktop-v([\\d.]+)"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": [
+          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/tacho-x86_64-pc-windows-msvc.exe",
+          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/oxagen-x86_64-pc-windows-msvc.exe"
+        ]
+      }
+    },
+    "hash": {
+      "url": "$url.sha256"
+    }
+  },
+  "notes": [
+    "Sign in, then enroll this machine (a per-user Task Scheduler service and the hooks for the harnesses you name):",
+    "  oxagen login",
+    "  tacho enroll --harness claude-code,codex",
+    "Managed machines enroll without a browser:",
+    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex",
+    "SmartScreen warns while builds are unsigned; signing runs only when the Azure secrets exist in CI."
+  ]
+}
