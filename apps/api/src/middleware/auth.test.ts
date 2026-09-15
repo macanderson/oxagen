@@ -1,9 +1,9 @@
 // The bearer path of the real auth middleware: an API key binds the org and
 // workspace and the user the resolver returns, which is null for every key but
 // one minted by the CLI authorize flow. A handler that gates on the caller's
-// role (`assertOrgRole`) refuses a null user with `no_principal`, which is why
-// `open_context_pr`, `merge_context_pr` and `dismiss_proposal` do not declare
-// the `mcp` surface.
+// role resolves the key's creator (`resolveActingUserId`) and passes that user
+// to `assertOrgRole`; `merge_context_pr` needs a signed-in reviewer and
+// refuses a null user with `no_principal`.
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppEnv } from "../app";
