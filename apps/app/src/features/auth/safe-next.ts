@@ -70,16 +70,22 @@ export function firstParam(
 }
 
 /**
- * The destination a sign-in-flow page was asked for, before sanitising: `next`,
- * or `returnTo` when `next` is absent. `returnTo` is the name the CLI's
- * `oxagen auth login --signup` (apps/cli/src/auth/loopback-login.ts) and the
- * deprecated app put on /signup and /login, so a new account made from the
- * CLI or the desktop installer still comes back to the consent page.
+ * The sanitised destination a page was asked for: `?next=`, or `?returnTo=`
+ * when `next` is absent, under the rules of `sanitizeNext`. `returnTo` is the
+ * name the CLI's `oxagen auth login --signup` (apps/cli/src/auth/loopback-login.ts)
+ * and the deprecated app put on /signup and /login, so a new account made from
+ * the CLI or the desktop installer still comes back to the consent page. A
+ * present `next` that is refused yields `fallback` and never falls through to
+ * `returnTo`. Pages read the destination through this function only.
  */
-export function nextParam(
+export function readNext(
   params: Record<string, string | string[] | undefined>,
-): string | undefined {
-  return firstParam(params.next) ?? firstParam(params.returnTo);
+  fallback: string = DEFAULT_NEXT,
+): string {
+  return sanitizeNext(
+    firstParam(params.next) ?? firstParam(params.returnTo),
+    fallback,
+  );
 }
 
 /** A sign-in-flow link that carries a sanitised destination forward, e.g. `/signup?next=%2Facme`. */
