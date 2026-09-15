@@ -2,10 +2,6 @@ import { describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import { catalogStems, mergeCatalogs, parseCatalog } from "./catalogs";
 
-const INVALID_CATALOG = expect.objectContaining({
-  code: "i18n_catalog_invalid",
-});
-
 describe("catalogStems", () => {
   it("puts the shared catalog first and sorts the rest, whatever the listing order", () => {
     expect(
@@ -19,7 +15,9 @@ describe("catalogStems", () => {
 
   it("refuses a listing without the shared catalog", () => {
     const run = () => catalogStems(["fleet.json"]);
-    expect(run).toThrow(INVALID_CATALOG);
+    expect(run).toThrow(
+      expect.objectContaining({ code: "i18n_catalog_invalid" }),
+    );
     expect(run).toThrow("messages/en.json: the shared catalog is missing");
   });
 
@@ -30,7 +28,9 @@ describe("catalogStems", () => {
     ".json",
     "-x.json",
   ])("refuses %s, a name that is not a kebab-case stem", (entry) => {
-    expect(() => catalogStems(["en.json", entry])).toThrow(INVALID_CATALOG);
+    expect(() => catalogStems(["en.json", entry])).toThrow(
+      expect.objectContaining({ code: "i18n_catalog_invalid" }),
+    );
   });
 });
 

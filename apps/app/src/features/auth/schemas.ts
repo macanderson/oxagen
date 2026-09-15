@@ -8,19 +8,6 @@ import { z } from "zod";
 export const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 
-type AuthErrorKey =
-  | "emailRequired"
-  | "emailInvalid"
-  | "passwordRequired"
-  | "passwordTooShort"
-  | "passwordTooLong"
-  | "passwordsDiffer"
-  | "nameRequired"
-  | "nameTooLong"
-  | "codeInvalid"
-  | "backupCodeInvalid"
-  | "tokenMissing";
-
 const email = z
   .string()
   .trim()
