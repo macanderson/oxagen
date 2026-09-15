@@ -11,7 +11,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **asset** (1): upload_asset
 - **audit** (1): query_audit_log
 - **auth** (1): authorize_cli
-- **billing** (12): get_action_usage, get_contract_rate, get_evidence_retention, get_rate_card, get_spend_budget, get_subscription, get_usage_breakdown, list_invoices, preview_action_cost, purchase_credits, set_spend_budget, start_subscription_upgrade
+- **billing** (12): get_contract_rate, get_evidence_retention, get_gau_bucket, get_rate_card, get_spend_budget, get_subscription, get_usage_breakdown, list_invoices, preview_action_cost, purchase_credits, set_spend_budget, start_subscription_upgrade
 - **capability** (2): get_capability_registry, list_capability_registry
 - **chat** (2): get_message_execution, send_message
 - **command** (2): search_command_menu, suggest_commands

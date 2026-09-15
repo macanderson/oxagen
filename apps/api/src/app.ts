@@ -20,13 +20,13 @@ import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
+import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { billingActionRateCardRoute } from "./routes/v1/billing.action_rate_card";
-import { billingActionUsageRoute } from "./routes/v1/billing.action_usage";
 import { billingActionEstimateRoute } from "./routes/v1/billing.action_estimate";
 import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_retention";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
@@ -422,6 +422,7 @@ orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Fleet list and the Run header with its frame page.
 orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
+orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
@@ -432,10 +433,10 @@ orgScoped.route(
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 // Governed-action meter (ADR-052, docs/specs/governed-action-metering.md):
-// the rate card, this org's usage against it, the run->action estimator, and
-// evidence-retention posture. All four are noBillingGate reads.
+// the rate card, the run->action estimator, and evidence-retention posture.
+// All three are noBillingGate reads. This org's position against its own
+// terms is /billing/gau-bucket (ADR-055).
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
-orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
 orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);

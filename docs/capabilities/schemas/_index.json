@@ -647,18 +647,6 @@
       "consumes": []
     },
     {
-      "name": "get_action_usage",
-      "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "get_agent_def",
       "domain": "agent",
       "surfaces": [
@@ -832,6 +820,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_gau_bucket",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
