@@ -1,0 +1,352 @@
+{
+  "agents": {
+    "notRecorded": "not recorded",
+    "harness": {
+      "stella": "Stella",
+      "claude-code": "Claude Code",
+      "claude-agent-sdk": "Claude Agent SDK",
+      "custom": "Custom harness"
+    },
+    "status": {
+      "unenrolled": "unenrolled",
+      "enrolled": "enrolled",
+      "suspended": "suspended",
+      "retired": "retired"
+    },
+    "list": {
+      "tiles": {
+        "label": "Identities summary",
+        "identities": {
+          "title": "Identities here",
+          "basis": "registered in this workspace"
+        },
+        "enrolled": {
+          "title": "Enrolled",
+          "basis": "of {count} registered"
+        },
+        "tamper": {
+          "title": "Tamper incidents",
+          "basis": "open, on this workspace's hosts"
+        }
+      },
+      "title": "Registered in {workspace}",
+      "tableLabel": "Agent identities",
+      "columns": {
+        "identity": "Identity",
+        "harness": "Harness",
+        "operator": "Operator",
+        "status": "Status",
+        "runs": "Runs 30d",
+        "spend": "Spend 30d",
+        "incidents": "Incidents",
+        "actions": "Actions"
+      },
+      "basisNotRecorded": "basis not recorded",
+      "edit": "Edit",
+      "pager": "Identities pages",
+      "first": "First identities",
+      "next": "More identities",
+      "empty": {
+        "title": "No identities registered in {workspace}",
+        "body": "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the workspace repository.",
+        "register": "Register one from the repository it works in:",
+        "command": "oxagen agent register"
+      }
+    },
+    "detail": {
+      "header": "Agent identity",
+      "seeBelt": "See the belt as the model sees it",
+      "tabs": {
+        "label": "Agent sections",
+        "identity": "Identity",
+        "toolbelt": "Toolbelt",
+        "enrollment": "Enrollment",
+        "incidents": "Tamper incidents",
+        "definition": "Definition in git"
+      },
+      "identity": {
+        "title": "Identity",
+        "lead": "In Postgres, revocable in one second.",
+        "agentKey": "Agent key",
+        "principal": "Principal",
+        "harness": "Harness",
+        "operator": "Operator",
+        "status": "Status",
+        "registered": "Registered",
+        "firstFrame": "First frame",
+        "noFrame": "no frame yet"
+      },
+      "roles": {
+        "title": "Roles",
+        "lead": "Effective permission is the agent's grants intersected with the invoking person's.",
+        "empty": "No role is assigned: the agent reaches nothing but its own run channel.",
+        "columns": {
+          "role": "Role",
+          "scope": "Scope",
+          "assigned": "Assigned",
+          "expires": "Expires"
+        },
+        "scope": {
+          "org": "organization",
+          "workspace": "workspace"
+        },
+        "standing": "standing"
+      },
+      "credentials": {
+        "title": "Run credentials",
+        "lead": "Long-lived, purpose-locked and hashed at rest; the secret was shown once, at issue.",
+        "empty": "The agent holds no long-lived credential.",
+        "columns": {
+          "key": "Key",
+          "issued": "Issued",
+          "lastUsed": "Last used",
+          "expires": "Expires",
+          "state": "State"
+        },
+        "never": "never",
+        "noExpiry": "does not expire",
+        "active": "active",
+        "revoked": "revoked"
+      },
+      "toolbelt": {
+        "title": "Toolbelt",
+        "computation": {
+          "title": "How this belt was computed",
+          "computedAt": "Computed",
+          "ceiling": "Delegation ceiling",
+          "ceilingValue": {
+            "caller": "the agent's grants intersected with yours",
+            "sentinel": "no person resolved, so the unprivileged ceiling"
+          },
+          "roleGrants": "Role grants",
+          "denyGeneration": "Deny generation",
+          "denyGenerationValue": "organization {org}, workspace {workspace}",
+          "killSwitches": "Kill switches in scope"
+        },
+        "presentation": {
+          "title": "What the model receives",
+          "mode": {
+            "full": "Full belt",
+            "searchable": "Searchable belt"
+          },
+          "sent": {
+            "definitions": "Every tool definition is in the request.",
+            "meta_tools": "The request carries the search and load meta-tools; the model finds a tool before it calls it."
+          },
+          "limit": "A belt of up to {limit} tools is sent in full."
+        },
+        "tools": {
+          "title": "Per-tool decision rules",
+          "empty": "The belt is empty: the model is shown no tool.",
+          "columns": {
+            "tool": "Tool",
+            "category": "Category",
+            "risk": "Risk",
+            "decision": "Decision",
+            "rule": "Rule",
+            "access": "Access"
+          },
+          "risk": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high"
+          },
+          "decision": {
+            "allow": "allow",
+            "require_approval": "requires approval"
+          },
+          "readOnly": "reads only",
+          "writes": "writes"
+        },
+        "cannotSee": {
+          "title": "What this agent cannot see",
+          "empty": "Every tool in the registry is on the belt.",
+          "columns": {
+            "tool": "Tool",
+            "rule": "Why it is not on the belt"
+          }
+        }
+      },
+      "enrollment": {
+        "title": "Hosts",
+        "lead": "The hosts enrolled under this agent's key, and what each one's daemon last reported.",
+        "columns": {
+          "host": "Host",
+          "status": "Status",
+          "mode": "Mode",
+          "collector": "Collector",
+          "hooks": "Hooks",
+          "bundle": "Policy bundle",
+          "deviceKey": "Device key",
+          "lastSeen": "Last seen"
+        },
+        "hooks": {
+          "ok": "in place",
+          "missing": "removed",
+          "unreported": "not reported"
+        },
+        "bundleVersion": "version {version}",
+        "never": "never",
+        "revoked": "revoked",
+        "empty": {
+          "title": "No host is enrolled under this agent",
+          "body": "Enroll the host it runs on, from the repository it works in:",
+          "command": "oxagen tacho enroll"
+        }
+      },
+      "incidents": {
+        "title": "Tamper incidents",
+        "empty": "No incident is recorded on this agent's hosts.",
+        "columns": {
+          "kind": "Kind",
+          "severity": "Severity",
+          "detected": "Detected",
+          "session": "Session",
+          "state": "State"
+        },
+        "severity": {
+          "notice": "notice",
+          "warning": "warning",
+          "tamper": "tamper"
+        },
+        "detectedBy": {
+          "collector": "by the collector",
+          "control_plane": "by the control plane",
+          "human": "by a person"
+        },
+        "open": "open",
+        "resolved": "resolved",
+        "pager": "Incident pages",
+        "first": "Newest incidents",
+        "next": "Older incidents"
+      },
+      "definition": {
+        "openEditor": "Open in the source editor",
+        "none": {
+          "title": "No definition committed",
+          "body": "The definition of record is the file .oxagen/agents/{slug}.toml in the workspace repository. Write it in the source editor; saving commits it to a branch and opens a pull request."
+        },
+        "unparsed": "The committed file does not parse at line {line}. Open it in the source editor to read and fix it.",
+        "fields": {
+          "title": "The file",
+          "schema": "Schema",
+          "slug": "Slug",
+          "name": "Name",
+          "description": "Description",
+          "modelTier": "Model tier",
+          "budget": "Per-run budget",
+          "tools": "Tools",
+          "denyTools": "Denied tools",
+          "sideEffects": "Side effects",
+          "harness": "Harness",
+          "instructions": "Instructions",
+          "unset": "not set"
+        },
+        "source": {
+          "title": "Source",
+          "lead": "Every field is a view of this commit. The running definition is what the default branch holds; this commit runs once its pull request merges.",
+          "path": "Path",
+          "branch": "Branch",
+          "commit": "Commit",
+          "digest": "definition_digest",
+          "pullRequest": "Pull request",
+          "committed": "Committed"
+        }
+      }
+    },
+    "actions": {
+      "rotate": {
+        "open": "Rotate credential",
+        "title": "Rotate the credential of {name}",
+        "body": "The current key is refused at its next presentation and a new one is issued. The new secret is shown once.",
+        "confirm": "Rotate",
+        "pending": "Rotating",
+        "done": "The new credential, shown once. Store it now:",
+        "expires": "Expires {at}"
+      },
+      "suspend": {
+        "open": "Suspend",
+        "title": "Suspend {name}",
+        "body": "A suspended agent anchors no governed run and is shown an empty belt. Its credentials, roles and hosts stay as they are.",
+        "confirm": "Suspend",
+        "pending": "Suspending"
+      },
+      "resume": {
+        "open": "Resume",
+        "title": "Resume {name}",
+        "body": "The agent anchors governed runs again, with the credentials, roles and hosts it held.",
+        "confirm": "Resume",
+        "pending": "Resuming"
+      },
+      "retire": {
+        "open": "Deregister",
+        "title": "Deregister {name}",
+        "body": "The principal is retired, never deleted, so its runs keep their identity. Every credential and host enrollment is revoked. Removing the definition file is a pull request.",
+        "confirm": "Deregister",
+        "pending": "Deregistering"
+      },
+      "failure": {
+        "orgRoleRequired": "Your organization role does not allow this change. Nothing was changed.",
+        "noPrincipal": "The request carried no signed-in user. Sign in and try again.",
+        "delegationCeiling": "The file names tools you do not hold, so you cannot grant them to the agent. Nothing was committed.",
+        "agentNotFound": "This agent no longer exists.",
+        "agentRetired": "This agent is retired. Nothing was changed.",
+        "agentPrincipalMissing": "This agent has no delegated principal. Nothing was changed.",
+        "noRepository": "This workspace has no repository bound. Bind a repository to the workspace, then commit.",
+        "repositoryAmbiguous": "This workspace binds more than one repository, so the commit has no single target. Nothing was committed.",
+        "branchIsDefault": "That branch is the repository's default branch. Choose another branch.",
+        "definitionSchema": "The file's schema line is missing or names another schema. Nothing was committed.",
+        "definitionSlug": "The file's slug does not match this agent's slug. Nothing was committed.",
+        "refused": "The change was refused: {code}. Nothing was changed.",
+        "invalid": "The request was refused as invalid. Nothing was changed.",
+        "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The change could not be made: {code}. Nothing was changed."
+      }
+    },
+    "source": {
+      "facts": "Definition file",
+      "loading": "Loading the definition file",
+      "branchAt": "{branch} at {commit}",
+      "uncommitted": "no committed definition",
+      "truth": "source of truth",
+      "lead": "Every field on the Definition tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
+      "back": "Back to the definition",
+      "discard": "Discard",
+      "save": "Save",
+      "modified": "modified",
+      "unchanged": "unchanged",
+      "stat": "+{added} −{removed}",
+      "parse": {
+        "error": "The file does not parse at line {line}: {reason}.",
+        "reason": {
+          "unterminated_string": "a string is not closed",
+          "unterminated_array": "an array is not closed",
+          "array_separator": "array items need a comma between them",
+          "inline_table_key": "an inline table entry needs a key",
+          "inline_table_separator": "inline table entries need a comma between them",
+          "missing_value": "a key has no value",
+          "unreadable_value": "a value is not a string, number, boolean, array or table",
+          "expected_key_value": "a line must be key = value, a [table] header or a comment",
+          "text_after_value": "there is text after the value"
+        }
+      },
+      "commit": {
+        "title": "Commit {path}",
+        "diff": "{added} lines added and {removed} removed against the file you started from.",
+        "branch": "Branch",
+        "branchHint": "Created from the default branch when new; a branch with an open pull request gets this commit on it.",
+        "message": "Message",
+        "messageHint": "The commit and pull request title. Optional.",
+        "submit": "Commit and open a pull request",
+        "pending": "Committing",
+        "done": "Committed {commit} to {branch}.",
+        "pullRequest": "Pull request {number}: {url}",
+        "invalid": {
+          "branch": "Name a branch: letters, digits, dots, slashes and hyphens, not the default branch and not a refs/ path.",
+          "message": "The message is at most 200 characters.",
+          "source": "The file is empty or larger than 64 KB."
+        }
+      }
+    }
+  }
+}
