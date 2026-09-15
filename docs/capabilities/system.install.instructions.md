@@ -21,6 +21,7 @@ so the result renders inline in chat without any additional wiring.
 | --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
 | `client`        | `"claude-code" \| "cursor" \| "claude-desktop" \| "codex" \| "vscode"`        | The AI client to generate installation instructions for.     |
 | `workspaceSlug` | `string` (optional)                                                            | Slug used to build personalised MCP URL / config snippets.  |
+| `enrollmentToken` | `string` (optional)                                                          | A token `create_enrollment_token` issued (#2967). For `claude-code` and `codex` the steps become the wrap: `oxagen agent enroll --token …`, then start a session. Ignored for the other clients; passed through, never stored; not on the MCP tool. |
 
 ## Output
 

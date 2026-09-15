@@ -45,6 +45,15 @@
       "writes": []
     },
     {
+      "domain": "onboarding",
+      "name": "advance_onboarding",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "append_record",
       "reads": [],
@@ -114,6 +123,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "bind_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -243,6 +261,16 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "create_enrollment_token",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -577,6 +605,16 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "enroll_host",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
       "domain": "privacy",
       "name": "erase_data",
       "reads": [],
@@ -873,6 +911,16 @@
       "writes": []
     },
     {
+      "domain": "onboarding",
+      "name": "get_first_frame",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_gau_bucket",
       "reads": [],
@@ -998,6 +1046,16 @@
       "reads": [],
       "surfaces": [
         "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "onboarding",
+      "name": "get_onboarding_state",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -3072,7 +3130,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a7f03345fd9be82c986aa0effcd8a5820c21641f9fd176809e7868b513b0601e",
+  "contentHash": "e96a31e510d6ea8d06f1526b8faecd13e2bc8d93f45605cc048a32fc3302a7cb",
   "domains": [
     {
       "name": "agent",
@@ -3335,6 +3393,7 @@
         "postgres:org.data_planes",
         "postgres:org.invitations",
         "postgres:org.model_credentials",
+        "postgres:org.onboarding_state",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
         "postgres:org.organizations"
@@ -3402,6 +3461,7 @@
       "tables": [
         "postgres:tacho.checkpoints",
         "postgres:tacho.control_commands",
+        "postgres:tacho.enrollment_tokens",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
         "postgres:tacho.session_commands",
@@ -3487,7 +3547,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 123
+      "tableCount": 125
     },
     {
       "domains": [
@@ -6944,6 +7004,12 @@
         },
         {
           "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "registered_via",
           "nullable": false,
           "primaryKey": false,
           "type": "text"
@@ -15070,6 +15136,76 @@
     {
       "columns": [
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "step",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "first_frame_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "first_run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provisional_until",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "main_repo_bound_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "detected_repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.onboarding_state",
+      "name": "onboarding_state",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -16853,6 +16989,94 @@
       "domain": "tacho",
       "id": "postgres:tacho.control_commands",
       "name": "control_commands",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "token_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "issued_to_user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "used_by_host_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "rejected_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.enrollment_tokens",
+      "name": "enrollment_tokens",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

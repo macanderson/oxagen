@@ -22,6 +22,7 @@ const CostBasis = z.enum([
   "estimated",
 ]);
 
+/** A metered cost: money plus who observed it, `null` when nobody recorded that. */
 export const Cost = Money.extend({ basis: CostBasis.nullable() });
 export type Cost = z.infer<typeof Cost>;
 

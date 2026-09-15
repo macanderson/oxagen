@@ -12,8 +12,9 @@
  * See actions.ts for the server actions wired to the Approve / Cancel buttons.
  */
 
+import type { JSX } from "react";
 import { redirect } from "next/navigation";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { getSession } from "@/lib/session";
 import { withReturnTo } from "@/lib/return-to";
@@ -23,7 +24,7 @@ import {
   isValidCodeChallenge,
 } from "@oxagen/auth/cli-auth";
 import { ConsentForm } from "./consent-form";
-import type { OrgOption } from "./consent-form";
+import { groupCliAuthScopes } from "./scopes";
 
 // ---------------------------------------------------------------------------
 // Inline error page (rendered for invalid params — never redirects)
@@ -58,7 +59,7 @@ export default async function CliAuthorizePage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}): Promise<JSX.Element> {
   const params = await searchParams;
 
   const redirectUri = Array.isArray(params.redirect_uri)
@@ -125,9 +126,14 @@ export default async function CliAuthorizePage({
 
   // --- 3. Load user's orgs + member workspaces -----------------------------
   // withSystemDb bypasses RLS (deliberate — cross-tenant identity resolution
-  // before a tenant scope exists; same pattern as the root page). The join on
-  // workspaceUsers ensures the list only contains workspaces the user can
-  // actually access.
+  // before a tenant scope exists; same pattern as the root page). Every org
+  // the user belongs to is a row; a workspace joins in only when the user
+  // holds a workspace_users row for it, so the picker offers exactly what the
+  // approve action will accept. Both workspace joins are LEFT joins on
+  // purpose: an org whose workspaces the user is not a member of still
+  // appears, with "No workspaces available", instead of vanishing — an inner
+  // join dropped the org itself, and a user with one such org saw a picker
+  // for some other org and read it as the wrong account.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -137,61 +143,32 @@ export default async function CliAuthorizePage({
         workspaceId: schema.workspaces.id,
         workspaceSlug: schema.workspaces.slug,
         workspaceName: schema.workspaces.name,
+        membershipId: schema.workspaceUsers.id,
       })
       .from(schema.orgUsers)
       .innerJoin(
         schema.organizations,
         eq(schema.organizations.id, schema.orgUsers.orgId),
       )
-      .innerJoin(
+      .leftJoin(
+        schema.workspaces,
+        eq(schema.workspaces.orgId, schema.organizations.id),
+      )
+      .leftJoin(
         schema.workspaceUsers,
         and(
+          eq(schema.workspaceUsers.workspaceId, schema.workspaces.id),
           eq(schema.workspaceUsers.userId, userId),
-          eq(schema.workspaceUsers.userId, schema.orgUsers.userId),
         ),
       )
-      .innerJoin(
-        schema.workspaces,
-        and(
-          eq(schema.workspaces.id, schema.workspaceUsers.workspaceId),
-          eq(schema.workspaces.orgId, schema.organizations.id),
-        ),
-      )
-      .where(eq(schema.orgUsers.userId, userId)),
+      .where(eq(schema.orgUsers.userId, userId))
+      .orderBy(
+        asc(schema.organizations.createdAt),
+        asc(schema.workspaces.createdAt),
+      ),
   );
 
-  // Group rows into org → workspaces structure.
-  const orgMap = new Map<
-    string,
-    {
-      id: string;
-      slug: string;
-      name: string;
-      workspaces: { id: string; slug: string; name: string }[];
-    }
-  >();
-  for (const row of rows) {
-    if (!orgMap.has(row.orgId)) {
-      orgMap.set(row.orgId, {
-        id: row.orgId,
-        slug: row.orgSlug,
-        name: row.orgName,
-        workspaces: [],
-      });
-    }
-    const org = orgMap.get(row.orgId)!;
-    // Avoid duplicate workspace entries (the join can produce them if a user
-    // has multiple org_users rows, which shouldn't happen but guard anyway).
-    if (!org.workspaces.some((w) => w.id === row.workspaceId)) {
-      org.workspaces.push({
-        id: row.workspaceId,
-        slug: row.workspaceSlug,
-        name: row.workspaceName,
-      });
-    }
-  }
-
-  const orgs: OrgOption[] = Array.from(orgMap.values());
+  const orgs = groupCliAuthScopes(rows);
 
   // A brand-new account (the installer's "Create an account", or a social
   // sign-up that landed here) has nothing to authorize yet: create the

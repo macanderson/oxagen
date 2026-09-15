@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**280 capabilities across 40 domains.**
+**286 capabilities across 42 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -236,6 +236,12 @@ Capabilities granted to an agent as a set have a page of their own:
 - [notification.list](notification.list.md) — List in-app notifications for the calling user, with unread filtering and pagination
 - [notification.mark](notification.mark.md) — Mark a notification as read and/or archived for the calling user
 
+## Onboarding (3)
+
+- [onboarding.advance](onboarding.advance.md) — Move the onboarding gate between the wrap and run steps; the run step completes only on the first frame, so unlocked is never a target
+- [onboarding.first_frame.get](onboarding.first_frame.get.md) — For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs
+- [onboarding.state.get](onboarding.state.get.md) — Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound
+
 ## Ontology (2)
 
 - [ontology.neighbors](ontology.neighbors.md) — The one-hop neighborhood of a node — a focused traversal primitive pairing with `ontology.query`
@@ -302,6 +308,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.pr.get](repo.pr.get.md) — Read a GitHub pull request's summary, diff stats, comments, and CI status
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
+
+## Repository (1)
+
+- [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
 
 ## Router (4)
 
@@ -370,7 +380,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Tacho (11)
+## Tacho (13)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
 - [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
@@ -378,7 +388,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [tacho.command.list](tacho.command.list.md) — `list_commands`: the delivery report for one run, newest first, with the status, the requested and achieved delivery mode, and the frame an applied command landed on
 - [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
 - [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
+- [tacho.enrollment_token.create](tacho.enrollment_token.create.md) — Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host; shown once, expires unused after its TTL
 - [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
+- [tacho.host.enroll](tacho.host.enroll.md) — Enrol this machine as a registered agent's host by presenting a single-use enrollment token: mint its scoped API key, signed enrollment and initial policy bundle
 - [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
 - [tacho.incident.list](tacho.incident.list.md) — List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents
 - [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model

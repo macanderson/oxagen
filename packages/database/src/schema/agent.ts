@@ -67,6 +67,12 @@ export const agents = agentSchema.table(
     // records it so the identities table can print it without a host row.
     // CHECK: harness IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom').
     harness: text("harness").notNull().default("custom"),
+    // How the identity came to exist (#2967, ADR-065): `ui` (the default),
+    // `cli` (for register_agent to write on the CLI surface), or
+    // `onboarding` — the agent whose first frame opened the organization's
+    // onboarding gate, stamped by ingest_tacho_events at the unlock. CHECK
+    // enforced below.
+    registeredVia: text("registered_via").notNull().default("ui"),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -100,6 +106,10 @@ export const agents = agentSchema.table(
     harnessCheck: check(
       "agents_harness_check",
       sql`${t.harness} IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom')`,
+    ),
+    registeredViaCheck: check(
+      "agents_registered_via_check",
+      sql`${t.registeredVia} IN ('ui', 'cli', 'onboarding')`,
     ),
   }),
 );
