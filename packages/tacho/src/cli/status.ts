@@ -6,6 +6,7 @@
 import { codexHookPresence } from "../host/codex-writer";
 import { readHostFile } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
+import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
 import type { CliDeps } from "./deps";
 
@@ -29,6 +30,7 @@ export interface StatusReport {
     port: number;
     claude_version: string | null;
     codex_version: string | null;
+    stella_version: string | null;
     wrapper_version: string;
     /** The slugs the desktop app shows and reassigns against. */
     org_slug: string;
@@ -53,6 +55,8 @@ export interface StatusReport {
   hooks?: ReturnType<typeof tachoHookPresence>;
   /** Present when the host enrolled Codex. */
   codexHooks?: ReturnType<typeof codexHookPresence>;
+  /** Present when the host enrolled Stella. */
+  stellaHooks?: ReturnType<typeof stellaHookPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
 }
 
@@ -79,6 +83,9 @@ export async function status(
   const codexHooks = host.harnesses.includes("codex")
     ? codexHookPresence(deps.readCodexHooks(), host.host_enrollment_id)
     : undefined;
+  const stellaHooks = host.harnesses.includes("stella")
+    ? stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id)
+    : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
   const report: StatusReport = {
     enrolled: true,
@@ -96,6 +103,7 @@ export async function status(
       port: host.port,
       claude_version: host.claude_version,
       codex_version: host.codex_version ?? null,
+      stella_version: host.stella_version ?? null,
       wrapper_version: host.wrapper_version,
       org_slug: host.org_slug,
       workspace_slug: host.workspace_slug,
@@ -116,6 +124,7 @@ export async function status(
     daemon,
     hooks,
     ...(codexHooks !== undefined ? { codexHooks } : {}),
+    ...(stellaHooks !== undefined ? { stellaHooks } : {}),
     wal: {
       sessions: walStats.sessions,
       unshipped: walStats.unshipped,
@@ -171,6 +180,13 @@ export async function status(
     );
     if (codexHooks.missing.length > 0)
       deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
+  }
+  if (stellaHooks !== undefined) {
+    deps.out(
+      `Stella      ${stellaHooks.complete ? "complete" : "INCOMPLETE"}: ${stellaHooks.present.length} present, ${stellaHooks.missing.length} missing`,
+    );
+    if (stellaHooks.missing.length > 0)
+      deps.out(`            missing: ${stellaHooks.missing.join(", ")}`);
   }
   deps.out(
     `WAL         ${walStats.sessions} session files, ${walStats.unshipped} events unshipped${walStats.oldestUnshippedAt !== undefined ? ` (oldest ${walStats.oldestUnshippedAt})` : ""}`,

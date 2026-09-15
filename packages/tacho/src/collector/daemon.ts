@@ -122,6 +122,7 @@ interface SpoolFile {
   env?: Record<string, string | undefined>;
   evaluation?: HookReplay["evaluation"];
   harness?: HookEnvelope["harness"];
+  agent?: HookEnvelope["agent"];
 }
 
 function defaultExec(command: string, args: string[]): ReturnType<Exec> {
@@ -404,6 +405,7 @@ export async function startDaemon(
     payload: file.payload,
     ...(file.env !== undefined ? { env: file.env } : {}),
     ...(file.harness !== undefined ? { harness: file.harness } : {}),
+    ...(file.agent !== undefined ? { agent: file.agent } : {}),
     replay: {
       receivedAt: file.received_at,
       ...(file.evaluation !== undefined ? { evaluation: file.evaluation } : {}),
@@ -434,6 +436,7 @@ export async function startDaemon(
       },
       envelope.replay,
       envelope.harness,
+      envelope.agent,
     );
     record(outcome.events);
     return outcome.response;
@@ -537,9 +540,15 @@ export async function startDaemon(
       last_error: shipper.lastError ?? null,
       hooks: detector.presence ?? null,
       unobserved_sessions: detector.unobserved,
+      // Every kind of agent this host has run; the daemon's own chain is
+      // not one of them.
+      agents: registry.agents(),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
+        runtime: registry.agentOf(session).runtime,
+        harness: registry.agentOf(session).harness,
+        last_hook_event: session.lastHookEvent ?? null,
         seq: session.recorder.chainCursor.seq,
         sealed: session.sealed,
         ambient: session.ambient,
@@ -555,6 +564,10 @@ export async function startDaemon(
       registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
+        // `tacho verify` matches a harness that reports no session id by
+        // the newest chain carrying its label.
+        runtime: registry.agentOf(session).runtime,
+        harness: registry.agentOf(session).harness,
         sealed: session.sealed,
         seq: session.recorder.chainCursor.seq,
       })),

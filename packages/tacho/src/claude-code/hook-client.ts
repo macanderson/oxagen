@@ -17,7 +17,20 @@ import { type HostFile, readHostFile } from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
-import { type TachoHarness, tachoHarnessSchema } from "../wire";
+import {
+  CUSTOM_AGENT_NAME_PATTERN,
+  customAgentNameSchema,
+  type TachoHarness,
+  tachoHarnessSchema,
+} from "../wire";
+import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
+import { hookInputSchema } from "./hooks";
+import {
+  parseAnswerBody,
+  stellaAnswer,
+  stellaHarnessPid,
+  translateStellaPayload,
+} from "./stella-adapter";
 
 /** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
@@ -26,8 +39,16 @@ export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const parsed = tachoHarnessSchema.safeParse(value);
   return parsed.success ? parsed.data : "claude-code";
 }
-import { hookInputSchema } from "./hooks";
-import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
+
+/**
+ * The `--agent <name>` flag: undefined when absent, `""` when given without
+ * a value (so the hook refuses it rather than recording an unnamed agent).
+ */
+export function agentFromArgv(argv: readonly string[]): string | undefined {
+  const index = argv.indexOf("--agent");
+  if (index < 0) return undefined;
+  return argv[index + 1] ?? "";
+}
 
 export interface UnixPostOptions {
   /** The daemon's Unix socket; on Windows `loopbackPort` is used instead. */
@@ -117,6 +138,16 @@ export interface HookRunDeps {
   readHost?: () => HostFile | undefined;
   /** Which harness ran this hook (`--harness`); the daemon labels the session. */
   harness?: TachoHarness;
+  /**
+   * A custom agent's name (`--agent`). Its payload is Claude Code's shape;
+   * the session is labelled `runtime: "custom"`. Wins over `harness`.
+   */
+  agent?: string;
+  /**
+   * The Stella process's pid, for `--harness stella` (whose payload names no
+   * session). Defaults to walking up from this process's parent with `ps`.
+   */
+  harnessPid?: () => number;
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
 }
@@ -261,6 +292,21 @@ export function decideLocally(
 
 export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const now = deps.now ?? (() => Date.now());
+  const platform = deps.platform ?? process.platform;
+  const agent = deps.agent;
+  if (agent !== undefined && !customAgentNameSchema.safeParse(agent).success) {
+    return {
+      stdout: "{}\n",
+      stderr: `tacho-hook: invalid --agent name ${JSON.stringify(agent)}; expected ${CUSTOM_AGENT_NAME_PATTERN.source}\n`,
+      exitCode: 0,
+      path: "invalid",
+    };
+  }
+  // `--agent` is the more specific claim: a custom agent speaks Claude
+  // Code's hook shape whatever `--harness` also says.
+  const harness: TachoHarness =
+    agent !== undefined ? "claude-code" : (deps.harness ?? "claude-code");
+  const stella = harness === "stella";
   let raw: unknown;
   try {
     raw = JSON.parse(deps.stdin);
@@ -272,22 +318,36 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       path: "invalid",
     };
   }
+  let harnessPid: number | undefined;
+  if (stella) {
+    harnessPid = (
+      deps.harnessPid ?? (() => stellaHarnessPid(process.ppid, platform))
+    )();
+    raw = translateStellaPayload(raw, harnessPid);
+  }
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
     return {
       stdout: "{}\n",
-      stderr: "tacho-hook: payload is not a Claude Code hook\n",
+      stderr: `tacho-hook: payload is not a ${stella ? "Stella" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",
     };
   }
   const input = parsed.data;
+  // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
+  // as prompt text; every other harness reads Claude Code's answer as is.
+  const answer = (response: Record<string, unknown>): string =>
+    stella
+      ? stellaAnswer(response, input.hook_event_name)
+      : `${JSON.stringify(response)}\n`;
+  const emptyAnswer = answer({});
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
     return {
-      stdout: "{}\n",
+      stdout: emptyAnswer,
       stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
       exitCode: 0,
       path: "unenrolled",
@@ -295,16 +355,21 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   }
   if (host === undefined) {
     return {
-      stdout: "{}\n",
+      stdout: emptyAnswer,
       stderr: "tacho-hook: this machine is not enrolled; run `tacho enroll`\n",
       exitCode: 0,
       path: "unenrolled",
     };
   }
-  const env = snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN);
+  const env: Record<string, string> = {
+    ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
+    ...(harnessPid !== undefined
+      ? { TACHO_HARNESS_PID: String(harnessPid) }
+      : {}),
+  };
   const post = deps.post ?? postUnix;
-  const harness = deps.harness ?? "claude-code";
-  const useTcp = (deps.platform ?? process.platform) === "win32";
+  const useTcp = platform === "win32";
+  const label = agent !== undefined ? { agent } : { harness };
   try {
     const result = await post({
       ...(useTcp
@@ -315,13 +380,15 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         Authorization: `Bearer ${host.local_token}`,
         "x-tacho-envelope": "1",
       },
-      body: JSON.stringify({ payload: raw, env, harness }),
+      body: JSON.stringify({ payload: raw, env, ...label }),
       connectTimeoutMs: deps.connectTimeoutMs ?? 50,
       responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
     });
     if (result.status === 200) {
       return {
-        stdout: `${result.body.trim() || "{}"}\n`,
+        stdout: stella
+          ? answer(parseAnswerBody(result.body))
+          : `${result.body.trim() || "{}"}\n`,
         stderr: "",
         exitCode: 0,
         path: "daemon",
@@ -341,14 +408,14 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         received_at: at,
         payload: raw,
         env,
-        harness,
+        ...label,
         ...(local.evaluation !== undefined
           ? { evaluation: local.evaluation }
           : {}),
       }),
     );
     return {
-      stdout: `${JSON.stringify(local.response)}\n`,
+      stdout: answer(local.response),
       stderr: `tacho-hook: ${local.note} (${error instanceof Error ? error.message : String(error)})\n`,
       exitCode: 0,
       path: "local",

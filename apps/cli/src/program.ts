@@ -639,7 +639,7 @@ export function buildProgram(): Command {
     .option("--force", "Enroll again even if already enrolled")
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+      "Harnesses to hook: claude-code, codex, stella, or a comma list such as claude-code,stella",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(

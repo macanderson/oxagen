@@ -61,6 +61,9 @@ export const hostFileSchema = z
     /** Present once a host enrolls with `--harness codex`. */
     codex_version: z.string().nullable().optional(),
     codex_execpath: z.string().nullable().optional(),
+    /** Present once a host enrolls with `--harness stella`. */
+    stella_version: z.string().nullable().optional(),
+    stella_execpath: z.string().nullable().optional(),
     wrapper_version: z.string(),
     /** The command lines the settings and the service unit were written with. */
     hook_command: z.string().min(1),

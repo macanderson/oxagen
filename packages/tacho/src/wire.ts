@@ -20,10 +20,30 @@ export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
 /**
  * The harnesses a host can enroll. Codex CLI's hook surface (events, stdin
  * fields, decision JSON, `hooks.json` shape) mirrors Claude Code's, so it
- * runs through the same `tacho-hook` with a `--harness codex` tag.
+ * runs through the same `tacho-hook` with a `--harness codex` tag. Stella's
+ * does not: its payload names no session and its answers are
+ * `{"action": ...}` decisions, so `--harness stella` routes the hook through
+ * `claude-code/stella-adapter.ts` in both directions.
  */
-export const tachoHarnessSchema = z.enum(["claude-code", "codex"]);
+export const tachoHarnessSchema = z.enum(["claude-code", "codex", "stella"]);
 export type TachoHarness = z.infer<typeof tachoHarnessSchema>;
+
+/** How each harness is named to a person: detect, status, the agent roster. */
+export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  stella: "Stella",
+};
+
+/**
+ * A custom agent's name (`tacho hook --agent <name>`). It becomes the
+ * session's `agent.harness` and the roster label, so it is held to a
+ * slug: lowercase, no spaces, short enough for every column that shows it.
+ */
+export const CUSTOM_AGENT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+export const customAgentNameSchema = z
+  .string()
+  .regex(CUSTOM_AGENT_NAME_PATTERN);
 export const tachoHostStatusSchema = z.enum([
   "active",
   "paused",

@@ -1,38 +1,64 @@
 /**
- * The session registry (spec plan PR 3): one recorder per live Claude Code
+ * The session registry (spec plan PR 3): one recorder per live agent
  * session, keyed by the harness session id, with the operator control state
  * a command can set (pause, cancel, message) and the process facts the
  * detector and the kill path need. Persists to `daemon.json` so a daemon
  * restart continues every chain instead of forking it.
+ *
+ * It also keeps the agent roster: one entry per kind of agent this host has
+ * run (`claude-code`, `codex`, `stella`, or a named custom agent), with when
+ * it was first and last seen and how many sessions it opened. The roster
+ * outlives the sessions it counted — `forgetSealed` drops sealed sessions,
+ * never roster entries — so the desktop app can show every agent the host
+ * has run, not only those with a live session.
  */
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent, TachoRuntime } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { TachoHarness } from "../wire";
+import { TACHO_HARNESS_LABELS, type TachoHarness } from "../wire";
 
 /**
  * The recorder context for a session's harness. The daemon's context is
- * Claude Code's; a Codex session keeps every other fact and relabels the
- * agent with its own runtime. `runtime` is the control plane's checked enum
- * (`TACHO_RUNTIMES`), so every harness this map admits must also be a member
- * there: the fleet page filters on `runtime`, and a harness that had to
- * borrow `custom` could not be told apart from a custom agent.
+ * Claude Code's; a Codex or Stella session keeps every other fact and
+ * relabels the agent with its own runtime. `runtime` is the control plane's
+ * checked enum (`TACHO_RUNTIMES`), so every harness this map admits must
+ * also be a member there: the fleet page filters on `runtime`, and a
+ * harness that had to borrow `custom` could not be told apart from a custom
+ * agent.
  */
 const RUNTIME_FOR_HARNESS: Record<TachoHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
+  stella: "stella",
 };
 
+/**
+ * A custom agent (`tacho hook --agent <name>`) is `runtime: "custom"` with
+ * its name as the harness, and wins over `harness`: the name is the more
+ * specific claim.
+ */
 export function contextForHarness(
   context: ClaudeCodeContext,
   harness: TachoHarness | undefined,
+  customAgent?: string,
 ): ClaudeCodeContext {
+  if (customAgent !== undefined) {
+    return {
+      ...context,
+      agent: { ...context.agent, harness: customAgent, runtime: "custom" },
+    };
+  }
   if (harness === undefined || harness === "claude-code") return context;
   return {
     ...context,
     agent: { ...context.agent, harness, runtime: RUNTIME_FOR_HARNESS[harness] },
   };
+}
+
+/** The daemon's own chain (`tachod-<ulid>`) is host bookkeeping, not an agent. */
+export function isInternalSession(harnessSessionId: string): boolean {
+  return harnessSessionId.startsWith("tachod-");
 }
 
 export interface SessionControl {
@@ -48,6 +74,14 @@ export interface SessionFacts {
   pid?: number;
   /** Which harness runs the session; fixed at first sight, Claude Code by default. */
   harness?: TachoHarness;
+  /** A custom agent's name (`--agent`); fixed at first sight. */
+  customAgent?: string;
+  /**
+   * The newest hook event the session sent. Stella has no SessionEnd, so a
+   * chain whose process is gone after a `Stop` ended cleanly; without a
+   * `Stop` it did not.
+   */
+  lastHookEvent?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -75,9 +109,29 @@ export interface PersistedSession extends SessionFacts {
   ambient: boolean;
 }
 
+/** One kind of agent this host has run. */
+export interface AgentRosterEntry {
+  /** `${runtime}:${harness}`, e.g. `stella:stella` or `custom:reviewer`. */
+  key: string;
+  runtime: TachoRuntime;
+  harness: string;
+  /** "Claude Code", "Codex", "Stella", or the custom agent's name. */
+  label: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  sessions_total: number;
+}
+
+export interface AgentStatus extends AgentRosterEntry {
+  /** Sessions of this agent whose chain is not sealed. */
+  sessions_live: number;
+}
+
 export interface RegistryState {
   schema: "tacho.daemon-state.v1";
   sessions: PersistedSession[];
+  /** Absent in files written before the roster existed. */
+  agents?: AgentRosterEntry[];
 }
 
 export interface RegistryOptions {
@@ -89,6 +143,7 @@ export interface RegistryOptions {
 export class SessionRegistry {
   private readonly options: RegistryOptions;
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly roster = new Map<string, AgentRosterEntry>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -121,6 +176,63 @@ export class SessionRegistry {
     return this.list().filter((record) => !record.sealed);
   }
 
+  /** Which agent a session belongs to: runtime, harness, and the label a person reads. */
+  agentOf(record: SessionFacts): {
+    key: string;
+    runtime: TachoRuntime;
+    harness: string;
+    label: string;
+  } {
+    if (record.customAgent !== undefined) {
+      return {
+        key: `custom:${record.customAgent}`,
+        runtime: "custom",
+        harness: record.customAgent,
+        label: record.customAgent,
+      };
+    }
+    const harness = record.harness ?? "claude-code";
+    const runtime = RUNTIME_FOR_HARNESS[harness];
+    return {
+      key: `${runtime}:${harness}`,
+      runtime,
+      harness,
+      label: TACHO_HARNESS_LABELS[harness],
+    };
+  }
+
+  private noteAgent(record: SessionRecord, created: boolean): void {
+    if (isInternalSession(record.harnessSessionId)) return;
+    const agent = this.agentOf(record);
+    const now = record.lastSeenAt;
+    const entry = this.roster.get(agent.key);
+    if (entry === undefined) {
+      this.roster.set(agent.key, {
+        ...agent,
+        first_seen_at: now,
+        last_seen_at: now,
+        sessions_total: created ? 1 : 0,
+      });
+      return;
+    }
+    entry.last_seen_at = now;
+    if (created) entry.sessions_total += 1;
+  }
+
+  /** Every agent this host has run, with its live session count. */
+  agents(): AgentStatus[] {
+    const live = new Map<string, number>();
+    for (const record of this.live()) {
+      if (isInternalSession(record.harnessSessionId)) continue;
+      const key = this.agentOf(record).key;
+      live.set(key, (live.get(key) ?? 0) + 1);
+    }
+    return [...this.roster.values()].map((entry) => ({
+      ...entry,
+      sessions_live: live.get(entry.key) ?? 0,
+    }));
+  }
+
   /** Find or open the record for a harness session, absorbing new facts. */
   ensure(
     harnessSessionId: string,
@@ -133,14 +245,21 @@ export class SessionRegistry {
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) existing.cwd = facts.cwd;
       if (facts.pid !== undefined) existing.pid = facts.pid;
+      if (facts.lastHookEvent !== undefined)
+        existing.lastHookEvent = facts.lastHookEvent;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
+      this.noteAgent(existing, false);
       return { record: existing, created: false };
     }
     const record: SessionRecord = {
       harnessSessionId,
       recorder: new SessionRecorder({
-        context: contextForHarness(this.options.context, facts.harness),
+        context: contextForHarness(
+          this.options.context,
+          facts.harness,
+          facts.customAgent,
+        ),
         harnessSessionId,
         scope: this.options.scope,
       }),
@@ -150,20 +269,19 @@ export class SessionRegistry {
       sealed: false,
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
-      ...(facts.harness !== undefined ? { harness: facts.harness } : {}),
-      ...(facts.transcriptPath !== undefined
-        ? { transcriptPath: facts.transcriptPath }
-        : {}),
-      ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
-      ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+      ...optionalFacts(facts),
     };
     this.sessions.set(harnessSessionId, record);
+    this.noteAgent(record, true);
     return { record, created: true };
   }
 
   touch(harnessSessionId: string): void {
     const record = this.sessions.get(harnessSessionId);
-    if (record) record.lastSeenAt = this.ts();
+    if (record) {
+      record.lastSeenAt = this.ts();
+      this.noteAgent(record, false);
+    }
   }
 
   /** Mark a chain sealed after `agent_stop` landed on it. */
@@ -172,7 +290,7 @@ export class SessionRegistry {
     if (record) record.sealed = true;
   }
 
-  /** Forget sealed sessions older than `retainMs`. */
+  /** Forget sealed sessions older than `retainMs`. The roster keeps them counted. */
   forgetSealed(retainMs: number): string[] {
     const cutoff = this.options.now() - retainMs;
     const removed: string[] = [];
@@ -187,8 +305,11 @@ export class SessionRegistry {
 
   /**
    * Close chains whose process is gone (or, with no pid known, idle past
-   * `idleMs`). Returns the sealing events. A session that only ever showed
-   * up through OTel or a transcript is closed as `crashed` too: the harness
+   * `idleMs`). Returns the sealing events. A session whose process is gone
+   * right after a `Stop` hook completed its turn and exited: that is how
+   * Stella, which has no SessionEnd, ends every session, so it closes as
+   * `completed`. Anything else closes as `crashed`, including a session
+   * that only ever showed up through OTel or a transcript: the harness
    * never told us it ended.
    */
   sweep(isAlive: (pid: number) => boolean, idleMs: number): TachoEvent[] {
@@ -203,7 +324,9 @@ export class SessionRegistry {
         record.sealed = true;
         continue;
       }
-      out.push(...record.recorder.finalize("crashed", this.ts()));
+      const outcome =
+        gone && record.lastHookEvent === "Stop" ? "completed" : "crashed";
+      out.push(...record.recorder.finalize(outcome, this.ts()));
       record.sealed = true;
     }
     return out;
@@ -225,13 +348,9 @@ export class SessionRegistry {
         sealed: record.sealed,
         lastCheckpointSeq: record.lastCheckpointSeq,
         ambient: record.ambient,
-        ...(record.harness !== undefined ? { harness: record.harness } : {}),
-        ...(record.transcriptPath !== undefined
-          ? { transcriptPath: record.transcriptPath }
-          : {}),
-        ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-        ...(record.pid !== undefined ? { pid: record.pid } : {}),
+        ...optionalFacts(record),
       })),
+      agents: [...this.roster.values()].map((entry) => ({ ...entry })),
     };
   }
 
@@ -240,7 +359,11 @@ export class SessionRegistry {
       this.sessions.set(persisted.harnessSessionId, {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
-          context: contextForHarness(this.options.context, persisted.harness),
+          context: contextForHarness(
+            this.options.context,
+            persisted.harness,
+            persisted.customAgent,
+          ),
           harnessSessionId: persisted.harnessSessionId,
           scope: this.options.scope,
           restore: persisted.recorder,
@@ -251,15 +374,29 @@ export class SessionRegistry {
         sealed: persisted.sealed,
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
-        ...(persisted.harness !== undefined
-          ? { harness: persisted.harness }
-          : {}),
-        ...(persisted.transcriptPath !== undefined
-          ? { transcriptPath: persisted.transcriptPath }
-          : {}),
-        ...(persisted.cwd !== undefined ? { cwd: persisted.cwd } : {}),
-        ...(persisted.pid !== undefined ? { pid: persisted.pid } : {}),
+        ...optionalFacts(persisted),
       });
     }
+    for (const entry of state.agents ?? []) {
+      this.roster.set(entry.key, { ...entry });
+    }
   }
+}
+
+/** The optional session facts, copied only when set (the state file omits absent keys). */
+function optionalFacts(facts: SessionFacts): SessionFacts {
+  return {
+    ...(facts.harness !== undefined ? { harness: facts.harness } : {}),
+    ...(facts.customAgent !== undefined
+      ? { customAgent: facts.customAgent }
+      : {}),
+    ...(facts.transcriptPath !== undefined
+      ? { transcriptPath: facts.transcriptPath }
+      : {}),
+    ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
+    ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+    ...(facts.lastHookEvent !== undefined
+      ? { lastHookEvent: facts.lastHookEvent }
+      : {}),
+  };
 }

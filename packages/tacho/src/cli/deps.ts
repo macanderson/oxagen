@@ -20,6 +20,11 @@ import { fileURLToPath } from "node:url";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile } from "../host/host-file";
+import {
+  readStellaHooksFile,
+  type StellaHooksFile,
+  type StellaHooksFormat,
+} from "../host/stella-writer";
 import { oxagenConfigPath, type TachoPaths, tachoPaths } from "../host/paths";
 import {
   type Exec,
@@ -239,8 +244,16 @@ export interface CliDeps {
   /** Codex CLI's `hooks.json`, undefined when absent. */
   readCodexHooks: () => unknown;
   writeCodexHooks: (document: unknown) => void;
+  /**
+   * Stella's user-scope hooks file: `stella.toml` when it exists, else the
+   * legacy `settings.json` when that exists, else a new `stella.toml`.
+   * `format` reads that one file instead (unenroll strips both).
+   */
+  readStellaHooks: (format?: StellaHooksFormat) => StellaHooksFile;
+  writeStellaHooks: (file: StellaHooksFile) => void;
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
+  stella: () => HarnessFacts;
   runtime: RuntimeCommands;
   /** GET a daemon route on the loopback port with the local bearer. */
   daemonGet: (path: string) => Promise<unknown | undefined>;
@@ -289,12 +302,15 @@ export function wellKnownBinDirs(
       `${local}\\Programs\\claude`,
       `${home}\\.local\\bin`,
       `${home}\\.codex\\bin`,
+      `${home}\\.cargo\\bin`,
     ];
   }
   return [
     `${home}/.local/bin`,
     `${home}/.claude/local`,
     `${home}/.codex/bin`,
+    // Stella installs through cargo as well as its install script.
+    `${home}/.cargo/bin`,
     "/opt/homebrew/bin",
     "/usr/local/bin",
     `${home}/.npm-global/bin`,
@@ -438,8 +454,12 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         `${JSON.stringify(document, null, 2)}\n`,
         0o644,
       ),
+    readStellaHooks: (format) => readStellaHooksFile(paths, format),
+    writeStellaHooks: (file) =>
+      writeSensitiveFileAtomic(file.path, file.text ?? "", 0o644),
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
+    stella: () => harnessFacts(exec, "stella", platform, env, home),
     runtime: runtimeCommands(undefined, env, undefined, platform),
     daemonGet,
     findFreePort: () =>

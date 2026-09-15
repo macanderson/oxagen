@@ -21,6 +21,8 @@ export interface HookEnvelope {
   replay?: HookReplay;
   /** Which harness ran the hook; absent means Claude Code. */
   harness?: TachoHarness;
+  /** A custom agent's name (`tacho hook --agent`); wins over `harness`. */
+  agent?: string;
 }
 
 /** What the daemon exposes to the listener; the daemon implements it. */
