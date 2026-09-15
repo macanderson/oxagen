@@ -34,6 +34,7 @@ const source = {
     contractRate: vi.fn(),
     invoices: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 
 beforeEach(() => {

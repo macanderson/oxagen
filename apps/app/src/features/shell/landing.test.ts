@@ -39,6 +39,7 @@ const source = {
     contractRate: vi.fn(),
     invoices: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };
