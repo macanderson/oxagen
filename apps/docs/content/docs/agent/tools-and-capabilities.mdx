@@ -1,6 +1,6 @@
 ---
 title: Tools and capabilities
-description: The agent tool surface — which capabilities agents can invoke, how the tool list is assembled, and how the MCP gateway extends it.
+description: The agent tool surface: which capabilities agents can invoke, how the tool list is assembled, and how the MCP gateway extends it.
 ---
 
 ## How the tool list is built
@@ -17,7 +17,7 @@ At the start of each agent turn, the runtime materializes the tool list by:
 
 The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent
 selects from this map; it cannot use a tool not in the map. There is no
-sandbox, file system, or browser tool — the agent's only way to affect the
+sandbox, file system, or browser tool: the agent's only way to affect the
 world is a capability call through `kernel.invoke()`.
 
 ## Built-in agent tools
@@ -30,7 +30,7 @@ world is a capability call through `kernel.invoke()`.
 | `list_agent_roles` / `get_agent_role` | Inspect an agent's IAM role and effective grants. |
 | `list_agent_environments` | List an agent's environment bindings. |
 | `list_executions` / `get_execution_trace` | List and inspect past agent executions and their traces. |
-| `debug_execution` | Diagnose why an execution failed — failing step, error class, suspect files. |
+| `debug_execution` | Diagnose why an execution failed: failing step, error class, suspect files. |
 
 ### Memory
 
@@ -53,7 +53,7 @@ Memories**. See [Agent memory](/docs/agent/memory) for the full model.
 | `get_node` / `list_nodes` / `get_node_labels` | Node lookups and browsing. |
 | `get_graph_stats` | Aggregate node/edge counts. |
 
-These are the *ontology read set* — see `docs/capabilities/_ontology-read-set.md`
+These are the *ontology read set*: see `docs/capabilities/_ontology-read-set.md`
 in the repository for how a run opts a narrowed allowlist into it.
 
 ### Approvals
@@ -63,7 +63,7 @@ in the repository for how a run opts a narrowed allowlist into it.
 | `resolve_approval` | Approve or deny a pending tool-call approval request (used programmatically; in the app UI, approval cards render inline in chat). |
 | `resolve_mcp_consent` | Grant or deny first-use consent for an external MCP tool. |
 
-### Repository observability (read-only)
+### Repository status (read-only)
 
 | Tool | Description |
 |---|---|
@@ -72,7 +72,7 @@ in the repository for how a run opts a narrowed allowlist into it.
 | `get_repo_metrics` | Read repository health metrics. |
 
 Oxagen observes connected repositories; it does not open branches, push
-commits, or open pull requests on their behalf — the mutation half of the
+commits, or open pull requests on their behalf: the mutation half of the
 repo surface (create/fork/file.put/pr.open/branch.create) was removed under
 ADR-043 along with the coding runtime that used it.
 
@@ -95,7 +95,7 @@ ADR-043 along with the coding runtime that used it.
 When a workspace enables an external MCP server plugin, that server's tools
 are injected into the workspace toolchain through the governed MCP tool
 gateway. Plugin tools appear in the agent's tool list alongside built-in
-tools. They are governed by the same IAM and audit infrastructure — calling a
+tools. They are governed by the same IAM and audit infrastructure: calling a
 plugin tool produces the same audit record as calling a built-in tool.
 
 Plugin tool names are namespaced by the plugin's server ID to prevent
@@ -111,7 +111,7 @@ Every tool has a `riskLevel` field: `low`, `medium`, or `high`.
   approval card rendered).
 
 The workspace tool policy can customize risk thresholds and enable/disable
-individual capabilities for the agent surface — see **Workspace → Settings →
+individual capabilities for the agent surface: see **Workspace → Settings →
 General → Tool policy**.
 
 Default-deny applies to high-risk tools. A workspace that has never

@@ -3,7 +3,7 @@ title: Security overview
 description: How Oxagen protects your data and enforces your governance policies across every layer of the platform.
 ---
 
-Oxagen is designed for organizations where AI governance is not optional. Every architectural decision — from the single capability chokepoint to the database-enforced row-level security — is made with an enterprise security review in mind.
+Oxagen is designed for organizations where AI governance is not optional. Every architectural decision, from the single capability chokepoint to the database-enforced row-level security, is made with an enterprise security review in mind.
 
 ## Defense in depth
 
@@ -37,7 +37,7 @@ These layers are independent. A misconfigured application-layer predicate does n
 
 ## The single capability chokepoint
 
-Every user action, agent action, API call, and MCP tool invocation passes through one function: `invoke()`. This is not convention — it is structural. The capability handler is captured inside `defineContract()` and is unreachable except via `invoke()`. There is no alternate call path.
+Every user action, agent action, API call, and MCP tool invocation passes through one function: `invoke()`. This is not convention: it is structural. The capability handler is captured inside `defineContract()` and is unreachable except via `invoke()`. There is no alternate call path.
 
 At the `invoke()` boundary:
 
@@ -72,11 +72,11 @@ Oxagen services are deployed to `us-central` / `iad1` (US-East). Postgres, Click
 
 Five built-in roles govern what principals can do:
 
-- **Owner** — full control, including billing and org deletion.
-- **Admin** — all operations except destructive org-level actions.
-- **Billing** — billing and subscription management only; no access to operational surfaces.
-- **Member** — run agents, resolve approvals, edit memories.
-- **Viewer** — read-only across the workspace.
+- **Owner**: full control, including billing and org deletion.
+- **Admin**: all operations except destructive org-level actions.
+- **Billing**: billing and subscription management only; no access to operational surfaces.
+- **Member**: run agents, resolve approvals, edit memories.
+- **Viewer**: read-only across the workspace.
 
 The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today: its tables were removed in migration 0027, so every live decision comes from role grants, the system org Owner role, or the contract default. The resolution order is documented in [RBAC and roles](/docs/governance/rbac).
 

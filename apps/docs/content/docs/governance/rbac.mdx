@@ -1,6 +1,6 @@
 ---
 title: RBAC and roles
-description: Oxagen's role-based access control model — built-in roles, how the IAM resolver decides a capability call, and where to see who holds what.
+description: Oxagen's role-based access control model: built-in roles, how the IAM resolver decides a capability call, and where to see who holds what.
 ---
 
 ## Built-in roles
@@ -9,7 +9,7 @@ description: Oxagen's role-based access control model — built-in roles, how th
 
 | Role | Capabilities |
 |---|---|
-| **Owner** | Everything — including billing, org deletion, and ownership transfer. |
+| **Owner** | Everything: including billing, org deletion, and ownership transfer. |
 | **Admin** | All operations except destructive org-level actions (delete org, transfer ownership). |
 | **Compliance** | Security and privacy policy management; no access to operational surfaces or billing. |
 | **Billing** | Billing and subscription management only. No access to operational surfaces or IAM. |
@@ -71,7 +71,7 @@ Capabilities are organized into domains. Role grants are listed by domain:
 
 ## Agents as principals
 
-Every agent configuration is also a principal with its own grant matrix. An agent run is resolved against two principals at once — the agent's own, and the authenticated human who started the run — and the more restrictive outcome wins:
+Every agent configuration is also a principal with its own grant matrix. An agent run is resolved against two principals at once, the agent's own, and the authenticated human who started the run, and the more restrictive outcome wins:
 
 <Mermaid
   chart={`
@@ -84,9 +84,9 @@ flowchart LR
 `}
 />
 
-The human side is the user who started this run, never the agent's creator — otherwise anyone able to trigger an agent would borrow its creator's access. A run with no initiating user resolves the human side as a principal with no roles and no grants, which can only narrow the result. A subagent is further narrowed by its parent run's scope. Both principals are recorded in the audit event.
+The human side is the user who started this run, never the agent's creator: otherwise anyone able to trigger an agent would borrow its creator's access. A run with no initiating user resolves the human side as a principal with no roles and no grants, which can only narrow the result. A subagent is further narrowed by its parent run's scope. Both principals are recorded in the audit event.
 
-Agents get their own roles, separate from the human ones above — three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
+Agents get their own roles, separate from the human ones above: three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
 
 This is what makes AI automation auditable: every action is attributable to either a human chain of custody or a configured service identity.
 
@@ -106,13 +106,13 @@ When the resolver returns `require approval`, the call is refused with `pending_
 
 ## Gate functions
 
-`apps/app` exposes five app-layer guard functions for sensitive server paths. These are **not** part of the `@oxagen/iam` kernel — they query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure (404, not 403 — to avoid existence leaks).
+`apps/app` exposes five app-layer guard functions for sensitive server paths. These are **not** part of the `@oxagen/iam` kernel: they query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure (404, not 403: to avoid existence leaks).
 
-- `assertOrgMember(orgId, userId)` — confirms the principal is a member of the org.
-- `assertBillingManager(orgId, userId)` — confirms the principal holds Owner, Admin, or Billing role.
-- `assertMcpManager(orgId, userId)` — confirms the principal holds Owner or Admin role for plugin governance.
-- `assertWorkspaceMember(workspaceId, userId)` — confirms the principal is a member of the given workspace.
-- `assertSecurityManager(orgId, userId)` — confirms the principal holds Owner or Admin role for audit evidence export.
+- `assertOrgMember(orgId, userId)`: confirms the principal is a member of the org.
+- `assertBillingManager(orgId, userId)`: confirms the principal holds Owner, Admin, or Billing role.
+- `assertMcpManager(orgId, userId)`: confirms the principal holds Owner or Admin role for plugin governance.
+- `assertWorkspaceMember(workspaceId, userId)`: confirms the principal is a member of the given workspace.
+- `assertSecurityManager(orgId, userId)`: confirms the principal holds Owner or Admin role for audit evidence export.
 
 ## SSO and directory sync
 

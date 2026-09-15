@@ -1,6 +1,6 @@
 ---
 title: Agent overview
-description: How the Oxagen in-app agent works — a governed turn loop over the fleet record and knowledge graph, not a coding runtime.
+description: How the Oxagen in-app agent works: a governed turn loop over the fleet record and knowledge graph, not a coding runtime.
 ---
 
 Oxagen governs the agents your organization builds and runs; it does not run
@@ -9,12 +9,12 @@ tasks, plan mode, skills authoring, and content-generation tools have been
 excised (ADR-043, `docs/adr/ADR-043-runtime-excision.md` in the repository).
 What remains is one conversational surface: a governed turn
 (`runGovernedTurn`) whose job is to interrogate the **fleet record** and
-the **knowledge graph** — what did my agents do, what context did they have,
+the **knowledge graph**: what did my agents do, what context did they have,
 what did it cost, what is pending approval.
 
 It has no sandbox, no file system, no browser, and no subagents. Every tool
 call it makes is a capability contract invoked through the same
-`kernel.invoke()` boundary as the REST API and the MCP gateway — IAM-checked,
+`kernel.invoke()` boundary as the REST API and the MCP gateway: IAM-checked,
 metered, and audit-logged identically regardless of which surface triggered
 it.
 
@@ -75,7 +75,7 @@ filtered by:
    grant.
 
 The agent selects tools autonomously based on the user's request. It cannot
-call a capability it does not have access to — the IAM check happens before
+call a capability it does not have access to: the IAM check happens before
 the handler runs, not inside it.
 
 ## Delegated context
@@ -99,12 +99,12 @@ service identity configured for an automated trigger.
 | Approvals | Resolve a pending tool-call or MCP-consent approval |
 | Billing & budgets | Read spend, usage, and budget policy |
 | MCP gateway | List registered external MCP servers and their tools |
-| Repository observability | CI status, PR diffs, PR metadata for connected repos (read-only) |
+| Repository status | CI status, PR diffs, PR metadata for connected repos (read-only) |
 
 See [Tools and capabilities](/docs/agent/tools-and-capabilities) for the full
 list.
 
-## Observability
+## What a turn records
 
 Every agent turn produces:
 

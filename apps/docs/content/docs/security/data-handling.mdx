@@ -32,7 +32,7 @@ Oxagen services are deployed to US-East (`iad1` on Vercel). All data stores are 
 | Neo4j AuraDB | US region |
 | Vercel Blob | US region |
 
-Customer data does not leave the United States in normal operation. If a workspace connects to an external MCP server, data sent to that server is subject to that server's data handling policies — Oxagen does not control or log the payloads sent to external integrations.
+Customer data does not leave the United States in normal operation. If a workspace connects to an external MCP server, data sent to that server is subject to that server's data handling policies: Oxagen does not control or log the payloads sent to external integrations.
 
 ## Data classification
 
@@ -76,7 +76,7 @@ DPAs are available on request for all primary sub-processors. Contact privacy@ox
 
 ## Model providers and AI inference
 
-All AI inference routes through the Vercel AI Gateway. Oxagen does not hold Anthropic, OpenAI, or other provider API keys in its codebase or deployment environment — the gateway handles provider authentication.
+All AI inference routes through the Vercel AI Gateway. Oxagen does not hold Anthropic, OpenAI, or other provider API keys in its codebase or deployment environment: the gateway handles provider authentication.
 
 Inference requests contain the content of the user's message and the agent's system prompt. They do not contain: passwords, API keys, raw payment data, or other secrets. Model providers' data handling policies apply to the content of inference requests.
 

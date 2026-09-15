@@ -69,7 +69,8 @@
     "db:backfill-mcp-server-auth-config": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-mcp-server-auth-config.ts",
     "check:mcp-externals": "tsx tools/scripts/check-mcp-externals.ts",
     "check:inngest-senders": "tsx tools/scripts/check-inngest-senders.ts",
-    "check:control-bytes": "node tools/scripts/check-control-bytes.mjs"
+    "check:control-bytes": "node tools/scripts/check-control-bytes.mjs",
+    "check:prose": "node tools/scripts/check-prose.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",

@@ -48,7 +48,7 @@ It helps to name the two levers separately, because teams reach for one and assu
 
 Capability control bounds what the agent can reach: the sandbox, the tool allowlist, the credential scope, the data it can query. It is enforceable, it is testable, and Skalse's result says it is the lever that actually carries the guarantee, since safety comes from restricting the policy set.[^3]
 
-Incentive control shapes what the agent wants: the reward, the score, the acceptance criterion for a self-edit. It feels like the powerful lever, and it is the one that provably cannot be made airtight on its own.
+Incentive control shapes what the agent wants: the reward, the score, the acceptance criterion for a self-edit. It feels like the strong lever, and it is the one that provably cannot be made airtight on its own.
 
 Oversight sits on top of both, and the evidence here is more encouraging than people expect. Bowman and colleagues tested a deliberately trivial baseline for scalable oversight, humans interacting with an unreliable model assistant through chat, and found that the pair substantially outperformed both the model alone and the humans unaided on MMLU and time-limited QuALITY.[^8] The lesson is not that humans should review every self-edit. It is that a human in the loop with a real interface beats a human reading a summary, and that the loop is worth designing rather than treating as a rubber stamp.
 

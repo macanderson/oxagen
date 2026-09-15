@@ -1,14 +1,14 @@
 ---
 title: CLI overview
-description: The oxagen CLI — govern, ground, explain, meter and rate your agent fleet from the terminal.
+description: The oxagen CLI: govern, ground, explain, meter and rate your agent fleet from the terminal.
 ---
 
 `oxagen` is the governance-operations CLI for the Oxagen control plane. It answers the questions an operator asks about a fleet of agents: what did they do, what context did they have, what did it cost, what are they allowed to do next.
 
-Oxagen **governs, grounds, explains, meters/bills and rates** agents — it does not run them. Agentic coding lives in the [`stella`](https://github.com/macanderson/stella) CLI, which talks to Oxagen over MCP and the platform API.
+Oxagen **governs, grounds, explains, meters/bills and rates** agents: it does not run them. Agentic coding lives in the [`stella`](https://github.com/macanderson/stella) CLI, which talks to Oxagen over MCP and the platform API.
 
 <Callout type="warn">
-**The coding agent moved.** The interactive REPL, one-shot turns, fleets, sandboxes, skills, slash commands, evals, and local rules/settings that earlier versions of this CLI shipped were removed. Every removed entry point is still registered and prints a retirement notice pointing at Stella, so a stale script fails loudly instead of silently doing nothing. See [ADR-043](https://github.com/macanderson/oxagen/blob/main/docs/adr/ADR-043-runtime-excision.md).
+**The coding agent moved.** The interactive REPL, one-shot turns, fleets, sandboxes, skills, slash commands, `eval`, and local rules/settings that earlier versions of this CLI shipped were removed. Every removed entry point is still registered and prints a retirement notice pointing at Stella, so a stale script fails loudly instead of silently doing nothing. See [ADR-043](https://github.com/macanderson/oxagen/blob/main/docs/adr/ADR-043-runtime-excision.md).
 </Callout>
 
 ## Who this is for
@@ -18,11 +18,11 @@ These docs are written for **developers and platform operators**. You should be 
 ## What you can do
 
 - **Meter and bill.** `oxagen budget` sets and inspects hard period-to-date spend ceilings for an org or workspace, with live burn against each one. `oxagen cost` prices token usage from the baked-in rate card before you spend anything.
-- **Explain a run.** `oxagen trace <executionId>` renders an agent run as a span tree — every step, the tool calls it made, and any child executions it spawned, with timing and spend.
+- **Explain a run.** `oxagen trace <executionId>` renders an agent run as a span tree: every step, the tool calls it made, and any child executions it spawned, with timing and spend.
 - **Ground answers.** `oxagen graph search` runs a bounded, workspace-scoped semantic search over the governed knowledge graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
-- **Curate what agents learn.** `oxagen memory` and `oxagen remember` manage the workspace's [agent memory](/docs/cli/memory) — the OBSERVATION → RULE → FACT ladder, citation analytics, and auditable promotions.
+- **Curate what agents learn.** `oxagen memory` and `oxagen remember` manage the workspace's [agent memory](/docs/cli/memory): the OBSERVATION → RULE → FACT ladder, citation analytics, and auditable promotions.
 - **Govern the workspace.** Bind agents to environments (`oxagen agent env`), manage environments (`oxagen env`), and read or write the encrypted credential vault (`oxagen secret`).
-- **Route economically.** `oxagen router` inspects the verified-outcome market router — observed outcomes per (task class, model) and the governed routing policy.
+- **Route economically.** `oxagen router` inspects the verified-outcome market router: observed outcomes per (task class, model) and the governed routing policy.
 
 ## One credential
 
@@ -38,7 +38,7 @@ It makes no LLM calls of its own, so there is no model provider key to configure
 
 ## Next steps
 
-- [Installing the CLI](/docs/cli/installation) — get the `oxagen` binary onto your machine.
-- [Account setup](/docs/cli/account-setup) — create an Oxagen account and authenticate the CLI.
-- [CLI quickstart](/docs/cli/quickstart) — link a project, then read your first trace and budget.
-- [Command reference](/docs/cli/commands) — every command and flag.
+- [Installing the CLI](/docs/cli/installation): get the `oxagen` binary onto your machine.
+- [Account setup](/docs/cli/account-setup): create an Oxagen account and authenticate the CLI.
+- [CLI quickstart](/docs/cli/quickstart): link a project, then read your first trace and budget.
+- [Command reference](/docs/cli/commands): every command and flag.

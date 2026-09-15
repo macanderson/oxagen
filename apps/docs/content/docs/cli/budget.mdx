@@ -1,6 +1,6 @@
 ---
 title: Spend budgets
-description: Hard period-to-date spend ceilings that gate agent runs — the org ceiling, the workspace ceiling, live burn, and the threshold ladder.
+description: Hard period-to-date spend ceilings that gate agent runs: the org ceiling, the workspace ceiling, live burn, and the threshold ladder.
 ---
 
 A spend budget is a hard USD ceiling on what an org or a workspace may spend in an accounting period. It is enforced by the platform's billing admission gate: once a ceiling is exceeded, capability invocations that consume credits are denied until the period rolls over or the ceiling is raised.
@@ -10,7 +10,7 @@ Two ceilings apply independently:
 - The **org** ceiling covers every workspace in the organization.
 - The **workspace** ceiling covers the active workspace alone.
 
-A run must clear both. The same ceilings back the `get_spend_budget` / `set_spend_budget` capabilities, so the CLI, the app, the API, and MCP all read and write one governed record — there is no CLI-local budget.
+A run must clear both. The same ceilings back the `get_spend_budget` / `set_spend_budget` capabilities, so the CLI, the app, the API, and MCP all read and write one governed record: there is no CLI-local budget.
 
 ## Read the current ceilings
 
@@ -24,7 +24,7 @@ For each configured scope this prints the ceiling and its **live burn**: period-
 oxagen budget show --json
 ```
 
-`--json` emits the exact contract payload on one line — an array of budget statuses, each carrying `scope`, `enabled`, `period`, `windowDays`, `limitUsd`, `spentUsd`, `projectedUsd`, `ratio`, `state`, `reachedThreshold`, `windowStart`, and `windowEnd`.
+`--json` emits the exact contract payload on one line: an array of budget statuses, each carrying `scope`, `enabled`, `period`, `windowDays`, `limitUsd`, `spentUsd`, `projectedUsd`, `ratio`, `state`, `reachedThreshold`, `windowStart`, and `windowEnd`.
 
 ## The threshold ladder
 
@@ -35,7 +35,7 @@ oxagen budget show --json
 | `ok` | Below 50% of the ceiling. |
 | `threshold_50` | Crossed 50%. |
 | `threshold_80` | Crossed 80%. |
-| `threshold_95` | Crossed 95% — the last warning before denial. |
+| `threshold_95` | Crossed 95%: the last warning before denial. |
 | `exceeded` | At or over the ceiling; the admission gate is denying. |
 
 `reachedThreshold` records the highest rung crossed in this period, so a notification fires once per rung rather than on every run.
@@ -56,12 +56,12 @@ oxagen budget set --scope org --period rolling --window-days 30 --limit 5000
 | `--enabled <bool>` | Disable a ceiling without deleting it (`--enabled false`) or re-enable it. |
 | `--json` | Machine-readable output. |
 
-`set` is a replace-in-place: it writes the ceiling for that scope, creating it if absent. It requires org **Owner**, **Admin**, or **Billing** — changing a ceiling changes spend behavior.
+`set` is a replace-in-place: it writes the ceiling for that scope, creating it if absent. It requires org **Owner**, **Admin**, or **Billing**: changing a ceiling changes spend behavior.
 
 The rolling/monthly `--window-days` rule is checked client-side before the request so a bad combination fails fast with a usage error (exit 2); the platform re-validates it regardless.
 
 ## Projection vs. observation
 
-`oxagen budget show` reports what was **actually spent** — metered usage, the same numbers that reach billing.
+`oxagen budget show` reports what was **actually spent**: metered usage, the same numbers that reach billing.
 
 To price a workload *before* running it, use [`oxagen cost`](/docs/cli/commands#oxagen-cost--project-model-cost), which projects token counts against the rate card baked into the CLI and makes no network call. To see where the spend on one run went, use [`oxagen trace <executionId>`](/docs/cli/commands#oxagen-trace--a-run-as-a-span-tree).

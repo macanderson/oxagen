@@ -1,6 +1,6 @@
 ---
 title: Knowledge graph
-description: The governed workspace context graph — secured source facts, relationships, memories, provider metadata, and agent evidence.
+description: The governed workspace context graph: secured source facts, relationships, memories, provider metadata, and agent evidence.
 ---
 
 Every workspace has a **governed context graph**: a tenant-isolated Neo4j graph holding approved entities and relationships from connected sources, agent memories, and stable provider metadata. Access is evaluated in workspace scope so agents can ground answers in shared context without turning Oxagen into a remote copy of a developer's checkout.
@@ -32,7 +32,7 @@ Until the evidence ledger exists, Oxagen does not infer or automatically promote
 
 ## Sources
 
-**Knowledge → Sources** lists the governed data source connections feeding the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence — webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in three modes: connection only (keep data), data only (keep config), or full.
+**Knowledge → Sources** lists the governed data source connections feeding the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence: webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in three modes: connection only (keep data), data only (keep config), or full.
 
 <Mermaid
   chart="
@@ -49,8 +49,8 @@ flowchart LR
 
 Two complementary searches:
 
-- **Semantic search** — embeds a natural-language query and ranks eligible shared knowledge (entities, memories, documents, messages, and provider metadata) by vector similarity. Repository source text, symbols, chunks, and code embeddings are excluded.
-- **Lexical search** — substring match on node names and descriptions, useful when you know what something is called.
+- **Semantic search**: embeds a natural-language query and ranks eligible shared knowledge (entities, memories, documents, messages, and provider metadata) by vector similarity. Repository source text, symbols, chunks, and code embeddings are excluded.
+- **Lexical search**: substring match on node names and descriptions, useful when you know what something is called.
 
 From any node you can walk its neighbors one hop at a time, or traverse multiple hops along named relationship types. Reads support bitemporal queries: "as of" a valid time (what was true in the world) and "as known at" a transaction time (what we had recorded).
 
@@ -62,8 +62,8 @@ A future candidate system must be built around attributable producer provenance,
 
 ## Citation analytics
 
-Every grounded answer records which memories and graph nodes it cited, and how much they mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard — most-cited and least-useful memories, violated rules, top cited entities — so you can promote what works and demote what doesn't. See [Citations](/docs/knowledge/citations).
+Every grounded answer records which memories and graph nodes it cited, and how much they mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard, most-cited and least-useful memories, violated rules, top cited entities, so you can promote what works and demote what doesn't. See [Citations](/docs/knowledge/citations).
 
 ## Governing the graph's shape
 
-The graph's vocabulary — which entity types, properties, and relationship types are allowed — is governed by the workspace [schema registry](/docs/knowledge/schema-registry).
+The graph's vocabulary, which entity types, properties, and relationship types are allowed, is governed by the workspace [schema registry](/docs/knowledge/schema-registry).
