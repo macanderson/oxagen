@@ -9,7 +9,7 @@
 // human of the delegation ceiling: the belt is the one a run they start would
 // carry. Field semantics are on the contract
 // (packages/oxagen/src/contracts/agent.toolbelt.get.ts).
-import { schema, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import {
   agentKeysFor,
   resolveAgentIdentity,
@@ -19,6 +19,7 @@ import {
   decideMcpToolEffect,
   effectiveMcpScopeForRun,
 } from "@oxagen/agent/runtime/mcp-rbac";
+import { selectMaterializableMcpServers } from "@oxagen/agent/runtime/mcp-servers";
 import {
   decideCapabilityForBelt,
   decideMcpToolForBelt,
@@ -44,7 +45,6 @@ import {
 } from "@oxagen/oxagen/iam";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
-import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 /** The audit correlation id of a belt that no run carries. */
@@ -220,7 +220,9 @@ export const agentToolbeltGetHandler: CapabilityHandler<
   }
 
   // MCP tools from the servers' cached `tools/list` snapshot, decided by the
-  // run's effective MCP rules and the agent principal's standing consent.
+  // run's effective MCP rules and the agent principal's standing consent. The
+  // servers are the ones the runtime contributor loads, selected by the same
+  // query.
   const mcpScope = effectiveMcpScopeForRun(
     agentRun,
     resolution,
@@ -229,22 +231,7 @@ export const agentToolbeltGetHandler: CapabilityHandler<
     ctx.clientIp ?? null,
   );
   const servers = await withTenantDb((tx) =>
-    tx
-      .select({
-        id: schema.mcpServers.id,
-        publicId: schema.mcpServers.publicId,
-        name: schema.mcpServers.name,
-        discoveredTools: schema.mcpServers.discoveredTools,
-      })
-      .from(schema.mcpServers)
-      .where(
-        and(
-          eq(schema.mcpServers.orgId, scope.orgId),
-          eq(schema.mcpServers.workspaceId, scope.workspaceId),
-          eq(schema.mcpServers.enabled, true),
-          isNull(schema.mcpServers.deletedAt),
-        ),
-      ),
+    selectMaterializableMcpServers(tx, scope),
   );
   for (const server of servers) {
     const discovered = Array.isArray(server.discoveredTools)

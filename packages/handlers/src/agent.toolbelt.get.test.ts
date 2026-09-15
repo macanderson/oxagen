@@ -3,7 +3,9 @@
 // role grants, the caller's grants, the entitlement read and the kill
 // switches). The per-tool decision itself and its parity with the runtime
 // listing are proven in packages/agent (runtime/toolbelt.test.ts and
-// materialize-tools.test.ts). Runs where DATABASE_URL is set; locally:
+// materialize-tools.test.ts); the MCP servers are selected by the runtime's
+// own query (runtime/mcp-servers.ts), proven here against the rows the two
+// diverging writers leave behind. Runs where DATABASE_URL is set; locally:
 //
 //   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
 //     pnpm --filter @oxagen/handlers exec vitest run src/agent.toolbelt.get.test.ts
@@ -24,7 +26,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   async () => {
     const { withSystemDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
-    const { eq } = await import("drizzle-orm");
+    const { eq, inArray } = await import("drizzle-orm");
     const support = await import(
       "@oxagen/agent/handlers/_agent-identity.test-support"
     );
@@ -67,6 +69,44 @@ describe.skipIf(!process.env.DATABASE_URL)(
         principalStatus: "suspended",
       });
       await support.seedAgent(tenant, { slug: "bare", principalStatus: null });
+      // Three MCP servers, each with one cached tool. "live" is installed and
+      // enabled. "offplugin" is enabled while its install row is off (what
+      // set_plugin_enabled at org scope leaves). "unlisted" has no install row
+      // (what register_mcp_server writes), and is healthy so the missing
+      // listing is the only reason the runtime skips it.
+      await withSystemDb(async (tx) => {
+        const installs = await tx
+          .insert(schema.pluginInstalledPlugins)
+          .values(
+            (["live", "offplugin"] as const).map((name) => ({
+              orgId: tenant.orgId,
+              workspaceId: tenant.workspaceId,
+              pluginType: "mcp_server",
+              source: "custom",
+              name,
+              authKind: "none",
+              enabled: name === "live",
+            })),
+          )
+          .returning({
+            id: schema.pluginInstalledPlugins.id,
+            name: schema.pluginInstalledPlugins.name,
+          });
+        const listing = new Map(installs.map((row) => [row.name, row.id]));
+        await tx.insert(schema.mcpServers).values(
+          (["live", "offplugin", "unlisted"] as const).map((name) => ({
+            orgId: tenant.orgId,
+            workspaceId: tenant.workspaceId,
+            orgListingId: listing.get(name) ?? null,
+            name,
+            transportType: "streamable-http",
+            endpointUrl: `https://${name}.mcp.example.com`,
+            authStrategy: "none",
+            healthStatus: name === "live" ? "unknown" : "healthy",
+            discoveredTools: ["ping"],
+          })),
+        );
+      });
       await withSystemDb(async (tx) => {
         const [ownerRole] = await tx
           .select({ id: schema.roles.id })
@@ -118,6 +158,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.roleGrants)
           .where(eq(schema.roleGrants.orgId, tenant.orgId));
+        await tx
+          .delete(schema.mcpServers)
+          .where(inArray(schema.mcpServers.orgId, orgIds));
+        await tx
+          .delete(schema.pluginInstalledPlugins)
+          .where(inArray(schema.pluginInstalledPlugins.orgId, orgIds));
       });
       await support.cleanupTenants(orgIds);
       await support.cleanupUsers(userIds);
@@ -152,6 +198,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
         sentToModel:
           out.tools.length <= FULL_BELT_LIMIT ? "definitions" : "meta_tools",
       });
+    });
+
+    it("lists MCP tools only from the servers the runtime loads: an install that is off and a server with no listing contribute nothing", async () => {
+      const out = agentToolbeltGet.output.parse(await belt("granted"));
+      expect(out.tools.find((t) => t.name === "live__ping")).toMatchObject({
+        kind: "mcp",
+        category: "external",
+      });
+      const listed = [
+        ...out.tools.map((t) => t.name),
+        ...out.cannotSee.map((c) => c.name),
+      ];
+      expect(listed).not.toContain("offplugin__ping");
+      expect(listed).not.toContain("unlisted__ping");
     });
 
     it("a forced presentation wins over the size rule", async () => {
