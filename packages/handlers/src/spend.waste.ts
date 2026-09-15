@@ -4,8 +4,8 @@
 // the money the frames put on it. The one cause the rollup can cost exactly
 // today is a cache written and never read (spec §12.8 "Cache writes never
 // read"): the run wrote prompt-cache tokens and read none, so every cache
-// write premium it paid bought nothing. The findings job that costs the other
-// patterns is the findings lane; its causes join this list.
+// write premium it paid bought nothing. A pattern with a counterfactual saving
+// over the runs it cites is a finding (`list_findings`, ADR-062).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   spendWasteList,

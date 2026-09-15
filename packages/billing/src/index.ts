@@ -25,6 +25,8 @@ export * from "./spend-counter";
 export * from "./price-book";
 export * from "./cost-rollup";
 export * from "./cost-rollup-store";
+export type { FindingEvidence } from "./findings";
+export { listWorkspacesForFindings, runFindingsPass } from "./findings-store";
 export * from "./discount";
 export * from "./action-metering";
 export {

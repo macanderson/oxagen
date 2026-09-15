@@ -29,6 +29,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "record_finding_fix",
+  "dismiss_finding",
 ] as const;
 
 const SRC = join(__dirname);
