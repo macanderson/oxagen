@@ -150,7 +150,10 @@ describe("oxagen logs --follow", () => {
     // The command computes its `seen` baseline before it calls `watch`, so a
     // defined listener is the signal that the pre-follow tail and the baseline
     // read are both done and an append now counts as new.
-    await waitUntil(() => listener !== undefined, "follow mode to start watching");
+    await waitUntil(
+      () => listener !== undefined,
+      "follow mode to start watching",
+    );
 
     await debugLog("turn", "after.follow");
     listener!();

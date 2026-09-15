@@ -7,7 +7,7 @@
  */
 import { join } from "node:path";
 import { ensureDir, writeSensitiveFileAtomic } from "./fs";
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 
 export const SERVICE_LABEL = "sh.oxagen.tachod";
 /** Task Scheduler names cannot carry dots; this is the Windows label. */
@@ -128,6 +128,12 @@ export interface ServiceManagerOptions {
   uid?: number;
   /** Where the Windows launcher `.cmd` is written (`TachoPaths.daemonLauncher`). */
   launcherPath?: string;
+  /**
+   * The daemon's pid file (`TachoPaths.pid`), the handle the Windows manager
+   * stops and observes the daemon by. Defaults to `tachod.pid` next to the
+   * launcher.
+   */
+  pidPath?: string;
 }
 
 function launchdManager(options: ServiceManagerOptions): ServiceManager {
@@ -243,15 +249,55 @@ export function renderWindowsLauncher(spec: ServiceSpec): string {
  * starts it at sign-in, `/RL LIMITED` keeps it unelevated, and `/Run` starts
  * it right away. The task is hidden from the foreground with `cmd /c start
  * /min` so the collector does not own a console window.
+ *
+ * The daemon is stopped and observed by its pid, never by the task: the
+ * task's action is `cmd /c start`, which returns as soon as the launcher is
+ * handed off, so the task's own status says nothing reliable about the
+ * daemon, and the daemon's image is `tacho.exe` (multi-call) or `node.exe`
+ * (bundle), so no image name identifies it either. `runDaemonProcess`
+ * writes `tachod.pid`; that is the handle. A stale pid file (the process is
+ * gone) reads as stopped.
  */
 function schtasksManager(options: ServiceManagerOptions): ServiceManager {
   const launcher = options.launcherPath ?? join(options.home, "tachod.cmd");
+  const pidPath = options.pidPath ?? join(launcher, "..", "tachod.pid");
+  /** The pid in `tachod.pid` when that process exists. */
+  const livePid = (): number | undefined => {
+    if (!existsSync(pidPath)) return undefined;
+    const pid = Number(readFileSync(pidPath, "utf8").trim());
+    if (!Number.isInteger(pid) || pid <= 0) return undefined;
+    const query = options.exec("tasklist", [
+      "/FI",
+      `PID eq ${pid}`,
+      "/NH",
+      "/FO",
+      "CSV",
+    ]);
+    return query.status === 0 && query.stdout.includes(`"${pid}"`)
+      ? pid
+      : undefined;
+  };
+  /**
+   * Stop whatever the task started: end the task instance (harmless when
+   * none is running) and kill the daemon's process tree by pid. `install`
+   * does this before `/Run` so a re-enroll or reassign never starts a
+   * second daemon on the reused port (the first would keep answering for
+   * the old enrollment while the second dies with EADDRINUSE).
+   */
+  const stopDaemon = () => {
+    options.exec("schtasks", ["/End", "/TN", SCHTASKS_NAME]);
+    const pid = livePid();
+    if (pid !== undefined) {
+      options.exec("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    }
+  };
   return {
     kind: "schtasks",
     unitPath: launcher,
     install: (spec) => {
       ensureDir(join(launcher, ".."), 0o755);
       writeSensitiveFileAtomic(launcher, renderWindowsLauncher(spec), 0o600);
+      stopDaemon();
       options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
       const create = options.exec("schtasks", [
         "/Create",
@@ -278,9 +324,8 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       }
     },
     uninstall: () => {
-      options.exec("schtasks", ["/End", "/TN", SCHTASKS_NAME]);
+      stopDaemon();
       options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
-      options.exec("taskkill", ["/IM", "tachod.exe", "/F"]);
       if (existsSync(launcher)) unlinkSync(launcher);
     },
     status: () => {
@@ -292,13 +337,15 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
         "LIST",
       ]);
       const installed = result.status === 0;
-      const running = installed && /Status:\s+Running/i.test(result.stdout);
+      const pid = livePid();
       return {
         installed,
-        running,
-        detail: installed
-          ? (/Status:\s+(\S+)/i.exec(result.stdout)?.[1] ?? "")
-          : "not installed",
+        running: pid !== undefined,
+        detail: !installed
+          ? "not installed"
+          : pid !== undefined
+            ? `pid ${pid}`
+            : "no daemon process",
       };
     },
   };
