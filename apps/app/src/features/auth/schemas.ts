@@ -8,6 +8,22 @@ import { z } from "zod";
 export const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 
+/** The catalog keys under `auth.errors.*` a schema issue may carry. */
+const AUTH_ERROR_KEYS = [
+  "emailRequired",
+  "emailInvalid",
+  "passwordRequired",
+  "passwordTooShort",
+  "passwordTooLong",
+  "passwordsDiffer",
+  "nameRequired",
+  "nameTooLong",
+  "codeInvalid",
+  "backupCodeInvalid",
+  "tokenMissing",
+] as const;
+export type AuthErrorKey = (typeof AUTH_ERROR_KEYS)[number];
+
 const email = z
   .string()
   .trim()
@@ -73,14 +89,18 @@ export const ResetPasswordSchema = z
   });
 
 /** Field → first error key, for rendering one message under each field. */
-export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
+export type FieldErrors<K extends string = string> = Partial<
+  Record<K, AuthErrorKey>
+>;
 
+/** Each field's first error as a catalog key; an issue outside the catalog keys is dropped. */
 export function fieldErrors(error: z.ZodError): FieldErrors {
   const out: FieldErrors = {};
   for (const issue of error.issues) {
     const field = issue.path[0];
-    if (typeof field !== "string") continue;
-    out[field] ??= issue.message;
+    const key = AUTH_ERROR_KEYS.find((k) => k === issue.message);
+    if (typeof field !== "string" || key === undefined) continue;
+    out[field] ??= key;
   }
   return out;
 }

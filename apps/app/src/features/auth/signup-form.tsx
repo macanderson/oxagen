@@ -11,6 +11,7 @@ import { AFTER_SIGNUP } from "./routes";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
 import {
+  type AuthErrorKey,
   type FieldErrors,
   PASSWORD_MIN,
   SignupSchema,
@@ -64,7 +65,7 @@ export function SignupForm({ next = AFTER_SIGNUP }: { next?: SafePath }) {
     }
   }
 
-  const message = (key: string | undefined) =>
+  const message = (key: AuthErrorKey | undefined) =>
     key ? t(`errors.${key}`) : undefined;
 
   return (
