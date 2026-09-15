@@ -542,8 +542,7 @@
       "name": "export_run",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -592,8 +591,7 @@
       "name": "fork_run",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -2396,8 +2394,7 @@
       "name": "summarize_run",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -2735,7 +2732,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a5480f005de1a3fb02fd8943f4fbf227d4c9fc19d9bd064f95745ec2a408a472",
+  "contentHash": "b9fa56784b90dac0e623ca1071e71d17c4ce6b1f09db7ccd484b778dc8fa71ea",
   "domains": [
     {
       "name": "agent",

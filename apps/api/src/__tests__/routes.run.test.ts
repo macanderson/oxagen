@@ -161,8 +161,8 @@ const CASES: RouteCase[] = [
     input: { runId: LEDGER_ID, fromSeq: "2" },
     output: { attemptId: "arat_forkforkforkforkforkfo", attemptNumber: 2 },
     refused: {
-      "a wrapped session, which has no attempt to mint": {
-        runId: TACHO_ID,
+      "an attempt id in place of a run id": {
+        runId: "arat_0123456789abcdefghjkmn",
         fromSeq: "2",
       },
       "fromSeq of 0": { runId: LEDGER_ID, fromSeq: "0" },
