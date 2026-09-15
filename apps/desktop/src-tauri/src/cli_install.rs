@@ -239,6 +239,11 @@ pub fn decide_symlink_action(existing: &ExistingLink, target: &Path) -> LinkActi
     }
 }
 
+// These three are exercised by `link_one`'s `#[cfg(windows)]` branch and by
+// the unit tests below; a plain `cargo clippy --lib` on a non-Windows host
+// checks neither, so the items are genuinely unreferenced from that build's
+// perspective — the same situation `ADD_TO_USER_PATH_PS` is in, below.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShimAction {
     Create,
@@ -248,6 +253,7 @@ pub enum ShimAction {
 }
 
 /// The Windows `.cmd` shim body `install_cli` writes for `target`.
+#[allow(dead_code)]
 pub fn windows_shim_content(target: &Path) -> String {
     format!("@\"{}\" %*\r\n", target.display())
 }
@@ -256,6 +262,7 @@ pub fn windows_shim_content(target: &Path) -> String {
 /// rewrite only when it was written by us (starts with the `@"` form we
 /// write), so a hand-written shim or another vendor's `oxagen.cmd` is left
 /// alone.
+#[allow(dead_code)]
 pub fn decide_shim_action(existing: Option<&str>, desired: &str) -> ShimAction {
     match existing {
         None => ShimAction::Create,
@@ -613,10 +620,8 @@ fn remove_all_profile_blocks() -> Vec<String> {
     for candidate in [home.join(".zprofile"), home.join(".bash_profile"), home.join(".bashrc")] {
         if let Ok(existing) = fs::read_to_string(&candidate) {
             let updated = remove_path_block(&existing);
-            if updated != existing {
-                if fs::write(&candidate, &updated).is_ok() {
-                    touched.push(candidate.display().to_string());
-                }
+            if updated != existing && fs::write(&candidate, &updated).is_ok() {
+                touched.push(candidate.display().to_string());
             }
         }
     }
