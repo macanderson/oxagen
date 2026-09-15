@@ -93,10 +93,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // ADR-052 governed-action counter. org_id NOT NULL, no workspace_id — the
-  // allowance and the volume band are both annual and org-wide, so a workspace
-  // column would imply a per-workspace allowance that does not exist.
-  { table: "billing.governed_action_counters", policyClass: "org_only" },
   // ADR-055 GAU model (20260914165423_gau_buckets_and_contract_terms.sql).
   // All three carry org_id NOT NULL and no workspace_id: terms, the month
   // bucket and the settlement ledger are org-wide. The recorder reads and
