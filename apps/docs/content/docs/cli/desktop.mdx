@@ -8,12 +8,24 @@ The Oxagen app puts one machine under Oxagen control. It installs the `oxagen` C
 The app owns no state. Every panel reads the files the CLIs already write (`~/.config/oxagen/config.json`, `~/.config/oxagen/tacho/host.json`, the collector's `/status` on loopback), and every action runs one of the two CLIs bundled inside the app. Whatever you do in the app, you can do from the terminal, and `tacho status` and the app's Connection panel can never disagree.
 
 <Callout type="info">
-The app is a management window, not a wizard. It does not run agents; it records, gates and evidences the Claude Code and Codex sessions that already run on the machine. Hook-based control is `client_attested` — the app's This machine panel says so.
+The app does not run agents; it records, gates and evidences the Claude Code and Codex sessions that already run on the machine. Hook-based control is `client_attested` — the app's This machine panel says so.
 </Callout>
+
+## First launch: the setup wizard
+
+On a machine with no enrollment the app opens a five-step wizard on a single pane; a machine that is already enrolled skips it and opens the management panels described below.
+
+1. **Authenticate with Oxagen.** **Sign in** runs `oxagen login --browser`; **Create an account** runs the same with `--signup`, which opens the sign-up page first. A new account names its organization and first workspace in the browser, then lands on the consent page, and the app picks the session up from there.
+2. **Select an organization and workspace.** Only the organizations and workspaces you belong to are listed.
+3. **Register the agents on this machine.** The app runs `tacho detect` to find Claude Code and Codex (it checks your login shell's `PATH` and the usual install directories, so a Finder launch still finds `~/.local/bin/claude`). Every agent found is ticked; confirm, and it runs `tacho enroll … --harness …`, which writes Oxagen's hooks into each agent's settings.
+4. **Confirmation**, or the error and how to retry.
+5. **Record a first run.** One small prompt per registered agent (`tacho verify --harness <agent>`), confirmed recorded, then **Open Mission Control** to see it.
 
 ## Download
 
-One installer per OS from a single Tauri 2 project. Every file is attached to the `Oxagen desktop-v<version>` GitHub release that `.github/workflows/desktop.yml` publishes on a `desktop-v<version>` tag, next to the bare `tacho` and `oxagen` binaries and their `.sha256` files.
+Download from **[downloads.oxagen.sh](https://downloads.oxagen.sh/)** — one page listing every installer for the current version with its size and SHA-256, and a `SHA256SUMS.txt` per version (`shasum -a 256 -c SHA256SUMS.txt` verifies a download). Each file lives at `https://downloads.oxagen.sh/desktop/<version>/<file>` and never changes once published; a fix ships as a new version.
+
+One installer per OS from a single Tauri 2 project, built by `.github/workflows/desktop.yml` and published with `apps/desktop/scripts/publish-downloads.mjs`. A `desktop-v<version>` tag also attaches the same files to a GitHub release, next to the bare `tacho` and `oxagen` binaries.
 
 | OS | Architecture | File |
 | --- | --- | --- |
@@ -24,7 +36,7 @@ One installer per OS from a single Tauri 2 project. Every file is attached to th
 
 Both CLIs ship inside the app as single executables — a copy of Node with the CLI bundle embedded — so the machine does not need Node installed. That is why the app is large (about 235 MB unpacked on macOS, about 80 MB as a `.dmg`), and why each OS is built on its own runner: there is no cross-compile.
 
-Package-manager templates (a Homebrew cask for the `.dmg`, a Homebrew formula and a Scoop manifest for the two CLI binaries) live under `tools/packaging/` in the repo. They become live once a tap and a bucket exist; until then, download from the release page.
+Package-manager templates (a Homebrew cask for the `.dmg`, a Homebrew formula and a Scoop manifest for the two CLI binaries) live under `tools/packaging/` in the repo. They become live once a tap and a bucket exist; until then, download from downloads.oxagen.sh.
 
 ## First open while builds are unsigned
 
@@ -38,7 +50,7 @@ A release built with the Apple certificate in place is Developer ID signed and n
 
 ## Sign in
 
-Press **Sign in**. The app runs `oxagen login`, which opens your browser; the web app is the org and workspace picker, and the loopback callback returns the session to the CLI, which persists it in `~/.config/oxagen/config.json`. The Account panel then shows the org you signed in to, the CLI's default workspace and the API URL. The token never crosses into the app's webview — the shell attaches it to the two picker calls it makes.
+Press **Sign in**. The app runs `oxagen login --browser` (the flag forces the browser flow, since the app's sidecar has no terminal), which opens your browser; the web app is the org and workspace picker, and the loopback callback returns the session to the CLI, which persists it in `~/.config/oxagen/config.json`. The Account panel then shows the org you signed in to, the CLI's default workspace and the API URL. The token never crosses into the app's webview — the shell attaches it to the two picker calls it makes.
 
 **Switch organization…** is the same flow run again. **Sign out** runs `oxagen logout`.
 
