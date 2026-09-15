@@ -32,7 +32,11 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
-import { insertTachoEvents, type TachoEventInsert } from "@oxagen/telemetry";
+import {
+  insertTachoEvents,
+  selectTachoEvents,
+  type TachoEventInsert,
+} from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -493,6 +497,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       reason: string;
     }> = [];
     const verified = new Map<string, boolean>();
+    // The head each session had before this batch: events below it are
+    // re-sent rows.
+    const recordedHeads = new Map<string, number>();
     // What the batch changed about spend: cost each session added, and the
     // root sessions it sealed. Both are acted on after the transaction.
     const spendDeltas: { micros: number; at: Date }[] = [];
@@ -568,6 +575,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         reason = `first observed event has seq ${first.seq}, not 0`;
       }
       verified.set(sessionUuid, ok);
+      recordedHeads.set(sessionUuid, existing?.seqCount ?? 0);
       if (!ok && breakSeq !== null)
         chainBreaks.push({
           session_uuid: sessionUuid,
@@ -734,7 +742,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }
     await touchHost(tx as never, host, input.daemon, now, true);
     const control = await controlEnvelope(tx as never, ctx, host, now);
-    return { chainBreaks, verified, control, spendDeltas, sealedRoots };
+    return {
+      chainBreaks,
+      verified,
+      recordedHeads,
+      control,
+      spendDeltas,
+      sealedRoots,
+    };
   });
 
   // The spend counter is best-effort: the batch is accepted once the rows
@@ -754,8 +769,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       );
     }
   }
+  const storedRefs = await storedBytesRefs(
+    input.events,
+    result.recordedHeads,
+    bytesRefs,
+  );
   const inserts: TachoEventInsert[] = input.events.map((event) => {
-    const bytesRef = bytesRefs.get(event.event_id_idem);
+    const bytesRef =
+      bytesRefs.get(event.event_id_idem) ?? storedRefs.get(event.event_id_idem);
     return {
       event,
       chainVerified: result.verified.get(event.session_uuid) ?? false,
@@ -802,6 +823,52 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     control: result.control,
   };
 };
+
+/**
+ * The body references already stored for re-sent events that carry content
+ * and ship no body in this batch, keyed by `event_id_idem`. The batch
+ * re-inserts every event (that is how a ClickHouse failure after the Postgres
+ * commit recovers), and `tacho_events` keeps the newest row per seq, so a row
+ * written without its reference would serve a body the seal counted as
+ * `digest_only`. A stored reference is carried only onto an event with the
+ * same content digest.
+ */
+async function storedBytesRefs(
+  events: readonly TachoEvent[],
+  recordedHeads: ReadonlyMap<string, number>,
+  shipped: ReadonlyMap<string, string>,
+): Promise<Map<string, string>> {
+  const bySession = new Map<string, TachoEvent[]>();
+  for (const event of events) {
+    const head = recordedHeads.get(event.session_uuid) ?? 0;
+    if (event.seq >= head || !event.content?.digest) continue;
+    if (shipped.has(event.event_id_idem)) continue;
+    const list = bySession.get(event.session_uuid) ?? [];
+    list.push(event);
+    bySession.set(event.session_uuid, list);
+  }
+  const refs = new Map<string, string>();
+  for (const [sessionUuid, resent] of bySession) {
+    const seqs = resent.map((event) => event.seq);
+    const low = Math.min(...seqs);
+    const rows = await selectTachoEvents({
+      sessionUuid,
+      afterSeq: low - 1,
+      limit: Math.max(...seqs) - low + 1,
+    });
+    const stored = new Map(rows.map((row) => [row.seq, row]));
+    for (const event of resent) {
+      const row = stored.get(event.seq);
+      if (
+        row &&
+        row.bytesRef !== "" &&
+        row.contentDigest === event.content?.digest
+      )
+        refs.set(event.event_id_idem, row.bytesRef);
+    }
+  }
+  return refs;
+}
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };

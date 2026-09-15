@@ -29,16 +29,14 @@ interface RedactionResult {
   redactions: Redaction[];
 }
 
-export const REDACTION_REASONS = [
-  "private_key",
-  "aws_access_key",
-  "github_token",
-  "slack_token",
-  "model_api_key",
-  "bearer_token",
-  "jwt",
-] as const;
-export type RedactionReason = (typeof REDACTION_REASONS)[number];
+export type RedactionReason =
+  | "private_key"
+  | "aws_access_key"
+  | "github_token"
+  | "slack_token"
+  | "model_api_key"
+  | "bearer_token"
+  | "jwt";
 
 interface Detector {
   reason: RedactionReason;

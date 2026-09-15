@@ -10,7 +10,6 @@ import {
   createEvidenceStore,
   evidenceBodyKey,
   evidenceBodyRef,
-  evidenceKeyScope,
   parseEvidenceBodyRef,
   parseFrameBodyPlaintext,
 } from "./evidence-store";
@@ -75,13 +74,9 @@ describe("evidence body store", () => {
     expect(() => parseFrameBodyPlaintext(new Uint8Array([0, 9, 1]))).toThrow(
       /out of range/,
     );
-    expect(
-      evidenceKeyScope(evidenceBodyKey(scope, crypto.keyId, "0".repeat(64))),
-    ).toEqual(scope);
     expect(evidenceBodyKey(scope, "ingestion:env:v1", "0".repeat(64))).toBe(
       `evidence/${scope.orgId}/${scope.workspaceId}/bodies/ingestion_env_v1/${"0".repeat(64)}`,
     );
-    expect(evidenceKeyScope("privacy-exports/x.zip")).toBeNull();
   });
 
   it("keeps a body written under an earlier KEK readable after the write key changes", async () => {

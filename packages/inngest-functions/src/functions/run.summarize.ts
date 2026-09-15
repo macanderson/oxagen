@@ -4,7 +4,10 @@
 // Triggered by `run/summarize`. The handler already refused a live run and a
 // digest_only recording. The job reads the run's frames in its tenant scope,
 // folds them at the `steps` zoom, reads the retained bodies of the first
-// SUMMARY_STEP_MAX steps (each cut at SUMMARY_TEXT_MAX characters), and asks
+// SUMMARY_STEP_MAX steps (each cut at SUMMARY_TEXT_MAX characters), fails
+// without retry when none of those steps kept a readable body (the prompt
+// would hold step labels alone, the receipts-only summary the interface
+// forbids), and asks
 // the fast tier for a name and a summary through `@oxagen/ai` on the
 // organisation's funding source, metered like every other model call. The
 // three summary columns are written together with the model id
@@ -151,6 +154,11 @@ export const [runSummarize] = createFunction(
       );
       return { ...steps, source: record.source };
     });
+    if (collected.steps.every((s) => s.text === null)) {
+      throw new NonRetriableError(
+        `run ${data.runPublicId} has no retained body to summarise`,
+      );
+    }
 
     const generated = await step.run("generate", async () => {
       const funding = await resolveModelFundingSource(data.orgId);

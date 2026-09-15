@@ -159,7 +159,7 @@ describe("summarize_run", () => {
     expect(wrapped.dispatch).not.toHaveBeenCalled();
   });
 
-  it("queues a run graded inspect for a gap other than digest_only: the bodies it kept are readable", async () => {
+  it("queues a run graded inspect for a gap other than digest_only; the job refuses a run none of whose steps kept a body", async () => {
     const { summarize, dispatch } = harness({
       ledger: {
         publicId: LEDGER_ID,

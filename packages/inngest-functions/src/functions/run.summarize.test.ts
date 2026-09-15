@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   ledgerStore: vi.fn(),
   readRunFrames: vi.fn(),
   resolveRunRecord: vi.fn(),
+  evidenceStore: vi.fn(),
 }));
 
 type StepRun = (name: string, fn: () => unknown) => Promise<unknown>;
@@ -58,7 +59,7 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
 }));
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
-  evidenceStore: vi.fn(),
+  evidenceStore: mocks.evidenceStore,
 }));
 vi.mock("../lib/run-record", () => ({
   ledgerStore: mocks.ledgerStore,
@@ -222,7 +223,11 @@ describe("run.summarize job", () => {
       (_scope: unknown, fn: () => unknown) => fn(),
     );
     mocks.resolveRunRecord.mockResolvedValue(tachoRecord);
-    mocks.readRunFrames.mockResolvedValue([]);
+    store("What is in README?");
+    mocks.readRunFrames.mockResolvedValue([
+      row(1, "llm_call", "What is in README?"),
+    ]);
+    mocks.evidenceStore.mockReturnValue({ getBody });
     mocks.resolveModelFundingSource.mockResolvedValue({
       fundedBy: "platform",
       credential: null,
@@ -275,6 +280,18 @@ describe("run.summarize job", () => {
     await expect(done).rejects.toBeInstanceOf(NonRetriableError);
     expect(steps).toEqual(["read-transcript"]);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+  });
+
+  it("fails without retry, before any model call, when no step kept a body (negative)", async () => {
+    mocks.readRunFrames.mockResolvedValue([
+      row(1, "llm_call"),
+      row(2, "tool_call"),
+    ]);
+    const { done, steps, updates } = run([{ id: "s1" }]);
+    await expect(done).rejects.toBeInstanceOf(NonRetriableError);
+    expect(steps).toEqual(["read-transcript"]);
+    expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(0);
   });
 
   it("writes a ledger run's summary through the ledger store", async () => {

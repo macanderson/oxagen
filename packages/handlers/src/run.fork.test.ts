@@ -1,6 +1,8 @@
 /**
  * fork_run. The org is tier-free in every case, so every refusal below comes
- * from the handler (ARCHITECTURE.md §3.2, INV-29).
+ * from the handler (ARCHITECTURE.md §3.2, INV-29). The `fork`-graded ledger
+ * seal these tests use is a state no recorder in this revision writes
+ * (ADR-058 decision 3): the mint waits for the gateway-observed ledger lane.
  */
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
@@ -171,6 +173,48 @@ describe("fork_run", () => {
         event(2, {
           body: { ...retained, bodyRef: null, fidelity: "digest_only" },
         }),
+        event(3, { body: retained }),
+      ],
+    });
+    await expect(
+      fork({ runId: LEDGER_ID, fromSeq: "3" }, ctx()),
+    ).rejects.toSatisfy(conflict("gap_before_from_seq"));
+    expect(createAttempt).not.toHaveBeenCalled();
+  });
+
+  it("mints an attempt that branches from the sealed attempt at the branch point", async () => {
+    // Frame 1 carries no content; frame 3, past the branch point, kept no body.
+    const { fork, createAttempt } = harness({
+      events: [
+        event(1, { eventType: "run.started" }),
+        event(2, { body: retained }),
+        event(3),
+      ],
+    });
+    await expect(
+      fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+    ).resolves.toEqual({
+      attemptId: "arat_forkforkforkforkforkfo",
+      attemptNumber: 2,
+    });
+    expect(createAttempt).toHaveBeenCalledOnce();
+    expect(createAttempt).toHaveBeenCalledWith({
+      runId: RUN_UUID,
+      producerId: "drain_1",
+      engine: { name: "stella", version: "2.1.0", buildDigest: DIGEST },
+      resumedFrom: {
+        attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
+        attemptPublicId: "arat_0123456789abcdefghjkmn",
+      },
+      forkedFromRunSeq: "2",
+    });
+  });
+
+  it("refuses a branch point a content-bearing frame with no digest and no body precedes (negative)", async () => {
+    const { fork, createAttempt } = harness({
+      events: [
+        event(1, { body: retained }),
+        event(2),
         event(3, { body: retained }),
       ],
     });

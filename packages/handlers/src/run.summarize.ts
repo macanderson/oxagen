@@ -7,7 +7,8 @@
 // the recording kept bodies (`conflict`, `digest_only`): a summary written
 // from receipts alone would be the placeholder the interface forbids. The
 // model call itself runs in the durable function `run.summarize`
-// (@oxagen/inngest-functions), which writes the three summary columns
+// (@oxagen/inngest-functions), which fails without a model call when none of
+// the steps it reads kept a body, and writes the three summary columns
 // together.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";

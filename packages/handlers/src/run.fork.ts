@@ -18,13 +18,20 @@
 //      (`conflict`, `gap_before_from_seq`): the cassette would otherwise have
 //      a hole before the fork.
 // The attempt is minted with the sealed attempt's engine identity and
-// provenance, and `forked_from_run_seq` records the branch point.
+// provenance, and `forked_from_run_seq` records the branch point. No recorder
+// in this revision seals a ledger attempt at `fork` (`gradeSealedAttempt`
+// grades at the `harness` tier), so the mint waits for the gateway-observed
+// ledger lane; its unit test drives a fabricated `fork` seal.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole } from "@oxagen/iam/org-role";
 import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
-import { gradeAllows, isReplayGrade } from "@oxagen/tacho";
+import {
+  gradeAllows,
+  isContentBearingFrame,
+  isReplayGrade,
+} from "@oxagen/tacho";
 import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
@@ -82,14 +89,18 @@ export function createRunForkHandler(
       throw conflict("from_seq_past_seal");
     }
 
-    // Walk the recording up to the branch point: every frame with content
-    // must have its body, or the cassette has a hole before the fork.
+    // Walk the recording up to the branch point under the seal's rule
+    // (`deriveCompletenessGaps`): a content-bearing frame, or any frame whose
+    // digest was recorded, must have its body, or the cassette has a hole
+    // before the fork.
     let after = "0";
     for (;;) {
       const page = await readFrames(deps, run, after, PAGE);
       for (const frame of page) {
         if (BigInt(frame.seq) > fromSeq) break;
-        if (frame.body.bodyDigest !== null && frame.body.bodyRef === null) {
+        const carriesContent =
+          isContentBearingFrame(frame.type) || frame.body.bodyDigest !== null;
+        if (carriesContent && frame.body.bodyRef === null) {
           throw conflict("gap_before_from_seq");
         }
       }

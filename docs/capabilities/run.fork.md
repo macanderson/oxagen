@@ -37,6 +37,8 @@ The attempt carries the sealed attempt's engine identity, `resumed_from_attempt_
 
 - `forbidden` (403): the actor holds none of Owner, Admin, Member in the org.
 - `not_found` (404): no ledger run with that id in the caller's workspace.
-- `conflict` (409), by `reason`: `fork_requires_ledger_run` (the run is a wrapped session: it has no attempt row to mint, whatever grade its seal recorded); `run_not_sealed` (no attempt has sealed); `replay_grade_below_fork` (the seal recorded `inspect` or `view`, or no grade); `from_seq_past_seal` (the branch point lies past the sealed recording); `gap_before_from_seq` (a frame at or before the branch point carried content whose body was not retained, so the cassette would have a hole before the fork).
+- `conflict` (409), by `reason`: `fork_requires_ledger_run` (the run is a wrapped session: it has no attempt row to mint, whatever grade its seal recorded); `run_not_sealed` (no attempt has sealed); `replay_grade_below_fork` (the seal recorded `inspect` or `view`, or no grade); `from_seq_past_seal` (the branch point lies past the sealed recording); `gap_before_from_seq` (a content-bearing frame, or any frame whose digest was recorded, at or before the branch point has no retained body, so the cassette would have a hole before the fork; the seal's `body_missing` rule).
+
+No recorder in this revision writes a grade this capability accepts: a ledger seal grades at the `harness` tier and caps at `view`, and a wrapped session is refused by name. The mint waits for the gateway-observed ledger lane (ADR-058 decision 3).
 
 The grade is read from the seal and never recomputed: a run is forkable when its record says so (spec §8.4 "the interface renders the recorded grade and never a stronger word").

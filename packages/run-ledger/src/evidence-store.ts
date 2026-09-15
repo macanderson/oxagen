@@ -100,13 +100,6 @@ function evidenceBundleKey(
   return `evidence/${scope.orgId}/${scope.workspaceId}/exports/${exportId}/${digestHex}.zip`;
 }
 
-/** The tenant a stored key belongs to, or null for a key outside the layout. */
-export function evidenceKeyScope(key: string): EvidenceScope | null {
-  const match = /^evidence\/([^/]+)\/([^/]+)\//.exec(key);
-  if (!match) return null;
-  return { orgId: match[1] as string, workspaceId: match[2] as string };
-}
-
 function digestHexOf(digest: string): string {
   if (!SHA256_DIGEST_PATTERN.test(digest)) {
     throw new TypeError(`not a sha256 digest: ${digest}`);

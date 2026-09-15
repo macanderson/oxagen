@@ -154,7 +154,11 @@ wrapped seal below `fork` would write a grade the evidence contradicts, and a
 grade is never raised afterwards, so those sessions could not be forked once a
 later revision mints attempts for wrapped sessions. Until then no store
 records a grade `fork_run` accepts: a ledger seal caps at `view` and a
-wrapped session is refused by name. `fork_run`, `export_run` and
+wrapped session is refused by name. The mint path waits for the
+gateway-observed ledger lane, which is the first recorder that can seal a
+ledger attempt at `fork`; until then its unit test drives a fabricated
+`fork`-graded seal, and the maintainer decides whether the path stays or
+`fork_run` is cut to its refusals. `fork_run`, `export_run` and
 `summarize_run` check an org role in the handler and have no MCP surface,
 because an MCP context carries no user.
 

@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
+  selectTachoEvents: vi.fn(),
   withTenantDb: vi.fn(),
   loggerError: vi.fn(),
   recordSpend: vi.fn(),
@@ -32,7 +33,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/telemetry")>();
-  return { ...original, insertTachoEvents: mocks.insertTachoEvents };
+  return {
+    ...original,
+    insertTachoEvents: mocks.insertTachoEvents,
+    selectTachoEvents: mocks.selectTachoEvents,
+  };
 });
 
 vi.mock("./logger", () => ({
@@ -323,6 +328,7 @@ function wire(db: FakeDb): void {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
+  mocks.selectTachoEvents.mockResolvedValue([]);
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
     ref: `evb:v1:test:${input.digest.slice(7)}`,
   }));
@@ -888,6 +894,72 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     }
     expect(mocks.bodyPut).toHaveBeenCalledOnce();
     expect(mocks.sendEvent.mock.calls.length).toBe(eventsSent);
+  });
+
+  /** What ClickHouse serves after `insertTachoEvents` call `call`, as `selectTachoEvents` rows. */
+  function storedRows(call: number) {
+    const inserts = mocks.insertTachoEvents.mock.calls[call]?.[0] as Array<{
+      event: TachoEvent;
+      bytesRef?: string;
+    }>;
+    return inserts.map((insert) => ({
+      seq: insert.event.seq,
+      contentDigest: insert.event.content?.digest ?? "",
+      bytesRef: insert.bytesRef ?? "",
+    }));
+  }
+  const refOf = (call: number, seq: number) =>
+    (
+      mocks.insertTachoEvents.mock.calls[call]?.[0] as Array<{
+        event: TachoEvent;
+        bytesRef?: string;
+      }>
+    ).find((insert) => insert.event.seq === seq)?.bytesRef;
+
+  it("keeps the stored body reference on a re-sent row whose body the retry dropped", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    const firstRef = refOf(0, 1);
+    expect(firstRef).toMatch(/^evb:v1:test:/);
+    mocks.selectTachoEvents.mockResolvedValue(storedRows(0));
+
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(mocks.selectTachoEvents).toHaveBeenCalledOnce();
+    expect(mocks.selectTachoEvents).toHaveBeenCalledWith({
+      sessionUuid: SESSION,
+      afterSeq: 0,
+      limit: 1,
+    });
+    expect(refOf(1, 1)).toBe(firstRef);
+    expect(mocks.bodyPut).toHaveBeenCalledOnce();
+  });
+
+  it("carries no stored reference onto a re-sent row with another content digest (negative)", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    mocks.selectTachoEvents.mockResolvedValue(
+      storedRows(0).map((row) => ({
+        ...row,
+        contentDigest: digestBytes("other bytes"),
+      })),
+    );
+
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(refOf(1, 1)).toBeUndefined();
   });
 
   it("seals inspect on an observe-tier host whatever bodies it shipped (spec §8.4)", async () => {
