@@ -1075,6 +1075,30 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendStatementHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_findings",
+    async () =>
+      (await import("./finding.list"))
+        .findingListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_finding_evidence",
+    async () =>
+      (await import("./finding.evidence.get"))
+        .findingEvidenceHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "record_finding_fix",
+    async () =>
+      (await import("./finding.fix.record"))
+        .findingFixRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_finding",
+    async () =>
+      (await import("./finding.dismiss"))
+        .findingDismissHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_price_entries",
     async () =>
       (await import("./cost.price_entry.list"))

@@ -526,6 +526,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "dismiss_finding",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "dismiss_memory_promotion",
       "reads": [],
@@ -847,6 +857,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_finding_evidence",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1537,6 +1557,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "list_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "list_iam_roles",
       "reads": [],
@@ -2150,6 +2180,17 @@
       "name": "record_execution",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "record_finding_fix",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3026,7 +3067,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7e7225c0ae68d97f12968f6780ae4e3d4744295306ed3061dbda3f9c155c0723",
+  "contentHash": "11937bf0fe838cd3db0142c48fcf91a96280c801f14976cf55b5bbe6d10b59cc",
   "domains": [
     {
       "name": "agent",
@@ -3164,6 +3205,7 @@
       ],
       "tables": [
         "postgres:cost.daily_totals",
+        "postgres:cost.findings",
         "postgres:cost.price_entries",
         "postgres:cost.run_totals"
       ]
@@ -3430,7 +3472,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 121
+      "tableCount": 122
     },
     {
       "domains": [
@@ -10855,6 +10897,154 @@
       "domain": "cost",
       "id": "postgres:cost.daily_totals",
       "name": "daily_totals",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "subject",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fingerprint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "window_start",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "window_end",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "estimated_saving_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "saving_basis",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "confidence",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "why",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fix",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cited_runs",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "cited_frames",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "detected_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "decided_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "decided_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "applied_action_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.findings",
+      "name": "findings",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
