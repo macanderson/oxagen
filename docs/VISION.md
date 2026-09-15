@@ -75,6 +75,16 @@ single wedge where a platform of Oxagen's exact shape can credibly be #1:
 
 **The control plane for every agent an enterprise runs — whoever built it.**
 
+That wedge has two names, and Oxagen owns both (ADR-055). **The agent control
+plane** is what Oxagen is to the enterprise: where the mandate is set and enforced.
+**Agent fleet management** is what an operator does with it: see every agent the
+organization runs as one fleet, under which mandate, what each has asked for, spent
+and done, then answer, fund, hold or stop it. Spend management is part of fleet
+management, not a separate product. Fleet management is the name that separates us
+from the two plays beside us: observability watches and reports, governance says no,
+and neither operates anything. Oxagen operates — dispatches, answers, funds, holds,
+stops — and every one of those is a governed action the meter prices.
+
 Not "another agent framework" and not "another enterprise search box." The knowledge
 graph is the **accuracy moat**, vendor-neutral BYOK (own model keys, own Neo4j
 endpoint) is the **trust moat**, and the corpus of recorded, rated runs is the
@@ -131,6 +141,14 @@ front line**.
 
 Work that lets an accountable team set a clause of the mandate, or lets the platform
 enforce or record it:
+
+- **The fleet (operators):** one population view of every agent the organization
+  runs — mandate, open requests, spend against budget, last run — and the actions an
+  operator takes on it (answer a routed request, fund, hold, stop), each a governed,
+  metered action. Spend lives on the fleet page beside the agent (ADR-055).
+- **The request, not the key (security):** an agent holds an identity and a mandate,
+  never a standing credential; it asks at the moment of use and a decision rule
+  answers allow, deny or route to a person (`packages/rules`, the approval contracts).
 
 - **Access (security):** agent identity and registration, connections to systems,
   IAM + entitlement gates, permission-scoped graph retrieval, principal attribution
@@ -213,3 +231,7 @@ strategic drift, not to nag maintenance.
    customers — markup pricing, downstream customer records, re-bill runs, or holding
    their payment credentials? (drifts)
 9. Is it routine maintenance, fix, test, or tooling work? (neutral)
+10. Does it let an operator see or act on the fleet as one population, including its
+    spend, or move a credential out of the agent's hands into a request a rule
+    answers? (advances) Does it hand an agent a standing credential, or add a
+    watch-only or forbid-only surface that no operator can act from? (drifts)

@@ -21,9 +21,9 @@ The source of truth is `skills/oxagen-branding/` in the house brand kit, `oxagen
 
 ## What Oxagen is, in one sentence
 
-Oxagen is the control plane for the agents an enterprise runs. Every agent operates under a mandate: its access, its budget, its tools, its rules, set by the teams accountable for it and enforced on every run.
+Oxagen is the platform that governs and operates the autonomous agents an enterprise runs. It is the organization's agent control plane, and the operator's agent fleet management. Every agent operates under a mandate: its access, its budget, its tools, its rules, set by the teams accountable for it and enforced on every run.
 
-Every piece of copy is downstream of that sentence. A mandate has four clauses, and every claim belongs to one of them: access (security sets it), budget and rules (FinOps sets it), equipment (engineering sets it), and the record (the platform keeps it). If a line does not connect to a clause, cut the line. The definition of done is a mechanism inside the record clause, not the sentence.
+Every piece of copy is downstream of that sentence. It has two names on purpose. **Agent control plane** is what Oxagen is to the enterprise: where the terms are set and enforced. **Agent fleet management** is what an operator does with it all day: see every agent that is running, what each one has asked for, what it has spent, and what it did, then answer, fund, hold, or stop it. Use either name. Use both when there is room. Spend management is part of fleet management, not a separate product. A mandate has four clauses, and every claim belongs to one of them: access (security sets it), budget and rules (FinOps sets it), equipment (engineering sets it), and the record (the platform keeps it). If a line does not connect to a clause, cut the line. The definition of done is a mechanism inside the record clause, not the sentence.
 
 ## The six rules that never bend
 
@@ -38,7 +38,7 @@ Every piece of copy is downstream of that sentence. A mandate has four clauses, 
 
 Every other layer covers one clause of the mandate and stops. Identity says who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds all of it into one object and enforces it on every call, then keeps the record.
 
-The category is **the agent control plane**, the control plane for every agent an enterprise runs, whoever built it. Do not say observability, governance, or evals as the category; those are owned, and all three mean watch and report.
+The category has two names and Oxagen owns both: **the agent control plane** and **agent fleet management**. Fleet management is the name that pulls hardest away from the plays around us. An observe play watches. A pure governance play says no. Fleet management runs the operation: it dispatches, answers, funds, holds, and stops, and it carries the spend. Do not say observability, governance, or evals as the category; those are owned, and none of them operates anything.
 
 The lead line today is **Can you explain your AI bill? Neither can your provider.** For the security reader, the access line is **Don't hand your agents the keys.** The dod line, **The agent doesn't get to decide it's done.**, is held until the dod ships. The full table and the decision are in `references/positioning.md`.
 

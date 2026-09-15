@@ -6,11 +6,17 @@ Read this before writing any headline, hero, tagline, ad, or opening sentence.
 
 Every other layer covers one clause of an agent's mandate and stops. Identity says who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds all of it into one object, enforces it on every call, and keeps a record an outside party can read.
 
-## The category
+## The category, two names
 
-**The agent control plane.** The control plane for every agent an enterprise runs, whoever built it.
+Oxagen is the platform that governs and operates the autonomous agents an enterprise runs. It has two names, and both are right.
 
-Not observability. Not governance. Not evals. Not guardrails. Not a trust layer. Each of those is owned by someone, and each one means "watch and report." Oxagen acts: it answers the request before the action happens and blocks a run from ending before its definition of done holds. Name the category by what it does. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents.
+**The agent control plane.** What Oxagen is to the enterprise: the one place the terms are set for every agent it runs, whoever built the agent, and enforced on every call. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents.
+
+**Agent fleet management.** What an operator does with Oxagen all day: see every agent that is running and under which mandate, see what each one has asked for, spent, and done, then answer its requests, fund it, hold it, or stop it. A fleet manager never drives the trucks, and neither does Oxagen. Spend management is part of fleet management: the budget, the meter, the rules, and the bill per agent, run, and person sit on the same page as the fleet, not in a separate finance tool.
+
+Use the control plane name when the reader is deciding whether to adopt: the security lead, the finance lead, the platform owner. Use fleet management when the reader will sit at the console: the operator, the engineering lead, the person answering routed requests at 4pm. Use both in the same paragraph when there is room; they are one product seen from two chairs.
+
+Not observability. Not governance. Not evals. Not guardrails. Not a trust layer. Not orchestration. Each of those is owned by someone. An observe play watches and reports. A pure governance play says no. An orchestration play runs the agent, which Oxagen will not do. Fleet management is the name that pulls hardest away from all three, because it operates: it dispatches, answers, funds, holds, stops, and carries the spend. Name the category by what it does.
 
 ## The mandate
 
@@ -53,7 +59,7 @@ Proof points, stated so they survive a rebuttal:
 **Decision, 2026-09-15 (Mac):** the dod does not ship yet, so the dod lines are
 held until it does. Until then the lead is the bill. The first three lines below
 come from the shipped house ads in `oxagenai/oxagen-brand`. The fourth is the
-access line, added 2026-09-15 for the security reader. These are the only lead
+access line and the fifth is the fleet line, both added 2026-09-15 (ADR-055). These are the only lead
 lines for the site, ads, and outreach today. When the dod lands, the dod lines
 move back to the top of this table; nothing else changes.
 
@@ -63,6 +69,7 @@ move back to the top of this table; nothing else changes.
 | **Stop wasting money on AI.** | The Oxagen product page, the waste ad | Fewer tokens, same answers. The claim the record can back now. |
 | **Never re-explain yourself to AI ever again.** | The memory ad, the knowledge graph section | Taught once, known by every agent you run. |
 | **Don't hand your agents the keys.** | The access section of the site, the security page, cold email to security leads | Names the thing every security lead has already done and regrets. The next sentence is the product: the agent asks, a rule you wrote answers. |
+| **Run your agents as a fleet.** | The Fleet page, the product tour, the operator reader, the fleet ad | Names the thing nobody else sells: every agent the organization runs, on one page, with its mandate, its requests, its spend, and its last run. |
 
 Held until the dod ships:
 
@@ -82,7 +89,7 @@ Your agents run on a token somebody pasted in, spend against a budget nobody set
 
 ## The pitch, one sentence
 
-Oxagen is the control plane for the agents an enterprise runs: one mandate per agent, set by the teams accountable for it, enforced on every call, recorded on every run.
+Oxagen governs and operates the autonomous agents an enterprise runs: one mandate per agent, set by the teams accountable for it, enforced on every call, and one fleet the operator can see, fund, hold, and stop.
 
 ## Proof points, stated so they survive a rebuttal
 
@@ -90,6 +97,8 @@ Oxagen is the control plane for the agents an enterprise runs: one mandate per a
 - **The meter is a row, not an estimate.** Every governed action is priced and attributed to the person, the agent, the run, the turn, and the step. The bill page and the record page read the same rows.
 - **Your keys, your graph, your model.** Own model keys, own graph endpoint, hosting at cost. There is no cloud the product pulls toward.
 - **Whoever built the agent.** Claude Code, the Agent SDK, a custom loop. The wrapper records and gates from beside the agent; Oxagen never has to run it.
+- **One fleet, one page.** Every agent the organization runs, whoever built it, on one Fleet page with its mandate, its open requests, its spend, and its last run. Observe tools show one agent's trace. Fleet management shows the population.
+- **Spend is on the fleet page, not in finance.** The budget an agent runs under, what it has spent this month, and the rule that stops it are beside the agent, priced per governed action. The finance lead and the operator read the same rows.
 
 Held with the dod lines:
 

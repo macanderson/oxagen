@@ -2,7 +2,17 @@
 
 Finished prose per surface. Copy the structure, not the sentences, unless the sentence is one of the approved lines in `positioning.md`.
 
-## Website hero
+## Website hero, live
+
+**Headline.** Can you explain your AI bill? Neither can your provider.
+
+**Sub.** Oxagen governs and operates the autonomous agents you run. One mandate per agent, set by security, FinOps, and engineering, enforced on every call. One fleet, on one page, with what each agent asked for, spent, and did.
+
+**Action.** See your fleet
+
+**Under the action.** Bring your own model keys and your own graph. The first screen shows your own numbers.
+
+## Website hero, held until the dod ships
 
 **Headline.** The agent doesn't get to decide it's done.
 
@@ -39,6 +49,20 @@ The team that owns the system writes the rule. Reads of the public repo: allowed
 ### The key never moves
 
 The credential stays in Oxagen, encrypted under a key you own. Oxagen makes the connection on the agent's behalf and closes it when the action is done. The agent never sees the key. The record shows every use: the request, the rule that answered it, and the person who signed it.
+
+## Product page, the fleet section
+
+### Run your agents as a fleet
+
+Every agent your organization runs is on one page, whoever built it: Claude Code on a laptop, an Agent SDK service, a custom loop. Beside each one is the mandate it runs under, the requests it has open, what it has spent this month against its budget, and its last run with the record.
+
+### Operate it from one chair
+
+The operator answers routed requests, raises or lowers a budget, holds an agent, or stops it, from the same page. Each of those is a governed action with a row in the record: who did it, to which agent, under which rule.
+
+### Spend is on the fleet page
+
+The budget an agent runs under, the meter that prices each governed action, the rule that stops it, and the bill per agent, run, and person are beside the agent, not in a separate finance tool. The finance lead and the operator read the same rows.
 
 ## Docs, writing a rule
 
