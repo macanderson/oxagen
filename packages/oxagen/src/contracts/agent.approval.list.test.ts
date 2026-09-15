@@ -9,6 +9,7 @@ const item = {
   requester: "usr_0123456789abcdefghjkmn",
   createdAt: "2026-09-13T10:00:00.000Z",
   expiresAt: "2026-09-13T10:05:00.000Z",
+  mandateId: null,
   chain: { agentKey: null, rule: null },
 };
 
@@ -77,6 +78,7 @@ describe("list_approvals contract", () => {
       "createdAt",
       "expiresAt",
       "id",
+      "mandateId",
       "requester",
       "runId",
       "tool",
@@ -95,6 +97,16 @@ describe("list_approvals contract", () => {
     });
     expect(recorded.runId).toBe("arun_0123456789abcdefghjkmn");
     expect(recorded.chain.agentKey).toBe("acme.core.release-manager");
+    expect(
+      approvalListItem.parse({
+        ...item,
+        mandateId: "mnd_0123456789abcdefghjkmn",
+        chain: {
+          agentKey: null,
+          rule: "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
+        },
+      }).mandateId,
+    ).toBe("mnd_0123456789abcdefghjkmn");
     expect(approvalListItem.safeParse({ ...item, risk: "high" }).success).toBe(
       false,
     );

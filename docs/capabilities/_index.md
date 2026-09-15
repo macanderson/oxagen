@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**280 capabilities across 41 domains.**
+**286 capabilities across 42 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -217,6 +217,15 @@ Capabilities granted to an agent as a set have a page of their own:
 - [integration.list](integration.list.md) — Browse installed plugin instances with status and sync metrics
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
+
+## Mandate (6)
+
+- [get_mandate](get_mandate.md) — Read one mandate: the grant, remaining authority by measure from the ledger, and the ledger rows newest first
+- [grant_mandate](grant_mandate.md) — Grant an agent bounded, expiring authority for a consequence within limits over the tool's declared measures
+- [list_mandates](list_mandates.md) — List the workspace's mandates with remaining authority by measure, optionally narrowed to one agent or one status
+- [request_mandate](request_mandate.md) — Ask for a mandate on behalf of an agent, recorded as a draft for the accountable role to grant or decline
+- [revoke_mandate](revoke_mandate.md) — Revoke a mandate with a reason; releases every reservation held by a call that has not dispatched
+- [update_mandate_limits](update_mandate_limits.md) — Change an active mandate's limits, targets, approval rule or validity end
 
 ## Model (1)
 

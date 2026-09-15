@@ -4,22 +4,34 @@ import {
   type WorkspaceSettingsReadOutput,
 } from "@oxagen/oxagen/contracts/workspace.settings.read";
 import { schema, withTenantDb } from "@oxagen/database";
+import {
+  consequenceRolesSchema,
+  effectiveConsequenceRoles,
+} from "@oxagen/oxagen/mandates/schemas";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 // `description` and `avatarUrl` are real columns on workspace.workspaces
 // (description was promoted out of the settings JSONB bag — audit §1.7).
+// `consequenceRoles` holds the overrides; the read returns the effective map
+// over the defaults (ADR-059 decision 1). A stored value that no longer
+// parses reads as no overrides.
 export function mapWorkspaceSettingsRow(row: {
   name: string;
   slug: string;
   avatarUrl: string | null;
   description: string | null;
+  consequenceRoles: unknown;
 }): WorkspaceSettingsReadOutput {
+  const overrides = consequenceRolesSchema.safeParse(row.consequenceRoles);
   return {
     name: row.name,
     slug: row.slug,
     description: row.description ?? null,
     avatarUrl: row.avatarUrl ?? null,
+    consequenceRoles: effectiveConsequenceRoles(
+      overrides.success ? overrides.data : {},
+    ),
   };
 }
 
@@ -39,7 +51,13 @@ export const workspaceSettingsReadHandler: CapabilityHandler<
   const row = await withTenantDb((tx) =>
     tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, description: true },
+      columns: {
+        name: true,
+        slug: true,
+        avatarUrl: true,
+        description: true,
+        consequenceRoles: true,
+      },
     }),
   );
 
