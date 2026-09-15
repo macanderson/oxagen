@@ -41,7 +41,9 @@ Any agent you run yourself, in a script, a CI job, or your own loop, wraps by pi
 tacho hook --agent <name>
 ```
 
-`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential.
+`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `stella`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential.
+
+For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through `tacho hook --agent stripe-refunds`, fails closed when `tacho` does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
 
 ### The call sequence
 
