@@ -19,7 +19,6 @@
  */
 import { randomUUID, createHash } from "node:crypto";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
-import { emitSecurityEventAsync } from "@oxagen/database/security";
 // The subpath, not the package root: the root barrel side-effect-imports
 // every contract, and this module sits on the import graph of every
 // service that boots the rules gate.
@@ -544,19 +543,26 @@ function emitException(
     },
     "mandate: call refused",
   );
-  void emitSecurityEventAsync({
-    eventType: "mandate.exception",
-    actorUserId: args.userId,
-    orgId: args.orgId,
-    workspaceId: args.workspaceId,
-    capability: args.capability,
-    outcome: "deny",
-    ip: null,
-    userAgent: null,
-    requestId: args.requestId ?? null,
-  }).catch((err: unknown) =>
-    logger.error({ err }, "mandate: security event emission failed"),
-  );
+  // Loaded on the refusal path, not at module load: `@oxagen/database/security`
+  // pulls the telemetry barrel, the Postgres client and the full schema, and
+  // `bootstrap` puts this module on the import graph of every rules consumer.
+  void import("@oxagen/database/security")
+    .then(({ emitSecurityEventAsync }) =>
+      emitSecurityEventAsync({
+        eventType: "mandate.exception",
+        actorUserId: args.userId,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        capability: args.capability,
+        outcome: "deny",
+        ip: null,
+        userAgent: null,
+        requestId: args.requestId ?? null,
+      }),
+    )
+    .catch((err: unknown) =>
+      logger.error({ err }, "mandate: security event emission failed"),
+    );
 }
 
 /**
