@@ -81,6 +81,12 @@ export function fleetSource(reads: FleetReads) {
         return Promise.resolve(reads.approvals);
       },
     },
+    billing: {
+      plan: refuse,
+      bucket: refuse,
+      contractRate: refuse,
+      invoices: refuse,
+    },
   };
   return { source, calls };
 }

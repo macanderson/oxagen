@@ -171,6 +171,8 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse },
+    runs: { list: refuse },
+    approvals: { pending: refuse },
     billing: {
       plan: (...args) => {
         calls.plan.push(args);

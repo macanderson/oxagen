@@ -21,6 +21,9 @@ const ledgerRun: Run = {
   taskRef: "ENG-4121",
   startedAt: "2026-09-15T08:00:00.000Z",
   sealedAt: "2026-09-15T08:40:00.000Z",
+  replayGrade: null,
+  name: null,
+  summary: null,
 };
 
 const unpricedSession: Run = {
@@ -36,6 +39,9 @@ const unpricedSession: Run = {
   taskRef: null,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
+  replayGrade: null,
+  name: null,
+  summary: null,
 };
 
 describe("toRunPage", () => {
