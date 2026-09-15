@@ -57,7 +57,14 @@ two consequences needs authority over both.
 
 No `two_person` or `second_approver` column, no `accept_mandate` contract,
 no `pending_second` state. The scope note of 2026-09-14 cuts them; the
-columns and the state return with the lane that builds them.
+columns and the state return with the lane that builds them. Six contracts
+ship: `grant_mandate`, `request_mandate`, `list_mandates`, `get_mandate`,
+`revoke_mandate`, `update_mandate_limits`. A request is a `draft` row with
+`requested_by`; the office activates it with `grant_mandate(requestId)` or
+declines it with `revoke_mandate`, which is why `mandates_grant_check`
+admits a revoked row with no granter. A mandate is readable by the
+accountable org roles (Owner, Admin, Billing, Compliance) and by the
+operator of the agent (`agents.created_by_user_id`).
 
 ### 3. Reconciliation ships with `spend-findings-reconciliation`
 
@@ -77,23 +84,43 @@ mandates to agents. The gate looks the capability up as a tool in the
 workspace registry (`agent.tools.slug` equals the capability name, the same
 identity `tool-projection.ts` uses) and reads the version's
 `consequence_tags`, `measures` and `effect_id_path`. A tool with no
-consequence tag yields no opinion. A tagged tool is decided in this order:
+consequence tag yields no opinion. A tagged tool is decided in this order,
+the whole decision in one tenant transaction under `SELECT … FOR UPDATE`
+on the mandate row:
 
 1. no active mandate of the agent covers every tag and matches the tool →
-   deny, reason `no_mandate`, ledger unchanged (§6.9 part 3);
-2. a target measure outside the mandate's allow list, or on its deny list →
-   deny, reason `target_denied`;
-3. a measure over `per_call` or over the period's remaining authority →
+   deny, reason `no_mandate`, ledger unchanged (§6.9 part 3). When several
+   cover it, the oldest is the one drawn on;
+2. a limit or target names a measure the version does not declare, or the
+   measure cannot be read from the call (absent, not a number, negative)
+   → deny, reason `measure_unreadable` (§6.9 rule 1 at decision time: a
+   later version may have dropped a measure the grant was checked against);
+3. a target measure outside the mandate's targets → deny, reason
+   `target_denied`. A target on an allow pattern passes; otherwise one on a
+   deny pattern fails; otherwise it passes only when no allow pattern is
+   named, so the spec's `{ allow: ["vendor:aws"], deny: ["*"] }` admits the
+   named vendor alone;
+4. the same call (same input digest) already parked and unresolved → refused
+   again as pending with that row's id, drawing no more authority; the same
+   call approved and not yet retried → proceeds on the held reservation and
+   marks the row used (`token_used_at`; an approval is single-use);
+5. a measure over `per_call` or over the period's remaining authority →
    deny, reason `over_limit`; the mandate stays as it was;
-4. the tool carries a tag in `always_human_for`, or a measure exceeds
+6. the tool carries a tag in `always_human_for`, or a measure exceeds
    `human_above` → the reservation is written, an
    `agent.approval_requests` row is inserted carrying `mandate_id`,
-   `tool_call_id`, `rule_ids` and `input_digest`, and the call is refused
-   as pending approval with that row's id. A retry of the same digest by
-   the same agent within the approval's window, after a person approved it,
-   proceeds on the held reservation and marks the row used
-   (`token_used_at`); the approval is single-use;
-5. otherwise the reservation is written and the call proceeds.
+   `tool_call_id`, `rule_ids`, `input_digest` and a 24-hour `expires_at`
+   (`MANDATE_APPROVAL_TTL_MS`; the chat gate's five minutes fits a stream
+   that is waiting, a parked call is retried), and the call is refused as
+   pending approval with that row's public id;
+7. otherwise the reservation is written and the call proceeds.
+
+A refusal is a `HandlerError { code: "forbidden", reason }`, which every
+surface already classifies as a refusal (INV-14: `denied`; the API's 403);
+a parked call is the kernel's `CapabilityError("pending_approval")` with
+the approval's `apr_…` id as `accessRequestId`. Each refusal emits
+`mandate.exception`. `approval_requests.message_id` becomes nullable: a
+call the gate parks has no chat message.
 
 The gate returns a settlement the kernel applies after the handler: the
 output validated → `settle` with the effect id read from the output; the
@@ -105,7 +132,9 @@ the kernel still imports nothing from `@oxagen/rules`.
 `denied` and leaves it held on `approved` — the effect has not happened at
 approval time, so nothing settles there; the retry's receipt settles. The
 output reports `mandate: { mandateId, reserved, outcome }` with `outcome`
-`held` or `released`.
+`held` or `released`, null on a chat gate row. `list_approvals` items carry
+`mandateId` and `chain.rule` (the first of `rule_ids`) from the same
+columns.
 
 Calls Oxagen only observes — frames a Tacho host ingests after the fact —
 are not gated here. The Tacho incident kind `mandate_exception` is where the
@@ -119,7 +148,12 @@ role). A row is one movement for one measure of one mandate in one period
 `period`). `reserve` lowers remaining by the value, `release` raises it,
 `settle` leaves it unchanged and converts the reservation to a settlement.
 `balance_after` is the remaining authority after the row; a period with no
-rows starts at `per_period`. Remaining authority is read from the ledger's
+rows starts at `per_period`; a measure limited per call only has no period
+authority and its rows carry `0`. Rows are stamped `clock_timestamp()` at
+insert, under the lock, so the latest row is well ordered across
+transactions (`now()` is each transaction's start time and would misorder
+a transaction that waited on the lock). Every read reports authority by
+measure name in alphabetical order. Remaining authority is read from the ledger's
 last `balance_after`, never computed elsewhere (INV-10). Every write runs
 in one transaction that first takes `SELECT … FOR UPDATE` on the mandate
 row, so concurrent calls serialise and two cannot both fit under one
@@ -140,17 +174,22 @@ converted to micros with string arithmetic, never a float. `calls` is the
 one built-in measure: value 1 per call, no path. Values on the wire are
 integer strings — micros for a currency, whole units otherwise (INV-09).
 
-`grant_mandate` resolves the mandate's tool patterns against the workspace
-registry; a pattern that matches no declared tool, or a matched tool whose
-version declares no measure for a limit the mandate names, is refused
-(`invalid_input`, reasons `no_tool_matches` and `measure_not_declared`) —
-denied by construction (§6.9 rule 1).
+`grant_mandate`, `request_mandate` and `update_mandate_limits` resolve the
+mandate's tool patterns against the workspace registry; a pattern that
+matches no declared, enabled tool, or a matched tool whose active version
+declares no measure for a limit or a target the mandate names (a text
+measure cannot carry a limit), is refused as `HandlerError { code:
+"conflict", reason: "no_tool_matches" | "measure_not_declared" }` — denied
+by construction (§6.9 rule 1). `conflict` because the input parsed and the
+refusal is about the tenant's registry, the same class as `last_owner`.
 
 ### 7. Expiry is an hourly job
 
 `mandate/expiry` (`packages/inngest-functions`) flips `active` mandates past
-`valid_to` to `expired`, releases reservations held by approval requests
-that expired unresolved, and emits `mandate.expired`. Grant, revoke and a
+`valid_to` to `expired` under the row lock in the mandate's own tenant
+scope, releases reservations held by parked calls, resolves their approval
+rows `expired`, and emits `mandate.expired`. `revoke_mandate` does the same
+for one mandate on demand. Grant, revoke and a
 limits change emit `mandate.granted`, `mandate.revoked` and
 `mandate.limits_changed`; a refusal by the gate emits `mandate.exception`.
 

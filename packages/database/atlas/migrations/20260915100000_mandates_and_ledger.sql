@@ -59,7 +59,7 @@ CREATE TABLE "tools"."mandates" (
   CONSTRAINT "mandates_public_id_unique" UNIQUE ("public_id"),
   CONSTRAINT "mandates_status_check" CHECK ("status" IN ('draft', 'active', 'expired', 'revoked')),
   CONSTRAINT "mandates_validity_check" CHECK ("valid_to" > "valid_from"),
-  CONSTRAINT "mandates_grant_check" CHECK (("status" = 'draft') OR ("granted_by" IS NOT NULL AND "role_at_grant" IS NOT NULL))
+  CONSTRAINT "mandates_grant_check" CHECK (("status" IN ('draft', 'revoked')) OR ("granted_by" IS NOT NULL AND "role_at_grant" IS NOT NULL))
 );
 CREATE INDEX "mandates_agent_status_idx" ON "tools"."mandates" ("org_id", "workspace_id", "agent_principal_id", "status");
 CREATE INDEX "mandates_status_valid_to_idx" ON "tools"."mandates" ("status", "valid_to");

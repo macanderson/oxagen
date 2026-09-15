@@ -25,6 +25,7 @@ Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).
 | slug | string (1–100, kebab-case), optional | New URL slug; must be unique within the org |
 | description | string (≤2000) \| null, optional | Free-text description; `null` clears it |
 | avatarUrl | string \| null, optional | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
+| consequenceRoles | Record<tag, OrgRole[]>, optional | The consequence-role overrides for mandates (ADR-059 decision 1); replaces the stored overrides as a whole, a tag left out falls back to the default |
 
 ## Output
 
@@ -34,6 +35,7 @@ Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).
 | slug | string | URL slug after the update |
 | description | string \| null | Description after the update |
 | avatarUrl | string \| null | Avatar after the update; `null` when unset |
+| consequenceRoles | Record<tag, OrgRole[]> | The effective map after the update, as `get_workspace_settings` returns it |
 
 ## Side effects
 

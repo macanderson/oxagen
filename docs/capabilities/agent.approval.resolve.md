@@ -26,6 +26,7 @@ approved tool call or skips it and apologises.
 | ------------ | ------------------------------------------ | ---------------------------------- |
 | `approvalId` | `string`                                   | Echoes the input id, in the form it was sent. |
 | `resolution` | `"approved" \| "denied"`                    | The decision that was written.     |
+| `mandate`    | `{ mandateId, reserved: { measure, value, unitOrCurrency }[], outcome: "held" \| "released" } \| null` | The mandate settlement (ADR-059): on a row the mandate gate parked, the reservation the call holds and whether it stays `held` (approved: the agent's retry settles it on receipt) or was `released` (denied). Null on a chat gate row. |
 
 ## Side effects
 

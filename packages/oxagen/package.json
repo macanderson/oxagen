@@ -22,7 +22,8 @@
     "./contracts": "./src/contracts/index.ts",
     "./plugins": "./src/plugins/index.ts",
     "./tacho/schemas": "./src/tacho/schemas.ts",
-    "./mandates/schemas": "./src/mandates/schemas.ts"
+    "./mandates/schemas": "./src/mandates/schemas.ts",
+    "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

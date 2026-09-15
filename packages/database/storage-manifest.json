@@ -787,6 +787,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "get_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "get_memory_policy",
       "reads": [],
@@ -1119,6 +1130,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "grant_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "import_env_secrets",
       "reads": [],
@@ -1382,6 +1404,17 @@
       "name": "list_invoices",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "list_mandates",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1926,6 +1959,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "request_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "resolve_approval",
       "reads": [],
@@ -2003,6 +2047,17 @@
     {
       "domain": "api_key",
       "name": "revoke_api_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "revoke_mandate",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2464,6 +2519,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "update_mandate_limits",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "update_memory",
       "reads": [],
@@ -2675,7 +2741,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2c63a747b4fc5d7be11ba92efc8098202b7d04a072543e6971f6ff337aa0c8d4",
+  "contentHash": "0396f62f8e30aec67e15f558124bf0acffdbeb4564c67deaaf1dfea958b7ae83",
   "domains": [
     {
       "name": "agent",
@@ -6443,7 +6509,7 @@
         },
         {
           "name": "message_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },

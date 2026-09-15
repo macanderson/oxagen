@@ -154,7 +154,11 @@ export async function readAuthority(
   at: Date = new Date(),
 ): Promise<MandateAuthority[]> {
   const out: MandateAuthority[] = [];
-  for (const [measure, limit] of Object.entries(mandate.limits)) {
+  // jsonb stores keys in its own order; the report is by measure name.
+  const limits = Object.entries(mandate.limits).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  for (const [measure, limit] of limits) {
     const key = periodKey(limit.period, at);
     const [sums] = await tx
       .select({

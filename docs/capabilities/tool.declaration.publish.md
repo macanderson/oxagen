@@ -23,6 +23,9 @@ Publish a tool declaration into the workspace agent-asset registry. Upserts the 
 | policy_group | string (optional) | Policy group the tool's per-tool toggles key on |
 | source | `builtin` \| `custom` \| `mcp` \| `foundry` | Where the declaration came from |
 | manifest | object | The full declared manifest body, verbatim |
+| consequence_tags | string[] (default `[]`) | Safety classification (MC spec §6.9 part 1, ADR-059): the consequences invoking this tool can cause — `moves_money`, `destroys_data`, `alters_production`, `communicates_externally`, `changes_access`, `changes_entitlement`, or a workspace-defined tag. A tagged tool is mandate-gated for agent principals |
+| measures | Record<name, { path, type: amount \| count \| text, unit, scale? }> (default `{}`) | How a mandate's limits and targets are read from the call's input; `scale` is the number of decimal places an amount uses (default 2) |
+| effect_id_path | string (optional) | Dot path into the tool's output carrying the external effect id a mandate settlement records |
 
 ## Output
 

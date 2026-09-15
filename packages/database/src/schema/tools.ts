@@ -97,10 +97,11 @@ export const mandates = toolsSchema.table(
       "mandates_validity_check",
       sql`${t.validTo} > ${t.validFrom}`,
     ),
-    // A grant carries its granter and role; a draft carries neither.
+    // A grant carries its granter and role; a draft carries neither, and a
+    // revoked row may be a declined draft.
     grantCheck: check(
       "mandates_grant_check",
-      sql`(${t.status} = 'draft') OR (${t.grantedBy} IS NOT NULL AND ${t.roleAtGrant} IS NOT NULL)`,
+      sql`(${t.status} IN ('draft', 'revoked')) OR (${t.grantedBy} IS NOT NULL AND ${t.roleAtGrant} IS NOT NULL)`,
     ),
   }),
 );
