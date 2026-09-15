@@ -17,7 +17,13 @@ export { InvitationBody, InvitationNotFound } from "./invite-view";
 export { LoginForm } from "./login-form";
 export { ForgotPasswordForm, ResetPasswordForm } from "./password-reset-forms";
 export { AFTER_SIGNUP } from "./routes";
-export { DEFAULT_NEXT, firstParam, sanitizeNext, withNext } from "./safe-next";
+export {
+  DEFAULT_NEXT,
+  firstParam,
+  nextParam,
+  sanitizeNext,
+  withNext,
+} from "./safe-next";
 export { getAuthUser } from "./session";
 export { SignupForm } from "./signup-form";
 export { TwoFactorForm } from "./two-factor-form";

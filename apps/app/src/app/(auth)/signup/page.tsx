@@ -6,8 +6,8 @@ import {
   AFTER_SIGNUP,
   OAuthButtons,
   SignupForm,
-  firstParam,
   sanitizeNext,
+  nextParam,
   withNext,
 } from "@/features/auth";
 import {
@@ -32,7 +32,7 @@ async function Signup({
   searchParams: PageProps<"/signup">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const next = sanitizeNext(nextParam(params), AFTER_SIGNUP);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>
