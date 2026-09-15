@@ -2,7 +2,7 @@
 <rect x="0" y="0" width="680" height="470" rx="6" fill="#10100F" stroke="#292722" stroke-width="1"/>
 <text x="16" y="22" font-size="11" fill="#8C877C">SESSION  AGENTS  TRACES  GRAPH  FILES  SKILLS  MCP</text>
 <text x="400" y="22" font-size="11" fill="#D6962C" font-weight="500">ISSUES</text>
-<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">stella</text>
+<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">agent</text>
 <text x="645" y="22" font-size="12" fill="#D6962C" font-weight="500">*</text>
 <line x1="0" y1="32" x2="680" y2="32" stroke="#292722" stroke-width="1"/>
 <text x="16" y="56" font-size="11" fill="#8C877C">backlog · linear via mcp · 14 open</text>
@@ -51,7 +51,7 @@
 <text x="24" y="362" font-size="11" fill="#504C44">↵ open plan · c comment · s status · b branch</text>
 <line x1="0" y1="392" x2="680" y2="392" stroke="#292722" stroke-width="1"/>
 <text x="16" y="414" font-size="11" fill="#D6962C">w start work</text>
-<text x="116" y="414" font-size="11" fill="#8C877C">on a triaged issue → stella drafts plan r1 from the issue + graph context,</text>
+<text x="116" y="414" font-size="11" fill="#8C877C">on a triaged issue → the agent drafts plan r1 from the issue + graph context,</text>
 <text x="116" y="430" font-size="11" fill="#8C877C">shows the task contracts, and waits for your approval before touching code</text>
 <text x="16" y="456" font-size="11" fill="#504C44">↑↓ select · w start work · n new issue · / search tracker · r refresh · esc</text>
 </svg>

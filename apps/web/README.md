@@ -14,7 +14,7 @@ committed.
 
 ## Layout
 
-- `assets/oxagen.css` — the shared shell: the Stella colour tokens, the nav,
+- `assets/oxagen.css` — the shared shell: the house colour tokens, the nav,
   buttons, cards, terminal chrome, forms and footer. Every page under
   `index.html` and `products/` links it. Each page adds its own small
   `<style>` block for the parts only that page has (its hero, mostly). The
@@ -30,11 +30,11 @@ committed.
   build step. Every animation that would otherwise run forever (typewriters,
   terminal replay) is started and stopped by an IntersectionObserver, so a
   page of them costs nothing below the fold.
-- `assets/tui/*.svg` — the ten Stella deck renderings used as screenshots.
-- `index.html` — the marketing one-pager: a three-card `#products` strip, the
-  terminal coding agent, the platform, a `#field-manual` section with the
-  ebook lead-capture form, and the "Get a demo" lead form.
-- `products/stella/`, `products/oxagen/`, `products/private-llms/` — one page
+- `assets/tui/*.svg` — the four terminal-deck renderings used as screenshots.
+- `index.html` — the marketing one-pager: the hero, the terminal CLI section, the
+  platform, a `#field-manual` section with the ebook lead-capture form, and the
+  "Get a demo" lead form.
+- `products/oxagen/` — one page
   per product. Each carries its own copy of the nav, drawer and footer markup.
 - `read/index.html` — the gate in front of the ebook *Engineering
   Deterministic AI Coding Agents*. The page itself holds no book text. It
@@ -83,9 +83,6 @@ committed.
 - `scripts/fonts/` — Space Grotesk, the variable file the house kit ships
   (OFL), used only at build time to set the text on generated images as
   outlines. Not published.
-- `overview-video.html` — a standalone Stella overview page. Nothing on the
-  site links to it and it is not in `sitemap.xml`; it is reachable only if you
-  already know the URL.
 
 ## The palette, and the four rules
 
