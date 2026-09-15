@@ -4,19 +4,23 @@
 import { authCliAuthorize } from "@oxagen/oxagen/contracts/auth.cli.authorize";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { redirect, requireViewer, kernelWrite } = vi.hoisted(() => ({
-  redirect: vi.fn((to: string) => {
-    throw new Error(`NEXT_REDIRECT ${to}`);
+const { redirect, requireUser, requireViewer, kernelWrite } = vi.hoisted(
+  () => ({
+    redirect: vi.fn((to: string) => {
+      throw new Error(`NEXT_REDIRECT ${to}`);
+    }),
+    requireUser: vi.fn(),
+    requireViewer: vi.fn(),
+    kernelWrite: vi.fn(),
   }),
-  requireViewer: vi.fn(),
-  kernelWrite: vi.fn(),
-}));
+);
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("@/server/kernel", () => ({ kernelWrite }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 vi.mock("@/server/viewer", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/viewer")>()),
+  requireUser,
   requireViewer,
 }));
 
@@ -180,6 +184,15 @@ describe("cancelCliAuth", () => {
     await expect(cancelCliAuth(null, form(valid))).rejects.toThrow(
       "NEXT_REDIRECT http://127.0.0.1:53682/callback?error=access_denied&state=st_1",
     );
+    expect(requireUser).toHaveBeenCalledOnce();
+  });
+
+  it("sends a signed-out person to sign in before answering the listener (negative)", async () => {
+    requireUser.mockRejectedValueOnce(new Error("NEXT_REDIRECT /login"));
+    await expect(cancelCliAuth(null, form(valid))).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("refuses a non-loopback redirect and a missing state (negative)", async () => {

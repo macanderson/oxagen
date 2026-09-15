@@ -6,6 +6,7 @@ import js from "@eslint/js";
 import react from "@eslint-react/eslint-plugin";
 import next from "@next/eslint-plugin-next";
 import { defineConfig, globalIgnores } from "eslint/config";
+import { builtinRules } from "eslint/use-at-your-own-risk";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 import { tenancySeamRestrictedImports } from "../../eslint.tenancy-seams.mjs";
@@ -95,6 +96,124 @@ const COMPUTED_LINK_TARGETS = [
 
 const VIEWER_SEAM = ["src/server/viewer.ts", "src/server/viewer.testing.ts"];
 
+// Test-only modules (§4 preamble): they render fixtures, never interface.
+const TEST_ONLY = [
+  "src/**/*.test.{ts,tsx}",
+  "src/**/*.type-test.ts",
+  "src/**/*.builders.ts",
+  "src/test/**",
+  "src/server/viewer.testing.ts",
+];
+
+// INV-12 (ARCHITECTURE.md §4): interface prose comes from messages/*.json.
+const PROSE_MESSAGE =
+  "Interface prose comes from messages/*.json through t(); a literal string reaches no catalog (INV-12).";
+const PROSE = [
+  { selector: "JSXText[value=/[A-Za-z]/]", message: PROSE_MESSAGE },
+  {
+    selector:
+      "JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > Literal[value=/[A-Za-z]/]",
+    message: PROSE_MESSAGE,
+  },
+  {
+    selector:
+      "JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > JSXExpressionContainer > :matches(Literal[value=/[A-Za-z]/], TemplateLiteral)",
+    message: PROSE_MESSAGE,
+  },
+];
+
+// INV-09 (ARCHITECTURE.md §4): only src/ui/money-format.ts formats a number,
+// and only src/data/contracts/money.ts does arithmetic on micros.
+const NUMBER_FORMAT_MESSAGE =
+  "Format money through <Money> and counts through formatCount from src/ui/money-format.ts (INV-09).";
+const NUMBER_FORMATTING = [
+  {
+    selector:
+      ":matches(NewExpression, CallExpression):matches([callee.name='NumberFormat'], [callee.property.name='NumberFormat'])",
+    message: NUMBER_FORMAT_MESSAGE,
+  },
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(toFixed|toLocaleString)$/]",
+    message: NUMBER_FORMAT_MESSAGE,
+  },
+];
+const BIGINT = [
+  {
+    selector: "CallExpression[callee.name='BigInt']",
+    message:
+      "Arithmetic on micros happens only in src/data/contracts/money.ts (mulMicros), INV-09.",
+  },
+];
+
+const FORMATTER_FACTORIES = new Set(["getFormatter", "useFormatter"]);
+
+/** `getFormatter()`, `useFormatter()` or either awaited. */
+function isFormatter(node) {
+  const call = node?.type === "AwaitExpression" ? node.argument : node;
+  return (
+    call?.type === "CallExpression" &&
+    call.callee.type === "Identifier" &&
+    FORMATTER_FACTORIES.has(call.callee.name)
+  );
+}
+
+/** The initializer an identifier was declared with, looked up through the enclosing scopes. */
+function initializerOf(scope, name) {
+  for (let s = scope; s; s = s.upper) {
+    const variable = s.set.get(name);
+    if (variable) {
+      const def = variable.defs[0];
+      return def?.type === "Variable" ? def.node : null;
+    }
+  }
+  return null;
+}
+
+/** INV-09: next-intl's `.number(` on a formatter, called or destructured, by any binding. */
+const formatterNumber = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: { number: NUMBER_FORMAT_MESSAGE },
+  },
+  create(context) {
+    return {
+      "CallExpression > MemberExpression.callee[property.name='number']"(
+        member,
+      ) {
+        const target =
+          member.object.type === "Identifier"
+            ? initializerOf(
+                context.sourceCode.getScope(member),
+                member.object.name,
+              )?.init
+            : member.object;
+        if (isFormatter(target))
+          context.report({ node: member, messageId: "number" });
+      },
+      "VariableDeclarator > ObjectPattern.id > Property[key.name='number']"(
+        property,
+      ) {
+        if (isFormatter(property.parent.parent.init))
+          context.report({ node: property, messageId: "number" });
+      },
+    };
+  },
+};
+
+// `no-restricted-syntax` restated under rule names of their own, so the
+// exemptions of INV-09 and INV-12 never replace the INV-02 and INV-13 groups.
+const restrictedSyntax = builtinRules.get("no-restricted-syntax");
+const invariants = {
+  rules: {
+    prose: restrictedSyntax,
+    "number-format": restrictedSyntax,
+    bigint: restrictedSyntax,
+    "formatter-number": formatterNumber,
+  },
+};
+
 export default defineConfig([
   globalIgnores([
     ".next/**",
@@ -164,6 +283,32 @@ export default defineConfig([
         { assertionStyle: "never" },
       ],
     },
+  },
+  {
+    // INV-09 and INV-12, everywhere under src/ but test-only modules. Probes:
+    // src/test/arch/lint.test.ts.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: TEST_ONLY,
+    plugins: { invariants },
+    rules: {
+      "invariants/prose": ["error", ...PROSE],
+      "invariants/number-format": ["error", ...NUMBER_FORMATTING],
+      "invariants/formatter-number": "error",
+      "invariants/bigint": ["error", ...BIGINT],
+    },
+  },
+  {
+    // The one module that formats a number.
+    files: ["src/ui/money-format.ts"],
+    rules: {
+      "invariants/number-format": "off",
+      "invariants/formatter-number": "off",
+    },
+  },
+  {
+    // The one module that does arithmetic on micros.
+    files: ["src/data/contracts/money.ts"],
+    rules: { "invariants/bigint": "off" },
   },
   {
     files: VIEWER_SEAM,

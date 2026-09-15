@@ -6,7 +6,3 @@
 // resolves its viewer itself and renders nothing from here.
 export { ShellChrome } from "./shell-chrome";
 export { ShellFrame } from "./shell-frame";
-
-// The phone navigation seam (feedback 3, plan §6 Q3): the design replaces the
-// body of <MobileNav> and keeps its props.
-export { MobileNav, type MobileNavProps } from "./mobile-nav";

@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
-import { DEFAULT_LOCALE } from "@/i18n/catalogs";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -33,9 +32,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
-    <html lang={DEFAULT_LOCALE} dir="ltr" suppressHydrationWarning>
+    <html lang={await getLocale()} dir="ltr" suppressHydrationWarning>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>

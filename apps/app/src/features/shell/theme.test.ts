@@ -4,7 +4,6 @@ import {
   applyTheme,
   nextTheme,
   readThemeCookie,
-  resolveTheme,
   THEME_SCRIPT,
   themeCookieString,
 } from "./theme";
@@ -32,9 +31,10 @@ describe("theme values", () => {
   });
 
   it("resolves system against the OS preference", () => {
-    expect(resolveTheme("system", true)).toBe("dark");
-    expect(resolveTheme("system", false)).toBe("light");
-    expect(resolveTheme("light", true)).toBe("light");
+    const root = document.documentElement;
+    expect(applyTheme(root, "system", true)).toBe("dark");
+    expect(applyTheme(root, "system", false)).toBe("light");
+    expect(applyTheme(root, "light", true)).toBe("light");
   });
 
   it("cycles light → dark → system → light", () => {

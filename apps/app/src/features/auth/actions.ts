@@ -6,6 +6,7 @@
 // two password-reset legs and verification resend (all anti-enumeration: the
 // reply never reveals whether an account exists); every input is re-validated
 // here. The Better Auth calls go through the session seam.
+import { captureError } from "@oxagen/telemetry";
 import {
   requestPasswordReset as sendResetLink,
   resetPassword as setNewPassword,
@@ -37,12 +38,15 @@ export async function requestPasswordReset(input: {
       redirectTo: routes.resetPassword(),
     });
   } catch (err) {
-    // Anti-enumeration: the reply stays ok. A send outage must still be visible server-side.
-    const { logger } = await import("@oxagen/handlers/logger");
-    logger.warn(
-      { outcome: authOutcomeKey(err) },
-      "[forgot-password] requestPasswordReset failed; reply unaffected",
-    );
+    // Anti-enumeration: the reply stays ok. A send outage must still be visible
+    // server-side; the report carries the outcome key, never the address.
+    captureError({
+      error: authOutcomeKey(err),
+      source: "app",
+      severity: "warn",
+      context:
+        "[forgot-password] requestPasswordReset failed; reply unaffected",
+    });
   }
   return { ok: true, to: "/forgot-password" };
 }
@@ -68,9 +72,13 @@ export async function resetPassword(input: {
   } catch (err) {
     const outcome = authOutcomeKey(err);
     if (outcome !== "linkExpired") {
-      // Never log the password; the outcome key is enough to see an outage hiding behind "expired link".
-      const { logger } = await import("@oxagen/handlers/logger");
-      logger.warn({ outcome }, "[reset-password] resetPassword failed");
+      // Never report the password; the outcome key is enough to see an outage hiding behind "expired link".
+      captureError({
+        error: outcome,
+        source: "app",
+        severity: "warn",
+        context: "[reset-password] resetPassword failed",
+      });
     }
     return {
       ok: false,
@@ -91,11 +99,12 @@ export async function resendVerification(input: {
       callbackURL: sanitizeNext(input.next ?? null, AFTER_SIGNUP),
     });
   } catch (err) {
-    const { logger } = await import("@oxagen/handlers/logger");
-    logger.warn(
-      { outcome: authOutcomeKey(err) },
-      "[verify] sendVerificationEmail failed; reply unaffected",
-    );
+    captureError({
+      error: authOutcomeKey(err),
+      source: "app",
+      severity: "warn",
+      context: "[verify] sendVerificationEmail failed; reply unaffected",
+    });
   }
   return { ok: true, to: "/verify" };
 }

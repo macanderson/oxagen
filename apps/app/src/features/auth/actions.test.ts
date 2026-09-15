@@ -7,7 +7,7 @@ const session = {
 };
 vi.mock("@/server/session", () => session);
 const warn = vi.fn();
-vi.mock("@oxagen/handlers/logger", () => ({ logger: { warn } }));
+vi.mock("@oxagen/telemetry", () => ({ captureError: warn }));
 
 const actions = await import("./actions");
 

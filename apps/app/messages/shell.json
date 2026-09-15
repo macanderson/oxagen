@@ -45,6 +45,7 @@
       "footer": {
         "move": "move",
         "open": "open",
+        "escape": "esc",
         "close": "close"
       }
     },

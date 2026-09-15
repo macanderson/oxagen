@@ -2,7 +2,7 @@
 // element tree it returns, which covers both branches without an RSC renderer.
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { translator } from "../auth/test-intl";
+import { translator } from "@/test/intl";
 
 vi.mock("next-intl/server", () => ({
   getTranslations: (ns: string) => Promise.resolve(translator(ns)),

@@ -14,7 +14,7 @@ export type AuthOutcomeKey =
   | "unavailable"
   | "unknown";
 
-export type AuthErrorLike = {
+type AuthErrorLike = {
   code?: string | undefined;
   status?: number | undefined;
   message?: string | undefined;

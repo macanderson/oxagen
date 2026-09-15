@@ -4,7 +4,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IntlProvider } from "./test-intl";
+import { expectNoAxe } from "@/test/expect-no-axe";
+import { IntlProvider } from "@/test/intl";
 
 const { approveCliAuth, cancelCliAuth } = vi.hoisted(() => ({
   approveCliAuth: vi.fn(),
@@ -35,8 +36,13 @@ beforeEach(() => {
   approveCliAuth.mockReset();
   cancelCliAuth.mockReset();
 });
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("loadConsentChoices", () => {

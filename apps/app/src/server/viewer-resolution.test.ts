@@ -5,7 +5,6 @@ import type { AppSession } from "./session";
 import type { SystemLookups } from "./tenancy-lookups";
 import {
   canonicalPath,
-  isValidSlug,
   type ResolveViewerDeps,
   resolveViewerWith,
 } from "./viewer-resolution";
@@ -119,6 +118,11 @@ describe("resolveViewerWith: refused", () => {
     ["acme", "robots.txt"],
     ["acme", ""],
     ["-acme", undefined],
+    ["a--b", undefined],
+    ["acme-", undefined],
+    ["a.b", undefined],
+    ["a".repeat(129), undefined],
+    ["acme", "Core"],
   ])(
     "404s a malformed slug (%s / %s) without a database round trip",
     async (o, w) => {
@@ -272,15 +276,6 @@ describe("resolveViewerWith: MFA gate", () => {
     const l = lookups({ mfaPolicy: () => Promise.resolve(policy) });
     expect((await resolve(l, "acme")).kind).toBe("ok");
     expect(l.twoFactorEnabled).not.toHaveBeenCalled();
-  });
-});
-
-describe("isValidSlug", () => {
-  it("accepts kebab-case and rejects everything else", () => {
-    expect(isValidSlug("core-platform")).toBe(true);
-    expect(isValidSlug("a1")).toBe(true);
-    for (const bad of ["", "a--b", "a-", "A", "a.b", "a/b", "a".repeat(129)])
-      expect(isValidSlug(bad)).toBe(false);
   });
 });
 

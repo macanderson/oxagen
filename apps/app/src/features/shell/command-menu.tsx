@@ -160,7 +160,8 @@ function CommandPalette({
           <kbd className="font-mono">↩</kbd> {t("commands.footer.open")}
         </span>
         <span>
-          <kbd className="font-mono">esc</kbd> {t("commands.footer.close")}
+          <kbd className="font-mono">{t("commands.footer.escape")}</kbd>{" "}
+          {t("commands.footer.close")}
         </span>
       </div>
     </Dialog.Popup>
