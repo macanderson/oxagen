@@ -94,7 +94,7 @@ describe("messages/en.json", () => {
     expect(Object.keys(en)).toEqual(
       expect.arrayContaining([
         "app",
-        "routes",
+        "pages",
         "unrecorded",
         "notFound",
         "globalError",

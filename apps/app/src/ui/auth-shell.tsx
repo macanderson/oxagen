@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
-import { eyebrow } from "./control-styles";
 
 async function Brandmark() {
   const t = await getTranslations("ui.brand");
@@ -49,7 +48,7 @@ export function AuthShell({
   );
 }
 
-/** One sign-in screen's column: heading block, then the panel and footer the page passes. */
+/** One sign-in screen's column: the page's PageHeader, then the panel and footer the page passes. */
 export function AuthColumn({
   wide = false,
   children,
@@ -62,30 +61,6 @@ export function AuthColumn({
       className={`flex w-full min-w-0 flex-col gap-5 ${wide ? "max-w-xl" : "max-w-md"}`}
     >
       {children}
-    </div>
-  );
-}
-
-export function AuthHeading({
-  kicker,
-  title,
-  lead,
-}: {
-  kicker: string;
-  title: string;
-  lead?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <p className={eyebrow}>{kicker}</p>
-      <h1 className="text-2xl leading-tight font-semibold tracking-tight text-foreground sm:text-[1.75rem]">
-        {title}
-      </h1>
-      {lead ? (
-        <p className="max-w-prose text-[0.95rem] leading-relaxed text-muted-foreground">
-          {lead}
-        </p>
-      ) : null}
     </div>
   );
 }

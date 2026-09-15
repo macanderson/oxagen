@@ -6,8 +6,9 @@ import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
+  // Each page returns its own pages.* title; the template names the product after it.
   return {
-    title: t("name"),
+    title: { default: t("name"), template: `%s · ${t("name")}` },
     description: t("description"),
     icons: {
       icon: [

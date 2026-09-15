@@ -1,15 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { ResetPasswordForm } from "@/features/auth";
 import { firstParam } from "@/shared/safe-path";
-import {
-  AuthColumn,
-  AuthFooter,
-  AuthHeading,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("resetPassword") };
+}
 
 export default function ResetPasswordPage(props: PageProps<"/reset-password">) {
   return (
@@ -30,13 +32,16 @@ async function Reset({
     firstParam(params.error) === undefined
       ? (firstParam(params.token) ?? "")
       : "";
-  const t = await getTranslations("auth");
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("reset.eyebrow")}
-        title={t("reset.title")}
-        lead={t("reset.lead")}
+      <PageHeader
+        eyebrow={t("reset.eyebrow")}
+        title={pages("resetPassword")}
+        description={t("reset.lead")}
       />
       <ResetPasswordForm token={token} />
       <AuthFooter>
