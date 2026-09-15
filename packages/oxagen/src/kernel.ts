@@ -42,8 +42,8 @@ let _billingGate: BillingAdmissionGateFn | null = null;
 
 /**
  * Register the billing admission gate. Call once at service bootstrap.
- * The gate must throw `BillingSuspendedError` or `InsufficientCreditsError`
- * (from @oxagen/billing) to refuse a turn.
+ * The gate must throw `BillingSuspendedError` or `GauExhaustedError` (from
+ * @oxagen/billing) to refuse a governed action.
  */
 export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
   _billingGate = gate;

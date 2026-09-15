@@ -17,6 +17,10 @@ export const billingSubscriptionRead = registerCapability({
   },
   sensitivity: "low",
   mutates: false,
+  // INV-27 (ADR-052 exclusion 2): reading your bill is never refused for lack
+  // of governed action units — an org whose bucket is empty must still be
+  // able to read the plan that says so.
+  noBillingGate: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },

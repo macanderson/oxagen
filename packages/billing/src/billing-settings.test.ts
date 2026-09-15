@@ -14,6 +14,8 @@
  *  7. updateAutoReloadSettings — accepts amountCents exactly 100
  *  8. updateAutoReloadSettings — accepts thresholdCents = 0
  *  9. getOrgBillingSettings — throws when DB returns no row after insert
+ * 10. readOrgBillingSettings — the GAU-path read: column defaults for an org
+ *     with no row, never an insert (asserted on the query log)
  */
 
 import { afterAll, describe, it, expect, vi, beforeEach } from "vitest";
@@ -67,6 +69,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 const {
   DEFAULT_ASSISTANT_SPEND_CAP_CENTS,
   getOrgBillingSettings,
+  readOrgBillingSettings,
   updateAssistantSpendCap,
   updateAutoReloadSettings,
 } = await import("./billing-settings");
@@ -397,5 +400,66 @@ describe("updateAutoReloadSettings", () => {
     expect(setArg.autoReloadThresholdCents).toBeUndefined();
     expect(setArg.autoReloadAmountCents).toBeUndefined();
     expect(setArg.autoReloadPaymentMethodId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readOrgBillingSettings — ADR-055 §5: a read never writes
+// ---------------------------------------------------------------------------
+
+describe("readOrgBillingSettings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns the column defaults for an org with no row and issues NO insert", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+
+    const result = await readOrgBillingSettings("org-new");
+
+    expect(result).toEqual({
+      orgId: "org-new",
+      stripeCustomerId: null,
+      approvedForInvoiceBilling: false,
+      invoiceGauMax: 100_000,
+      autoTopupEnabled: true,
+      autoTopupBlocks: 1,
+      dunningState: "active",
+    });
+    // The query log: one SELECT, no INSERT, no UPDATE.
+    expect(findFirstMock).toHaveBeenCalledOnce();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the stored row and still never inserts", async () => {
+    findFirstMock.mockResolvedValue({
+      stripeCustomerId: "cus_123",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      autoTopupEnabled: false,
+      autoTopupBlocks: 4,
+      dunningState: "suspended",
+    });
+
+    const result = await readOrgBillingSettings("org-001");
+
+    expect(result).toEqual({
+      orgId: "org-001",
+      stripeCustomerId: "cus_123",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      autoTopupEnabled: false,
+      autoTopupBlocks: 4,
+      dunningState: "suspended",
+    });
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("reads through withTenantDb (the callers run inside a tenant scope)", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    await readOrgBillingSettings("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
   });
 });

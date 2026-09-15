@@ -2,6 +2,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { schema, withTenantDb } from "@oxagen/database";
+import { assertOrgRole } from "@oxagen/iam/org-role";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -23,16 +24,14 @@ type SubscriptionWithPlan = {
 export const billingSubscriptionReadHandler: CapabilityHandler<
   typeof billingSubscriptionRead
 > = async (_input, ctx) => {
-  // Authorization guard: a resolved principal (user or API key) is required.
-  // API-key calls always carry a non-empty orgId; session calls that lack
-  // org scope are rejected here rather than at the transport layer so the
-  // check is surface-agnostic (API, MCP, agent — same code path).
-  if (!ctx.userId && !ctx.apiKeyId) {
-    throw new Error("Unauthorized: no authenticated principal");
-  }
   if (!ctx.orgId) {
     throw new Error("Forbidden: orgId is required to read billing data");
   }
+  // Role gate (ARCHITECTURE.md §3.2, INV-29): the contract's defaultRoles
+  // are Owner, Admin and Billing, and the kernel's IAM check enforces them
+  // for enterprise orgs only, so the handler checks them itself. A context
+  // with no signed-in user is refused with reason no_principal.
+  await assertOrgRole(ctx, { org: ["Owner", "Admin", "Billing"] });
 
   // Two parallel round trips: subscription+plan (joined) and credit balance.
   // The plan join eliminates the sequential N+1 lookup; sub and balance are

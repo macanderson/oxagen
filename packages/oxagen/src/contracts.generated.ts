@@ -77,6 +77,7 @@ import "./contracts/billing.budget.get";
 import "./contracts/billing.budget.set";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.evidence_retention";
+import "./contracts/billing.invoice.list";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription_upgrade.start";
 import "./contracts/billing.usage.breakdown";

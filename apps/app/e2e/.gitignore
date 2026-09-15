@@ -1,0 +1,3 @@
+# Runtime output of the harness: the owner's storage state (login.spec.ts) and
+# the seed record (seed:e2e). Neither is source.
+.auth/
