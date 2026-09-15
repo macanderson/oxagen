@@ -4,12 +4,23 @@ import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 
-const gate = vi.hoisted(() => ({ refuse: false }));
+// The role gate reads iam.principal_role_assignments and the key's creator
+// from auth.api_keys; the tests decide both.
+const gate = vi.hoisted(() => ({
+  refuse: false,
+  keyCreator: "u_key_creator" as string | null,
+}));
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
-  assertOrgRole: async () => {
+  resolveActingUserId: async (c: {
+    userId: string | null;
+    apiKeyId: string | null;
+  }) => c.userId ?? (c.apiKeyId ? gate.keyCreator : null),
+  assertOrgRole: async (actor: { userId: string | null }) => {
+    if (!actor.userId)
+      throw new HandlerError({ code: "forbidden", reason: "no_principal" });
     if (gate.refuse)
       throw new HandlerError({
         code: "forbidden",
@@ -72,6 +83,7 @@ async function proposed(h: Harness, over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   gate.refuse = false;
+  gate.keyCreator = "u_key_creator";
 });
 
 describe("open_context_pr", () => {
@@ -558,6 +570,26 @@ describe("open_context_pr", () => {
       createOpenContextPrHandler(h)({ proposalId: a }, ctx()),
     ).rejects.toMatchObject({ code: "forbidden" });
     expect(h.github.branches).toHaveLength(0);
+  });
+
+  it("under an API key acts as the key's creator, recorded as the updater, and refuses a key with no creator before GitHub", async () => {
+    const h = harness();
+    const a = await proposed(h);
+    const KEY_CTX = ctx({ userId: null, apiKeyId: "key_1" });
+
+    gate.keyCreator = null;
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: a }, KEY_CTX),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
+    expect(h.github.branches).toHaveLength(0);
+    expect(h.store.proposals[0]!.status).toBe("proposed");
+
+    gate.keyCreator = "u_key_creator";
+    const out = await createOpenContextPrHandler(h)({ proposalId: a }, KEY_CTX);
+    expect(out.status).toBe("checks_passed");
+    expect(h.store.proposals[0]).toMatchObject({
+      updatedByUserId: "u_key_creator",
+    });
   });
 });
 
