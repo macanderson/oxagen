@@ -80,6 +80,32 @@ stage_internal_docs() {
      }' > "$out/oxagen-run.json"
 }
 
+# Pack <stage-dir> into the gzipped tarball <tarball>.
+#
+# On a Mac, tar copies each file's extended attributes into the archive:
+# macOS stamps com.apple.provenance on nearly every file, and bsdtar writes it
+# as a LIBARCHIVE.xattr pax header, plus an AppleDouble ._ file wherever
+# copyfile has metadata to save. GNU tar on the node does not know that
+# keyword and prints "Ignoring unknown extended header keyword" once per file,
+# which buries the deploy log. COPYFILE_DISABLE=1 stops the ._ files and
+# --no-xattrs stops the headers. bsdtar and GNU tar (1.27 and later) both take
+# --no-xattrs, but a tar that does not refuses the whole command, so the flag
+# is passed only when this tar accepts it.
+pack_internal_docs() {
+  local stage=$1 tarball=$2
+  local -a flags=()
+  if tar_accepts_no_xattrs "$stage"; then
+    flags+=(--no-xattrs)
+  fi
+  COPYFILE_DISABLE=1 tar ${flags[@]+"${flags[@]}"} -czf "$tarball" -C "$stage" .
+}
+
+# Whether tar accepts --no-xattrs, by archiving <dir> to /dev/null with it.
+# `tar --help` is no guide: bsdtar's short help leaves out flags it supports.
+tar_accepts_no_xattrs() {
+  COPYFILE_DISABLE=1 tar --no-xattrs -cf /dev/null -C "$1" . >/dev/null 2>&1
+}
+
 # HTTP status of <url>, with no credentials.
 http_status() {
   curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$1" 2>/dev/null || echo 000
@@ -159,7 +185,7 @@ TARBALL=$(mktemp "${TMPDIR:-/tmp}/oxagen-internal-docs-tgz-XXXXXX")
 trap 'rm -rf "$STAGE" "$TARBALL"' EXIT
 
 stage_internal_docs "$1" "$STAGE" "$HERE/internal-docs/Caddyfile"
-tar -czf "$TARBALL" -C "$STAGE" .
+pack_internal_docs "$STAGE" "$TARBALL"
 echo "==> packaged $INTERNAL_DOCS_SERVICE ($(du -h "$TARBALL" | cut -f1), $(command find "$STAGE/site" -type f | wc -l | tr -d ' ') files)"
 
 aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/$INTERNAL_DOCS_SERVICE-standalone.tgz" \
