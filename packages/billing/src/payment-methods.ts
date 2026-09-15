@@ -109,6 +109,44 @@ export async function listOrgPaymentMethods(
   }));
 }
 
+// ── readDefaultPaymentMethod ──────────────────────────────────────────────────
+
+/** The saved card auto top-up charges (ADR-055 §5). */
+export interface DefaultPaymentMethod {
+  stripePaymentMethodId: string;
+  brand: string | null;
+  last4: string | null;
+}
+
+/**
+ * The org's default `billing.payment_methods` row, or null when none is saved.
+ *
+ * A DB-only read of the mirror, never a provider call: the GAU gate reads it
+ * on every governed action to tell a Free org that must save a card from a
+ * prepaid org whose auto top-up could not run, and the recorder reads it
+ * before claiming a top-up episode. Runs inside the caller's tenant scope.
+ */
+export async function readDefaultPaymentMethod(
+  orgId: string,
+): Promise<DefaultPaymentMethod | null> {
+  const row = await withTenantDb((tx) =>
+    tx.query.paymentMethods.findFirst({
+      where: and(
+        eq(schema.paymentMethods.orgId, orgId),
+        eq(schema.paymentMethods.isDefault, true),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+      columns: { stripePaymentMethodId: true, brand: true, last4: true },
+    }),
+  );
+  if (!row) return null;
+  return {
+    stripePaymentMethodId: row.stripePaymentMethodId,
+    brand: row.brand,
+    last4: row.last4,
+  };
+}
+
 // ── createPaymentMethodSetupIntent ────────────────────────────────────────────
 
 /**

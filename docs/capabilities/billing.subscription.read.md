@@ -8,8 +8,14 @@
 
 Return the active subscription, plan slug, current period bounds, and
 credit balance for the caller's active tenant. Used by the billing
-dashboard, the upgrade flow, and the runtime credit-gate when an agent
-attempts a paid action.
+dashboard and the upgrade flow.
+
+Reading your bill is never a charge (ADR-052 exclusion 2, INV-27): the
+contract declares `noBillingGate: true`, so a prepaid organisation whose
+month bucket of governed action units is empty can still read the plan that
+says so. The handler checks the caller's org role itself — Owner, Admin or
+Billing — because the kernel's IAM check enforces `defaultRoles` for
+enterprise organisations only (ARCHITECTURE.md §3.2, INV-29).
 
 ## Input
 
@@ -38,10 +44,10 @@ Empty object. Tenant scope is resolved from the request context.
 
 ## Errors
 
-| code             | meaning                                  |
-| ---------------- | ---------------------------------------- |
-| `tenant_missing` | No active tenant on the request context. |
-| `forbidden`      | Caller lacks `billing:read` on tenant.   |
+| code             | meaning                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `tenant_missing` | No active tenant on the request context.                                                  |
+| `forbidden`      | `HandlerError` (403): no signed-in user (`no_principal`), or the user holds none of Owner, Admin, Billing in the org (`org_role_required`). |
 
 ## SPEC references
 
