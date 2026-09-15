@@ -9,7 +9,7 @@ import type { AuthOutcomeKey } from "./auth-errors";
 import { liveVerifyTwoFactor, takePendingNext } from "./auth-client";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
-import { TwoFactorSchema, fieldErrors } from "./schemas";
+import { type AuthErrorKey, TwoFactorSchema, fieldErrors } from "./schemas";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { linkText, panel } from "@/ui/control-styles";
@@ -21,7 +21,7 @@ export function TwoFactorForm({ next }: { next: SafePath }) {
   const t = useTranslations("auth");
   const navigate = useNavigate();
   const [method, setMethod] = useState<Method>("totp");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthErrorKey | null>(null);
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
 

@@ -1,0 +1,64 @@
+# The internal docs site's own server: a static Fumadocs export behind a
+# password. It runs as the `internal-docs` service through deploy-service.sh,
+# in a caddy:2 container, and the front door (tools/caddy/Caddyfile.alb)
+# proxies internal.oxagen.sh to it.
+#
+# Why a second Caddy rather than a file_server block in the front door:
+#
+#   - The front Caddy mounts only /opt/oxagen/caddy. Mounting a site directory
+#     means editing user-data, which replaces the node.
+#   - deploy-service.sh already gives a service a release swap, rollback, a disk
+#     floor, and restore on node replacement. A hand-made directory gets none of
+#     those and is gone on the next replacement.
+#   - The bcrypt hash arrives through `config_prefix`
+#     (/oxagen/production/internal-docs) as an environment variable, so it is
+#     never in git and never rendered into a file on the node.
+#
+# `admin off` is required, not tidy. The container uses host networking, and
+# the front Caddy's admin API on localhost:2019 is what `caddy reload` in
+# install-node-scripts.sh talks to. A second admin endpoint would fail to bind,
+# or, started first, take reloads meant for the front door.
+{
+	admin off
+	persist_config off
+	auto_https off
+}
+
+:{$PORT} {
+	bind 127.0.0.1
+
+	# A `route` so these run in the order written; see Caddyfile.alb's header
+	# for what Caddy's own directive ordering did to /healthz.
+	route {
+		# Before the password: deploy-service.sh health-checks with `curl -f`
+		# and holds no credentials. The front door answers /healthz itself for
+		# every hostname, so this path is not reachable from outside.
+		respond /healthz 200
+
+		header {
+			X-Robots-Tag "noindex, nofollow"
+			# Internal page paths name unreleased plans; do not hand them to
+			# whatever an outbound link points at.
+			Referrer-Policy "no-referrer"
+			X-Content-Type-Options "nosniff"
+		}
+
+		basic_auth {
+			oxagen {$INTERNAL_DOCS_PASSWORD_HASH}
+		}
+
+		root * /app/site
+		# A Next static export writes `/a/b.html` without trailingSlash and
+		# `/a/b/index.html` with it; this serves either.
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+
+	# Only 404. A failed password check is a 401 error too, and it must stay a
+	# 401 with its WWW-Authenticate challenge rather than become this page.
+	handle_errors 404 {
+		root * /app/site
+		rewrite * /404.html
+		file_server
+	}
+}

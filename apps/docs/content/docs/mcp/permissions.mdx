@@ -3,7 +3,7 @@ title: Permissions
 description: Control which external MCP tools are allowed, denied, or require confirmation before execution.
 ---
 
-The permission system lets you control what external MCP tools can do — without modifying the MCP server itself. Permissions are defined in the same settings files as server definitions and use glob patterns for flexible matching.
+The permission system lets you control what external MCP tools can do: without modifying the MCP server itself. Permissions are defined in the same settings files as server definitions and use glob patterns for flexible matching.
 
 ## Permission policies
 
@@ -12,7 +12,7 @@ Every tool invocation is evaluated against one of three policies:
 | Policy | Behavior |
 |--------|----------|
 | `allow` | Tool executes immediately without prompting |
-| `deny` | Tool is blocked — never shown to the model or executed |
+| `deny` | Tool is blocked: never shown to the model or executed |
 | `ask` | User is prompted for confirmation before execution (default) |
 
 ## Configuration
@@ -42,10 +42,10 @@ Every tool invocation is evaluated against one of three policies:
 
 Rules are evaluated in this order (first match wins):
 
-1. **Per-server deny rules** — if the tool matches any deny pattern, it's blocked
-2. **Per-server allow rules** — if the tool matches any allow pattern, it's permitted
-3. **Per-server `defaultPolicy`** — applies when no specific rule matches
-4. **Global `defaultMcpPolicy`** — fallback when no server-level config exists
+1. **Per-server deny rules**: if the tool matches any deny pattern, it's blocked
+2. **Per-server allow rules**: if the tool matches any allow pattern, it's permitted
+3. **Per-server `defaultPolicy`**: applies when no specific rule matches
+4. **Global `defaultMcpPolicy`**: fallback when no server-level config exists
 
 Deny always takes priority over allow at the same scope level. This means you can safely write:
 
@@ -119,7 +119,7 @@ Effective result: `defaultPolicy: "allow"`, deny: `["delete_repository", "force_
 
 ## Tool visibility
 
-Separate from permissions, **tool visibility** controls which tools are shown to the model at all — even if they would be allowed by permissions:
+Separate from permissions, **tool visibility** controls which tools are shown to the model at all: even if they would be allowed by permissions:
 
 ```json
 {

@@ -1,9 +1,9 @@
 "use client";
 // The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes.
-// Arrow keys move, Enter opens, Esc closes.
+// Arrow keys move, Enter opens, Esc closes. On a phone it rises from the bottom
+// edge as a sheet (src/ui/phone.css).
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useRef, useState } from "react";
 import {
@@ -12,10 +12,11 @@ import {
   filterCommands,
   moveHighlight,
 } from "./commands";
-import { parseShellPath } from "./nav";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { useSidebarSections } from "./sidebar";
 import { useNavigate } from "@/ui/navigation";
+import { SheetHandle } from "@/ui/sheet-dialog";
 
 export function CommandMenu({ data }: { data: ShellData }) {
   const { commandOpen, setCommandOpen } = useShellState();
@@ -46,8 +47,7 @@ function CommandPalette({
 }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
-  const pathname = usePathname();
-  const ws = parseShellPath(pathname).ws;
+  const { ws } = useSidebarSections(data);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const listId = useId();
@@ -74,9 +74,11 @@ function CommandPalette({
   return (
     <Dialog.Popup
       data-testid="command-menu"
+      data-sheet=""
       initialFocus={inputRef}
       className="fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl"
     >
+      <SheetHandle />
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
         <Search aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -160,7 +162,8 @@ function CommandPalette({
           <kbd className="font-mono">↩</kbd> {t("commands.footer.open")}
         </span>
         <span>
-          <kbd className="font-mono">esc</kbd> {t("commands.footer.close")}
+          <kbd className="font-mono">{t("commands.footer.escape")}</kbd>{" "}
+          {t("commands.footer.close")}
         </span>
       </div>
     </Dialog.Popup>

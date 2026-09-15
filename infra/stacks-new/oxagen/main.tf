@@ -226,6 +226,7 @@ resource "aws_acm_certificate" "app" {
     "stella.oxagen.sh",
     "api.oxagen.sh",
     "mcp.oxagen.sh",
+    "internal.oxagen.sh",
   ]
 
   lifecycle {
@@ -297,6 +298,11 @@ locals {
     "app.oxagen.sh",
     "api.oxagen.sh",
     "mcp.oxagen.sh",
+    # The internal docs site: specs, pricing and plans. Every name on the
+    # certificate above is published in Certificate Transparency logs, so this
+    # hostname is public knowledge; the basic_auth in
+    # tools/internal-docs/Caddyfile is the only thing keeping the site private.
+    "internal.oxagen.sh",
   ])
 }
 

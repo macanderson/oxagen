@@ -2,8 +2,9 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
-import { IntlProvider } from "./test-intl";
+import { IntlProvider } from "@/test/intl";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -54,8 +55,13 @@ beforeEach(() => {
   // Storage holds no remembered destination unless a test puts one there.
   live.takePendingNext.mockReturnValue(null);
 });
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("LoginForm", () => {
@@ -441,7 +447,10 @@ describe("VerifyPanel", () => {
 
 describe("InviteDecision", () => {
   it("accept replaces the page with the organization", async () => {
-    inviteActions.acceptInvitation.mockResolvedValue({ ok: true, to: "/acme" });
+    inviteActions.acceptInvitation.mockResolvedValue({
+      ok: true,
+      value: { to: "/acme" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Accept invitation" }),
@@ -452,7 +461,10 @@ describe("InviteDecision", () => {
   });
 
   it("decline confirms without navigating", async () => {
-    inviteActions.declineInvitation.mockResolvedValue({ ok: true, to: "/" });
+    inviteActions.declineInvitation.mockResolvedValue({
+      ok: true,
+      value: { invitationPublicId: "invi_1", status: "declined" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     expect(await screen.findByTestId("invite-declined")).toHaveTextContent(
@@ -461,25 +473,45 @@ describe("InviteDecision", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("a refused decision is announced", async () => {
+  it("names the refusal: another account, a closed invitation, any other failure", async () => {
+    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
+    const accept = () =>
+      userEvent.click(
+        screen.getByRole("button", { name: "Accept invitation" }),
+      );
     inviteActions.acceptInvitation.mockResolvedValueOnce({
       ok: false,
-      reason: "failed",
+      reason: "denied",
+      code: "wrong_email",
     });
-    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Accept invitation" }),
+    await accept();
+    expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
+      "This account may not answer this invitation",
     );
+    inviteActions.declineInvitation.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "invitation_expired",
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
+      "This invitation is closed",
+    );
+    inviteActions.acceptInvitation.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
+    });
+    await accept();
     expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
       "could not be accepted",
     );
     inviteActions.acceptInvitation.mockRejectedValueOnce(new Error("boom"));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Accept invitation" }),
-    );
+    await accept();
     expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
       "could not be accepted",
     );
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
 

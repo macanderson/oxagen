@@ -319,6 +319,29 @@ esac
 # the connection — anything short of that would have failed above.
 contains "$CURL_OUT" "Failed to connect" "curl config: real curl reached the connect stage with the credential in place"
 
+# A cypher-shell result opens with its `name` header. Without it the file is
+# not a result: on 2026-09-15 cypher-shell printed "Unsupported Java 17
+# detected" and exited 0 with no rows, the header-dropping tail read that as an
+# empty result, and the check reported "55 declared, 0 present" against a
+# database carrying all 55 (#3036). An empty database and a refused query must
+# not collapse into one another — the header is what tells them apart.
+printf 'name\n"tenant_public_id"\n"execution_org"\n\n' > "$WORK/neo-ok.txt"
+OUT=$(neo_result_names "$WORK/neo-ok.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a headed result is read"
+[[ $OUT == $'tenant_public_id\nexecution_org' ]] && pass || fail "neo4j result: expected two unquoted names, got: $OUT"
+printf 'name\n' > "$WORK/neo-empty.txt"
+OUT=$(neo_result_names "$WORK/neo-empty.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a headed result with no rows is a real, empty answer"
+[[ -z $OUT ]] && pass || fail "neo4j result: an empty answer must print nothing, got: $OUT"
+printf 'Unsupported Java 17.0.20.1 detected. Please use Java(TM) 21 or Java(TM) 25 to run Cypher Shell.\n' > "$WORK/neo-java.txt"
+neo_result_names "$WORK/neo-java.txt" >/dev/null 2>&1
+expect_code 2 "$?" "neo4j result: cypher-shell refusing to run is 'unknown', not 'nothing present'"
+: > "$WORK/neo-none.txt"
+neo_result_names "$WORK/neo-none.txt" >/dev/null 2>&1
+expect_code 2 "$?" "neo4j result: no output at all is 'unknown', not 'nothing present'"
+neo_result_names "$WORK/does-not-exist.txt" >/dev/null 2>&1
+expect_code 2 "$?" "neo4j result: a missing file is 'unknown'"
+
 # --- the shipped script ----------------------------------------------------
 
 SCRIPT=$(cat "$TOOLS/check-store-drift.sh")

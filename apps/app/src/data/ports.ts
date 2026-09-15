@@ -14,7 +14,8 @@ import type { Read } from "./read";
 export interface DataSource {
   /**
    * list_orgs and list_workspaces ({orgSlug}) for a signed-in person before
-   * any organization context; caller: features/auth/cli-consent.ts. The only
+   * any organization context; callers: features/shell/landing.ts and
+   * features/auth/cli-consent.ts. The only
    * port that takes a PretenantCtx, so src/data/live/pretenant.ts is the only
    * caller of kernelRead's PretenantCtx overload.
    */

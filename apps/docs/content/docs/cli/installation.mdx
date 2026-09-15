@@ -46,7 +46,7 @@ Two environment variables change where it looks and where it writes:
 | `OXAGEN_INSTALL_DIR` | `~/.local/bin` | Where the binary is written |
 | `OXAGEN_INSTALL_BASE` | `https://cli.oxagen.sh/releases/latest` | Where releases are fetched from |
 
-If `~/.local/bin` is not on your `PATH`, the script tells you the line to add to your shell profile. Read the script before you run it — it is 79 lines and does nothing else.
+If `~/.local/bin` is not on your `PATH`, the script tells you the line to add to your shell profile. Read the script before you run it: it is 79 lines and does nothing else.
 
 ## From the monorepo
 
@@ -91,7 +91,7 @@ oxagen --version
 ```
 
 <Callout type="info">
-The bundle is a single `.mjs` file with no native dependencies — it needs only Node.js 20 or newer on `PATH`.
+The bundle is a single `.mjs` file with no native dependencies: it needs only Node.js 20 or newer on `PATH`.
 </Callout>
 
 ## From npm
@@ -99,7 +99,7 @@ The bundle is a single `.mjs` file with no native dependencies — it needs only
 <Callout type="warn">
 **A global npm install can fail today.** The published `@oxagen/cli` package still
 carries internal workspace dependencies, and its launcher expects `tsx` on your
-`PATH` — so `npm i -g @oxagen/cli` may not produce a working `oxagen` outside the
+`PATH`, so `npm i -g @oxagen/cli` may not produce a working `oxagen` outside the
 monorepo. Use the **install script** above instead. A self-contained npm package
 is in progress; this section will lose its warning when it lands.
 </Callout>

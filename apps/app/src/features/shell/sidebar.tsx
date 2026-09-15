@@ -17,14 +17,22 @@ import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 
-/** Sidebar sections for the current URL. Shared by the desktop rail, the phone drawer and <MobileNav>. */
+/**
+ * Sidebar sections for the current URL. Shared by the desktop rail, the phone
+ * drawer, <ShellMobileNav> and the command menu. The workspace is the one in
+ * the URL or, on an organization page, the first `shell.context` lists, so the
+ * workspace links always point somewhere the viewer can open.
+ */
 export function useSidebarSections(data: ShellData): {
   sections: NavSection[];
   ws: string | null;
   pathname: string;
 } {
   const pathname = usePathname();
-  const ws = parseShellPath(pathname).ws;
+  const { context } = data;
+  const ws =
+    parseShellPath(pathname).ws ??
+    (context.ok ? (context.value.workspaces[0]?.slug ?? null) : null);
   return { sections: sidebarSections(data.org.slug, ws), ws, pathname };
 }
 
@@ -93,13 +101,13 @@ export function SidebarHeader({ data }: { data: ShellData }) {
       >
         <OxagenWordmark className="h-6" />
       </SafeLink>
-      <OrgSwitcher org={data.org} />
-      <WorkspaceSwitcher current={ws} />
+      <OrgSwitcher data={data} />
+      <WorkspaceSwitcher data={data} ws={ws} />
     </div>
   );
 }
 
-/** The desktop rail. Hidden below `md`, where <MobileNav> and the drawer take over. */
+/** The desktop rail. Hidden below `md`, where the thumb bar and the drawer take over. */
 export function Sidebar({ data }: { data: ShellData }) {
   const t = useTranslations("shell.sidebar");
   return (

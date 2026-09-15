@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   breadcrumbs,
-  currentNavKey,
+  isMoreCurrent,
   isNavItemCurrent,
+  MORE_SHEET,
+  type NavKey,
+  ORG_NAV,
   orgHref,
-  orgSegmentKey,
   parseShellPath,
   sidebarSections,
+  THUMB_SLOTS,
+  WORKSPACE_NAV,
   workspaceHref,
 } from "./nav";
+
+const ALL_KEYS: readonly NavKey[] = [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"];
 
 describe("parseShellPath", () => {
   it("reads organization, workspace and the rest", () => {
@@ -20,7 +26,7 @@ describe("parseShellPath", () => {
   });
 
   it("treats the static organization segments as organization pages, not workspaces", () => {
-    for (const segment of ["billing", "audit", "api-keys"])
+    for (const segment of ["billing", "api-keys"])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
         ws: null,
@@ -29,9 +35,8 @@ describe("parseShellPath", () => {
   });
 
   it("does not mistake an object prototype key for an organization segment", () => {
-    expect(orgSegmentKey("toString")).toBeNull();
-    expect(orgSegmentKey("constructor")).toBeNull();
     expect(parseShellPath("/acme/toString").ws).toBe("toString");
+    expect(parseShellPath("/acme/constructor").ws).toBe("constructor");
   });
 
   it("ignores the query and hash, decodes segments and survives malformed escapes", () => {
@@ -51,26 +56,33 @@ describe("parseShellPath", () => {
   });
 });
 
-describe("currentNavKey and isNavItemCurrent", () => {
+describe("isNavItemCurrent", () => {
   it.each([
     ["/acme", "organization"],
     ["/acme/billing", "billing"],
-    ["/acme/audit/exports", "audit"],
     ["/acme/api-keys", "apiKeys"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
-    ["/acme/core-platform/ontology", "ontology"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
-  ])("%s → %s", (path, key) => {
-    expect(currentNavKey(path)).toBe(key);
+  ] as const)("%s → %s", (path, key) => {
+    expect(
+      ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
+    ).toEqual(key === "organization" ? [] : [key]);
+    expect(isNavItemCurrent("organization", path)).toBe(
+      key === "organization" || key === "apiKeys",
+    );
   });
 
-  it("returns null outside the ten pages", () => {
-    expect(currentNavKey("/")).toBeNull();
-    expect(currentNavKey("/acme/core-platform/scenarios")).toBeNull();
+  it("marks nothing current on a path no nav item holds, Ontology's included (negative)", () => {
+    for (const path of [
+      "/",
+      "/acme/core-platform/scenarios",
+      "/acme/core-platform/ontology",
+    ])
+      expect(ALL_KEYS.filter((k) => isNavItemCurrent(k, path))).toEqual([]);
   });
 
   it("marks Organization current for its API keys page", () => {
@@ -102,30 +114,20 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the baseline sections, in order", () => {
+  it("has the mockup's seven links in order, and no Run, Ontology or Audit entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
-    expect(sections[0]?.items.map((i) => i.key)).toEqual([
-      "fleet",
-      "agents",
-      "tools",
-      "ontology",
-      "steering",
-      "spend",
+    expect(sections.flatMap((s) => s.items)).toEqual([
+      { key: "fleet", href: "/acme/core-platform" },
+      { key: "agents", href: "/acme/core-platform/agents" },
+      { key: "tools", href: "/acme/core-platform/tools" },
+      { key: "steering", href: "/acme/core-platform/steering" },
+      { key: "spend", href: "/acme/core-platform/spend" },
+      { key: "organization", href: "/acme" },
+      { key: "billing", href: "/acme/billing" },
     ]);
-    expect(sections[1]?.items.map((i) => i.key)).toEqual([
-      "organization",
-      "billing",
-      "audit",
-    ]);
-    expect(sections[0]?.items[0]).toEqual({
-      key: "fleet",
-      href: "/acme/core-platform",
-    });
-    expect(sections[1]?.items[2]).toEqual({
-      key: "audit",
-      href: "/acme/audit",
-    });
+    for (const { href } of sections.flatMap((s) => s.items))
+      expect(href).not.toMatch(/\/(ontology|audit|runs)(\/|$)/);
   });
 
   it("carries a key and an href per item and nothing else (negative)", () => {
@@ -139,6 +141,36 @@ describe("sidebarSections", () => {
     expect(sidebarSections("acme", null).map((s) => s.key)).toEqual([
       "organization",
     ]);
+  });
+});
+
+describe("the phone's thumb bar and More sheet", () => {
+  it("split the seven sidebar keys: four slots, the rest in the sheet, each key once", () => {
+    expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
+    expect(MORE_SHEET).toEqual(["steering", "organization", "billing"]);
+    expect([...THUMB_SLOTS, ...MORE_SHEET].sort()).toEqual(
+      [...WORKSPACE_NAV, ...ORG_NAV].sort(),
+    );
+  });
+
+  it("marks More current on a page the sheet holds, API keys under Organization included", () => {
+    for (const path of [
+      "/acme",
+      "/acme/api-keys",
+      "/acme/billing",
+      "/acme/core-platform/steering",
+    ])
+      expect(isMoreCurrent(path)).toBe(true);
+  });
+
+  it("does not mark More current on a thumb-bar page or outside the nav (negative)", () => {
+    for (const path of [
+      "/",
+      "/acme/core-platform",
+      "/acme/core-platform/tools",
+      "/acme/core-platform/spend",
+    ])
+      expect(isMoreCurrent(path)).toBe(false);
   });
 });
 

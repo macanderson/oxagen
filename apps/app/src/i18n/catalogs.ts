@@ -1,6 +1,6 @@
 // Message catalogs (spec §15 "Language"): ICU MessageFormat, English source, no
 // locale routing. Each JSON file directly under messages/ holds top-level
-// namespaces. `en.json` carries the shared ones (app, routes, states); each page
+// namespaces. `en.json` carries the shared ones (app, routes, unrecorded); each page
 // lane adds messages/<page>.json with its own namespace and nothing else. The
 // directory is the list: no shared array names the files, so two lanes adding
 // catalogs never edit the same line. No two files may declare one namespace.
@@ -10,12 +10,12 @@ export type Messages = Record<string, unknown>;
 export const DEFAULT_LOCALE = "en";
 
 /** The shared catalog. It must exist, and it merges first. */
-export const SHARED_CATALOG = "en";
+const SHARED_CATALOG = "en";
 
 /** A catalog stem is kebab-case, matching the page folder that owns it. */
 const STEM = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
-export class DuplicateNamespaceError extends Error {
+class DuplicateNamespaceError extends Error {
   readonly code = "i18n_duplicate_namespace";
 
   constructor(
@@ -29,7 +29,7 @@ export class DuplicateNamespaceError extends Error {
   }
 }
 
-export class CatalogError extends Error {
+class CatalogError extends Error {
   readonly code = "i18n_catalog_invalid";
 
   constructor(

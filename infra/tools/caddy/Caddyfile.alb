@@ -83,6 +83,21 @@
 			}
 		}
 
+		# --- Internal ---------------------------------------------------------
+		# Specs, pricing and plans; must not be publicly readable. The password
+		# check is NOT here: it lives in the site's own Caddy container
+		# (tools/internal-docs/Caddyfile), which reads the bcrypt hash from
+		# Parameter Store at start. Putting it in this file would mean either
+		# committing the hash or rendering it on the node, and a rendered file
+		# breaks the boot path: user-data copies this file raw from S3, the
+		# reload fails, and every hostname keeps serving 503.
+
+		@internal host internal.oxagen.sh
+		handle @internal {
+			encode gzip zstd
+			reverse_proxy 127.0.0.1:3003
+		}
+
 		respond 404
 	}
 }

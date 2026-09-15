@@ -11,7 +11,7 @@ This walkthrough assumes you've [installed the CLI](/docs/cli/installation) and 
 oxagen init
 ```
 
-`init` resolves an org and workspace — picking interactively when you belong to more than one — and writes `.oxagen/workspace.json`. Every other command reads that file to scope itself, so you don't pass `--org`/`--workspace` on each invocation.
+`init` resolves an org and workspace, picking interactively when you belong to more than one, and writes `.oxagen/workspace.json`. Every other command reads that file to scope itself, so you don't pass `--org`/`--workspace` on each invocation.
 
 It then checks whether the workspace has a GitHub connection and offers to create one, so the knowledge graph has a source to ground on. Re-running `init` later reuses the existing link instead of re-prompting.
 
@@ -25,7 +25,7 @@ oxagen init --no-link   # skip the linker (CI, or when the link already exists)
 oxagen budget show
 ```
 
-This prints each configured spend ceiling — the org's and the active workspace's — with its live burn: period-to-date spend, projection to the end of the period, and whether the admission gate is currently denying.
+This prints each configured spend ceiling, the org's and the active workspace's, with its live burn: period-to-date spend, projection to the end of the period, and whether the admission gate is currently denying.
 
 Set one (org Owner, Admin, or Billing only):
 
@@ -37,7 +37,7 @@ See [Spend budgets](/docs/cli/budget) for the threshold ladder and the rolling-w
 
 ## 3. Price a workload before you run it
 
-`oxagen cost` makes no network call — it prices token counts against the rate card baked into the CLI:
+`oxagen cost` makes no network call: it prices token counts against the rate card baked into the CLI:
 
 ```bash
 oxagen cost --in 200000 --out 40000
@@ -47,7 +47,7 @@ With no `--model` it compares every priced model cheapest-first and reports the 
 
 ## 4. Explain what an agent did
 
-Given an execution id, render the run as a span tree — every step, tool call, and child execution:
+Given an execution id, render the run as a span tree: every step, tool call, and child execution:
 
 ```bash
 oxagen trace exec_01J8…
@@ -62,7 +62,7 @@ Child executions appear nested under the step that spawned them, so one trace co
 oxagen graph search -q "where do we enforce tenant isolation?" -n 5
 ```
 
-The query runs online and returns only the bounded results your current workspace grants allow — there is no local replica of the workspace graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
+The query runs online and returns only the bounded results your current workspace grants allow: there is no local replica of the workspace graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
 
 ## 6. Curate what agents have learned
 
@@ -90,6 +90,6 @@ Nothing in this CLI runs an agent. Oxagen governs, grounds, explains, meters and
 
 ## Next steps
 
-- [Command reference](/docs/cli/commands) — every command and flag.
-- [Spend budgets](/docs/cli/budget) — the ceilings that gate agent runs.
-- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the two grounding surfaces.
+- [Command reference](/docs/cli/commands): every command and flag.
+- [Spend budgets](/docs/cli/budget): the ceilings that gate agent runs.
+- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph): the two grounding surfaces.
