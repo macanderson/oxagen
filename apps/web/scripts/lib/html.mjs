@@ -69,16 +69,7 @@ export function siteHeader({ wordmark, current }) {
   <div class="nav-in">
     <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
     <nav class="nav-links" aria-label="Primary">
-      <div class="drop" data-open="false">
-        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
-        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
-          <a href="/products/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
-          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
-          <a href="/products/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
-          <div class="drop-sep"></div>
-          <div class="drop-foot">one loop · three deployments</div>
-        </div>
-      </div>
+      <a href="/products/oxagen">Product</a>
       <a href="/blog"${cur("blog")}>Research</a>
       <a href="/#field-manual">Field manual</a>
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
@@ -93,10 +84,8 @@ export function siteHeader({ wordmark, current }) {
 
 <div class="drawer" id="drawer" data-open="false">
   <div class="wrap">
-    <h5>Products</h5>
-    <a href="/products/stella">Stella — the terminal agent</a>
+    <h5>Product</h5>
     <a href="/products/oxagen">Oxagen — the control plane</a>
-    <a href="/products/private-llms">Private LLMs</a>
     <h5>More</h5>
     <a href="/blog">Research</a>
     <a href="/#field-manual">Field manual</a>
@@ -115,12 +104,10 @@ export function siteFooter({ wordmark, pillars }) {
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
         <p>Everyone has the same models.<br>Your edge is context.</p>
       </div>
-      <nav class="foot-col" aria-label="Products">
-        <h4>Products</h4>
+      <nav class="foot-col" aria-label="Product">
+        <h4>Product</h4>
         <ul>
-          <li><a href="/products/stella">Stella — the agent</a></li>
           <li><a href="/products/oxagen">Oxagen — the platform</a></li>
-          <li><a href="/products/private-llms">Private LLMs</a></li>
           <li><a href="/#demo">Get a demo</a></li>
         </ul>
       </nav>
