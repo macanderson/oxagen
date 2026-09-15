@@ -270,9 +270,44 @@ export interface BillingCheckoutDynamicCreditInput {
   cancelUrl: string;
 }
 
+/**
+ * A block purchase of governed action units (ADR-055 §6,
+ * apps/app/ARCHITECTURE.md §3.9 item 11). One `price_data` line at the block
+ * price, `quantity: blocks`; the session and its invoice carry the terms the
+ * purchase was priced at, so the webhook grant needs nothing from the
+ * handler. The card Checkout collects is saved for off-session use (the
+ * recorder's auto top-up).
+ */
+export interface BillingCheckoutGauInput {
+  customerId: string;
+  orgId: string;
+  /** Units purchased: `blocks × block size`. */
+  quantityGau: number;
+  blocks: number;
+  /** Price of one block in minor units of `currency`; a whole number by the plans/contract_terms CHECK. */
+  blockPriceCents: number;
+  /** Micro-dollars per GAU, recorded on the session for the settlement row. */
+  ratePerGauMicros: bigint;
+  /** ISO 4217, lower case. */
+  currency: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 export interface BillingCheckoutResult {
   sessionId: string;
   url: string;
+}
+
+/** The card a completed Checkout Session collected and saved to the customer. */
+export interface BillingCheckoutPaymentMethod {
+  id: string;
+  /** Provider payment-method type (`card`, `link`, …). */
+  type: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
 }
 
 // ── Credit-pack line items ───────────────────────────────────────────────────
@@ -342,10 +377,17 @@ export interface BillingCheckoutSession {
   id: string;
   mode: string;
   paymentStatus: string;
+  /** Provider customer the session was created for; null for a guest session. */
+  customerId: string | null;
   /** Metadata on the session (e.g. org_id). */
   metadata: Record<string, string>;
   /** Provider subscription id created from this session (if mode=subscription). */
   subscriptionId: string | null;
+  /**
+   * The invoice a payment-mode session issued, present only when the session
+   * was created with `invoice_creation` enabled (the GAU block purchase).
+   */
+  invoiceId: string | null;
 }
 
 // ── BillingProvider interface ────────────────────────────────────────────────
@@ -464,6 +506,24 @@ export interface BillingProvider {
   getCheckoutSessionCreditPacks(
     sessionId: string,
   ): Promise<BillingCreditPackLineItem[]>;
+
+  /**
+   * Create the block-purchase checkout session of ADR-055 §6: `mode: "payment"`,
+   * one inline `price_data` line, an invoice for the payment, and the card
+   * saved for off-session use. No pre-created Price is involved.
+   */
+  createGauCheckout(
+    input: BillingCheckoutGauInput,
+  ): Promise<BillingCheckoutResult>;
+
+  /**
+   * The payment method a completed checkout session charged and saved, or
+   * null when the session holds none (unpaid, or a method Checkout did not
+   * attach).
+   */
+  getCheckoutPaymentMethod(
+    sessionId: string,
+  ): Promise<BillingCheckoutPaymentMethod | null>;
 
   // ── Webhook ─────────────────────────────────────────────────────────────────
 

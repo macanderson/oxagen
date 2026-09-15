@@ -52,12 +52,35 @@ vi.mock("./client", () => ({
 
 // Mock grants so their internal syncSubscriptionFromStripe calls don't leak
 // into webhook dispatch assertions. Grant correctness is tested in grants.test.ts.
+// The real module is kept so one test can run the real plan-credit grant
+// against a governed-action invoice and show it grants nothing.
 const grantPlanCreditsForInvoicePaidMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("./grants", () => ({
-  grantPlanCreditsForInvoicePaid: grantPlanCreditsForInvoicePaidMock,
-  grantCreditPackForCheckout: vi.fn().mockResolvedValue(undefined),
-  grantFreeCredits: vi.fn().mockResolvedValue(undefined),
-}));
+const grantCreditPackForCheckoutMock = vi.fn().mockResolvedValue(undefined);
+const realGrants: { module: typeof import("./grants") | null } = {
+  module: null,
+};
+vi.mock("./grants", async (importOriginal) => {
+  realGrants.module = await importOriginal<typeof import("./grants")>();
+  return {
+    grantPlanCreditsForInvoicePaid: grantPlanCreditsForInvoicePaidMock,
+    grantCreditPackForCheckout: grantCreditPackForCheckoutMock,
+    grantFreeCredits: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+// The governed-action Checkout grant (gau-settlements.ts) has its own tests;
+// here only the dispatch on the session's oxagen_kind is asserted.
+const grantGauPurchaseForCheckoutMock = vi.fn().mockResolvedValue(undefined);
+vi.mock(
+  "./gau-settlements",
+  () =>
+    ({
+      grantGauPurchaseForCheckout: grantGauPurchaseForCheckoutMock,
+    }) satisfies Pick<
+      typeof import("./gau-settlements"),
+      "grantGauPurchaseForCheckout"
+    >,
+);
 
 // Mock dunning handlers. Spread the REAL module so resolveOrgFromInvoice — which
 // the real receipts.ts imports — stays available; only the two lifecycle handlers
@@ -621,8 +644,10 @@ describe("processStripeEvent", () => {
       id: "cs_test_checkout_001",
       mode: "payment",
       paymentStatus: "paid",
+      customerId: "cus_test_001",
       metadata: { org_id: "org-abc", credits: "500" },
       subscriptionId: null,
+      invoiceId: null,
     };
 
     const event = makeWebhookEvent({
@@ -634,6 +659,96 @@ describe("processStripeEvent", () => {
 
     const result = await processStripeEvent(event);
     expect(result).toEqual({ status: "applied" });
+    expect(grantCreditPackForCheckoutMock).toHaveBeenCalledWith(
+      checkoutSession,
+    );
+    expect(grantGauPurchaseForCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("checkout.session.completed — a gau_purchase session goes to grantGauPurchaseForCheckout and never to the credit-pack grant", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-12b" }]);
+
+    const checkoutSession = {
+      id: "cs_test_gau_001",
+      mode: "payment",
+      paymentStatus: "paid",
+      customerId: "cus_test_001",
+      metadata: {
+        oxagen_kind: "gau_purchase",
+        org_id: "org-abc",
+        gau_quantity: "5000",
+        block_size_gau: "5000",
+        rate_per_gau_micros: "5000",
+        currency: "usd",
+      },
+      subscriptionId: null,
+      invoiceId: "in_gau_001",
+    };
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_checkout_gau_001",
+      type: "checkout.session.completed",
+      subscriptionId: undefined,
+      checkoutSession,
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+    expect(grantGauPurchaseForCheckoutMock).toHaveBeenCalledWith(
+      checkoutSession,
+    );
+    expect(grantCreditPackForCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("invoice.paid for a governed-action purchase invoice mirrors it, sends the receipt and grants no plan credits", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-gau-inv" }]);
+    // The real plan-credit grant, against the invoice a Checkout with
+    // invoice_creation issues: billing_reason 'manual', no subscription, the
+    // org in the invoice metadata.
+    grantPlanCreditsForInvoicePaidMock.mockImplementationOnce(
+      realGrants.module!.grantPlanCreditsForInvoicePaid,
+    );
+
+    const invoice = {
+      id: "in_gau_001",
+      providerInvoiceId: "in_gau_001",
+      number: "INV-GAU-001",
+      status: "paid" as const,
+      amountDueCents: 2500,
+      amountPaidCents: 2500,
+      amountRemainingCents: 0,
+      currency: "usd",
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      dueAt: null,
+      paidAt: new Date(),
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/gau",
+      invoicePdfUrl: null,
+      subscriptionId: null,
+      orgId: "org-abc",
+      billingReason: "manual",
+      lineItems: [],
+    };
+
+    const result = await processStripeEvent(
+      makeWebhookEvent({
+        providerEventId: "evt_inv_gau_001",
+        type: "invoice.paid",
+        subscriptionId: undefined,
+        invoice,
+      }),
+    );
+
+    expect(result).toEqual({ status: "applied" });
+    expect(syncInvoiceMock).toHaveBeenCalledWith("in_gau_001");
+    // No plan credits: the real grant left before any subscription sync or
+    // ledger insert (the two inserts are the event row and its processing row).
+    expect(syncSubscriptionMock).not.toHaveBeenCalled();
+    expect(dbState.instance!.insert).toHaveBeenCalledTimes(2);
+    expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
+    expect(notifyOrgManagersMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-abc", kind: "system" }),
+    );
   });
 
   it("checkout.session.completed — no-ops when checkoutSession is missing", async () => {
@@ -675,6 +790,74 @@ describe("processStripeEvent", () => {
     expect(result).toEqual({ status: "applied" });
     // The detach path calls db.update(paymentMethods).set({ deletedAt })
     expect(dbState.instance!.update).toHaveBeenCalled();
+  });
+
+  it("payment_method.attached — a Free org with no subscription mirrors through org_billing_settings.stripe_customer_id", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-15a" }]);
+    dbState.instance!.query.orgBillingSettings.findFirst = vi
+      .fn()
+      .mockResolvedValue({ orgId: "org-free" });
+    dbState.instance!.query.subscriptions.findFirst = vi
+      .fn()
+      .mockResolvedValue(null);
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_pm_attached_free_001",
+      type: "payment_method.attached",
+      subscriptionId: undefined,
+      paymentMethod: {
+        id: "pm_free_001",
+        customerId: "cus_free_001",
+        type: "card",
+        brand: "visa",
+        last4: "4242",
+        expMonth: 3,
+        expYear: 2029,
+      },
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+    // The event row, the payment_methods upsert, the processing row.
+    expect(dbState.instance!.insert).toHaveBeenCalledTimes(3);
+    const upsert = dbState.instance!.insert.mock.results[1]!.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    expect(upsert.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-free",
+        stripeCustomerId: "cus_free_001",
+        stripePaymentMethodId: "pm_free_001",
+        isDefault: false,
+      }),
+    );
+    expect(
+      dbState.instance!.query.subscriptions.findFirst,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("payment_method.attached — a customer known to neither table is skipped", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-15b" }]);
+
+    const result = await processStripeEvent(
+      makeWebhookEvent({
+        providerEventId: "evt_pm_attached_unknown_001",
+        type: "payment_method.attached",
+        subscriptionId: undefined,
+        paymentMethod: {
+          id: "pm_unknown_001",
+          customerId: "cus_unknown_001",
+          type: "card",
+          brand: "visa",
+          last4: "1111",
+          expMonth: 1,
+          expYear: 2030,
+        },
+      }),
+    );
+    expect(result).toEqual({ status: "applied" });
+    // The event row and the processing row only.
+    expect(dbState.instance!.insert).toHaveBeenCalledTimes(2);
   });
 
   it("payment_method.attached — upserts payment method when subscription exists", async () => {

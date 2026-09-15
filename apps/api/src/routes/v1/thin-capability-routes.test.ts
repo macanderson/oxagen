@@ -62,6 +62,7 @@ import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingAutoTopupSet } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
+import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -117,6 +118,7 @@ import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingAutoTopupSetRoute } from "./billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
+import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -529,6 +531,23 @@ const ROUTES: ThinRoute[] = [
     method: "GET",
     capability: billingGauBucketGet.name,
     expectedInput: {},
+    status: 200,
+  },
+  {
+    file: "billing.gau_bucket.purchase",
+    route: billingGauBucketPurchaseRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingGauBucketPurchase.name,
+    body: {
+      quantityGau: 10_000,
+      successPath: "/acme/billing?checkout=success",
+      cancelPath: "/acme/billing?checkout=cancel",
+    },
+    invalidBody: {
+      quantityGau: 10_000,
+      successPath: "https://evil.example/",
+      cancelPath: "/acme/billing",
+    },
     status: 200,
   },
   {

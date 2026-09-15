@@ -79,6 +79,7 @@ import "./contracts/billing.contract_rate.get";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.evidence_retention";
 import "./contracts/billing.gau_bucket.get";
+import "./contracts/billing.gau_bucket.purchase";
 import "./contracts/billing.invoice.list";
 import "./contracts/billing.org_terms.set";
 import "./contracts/billing.subscription.read";

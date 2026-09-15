@@ -1015,6 +1015,13 @@
    "tier": "org+workspace"
   },
   {
+   "capability": "purchase_gau_bucket",
+   "file": "apps/api/src/routes/v1/billing.gau_bucket.purchase.ts",
+   "method": "POST",
+   "path": "/v1/:org_slug/:workspace_slug/billing/gau-bucket/purchase",
+   "tier": "org+workspace"
+  },
+  {
    "capability": "list_invoices",
    "file": "apps/api/src/routes/v1/billing.invoice.list.ts",
    "method": "POST",
@@ -3728,6 +3735,25 @@
    },
    "mode": "sync",
    "name": "purchase_credits",
+   "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+   ]
+  },
+  {
+   "domain": "billing",
+   "file": "billing.gau_bucket.purchase.ts",
+   "handlerFile": "packages/handlers/src/billing.gau_bucket.purchase.ts",
+   "layers": {
+    "api": true,
+    "docs": true,
+    "mcp": true,
+    "schema": true,
+    "unit": true
+   },
+   "mode": "sync",
+   "name": "purchase_gau_bucket",
    "surfaces": [
     "agent",
     "api",
@@ -14469,6 +14495,17 @@
     "writes": []
    },
    {
+    "domain": "billing",
+    "name": "purchase_gau_bucket",
+    "reads": [],
+    "surfaces": [
+     "agent",
+     "api",
+     "mcp"
+    ],
+    "writes": []
+   },
+   {
     "domain": "conversation",
     "name": "purge_conversations",
     "reads": [],
@@ -15377,7 +15414,7 @@
     "writes": []
    }
   ],
-  "contentHash": "2498ca3cae7045f6107cf4c53e02b0ac4f566d28220a743499fdbe49081202a9",
+  "contentHash": "3b1c43527897d226f5c138b82748be87aee461860260a5faa794f465de4b42c8",
   "domains": [
    {
     "name": "agent",
@@ -30755,6 +30792,7 @@
   "billing.credits.purchase",
   "billing.evidence_retention",
   "billing.gau_bucket.get",
+  "billing.gau_bucket.purchase",
   "billing.invoice.list",
   "billing.subscription.read",
   "billing.subscription_upgrade.start",
