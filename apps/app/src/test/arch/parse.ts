@@ -23,6 +23,16 @@ export const APP_DIR = fileURLToPath(new URL("../../..", import.meta.url));
  */
 export const WHOLE_TREE_TIMEOUT_MS = 60_000;
 
+/**
+ * The budget for a test that builds a type-checked program over every
+ * production module. Following its imports loads about 5.2k declaration files
+ * (next, @base-ui, drizzle, stripe); catalog-used.test.ts read 2.5s bare and
+ * 6.9s under coverage on a laptop, and passed 60s inside CI job 104360776175
+ * (run 34962987113), where WHOLE_TREE_TIMEOUT_MS failed it. It sits an order of
+ * magnitude above that CI reading, for the reason WHOLE_TREE_TIMEOUT_MS gives.
+ */
+export const TYPE_CHECKED_TREE_TIMEOUT_MS = 600_000;
+
 export type SourceText = {
   /** Posix path relative to APP_DIR, e.g. `src/ui/money.tsx`. */
   readonly file: string;

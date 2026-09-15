@@ -20,7 +20,7 @@ import {
   lineOf,
   listFiles,
   productionFiles,
-  WHOLE_TREE_TIMEOUT_MS,
+  TYPE_CHECKED_TREE_TIMEOUT_MS,
 } from "./parse";
 
 const RULE = "catalog-used";
@@ -242,7 +242,7 @@ let program: ts.Program;
 
 beforeAll(() => {
   program = createProgram([...SOURCES, ...PROBE_SOURCES]);
-}, WHOLE_TREE_TIMEOUT_MS);
+}, TYPE_CHECKED_TREE_TIMEOUT_MS);
 
 describe("catalog keys", () => {
   it(
@@ -253,7 +253,7 @@ describe("catalog keys", () => {
       const keys = leafKeys(loadCatalogs(path.join(APP_DIR, "messages")));
       expect(unusedKeys(keys, [...used, ...REV1_ROUTE_TITLE_KEYS])).toEqual([]);
     },
-    WHOLE_TREE_TIMEOUT_MS,
+    TYPE_CHECKED_TREE_TIMEOUT_MS,
   );
 
   it("reads every UNRECORDED row through NotRecorded's unrecorded.${section}", () => {
