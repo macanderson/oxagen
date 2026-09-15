@@ -5,8 +5,10 @@
  * 2. Binds a one-shot HTTP server to 127.0.0.1 on an ephemeral port.
  * 3. Opens the Oxagen app's /cli/authorize page in the default browser.
  * 4. Waits for the callback GET /callback?code=…&state=…, validates state,
- *    sends a friendly "you can close this tab" HTML page, then exchanges the
- *    authorization code for a token via POST /v1/auth/cli/token.
+ *    exchanges the authorization code for a token via POST /v1/auth/cli/token,
+ *    then 302s the browser to the app's /cli/complete page. Errors are the
+ *    one case served as HTML from the loopback port: they carry a message the
+ *    app never saw.
  * 5. Returns { token, orgSlug, workspaceSlug } for the caller to persist.
  *
  * Security notes:
@@ -67,27 +69,18 @@ function asTokenExchangeResponse(body: unknown): TokenExchangeResponse {
   return { token, orgSlug, workspaceSlug };
 }
 
-const SUCCESS_HTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Oxagen — Login complete</title>
-  <style>
-    body { font-family: system-ui, sans-serif; display: flex; justify-content: center;
-           align-items: center; min-height: 100vh; margin: 0; background: #f4f4f5; }
-    .card { background: #fff; border-radius: 10px; padding: 2.5rem 3rem;
-            text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,.10); max-width: 380px; }
-    h1 { color: #16a34a; margin: 0 0 .6rem; font-size: 1.5rem; }
-    p  { color: #555; margin: 0; line-height: 1.5; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Login complete</h1>
-    <p>You can close this tab and return to your terminal.</p>
-  </div>
-</body>
-</html>`;
+/**
+ * Where the browser goes once the CLI holds its token: a page on the app
+ * origin, reached by a 302 from the loopback listener. Serving HTML from
+ * 127.0.0.1 left the user on a bare card at a localhost address, which reads
+ * as a misdirected redirect rather than a finished login.
+ */
+export const CLI_LOGIN_COMPLETE_PATH = "/cli/complete";
+
+/** The absolute completion URL for an app origin (trailing slashes dropped). */
+export function cliLoginCompleteUrl(appUrl: string): string {
+  return `${appUrl.replace(/\/+$/, "")}${CLI_LOGIN_COMPLETE_PATH}`;
+}
 
 function makeErrorHtml(message: string): string {
   const escaped = message
@@ -254,6 +247,16 @@ export async function browserLogin({
             res.end(html, r);
           });
 
+        /** Send the browser to `location` and wait for the response to flush. */
+        const sendRedirect = (location: string): Promise<void> =>
+          new Promise<void>((r) => {
+            res.writeHead(302, {
+              Location: location,
+              "Cache-Control": "no-store",
+            });
+            res.end(r);
+          });
+
         void (async () => {
           try {
             // ── CSRF guard ────────────────────────────────────────────────────
@@ -317,7 +320,7 @@ export async function browserLogin({
             }
 
             const data = asTokenExchangeResponse(await exchangeRes.json());
-            await sendHtml(SUCCESS_HTML);
+            await sendRedirect(cliLoginCompleteUrl(appUrl));
             closeAndSettle(() => resolve(data));
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
