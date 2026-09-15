@@ -143,8 +143,8 @@ export interface ActingCredential {
  * The user a call acts as: the signed-in user, or, for an API-key call (the
  * only credential MCP accepts), the key's creator
  * (`auth.api_keys.created_by_user_id`), the mapping the kernel's enterprise
- * IAM path makes (fetch-authz.ts) and `assign_agent_role` makes for its
- * ceiling. A deleted key, a key of another org, a key with no recorded
+ * IAM path makes (fetch-authz.ts); `assign_agent_role` reads its delegation
+ * ceiling for this user. A deleted key, a key of another org, a key with no recorded
  * creator, or no credential at all resolves to null, which `assertOrgRole`
  * refuses as `no_principal`. Every handler that runs `assertOrgRole` passes
  * this user to it and records it as the actor, so a key acts with its
