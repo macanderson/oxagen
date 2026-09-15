@@ -12,13 +12,15 @@
  *     the org and workspace filters, the expiry guard and the unresolved
  *     guard stay in the WHERE either way
  *   - no row matched (unknown, expired, already resolved, wrong tenant) →
- *     HandlerError conflict `approval_expired`, no NOTIFY
+ *     HandlerError conflict `approval_expired`, no NOTIFY; the same when the
+ *     row lapsed between the read and the UPDATE
  *   - through the kernel with a fake usage recorder: a matched decision is
  *     recorded once; the conflict and the forbidden paths record nothing
  *   - mandate hop (ADR-059): a row carrying mandate_id and tool_call_id →
  *     `denied` releases the reservation under the mandate lock and reports
- *     `released`; `approved` releases nothing and reports `held`; a row with
- *     no mandate reports null and never touches the ledger
+ *     `released`, in the one transaction the UPDATE runs in; `approved`
+ *     releases nothing and reports `held`; a row with no mandate reports
+ *     null and never touches the ledger
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,13 +77,22 @@ type Tenant = {
   principalId: string | null;
   orgRole: string | null;
   workspaceRole: string | null;
-  /** The uuid RETURNING yields when the UPDATE matched a row; null for no match. */
+  /** The uuid of the pending row the read finds; null for no match. */
   matchedRowId: string | null;
   /** The mandate hop on the matched row (ADR-059); absent for a chat gate row. */
   mandate?: { mandateId: string; toolCallId: string };
+  /** False when the row lapsed between the read and the UPDATE. */
+  updateMatches?: boolean;
 };
 
-type Captured = { set: Record<string, unknown> | null; where: SQL | null };
+type Captured = {
+  set: Record<string, unknown> | null;
+  where: SQL | null;
+  /** The tx the UPDATE ran on. */
+  updateTx: unknown;
+  /** Whether `release` had run when the UPDATE started. */
+  releasedBeforeUpdate: boolean;
+};
 
 /**
  * Answers the role lookups by the table read and the scope the WHERE pinned
@@ -96,7 +107,16 @@ function makeTx(tenant: Tenant, captured: Captured) {
     const name = pinsWorkspace ? tenant.workspaceRole : tenant.orgRole;
     return name ? [{ roleName: name }] : [];
   };
-  return {
+  const pendingRow = () =>
+    tenant.matchedRowId
+      ? [
+          {
+            mandateId: tenant.mandate?.mandateId ?? null,
+            toolCallId: tenant.mandate?.toolCallId ?? null,
+          },
+        ]
+      : [];
+  const tx = {
     select: () => ({
       from: (table: unknown) => {
         let lastWhere: SQL | null = null;
@@ -114,6 +134,9 @@ function makeTx(tenant: Tenant, captured: Captured) {
             }
             if (table === schema.principalRoleAssignments) {
               return Promise.resolve(roleRows(lastWhere));
+            }
+            if (table === schema.approvalRequests) {
+              return Promise.resolve(pendingRow());
             }
             throw new Error("unexpected table");
           },
@@ -140,20 +163,16 @@ function makeTx(tenant: Tenant, captured: Captured) {
       return {
         set: (values: Record<string, unknown>) => {
           captured.set = values;
+          captured.updateTx = tx;
+          captured.releasedBeforeUpdate = mocks.release.mock.calls.length > 0;
           return {
             where: (cond: SQL) => {
               captured.where = cond;
               return {
                 returning: () =>
                   Promise.resolve(
-                    tenant.matchedRowId
-                      ? [
-                          {
-                            id: tenant.matchedRowId,
-                            mandateId: tenant.mandate?.mandateId ?? null,
-                            toolCallId: tenant.mandate?.toolCallId ?? null,
-                          },
-                        ]
+                    tenant.matchedRowId && tenant.updateMatches !== false
+                      ? [{ id: tenant.matchedRowId }]
                       : [],
                   ),
               };
@@ -163,6 +182,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
       };
     },
   };
+  return tx;
 }
 
 const ROW_UUID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
@@ -176,7 +196,12 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     matchedRowId: ROW_UUID,
     ...overrides,
   };
-  const captured: Captured = { set: null, where: null };
+  const captured: Captured = {
+    set: null,
+    where: null,
+    updateTx: null,
+    releasedBeforeUpdate: false,
+  };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx(tenant, captured))),
   );
@@ -319,13 +344,26 @@ describe("resolve_approval — the UPDATE", () => {
   });
 
   it("throws conflict approval_expired when no row matched, and notifies nobody", async () => {
-    setup({ matchedRowId: null });
+    const captured = setup({ matchedRowId: null });
     await expect(
       agentApprovalResolveHandler(
         { approvalId: PUBLIC_ID, decision: "approved" },
         CTX,
       ),
     ).rejects.toSatisfy(conflict);
+    expect(captured.set).toBeNull();
+    expect(mocks.notifyResolution).not.toHaveBeenCalled();
+  });
+
+  it("throws conflict approval_expired when the row lapsed between the read and the UPDATE", async () => {
+    const captured = setup({ updateMatches: false });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(conflict);
+    expect(captured.set).toMatchObject({ resolution: "approved" });
     expect(mocks.notifyResolution).not.toHaveBeenCalled();
   });
 });
@@ -433,20 +471,28 @@ describe("resolve_approval — the mandate hop", () => {
   const MANDATE_ID = "6f0c2a4e-1b3d-4c5e-8a7f-9d1e3b5c7a2f";
   const TOOL_CALL_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-  it("denied: releases the reservation under the mandate lock and reports released", async () => {
-    setup({ mandate: { mandateId: MANDATE_ID, toolCallId: TOOL_CALL_ID } });
+  it("denied: releases the reservation under the mandate lock, in the UPDATE's transaction, and reports released", async () => {
+    const captured = setup({
+      mandate: { mandateId: MANDATE_ID, toolCallId: TOOL_CALL_ID },
+    });
     const out = await agentApprovalResolveHandler(
       { approvalId: PUBLIC_ID, decision: "denied" },
       CTX,
     );
+    // One transaction for the role gate's read, one for the write; the
+    // lock, the release and the UPDATE share the second.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
+    expect(captured.updateTx).not.toBeNull();
     expect(mocks.lockMandate).toHaveBeenCalledWith(
-      expect.anything(),
+      captured.updateTx,
       MANDATE_ID,
     );
-    expect(mocks.release).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.release).toHaveBeenCalledWith(captured.updateTx, {
       mandate: expect.objectContaining({ id: MANDATE_ID }),
       toolCallId: TOOL_CALL_ID,
     });
+    // The mandate row lock and the release precede the resolution write.
+    expect(captured.releasedBeforeUpdate).toBe(true);
     expect(out.mandate).toEqual({
       mandateId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
       reserved: [

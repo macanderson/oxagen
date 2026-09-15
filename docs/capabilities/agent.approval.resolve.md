@@ -31,6 +31,7 @@ approved tool call or skips it and apologises.
 ## Side effects
 
 - Postgres: update `agent.approvals` row; insert audit row in `agent.approval_events`.
+- Postgres, on a row the mandate gate parked and `denied`: the `release` rows in `tools.mandate_ledger`, written in the same transaction as the resolution under the mandate row lock (ADR-059 decision 5), so the two commit or roll back together.
 - SSE: emit `approval.resolved` event so the chat stream resumes.
 - ClickHouse: emit `agent.approval.resolved` row.
 

@@ -1509,9 +1509,14 @@ async function _invokeCoreInner(
       );
     });
   } catch (err) {
-    await withScope(() =>
-      applyDecisionSettlement(decisionSettlement, canonical, null),
-    );
+    // A settlement exists only when the first withScope succeeded, so
+    // re-entering the scope here cannot throw on the fail-closed path (orgId
+    // "") and the deny event below still reaches the audit chain.
+    if (decisionSettlement !== null) {
+      await withScope(() =>
+        applyDecisionSettlement(decisionSettlement, canonical, null),
+      );
+    }
     // Distinguish CapabilityError (handler not found → deny) from a
     // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP
     // orgId:"" fail-open path) carries a stable `code` we surface to the
