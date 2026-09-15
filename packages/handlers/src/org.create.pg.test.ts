@@ -237,7 +237,10 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       );
       expect([...rows][0]?.n, `billing.${name}`).toBe(0);
     }
-  });
+    // A dozen-plus round trips (one more per billing table) against a
+    // Postgres shared with every other *.pg.test.ts under coverage: vitest's
+    // 5s default timed out in CI with no assertion failing.
+  }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(
