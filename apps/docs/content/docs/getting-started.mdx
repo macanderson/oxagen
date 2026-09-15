@@ -1,26 +1,28 @@
 ---
 title: Getting started
-description: Sign up, create your organization and workspace, wrap one machine, and connect over the API or MCP.
+description: Sign up, create your organization and workspace, wrap one machine, and reach Oxagen over the API or MCP.
 ---
+
+Oxagen governs and operates the autonomous agents your organization runs: one mandate per agent, set by the teams accountable for it and enforced on every run. This page creates the organization that owns those mandates, wraps one machine so its runs land in the record, and gives you an Oxagen API key for the REST API and MCP.
 
 ## Sign up
 
 Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**. Enter your name, email address, and a password.
 
-Oxagen emails you a verification link. Click it before you sign in; an unverified account cannot get past the login screen. If the email does not arrive, check your spam folder before you request another one.
+Oxagen emails you a verification link. Click it before you sign in. An unverified account cannot get past the login screen. If the email does not arrive, check your spam folder before you request another one.
 
 Google and GitHub sign-in are on the same screen.
 
-Email verification is turned off when you run Oxagen on your own machine, so local development does not need a working mail server. See [Local development](/docs/configuration/local-development) and [Email & SMTP](/docs/configuration/email).
+Oxagen turns email verification off when you run it on your own machine, so local development does not need a working mail server. See [Local development](/docs/configuration/local-development) and [Email & SMTP](/docs/configuration/email).
 
 ## Create your organization
 
-After signup you land on the **New organization** screen. You need one organization before you can do anything else. The organization is the top-level boundary: it owns billing, IAM policies, and audit logs.
+After signup you land on the **New organization** screen. You need one organization before you can do anything else. The organization is the top-level boundary. It owns billing, IAM policies, and audit logs.
 
-1. Enter an organization name. A URL-safe slug is generated automatically; you can edit it.
+1. Enter an organization name. Oxagen generates a URL-safe slug, and you can edit it.
 2. Click **Create organization**.
 
-Creating an organization also creates a default workspace within it. You are automatically assigned the **Owner** role in both.
+Creating an organization also creates a default workspace inside it. Oxagen assigns you the **Owner** role in both.
 
 <Mermaid chart={`
 flowchart TD
@@ -32,15 +34,15 @@ flowchart TD
   W1 --> C[Conversations]
 `} />
 
-*Access to a workspace is granted separately from the organization, and every API key is pinned to exactly one workspace.*
+*Workspace membership is granted separately from the organization, and every API key is pinned to exactly one workspace.*
 
 ## Explore the app shell
 
-After you create the organization you land at `/{orgSlug}/{workspaceSlug}/ask`, the Ask surface. The shell has three parts:
+After you create the organization, you land on the organization **Dashboard** at `/{orgSlug}`, the usage and metering home. The shell has three parts:
 
-- **Org and workspace switchers** in the top bar (right of the Oxagen mark). If you belong to multiple organizations or workspaces, switch between them here.
-- **Sidebar** with four workspace zones: Ask, Knowledge, Automation, and Activity. The Organization section below handles members, access (IAM), security, billing, and developer settings.
-- **Ask bar**: the persistent AI entry point. Available on every screen; the agent has context about the page you are on.
+- **Org and workspace switchers** in the top bar, to the right of the Oxagen mark. If you belong to more than one organization or workspace, switch between them here.
+- **Sidebar** with the workspace pages (Overview, Sessions, Knowledge, Agents, Tools, Environments, Marketplace, and Settings) and the organization pages (Dashboard, Workspaces, Members, Governance, Access, Security, Billing, Developer, and Settings).
+- **Ask bar**: the entry point to the in-app agent, on every screen. The agent knows which page you are on.
 
 ## Wrap one machine
 
@@ -52,24 +54,24 @@ $ oxagen tacho enroll
 $ oxagen tacho status
 ```
 
-`enroll` writes the hooks into Claude Code's settings, installs the collector as a user service, and enrolls the host against your workspace. From then on every run on that machine is recorded frame by frame and shipped to Oxagen; open **Activity** to read the first one. [The Oxagen app](/docs/cli/desktop) does the same from one window, and [the CLI reference](/docs/cli/commands) covers the rest of `oxagen tacho`.
+`enroll` writes the hooks into Claude Code's settings, installs the collector as a user service, and enrolls the host against your workspace. From then on, Oxagen records every run on that machine frame by frame. `oxagen tacho status` shows whether the collector is shipping, and `oxagen trace` reads one run as a tree. [The Oxagen app](/docs/cli/desktop) does the same from one window, and [the CLI reference](/docs/cli/commands) covers the rest of `oxagen tacho`.
 
 ## Have your first agent conversation
 
-1. Click **Ask** in the sidebar, or use the Ask bar at the top of any page.
+1. Click **Sessions** in the sidebar, or use the Ask bar at the top of any page.
 2. Type a message and press Enter or click Send.
-3. The agent responds using the model tier available on your plan.
+3. The agent answers with the model tier your plan includes.
 
-Every message is recorded as a conversation under `/{orgSlug}/{workspaceSlug}/ask`. Conversations persist; archive or delete them from the conversation list.
+Oxagen keeps every conversation under `/{orgSlug}/{workspaceSlug}/sessions`. Conversations persist. Archive or delete them from the conversation list.
 
 ## Invite a teammate
 
 1. Go to **Organization → Members**.
 2. Click **Invite member**.
 3. Enter their email address and assign a role (Owner, Admin, Billing, Compliance, or a workspace role).
-4. They receive an invite email with a one-click acceptance link.
+4. They receive an invite email with an acceptance link.
 
-Workspace access is granted separately under **Workspace settings → Members**.
+Workspace membership is granted separately from organization membership.
 
 ## Connect via the REST API
 
@@ -79,15 +81,15 @@ Every capability in the app is also reachable over the versioned REST API at `ht
 
 1. Go to **Organization → Developer → Tokens**.
 2. Click **Create API key** and give it a name.
-3. Copy the key. It is shown only once.
+3. Copy the key. Oxagen shows it only once.
 
-API keys carry org and workspace scope, and act with the access of the user who created them. Pass the key as a Bearer token:
+An Oxagen API key carries org and workspace scope and acts as the person who created it. It is for you, your scripts, and the MCP clients you run. It is not a credential to hand to an agent for the systems the agent reaches. Those stay in Oxagen, and the agent asks for them. Pass the key as a Bearer token:
 
 ```http
 Authorization: Bearer ox_…
 ```
 
-**Check that the key works.** Replace `acme/main` with your org and workspace slugs. A JSON body with a `tools` array means the key is valid; a `401` means it is not.
+**Check that the key works.** Replace `acme/main` with your org and workspace slugs. A JSON body with a `tools` array means the key is valid. A `401` means it is not.
 
 ```console title="Terminal"
 $ export OXAGEN_API_KEY="ox_…"
@@ -101,7 +103,7 @@ See [API authentication](/docs/api/authentication) for the full reference, and t
 
 ## Connect via MCP
 
-Oxagen exposes every capability as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. The API key carries the org and workspace scope, so there is no path segment.
+Oxagen exposes every capability as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. The API key carries the org and workspace scope, so the URL has no path segment for them.
 
 ```bash tab="Claude Code"
 claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
@@ -125,7 +127,7 @@ claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
 codex mcp add oxagen --url https://mcp.oxagen.sh/mcp --bearer-token-env-var OXAGEN_API_KEY
 ```
 
-**Connect from the unified install page:**
+**Connect from the install page:**
 
 Go to **Organization → Developer → MCP** for copy-ready snippets for Claude Code, Claude Desktop, and Cursor, pre-filled with your API key. [Connecting to the MCP server](/docs/mcp/connecting) covers Codex and VS Code.
 
@@ -133,7 +135,7 @@ See [MCP overview](/docs/mcp/overview) and [Connecting to the MCP server](/docs/
 
 ## Next steps
 
-- [Security overview](/docs/security/overview): understand the controls your security team will ask about.
-- [RBAC and roles](/docs/governance/rbac): set up roles and grant policies for your team.
-- [Agent capabilities](/docs/agent/overview): what the agent can do and how to configure it.
+- [Security overview](/docs/security/overview): the controls your security team will ask about.
+- [RBAC and roles](/docs/governance/rbac): the roles your team holds and how a call is decided.
+- [Agent overview](/docs/agent/overview): what the in-app agent can request and how a rule answers.
 - [Enterprise use cases](/docs/enterprise/use-cases): what a CIO uses Oxagen for at org scale.

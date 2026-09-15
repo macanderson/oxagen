@@ -1,43 +1,36 @@
 ---
 title: Memory from the CLI
-description: "Engram, the workspace's experiential memory: capture and recall lessons from the CLI, the OBSERVATION → RULE → FACT confidence ladder, and how memory is distinct from the knowledge graph."
+description: "Engram, the workspace's memory of what agents learned: capture and recall lessons from the CLI, the OBSERVATION → RULE → FACT confidence ladder, and how memory differs from the knowledge graph."
 ---
 
-As the agent works, it learns things: that a test is flaky for a specific reason, that your team always uses `withTenantDb`, that the staging database is on an unusual port. **Agent memory**, powered by Oxagen's memory engine, **Engram**, is where those lessons live. Before starting new work the agent recalls the relevant ones, so it doesn't re-discover the same gotcha twice. This is the flywheel that makes the agent get better in *your* workspace over time.
+As an agent works, it learns things: that a test is flaky for a specific reason, that your team always uses `withTenantDb`, that the staging database is on an unusual port. **Agent memory** is where those lessons live, and Oxagen's memory engine, **Engram**, keeps it. Before an agent starts new work, it recalls the relevant lessons, so it doesn't rediscover the same gotcha twice. Over time, agents repeat fewer mistakes in *your* workspace.
 
-Memory is **workspace-scoped**: shared across every session, one-shot run, and fleet subagent in the workspace, not per-conversation, and never leaked across workspaces or organizations.
+Memory is **workspace-scoped**. Every run in the workspace shares it. It is not kept per conversation, and it never crosses workspaces or organizations.
 
 <Callout type="info">
-**Memory is not the knowledge graph.** Agent memory is *experiential*: what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural*: what your code and entities **are**. An agent draws on both: memory tells it what worked last time, the graph tells it how the system is wired.
+**Memory is not the knowledge graph.** Agent memory is *experiential*: what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural*: what your code and entities **are**. An agent draws on both. Memory tells it what worked last time, and the graph tells it how the system is wired.
 </Callout>
 
 ## The two axes
 
-Every memory has two independent axes, so "how sure are we it's true" is kept separate from "what is it about":
+Every memory has two independent axes, so how sure Oxagen is that a memory is true stays separate from what the memory is about:
 
 - **Class**: the epistemic ladder, from tentative to settled: **OBSERVATION → RULE → FACT**.
   - `OBSERVATION`: something noticed in passing.
   - `RULE`: a distilled instruction the agent should follow, with an enforcement strength.
-  - `FACT`: settled ground truth (promotion to FACT requires human confirmation).
+  - `FACT`: settled ground truth. Promotion to FACT requires human confirmation.
 - **Kind**: the content domain, an open label like `gotcha`, `convention-deviation`, `bug-root-cause`, `preference`, or `constraint`.
 
 And two independent scores:
 
-- **Confidence** (0–100): how sure the memory is *true*. It decays over time and recovers when re-confirmed.
+- **Confidence** (0–100): how sure it is that the memory is *true*. It decays over time and recovers when re-confirmed.
 - **Enforcement** (1–100, RULE only): how strongly it *should* be followed.
 
-Frequently-cited, outcome-positive memories resist decay; unused ones fade and are archived (recoverable, not deleted). Citations create the pressure that surfaces promotion candidates: the self-improvement loop.
+Memories that are cited often, with good outcomes, resist decay. Unused ones fade and are archived (recoverable, not deleted). Citations create the pressure that surfaces promotion candidates, which closes the loop.
 
 ## Capture a memory
 
-From the REPL, `/remember` infers the class and kind from your text:
-
-```text
-› /remember always use withTenantDb, never raw db()
-◇ saved RULE · gotcha
-```
-
-Or from the shell, with `oxagen remember`: pin the class and enforcement when you want to:
+Capture a lesson from the shell with `oxagen remember`. It infers the class and kind from your text. Pin the class and enforcement when you want to:
 
 ```bash
 oxagen remember "the staging DB listens on port 5433"
@@ -54,13 +47,6 @@ oxagen remember "always use withTenantDb, never raw db()" --class RULE --enforce
 
 ## Browse and recall
 
-```text
-› /memories             # recent memories
-› /memories RULE        # only rules
-› /memories deploys     # filter by kind/text
-› /forget mem_01H…      # delete one by id
-```
-
 The full management surface is `oxagen memory`:
 
 ```bash
@@ -76,7 +62,7 @@ oxagen memory rm mem_01H…                           # delete
 
 ### Promote up the ladder
 
-When an observation has proven itself, promote it: this records an auditable event. The `--rationale` flag is optional; promotion needs nothing beyond the command itself:
+When an observation keeps holding up, promote it. Promotion records an audit event. The `--rationale` flag is optional:
 
 ```bash
 oxagen memory promote mem_01H… --to rule --enforcement 80
@@ -88,7 +74,7 @@ oxagen memory promote mem_01H… --to fact \
 
 ### Demote back down
 
-The audited inverse of promote: for rules that stopped earning their citations or facts that turned out to be wrong. Direction is strictly downward; demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
+Demotion is the audited inverse of promotion, for rules that stopped earning their citations or facts that turned out to be wrong. It only moves down. Demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
 
 ```bash
 oxagen memory demote mem_01H… --to observation
@@ -98,7 +84,7 @@ oxagen memory demote mem_01H… --to rule --enforcement 60 \
 
 ### Dismiss a promotion suggestion
 
-`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable: the memory stays active and recallable, but it leaves the queue permanently and the next candidate takes its slot:
+`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable. The memory stays active and recallable, but it leaves the queue until you restore it, and the next candidate takes its slot:
 
 ```bash
 oxagen memory dismiss mem_01H…            # silence the suggestion
@@ -107,7 +93,7 @@ oxagen memory dismiss mem_01H… --restore  # let it re-qualify later
 
 ### Citation analytics
 
-A workspace-wide rollup of which memories and graph nodes agents actually cite, how useful those citations were, and where promoted rules get violated: the terminal view of the **Knowledge → Citations** dashboard:
+A workspace-wide rollup of which memories and graph nodes agents cite, how useful those citations were, and where agents break promoted rules. It is the terminal view of **Knowledge → Citations**:
 
 ```bash
 oxagen memory citations                   # 30-day window, top 10 per list
@@ -116,7 +102,7 @@ oxagen memory citations --days 90 --limit 25
 
 ### Import existing docs
 
-Turn a folder of Markdown convention/rule docs into memories in bulk:
+Turn a folder of Markdown convention and rule docs into memories in bulk:
 
 ```bash
 oxagen memory import docs/conventions/*.md          # preview
@@ -125,13 +111,13 @@ oxagen memory import docs/conventions/*.md --yes     # commit
 
 ## How agents use memory automatically
 
-You rarely call these by hand mid-task. An agent connected to Oxagen over MCP recalls relevant memories semantically before it acts and folds them into its context; when a turn has to be corrected, it records a `gotcha` memory so the next run avoids the same mistake. RULE-class memories with high enforcement are surfaced as instructions the agent must honor.
+You rarely call these commands by hand during a task. An agent that reaches Oxagen over MCP recalls relevant memories by meaning before it acts and adds them to its context. When a turn has to be corrected, the agent records a `gotcha` memory so the next run avoids the same mistake. Oxagen surfaces RULE-class memories with high enforcement as instructions the agent must follow.
 
-The CLI commands on this page are the **curation** surface for that loop: review what was learned, promote what has proven out, demote or delete what has not.
+The CLI commands on this page are the **curation** surface for that loop: review what agents learned, promote what held up, and demote or delete what did not.
 
 ## Governance
 
-Memory writes are governed by the same IAM model as every capability and produce an audit record: including both the human principal and the agent when written in delegated context. Because memory lives in the workspace graph, it is portable: a workspace's memories travel with the workspace, not locked to Oxagen's storage.
+Memory writes pass the same IAM checks as every capability and leave an audit record. When an agent writes on a person's behalf, the record names both the person and the agent. Because memory lives in the workspace graph, it travels with the workspace and is not locked to Oxagen's storage.
 
 ## Related
 

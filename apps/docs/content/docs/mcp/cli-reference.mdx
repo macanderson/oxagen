@@ -1,9 +1,13 @@
 ---
 title: CLI reference
-description: "Complete reference for the oxagen mcp CLI commands: add, remove, list, enable, disable, and check."
+description: "Reference for the retired oxagen mcp commands: add, remove, list, and check."
 ---
 
-The `oxagen mcp` command group manages file-based MCP server configuration. These commands work offline and read/write settings files directly: no platform API calls required.
+<Callout type="warn">
+  The `oxagen mcp` command group is retired in the Oxagen CLI. Each command prints a retirement notice that points to the `stella` CLI and exits non-zero. The runtime still reads the settings files these commands wrote, so edit them by hand as [File-based configuration](/docs/mcp/file-config) describes. This page keeps the reference for scripts that still call the commands.
+</Callout>
+
+The `oxagen mcp` command group covers file-based MCP server configuration. Its commands read and write the settings files directly, with no platform API calls.
 
 ## oxagen mcp add
 
@@ -17,7 +21,7 @@ oxagen mcp add <name> [options]
 
 | Argument | Description |
 |----------|-------------|
-| `name` | Name for this server (used as the key in settings.json) |
+| `name` | Name for this server (the key in settings.json) |
 
 ### Options
 
@@ -52,7 +56,7 @@ oxagen mcp add memory --scope user --transport stdio --command npx --arg -y --ar
 
 ## oxagen mcp remove
 
-Remove an MCP server from file-based configuration.
+Remove an MCP server from the file-based configuration.
 
 ```bash
 oxagen mcp remove <name> [options]
@@ -74,13 +78,13 @@ oxagen mcp remove linear
 oxagen mcp remove memory --scope user
 ```
 
-Managed servers (provisioned by the org) cannot be removed.
+A managed server (provisioned by the org) cannot be removed.
 
 ---
 
 ## oxagen mcp list
 
-List effective MCP servers (merged across all scopes).
+List the effective MCP servers, merged across all scopes.
 
 ```bash
 oxagen mcp list [options]
@@ -104,13 +108,13 @@ MCP Servers:
 
 ## oxagen mcp check
 
-Connect to a server (or all enabled servers) and preview the tools it exposes.
+Connect to one server, or to every enabled server, and preview the tools it exposes.
 
 ```bash
 oxagen mcp check [name]
 ```
 
-Pass a server name to check only that server; omit to check all enabled servers.
+Pass a server name to check only that server. Omit it to check every enabled server.
 
 ### Example output
 
@@ -130,8 +134,8 @@ MCP Server Health:
 
 | Icon | Status | Meaning |
 |------|--------|---------|
-| `●` | healthy | Server responded successfully |
-| `◐` | auth_required | Server reachable but credentials missing or expired |
+| `●` | healthy | Server responded |
+| `◐` | auth_required | Server reachable, but credentials are missing or expired |
 | `✕` | unreachable | Connection failed (network error, DNS, timeout) |
 | `○` | disabled | Server is in config but disabled |
 

@@ -1,11 +1,11 @@
 ---
 title: Enterprise overview
-description: The org and workspace model, how governance scales across business units, and what enterprise tier includes.
+description: The org and workspace model, how governance scales across business units, and what the enterprise tier includes.
 ---
 
 ## The organization and workspace model
 
-Oxagen structures every customer account as an **organization** with one or more **workspaces**.
+Oxagen organizes every customer account as an **organization** with one or more **workspaces**.
 
 ```text title="Example structure"
 Organization (Acme Corp)
@@ -15,35 +15,35 @@ Organization (Acme Corp)
 └── Workspace: Legal
 ```
 
-This structure maps directly to how most enterprises manage AI governance:
+This structure matches how most enterprises divide accountability for the agents they run:
 
-- The **organization** is the governance entity: it owns billing, sets the outer bounds of every policy, manages the member roster, and holds the audit log for the entire company.
-- **Workspaces** are the operational units: each team, department, or project has its own isolated workspace with its own agents, knowledge, and automation. Teams work independently without seeing each other's data.
+- The **organization** is the accountable entity. It owns billing, sets the outer bounds of every rule, manages the member roster, and holds the audit log for the whole company.
+- **Workspaces** are the operating units. Each team, department, or project has its own isolated workspace with its own agents, knowledge, and automation. Teams work on their own without seeing each other's data.
 
-Workspace isolation is enforced at the database layer (see [Tenant isolation and RLS](/docs/security/tenant-isolation-rls)), not by application-layer conventions. A bug in the Marketing workspace's agent cannot expose Finance workspace data.
+The database enforces workspace isolation (see [Tenant isolation and RLS](/docs/security/tenant-isolation-rls)), not application-layer conventions. A bug in an agent in the Marketing workspace cannot read Finance workspace data.
 
 ## Scale tier for enterprise
 
 Scale tier organizations get:
 
-- **Unlimited workspaces**: scale across any number of departments or projects without restructuring.
+- **Unlimited workspaces**: add departments or projects without restructuring.
 - **25 seats included** (add more at the per-seat rate).
-- **All models** including Claude Opus 4.8.
+- **All models**, including Claude Opus 4.8.
 - **Advanced usage analytics**: cost attribution by workspace, agent, and capability domain.
-- **Dedicated Slack support** channel.
+- **A dedicated Slack support channel.**
 - **99.9% uptime SLA.**
-- **SOC 2 Type II report** available under NDA.
+- **SOC 2 Type II report**, available under NDA.
 - **DPA available** for GDPR, HIPAA, and similar requirements.
 
 ## Identity federation
 
-SAML 2.0 / OIDC single sign-on and SCIM 2.0 directory sync are not yet available. The SSO and SCIM settings stay hidden under **Organization → Security** until their capability contracts ship, and the security page reports SSO enforcement as not yet configurable. Until then, members sign in with email and password, Google, or GitHub, and org-wide MFA can be required for privileged roles on the MFA tab.
+SAML 2.0 and OIDC single sign-on and SCIM 2.0 directory sync are not available. The SSO and SCIM settings stay hidden under **Organization → Security** until their capability contracts ship, and the security page reports SSO enforcement as not configurable. Members sign in with email and password, Google, or GitHub, and you can require org-wide MFA for privileged roles on the MFA tab.
 
 ## Governance at scale
 
-### Central IT sets the rails
+### Central IT sets the outer bounds
 
-Today every access decision is made by role: a principal's role grants, then the system org Owner role, then the capability contract's default effect. The org decides who holds which role, so an org administrator controls access in every workspace, including workspaces created later.
+Every access decision is made by role: a principal's role grants first, then the system org Owner role, then the capability contract's default effect. The org decides who holds which role, so an org administrator controls access in every workspace, including workspaces created later.
 
 <Mermaid chart={`
 flowchart LR
@@ -54,15 +54,15 @@ flowchart LR
   OW -->|no| DEF["Contract defaultEffect"]
 `} />
 
-The IAM resolver also defines two stronger tiers: org-enforced policies that workspaces cannot override, and workspace grants and denies that tighten access inside those rails. Neither tier is active yet. Their tables were removed in migration 0027, so no live request is decided by them.
+The IAM resolver also defines two stronger tiers: org-enforced policies that workspaces cannot override, and workspace grants and denies that narrow access inside those bounds. Neither tier is active. Migration 0027 removed their tables, so no live request is decided by them.
 
 ### Agents as accountable principals
 
-Every agent configuration is a principal with its own grants. A department can give their agents exactly the capabilities needed for their use case, nothing more. Triggered and scheduled agents use their configured grants: they never inherit a user's session grants.
+Every agent configuration is a principal with its own role grants. Each grant names a capability the agent may request and the answer: allow, deny, or require approval. A department grants what its task needs and nothing more. Triggered and scheduled agents run under their own grants. They never inherit the grants of the person who signed in.
 
 ### Approval-gated capabilities
 
-When a role grant says a capability requires approval, the call is refused with `pending_approval` and Oxagen records an access request (`arq_…`) naming the principal and the capability, alongside the security event. There is no in-app screen for approving these requests yet, and no time-limited grant flow.
+When a role grant says a capability requires approval, the request is routed instead of run. The call returns `pending_approval`, and Oxagen records an access request (`arq_…`) that names the principal and the capability, beside the security event. The app has no screen for answering these requests, and there is no time-limited grant flow.
 
 ## Contact
 

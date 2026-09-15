@@ -1,9 +1,9 @@
 ---
 title: Plugin governance
-description: How organizations control which plugins agents can access, and how audit trails and role requirements work.
+description: How a workspace controls which plugin tools its agents can request, where plugin credentials live, and how the audit record and role requirements work.
 ---
 
-Oxagen plugins extend the agent toolchain with external tools and first-party capabilities. Every plugin installation is **workspace-scoped**: a plugin installed in one workspace is not visible to any other workspace, giving security and compliance teams a fine-grained control surface.
+Oxagen plugins add external tools and first-party capabilities that an agent can request. Every plugin install is **workspace-scoped**. A plugin installed in one workspace is not visible to any other workspace, which gives security and compliance teams a narrow control surface.
 
 ## Workspace-scoped plugin model
 
@@ -13,7 +13,7 @@ Workspace B    → independent plugin list; no visibility into Workspace A's plu
 Workspace C    → ...
 ```
 
-Org Owners and Admins can install plugins from the marketplace into any workspace they have access to. Workspace Owners and Admins can install plugins into their own workspace. All install, connect, and enable/disable actions are workspace-specific.
+Org Owners and Admins can install plugins from the marketplace into any workspace they belong to. Workspace Owners and Admins can install plugins into their own workspace. Every install, connection, and enable or disable action applies to one workspace.
 
 ## Installing plugins
 
@@ -21,38 +21,40 @@ See [Plugin marketplace](/docs/plugins/marketplace) for the full installation gu
 
 In summary:
 
-1. Go to **Workspace settings → Plugins → Browse marketplace**.
-2. Choose a tab (MCP Servers, Integrations, Agent Capabilities, Agent Skills, Knowledge Sources).
+1. Open **Marketplace** from the workspace sidebar.
+2. Choose a section: **Agent Tools → MCP Servers**, **Agent Tools → Capabilities**, or **Integrations**.
 3. Review the plugin's tools, README, and authentication requirements.
-4. Click **Install to workspace**. The plugin is enabled immediately in this workspace.
+4. Click **Install**. The plugin is enabled immediately in this workspace.
 
-For MCP server and integration plugins that require authentication, a **Connect** step follows install to supply credentials and activate the network endpoint.
+An MCP server or integration plugin that needs authentication also needs a connection step. Click **Authenticate** for OAuth, or **Enter API key** for a secret. Its tools stay out of every agent's tool list until the connection is done.
 
 ## Enable and disable
 
-One capability, **`set_plugin_enabled`**, turns a plugin on and off. It toggles the `enabled` flag on the plugin listing, and for an MCP server or integration plugin it also creates or deactivates the workspace-level MCP server connection.
+One capability, **`set_plugin_enabled`**, turns a plugin on and off. It toggles the `enabled` flag on the plugin listing. For an MCP server or integration plugin, it also creates or deactivates the workspace-level MCP server connection.
 
-Disabling a listing stops agents from using the plugin's tools, and for MCP servers it blocks re-connection until you enable it again.
+A disabled plugin's tools leave every agent's tool list. For an MCP server, disabling also blocks reconnection until you enable it again.
 
 ## Credential security
 
-OAuth tokens and API keys are encrypted at rest with AES-256-GCM. If an OAuth token expires or is revoked, the workspace member who authorized it receives an in-app notification and must re-authenticate before the plugin's tools become available again.
+The credential a plugin needs stays in Oxagen, held by the workspace. The agent never sees it. Oxagen encrypts OAuth tokens and API keys at rest with AES-256-GCM. If an OAuth token expires or is revoked, org managers get an in-app notification, and someone must authenticate again before the plugin's tools come back.
 
 ## Uninstalling
 
-Go to **Workspace settings → Plugins → Installed** and click **Uninstall**. Uninstalling immediately blocks all new invocations of the plugin's tools in this workspace. Existing tool call records referencing the plugin are retained in the audit log. Generated content (images, documents, videos) is not deleted.
+Go to **Tools → MCP Servers** and uninstall the server from its row. Uninstalling stops every new call to the plugin's tools in this workspace immediately. The audit log keeps existing tool call records that reference the plugin. Oxagen does not delete content the plugin generated (images, documents, and videos).
 
-## Audit trail
+## The record
 
-All plugin governance actions are recorded in `security.security_events` (Postgres) and `audit_events` (ClickHouse):
+Oxagen records plugin governance actions in `security.security_events` (Postgres):
 
 | Event | When it fires |
 |---|---|
 | `plugin.installed` | Plugin installed into a workspace. |
 | `plugin.uninstalled` | Plugin uninstalled from a workspace. |
 | `plugin.enabled_changed` | Plugin listing enabled or disabled, or a workspace MCP server connection activated or deactivated (`set_plugin_enabled`). |
-| `plugin.denylist_added` | Plugin added to the org denylist. |
-| `plugin.denylist_removed` | Plugin removed from the org denylist. |
+| `plugin.credential_set` | A plugin credential stored. |
+| `plugin.credential_revoked` | A plugin credential revoked. |
+| `plugin.denylist_added` | Reserved name. There is no plugin denylist, so nothing emits it. |
+| `plugin.denylist_removed` | Reserved name. There is no plugin denylist, so nothing emits it. |
 
 ## Role requirements
 

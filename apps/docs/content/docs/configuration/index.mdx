@@ -1,32 +1,32 @@
 ---
 title: Configuration
-description: "Environment configuration for running and deploying Oxagen: transactional email (SMTP) and local-development behavior."
+description: "Environment configuration for running and deploying Oxagen: transactional email (SMTP), local-development behavior, and the storage driver."
 ---
 
 ## Overview
 
-This section covers the environment configuration that controls how Oxagen behaves
-across deployed and local environments. Most configuration is supplied through
-environment variables that are validated at startup against the central env schema: an unregistered or malformed variable fails fast rather than silently degrading a
+This section covers the environment configuration that sets how Oxagen behaves
+in deployed and local environments. Most configuration comes from
+environment variables. Oxagen validates them at startup against the central env schema, so an unregistered or malformed variable stops the process instead of quietly breaking a
 feature.
 
 ## In this section
 
 | Page | What it covers |
 | --- | --- |
-| [Email &amp; SMTP](/docs/configuration/email) | The `SMTP_*` variables that power verification and password-reset email, TLS behavior, and how a misconfigured transport now fails loudly instead of silently. |
-| [Local development](/docs/configuration/local-development) | The `OXAGEN_LOCAL_DEV` flag and how Oxagen relaxes deployed-only controls (email verification, token encryption, cookie/rate-limit hardening) on a developer machine: without ever weakening a real deployment. |
-| [Storage driver](/docs/configuration/storage) | `STORAGE_DRIVER` and the filesystem driver (`STORAGE_FS_ROOT`): running blob storage locally or in CI without a Vercel Blob token. |
+| [Email &amp; SMTP](/docs/configuration/email) | The `SMTP_*` variables behind verification and password-reset email, TLS behavior, and how a misconfigured transport reports its failure. |
+| [Local development](/docs/configuration/local-development) | The `OXAGEN_LOCAL_DEV` flag, and how Oxagen relaxes deployed-only controls (email verification, token encryption, cookie and rate-limit hardening) on a developer machine without weakening a real deployment. |
+| [Storage driver](/docs/configuration/storage) | `STORAGE_DRIVER` and the filesystem driver (`STORAGE_FS_ROOT`), for blob storage locally or in CI without a Vercel Blob token. |
 
 ## How environment values are loaded
 
 - Deployed environments (Vercel) read their variables from the project's environment
   settings. Local development reads `.env.local`.
-- Values are normalized at load time (for example, surrounding quotes are stripped) so
-  an over-quoted value such as `"https://example.com"` is parsed correctly.
-- Security-relevant predicates are resolved deterministically and are **fail-safe**:
-  a control that protects production can never be relaxed by a value that leaks into a
-  deployed environment.
+- Oxagen normalizes values at load time (for example, it strips surrounding quotes), so
+  an over-quoted value such as `"https://example.com"` parses correctly.
+- Security-relevant predicates resolve the same way every time and **fail safe**:
+  a value that leaks into a deployed environment cannot relax a control that protects
+  production.
 
 <Mermaid chart={`
 flowchart LR
@@ -48,7 +48,7 @@ const env = requireEnv(["DATABASE_URL"] as const);
 // env.NEO4J_URI  ← type error: not requested
 ```
 
-A missing or malformed value throws at startup, listing each failing key:
+A missing or malformed value throws at startup and lists each failing key:
 
 ```text
 Invalid environment (required: DATABASE_URL):

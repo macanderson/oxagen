@@ -8,9 +8,10 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Oxagen Docs",
-    short_name: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    name: "Oxagen docs",
+    short_name: "Oxagen docs",
+    description:
+      "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
     lang: "en",
     dir: "ltr",
     start_url: "/",
