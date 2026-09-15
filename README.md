@@ -399,12 +399,14 @@ Four things reach production only when a human dispatches them. None runs on a
 push, and each was made a workflow of its own rather than a step inside a job
 gated on something else — a step buried in a job whose gating is about
 something adjacent is how the Stripe sync became unreachable for months without
-anybody noticing (#1371).
+anybody noticing (#1371). The fifth row is the read-only check that notices
+when a committed store migration has not been applied.
 
 | Workflow | What it does | Safe default |
 | --- | --- | --- |
-| `db-migrate.yml` | Applies committed Atlas migrations to production Postgres | `apply=false` prints the pending list and changes nothing |
-| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations | `apply=false` prints the pending list |
+| `db-migrate.yml` | Validates the committed Atlas migrations; for `target: production` it stops at its reachability guard, because Aurora admits 5432 from the app node only. The path that applies to production Postgres is `infra/tools/run-db-migrations.sh packages/database --apply`, run from a laptop with AWS credentials — it executes on the app node over SSM | `apply=false` (and the script without `--apply`) prints the pending list and changes nothing |
+| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations over an SSM tunnel through the app node | `apply=false` prints the pending list |
+| `store-migrate-drift.yml` | Scheduled daily (also dispatchable): reads production ClickHouse and Neo4j over the same tunnel and compares them with the committed schema; opens or closes a `store-drift` issue | read-only by construction — it never applies |
 | `stripe-sync.yml` | Reconciles Stripe products and prices with `packages/billing/src/pricing.ts` | `apply=false` is a dry run that writes nothing |
 | `infra.yml` | Plans and applies OpenTofu — this one *does* apply on a push to `main` | plans on every pull request |
 

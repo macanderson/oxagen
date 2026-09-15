@@ -291,6 +291,34 @@ expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/") == "http://h:8123/?reado
 expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/?database=x") == "http://h:8123/?database=x&readonly=1" ]] && echo 0 || echo 1)" \
   "readonly: appended with & when there is one"
 
+# curl's config file has one credential option, `user`, whose value is
+# "user:password". A `password` line is not an option curl has: Ubuntu's curl
+# warned, prompted for the password on a non-tty, read nothing and sent the
+# user alone — AUTHENTICATION_FAILED, three scheduled runs red, and an issue
+# (#2987) that read as a rotated credential. macOS's curl refuses the file.
+# Both halves are held here: the rendered text, and what real curl does with it.
+CFG=$(ch_curl_config oxagen s3cret)
+[[ $CFG == 'user = "oxagen:s3cret"' ]] && pass || fail "curl config: expected user = \"oxagen:s3cret\", got: $CFG"
+case "$CFG" in
+  *password*) fail "curl config: curl has no 'password' option — the credential goes in 'user' as user:password" ;;
+  *) pass ;;
+esac
+CFG=$(ch_curl_config 'ox"a\gen' 'p"w\d')
+[[ $CFG == 'user = "ox\"a\\gen:p\"w\\d"' ]] && pass || fail "curl config: a quote or backslash in the credential must be escaped, got: $CFG"
+# Real curl, no server: the only acceptable outcome is a connection failure.
+# A config curl cannot read fails before connecting ("error encountered when
+# reading a file"), and a user with no password makes it prompt ("Enter host
+# password"); neither may appear.
+CURL_OUT=$(ch_curl_config oxagen s3cret | curl -sS --max-time 2 --config - http://127.0.0.1:9/ </dev/null 2>&1 || true)
+case "$CURL_OUT" in
+  *"Enter host password"*|*"error encountered when reading"*|*"Unknown option"*|*"Warning"*)
+    fail "curl config: real curl did not accept the rendered config: $CURL_OUT" ;;
+  *) pass ;;
+esac
+# The port is closed, so the credential was accepted and curl got as far as
+# the connection — anything short of that would have failed above.
+contains "$CURL_OUT" "Failed to connect" "curl config: real curl reached the connect stage with the credential in place"
+
 # --- the shipped script ----------------------------------------------------
 
 SCRIPT=$(cat "$TOOLS/check-store-drift.sh")
