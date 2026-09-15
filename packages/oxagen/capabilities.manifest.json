@@ -1311,6 +1311,23 @@
       }
     },
     {
+      "name": "list_invoices",
+      "file": "billing.invoice.list.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_subscription",
       "file": "billing.subscription.read.ts",
       "domain": "billing",
