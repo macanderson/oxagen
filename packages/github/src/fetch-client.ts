@@ -701,15 +701,35 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       "GET",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}/files?per_page=100`,
     );
-    return data.map((f) => ({
-      path: f.filename,
-      previousPath: f.previous_filename ?? null,
-      status: normaliseFileStatus(f.status),
-      additions: f.additions,
-      deletions: f.deletions,
-      changes: f.changes,
-      patch: f.patch ?? null,
-    }));
+    return data.map(toPrFile);
+  }
+
+  async function compareCommits(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubPrFile[]> {
+    const data = await request<{ files?: GHPullFile[] }>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/compare/${encodeURIComponent(args.base)}...${encodeURIComponent(args.head)}`,
+    );
+    return (data.files ?? []).map(toPrFile);
+  }
+
+  async function findOpenPullRequest(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    base: string;
+  }): Promise<{ number: number; htmlUrl: string } | null> {
+    const query = `state=open&head=${encodeURIComponent(`${args.owner}:${args.head}`)}&base=${encodeURIComponent(args.base)}`;
+    const data = await request<GHPull[]>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls?${query}`,
+    );
+    const pr = data[0];
+    return pr ? { number: pr.number, htmlUrl: pr.html_url } : null;
   }
 
   async function listBranches(args: {
@@ -824,6 +844,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,
+    compareCommits,
+    findOpenPullRequest,
     listBranches,
     createCheckRun,
     mergePullRequest,
@@ -868,6 +890,18 @@ function normaliseStatusState(state: string): GitHubCommitStatus["state"] {
     default:
       return "pending";
   }
+}
+
+function toPrFile(f: GHPullFile): GitHubPrFile {
+  return {
+    path: f.filename,
+    previousPath: f.previous_filename ?? null,
+    status: normaliseFileStatus(f.status),
+    additions: f.additions,
+    deletions: f.deletions,
+    changes: f.changes,
+    patch: f.patch ?? null,
+  };
 }
 
 function normaliseFileStatus(status: string): GitHubPrFile["status"] {

@@ -20,13 +20,15 @@ The pull request that publishes a proposal ([ADR-061](../adr/ADR-061-steering-go
 4. the PR, whose body carries the rationale, the supporting records, runs and agents, the evidence links and the check list;
 5. the six §10.3 checks, one at a time — each outcome is written to the proposal before the next check starts and mirrored to GitHub as a check run (`Oxagen · <check>`) on the head commit. The file that is checked is the one read back from the branch.
 
-On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`, `checks_failed`) the checks run again on the same PR, against its current head: `headSha` is re-read from GitHub, the file is read at that commit and the check runs are posted to it. Once every check passes the row carries the `record_id` and `record_hash` stamped in that file, and `merge_context_pr` merges that commit and no other. One concern, one pull request: a second proposal on a lineage with an open PR is refused.
+The row records the branch before GitHub is touched. A call that failed after GitHub opened the PR is retried onto that PR; an open PR on the branch that the row did not record is refused `lineage_pr_open`.
+
+On a row whose PR is already open (`pr_open`, `checks_running`, `checks_passed`, `checks_failed`) the checks run again on the same PR, against its current head: the PR is refused `base_moved` when it no longer targets the production branch, `headSha` is re-read from GitHub, the file is read at that commit and the check runs are posted to it. Every status write applies only from the statuses it names, so a proposal dismissed or merged while the checks run is left as it is and the call is refused `proposal_rejected` or `proposal_merged`. Once every check passes the row carries the `record_id` and `record_hash` stamped in that file, and `merge_context_pr` merges that commit and no other. One concern, one pull request: a second proposal on a lineage with an open PR is refused.
 
 ## The checks
 
 | name | passes when |
 | --- | --- |
-| `schema` | The file is TOML, `schema = "context-record/v0.1"`, one `[[record]]` with a lineage, a kind from the six, a statement, an origin, a sharing scope, `status`, a stamped identity, provenance and `steering.force` |
+| `schema` | The PR changes the record file and no other path (GitHub's compare from the production branch to the head; a rename counts both paths); the file is TOML, `schema = "context-record/v0.1"`, one `[[record]]` with a lineage, a kind from the six, a statement, an origin, a sharing scope, `status`, a stamped identity, provenance and `steering.force` |
 | `lineage_uniqueness` | The file holds one record whose lineage is the file stem and the proposal's; no published record holds that lineage at another path |
 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes |
 | `secret_pii_scan` | No credential token, JWT, high-entropy blob, sensitive-key value or PEM block, and no email, SSN or Luhn-valid card number in the statement, rationale, evidence or file |
@@ -51,4 +53,4 @@ A branch, a commit and a pull request on the workspace's repository; up to six G
 | --- | --- | --- |
 | `forbidden` | `org_role_required` / `no_principal` | |
 | `not_found` | `proposal_not_found` / `workspace_repository_missing` | No connected GitHub repository (MC spec §10.1). |
-| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `head_unknown` / `record_file_missing` / `github_refused` | GitHub's message travels on `github_refused`; `head_unknown` when GitHub reports no head commit for the PR. |
+| `conflict` | `proposal_merged` / `proposal_rejected` / `lineage_pr_open` / `governance_unreadable` / `base_moved` / `head_unknown` / `record_file_missing` / `github_refused` | GitHub's message travels on `github_refused`; `head_unknown` when GitHub reports no head commit for the PR; `base_moved` when the PR no longer targets the production branch. |

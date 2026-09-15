@@ -1,14 +1,27 @@
 // audit-exempt: a dismissed proposal steered nothing and publishes nothing; the kernel capability.invoke_* audit records who dismissed it.
 //
 // dismiss_proposal (ADR-061): Owner/Admin (or the workspace Owner) rejects a
-// proposal with a reason. A proposal whose Context PR is open has the PR
+// proposal with a reason. A proposal that started a Context PR has the PR
 // closed and its branch deleted first, so the next proposal on the lineage
-// opens a fresh branch and PR. A merged proposal is published and cannot be
-// dismissed; retirement is its own Context PR and is outside this release.
+// opens a fresh branch and PR; that includes a proposal whose open failed
+// after GitHub opened the PR, whose PR is found on its branch. A merged
+// proposal is published and cannot be dismissed; retirement is its own
+// Context PR and is outside this release. The `rejected` write applies only
+// to a proposal still short of `merged`, so a merge that published while
+// GitHub was being called keeps its proposal.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { assertOrgRole } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+
+const DISMISSABLE: readonly ProposalStatus[] = [
+  "proposed",
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+];
 
 export function createDismissProposalHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
@@ -34,17 +47,43 @@ export function createDismissProposalHandler(
     if (row.status === "rejected") {
       return { proposalId: row.publicId, status: "rejected" };
     }
-    if (row.prNumber !== null && row.branch) {
+    // Without a PR number the branch is this proposal's only while no other
+    // proposal on the lineage has opened a PR on it since.
+    if (
+      row.branch &&
+      (row.prNumber !== null ||
+        !(await deps.store.findOpenPrOnLineage(scope, row.lineageId, row.id)))
+    ) {
       const repo = await deps.github.resolveRepository(scope);
-      await deps.github.closePullRequest(repo, row.prNumber);
+      const prNumber =
+        row.prNumber ??
+        (
+          await deps.github.findOpenPullRequest(repo, {
+            head: row.branch,
+            base: repo.defaultBranch,
+          })
+        )?.number ??
+        null;
+      if (prNumber !== null) await deps.github.closePullRequest(repo, prNumber);
       await deps.github.deleteBranch(repo, row.branch);
     }
-    await deps.store.updateProposal(row.id, {
-      status: "rejected",
-      dismissedAt: deps.now(),
-      dismissedReason: input.reason,
-      updatedByUserId: ctx.userId ?? null,
-    });
+    try {
+      await deps.store.updateProposal(
+        row.id,
+        {
+          status: "rejected",
+          dismissedAt: deps.now(),
+          dismissedReason: input.reason,
+          updatedByUserId: ctx.userId ?? null,
+        },
+        DISMISSABLE,
+      );
+    } catch (err) {
+      // Another dismissal landed first; this one answers as it did.
+      if (err instanceof HandlerError && err.reason === "proposal_rejected")
+        return { proposalId: row.publicId, status: "rejected" };
+      throw err;
+    }
     return { proposalId: row.publicId, status: "rejected" };
   };
 }

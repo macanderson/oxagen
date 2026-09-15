@@ -34,6 +34,12 @@ export interface CheckContext {
   /** The committed file, as read back from the branch. */
   fileText: string;
   path: string;
+  /**
+   * Every path the pull request changes at the checked head, against the
+   * production branch. The merge squashes all of them, so the record file
+   * must be the only one.
+   */
+  changedPaths: string[];
   proposal: {
     lineageId: string;
     kind: RecordKind;
@@ -202,6 +208,13 @@ export function parseChecked(fileText: string):
 }
 
 function checkSchema(ctx: CheckContext): CheckOutcome {
+  const others = ctx.changedPaths.filter((p) => p !== ctx.path);
+  if (others.length > 0) {
+    return {
+      ok: false,
+      summary: `the pull request also changes ${others.join(", ")}; a Context PR changes ${ctx.path} and nothing else`,
+    };
+  }
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
   const n = parsed.file.record.length;

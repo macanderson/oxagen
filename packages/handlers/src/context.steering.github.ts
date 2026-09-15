@@ -42,15 +42,30 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     args: { title: string; head: string; base: string; body: string },
   ): Promise<{ number: number; htmlUrl: string }>;
-  /** The PR's head commit and, once GitHub merged it, the merge commit. */
+  /** The open PR from the branch `head` into `base`, or null. */
+  findOpenPullRequest(
+    repo: SteeringRepository,
+    args: { head: string; base: string },
+  ): Promise<{ number: number; htmlUrl: string } | null>;
+  /** The branch the PR merges into, its head commit and, once GitHub merged it, the merge commit. */
   getPullRequest(
     repo: SteeringRepository,
     number: number,
   ): Promise<{
+    baseRef: string;
     headSha: string | null;
     merged: boolean;
     mergeCommitSha: string | null;
   }>;
+  /**
+   * Every path the commit `head` changes against `base`, as its pull request
+   * shows them; a rename names both its paths.
+   */
+  changedPaths(
+    repo: SteeringRepository,
+    base: string,
+    head: string,
+  ): Promise<string[]>;
   /** The check run's URL, or null when GitHub refuses the token (not an App). */
   reportCheckRun(
     repo: SteeringRepository,
@@ -113,6 +128,25 @@ interface SteeringGitHubDeps {
     workspaceId: string;
   }) => Promise<string>;
   client: (token: string) => GitHubClient;
+}
+
+/**
+ * A Context PR merges only into the production branch. GitHub lets anyone
+ * with write access retarget a PR, so its base is read back before the checks
+ * run and before the merge.
+ */
+export function assertProductionBase(
+  repo: SteeringRepository,
+  baseRef: string,
+  prUrl: string | null,
+): void {
+  if (baseRef !== repo.defaultBranch) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "base_moved",
+      message: `${prUrl ?? "The pull request"} targets ${baseRef}; a Context PR merges only into ${repo.defaultBranch}`,
+    });
+  }
 }
 
 /** Wrap a GitHub error as a `conflict` the surfaces map to 409. */
@@ -211,6 +245,36 @@ export function createSteeringGitHub(
         throw githubRefused(err);
       }
     },
+    async findOpenPullRequest(repo, args) {
+      try {
+        return await clientFor(repo).findOpenPullRequest({
+          owner: repo.owner,
+          repo: repo.repo,
+          ...args,
+        });
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async changedPaths(repo, base, head) {
+      try {
+        const files = await clientFor(repo).compareCommits({
+          owner: repo.owner,
+          repo: repo.repo,
+          base,
+          head,
+        });
+        return [
+          ...new Set(
+            files.flatMap((f) =>
+              f.previousPath ? [f.previousPath, f.path] : [f.path],
+            ),
+          ),
+        ];
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
     async getPullRequest(repo, number) {
       try {
         const pr = await clientFor(repo).getPullRequest({
@@ -219,6 +283,7 @@ export function createSteeringGitHub(
           number,
         });
         return {
+          baseRef: pr.baseRef,
           headSha: pr.headSha,
           merged: pr.merged,
           mergeCommitSha: pr.mergeCommitSha,

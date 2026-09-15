@@ -4,11 +4,14 @@
 // the branch `context/<lineage>` from the production branch, the single
 // record file, the PR, then the six checks one at a time — each outcome is
 // written to the row before the next check starts, and mirrored to GitHub as
-// a check run. On a row whose PR is already open the checks run again on the
-// same PR, against its current head. The file that is checked is the one read
-// back from that head, never the text this process built, and once every
-// check passes the row carries the identity stamped in that file: the merge
-// gate pins the merge to this head and the registry is written from the row.
+// a check run. The row records the branch before GitHub is touched, so a call
+// that failed after GitHub opened the PR is retried onto that PR. On a row
+// whose PR is already open the checks run again on the same PR, against its
+// current head, while it still targets the production branch. The file that
+// is checked is the one read back from that head, never the text this process
+// built, together with every path the head changes; once every check passes
+// the row carries the identity stamped in that file: the merge gate pins the
+// merge to this head and the registry is written from the row.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import {
@@ -16,6 +19,7 @@ import {
   type CheckName,
   type CheckResult,
   type ConstraintEffect,
+  type ProposalStatus,
   type PublishedSharingScope,
   type RecordForce,
   type RecordKind,
@@ -34,20 +38,24 @@ import {
   recordFilePath,
   serializeRecordFile,
 } from "./context.steering.file";
-import type { SteeringRepository } from "./context.steering.github";
+import {
+  assertProductionBase,
+  type SteeringRepository,
+} from "./context.steering.github";
 import {
   GOVERNANCE_PATH,
   parseGovernanceMode,
 } from "./context.steering.policy";
-import type { ProposalRow } from "./context.steering.store";
+import { proposalMoved, type ProposalRow } from "./context.steering.store";
 import { contextPrView, prBody } from "./context.steering.view";
 
-const OPEN_PR = new Set([
+const OPEN_PR: readonly ProposalStatus[] = [
   "pr_open",
   "checks_running",
   "checks_passed",
   "checks_failed",
-]);
+];
+const isOpen = (status: string) => OPEN_PR.includes(status as ProposalStatus);
 
 const pendingChecks = (): CheckResult[] =>
   CHECK_NAMES.map((name) => ({
@@ -82,13 +90,9 @@ export function createOpenContextPrHandler(
       });
     }
     if (row.status === "merged" || row.status === "rejected") {
-      throw new HandlerError({
-        code: "conflict",
-        reason: `proposal_${row.status}`,
-        message: `Proposal ${row.publicId} is ${row.status}`,
-      });
+      throw proposalMoved(row.publicId, row.status);
     }
-    if (!OPEN_PR.has(row.status)) {
+    if (!isOpen(row.status)) {
       const other = await deps.store.findOpenPrOnLineage(
         scope,
         row.lineageId,
@@ -117,7 +121,23 @@ export function createOpenContextPrHandler(
 
     const path = recordFilePath(row.lineageId);
     const branch = contextBranch(row.lineageId);
-    if (!OPEN_PR.has(row.status)) {
+    if (!isOpen(row.status)) {
+      // An open PR on the branch is this proposal's only when an earlier call
+      // for it recorded the branch and failed before recording the PR.
+      const existing = await deps.github.findOpenPullRequest(repo, {
+        head: branch,
+        base: repo.defaultBranch,
+      });
+      if (existing && row.branch !== branch) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "lineage_pr_open",
+          message: `${existing.htmlUrl} is already open on ${branch}; one concern, one pull request`,
+        });
+      }
+      if (row.branch !== branch) {
+        row = await deps.store.updateProposal(row.id, { branch }, ["proposed"]);
+      }
       const file = buildRecordFile({
         lineageId: row.lineageId,
         kind: row.kind as RecordKind,
@@ -141,38 +161,53 @@ export function createOpenContextPrHandler(
         message: `steering: propose ${row.lineageId}`,
         branch,
       });
-      const pr = await deps.github.openPullRequest(repo, {
-        title: `Context PR: ${row.lineageId}`,
-        head: branch,
-        base: repo.defaultBranch,
-        body: prBody(stamped),
-      });
-      row = await deps.store.updateProposal(row.id, {
-        status: "pr_open",
-        governanceMode: mode,
-        repository: repo.fullName,
-        baseRef: repo.defaultBranch,
-        branch,
-        path,
-        prNumber: pr.number,
-        prUrl: pr.htmlUrl,
-        headSha: commitSha,
-        stampedRecordId: record.record_id,
-        recordHash: record.record_hash,
-        checks: pendingChecks(),
-        updatedByUserId: ctx.userId ?? null,
-      });
+      const pr =
+        existing ??
+        (await deps.github.openPullRequest(repo, {
+          title: `Context PR: ${row.lineageId}`,
+          head: branch,
+          base: repo.defaultBranch,
+          body: prBody(stamped),
+        }));
+      row = await deps.store.updateProposal(
+        row.id,
+        {
+          status: "pr_open",
+          governanceMode: mode,
+          repository: repo.fullName,
+          baseRef: repo.defaultBranch,
+          branch,
+          path,
+          prNumber: pr.number,
+          prUrl: pr.htmlUrl,
+          headSha: commitSha,
+          stampedRecordId: record.record_id,
+          recordHash: record.record_hash,
+          checks: pendingChecks(),
+          updatedByUserId: ctx.userId ?? null,
+        },
+        ["proposed"],
+      );
     } else {
       const pr = await deps.github.getPullRequest(repo, row.prNumber!);
-      row = await deps.store.updateProposal(row.id, {
-        governanceMode: mode,
-        headSha: pr.headSha,
-        checks: pendingChecks(),
-        updatedByUserId: ctx.userId ?? null,
-      });
+      assertProductionBase(repo, pr.baseRef, row.prUrl);
+      row = await deps.store.updateProposal(
+        row.id,
+        {
+          governanceMode: mode,
+          headSha: pr.headSha,
+          checks: pendingChecks(),
+          updatedByUserId: ctx.userId ?? null,
+        },
+        OPEN_PR,
+      );
     }
 
-    row = await deps.store.updateProposal(row.id, { status: "checks_running" });
+    row = await deps.store.updateProposal(
+      row.id,
+      { status: "checks_running" },
+      OPEN_PR,
+    );
     const headSha = row.headSha;
     if (!headSha) {
       throw new HandlerError({
@@ -181,7 +216,10 @@ export function createOpenContextPrHandler(
         message: `${row.prUrl ?? row.publicId} reports no head commit`,
       });
     }
-    const fileText = await deps.github.readFile(repo, path, headSha);
+    const [fileText, changedPaths] = await Promise.all([
+      deps.github.readFile(repo, path, headSha),
+      deps.github.changedPaths(repo, repo.defaultBranch, headSha),
+    ]);
     if (fileText === null) {
       throw new HandlerError({
         code: "conflict",
@@ -196,6 +234,7 @@ export function createOpenContextPrHandler(
     const checkCtx: CheckContext = {
       fileText,
       path,
+      changedPaths,
       proposal: {
         lineageId: row.lineageId,
         kind: row.kind as RecordKind,
@@ -223,7 +262,9 @@ export function createOpenContextPrHandler(
       const checks = row!.checks.map((c) =>
         c.name === name ? { ...c, ...patch } : c,
       );
-      row = await deps.store.updateProposal(row!.id, { checks });
+      row = await deps.store.updateProposal(row!.id, { checks }, [
+        "checks_running",
+      ]);
     };
     const allPassed = await runChecks(checkCtx, {
       start: async (name) => {
@@ -258,15 +299,19 @@ export function createOpenContextPrHandler(
     // Every check passed, so the file parses and its stamp recomputes: the
     // row now describes the record at this head, the one the merge publishes.
     const parsed = allPassed ? parseChecked(fileText) : null;
-    row = await deps.store.updateProposal(row.id, {
-      status: allPassed ? "checks_passed" : "checks_failed",
-      ...(parsed?.ok
-        ? {
-            stampedRecordId: parsed.file.record[0]!.record_id,
-            recordHash: parsed.file.record[0]!.record_hash,
-          }
-        : {}),
-    });
+    row = await deps.store.updateProposal(
+      row.id,
+      {
+        status: allPassed ? "checks_passed" : "checks_failed",
+        ...(parsed?.ok
+          ? {
+              stampedRecordId: parsed.file.record[0]!.record_id,
+              recordHash: parsed.file.record[0]!.record_hash,
+            }
+          : {}),
+      },
+      ["checks_running"],
+    );
     return contextPrView(row, await deps.store.ledgerLength(scope), null);
   };
 }

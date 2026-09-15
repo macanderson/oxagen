@@ -140,10 +140,11 @@ describe("the GitHub seam", () => {
     });
   });
 
-  it("reads a PR's head and merge commit, and wraps a GitHub refusal", async () => {
+  it("reads a PR's base, head and merge commit, and wraps a GitHub refusal", async () => {
     const getPullRequest = vi
       .fn()
       .mockResolvedValueOnce({
+        baseRef: "main",
         headSha: "head2",
         merged: true,
         mergeCommitSha: "m2",
@@ -152,6 +153,7 @@ describe("the GitHub seam", () => {
     const { gh } = seam(fakeClient({ getPullRequest }));
     const repo = await gh.resolveRepository(SCOPE);
     expect(await gh.getPullRequest(repo, 519)).toEqual({
+      baseRef: "main",
       headSha: "head2",
       merged: true,
       mergeCommitSha: "m2",
@@ -163,6 +165,44 @@ describe("the GitHub seam", () => {
     });
     await expect(gh.getPullRequest(repo, 519)).rejects.toMatchObject({
       reason: "github_refused",
+    });
+  });
+
+  it("names both paths of a rename among the changed paths, finds the open PR on a branch, and wraps a GitHub refusal", async () => {
+    const compareCommits = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { path: ".oxagen/rules/ctx.a.toml", previousPath: null },
+        { path: "docs/x.md", previousPath: ".oxagen/rules/governance.toml" },
+      ])
+      .mockRejectedValueOnce(new Error("GitHub API error 404: Not Found"));
+    const findOpenPullRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ number: 519, htmlUrl: "u" });
+    const { gh } = seam(fakeClient({ compareCommits, findOpenPullRequest }));
+    const repo = await gh.resolveRepository(SCOPE);
+    expect(await gh.changedPaths(repo, "main", "head1")).toEqual([
+      ".oxagen/rules/ctx.a.toml",
+      ".oxagen/rules/governance.toml",
+      "docs/x.md",
+    ]);
+    expect(compareCommits).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      base: "main",
+      head: "head1",
+    });
+    await expect(gh.changedPaths(repo, "main", "head1")).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+    expect(
+      await gh.findOpenPullRequest(repo, { head: "context/x", base: "main" }),
+    ).toEqual({ number: 519, htmlUrl: "u" });
+    expect(findOpenPullRequest).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      head: "context/x",
+      base: "main",
     });
   });
 

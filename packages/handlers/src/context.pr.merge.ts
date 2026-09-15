@@ -2,7 +2,8 @@
 // check passed; refused unless the caller is a reviewer the governance mode
 // allows (context.steering.policy.ts), read from governance.toml on the
 // production branch at merge time; refused when the PR's head is no longer
-// the commit the checks ran on. The merge is pinned to that commit on GitHub
+// the commit the checks ran on, or when the PR no longer targets the
+// production branch. The merge is pinned to that commit on GitHub
 // and the published body is the file at that commit. A merge GitHub already
 // holds (a retry after the publication failed) is resumed from its merge
 // commit. Only a merge GitHub confirmed publishes the record into the
@@ -13,6 +14,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import { assertProductionBase } from "./context.steering.github";
 import {
   GOVERNANCE_PATH,
   mergeRefusal,
@@ -114,6 +116,7 @@ export function createMergeContextPrHandler(
         message: `${row.prUrl} moved to ${pr.headSha ?? "no commit"} after the checks ran on ${row.headSha}; run the checks again`,
       });
     }
+    assertProductionBase(repo, pr.baseRef, row.prUrl);
     // The published body is the file at that commit.
     const body = await deps.github.readFile(repo, row.path, row.headSha);
     if (body === null) {

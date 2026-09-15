@@ -245,6 +245,29 @@ export interface GitHubClient {
   }): Promise<GitHubPrFile[]>;
 
   /**
+   * List the files changed between `base` and `head` as a pull request shows
+   * them: GitHub's three-dot compare, from the merge base to `head`. GitHub
+   * returns up to 300 files.
+   */
+  compareCommits(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubPrFile[]>;
+
+  /**
+   * The open pull request from `head` (a branch in this repository) into
+   * `base`, or null when there is none.
+   */
+  findOpenPullRequest(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    base: string;
+  }): Promise<{ number: number; htmlUrl: string } | null>;
+
+  /**
    * List branches in a repository, paginated up to 300 branches (3 pages of
    * 100). Stops early once a page returns fewer than 100 entries.
    */

@@ -30,6 +30,7 @@ function ctx(over: Partial<CheckContext> = {}): CheckContext {
   return {
     fileText: file(),
     path: `.oxagen/rules/${LINEAGE}.toml`,
+    changedPaths: [`.oxagen/rules/${LINEAGE}.toml`],
     proposal: {
       lineageId: LINEAGE,
       kind: "rule",
@@ -88,6 +89,19 @@ describe("the six §10.3 checks", () => {
     expect(CHECKS.schema(ctx({ fileText: tagged })).summary).toContain(
       "expected context-record/v0.1",
     );
+  });
+
+  it("schema: refuses a pull request that changes any path besides the record file", () => {
+    const out = CHECKS.schema(
+      ctx({
+        changedPaths: [
+          ".oxagen/rules/governance.toml",
+          `.oxagen/rules/${LINEAGE}.toml`,
+        ],
+      }),
+    );
+    expect(out.ok).toBe(false);
+    expect(out.summary).toContain(".oxagen/rules/governance.toml");
   });
 
   it("lineage_uniqueness: refuses a file about another lineage, and a lineage published at another path", () => {

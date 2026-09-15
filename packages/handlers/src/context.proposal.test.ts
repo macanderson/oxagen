@@ -19,11 +19,17 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
+import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createOpenContextPrHandler } from "./context.pr.open";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListProposalsHandler } from "./context.proposal.list";
 import { createDismissProposalHandler } from "./context.proposal.dismiss";
-import { AUTHOR, ctx, harness } from "./context.steering.test-support";
+import {
+  AUTHOR,
+  REVIEWER,
+  ctx,
+  harness,
+} from "./context.steering.test-support";
 
 const proposal = (over: Record<string, unknown> = {}) =>
   contextProposalCreate.input.parse({
@@ -131,9 +137,11 @@ describe("dismiss_proposal", () => {
     expect(h.store.proposals[0]!.dismissedReason).toBe(
       "superseded by the migration lint",
     );
-    await h.store.updateProposal(h.store.proposals[0]!.id, {
-      status: "merged",
-    });
+    await h.store.updateProposal(
+      h.store.proposals[0]!.id,
+      { status: "merged" },
+      ["rejected"],
+    );
     await expect(
       dismiss({ proposalId, reason: "x" }, ctx()),
     ).rejects.toMatchObject({
@@ -174,6 +182,91 @@ describe("dismiss_proposal", () => {
     expect(out.status).toBe("checks_passed");
     expect(out.pr?.number).toBe(520);
     expect(h.github.branches).toHaveLength(2);
+  });
+
+  it("closes the PR an open left unrecorded and deletes its branch; until then another proposal on the lineage is refused", async () => {
+    const h = harness();
+    const propose = createProposeRecordHandler(h);
+    const open = createOpenContextPrHandler(h);
+    const { proposalId: first } = await propose(proposal(), ctx());
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let fail = true;
+    store.updateProposal = async (id, patch, from) => {
+      if (fail && patch.status === "pr_open") {
+        fail = false;
+        throw new Error("db blip");
+      }
+      return update(id, patch, from);
+    };
+    await expect(open({ proposalId: first }, ctx())).rejects.toThrow("db blip");
+    expect(h.github.pulls[0]).toMatchObject({ number: 519, state: "open" });
+
+    const { proposalId: second } = await propose(proposal(), ctx());
+    await expect(open({ proposalId: second }, ctx())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "lineage_pr_open",
+      message: expect.stringContaining("/pull/519"),
+    });
+
+    await createDismissProposalHandler(h)(
+      { proposalId: first, reason: "abandoned" },
+      ctx(),
+    );
+    expect(h.github.pulls[0]).toMatchObject({
+      number: 519,
+      state: "closed",
+      merged: false,
+    });
+    expect(h.github.deletedBranches).toEqual([
+      "context/ctx.platform.migration-order",
+    ]);
+
+    const out = await open({ proposalId: second }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr?.number).toBe(520);
+  });
+
+  it("a merge that publishes while the dismissal is closing the PR keeps its proposal merged, and the dismissal is refused", async () => {
+    const h = harness();
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const github = h.github;
+    const close = github.closePullRequest.bind(github);
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    let parked!: () => void;
+    const closing = new Promise<void>((resolve) => (parked = resolve));
+    github.closePullRequest = async (repo, number) => {
+      parked();
+      await hold;
+      return close(repo, number);
+    };
+
+    const dismissal = createDismissProposalHandler(h)(
+      { proposalId, reason: "late" },
+      ctx(),
+    );
+    await closing;
+    const merged = await createMergeContextPrHandler(h)(
+      { proposalId },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(merged.status).toBe("merged");
+    release();
+
+    await expect(dismissal).rejects.toMatchObject({
+      code: "conflict",
+      reason: "proposal_merged",
+    });
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "merged",
+      dismissedReason: null,
+    });
+    expect(h.store.ledger).toHaveLength(1);
   });
 
   it("touches GitHub not at all for a proposal that has no PR", async () => {

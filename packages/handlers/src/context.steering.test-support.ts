@@ -12,8 +12,10 @@ import type {
   SteeringGitHub,
   SteeringRepository,
 } from "./context.steering.github";
+import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
+  proposalMoved,
   type AppendRow,
   type ProposalRow,
   type PublishedRecordRow,
@@ -169,9 +171,13 @@ export class MemoryStore implements SteeringStore {
   async updateProposal(
     id: string,
     patch: Parameters<SteeringStore["updateProposal"]>[1],
+    from: readonly ProposalStatus[],
   ) {
     const i = this.proposals.findIndex((p) => p.id === id);
     if (i < 0) throw new Error(`no proposal ${id}`);
+    const current = this.proposals[i]!;
+    if (!from.includes(current.status as ProposalStatus))
+      throw proposalMoved(current.publicId, current.status);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
     if (
       OPEN.has(next.status) &&
@@ -373,7 +379,9 @@ export class MemoryStore implements SteeringStore {
       checksum: version.checksum,
     });
     this.ledger.push(promotion);
-    await this.updateProposal(proposal.id, { status: "merged" });
+    await this.updateProposal(proposal.id, { status: "merged" }, [
+      "checks_passed",
+    ]);
     Object.assign(this.proposals.find((p) => p.id === proposal.id)!, {
       mergedCommit: input.commitSha,
       mergedAt: input.mergedAt,
@@ -397,6 +405,8 @@ export class MemoryStore implements SteeringStore {
   }
 }
 
+const pullUrl = (n: number) => `https://github.com/a-intel/platform/pull/${n}`;
+
 export const REPO: SteeringRepository = {
   owner: "a-intel",
   repo: "platform",
@@ -405,15 +415,19 @@ export const REPO: SteeringRepository = {
 };
 
 /**
- * A GitHub with commits: every branch head is a sha, a file is read at a sha
- * or at a branch (its head), a merge is pinned to the head it was asked for,
- * a second PR on a head is refused, and a branch stays until it is deleted.
+ * A GitHub with commits: every branch head is a sha with a parent, a file is
+ * read at a sha or at a branch (its head), a PR's changed paths are the diff
+ * from its merge base, a merge is pinned to the head it was asked for, a
+ * second PR on a head and base is refused, and a branch stays until it is
+ * deleted.
  */
 export class FakeGitHub implements SteeringGitHub {
   /** `${sha}:${path}` → content. */
   files = new Map<string, string>();
   /** branch → head sha. */
   heads = new Map<string, string>();
+  /** sha → its parent sha. */
+  private parents = new Map<string, string>();
   branches: { branch: string; from: string }[] = [];
   commits: { path: string; branch: string; message: string }[] = [];
   pulls: {
@@ -478,8 +492,20 @@ export class FakeGitHub implements SteeringGitHub {
       if (key.startsWith(`${parent}:`))
         this.files.set(`${sha}:${key.slice(parent.length + 1)}`, c);
     this.files.set(`${sha}:${path}`, content);
+    this.parents.set(sha, parent);
     this.heads.set(branch, sha);
     return sha;
+  }
+  private lineage(sha: string): string[] {
+    const out = [sha];
+    for (let p = this.parents.get(sha); p; p = this.parents.get(p)) out.push(p);
+    return out;
+  }
+  private tree(sha: string): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const [key, c] of this.files)
+      if (key.startsWith(`${sha}:`)) out.set(key.slice(sha.length + 1), c);
+    return out;
   }
   async resolveRepository() {
     if (!this.repository) {
@@ -516,7 +542,7 @@ export class FakeGitHub implements SteeringGitHub {
     args: { title: string; head: string; base: string; body: string },
   ) {
     const open = this.pulls.find(
-      (p) => p.head === args.head && p.state === "open",
+      (p) => p.head === args.head && p.base === args.base && p.state === "open",
     );
     if (open) {
       return this.refused(
@@ -532,10 +558,25 @@ export class FakeGitHub implements SteeringGitHub {
       mergeCommitSha: null,
       headSha: this.shaOf(args.head),
     });
-    return {
-      number: this.prNumber,
-      htmlUrl: `https://github.com/a-intel/platform/pull/${this.prNumber}`,
-    };
+    return { number: this.prNumber, htmlUrl: pullUrl(this.prNumber) };
+  }
+  async findOpenPullRequest(
+    _repo: SteeringRepository,
+    args: { head: string; base: string },
+  ) {
+    const pr = this.pulls.find(
+      (p) => p.head === args.head && p.base === args.base && p.state === "open",
+    );
+    return pr ? { number: pr.number, htmlUrl: pullUrl(pr.number) } : null;
+  }
+  async changedPaths(_repo: SteeringRepository, base: string, head: string) {
+    const onBase = new Set(this.lineage(this.shaOf(base)));
+    const mergeBase = this.lineage(this.shaOf(head)).find((s) => onBase.has(s));
+    const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
+    const to = this.tree(this.shaOf(head));
+    return [...new Set([...from.keys(), ...to.keys()])]
+      .filter((path) => from.get(path) !== to.get(path))
+      .sort();
   }
   private pull(number: number) {
     const pr = this.pulls.find((p) => p.number === number);
@@ -545,6 +586,7 @@ export class FakeGitHub implements SteeringGitHub {
   async getPullRequest(_repo: SteeringRepository, number: number) {
     const pr = this.pull(number);
     return {
+      baseRef: pr.base,
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
@@ -588,6 +630,7 @@ export class FakeGitHub implements SteeringGitHub {
     for (const [key, content] of this.files)
       if (key.startsWith(`${head}:`))
         this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
+    this.parents.set(mergeSha, this.shaOf(pr.base));
     this.heads.set(pr.base, mergeSha);
     Object.assign(pr, {
       state: "closed",
@@ -599,6 +642,7 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async closePullRequest(_repo: SteeringRepository, number: number) {
     const pr = this.pull(number);
+    if (pr.state !== "open") return;
     Object.assign(pr, { state: "closed", headSha: this.shaOf(pr.head) });
   }
   async deleteBranch(_repo: SteeringRepository, branch: string) {

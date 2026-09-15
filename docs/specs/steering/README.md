@@ -77,20 +77,27 @@ rejected
 commits the single file, opens the PR (its body: the record, the rationale,
 the supporting records, runs and agents, the evidence links, the check list)
 and runs the checks. On a row whose PR is open it runs the checks again on the
-same PR, against its current head (`head_sha` re-read from GitHub). At most
-one proposal per lineage is in an open-PR state
-(`context_proposals_open_pr_idx`).
+same PR, against its current head (`head_sha` re-read from GitHub), and is
+refused `base_moved` when the PR no longer targets the production branch. The
+branch is written to the row before GitHub is touched, so a call that failed
+after GitHub opened the PR is retried onto that PR; an open PR on the branch
+the row did not record is refused `lineage_pr_open`. At most one proposal per
+lineage is in an open-PR state (`context_proposals_open_pr_idx`), and every
+status write applies only from the statuses it names.
 
 `merge_context_pr` is refused until `checks_passed`, unless the caller is a
-reviewer the governance mode allows, and when the PR's head is no longer the
-commit the checks ran on (`head_moved`). GitHub merges first (squash, pinned
+reviewer the governance mode allows, when the PR's head is no longer the
+commit the checks ran on (`head_moved`), and when the PR no longer targets the
+production branch (`base_moved`). GitHub merges first (squash, pinned
 to that commit); a PR GitHub already holds merged is resumed from its merge
 commit. The head branch is deleted, then a confirmed merge publishes: the
 registry row, a new immutable version holding the file at that commit, the
 promotion event on the ledger (`agent.context_promotions`, `action = promote`,
 `policy_version = governance:<mode>`), the proposal to `merged`, and the
 `steering.published` audit event. The workspace's steering version is the
-ledger length. `dismiss_proposal` closes an open PR and deletes its branch.
+ledger length. `dismiss_proposal` closes an open PR (one found on the branch
+when the row never recorded its number) and deletes its branch, and writes
+`rejected` only to a proposal that is not merged.
 
 `open_context_pr`, `merge_context_pr` and `dismiss_proposal` gate on the
 caller's role and so need a signed-in user; they declare the `api` surface
@@ -107,7 +114,7 @@ a failure.
 
 | # | name | what passes | what fails |
 | --- | --- | --- | --- |
-| 1 | `schema` | TOML; `schema = "context-record/v0.1"`; `set_id`; one or more `[[record]]` each with `lineage_id`, a `kind` from the six, `statement`, `origin` from Stella's five, `sharing_scope` from Stella's four, `status`, `record_id`, `record_hash`, `provenance.source_kind`/`source_uri`, `steering.force` from the four | anything else, named by field |
+| 1 | `schema` | the PR changes the record file and no other path (compare from the production branch to the head; a rename counts both paths); TOML; `schema = "context-record/v0.1"`; `set_id`; one or more `[[record]]` each with `lineage_id`, a `kind` from the six, `statement`, `origin` from Stella's five, `sharing_scope` from Stella's four, `status`, `record_id`, `record_hash`, `provenance.source_kind`/`source_uri`, `steering.force` from the four | any other changed path, named; anything else, named by field |
 | 2 | `lineage_uniqueness` | exactly one record; its lineage is the proposal's and the file stem; no published record holds the lineage at another path | two records; a foreign lineage; a lineage published elsewhere |
 | 3 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes | an edit after stamping |
 | 4 | `secret_pii_scan` | no credential token (vendor prefix, JWT, high-entropy blob), sensitive-key value or PEM block; no email, SSN or Luhn-valid card number — in the statement, rationale, evidence and file | any finding, named by field |

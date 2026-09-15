@@ -126,11 +126,15 @@ export function createAppendRecordHandler(
       // (workspace, record_hash) index kept the first. Its proposal is the
       // one that counts, and the row created for this repeat is dismissed.
       if (proposalRow) {
-        await deps.store.updateProposal(proposalRow.id, {
-          status: "rejected",
-          dismissedAt: new Date(),
-          dismissedReason: `duplicate of the append ${row.publicId}`,
-        });
+        await deps.store.updateProposal(
+          proposalRow.id,
+          {
+            status: "rejected",
+            dismissedAt: new Date(),
+            dismissedReason: `duplicate of the append ${row.publicId}`,
+          },
+          ["proposed"],
+        );
       }
       const first = row.proposalId
         ? await deps.store.findProposalById(row.proposalId)

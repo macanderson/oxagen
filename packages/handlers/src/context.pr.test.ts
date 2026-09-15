@@ -38,6 +38,7 @@ import {
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
 const BRANCH = `context/${LINEAGE}`;
+const GOVERNANCE = ".oxagen/rules/governance.toml";
 
 const proposalInput = (over: Record<string, unknown> = {}) =>
   contextProposalCreate.input.parse({
@@ -154,8 +155,8 @@ describe("open_context_pr", () => {
     const seen: string[] = [];
     const store = h.store;
     const original = store.updateProposal.bind(store);
-    store.updateProposal = async (id, patch) => {
-      const row = await original(id, patch);
+    store.updateProposal = async (id, patch, from) => {
+      const row = await original(id, patch, from);
       const glyph = {
         pending: ".",
         running: "r",
@@ -168,8 +169,10 @@ describe("open_context_pr", () => {
       return row;
     };
     await createOpenContextPrHandler(h)({ proposalId }, ctx());
-    // One check at a time, in order: running, then its outcome, then the next.
-    expect(seen.slice(0, 5)).toEqual([
+    // The branch is recorded before GitHub is touched; then one check at a
+    // time, in order: running, then its outcome, then the next.
+    expect(seen.slice(0, 6)).toEqual([
+      "proposed:",
       "pr_open:......",
       "checks_running:......",
       "checks_running:r.....",
@@ -280,7 +283,9 @@ describe("open_context_pr", () => {
     expect(h.github.pulls).toHaveLength(1);
 
     const rejected = h.store.proposals.find((p) => p.publicId === b)!;
-    await h.store.updateProposal(rejected.id, { status: "rejected" });
+    await h.store.updateProposal(rejected.id, { status: "rejected" }, [
+      "proposed",
+    ]);
     await expect(open({ proposalId: b }, ctx())).rejects.toMatchObject({
       reason: "proposal_rejected",
     });
@@ -330,6 +335,63 @@ describe("open_context_pr", () => {
     expect(
       out.checks.every((c) => c.detailsUrl === null && c.status === "passed"),
     ).toBe(true);
+  });
+
+  it("fails the schema check when the branch changes a file besides the record, so nothing merges and the production branch keeps its governance file", async () => {
+    const h = harness({ [`main:${GOVERNANCE}`]: 'mode = "team"\n' });
+    const id = await proposed(h);
+    const open = createOpenContextPrHandler(h);
+    expect((await open({ proposalId: id }, ctx())).status).toBe(
+      "checks_passed",
+    );
+    h.github.commit(BRANCH, GOVERNANCE, 'mode = "solo"\n');
+
+    const out = await open({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_failed");
+    const schema = out.checks.find((c) => c.name === "schema")!;
+    expect(schema.status).toBe("failed");
+    expect(schema.summary).toContain(GOVERNANCE);
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ reason: "checks_not_passed" });
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.store.records).toHaveLength(0);
+    expect(await h.github.readFile(REPO, GOVERNANCE, "main")).toBe(
+      'mode = "team"\n',
+    );
+  });
+
+  it("retries onto the PR GitHub opened when recording it failed: one PR, checked at the new head, and the row carries its number", async () => {
+    const h = harness();
+    const id = await proposed(h);
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let fail = true;
+    store.updateProposal = async (rowId, patch, from) => {
+      if (fail && patch.status === "pr_open") {
+        fail = false;
+        throw new Error("db blip");
+      }
+      return update(rowId, patch, from);
+    };
+    const open = createOpenContextPrHandler(h);
+    await expect(open({ proposalId: id }, ctx())).rejects.toThrow("db blip");
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "proposed",
+      prNumber: null,
+      branch: BRANCH,
+    });
+
+    const out = await open({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({ number: 519, headSha: "head2" });
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.checkRuns).toHaveLength(6);
+    expect(h.github.checkRuns.every((r) => r.headSha === "head2")).toBe(true);
   });
 
   it("is refused for a role the gate excludes, before GitHub is touched", async () => {
@@ -591,6 +653,32 @@ describe("merge_context_pr", () => {
     expect(h.github.deletedBranches).toHaveLength(0);
     expect(h.store.records).toHaveLength(0);
     expect(h.store.ledger).toHaveLength(0);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
+  it("refuses base_moved on the merge and on a re-run once the PR is retargeted off the production branch, and publishes nothing", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.pulls[0]!.base = "staging";
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "base_moved",
+      message: expect.stringContaining("targets staging"),
+    });
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject({ code: "conflict", reason: "base_moved" });
+    expect(h.github.checkRuns).toHaveLength(6);
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.github.deletedBranches).toHaveLength(0);
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.events).toHaveLength(0);
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
   });
 

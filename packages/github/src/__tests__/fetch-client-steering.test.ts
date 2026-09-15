@@ -1,6 +1,7 @@
 // The calls the Context PR (ADR-061) needs beyond the read client: a
 // completed check run on a commit, a pull request merge pinned to a head
-// commit, a close, and a branch delete.
+// commit, a close, a branch delete, the files a head changes against its
+// base, and the open pull request on a branch.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGitHubClient } from "../fetch-client";
 
@@ -235,5 +236,71 @@ describe("deleteBranch", () => {
     await expect(
       client.deleteBranch({ owner: "o", repo: "r", branch: "context/ctx.x" }),
     ).rejects.toThrow("GitHub API error 422: Reference does not exist");
+  });
+});
+
+describe("compareCommits", () => {
+  it("GETs the three-dot compare from the base to a head sha and returns every file with its previous path", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        files: [
+          {
+            filename: ".oxagen/rules/ctx.a.toml",
+            status: "added",
+            additions: 30,
+            deletions: 0,
+            changes: 30,
+          },
+          {
+            filename: "docs/x.md",
+            previous_filename: ".oxagen/rules/governance.toml",
+            status: "renamed",
+            additions: 0,
+            deletions: 0,
+            changes: 0,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const files = await client.compareCommits({
+      owner: "o",
+      repo: "r",
+      base: "main",
+      head: "abc123",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/o/r/compare/main...abc123");
+    expect(init.method).toBe("GET");
+    expect(files.map((f) => [f.path, f.previousPath, f.status])).toEqual([
+      [".oxagen/rules/ctx.a.toml", null, "added"],
+      ["docs/x.md", ".oxagen/rules/governance.toml", "renamed"],
+    ]);
+  });
+});
+
+describe("findOpenPullRequest", () => {
+  it("GETs the open pulls from owner:head into base and answers the first, or null when there is none", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse([
+          { number: 519, html_url: "https://github.com/o/r/pull/519" },
+        ]),
+      )
+      .mockResolvedValueOnce(makeResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const args = { owner: "o", repo: "r", head: "context/ctx.a", base: "main" };
+    expect(await client.findOpenPullRequest(args)).toEqual({
+      number: 519,
+      htmlUrl: "https://github.com/o/r/pull/519",
+    });
+    expect(await client.findOpenPullRequest(args)).toBeNull();
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe(
+      "https://api.github.com/repos/o/r/pulls?state=open&head=o%3Acontext%2Fctx.a&base=main",
+    );
   });
 });

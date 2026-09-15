@@ -6,7 +6,10 @@
 // in-memory store in context.steering.test-support.ts.
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
-import type { CheckResult } from "@oxagen/oxagen/contracts/context.steering.shared";
+import type {
+  CheckResult,
+  ProposalStatus,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   and,
   asc,
@@ -14,6 +17,7 @@ import {
   desc,
   eq,
   getTableColumns,
+  inArray,
   isNull,
   or,
   sql,
@@ -155,7 +159,16 @@ export interface SteeringStore {
     filter: { status?: string; lineageId?: string },
     page: Page,
   ): Promise<{ rows: ProposalRow[]; total: number }>;
-  updateProposal(id: string, patch: ProposalPatch): Promise<ProposalRow>;
+  /**
+   * Apply the patch only while the proposal's status is one of `from`; a
+   * proposal another call moved on is left as it is and the write throws
+   * `conflict` with the reason `proposal_<its status>`.
+   */
+  updateProposal(
+    id: string,
+    patch: ProposalPatch,
+    from: readonly ProposalStatus[],
+  ): Promise<ProposalRow>;
 
   listRecords(
     scope: SteeringScope,
@@ -199,6 +212,15 @@ export interface SteeringStore {
    * transaction back with `already_merged`.
    */
   publishMerge(input: PublishMergeInput): Promise<PublishMergeResult>;
+}
+
+/** A guarded proposal write found the proposal at `status`. */
+export function proposalMoved(publicId: string, status: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: `proposal_${status}`,
+    message: `Proposal ${publicId} is ${status}`,
+  });
 }
 
 /** The publication found the proposal past `checks_passed`. */
@@ -347,18 +369,32 @@ export const postgresSteeringStore: SteeringStore = {
     });
   },
 
-  async updateProposal(id, patch) {
+  async updateProposal(id, patch, from) {
     return withTenantDb(async (tx) => {
       const [row] = await tx
         .update(schema.contextProposals)
         .set({ ...patch, updatedAt: sql`now()` })
-        .where(eq(schema.contextProposals.id, id))
+        .where(
+          and(
+            eq(schema.contextProposals.id, id),
+            inArray(schema.contextProposals.status, [...from]),
+          ),
+        )
         .returning();
-      if (!row)
+      if (row) return toProposal(row);
+      const [current] = await tx
+        .select({
+          publicId: schema.contextProposals.publicId,
+          status: schema.contextProposals.status,
+        })
+        .from(schema.contextProposals)
+        .where(eq(schema.contextProposals.id, id))
+        .limit(1);
+      if (!current)
         throw new Error(
           `[context.steering] proposal ${id} vanished during update`,
         );
-      return toProposal(row);
+      throw proposalMoved(current.publicId, current.status);
     });
   },
 

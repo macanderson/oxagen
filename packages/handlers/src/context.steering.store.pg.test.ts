@@ -98,18 +98,22 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
     const proposal = await propose();
     const opened = await inScope(() =>
-      store.updateProposal(proposal.id, {
-        status: "checks_passed",
-        repository: "a-intel/platform",
-        baseRef: "main",
-        branch: `context/${lineage}`,
-        path: `.oxagen/rules/${lineage}.toml`,
-        prNumber: 519,
-        prUrl: "https://github.com/a-intel/platform/pull/519",
-        headSha: "abc1234",
-        stampedRecordId: "rec_x",
-        recordHash: `sha256:${"a".repeat(64)}`,
-      }),
+      store.updateProposal(
+        proposal.id,
+        {
+          status: "checks_passed",
+          repository: "a-intel/platform",
+          baseRef: "main",
+          branch: `context/${lineage}`,
+          path: `.oxagen/rules/${lineage}.toml`,
+          prNumber: 519,
+          prUrl: "https://github.com/a-intel/platform/pull/519",
+          headSha: "abc1234",
+          stampedRecordId: "rec_x",
+          recordHash: `sha256:${"a".repeat(64)}`,
+        },
+        ["proposed"],
+      ),
     );
     const mergedAt = new Date("2026-09-15T09:16:40.000Z");
     const first = await inScope(() =>
@@ -180,6 +184,15 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         }),
       ),
     ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
+    // A guarded write finds the proposal merged and leaves it as it is.
+    await expect(
+      inScope(() =>
+        store.updateProposal(proposal.id, { status: "rejected" }, [
+          "proposed",
+          "checks_passed",
+        ]),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "proposal_merged" });
     expect(await inScope(() => store.ledgerLength(scope))).toBe(1);
     expect(
       (await inScope(() => store.findRecord(scope, lineage)))!.versions,
@@ -187,18 +200,22 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
 
     const second = await propose({ statement: "Cache the first read." });
     const secondOpened = await inScope(() =>
-      store.updateProposal(second.id, {
-        status: "checks_passed",
-        repository: "a-intel/platform",
-        baseRef: "main",
-        branch: `context/${lineage}`,
-        path: `.oxagen/rules/${lineage}.toml`,
-        prNumber: 520,
-        prUrl: "https://github.com/a-intel/platform/pull/520",
-        headSha: "def5678",
-        stampedRecordId: "rec_y",
-        recordHash: `sha256:${"e".repeat(64)}`,
-      }),
+      store.updateProposal(
+        second.id,
+        {
+          status: "checks_passed",
+          repository: "a-intel/platform",
+          baseRef: "main",
+          branch: `context/${lineage}`,
+          path: `.oxagen/rules/${lineage}.toml`,
+          prNumber: 520,
+          prUrl: "https://github.com/a-intel/platform/pull/520",
+          headSha: "def5678",
+          stampedRecordId: "rec_y",
+          recordHash: `sha256:${"e".repeat(64)}`,
+        },
+        ["proposed"],
+      ),
     );
     const again = await inScope(() =>
       store.publishMerge({
@@ -228,9 +245,13 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   it("keeps one open PR per lineage through the partial unique index", async () => {
     const a = await propose({ lineageId: `${lineage}.dup` });
     const b = await propose({ lineageId: `${lineage}.dup` });
-    await inScope(() => store.updateProposal(a.id, { status: "pr_open" }));
+    await inScope(() =>
+      store.updateProposal(a.id, { status: "pr_open" }, ["proposed"]),
+    );
     await expect(
-      inScope(() => store.updateProposal(b.id, { status: "checks_running" })),
+      inScope(() =>
+        store.updateProposal(b.id, { status: "checks_running" }, ["proposed"]),
+      ),
     ).rejects.toThrow();
     expect(
       await inScope(() =>

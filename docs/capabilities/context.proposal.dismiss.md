@@ -12,7 +12,7 @@
 
 ## Intent
 
-Reject a proposal with a reason ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md)). A proposal with an open Context PR has the PR closed on GitHub and its branch `context/<lineage>` deleted before the row changes, so the next proposal on the lineage opens a fresh branch and PR. A merged proposal is published and cannot be dismissed; retirement is its own Context PR and is outside this release.
+Reject a proposal with a reason ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md)). A proposal with an open Context PR has the PR closed on GitHub and its branch `context/<lineage>` deleted before the row changes, so the next proposal on the lineage opens a fresh branch and PR. A proposal whose open failed after GitHub opened the PR carries the branch and no PR number; its PR is found on the branch and closed, unless another proposal on the lineage has opened a PR there since. The `rejected` write applies only to a proposal that is not merged, so a merge that publishes while GitHub is being called keeps its proposal and the dismissal is refused `proposal_merged`. A merged proposal is published and cannot be dismissed; retirement is its own Context PR and is outside this release.
 
 ## Input
 

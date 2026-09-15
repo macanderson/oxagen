@@ -67,10 +67,14 @@ re-reads it from GitHub; the checks read the file at that commit and the
 check runs are posted to it; once every check passes the row carries the
 `record_id` and `record_hash` stamped in that file, and check 6 holds the
 file's kind, force, scope and statement to the proposal's, so the registry
-row written from the proposal at merge describes the file. `merge_context_pr`
-refuses `head_moved` when GitHub's head is no longer `head_sha`, sends that
-sha with the merge (GitHub answers 409 on a race), and publishes the file at
-that commit. A PR GitHub already reports merged — an earlier call whose
+row written from the proposal at merge describes the file. The squash merges
+every file the head changes, so check 1 also fails a PR that changes any path
+besides the record file (GitHub's compare from the production branch to
+`head_sha`, both paths of a rename counted). `merge_context_pr` refuses
+`head_moved` when GitHub's head is no longer `head_sha` and `base_moved` when
+the PR no longer targets the production branch (a re-run of the checks
+refuses `base_moved` too), sends that sha with the merge (GitHub answers 409
+on a race), and publishes the file at that commit. A PR GitHub already reports merged — an earlier call whose
 publication failed — is resumed from its merge commit, so a retry publishes
 once and never asks GitHub to merge again.
 
@@ -79,6 +83,14 @@ it before publishing, and `dismiss_proposal` closes an open PR and deletes
 its branch before writing `rejected`; the next proposal on the lineage
 branches from the production branch that already holds the squash, so
 there is no add/add conflict and no "a pull request already exists" 422.
+`open_context_pr` records the branch on the row before it calls GitHub, so a
+call that failed after GitHub opened the PR is retried onto that PR, and a
+dismissal of that proposal finds the PR on its branch and closes it. An open
+PR on the branch that the proposal did not record is refused
+`lineage_pr_open`. Every status write names the statuses it moves from and
+throws `proposal_<status>` when another call moved the proposal first, so a
+dismissal never overwrites a merge and a check run never overwrites a
+dismissal.
 
 The three writes that gate on a role — `open_context_pr`,
 `merge_context_pr`, `dismiss_proposal` — declare the `api` surface only.
