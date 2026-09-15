@@ -1436,6 +1436,7 @@
       "paths": ["apps/app", "verifications/"],
       "dependsOn": ["WL-50", "WL-51"],
       "acceptance": "CI green on the merge PR (checks, test, e2e incl. pay with the real test key). After deploy, app.oxagen.sh/login returns 200 with title 'Log in · Oxagen' and, signed in as a real (non-seeded) org owner, each rev1 route's title matches its catalog key; no seed runs in production. Responses and screenshots saved under verifications/<session>/.",
+      "notes": "2026-09-15 (ARCHITECTURE §9): 20260915020000_cost_price_book_and_rollups.sql, 20260915020100_rls_cost_tables.sql and 20260915020200_run_totals_operator_key.sql are applied in production (from main 67b9715d0, #3080); status OK at 20260915020200, 109 executed, 0 pending; the list price book holds 192 rows effective 2026-09-15T00:00:00Z. The three files are frozen: the cutover's first step is `git diff --exit-code origin/main <cutover-ref> -- packages/database/atlas/migrations/20260915020000_cost_price_book_and_rollups.sql packages/database/atlas/migrations/20260915020100_rls_cost_tables.sql packages/database/atlas/migrations/20260915020200_run_totals_operator_key.sql`, and 20260915020100 is never regenerated. The remaining app-rebuild migrations apply at cutover under non-linear execution order; the gate before that apply is a production dry run reading Next Version 20260914165423 with no checksum or history error. The billing.plans stripe-sync upsert runs after the cutover apply.",
       "estimateLinesDelta": 0
     },
     {
