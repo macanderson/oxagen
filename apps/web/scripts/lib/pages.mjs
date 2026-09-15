@@ -45,7 +45,7 @@ export function cardTitle(title) {
 
 /**
  * The card's file stem for a page path inside dist/:
- * "index.html" → "index", "products/stella/index.html" → "products-stella".
+ * "index.html" → "index", "products/oxagen/index.html" → "products-oxagen".
  * @param {string} rel
  */
 export function pageKey(rel) {

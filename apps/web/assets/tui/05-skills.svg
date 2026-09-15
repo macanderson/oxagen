@@ -3,7 +3,7 @@
 <text x="16" y="22" font-size="11" fill="#8C877C">SESSION  AGENTS  TRACES  GRAPH  FILES</text>
 <text x="306" y="22" font-size="11" fill="#D6962C" font-weight="500">SKILLS</text>
 <text x="366" y="22" font-size="11" fill="#8C877C">MCP  ISSUES</text>
-<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">stella</text>
+<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">agent</text>
 <text x="645" y="22" font-size="12" fill="#D6962C" font-weight="500">*</text>
 <line x1="0" y1="32" x2="680" y2="32" stroke="#292722" stroke-width="1"/>
 <rect x="12" y="42" width="656" height="24" fill="#181715" stroke="#292722" stroke-width="1"/>
@@ -26,7 +26,7 @@
 <text x="560" y="139" font-size="11" fill="#8C877C">7× · 0.6k</text>
 <text x="22" y="161" font-size="11" fill="#504C44">uses · avg tok per inject → prune what never fires</text>
 <text x="16" y="204" font-size="11" fill="#8C877C">learned from traces · 3</text>
-<text x="196" y="204" font-size="11" fill="#504C44">stella wrote these after repeated wins</text>
+<text x="196" y="204" font-size="11" fill="#504C44">written after repeated wins</text>
 <rect x="12" y="212" width="656" height="64" fill="#181715" stroke="#292722" stroke-width="1"/>
 <text x="22" y="232" font-size="11" fill="#D6962C">[x]</text>
 <text x="50" y="232" font-size="11" fill="#E8E8EC">search-by-meaning-first</text>
