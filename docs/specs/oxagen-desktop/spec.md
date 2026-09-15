@@ -211,7 +211,7 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420
 | Windows | Azure Trusted Signing; without it SmartScreen warns | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
 | Linux | unsigned; the `.deb` and `.rpm` carry no repository yet | none |
 
-> **Fleet and MDM.** The same installers push through MDM. A post-install that runs `tacho enroll --token … --org … --workspace … --managed --harness claude-code,codex` enrolls silently, and the managed settings document `enroll --print-managed` renders locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`; the app's This machine panel says so.
+> **Fleet and MDM.** The same installers push through MDM. A post-install that runs `tacho enroll --token … --org … --workspace … --managed --harness claude-code,codex,stella` enrolls silently, and the managed settings document `enroll --print-managed` renders locks the hooks so a user cannot strip them. The session record still carries `enforcement_tier = client_attested`; the app's This machine panel says so.
 
 
 ## 10. What was verified
