@@ -51,6 +51,7 @@ import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
@@ -85,6 +86,7 @@ import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
+import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
 import { budgetPolicyWriteRoute } from "./budget.policy.write";
@@ -369,6 +371,15 @@ const ROUTES: ThinRoute[] = [
     method: "GET",
     capability: billingBudgetGet.name,
     expectedInput: {},
+    status: 200,
+  },
+  {
+    file: "billing.invoice.list",
+    route: billingInvoiceListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingInvoiceList.name,
+    body: { limit: 10 },
+    invalidBody: { limit: 0 },
     status: 200,
   },
   {

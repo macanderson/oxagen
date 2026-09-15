@@ -14,7 +14,7 @@
     "forgotPassword": { "title": "Reset your password" },
     "resetPassword": { "title": "Choose a new password" },
     "invite": { "title": "Accept your invitation" },
-    "welcome": { "title": "Welcome to Oxagen" },
+    "newOrganization": { "title": "Create your organization" },
     "cliAuthorize": { "title": "Authorize the Oxagen CLI" },
     "githubSetup": { "title": "Finish connecting GitHub" },
     "organization": { "title": "Organization" },
@@ -31,8 +31,7 @@
     "tools": { "title": "Tools" },
     "ontology": { "title": "Ontology" },
     "steering": { "title": "Steering" },
-    "spend": { "title": "Spend" },
-    "register": { "title": "Register an agent" }
+    "spend": { "title": "Spend" }
   },
   "states": {
     "notBacked": {

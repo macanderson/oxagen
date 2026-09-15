@@ -24,7 +24,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { evidenceSchema } from "./_schemas";
-import { appendOnlyAuditMixin, idMixin, orgScopeMixin } from "./_mixins";
+import { appendOnlyAuditMixin, hexIdMixin, orgScopeMixin } from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // Shared vocabularies
@@ -126,7 +126,7 @@ export const SHA256_DIGEST_PATTERN = "^sha256:[0-9a-f]{64}$";
 export const retentionPolicyVersions = evidenceSchema.table(
   "retention_policy_versions",
   {
-    ...idMixin("rpv"),
+    ...hexIdMixin("rpv"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
     // Monotonically increasing per (org, workspace). Version 1 is the first

@@ -28,10 +28,10 @@
     },
     {
       "page": "Shell (org layout)",
-      "ships": "Sidebar with 9 links (no Ontology), org and workspace switchers, user menu (sign out, theme), ⌘K over static routes, MobileNav (component-tested at a 400 px container). Between WL-08 and WL-11 the switchers show the current org/workspace from the layout's viewer with no list.",
+      "ships": "Sidebar with 7 links in the mockup's order (Fleet, Agent IAM, Tools, Steering, Spend; Organization, Billing — no Ontology, no Audit; Run has no sidebar entry, it opens from the Fleet runs table), org and workspace switchers, user menu (sign out, theme), ⌘K over static routes, MobileNav (component-tested at a 400 px container). The #2968 lane (ADR-053; app half after WL-33, before WL-50) adds the assistant flyout on stella-serve with turns recorded as runs and an honest engine-down state, notifications, ⌘K as search_tools over the app's own routes and records, nav counts and the Account dialog: rev1 shell features built by that lane, not cut (maintainer, 2026-09-14: 'dont cut the in app agent'). Between WL-08 and WL-11 the switchers show the current org/workspace from the layout's viewer with no list.",
       "backing": "shell.context = kernelRead(list_orgs) + kernelRead(list_workspaces), implemented in WL-11 as the kernel seam's first production caller",
       "notRecordedOnly": [
-        "Not rendered at all: notifications, assistant flyout, Account dialog, nav counts, recent runs"
+        "Until the #2968 lane lands, not rendered at all: notifications, assistant flyout, Account dialog, nav counts, recent runs (WL-06 deletes the fixture-backed versions; the lane rebuilds them on live backing)"
       ]
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "page": "Run /{org}/{ws}/runs/{run} (pages.run)",
-      "ships": "Header (agent, operator or 'not recorded', status, times, cost with basis or 'not recorded'); frames for ledger runs with SSE resume on an opaque cursor (every poll is a noBillingGate kernelRead, so the stream never meters); approvals strip for this run; Halt for wrapped runs, disabled on ledger runs with the run.halt.ledgerReason copy. Halt has no exhausted state: dispatch_tacho_command is noBillingGate (tacho.command.dispatch.ts:24). Proof, context and cost-strip slices render nothing.",
+      "ships": "Header (agent, operator or 'not recorded', status, times, cost with basis or 'not recorded'); frames for ledger runs with SSE resume on an opaque cursor (every poll is a noBillingGate kernelRead, so the stream never meters); approvals strip for this run; Halt for wrapped runs, disabled on ledger runs with the run.halt.ledgerReason copy. Halt has no exhausted state: dispatch_tacho_command is noBillingGate (tacho.command.dispatch.ts:24). Proof and cost-strip slices render nothing until their lanes: witness first (#2955 — the proof/witness tab: the flip, verdicts on runs, proven spend), then #2952 (recorder and replay) and #2953 (controls: pause, resume, cancel, steer). The Context tab is cut (#2954 closed) and renders nothing for good.",
       "backing": "get_run with an opaque frame cursor (new, WL-18, noBillingGate), list_approvals {runId}, resolve_approval, dispatch_tacho_command kill (existing)",
       "notRecordedOnly": [
         "run.frames_wrapped (G6) — the one in-page NotRecorded row"
@@ -67,33 +67,27 @@
     },
     {
       "page": "Agents /{org}/{ws}/agents (pages.agents)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1",
-      "notRecordedOnly": ["agents"]
+      "ships": "PageHeader + one NotRecorded state until the #2956 lane (with #2957 mandates) lands its app half: identities list and agent detail with identity, credential broker (token exchange; the agent holds no credentials), roles, toolbelt and mandates. No scores or percentiles (#2969 closed); no two-person mandates.",
+      "backing": "none at WL-33; the #2956/#2957 backend halves register the contracts the app half binds (§1.1(b))",
+      "notRecordedOnly": ["agents — deleted by the lane's app-half PR"]
     },
     {
       "page": "Tools /{org}/{ws}/tools (pages.tools)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1 (no emergency-deny contract; registry blocked by #2915 and structural nulls)",
-      "notRecordedOnly": ["tools"]
+      "ships": "PageHeader + one NotRecorded state until the #2958 lane lands its app half: registry, connections and credential grants, kill switches, auto-approval rules. No policy simulation, Cedar versions or assurance suite (#2959 closed).",
+      "backing": "none at WL-33 (no emergency-deny contract; registry blocked by #2915 and structural nulls); the #2958 backend half registers the contracts the app half binds",
+      "notRecordedOnly": ["tools — deleted by the lane's app-half PR"]
     },
     {
       "page": "Steering /{org}/{ws}/steering (pages.steering)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1",
-      "notRecordedOnly": ["steering"]
+      "ships": "PageHeader + one NotRecorded state until the #2961 lane lands its app half: published records → proposals with their support → the Context PR state machine. No effect metrics, retirement candidates or promotion thresholds.",
+      "backing": "none at WL-33; the #2961 backend half registers the contracts the app half binds",
+      "notRecordedOnly": ["steering — deleted by the lane's app-half PR"]
     },
     {
       "page": "Spend /{org}/{ws}/spend (pages.spend)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1",
-      "notRecordedOnly": ["spend"]
-    },
-    {
-      "page": "Audit /{org}/audit (pages.audit)",
-      "ships": "PageHeader + one NotRecorded state",
-      "backing": "none in rev1",
-      "notRecordedOnly": ["audit"]
+      "ships": "PageHeader + one NotRecorded state until the #2963 lane lands its app half: attribution (spend by operator and agent) and costed findings with evidence and a fix. No reconciliation tab.",
+      "backing": "none at WL-33; the #2963 backend half registers the contracts the app half binds",
+      "notRecordedOnly": ["spend — deleted by the lane's app-half PR"]
     }
   ],
   "seams": [
@@ -129,7 +123,7 @@
     },
     {
       "name": "Not recorded (one state for unbacked slices)",
-      "contract": "UNRECORDED: Record<UnrecordedKey, {gap: `G${number}`|null}> as const with exactly six keys: agents, tools, steering, spend, audit (whole pages) and run.frames_wrapped (the one in-page row). <NotRecorded section={UnrecordedKey}/> renders catalog prose with the gap only as a data-gap attribute. Every other unbacked in-page slice renders nothing: no row, no prose, no port method, no view model, no adapter.",
+      "contract": "UNRECORDED: Record<UnrecordedKey, {gap: `G${number}`|null}> as const with at most five keys at WL-33: agents, tools, steering, spend (one per kept page, deleted by that page's gap lane in the PR that lands the page) and run.frames_wrapped (the one in-page row). Audit has no key: it has no page (decision log 2026-09-14). The table only shrinks. <NotRecorded section={UnrecordedKey}/> renders catalog prose with the gap only as a data-gap attribute. Every other unbacked in-page slice renders nothing: no row, no prose, no port method, no view model, no adapter.",
       "module": "apps/app/src/data/unrecorded.ts + apps/app/src/ui/not-recorded.tsx"
     },
     {
@@ -252,7 +246,7 @@
     {
       "id": "INV-18",
       "statement": "An unbacked page is exactly one UNRECORDED row rendered only by <NotRecorded>; an unbacked in-page slice renders nothing, except run.frames_wrapped.",
-      "enforcement": "Architecture test src/test/arch/unrecorded.test.ts (every row rendered by a route; every section literal in the table; the table has exactly the six §3.6 keys; no contract or port symbol shares a row key)."
+      "enforcement": "Architecture test src/test/arch/unrecorded.test.ts (every row rendered by a route; every section literal in the table; the table's keys are a subset of the five §3.6 keys and a key whose page has landed is gone; no contract or port symbol shares a row key)."
     },
     {
       "id": "INV-19",
@@ -271,7 +265,7 @@
     },
     {
       "id": "INV-22",
-      "statement": "Under apps/app no demo, seed or mock data and no dev-only data or auth switch exists in the production bundle; the one sanctioned harness relaxation, E2E_TEST=true, lives in packages/auth (auth.ts:63, local-env.ts:59-63, guarded by !VERCEL) and is set only by the e2e webServer.",
+      "statement": "Under apps/app no demo, seed or mock data and no dev-only data or auth switch exists in the production bundle; the one sanctioned harness relaxation, E2E_TEST=true, lives in packages/auth (auth.ts:63, local-env.ts:59-63, guarded by !VERCEL) and is set only by the e2e harness: the webServer in playwright.config.ts and the seed:e2e script, whose sign-in self-check runs under the same relaxation.",
       "enforcement": "Arch test: zero hits for MC_DATA|isFixtureMode|FIXTURE_|mc_state|adapters/fixture|E2E_TEST under src/, instrumentation.ts, next.config.ts; *.builders.ts and viewer.testing.ts importable only from tests; CI step after next build: a Node scan of .next/server and .next/static for 'e2e.oxagen.test' and 'demo-seed' finds nothing, mutation-checked once."
     },
     {
@@ -333,7 +327,7 @@
     },
     {
       "id": "page-load",
-      "journey": "page-load.spec.ts, one test — `test(\"every rev1 page loads with its title\", …)` — iterating REV1_ROUTES from e2e/routes.ts with test.step(r.path, …) per entry (20 steps after WL-33), so the suite is exactly three tests. Each entry is {path, auth: 'anonymous'|'owner', query?, expect: {title} | {redirectTo}}: anonymous entries (/login, /signup, /verify, /two-factor, /forgot-password, /reset-password, /invite/e2e-no-such-token) use a fresh context; owner entries use the saved storage state. A title step visits the route with its query and asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key), reading messages/en.json; /invite/[token] is visited with an unknown token and asserts pages.invitationNotFound; /cli/authorize carries a valid PKCE query built in routes.ts (redirect_uri=http://127.0.0.1:53682/callback, state, code_challenge=base64url(sha256(verifier)), code_challenge_method=S256); /{org}/{ws}/runs/{run} uses the seeded run id; / asserts it landed on /e2e-org/core (expect.redirectTo, admitted for that path only). INV-20's arch test keeps REV1_ROUTES equal to the page.tsx files.",
+      "journey": "page-load.spec.ts, one test — `test(\"every rev1 page loads with its title\", …)` — iterating REV1_ROUTES from e2e/routes.ts with test.step(r.path, …) per entry (19 steps after WL-33; a gap lane that adds a route adds a step), so the suite is exactly three tests. Each entry is {path, auth: 'anonymous'|'owner', query?, expect: {title} | {redirectTo}}: anonymous entries (/login, /signup, /verify, /two-factor, /forgot-password, /reset-password, /invite/e2e-no-such-token) use a fresh context; owner entries use the saved storage state. A title step visits the route with its query and asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key), reading messages/en.json; /invite/[token] is visited with an unknown token and asserts pages.invitationNotFound; /cli/authorize carries a valid PKCE query built in routes.ts (redirect_uri=http://127.0.0.1:53682/callback, state, code_challenge=base64url(sha256(verifier)), code_challenge_method=S256); /{org}/{ws}/runs/{run} uses the seeded run id; / asserts it landed on /e2e-org/core (expect.redirectTo, admitted for that path only). INV-20's arch test keeps REV1_ROUTES equal to the page.tsx files.",
       "proves": "Every rev1 page renders for a real session with the right name, from the root title template and the page's catalog key, so a new page cannot ship without a title or skip the smoke"
     }
   ],
@@ -468,7 +462,7 @@
         "apps/app/messages/shell.json"
       ],
       "dependsOn": ["WL-04"],
-      "acceptance": "ShellReadPort has only context (still the stub until WL-08 removes it). rg finds no navCounts, people, notifications, assistantEngine, recentRuns, account or liveNotifications under apps/app/src. The command menu lists static routes only. Surviving shell-client tests pass by file; the shell renders on /{org}/{ws}. The knip baseline shrinks by the removed entries.",
+      "acceptance": "ShellReadPort has only context (still the stub until WL-08 removes it). rg finds no navCounts, people, notifications, assistantEngine, recentRuns, account or liveNotifications under apps/app/src. The command menu lists static routes only. Surviving shell-client tests pass by file; the shell renders on /{org}/{ws}. The knip baseline shrinks by the removed entries. This deletes the fixture-backed versions only: the assistant flyout, notifications, nav counts and the Account dialog are rev1 shell features the #2968 lane rebuilds on live backing (stella-serve per ADR-053) after WL-33 (ARCHITECTURE.md §8, Gap lanes); they are not cut.",
       "estimateLinesDelta": -2000
     },
     {
@@ -499,7 +493,7 @@
     },
     {
       "id": "WL-08",
-      "title": "Delete the unbound data layer: non-rev1 ports, contracts, live adapters (incl. the shell.context stub), mappers, DB tests, backing table, not_backed; add the six-row UNRECORDED table and NotRecorded; switchers render the current org/ws from the viewer",
+      "title": "Delete the unbound data layer: non-rev1 ports, contracts, live adapters (incl. the shell.context stub), mappers, DB tests, backing table, not_backed; add the five-row UNRECORDED table and NotRecorded; switchers render the current org/ws from the viewer",
       "kind": "delete",
       "paths": [
         "apps/app/src/data/adapters/live",
@@ -523,7 +517,7 @@
         "apps/app/src/test/arch/unrecorded.test.ts"
       ],
       "dependsOn": ["WL-06", "WL-07"],
-      "acceptance": "ports.ts declares an empty DataSource (no shell.context: today's implementation is the stub at live/shell.ts:11-12 returning notBackedFor, and nothing in src/ calls list_orgs or list_workspaces except live/org.ts:42,283, deleted here); features/shell/source.ts:21 and the switchers no longer call it and render the current org and workspace from the layout's viewer (viewer-resolution.ts:20-28) with no list. Read<T> is ok | denied | error with no not_backed variant; PageKey and PAGE_FAILURES live in src/data/read.ts. rg for notBacked(, notBackedFor, BACKING, not_backed and liveCommandDeliveries under apps/app/src returns nothing. No *.pg.test.ts or *.db.test.ts remains in apps/app. UNRECORDED has exactly agents, tools, steering, spend, audit and run.frames_wrapped (no ontology: the page leaves rev1 scope, decision log 2026-09-14); every placeholder route renders <NotRecorded section=…> and unrecorded.test.ts passes; Fleet, Run, People, API keys and Billing render <PageHeader> with their title and no body until their page PR (WL-34…WL-38), never a NotRecorded row. The stream route is removed and 404s until WL-35. tsc passes; every remaining route renders. knip baseline shrinks.",
+      "acceptance": "ports.ts declares an empty DataSource (no shell.context: today's implementation is the stub at live/shell.ts:11-12 returning notBackedFor, and nothing in src/ calls list_orgs or list_workspaces except live/org.ts:42,283, deleted here); features/shell/source.ts:21 and the switchers no longer call it and render the current org and workspace from the layout's viewer (viewer-resolution.ts:20-28) with no list. Read<T> is ok | denied | error with no not_backed variant; PageKey and PAGE_FAILURES live in src/data/read.ts. rg for notBacked(, notBackedFor, BACKING, not_backed and liveCommandDeliveries under apps/app/src returns nothing. No *.pg.test.ts or *.db.test.ts remains in apps/app. UNRECORDED has exactly agents, tools, steering, spend and run.frames_wrapped (no ontology and no audit: neither page ships, decision log 2026-09-14; each gap lane deletes its page's key when the page lands); every placeholder route renders <NotRecorded section=…> and unrecorded.test.ts passes; Fleet, Run, People, API keys and Billing render <PageHeader> with their title and no body until their page PR (WL-34…WL-38), never a NotRecorded row. The stream route is removed and 404s until WL-35. tsc passes; every remaining route renders. knip baseline shrinks.",
       "estimateLinesDelta": -26000
     },
     {
@@ -1077,12 +1071,12 @@
         "apps/app/messages/shell.json"
       ],
       "dependsOn": ["WL-11", "WL-13"],
-      "acceptance": "The switchers render the org and workspace lists from DataSource.shell.context (implemented in WL-11) and component tests cover ok, denied and error states with expectNoAxe. src/app/page.tsx is one line delegating to the landing: requireUser() → pretenant.orgs(ctx) → first org by membership → pretenant.workspaces(ctx, orgSlug) → redirectTo(routes.fleet(org, firstWorkspace)) or routes.newOrganization(); landing.test.ts covers no org, one org, an org with no workspace → redirectTo(routes.people(org)), and a denied read → the error page. MobileNav is component-tested at a 400 px container. port-callers.test.ts (pretenant has exactly landing.ts and cli-consent.ts as callers) and live-adapters.test.ts pass. The sidebar renders exactly 9 links: nav.ts has no ontology key, nav-icons.tsx no icon for it, shell.json no ontology label, and commands.ts no graph-question commands (they opened Ontology's graph tab); nav.test.ts, commands.test.ts and shell-client.test.tsx assert the 9-link set and no /{org}/{ws}/ontology href.",
+      "acceptance": "The switchers render the org and workspace lists from DataSource.shell.context (implemented in WL-11) and component tests cover ok, denied and error states with expectNoAxe. src/app/page.tsx is one line delegating to the landing: requireUser() → pretenant.orgs(ctx) → first org by membership → pretenant.workspaces(ctx, orgSlug) → redirectTo(routes.fleet(org, firstWorkspace)) or routes.newOrganization(); landing.test.ts covers no org, one org, an org with no workspace → redirectTo(routes.people(org)), and a denied read → the error page. MobileNav is component-tested at a 400 px container. port-callers.test.ts (pretenant has exactly landing.ts and cli-consent.ts as callers) and live-adapters.test.ts pass. The sidebar renders exactly 7 links in the mockup's order — Fleet, Agent IAM, Tools, Steering, Spend; Organization, Billing (Run has no sidebar entry) — so nav.ts has no ontology or audit key (OrgNavKey is organization | billing; ORG_SEGMENTS has no audit), nav-icons.tsx no icon for either, shell.json no ontology or audit label, and commands.ts no graph-question commands (they opened Ontology's graph tab) and no audit-export command (commands.ts:79 today); nav.test.ts, commands.test.ts and shell-client.test.tsx assert the 7-link set and no /{org}/{ws}/ontology or /{org}/audit href.",
       "estimateLinesDelta": 220
     },
     {
       "id": "WL-33",
-      "title": "Route pruning, NotRecorded pages and per-page titles: root title template, generateMetadata + PageHeader from one catalog key per route (two keys on the invite page); vitest route exclusion removed; no Ontology page",
+      "title": "Route pruning, NotRecorded pages and per-page titles: root title template, generateMetadata + PageHeader from one catalog key per route (two keys on the invite page); vitest route exclusion removed; no Ontology page, no Audit page",
       "kind": "build",
       "paths": [
         "apps/app/src/app/layout.tsx",
@@ -1103,7 +1097,7 @@
         "apps/app/vitest.config.ts"
       ],
       "dependsOn": ["WL-10", "WL-13", "WL-32"],
-      "acceptance": "`fd page.tsx apps/app/src/app` lists exactly the 20 §1.2 route files: no [[...tab]], [[...drill]], agents/[agent], roles or ontology. apps/app/src/app/[org]/[ws]/ontology/** is deleted outright (no NotRecorded page; decision log 2026-09-14), messages/en.json has no pages.ontology key and the unrecorded catalog has no ontology prose. layout.tsx sets metadata.title = {default: t('app.name'), template: '%s · Oxagen'}; every page.tsx except src/app/page.tsx exports generateMetadata returning {title: t(<pages.key>)} and renders <PageHeader title={t(<pages.key>)}> from the same key; /invite/[token] uses pages.invitation when the token resolves and pages.invitationNotFound otherwise, in both generateMetadata and the heading; a unit test per page renders it and asserts the h1 and metadata agree (the invite page in both states; /cli/authorize with and without a valid PKCE query). Each [org] page calls requireViewer; route-guard, unrecorded and route-thin tests pass. vitest.config.ts:34-42 route exclusion removed and the 90% threshold holds.",
+      "acceptance": "`fd page.tsx apps/app/src/app` lists exactly the 19 §1.2 route files: no [[...tab]], [[...drill]], agents/[agent], roles, ontology or audit. apps/app/src/app/[org]/[ws]/ontology/** and apps/app/src/app/[org]/audit/** are deleted outright (no NotRecorded page; decision log 2026-09-14 — the audit placeholder was already removed from the branch with the scale-back PR), messages/en.json has no pages.ontology or pages.audit key and the unrecorded catalog has no ontology or audit prose. The gap lanes' app halves (ARCHITECTURE.md §8) land after this item. layout.tsx sets metadata.title = {default: t('app.name'), template: '%s · Oxagen'}; every page.tsx except src/app/page.tsx exports generateMetadata returning {title: t(<pages.key>)} and renders <PageHeader title={t(<pages.key>)}> from the same key; /invite/[token] uses pages.invitation when the token resolves and pages.invitationNotFound otherwise, in both generateMetadata and the heading; a unit test per page renders it and asserts the h1 and metadata agree (the invite page in both states; /cli/authorize with and without a valid PKCE query). Each [org] page calls requireViewer; route-guard, unrecorded and route-thin tests pass. vitest.config.ts:34-42 route exclusion removed and the 90% threshold holds.",
       "estimateLinesDelta": -150
     },
     {
@@ -1345,7 +1339,7 @@
         "apps/app/package.json"
       ],
       "dependsOn": ["WL-46", "WL-35", "WL-37", "WL-38"],
-      "acceptance": "REV1_ROUTES has one entry per page.tsx (20; no /{org}/{ws}/ontology) of shape {path, auth, query?, expect: {title} | {redirectTo}}: '/' → {redirectTo: '/e2e-org/core'}; '/invite/e2e-no-such-token' anonymous → pages.invitationNotFound; '/cli/authorize' owner with a PKCE query built in routes.ts from a fixed verifier (redirect_uri http://127.0.0.1:53682/callback, state, code_challenge = base64url(sha256(verifier)), code_challenge_method S256; cli-authorize.ts:53-67); the Run route uses the seeded run id; every other entry a pages.* key. page-load.spec.ts declares exactly one test() that iterates REV1_ROUTES with test.step(r.path, …): a title step asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key) from messages/en.json; the redirect step asserts the final URL. `playwright test --list` over the three files reports exactly 3 tests. e2e-files.test.ts fails when a page.tsx is missing from REV1_ROUTES, when redirectTo is used on any path but '/', and when a title key is absent from the catalog (each mutation recorded in the PR). All steps pass in CI on the first attempt. apps/app/package.json's test:e2e script drops --pass-with-no-tests (package.json:19), so `playwright test` with a testMatch that matches nothing exits non-zero (mutation recorded in the PR).",
+      "acceptance": "REV1_ROUTES has one entry per page.tsx (19 at WL-33; no /{org}/{ws}/ontology, no /{org}/audit; a gap lane that adds a route adds its entry) of shape {path, auth, query?, expect: {title} | {redirectTo}}: '/' → {redirectTo: '/e2e-org/core'}; '/invite/e2e-no-such-token' anonymous → pages.invitationNotFound; '/cli/authorize' owner with a PKCE query built in routes.ts from a fixed verifier (redirect_uri http://127.0.0.1:53682/callback, state, code_challenge = base64url(sha256(verifier)), code_challenge_method S256; cli-authorize.ts:53-67); the Run route uses the seeded run id; every other entry a pages.* key. page-load.spec.ts declares exactly one test() that iterates REV1_ROUTES with test.step(r.path, …): a title step asserts document.title === `${t(key)} · Oxagen` and the h1 equals t(key) from messages/en.json; the redirect step asserts the final URL. `playwright test --list` over the three files reports exactly 3 tests. e2e-files.test.ts fails when a page.tsx is missing from REV1_ROUTES, when redirectTo is used on any path but '/', and when a title key is absent from the catalog (each mutation recorded in the PR). All steps pass in CI on the first attempt. apps/app/package.json's test:e2e script drops --pass-with-no-tests (package.json:19), so `playwright test` with a testMatch that matches nothing exits non-zero (mutation recorded in the PR).",
       "estimateLinesDelta": 170
     },
     {
@@ -1366,7 +1360,7 @@
     },
     {
       "id": "WL-49",
-      "title": "Cutover: Appendix F legacy redirects as a data table in proxy.ts (72 rows incl. billing/governed-actions and billing/usage) + unit test over every row",
+      "title": "Cutover: Appendix F legacy redirects as a data table in proxy.ts (73 rows incl. billing/governed-actions, billing/usage and /{org}/audit) + unit test over every row",
       "kind": "build",
       "paths": [
         "apps/app/src/proxy.ts",
@@ -1374,7 +1368,7 @@
         "apps/app/src/proxy.test.ts"
       ],
       "dependsOn": ["WL-33"],
-      "acceptance": "The unit test reads the table and asserts each target is a §1.2 route with status 308, including /{org}/billing/governed-actions → /{org}/billing, /{org}/billing/usage → /{org}/billing, /{org}/{ws}/sessions, /{org}/members and /{org}/developer/tokens, and the rows Appendix F sent to Ontology retargeted: /{org}/{ws}/knowledge, knowledge/graph, knowledge/graph/[nodeId], knowledge/ontology, knowledge/sources, knowledge/sources/connect and /{org}/{ws}/settings/github → /{org}/{ws} (Fleet); knowledge/memory → /{org}/{ws}/steering unchanged; no row targets /{org}/{ws}/ontology. Dropping one row fails the test (mutation recorded in the PR). proxy.ts uses responseRedirect from shared/navigation.ts (INV-13).",
+      "acceptance": "The unit test reads the table and asserts each target is a §1.2 route with status 308, including /{org}/billing/governed-actions → /{org}/billing, /{org}/billing/usage → /{org}/billing, /{org}/{ws}/sessions, /{org}/members and /{org}/developer/tokens, and the rows Appendix F sent to Ontology retargeted: /{org}/{ws}/knowledge, knowledge/graph, knowledge/graph/[nodeId], knowledge/ontology, knowledge/sources, knowledge/sources/connect and /{org}/{ws}/settings/github → /{org}/{ws} (Fleet); knowledge/memory → /{org}/{ws}/steering unchanged; the rows Appendix F sent to Audit retargeted to /{org} (Organization › People): /{org}/security, security/audit, security/compliance, security/mfa, security/trust, governance and access, plus a new row /{org}/audit/** → /{org} (no Audit page, decision log 2026-09-14); no row targets /{org}/{ws}/ontology or /{org}/audit. Dropping one row fails the test (mutation recorded in the PR). proxy.ts uses responseRedirect from shared/navigation.ts (INV-13).",
       "estimateLinesDelta": 260
     },
     {
@@ -1466,7 +1460,7 @@
     "Billing amendment assumption 1 (adopted unless overridden, §3.9 item 6): an interim invoice does not move the monthly clock — the period-end invoice covers the remainder of the period, and the subscription's own advance bill is untouched. Confirm.",
     "Billing amendment assumption 2 (adopted unless overridden, §3.9 item 6): an interim or period-close invoice that is not paid on the day leaves an invoice-billed org running, flags it past due on the billing page (pastDue = an open settlement of the month) and stays collectable by Stripe — its retry schedule on a charge_automatically invoice, the hosted invoice page in either case; there is no automatic suspension for GAU invoices in rev1 (subscription dunning is unchanged and still suspends). Confirm, or name the point at which an unpaid GAU invoice should suspend.",
     "Saved cards. The only card capture in rev1 is the one Checkout collects on a block purchase (payment_intent_data.setup_future_usage 'off_session', made the customer default when none exists); there is no card-management UI. Consequences: a prepaid org cannot auto top-up until it has saved a card — for a Free org that is the rule answered 2026-09-14 (save a card or wait for the next month; the first block purchase through Checkout is the rev1 card-saving path, and the gate's refusal names it with reason 'free_no_payment_method'), so that half is settled; an invoice-billed org, which cannot buy blocks, has no way to save a card at all, so its interim and period-close invoices are send_invoice with days_until_due 30 (emailed by Stripe, paid on the hosted invoice page) instead of a same-day charge. Confirm both, or ask for a SetupIntent card form on the billing page for either mode (the package already has createPaymentMethodSetupIntent, packages/billing/src/payment-methods.ts:121); confirm the 30-day term, or supply the net terms your invoice-approved customers are on.",
-    "The $5 signup credit grant (grantFreeCredits in create_org, org.create.ts:169-195) is deleted in WL-16 so create_org writes nothing billing-shaped; the ADR-053 platform-funded assistant balance of a new org therefore starts at zero. The assistant flyout is not in rev1. Confirm, or name where the grant should return when the assistant ships.",
+    "The $5 signup credit grant (grantFreeCredits in create_org, org.create.ts:169-195) is deleted in WL-16 so create_org writes nothing billing-shaped; the ADR-053 platform-funded assistant balance of a new org therefore starts at zero. The assistant flyout is a rev1 shell feature built by the #2968 lane (maintainer, 2026-09-14: 'dont cut the in app agent'). Confirm, or name where the grant should return when that lane ships; the lane's backend half is the natural place.",
     "set_org_billing_terms is invoked only by the operator script `pnpm billing:terms` run with production credentials from Parameter Store (the db-migrate.yml / billing:stripe-sync pattern), through a `platformOnly` kernel check that no surface can satisfy (INV-31). Confirm this as the platform-scoped path for rev1, or ask for an operator role and an API route.",
     "Retention is off the page (R3-A3): get_evidence_retention returns unmeasured values for every org; no retention rate is stored, printed or charged; chargeEvidenceRetention is deleted. Confirm, or name the lane that measures per-org evidence volume and meters retention at a contracted per-GB-month rate as an invoice line.",
     "Who may buy GAUs (decision N-GAU): the design lets every tier, including Free, buy a GAU block at its contracted rate, because a block is a unit purchase, not a credit pack, and the direction names no tier gate; the credits Free-tier gate (packages/billing/src/entitlements.ts:125-127) stays only on the credits path the app no longer uses. Answered 2026-09-14: ratified as the card-saving path — every tier with a saved payment method may buy a block, and the Checkout that buys the first one saves the card, so a Free org with no card may purchase; only the recorder's auto top-up needs a card already on file (ADR-055 §6).",
@@ -1476,11 +1470,11 @@
     "The pay e2e needs a repository secret STRIPE_TEST_SECRET_KEY (a test-mode key from the Oxagen Stripe account) scoped to the e2e job (WL-48). The job is fail-closed: until the secret exists, every push to main and every same-repo PR fails at the 'Stripe test key present' step. Confirm the account and who sets the secret before WL-48 merges.",
     "Add a list_api_keys row to spec Appendix E. The appendix names create/rotate/revoke_api_key but no read and says nothing is added back without a row. WL-20, WL-37 and WL-43 wait on it. Recommendation: add the row; the alternative is shipping the API keys tab as one NotRecorded state.",
     "UI capability parity at cutover (WL-50, ADR-056): the deprecated app binds about 64 capabilities (apps/app_deprecated/capability-ui-map.json), most with no rev1 UI. The design adds every rev1 'app' layer in the cutover PR (the strict forward gate reads the deprecated map until APP_DIR flips), keeps the layer on get_subscription and get_gau_bucket, and retires it on get_rate_card, preview_action_cost, purchase_credits, start_subscription_upgrade and get_evidence_retention. Retiring layers on bound capabilities is a visible regression and needs sign-off.",
-    "Ratify cutting every fixture-only and unbacked slice from rev1: six of ten Appendix F pages (Agents, Tools, Ontology, Steering, Spend, Audit) render one NotRecorded state, in-page unbacked slices render nothing (only run.frames_wrapped keeps a NotRecorded row), and the unbound port methods are deleted, overriding plan §0 decision 3. Recommendation: ratify; each later page lane restores its slice with its contract, port method and tests.",
+    "Ratified in part by the review of 2026-09-14 and the maintainer's decisions on it (ARCHITECTURE.md §9): four of the Appendix F pages (Agents, Tools, Steering, Spend) render one NotRecorded state until their gap lanes land (#2956/#2957, #2958, #2961, #2963), Ontology and Audit are not built and have no route, in-page unbacked slices render nothing (only run.frames_wrapped keeps a NotRecorded row), and the unbound port methods are deleted, overriding plan §0 decision 3. Each lane restores its slice with its contract, port method and tests; slices the review cut have no lane.",
     "Ratify deleting the runtime fixture adapter (12,942 lines, MC_DATA, fixture session and tenancy), with dev and e2e running on a seeded real stack through package APIs and the CI-only E2E_TEST=true relaxation in packages/auth, overriding plan §4.5 and §4.12. Recommendation: ratify; it removes the 'fixture reachable in production' risk class and lets the pay and login specs hit the real kernel.",
-    "Confirm 'Halt a wrapped run' (existing dispatch_tacho_command kill) as rev1's governance write in place of a kill switch: set_kill_switch is new in Appendix E and no contract writes iam.emergency_denies. Recommendation: confirm and keep Tools as NotRecorded until set_kill_switch lands.",
-    "Confirm dropping the onboarding gate (name → wrap → run, G15) and the in-app assistant flyout from rev1, although spec §14.1 puts the in-app agent on every screen. Neither has live backing (backing.ts:222-228; live/shell.ts:17-18 stub; stella-serve not exposed to the app). New users land on Fleet's empty state with the enroll instruction.",
-    "get_spend_budget returns float USD (packages/oxagen/src/contracts/billing.budget.get.ts:31-35), which breaks the micros money invariant; changing it breaks API and MCP consumers. Not needed for rev1 (Spend is NotRecorded). Approve the change before the Spend lane starts; filed as a reliability handoff until then.",
+    "Confirm 'Halt a wrapped run' (existing dispatch_tacho_command kill) as rev1's governance write in place of a kill switch: set_kill_switch is new in Appendix E and no contract writes iam.emergency_denies. Recommendation: confirm and keep Tools as NotRecorded until the #2958 lane lands set_kill_switch with the registry.",
+    "Confirm dropping the onboarding gate (name → wrap → run, G15) from the WL-07 cut only: the gate returns as the #2967 lane (kept, 2026-09-14) on live backing (backing.ts:222-228 today). The in-app assistant flyout is not dropped: the maintainer kept it ('dont cut the in app agent') and the #2968 lane builds it on stella-serve per ADR-053 (live/shell.ts:17-18 is a stub and stella-serve is not exposed to the app today, which is that lane's backend half). Until both lanes land, new users land on Fleet's empty state with the enroll instruction.",
+    "get_spend_budget returns float USD (packages/oxagen/src/contracts/billing.budget.get.ts:31-35), which breaks the micros money invariant; changing it breaks API and MCP consumers. Not needed at WL-33 (Spend is NotRecorded until the #2963 lane). Approve the change before that lane starts; filed as a reliability handoff until then.",
     "Two uncommitted local worktrees overlap this plan: wt-2-c2-contracts (server/invoke-read.ts, data/settle.ts, org/tools mapper edits) and wt-2-k1-kernel-fixes (packages/agent/src/runtime/approval-id.ts for #2906). Recommendation: fold k1 into WL-14 as-is; discard c2, because WL-08 deletes those adapters and WL-11's kernel.ts supersedes invokeRead.",
     "The interim threshold (§3.9 item 8d): the design cuts the interim invoice when uninvoiced overage beyond the allowance reaches invoice_gau_max (uninvoiced ≥ max, so with Build's 50k allowance and a 100k cap the first interim fires at GAU #150,000 of the month), following the amendment's model table ('reaches invoice_gau_max'). The verbatim says 'gau # 100,001 occurs', which reads as the total count and as the unit after the cap. Confirm the count the cap bounds (overage beyond the allowance, or total GAUs in the month) and the boundary (≥ max, or > max).",
     "Settlement states (§3.9 item 7): pending → open | paid; open → paid; failed only for a row Stripe never answered within the 24-hour idempotency window or a pending top-up a Checkout superseded (its draft deleted, or voided if open; drafts are created with auto_advance false, so an abandoned one never collects). A voided or uncollectible GAU invoice is not a state the ledger tracks in rev1 (the billing.invoices mirror shows Stripe's status in Invoices; the prepaid episode it holds ends with the next paid purchase or the next month). Confirm, or ask for invoice.voided / invoice.marked_uncollectible to end the episode."

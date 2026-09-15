@@ -58,10 +58,10 @@ describe("a declared threshold must have a task that can fail it (#2635)", () =>
     ).toBeNull();
   });
 
-  it("says nothing about a package that declares no thresholds", () => {
+  it("says nothing about a package that declares no thresholds and has no suite", () => {
     // Not gating on coverage is a choice, and this guard has no opinion on it.
     const f = fs({
-      "p/package.json": pkg({ "test:unit": "vitest run" }, {}),
+      "p/package.json": pkg({ build: "tsc" }, {}),
       "p/vitest.config.ts": NO_THRESHOLDS,
     });
     expect(
@@ -79,6 +79,32 @@ describe("a declared threshold must have a task that can fail it (#2635)", () =>
     expect(
       verdict(inspect("p", f.read as never, f.exists as never))!.missing[0],
     ).toContain("@vitest/coverage-v8");
+  });
+
+  it("fails a test:unit script with no test:coverage script, thresholds or not", () => {
+    // `apps/desktop` exactly: PR CI runs test:coverage, so this suite ran
+    // on the nightly matrix only.
+    const f = fs({
+      "p/package.json": pkg({ "test:unit": "vitest run" }, {}),
+      "p/vitest.config.ts": NO_THRESHOLDS,
+    });
+    const v = verdict(inspect("p", f.read as never, f.exists as never));
+    expect(v!.missing).toHaveLength(1);
+    expect(v!.missing[0]).toContain("test:coverage");
+    expect(v!.missing[0]).toContain("test:unit");
+  });
+
+  it("passes a test:unit script paired with a test:coverage script and a provider", () => {
+    const f = fs({
+      "p/package.json": pkg(
+        { "test:unit": "vitest run", "test:coverage": "vitest run --coverage" },
+        { "@vitest/coverage-v8": "2.1.9" },
+      ),
+      "p/vitest.config.ts": NO_THRESHOLDS,
+    });
+    expect(
+      verdict(inspect("p", f.read as never, f.exists as never)),
+    ).toBeNull();
   });
 
   it("ignores a directory with no package.json", () => {

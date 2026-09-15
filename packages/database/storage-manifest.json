@@ -553,7 +553,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -977,7 +976,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -999,7 +997,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1022,7 +1019,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1361,6 +1357,16 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "list_invoices",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_mcp_consents",
       "reads": [],
@@ -1508,7 +1514,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1603,7 +1608,6 @@
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -2633,7 +2637,7 @@
       "writes": []
     }
   ],
-  "contentHash": "308a364bbfd776bfeb798933d4c66b4b66a77e4b736d6f79b2960594dbadeacb",
+  "contentHash": "ea0a29a3013ab87de0bada3fd0d239626966ac5bdbae1854fa5087b87457d79e",
   "domains": [
     {
       "name": "agent",

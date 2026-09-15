@@ -4,11 +4,12 @@
 // `.auth/` that login.spec.ts writes). No `*.spec.ts` sits under any other
 // `apps/*/e2e` and no other `apps/*` carries a `playwright.config.ts`.
 //
-// WL-03 deletes the fixture-mode suite; WL-46 lands the three specs. Between
-// the two, `apps/app/e2e` is absent and the entry set is empty, which this
-// test admits until WL-46 removes that allowance. The route-set, catalog-key
-// and `--pass-with-no-tests` clauses of INV-20 land with `routes.ts` (WL-46,
-// WL-47).
+// WL-03 deleted the fixture-mode suite; WL-46 landed `login.spec.ts` and
+// `support/`, so the suite directory exists and every entry is checked. The
+// entries WL-47 (`page-load.spec.ts`, `routes.ts`) and WL-48 (`pay.spec.ts`)
+// land are carried in baseline.json as `missing-entry` violations until they
+// do; the baseline only shrinks. The route-set, catalog-key and
+// `--pass-with-no-tests` clauses of INV-20 land with `routes.ts` (WL-47).
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -57,12 +58,11 @@ function hasSpec(abs: string): boolean {
 
 /**
  * Violations for the suite directory at `abs`, reported as `at`: each entry
- * outside the rev1 set and each rev1 entry that is absent. An empty directory
- * (or none) is admitted until WL-46 lands the suite.
+ * outside the rev1 set and each rev1 entry that is absent (an absent
+ * directory is missing every entry).
  */
 function suiteViolations(abs: string, at: string): string[] {
   const actual = visibleEntries(abs);
-  if (actual.length === 0) return [];
   return [
     ...actual
       .filter((name) => !REV1_E2E_ENTRIES.includes(name))
@@ -116,9 +116,11 @@ describe("e2e files", () => {
     });
   });
 
-  it("an absent suite directory has no entries, admitted until WL-46", () => {
+  it("an absent suite directory is missing every entry", () => {
     expect(suiteViolations(path.join(PROBE_DIR, "absent"), SUITE_AT)).toEqual(
-      [],
+      REV1_E2E_ENTRIES.map(
+        (name) => `${RULE} ${SUITE_AT} missing-entry:${name}`,
+      ),
     );
   });
 

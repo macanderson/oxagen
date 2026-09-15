@@ -5,9 +5,13 @@
  * directly (vendor-neutral, no cycle), so it exposes an injection slot. Every
  * service surface (api, app, mcp) calls `bootstrapBillingRuntime()` once at
  * startup — the same pattern as `bootstrapIAMRuntime()` — so that EVERY
- * `contract.invoke()` runs `assertCanStartTurn(orgId)` before the model does.
- * Without this call the gate is dormant and suspended / zero-balance orgs could
- * still consume. Idempotent.
+ * scoped, non-`noBillingGate` `contract.invoke()` runs
+ * `assertGauAvailable(orgId)` before the handler does. Without this call the
+ * gate is dormant and suspended or exhausted orgs could still consume.
+ * Idempotent.
+ *
+ * `assertCanStartTurn`, the credit-balance gate, survives only inside the
+ * ADR-053 platform-funded assistant turn (turn-credit-gate.ts).
  */
 
 import {
@@ -15,10 +19,9 @@ import {
   setBudgetAdmissionGate,
   setUsageRecorder,
 } from "@oxagen/oxagen/kernel";
-import { assertCanStartTurn } from "./metering";
+import { assertGauAvailable } from "./gau-bucket";
 import { assertWithinSpendBudget } from "./spend-budget-gate";
 import { recordGovernedAction } from "./action-metering";
-import { resolveOrgActionEntitlement } from "./plan-allowance";
 import { logger } from "./logger";
 
 let booted = false;
@@ -26,7 +29,9 @@ let booted = false;
 export function bootstrapBillingRuntime(): void {
   if (booted) return;
   booted = true;
-  setBillingAdmissionGate((orgId) => assertCanStartTurn(orgId));
+  // ADR-055: admission is a read of the org's month bucket and billing mode;
+  // it never charges (a gate that charges fails open when Stripe is down).
+  setBillingAdmissionGate((orgId) => assertGauAvailable(orgId));
   // Hard period-to-date spend ceiling. Fires right after the billing
   // admission gate inside the kernel's tenant scope; denies with
   // BudgetExceededError when an org/workspace ceiling is reached.
@@ -37,15 +42,12 @@ export function bootstrapBillingRuntime(): void {
   // because an append failed. The kernel guarantees this only fires for a
   // top-level, non-`noBillingGate`, successfully-completed invocation.
   setUsageRecorder(async (record) => {
-    // One query for tier + stored allowance. Two would be two round trips per
-    // governed action for two columns of the same join.
-    const entitlement = await resolveOrgActionEntitlement(record.orgId);
+    // The recorder resolves the org's terms, mode and period itself: a caller
+    // cannot talk itself onto cheaper terms by claiming them.
     await recordGovernedAction({
       orgId: record.orgId,
       actions: record.actions,
       capability: record.capability,
-      tier: entitlement.tier,
-      planIncludedActions: entitlement.includedActionsAnnual,
       runId: record.runId,
       now: record.occurredAt,
     });

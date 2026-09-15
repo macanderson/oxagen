@@ -60,7 +60,7 @@ const ORG_SCOPE = {
   workspaceId: ORG_ONLY_WORKSPACE_ID,
 };
 
-/** A port serving the built shell reads to the built viewer, and a 404 context to anyone else. */
+/** A port serving the built context to the built viewer, and a 404 to anyone else. */
 function builtPort(): ShellReadPort {
   const data = shellData();
   return {
@@ -70,12 +70,6 @@ function builtPort(): ShellReadPort {
           ? data.context
           : readError("org_not_found", 404),
       ),
-    navCounts: () => Promise.resolve(data.counts),
-    notifications: () => Promise.resolve(data.notifications),
-    people: () => Promise.resolve(readError("people_not_read", 501)),
-    assistantEngine: () => Promise.resolve(data.engine),
-    recentRuns: () => Promise.resolve({ ok: true, value: data.runs }),
-    account: () => Promise.resolve(data.account),
   };
 }
 const builtSource = (): ShellSource => ({

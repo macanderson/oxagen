@@ -5,15 +5,16 @@
  *
  * WHY this exists — closing the free-ride:
  *
- * `assertCanStartTurn(orgId)` is the platform's single admission gate. It is
- * already wired into EVERY `contract.invoke()` (via bootstrapBillingRuntime →
- * setBillingAdmissionGate in the kernel), so every scoped, metered TOOL call an
- * agent makes is refused for a suspended or zero-balance org. But the chat
- * route's top-level model turn reaches `streamAgentReply` as a
- * direct `@oxagen/ai` streaming call, NOT a `contract.invoke()` — so a turn that
- * makes no tool call (a pure Q&A response) skipped the balance check entirely
- * and a zero-balance org got a full model call for free. This gate closes that
- * window by running the SAME `assertCanStartTurn` before the model turn begins.
+ * The chat route's top-level model turn reaches `streamAgentReply` as a
+ * direct `@oxagen/ai` streaming call, NOT a `contract.invoke()`, so a turn
+ * that makes no tool call (a pure Q&A response) would spend the platform key's
+ * tokens with no gate in front of it. This gate runs `assertCanStartTurn`
+ * — the ADR-053 credit-balance gate for platform-funded assistant tokens —
+ * before the model turn begins. It is the credit gate's only surviving
+ * caller: the kernel's admission gate for governed actions is
+ * `assertGauAvailable` (gau-bucket.ts, ADR-055), installed by
+ * bootstrapBillingRuntime → setBillingAdmissionGate, and it reads the
+ * organisation's month bucket rather than a credit balance.
  *
  * WHY it is safe (never a false lockout):
  *   - It blocks ONLY on the two AFFIRMATIVE billing outcomes:

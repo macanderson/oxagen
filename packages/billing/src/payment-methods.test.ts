@@ -15,6 +15,7 @@
  *  6. removeOrgPaymentMethod — promotes next card to default when removed card was default
  *  7. removeOrgPaymentMethod — throws LastPaymentMethodError when removing last card on active sub
  *  8. isLastPaymentMethodError type guard
+ *  9. readDefaultPaymentMethod — the default row from the mirror, no provider call
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -109,6 +110,7 @@ const {
   removeOrgPaymentMethod,
   LastPaymentMethodError,
   isLastPaymentMethodError,
+  readDefaultPaymentMethod,
 } = await import("./payment-methods");
 
 // ---------------------------------------------------------------------------
@@ -178,6 +180,38 @@ describe("listOrgPaymentMethods", () => {
     _findManyResult = [];
     const result = await listOrgPaymentMethods("org-empty");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("readDefaultPaymentMethod", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _findFirstResult = undefined;
+  });
+
+  it("returns the default card's id, brand and last4 from the mirror", async () => {
+    _findFirstResult = makeDbPm({ isDefault: true });
+    const result = await readDefaultPaymentMethod("org-001");
+    expect(result).toEqual({
+      stripePaymentMethodId: "pm_001",
+      brand: "visa",
+      last4: "4242",
+    });
+  });
+
+  it("returns null when the org has saved no default card", async () => {
+    _findFirstResult = undefined;
+    expect(await readDefaultPaymentMethod("org-001")).toBeNull();
+  });
+
+  it("never calls the provider or creates a customer", async () => {
+    _findFirstResult = makeDbPm({ isDefault: true });
+    await readDefaultPaymentMethod("org-001");
+    expect(listPaymentMethodsMock).not.toHaveBeenCalled();
+    expect(getDefaultPaymentMethodIdMock).not.toHaveBeenCalled();
+    expect(ensureStripeCustomerMock).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 

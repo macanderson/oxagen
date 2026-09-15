@@ -14,7 +14,7 @@
 //   7. otherwise                        → the viewer
 import type { AppSession, SessionUser } from "./session";
 import { evaluateMfaGate, mfaGateApplies } from "./mfa-gate";
-import type { TenancyLookups } from "./tenancy-lookups";
+import type { SystemLookups } from "./tenancy-lookups";
 import { ORG_ONLY_WS, type Scope } from "./tenant-scope";
 
 export type Viewer = {
@@ -47,7 +47,7 @@ export function isValidSlug(value: string): boolean {
 
 export type ResolveViewerDeps = {
   session: AppSession | null;
-  lookups: TenancyLookups;
+  lookups: SystemLookups;
   now: Date;
 };
 

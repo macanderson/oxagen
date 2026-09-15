@@ -1,14 +1,12 @@
 "use client";
 // The top bar (mockup `topbar()`): phone menu, breadcrumbs, the ⌘K search
-// button, notifications, the assistant toggle and the account menu.
-import { Menu, Search, Sparkles } from "lucide-react";
+// button and the user menu.
+import { Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
-import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { breadcrumbs, parseShellPath } from "./nav";
-import { NotificationsPopover } from "./notifications-popover";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { UserMenu } from "./user-menu";
@@ -71,8 +69,7 @@ function Breadcrumbs({ data }: { data: ShellData }) {
 export function Topbar({ data }: { data: ShellData }) {
   const t = useTranslations("shell.topbar");
   const tShell = useTranslations("shell");
-  const { setCommandOpen, setDrawerOpen, assistantOpen, toggleAssistant } =
-    useShellState();
+  const { setCommandOpen, setDrawerOpen } = useShellState();
   return (
     <header
       aria-label={t("label")}
@@ -112,17 +109,6 @@ export function Topbar({ data }: { data: ShellData }) {
         >
           {t("searchShortcut")}
         </kbd>
-      </button>
-      <NotificationsPopover read={data.notifications} className={iconButton} />
-      <button
-        type="button"
-        className={iconButton}
-        aria-label={t("assistant")}
-        aria-controls={ASSISTANT_PANEL_ID}
-        aria-expanded={assistantOpen}
-        onClick={toggleAssistant}
-      >
-        <Sparkles aria-hidden="true" className="size-4" />
       </button>
       <UserMenu data={data} />
     </header>

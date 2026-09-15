@@ -293,7 +293,7 @@ describe("GitHub setup landing", () => {
     queries.mostRecentMembership.mockResolvedValueOnce([]);
     expect(
       await github.resolveGithubSetupTarget("u1", undefined, queries),
-    ).toBe("/welcome");
+    ).toBe("/new-organization");
     expect(queries.matchInstallation).toHaveBeenCalledOnce();
   });
 

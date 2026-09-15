@@ -21,7 +21,6 @@ export const InvitationView = z.object({
   email: z.string().min(1),
   role: OrgRole,
   status: InvitationStatus,
-  inviterName: z.string().nullable(),
   invitedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime().nullable(),
 });

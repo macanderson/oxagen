@@ -1,7 +1,7 @@
 "use client";
 // Create an account (mockup `obSignup` @ mc-baseline-w1). A new account goes to
-// email verification when the deployment requires it, otherwise straight into
-// the onboarding gate.
+// email verification when the deployment requires it, otherwise straight to
+// creating its organization.
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";

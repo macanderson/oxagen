@@ -10,7 +10,6 @@ export * from "./common";
 export * from "./iam";
 export * from "./invitations";
 export * from "./mandates";
-export * from "./onboarding";
 export * from "./ontology";
 export * from "./org";
 export * from "./runs";

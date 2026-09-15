@@ -101,6 +101,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_invoices",
+    async () =>
+      (await import("./billing.invoice.list"))
+        .billingInvoiceListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_subscription",
     async () =>
       (await import("./billing.subscription.read"))

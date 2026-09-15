@@ -1,5 +1,6 @@
 /**
- * action-metering.ts — the governed action as the billable unit (ADR-052).
+ * action-metering.ts — the governed action as the billable unit (ADR-052,
+ * refined by ADR-055).
  *
  * The charging path. `metering.ts` keeps the token meter, which under ADR-052
  * §4.4 is a REPORT: it prices a call in full and bills it at zero, except for
@@ -8,22 +9,35 @@
  *
  * The shape of the meter, in one paragraph. Every top-level `invoke()` that
  * passes its gates, runs its handler and validates its output is one governed
- * action. Actions accrue against an annual allowance carried by the
- * organisation's plan; past the allowance they price at the volume band the
- * organisation's running annual total lands in. Nothing about the price depends
- * on how long a run took or how many tokens it spent, because under ADR-043
- * nothing in this repo costs more for either.
+ * action. Actions debit the organisation's month bucket of governed action
+ * units (`billing.gau_buckets`, gau-bucket.ts): the month's included units
+ * come from the customer's contracted terms (contract-terms.ts), bought units
+ * arrive through Checkout or auto top-up, and unused bought units carry into
+ * the next month. Past the bucket a prepaid organisation is topped up from
+ * its saved card or refused by the gate; an invoice-billed organisation is
+ * never capped and is invoiced for its overage. Nothing about the charge
+ * depends on how long a run took or how many tokens it spent, because under
+ * ADR-043 nothing in this repo costs more for either.
  *
- * Rates: docs/specs/governed-action-metering.md §4. They are expected to move —
- * that is why they are here rather than in the ADR.
+ * The rate card and the annual allowances below are what the rate-card,
+ * estimate and usage capabilities publish; the recorder prices nothing by
+ * them. Rates: docs/specs/governed-action-metering.md §4.
  */
 
 import { and, eq, sql } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
-import { consumeCredits } from "./credits";
-import { CREDIT_REASONS } from "./constants";
-import { CREDIT_VALUE_USD, MICRO_CREDITS_PER_CREDIT } from "./pricing";
+import { readOrgBillingSettings } from "./billing-settings";
+import { resolveGauEntitlement } from "./contract-terms";
+import {
+  ensureCurrentBucket,
+  periodFor,
+  remainingGau,
+  type GauBucketRow,
+} from "./gau-bucket";
+import { claimAutoTopup, type GauSettlementRow } from "./gau-settlements";
+import { readDefaultPaymentMethod } from "./payment-methods";
+import { CREDIT_VALUE_USD } from "./pricing";
 import { logger } from "./logger";
 
 // ── The rate card (spec §4.1) ───────────────────────────────────────────────
@@ -173,49 +187,12 @@ export const RETENTION_INCLUDED_MONTHS = 12;
 /** USD per GB-month for evidence held beyond {@link RETENTION_INCLUDED_MONTHS}. */
 export const RETENTION_USD_PER_GB_MONTH = 0.08;
 
-/**
- * Credits owed for a month of extended evidence retention, rounded UP to the
- * ledger's whole-credit unit.
- *
- * Rounding up is safe here in a way it is not on the token meter (#1413): this
- * charge is raised once a month against a whole organisation's stored volume,
- * not once per call, so there is no sequence of sub-credit charges for the
- * rounding to compound over.
- */
-export function retentionCreditsForGbMonths(gbMonths: number): bigint {
-  if (!Number.isFinite(gbMonths) || gbMonths <= 0) return 0n;
-  const usd = gbMonths * RETENTION_USD_PER_GB_MONTH;
-  return BigInt(Math.ceil(usd / CREDIT_VALUE_USD));
-}
-
 // ── Pricing actions (spec §4.1) ─────────────────────────────────────────────
 
 /**
- * What `count` governed actions are worth in MICRO-credits at `band`.
- *
- * Micro-credits, not credits, for the same reason the token meter uses them: at
- * the $2 band one action is worth 0.2 of a credit, and rounding each one up to
- * a whole credit would over-charge a high-volume customer fivefold — the exact
- * failure #1413 fixed on the other meter. {@link consumeCredits} carries the
- * sub-credit remainder across calls, so a sequence of actions is exact.
- */
-export function microCreditsForActions(
-  count: number,
-  band: ActionRateBand,
-): bigint {
-  if (!Number.isFinite(count) || count <= 0) return 0n;
-  const usd = (count * band.usdPer1000) / 1000;
-  const micros = (usd / CREDIT_VALUE_USD) * Number(MICRO_CREDITS_PER_CREDIT);
-  return micros <= 0 ? 0n : BigInt(Math.round(micros));
-}
-
-/**
  * What `count` governed actions are worth in whole credits at `band` — the
- * DISPLAY figure (a quote, a usage readout), rounded up.
- *
- * An upper bound, not the debit. {@link microCreditsForActions} is what is
- * charged, and for a small count it is smaller than this. The two agree once a
- * count is worth a whole credit or more.
+ * DISPLAY figure (a quote, a usage readout), rounded up. Published by the
+ * rate-card and usage capabilities; the recorder charges nothing by it.
  */
 export function creditsForActions(
   count: number,
@@ -228,46 +205,12 @@ export function creditsForActions(
 
 /**
  * What a whole annual volume costs, priced at the single band the total lands
- * in — the §4.1 rule as written, in whole credits.
- *
- * The recorder charges INCREMENTALLY at whatever band the running total was in
- * at the time, which is not the same number: an organisation that ends the year
- * at 3M actions paid the $5 rate on its first million and the $4 rate after,
- * where §4.1 prices all 3M at $4. The difference is a true-up owed to the
- * customer, and it is surfaced rather than absorbed — `get_action_usage`
- * reports both figures so the amount is visible before the reconciliation, not
- * discovered after it.
+ * in — the §4.1 rule as written, in whole credits. A report figure:
+ * `get_action_usage` prints it beside the annual counter until WL-27 retires
+ * both with the dollar model they describe.
  */
 export function priceAnnualVolumeCredits(annualActions: number): bigint {
   return creditsForActions(annualActions, resolveActionBand(annualActions));
-}
-
-// ── Meter mode (spec §7.5) ──────────────────────────────────────────────────
-
-export type ActionMeterMode = "shadow" | "charge";
-
-// Env is fixed for a process lifetime and this is on the accrual hot path.
-let _resolvedMode: ActionMeterMode | null = null;
-
-/**
- * Whether the action meter charges or only counts.
- *
- * `shadow` records actions against the counter and raises no debit — spec §6
- * step 1, for a staged rollout. It defaults to `charge` because the interval
- * between `@oxagen/ai` giving up its markup and the action meter taking over is
- * an interval in which the platform bills nothing at all, and that is worse
- * than either end state (spec §7.5).
- */
-export function resolveActionMeterMode(): ActionMeterMode {
-  if (_resolvedMode !== null) return _resolvedMode;
-  _resolvedMode =
-    process.env.OXAGEN_ACTION_METER_MODE === "shadow" ? "shadow" : "charge";
-  return _resolvedMode;
-}
-
-/** Reset the memoised mode. Tests only. */
-export function resetActionMeterModeForTests(): void {
-  _resolvedMode = null;
 }
 
 // ── The entitlement period ──────────────────────────────────────────────────
@@ -370,261 +313,131 @@ export async function readActionCounter(
   };
 }
 
-// ── Allowance arithmetic ────────────────────────────────────────────────────
-
-/**
- * How many of the actions in `[before, after)` fall PAST the allowance.
- *
- * Written as the difference of two clamps rather than a branch, so the call
- * that straddles the allowance boundary — three actions where only one is
- * free — is the same expression as the calls either side of it, and cannot be
- * the case that got the branch wrong.
- */
-export function billableActionCount(
-  before: number,
-  after: number,
-  allowance: number,
-): number {
-  const overBefore = Math.max(0, before - allowance);
-  const overAfter = Math.max(0, after - allowance);
-  return Math.max(0, overAfter - overBefore);
-}
-
 // ── The recorder ────────────────────────────────────────────────────────────
 
 export interface RecordActionArgs {
   orgId: string;
   /** Governed actions this invocation is worth. Always >= 1 from the kernel. */
   actions: number;
-  /** Canonical capability name — logged, and the ledger's reference. */
+  /** Canonical capability name — logged. */
   capability: string;
-  /** The org's effective tier, if the caller already resolved it. */
-  tier?: PlanTier;
-  /** `billing.plans.included_actions_annual`, if the caller already read it. */
-  planIncludedActions?: number | null;
   /** The run this action belongs to. Metadata only, never a billing unit. */
   runId?: string | null;
   now?: Date;
 }
 
 export interface RecordActionResult {
-  /** Actions in the org's period after this one landed. */
-  periodActions: number;
-  /** Of this invocation's actions, how many priced as overage. */
-  billableActions: number;
-  /** The band the charge priced at. */
-  band: ActionRateBand;
-  /** Credits actually debited. Zero in shadow mode and inside the allowance. */
-  creditsCharged: bigint;
-  /** Credits the balance could not cover. */
-  shortfallCredits: bigint;
-  /** Whether the meter charged or only counted. */
-  mode: ActionMeterMode;
+  /** The organisation's month bucket after this action landed. */
+  bucket: GauBucketRow;
+  /** `included + purchased + carried − used` after the debit; negative when overdrawn. */
+  remainingGau: number;
+  /** The organisation's billing mode at the time of the debit. */
+  mode: "prepaid" | "invoice";
+  /** The auto top-up episode this action claimed, or null when none was. */
+  autoTopup: GauSettlementRow | null;
 }
 
 /**
  * Record one governed action (or a batch of them, for a contract that declares
- * a `meter` block) and charge for whatever part of it falls past the
- * organisation's allowance.
+ * a `meter` block) against the organisation's month bucket
+ * (ARCHITECTURE.md §3.9 item 8).
  *
- * Order matters. The counter is incremented FIRST and the debit is raised
- * second, because the counter is what makes the allowance boundary exact under
- * concurrency, and a debit that fails must not also lose the count. The
- * consequence — a counted action whose debit failed — is the right way round:
- * it under-bills by one action and is visible in the counter as the gap between
- * `actions_used` and `actions_charged`, where a lost count would be invisible.
+ *   a. Resolve the terms, the settings and the period.
+ *   b. Debit: `ensureCurrentBucket(tx, …)` — the lazy create and the debit as
+ *      one upsert in its own transaction, so the count lands whatever happens
+ *      after it. The returned row is the input to c.
+ *   c. Prepaid, at `remaining ≤ 0`, with auto top-up on and a saved default
+ *      card: claim at most one auto top-up episode (`claimAutoTopup`, its own
+ *      transaction, committed before any provider call). A Free organisation
+ *      with no card claims nothing — the gate refuses its next action with
+ *      `reason: "free_no_payment_method"` until it saves one or the next month
+ *      opens (ADR-055 §6). The settlement sequence that turns the claim into a
+ *      Stripe invoice is WL-31.
  *
- * Never throws on a billing failure. The kernel calls this after the action has
- * already happened and the customer's response is already correct; a throw here
- * could only turn a missed charge into a broken request.
- *
- * Reads through `withTenantDb`, so the caller must be inside a tenant scope.
+ * Runs inside the tenant scope the kernel re-entered for it. The kernel calls
+ * it once per completed top-level governed invocation and catches anything it
+ * throws, so the debit runs exactly once per invocation; everything after the
+ * debit is caught here so a claim that fails cannot surface as a broken
+ * request whose work is already done.
  */
 export async function recordGovernedAction(
   args: RecordActionArgs,
 ): Promise<RecordActionResult> {
   const start = Date.now();
-  const mode = resolveActionMeterMode();
   const actions = Math.max(1, Math.floor(args.actions));
-  const allowance = resolveActionAllowance(
-    args.tier ?? "free",
-    args.planIncludedActions,
-  );
   const now = args.now ?? new Date();
 
-  // Count first, then price. The counter's post-increment total is both the
-  // allowance answer and the band selector, so one round trip settles both.
-  const { before, after } = await incrementActionCounter(
-    args.orgId,
-    actions,
-    0,
-    now,
+  // a. Resolve.
+  const [{ terms, subscription }, settings] = await Promise.all([
+    resolveGauEntitlement(args.orgId, now),
+    readOrgBillingSettings(args.orgId),
+  ]);
+  const mode: RecordActionResult["mode"] = settings.approvedForInvoiceBilling
+    ? "invoice"
+    : "prepaid";
+  const period = periodFor(subscription, now);
+
+  // b. Debit, one statement.
+  const bucket = await withTenantDb((tx) =>
+    ensureCurrentBucket(tx, args.orgId, {
+      period,
+      terms,
+      usedDelta: actions,
+      purchasedDelta: 0,
+    }),
   );
-  const billable = billableActionCount(before, after, allowance);
-  const band = resolveActionBand(after);
+  const remaining = remainingGau(bucket);
 
-  if (mode === "shadow" || billable === 0) {
-    logger.debug(
-      {
-        orgId: args.orgId,
-        capability: args.capability,
-        actions,
-        periodActions: after,
-        allowance,
-        billableActions: billable,
-        band: band.id,
-        mode,
-        durationMs: Date.now() - start,
-      },
-      mode === "shadow"
-        ? "billing: governed action recorded — shadow mode, no debit"
-        : "billing: governed action recorded — inside allowance, no debit",
-    );
-    return {
-      periodActions: after,
-      billableActions: billable,
-      band,
-      creditsCharged: 0n,
-      shortfallCredits: 0n,
-      mode,
-    };
-  }
-
-  const microCredits = microCreditsForActions(billable, band);
-  let chargedCents = 0n;
-  let shortfallCredits = 0n;
-
-  // The debit (and the second counter write it unlocks) are wrapped so a
-  // consumeCredits failure cannot escape this function — see the "never
-  // throws" note above. On failure the action stays counted but uncharged,
-  // which is the gap incrementActionCounter's own docstring says to expect.
+  let autoTopup: GauSettlementRow | null = null;
   try {
-    const {
-      chargedCents: charged,
-      shortfallCents,
-      carryMicroCents,
-    } = await consumeCredits({
-      orgId: args.orgId,
-      requestedMicroCents: microCredits,
-      // ADR-052: `consume_execution` survives and takes on the action meter.
-      // `consume_token_overage` is retired, not repurposed — a historical row
-      // keeps meaning what it meant.
-      reason: CREDIT_REASONS.CONSUME_EXECUTION,
-      referenceType: "governed_action",
-      // referenceId is a Postgres uuid column. The run id is the only uuid this
-      // path has, and it is legitimately absent for direct API/MCP/human calls —
-      // undefined writes NULL, where a fabricated value would group a charge
-      // under a run that did not happen.
-      referenceId: args.runId ?? undefined,
-    });
-    chargedCents = charged;
-    shortfallCredits = shortfallCents;
+    // The annual counter `get_action_usage` reports until WL-27 retires both.
+    await incrementActionCounter(args.orgId, actions, 0, now);
 
-    // Record what was charged, separately from what was counted. The gap between
-    // the two columns is the audit answer to "did every overage action bill".
-    await incrementActionCounter(args.orgId, 0, billable, now);
-
-    logger.info(
-      {
-        orgId: args.orgId,
-        capability: args.capability,
-        actions,
-        periodActions: after,
-        allowance,
-        billableActions: billable,
-        band: band.id,
-        usdPer1000: band.usdPer1000,
-        microCredits: Number(microCredits),
-        creditsCharged: Number(chargedCents),
-        shortfallCredits: Number(shortfallCredits),
-        carryMicroCents: Number(carryMicroCents),
-        runId: args.runId ?? null,
-        mode,
-        durationMs: Date.now() - start,
-      },
-      "billing: governed action charged",
-    );
+    // c. Prepaid: at most one auto top-up episode at a time.
+    if (mode === "prepaid" && remaining <= 0 && settings.autoTopupEnabled) {
+      const card = await readDefaultPaymentMethod(args.orgId);
+      if (card !== null) {
+        autoTopup = await withTenantDb((tx) =>
+          claimAutoTopup(tx, bucket, terms, settings.autoTopupBlocks),
+        );
+      }
+    }
   } catch (error) {
-    // Never throws on a billing failure. The kernel calls this after the
-    // action has already happened and the customer's response is already
-    // correct; a throw here could only turn a missed charge into a broken
-    // request. shortfallCredits reports the whole overage as unbilled — the
-    // debit did not partially land, it did not run — using the same
-    // whole-credit display figure {@link creditsForActions} publishes
-    // elsewhere in this file.
-    shortfallCredits = creditsForActions(billable, band);
     logger.error(
       {
         orgId: args.orgId,
         capability: args.capability,
         actions,
-        periodActions: after,
-        allowance,
-        billableActions: billable,
-        band: band.id,
-        runId: args.runId ?? null,
+        bucketId: bucket.id,
+        remainingGau: remaining,
         mode,
-        durationMs: Date.now() - start,
         err: error instanceof Error ? error.message : String(error),
       },
-      "billing: governed action debit failed — action counted, not charged",
+      "billing: governed action debited; the step after the debit failed",
     );
   }
 
-  return {
-    periodActions: after,
-    billableActions: billable,
-    band,
-    creditsCharged: chargedCents,
-    shortfallCredits,
-    mode,
-  };
-}
-
-// ── Retention charge ────────────────────────────────────────────────────────
-
-/**
- * Charge an organisation for a month of evidence held beyond the included
- * twelve (spec §4.3).
- *
- * Opt-in (§7.4): the caller is responsible for checking
- * `org_billing_settings.extended_evidence_retention_enabled` and for
- * establishing the tenant scope. Charging an organisation that never opted in
- * is the surprise this pricing model exists to prevent, so this function
- * refuses rather than trusting the caller — see the guard below.
- */
-export async function chargeEvidenceRetention(args: {
-  orgId: string;
-  /** GB-months held beyond the included window. */
-  gbMonths: number;
-  /** The org's opt-in flag. False refuses the charge. */
-  optedIn: boolean;
-}): Promise<{ creditsCharged: bigint; shortfallCredits: bigint }> {
-  if (!args.optedIn) {
-    logger.debug(
-      { orgId: args.orgId, gbMonths: args.gbMonths },
-      "billing: extended retention not opted in — no charge",
-    );
-    return { creditsCharged: 0n, shortfallCredits: 0n };
-  }
-  const credits = retentionCreditsForGbMonths(args.gbMonths);
-  if (credits <= 0n) return { creditsCharged: 0n, shortfallCredits: 0n };
-
-  const { chargedCents, shortfallCents } = await consumeCredits({
-    orgId: args.orgId,
-    requestedCents: credits,
-    reason: CREDIT_REASONS.CONSUME_RETENTION,
-    referenceType: "evidence_retention",
-  });
   logger.info(
     {
       orgId: args.orgId,
-      gbMonths: args.gbMonths,
-      usdPerGbMonth: RETENTION_USD_PER_GB_MONTH,
-      creditsCharged: Number(chargedCents),
-      shortfallCredits: Number(shortfallCents),
+      capability: args.capability,
+      actions,
+      bucketId: bucket.id,
+      periodStart: period.start.toISOString(),
+      includedGau: bucket.includedGau,
+      purchasedGau: bucket.purchasedGau,
+      carriedGau: bucket.carriedGau,
+      usedGau: bucket.usedGau,
+      remainingGau: remaining,
+      mode,
+      tier: terms.tier,
+      termsSource: terms.source,
+      autoTopupSettlementId: autoTopup?.id ?? null,
+      runId: args.runId ?? null,
+      durationMs: Date.now() - start,
     },
-    "billing: evidence retention charged",
+    "billing: governed action recorded",
   );
-  return { creditsCharged: chargedCents, shortfallCredits: shortfallCents };
+
+  return { bucket, remainingGau: remaining, mode, autoTopup };
 }
