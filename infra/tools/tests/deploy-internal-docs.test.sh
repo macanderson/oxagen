@@ -76,6 +76,74 @@ else
   fail "a two-file export with index.html stages"
 fi
 
+# --- the tarball carries no macOS metadata --------------------------------
+#
+# GNU tar on the node prints a warning per file for every LIBARCHIVE.xattr
+# header a Mac's bsdtar writes, and extracts an AppleDouble ._ file beside
+# each file that had metadata. Neither belongs in the artifact.
+
+mkdir -p "$WORK/pack/site"
+echo home > "$WORK/pack/site/index.html"
+echo '{}' > "$WORK/pack/oxagen-run.json"
+cp "$CADDYFILE" "$WORK/pack/Caddyfile"
+# Give the files attributes where the platform can, so the real-tar cases
+# below test something on a Mac; elsewhere they hold the archive's shape.
+if command -v xattr >/dev/null 2>&1; then
+  xattr -w com.apple.provenance x "$WORK/pack/site/index.html" 2>/dev/null
+  xattr -w com.oxagen.test 1 "$WORK/pack/Caddyfile" 2>/dev/null
+elif command -v setfattr >/dev/null 2>&1; then
+  setfattr -n user.oxagen.test -v 1 "$WORK/pack/site/index.html" 2>/dev/null
+fi
+
+if pack_internal_docs "$WORK/pack" "$WORK/pack.tgz"; then
+  pass
+  listing=$(tar -tzf "$WORK/pack.tgz")
+  [[ $listing == *site/index.html* && $listing == *Caddyfile* && $listing == *oxagen-run.json* ]] && pass \
+    || fail "the tarball holds site/, the Caddyfile and the manifest"
+  printf '%s\n' "$listing" | command grep -q '\._' && fail "the tarball holds no AppleDouble ._ files" || pass
+  gzip -dc "$WORK/pack.tgz" | LC_ALL=C command grep -aqE 'LIBARCHIVE\.xattr|SCHILY\.xattr' \
+    && fail "the tarball carries no extended-attribute headers" || pass
+else
+  fail "a staged directory packs"
+fi
+
+# Stand-in tars that log each call as "<COPYFILE_DISABLE>|<argv>", so the
+# flags are held on every platform, whatever tar the machine has.
+mkdir -p "$WORK/tar-new" "$WORK/tar-old"
+cat > "$WORK/tar-new/tar" <<'SH'
+#!/usr/bin/env bash
+printf '%s|%s\n' "${COPYFILE_DISABLE:-}" "$*" >> "$TARLOG"
+SH
+cat > "$WORK/tar-old/tar" <<'SH'
+#!/usr/bin/env bash
+if [[ " $* " == *" --no-xattrs "* ]]; then
+  echo "tar: unrecognized option '--no-xattrs'" >&2
+  exit 64
+fi
+printf '%s|%s\n' "${COPYFILE_DISABLE:-}" "$*" >> "$TARLOG"
+SH
+chmod +x "$WORK/tar-new/tar" "$WORK/tar-old/tar"
+
+packed_with() {
+  export TARLOG="$WORK/$1.log"
+  : > "$TARLOG"
+  (PATH="$WORK/$1:$PATH" pack_internal_docs "$WORK/pack" "$WORK/$1.tgz") || return 1
+  command grep -- '-czf' "$TARLOG"
+}
+
+call=$(packed_with tar-new) && pass || fail "packing succeeds with a tar that takes --no-xattrs"
+[[ $call == "1|--no-xattrs -czf $WORK/tar-new.tgz -C $WORK/pack ." ]] && pass \
+  || fail "a tar that takes --no-xattrs gets it, with COPYFILE_DISABLE=1 (got: $call)"
+
+call=$(packed_with tar-old) && pass || fail "packing succeeds with a tar that refuses --no-xattrs"
+[[ $call == "1|-czf $WORK/tar-old.tgz -C $WORK/pack ." ]] && pass \
+  || fail "a tar that refuses --no-xattrs packs without it, still with COPYFILE_DISABLE=1 (got: $call)"
+
+# The deploy must pack through the function, not a bare tar that skips both.
+! command grep -qE '^[[:space:]]*tar[[:space:]]' "$TOOLS/deploy-internal-docs.sh" \
+  && command grep -q '^pack_internal_docs "\$STAGE" "\$TARBALL"$' "$TOOLS/deploy-internal-docs.sh" && pass \
+  || fail "the deploy builds its tarball only through pack_internal_docs"
+
 # --- the post-deploy verdict ----------------------------------------------
 
 internal_docs_verdict 401 200 200 200 >/dev/null && pass \
