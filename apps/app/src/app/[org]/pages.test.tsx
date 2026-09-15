@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 // Every route under /[org] renders between WL-08 and its page item
-// (ARCHITECTURE.md §8): the four gap-lane pages render their one UNRECORDED
-// row under the title, the rev1 pages render the title alone. Each page names
-// itself once from its pages.* key (§1.2), resolves its viewer first and
-// renders nothing for a person requireViewer refuses. Billing hands its viewer,
-// the data source, the checkout outcome and the invoices cursor to the Billing
-// feature (WL-38); Fleet, Run, People and API keys gain their bodies in WL-34
-// to WL-37.
+// (ARCHITECTURE.md §8): the gap-lane pages still waiting on their lane render
+// their one UNRECORDED row under the title, and the rev1 pages render the title
+// alone. Each page names itself once from its pages.* key (§1.2), resolves its
+// viewer first and renders nothing for a person requireViewer refuses. Billing
+// hands its viewer, the data source, the checkout outcome and the invoices
+// cursor to the Billing feature (WL-38); Spend hands its viewer, the data
+// source and the query to its body, and Fleet renders the cost rollup's two
+// tiles under its title (#2962); Run, People and API keys gain their bodies in
+// WL-35 to WL-37, and the rest of Fleet in WL-34.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -16,13 +18,21 @@ import {
   routeProps,
 } from "@/test/render-page";
 
-const { requireViewer, Billing, dataSource } = vi.hoisted(() => ({
-  requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
-  Billing: vi.fn((_props: Record<string, unknown>) => null),
-  dataSource: vi.fn(() => "live-source"),
-}));
+const { requireViewer, Billing, Spend, FleetSpendTiles, dataSource } =
+  vi.hoisted(() => ({
+    requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+    Billing: vi.fn((_props: Record<string, unknown>) => null),
+    Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="spend-body" data-tab={props.searchParams.tab} />
+    )),
+    FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="fleet-spend" />
+    )),
+    dataSource: vi.fn(() => "live-source"),
+  }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/billing", () => ({ Billing }));
+vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 vi.mock("@/data/source", () => ({ dataSource }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -46,11 +56,13 @@ const GAP_LANE: [string, Load][] = [
   ["agents", () => import("./[ws]/agents/page")],
   ["tools", () => import("./[ws]/tools/page")],
   ["steering", () => import("./[ws]/steering/page")],
-  ["spend", () => import("./[ws]/spend/page")],
 ];
 
+const SPEND: Load = () => import("./[ws]/spend/page");
+
+const FLEET: Load = () => import("./[ws]/page");
+
 const REV1: [string, string[], Load][] = [
-  ["fleet", WS, () => import("./[ws]/page")],
   ["run", WS, () => import("./[ws]/runs/[run]/page")],
   ["people", ORG, () => import("./page")],
   ["apiKeys", ORG, () => import("./api-keys/page")],
@@ -105,6 +117,45 @@ describe("the Billing page", () => {
   });
 });
 
+describe("the Spend page", () => {
+  it("resolves the workspace viewer, names the page once and hands its body the viewer, the data source and the query", async () => {
+    const viewer = { wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(viewer);
+    await expectPageTitle(
+      await SPEND(),
+      routeProps(SEGMENTS, { tab: "waste" }),
+      title("spend"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Spend.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source: "live-source",
+      searchParams: { tab: "waste" },
+    });
+    expect(screen.getByTestId("spend-body")).toHaveAttribute(
+      "data-tab",
+      "waste",
+    );
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
+describe("the Fleet page", () => {
+  it("resolves the workspace viewer, names the page once and renders the cost rollup's tiles under its title with the viewer and the data source", async () => {
+    const viewer = { wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(viewer);
+    await expectPageTitle(await FLEET(), routeProps(SEGMENTS), title("fleet"));
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(FleetSpendTiles).toHaveBeenCalledOnce();
+    expect(FleetSpendTiles.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source: "live-source",
+    });
+    expect(screen.getByTestId("fleet-spend")).toBeInTheDocument();
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
 describe("rev1 pages before their page item", () => {
   it.each(REV1)(
     "pages.%s resolves its viewer, names the page once and renders no body, never a NotRecorded row (negative)",
@@ -123,6 +174,8 @@ describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
+    ["spend", SPEND] as const,
+    ["fleet", FLEET] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));

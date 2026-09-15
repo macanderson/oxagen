@@ -23,10 +23,9 @@ import { breakerEnvConfig } from "./breaker-config";
  * so the row is lost permanently. For log/trace/event streams that is the right
  * trade. It is NOT free for `token_usage` — those rows are the metering ledger
  * `sumTokenUsage` bills from, so a ClickHouse outage silently drops billable
- * usage with no counter recording how much. Read paths degrade correctly:
- * callers on a critical path (see `getSpendBudgetStatuses` in
- * packages/billing/src/spend-budget-gate.ts) catch the rejection and fail OPEN,
- * so a down telemetry store never blocks an invocation.
+ * usage with no counter recording how much. Read paths degrade at the
+ * caller: a caller on a critical path catches the rejection and fails OPEN, so
+ * a down telemetry store never blocks an invocation.
  */
 function clickhouseBreaker(): CircuitBreaker {
   return getBreaker("clickhouse", {
@@ -388,8 +387,7 @@ export interface TokenUsageByStepRow {
  * (never a real execution step) and an empty input short-circuits without a
  * network call. Does NOT catch its own errors — callers on a read path that
  * must never fail on a degraded ClickHouse (e.g. query_lineage) are expected
- * to wrap this in try/catch and degrade to zero-spend nodes, mirroring
- * `getSpendBudgetStatuses` in packages/billing/src/spend-budget-gate.ts.
+ * to wrap this in try/catch and degrade to zero-spend nodes.
  */
 export async function sumTokenUsageByExecutionStep(args: {
   orgId: string;

@@ -31,7 +31,6 @@ type Messages = {
     agents: string;
     tools: string;
     steering: string;
-    spend: string;
     run: {
       frames_wrapped: string;
     };
@@ -444,6 +443,182 @@ type Messages = {
     drawer: {
       title: string;
       close: string;
+    };
+  };
+  spend: {
+    period: string;
+    notRecorded: string;
+    basisNotRecorded: string;
+    basis: {
+      gateway_observed: string;
+      client_attested: string;
+      mixed: string;
+      estimated: string;
+    };
+    tabs: {
+      label: string;
+      operator: string;
+      agent: string;
+      tool: string;
+      waste: string;
+      budgets: string;
+    };
+    actions: {
+      exportReport: string;
+      setBudget: string;
+    };
+    strip: {
+      spend: string;
+      proven: string;
+      provenNote: string;
+      accepted: string;
+      acceptedNote: string;
+      productiveRatio: string;
+      productiveRatioNote: string;
+    };
+    columns: {
+      provider: string;
+      runs: string;
+      calls: string;
+      spend: string;
+      proven: string;
+      productiveRatio: string;
+    };
+    groups: {
+      operator: {
+        title: string;
+        key: string;
+        empty: string;
+      };
+      agent: {
+        title: string;
+        key: string;
+        empty: string;
+      };
+      model: {
+        title: string;
+        key: string;
+        empty: string;
+      };
+      tool: {
+        title: string;
+        key: string;
+        empty: string;
+      };
+    };
+    waste: {
+      wasted: string;
+      share: string;
+      runsWithWaste: string;
+      largestCause: string;
+      noCause: string;
+      byCause: string;
+      none: string;
+      proof: string;
+      cause: {
+        cache_write_never_read: string;
+      };
+    };
+    budgets: {
+      title: string;
+      empty: string;
+      scopeColumn: string;
+      periodColumn: string;
+      limitColumn: string;
+      spentColumn: string;
+      positionColumn: string;
+      scope: {
+        org: string;
+        workspace: string;
+      };
+      monthly: string;
+      rolling: string;
+      noLimit: string;
+      disabled: string;
+      position: string;
+      state: {
+        ok: string;
+        threshold_50: string;
+        threshold_80: string;
+        threshold_95: string;
+        exceeded: string;
+      };
+    };
+    drill: {
+      title: {
+        operator: string;
+        agent: string;
+        tool: string;
+      };
+      back: string;
+      perCall: string;
+      perRun: string;
+      share: string;
+      byDay: string;
+      day: string;
+      tools: string;
+      toolsEmpty: string;
+    };
+    failure: {
+      denied: {
+        title: string;
+        body: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        code: string;
+      };
+    };
+    empty: {
+      title: string;
+      body: string;
+      back: string;
+    };
+    budgetDialog: {
+      title: string;
+      scope: string;
+      period: string;
+      rolling: string;
+      windowDays: string;
+      limit: string;
+      limitHint: string;
+      enabled: string;
+      submit: string;
+      pending: string;
+      errors: {
+        limitInvalid: string;
+        windowDaysInvalid: string;
+      };
+      alert: {
+        denied: string;
+        failed: string;
+      };
+    };
+    exportDialog: {
+      title: string;
+      month: string;
+      monthHint: string;
+      submit: string;
+      pending: string;
+      errors: {
+        monthInvalid: string;
+      };
+      alert: {
+        denied: string;
+        failed: string;
+      };
+    };
+    fleet: {
+      label: string;
+      spendToday: string;
+      spendTodayNote: string;
+      cacheHitRate: string;
+      cacheHitRateNote: string;
     };
   };
   ui: {
