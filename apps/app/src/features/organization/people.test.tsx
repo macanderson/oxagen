@@ -45,6 +45,12 @@ async function renderPeople(
   const source = {
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: { context: vi.fn() },
+    billing: {
+      plan: vi.fn(),
+      bucket: vi.fn(),
+      contractRate: vi.fn(),
+      invoices: vi.fn(),
+    },
     org: { members },
   };
   const view = render(
