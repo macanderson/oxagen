@@ -221,7 +221,7 @@ type ControlCommandRow = typeof schema.tachoControlCommands.$inferSelect;
 type DeliveredCommand = ControlEnvelope["commands"][number];
 
 /** A queued row as the wire carries it (spec section 7.4). */
-export function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
+function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
   const payload = (row.payload as Record<string, unknown>) ?? {};
   return {
     id: row.publicId,
