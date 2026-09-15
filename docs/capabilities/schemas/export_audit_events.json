@@ -1,0 +1,107 @@
+{
+  "name": "export_audit_events",
+  "domain": "audit",
+  "description": "Export the org's security audit events over the query_audit_log filters as CSV or NDJSON, signed with HMAC-SHA256 so the file can be verified after download. Up to 50,000 events; a wider match is refused.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "ndjson"
+        ],
+        "default": "csv",
+        "description": "csv (RFC 4180) or ndjson, one object per line"
+      },
+      "eventType": {
+        "type": "string",
+        "description": "Exact event-type match (e.g. 'billing.plan_changed')"
+      },
+      "actorUserId": {
+        "type": "string",
+        "description": "Filter by the acting user's id"
+      },
+      "actorPublicId": {
+        "type": "string",
+        "description": "Filter by the acting user's public id (usr_…)"
+      },
+      "capability": {
+        "type": "string",
+        "description": "Filter by capability name"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny",
+          "error",
+          "success"
+        ],
+        "description": "Filter by authz outcome"
+      },
+      "workspaceId": {
+        "type": "string",
+        "description": "Restrict to one workspace (default: all in org)"
+      },
+      "from": {
+        "type": "string",
+        "description": "Inclusive ISO-8601 lower bound on occurredAt"
+      },
+      "to": {
+        "type": "string",
+        "description": "Exclusive ISO-8601 upper bound on occurredAt"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "ndjson"
+        ]
+      },
+      "body": {
+        "type": "string"
+      },
+      "signature": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "algorithm": {
+        "const": "HMAC-SHA256"
+      },
+      "rowCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "format",
+      "body",
+      "signature",
+      "algorithm",
+      "rowCount"
+    ],
+    "additionalProperties": false
+  }
+}

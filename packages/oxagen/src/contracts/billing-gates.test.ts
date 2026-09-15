@@ -66,6 +66,10 @@ const CONSOLE_CONTRACTS = [
   "get_spend_budget",
   "set_spend_budget",
   "export_statement",
+  // The Audit page (#3097): reading and exporting the organization's own
+  // record. An audit trail that goes dark when the balance does is not one.
+  "query_audit_log",
+  "export_audit_events",
 ] as const;
 
 /** The one rev1 governed action. */

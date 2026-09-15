@@ -1,7 +1,7 @@
 {
   "name": "query_audit_log",
   "domain": "audit",
-  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a time-ordered feed. Read-only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -34,13 +34,20 @@
         "default": "all"
       },
       "eventType": {
-        "type": "string"
+        "type": "string",
+        "description": "Exact event-type match (e.g. 'billing.plan_changed')"
       },
       "actorUserId": {
-        "type": "string"
+        "type": "string",
+        "description": "Filter by the acting user's id"
+      },
+      "actorPublicId": {
+        "type": "string",
+        "description": "Filter by the acting user's public id (usr_…)"
       },
       "capability": {
-        "type": "string"
+        "type": "string",
+        "description": "Filter by capability name"
       },
       "outcome": {
         "type": "string",
@@ -49,16 +56,20 @@
           "deny",
           "error",
           "success"
-        ]
+        ],
+        "description": "Filter by authz outcome"
       },
       "workspaceId": {
-        "type": "string"
+        "type": "string",
+        "description": "Restrict to one workspace (default: all in org)"
       },
       "from": {
-        "type": "string"
+        "type": "string",
+        "description": "Inclusive ISO-8601 lower bound on occurredAt"
       },
       "to": {
-        "type": "string"
+        "type": "string",
+        "description": "Exclusive ISO-8601 upper bound on occurredAt"
       },
       "limit": {
         "type": "integer",
@@ -83,6 +94,10 @@
         "items": {
           "type": "object",
           "properties": {
+            "id": {
+              "type": "string",
+              "description": "The security event's id"
+            },
             "source": {
               "type": "string",
               "enum": [
@@ -92,7 +107,7 @@
             },
             "eventType": {
               "type": "string",
-              "description": "Event classification (e.g. capability.invoked, run_completed)"
+              "description": "Event classification (e.g. capability.invoke_denied)"
             },
             "occurredAt": {
               "type": "string",
@@ -106,7 +121,19 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "User who triggered the event, when known"
+            },
+            "actorPublicId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting user's public id (usr_…), when the user exists"
             },
             "workspaceId": {
               "anyOf": [
@@ -118,6 +145,17 @@
                 }
               ]
             },
+            "workspaceSlug": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The workspace's slug, when the event names a workspace"
+            },
             "capability": {
               "anyOf": [
                 {
@@ -126,7 +164,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Capability name for capability.* security events"
             },
             "outcome": {
               "anyOf": [
@@ -136,7 +175,30 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Authz outcome for security events (allow/deny/error/success)"
+            },
+            "ip": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Client IP address, when recorded"
+            },
+            "userAgent": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Client user agent, when recorded"
             },
             "requestId": {
               "anyOf": [
@@ -150,13 +212,18 @@
             }
           },
           "required": [
+            "id",
             "source",
             "eventType",
             "occurredAt",
             "actorUserId",
+            "actorPublicId",
             "workspaceId",
+            "workspaceSlug",
             "capability",
             "outcome",
+            "ip",
+            "userAgent",
             "requestId"
           ],
           "additionalProperties": false

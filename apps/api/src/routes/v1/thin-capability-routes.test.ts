@@ -93,6 +93,7 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -159,6 +160,7 @@ import { runCostGetRoute } from "./run.cost";
 import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
+import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
@@ -1028,6 +1030,16 @@ const ROUTES: ThinRoute[] = [
     body: { month: "2026-09" },
     expectedInput: { month: "2026-09", format: "csv" },
     invalidBody: { month: "2026-13" },
+    status: 200,
+  },
+  {
+    file: "audit.events.export",
+    route: auditEventsExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: auditEventsExport.name,
+    body: { outcome: "deny" },
+    expectedInput: { outcome: "deny", format: "csv" },
+    invalidBody: { format: "pdf" },
     status: 200,
   },
   {

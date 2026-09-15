@@ -1,5 +1,5 @@
 {
-  "generatedCount": 281,
+  "generatedCount": 282,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -638,6 +638,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "export_audit_events",
+      "domain": "audit",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
