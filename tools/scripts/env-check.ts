@@ -144,6 +144,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Codex CLI's equivalent of CLAUDE_CONFIG_DIR: where it keeps hooks.json
   // (packages/tacho/src/host/paths.ts). That tool's contract, not ours.
   "CODEX_HOME",
+  // Stella's equivalent: the directory holding stella.toml / settings.json,
+  // where `tacho enroll --harness stella` writes its hook block
+  // (packages/tacho/src/host/paths.ts). Stella's contract, not ours.
+  "STELLA_HOME",
   "CLAUDE_CODE_BRIDGE_SESSION_ID",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_EFFORT",
