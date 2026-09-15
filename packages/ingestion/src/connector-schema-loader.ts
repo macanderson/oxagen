@@ -132,7 +132,31 @@ export interface LoadSchemaOptions {
    * Default: 2 (total = 1 initial + 2 retries = 3 attempts).
    */
   maxRetries?: number;
+
+  /**
+   * The network and clock the partner fetch runs on. Defaults to the platform
+   * `fetch`, `node:dns` lookup and `setTimeout`. Tests pass their own so that
+   * no attempt reaches a real resolver, a real socket or a real timer.
+   */
+  transport?: SchemaFetchTransport;
 }
+
+/**
+ * The three side effects a partner schema fetch performs: resolving the host
+ * for the SSRF guard, issuing the HTTP request, and waiting between retries.
+ */
+export interface SchemaFetchTransport {
+  fetch: (url: string, init: RequestInit) => Promise<Response>;
+  lookup: (hostname: string) => Promise<readonly { address: string }[]>;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const platformTransport: SchemaFetchTransport = {
+  // Read `fetch` at call time so a runtime that installs it late still works.
+  fetch: (url, init) => fetch(url, init),
+  lookup: (hostname) => lookup(hostname, { all: true }),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
 
 // ── Cache ──────────────────────────────────────────────────────────────────────
 
@@ -276,6 +300,7 @@ export async function loadSchema(
     cacheWriter,
     fetchTimeoutMs = 10_000,
     maxRetries = 2,
+    transport = platformTransport,
   } = options ?? {};
 
   if (!schemaUrl) {
@@ -286,6 +311,7 @@ export async function loadSchema(
     schemaUrl,
     fetchTimeoutMs,
     maxRetries,
+    transport,
   );
 
   // Warm in-process cache.
@@ -321,7 +347,10 @@ const MAX_REDIRECTS = 3;
  * Throws (with the standard module prefix so callers treat it as permanent)
  * when the host is not allowed.
  */
-async function assertPublicHost(parsed: URL): Promise<void> {
+async function assertPublicHost(
+  parsed: URL,
+  transport: SchemaFetchTransport,
+): Promise<void> {
   const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
   // Obvious internal names that should never be fetched server-side.
@@ -354,9 +383,9 @@ async function assertPublicHost(parsed: URL): Promise<void> {
   // header preserved), which the platform fetch does not expose. A resolution
   // failure (ENOTFOUND/ENODATA) is left to the subsequent fetch to surface, so
   // the guard never throws on a host it could not look up.
-  let addresses: { address: string; family: number }[];
+  let addresses: readonly { address: string }[];
   try {
-    addresses = await lookup(host, { all: true });
+    addresses = await transport.lookup(host);
   } catch {
     return;
   }
@@ -426,6 +455,7 @@ function isBlockedIPv6(ip: string): boolean {
 async function fetchValidatedUrl(
   initialUrl: string,
   signal: AbortSignal,
+  transport: SchemaFetchTransport,
 ): Promise<Response> {
   let currentUrl = initialUrl;
 
@@ -445,9 +475,12 @@ async function fetchValidatedUrl(
       );
     }
 
-    await assertPublicHost(parsed);
+    await assertPublicHost(parsed, transport);
 
-    const response = await fetch(currentUrl, { signal, redirect: "manual" });
+    const response = await transport.fetch(currentUrl, {
+      signal,
+      redirect: "manual",
+    });
 
     // Manually handle redirects so each target is re-validated.
     if (response.status >= 300 && response.status < 400) {
@@ -486,12 +519,13 @@ async function fetchPartnerSchema(
   schemaUrl: string,
   timeoutMs: number,
   maxRetries: number,
+  transport: SchemaFetchTransport,
 ): Promise<LoadedConnectorSchema> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
-      await delay(RETRY_DELAY_MS);
+      await transport.sleep(RETRY_DELAY_MS);
     }
 
     try {
@@ -500,7 +534,11 @@ async function fetchPartnerSchema(
 
       let response: Response;
       try {
-        response = await fetchValidatedUrl(schemaUrl, controller.signal);
+        response = await fetchValidatedUrl(
+          schemaUrl,
+          controller.signal,
+          transport,
+        );
       } finally {
         clearTimeout(timer);
       }
@@ -595,11 +633,6 @@ function assertValidSchema(
   }
 
   return raw as LoadedConnectorSchema;
-}
-
-/** Promise-based delay helper. */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
