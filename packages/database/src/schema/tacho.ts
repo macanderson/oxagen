@@ -215,10 +215,10 @@ export const tachoHosts = tachoSchema.table(
   (t) => ({
     orgIdx: index("tacho_hosts_org_idx").on(t.orgId, t.workspaceId),
     apiKeyUniq: uniqueIndex("tacho_hosts_api_key_uniq").on(t.apiKeyId),
-    agentKeyUniq: uniqueIndex("tacho_hosts_agent_key_uniq").on(
-      t.orgId,
-      t.agentKey,
-    ),
+    // One live host per agent key; a revoked host gives its key up.
+    agentKeyUniq: uniqueIndex("tacho_hosts_agent_key_uniq")
+      .on(t.orgId, t.agentKey)
+      .where(sql`${t.status} <> 'revoked'`),
     statusCheck: check(
       "tacho_hosts_status_check",
       sql`${t.status} IN (${sql.raw(inList(TACHO_HOST_STATUSES))})`,
@@ -756,6 +756,51 @@ export const tachoCheckpoints = tachoSchema.table(
     headCheck: check(
       "tacho_checkpoints_head_check",
       sql`${t.chainHead} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+// ── enrollment_tokens ────────────────────────────────────────────────────────
+// The single-use enrollment token (#2967, spec §7.2 "a one-time enrollment
+// token embedded"): minted by create_enrollment_token for one registered
+// agent, shown to the operator once, stored as a SHA-256 digest, and consumed
+// by enroll_host exactly once — the claim is `UPDATE … SET used_at = now()
+// WHERE used_at IS NULL`, so two hosts presenting the same token cannot both
+// enrol. A presentation that is refused (used, expired) increments
+// rejected_count so the installer's "token rejected" screen can say so.
+export const tachoEnrollmentTokens = tachoSchema.table(
+  "enrollment_tokens",
+  {
+    ...idMixin("tet"),
+    ...appendOnlyAuditMixin(),
+    ...orgScopeMixin(),
+    // The agent.agents row the token enrols a host for. App-enforced.
+    agentId: uuid("agent_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    // The operator the token was issued to: the registering user.
+    issuedToUserId: uuid("issued_to_user_id").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    usedAt: ts("used_at"),
+    usedByHostId: uuid("used_by_host_id"),
+    rejectedCount: integer("rejected_count").notNull().default(0),
+  },
+  (t) => ({
+    tokenHashUniq: uniqueIndex("tacho_enrollment_tokens_hash_uniq").on(
+      t.tokenHash,
+    ),
+    agentIdx: index("tacho_enrollment_tokens_agent_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.agentId,
+    ),
+    hashCheck: check(
+      "tacho_enrollment_tokens_hash_check",
+      sql`${t.tokenHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    // A used token names the host that used it, and only a used token does.
+    usedCheck: check(
+      "tacho_enrollment_tokens_used_check",
+      sql`(${t.usedAt} IS NULL) = (${t.usedByHostId} IS NULL)`,
     ),
   }),
 );

@@ -68,9 +68,10 @@ export interface DistributedRateLimitOptions {
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
-   * collisions. Resolvers must return non-secret, bounded values.
+   * collisions. Resolvers must return non-secret, bounded values. A resolver
+   * that reads the request body returns a promise.
    */
-  bucketKey?: (c: Context<AppEnv>) => string;
+  bucketKey?: (c: Context<AppEnv>) => string | Promise<string>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -205,7 +206,7 @@ export function distributedRateLimiter(
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
     const key = opts.bucketKey
-      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
+      ? `${opts.keyPrefix}:${await opts.bucketKey(c)}`
       : deriveBucketKey(c, opts.keyPrefix);
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;

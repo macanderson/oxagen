@@ -28,6 +28,16 @@
         "workspace": "workspace"
       },
       "lineage": "Lineage"
+    },
+    "runStatus": {
+      "live": "live",
+      "sealed": "sealed",
+      "halted": "halted"
+    },
+    "readFailure": {
+      "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
+      "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
     }
   }
 }
