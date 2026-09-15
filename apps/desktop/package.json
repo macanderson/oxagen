@@ -17,7 +17,9 @@
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "publish:downloads": "node scripts/publish-downloads.mjs",
+    "smoke:e2e": "node scripts/e2e-smoke.mjs"
   },
   "dependencies": {
     "@oxagen/ui": "workspace:*",
