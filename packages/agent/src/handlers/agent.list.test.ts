@@ -23,6 +23,8 @@ const row = {
   harness: "stella",
   status: "draft",
   createdAt: new Date("2026-09-13T10:00:00.000Z"),
+  // A draft agent nothing has written since it was registered, which is what
+  // the schema's two defaultNow() columns produce on insert.
   updatedAt: new Date("2026-09-13T10:00:00.000Z"),
   principalId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
   principalPublicId: "prn_0123456789abcdefghjkmn",
