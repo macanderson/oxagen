@@ -1,10 +1,8 @@
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: the Oxagen house brand system, byte-for-byte, so this site, the app
-   (@oxagen/ui) and the terminal Stella ships are one surface. The generated
-   source of these values is tokens/house-tokens.css in
-   macanderson/oxagen-house-brand; the Rust copy of the same table is
-   crates/stella-tui-theme/src/token.rs.
+   Palette: the Oxagen house brand system, byte-for-byte, so this site and the
+   app (@oxagen/ui) are one surface. The generated source of these values is
+   tokens/house-tokens.css in macanderson/oxagen-house-brand.
    Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
    in a rule or a page.
@@ -33,7 +31,7 @@
   --st-gold: #D6962C; /* the brand metal: actions, active, money, the mark */
   --st-gold-bright: #F1C364; /* tiny live indicators only */
   --st-gold-ink: #8B5E1A; /* gold as TEXT where the metal itself is illegible */
-  --st-paper-text: #F2EEE5; /* primary text (what --stella-fg resolves to in dark) */
+  --st-paper-text: #F2EEE5; /* primary text in dark */
   --st-text: #e8e8ec; /* cooler alternate ink */
   --st-silver-type: #bfc1cc; /* types, tertiary labels */
   --st-silver: #9B958A; /* secondary emphasis */
@@ -125,8 +123,8 @@
 }
 
 /* Space Grotesk — the house typeface, self-hosted. Four static weights, the
-   subset the brand kit measured the wordmarks against: the `oxagen` and
-   `stella*` marks are this font's own outlines, so any other face would put
+   subset the brand kit measured the wordmarks against: the `oxagen`
+   wordmark is this font's own outlines, so any other face would put
    the running text and the logo in two unrelated designs.
    There is no house mono: "Space Grotesk is not a code face", so terminal
    output and code take the system monospace stack (see .mono below). */

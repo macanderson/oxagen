@@ -1,0 +1,131 @@
+{
+  "name": "get_first_frame",
+  "domain": "onboarding",
+  "description": "For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "waitMs": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 20000,
+        "default": 0
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "agentKey": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "hostEnrollmentId": {
+                "type": "string"
+              },
+              "enrolledAt": {
+                "type": "string"
+              },
+              "lastHeartbeatAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hooksOk": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "hostEnrollmentId",
+              "enrolledAt",
+              "lastHeartbeatAt",
+              "hooksOk"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "firstFrame": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "receivedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "receivedAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "agentId",
+      "agentKey",
+      "host",
+      "firstFrame"
+    ],
+    "additionalProperties": false
+  }
+}

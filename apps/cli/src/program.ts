@@ -971,6 +971,43 @@ export function buildProgram(): Command {
       await handleAgentEnvList(agentHandle, opts);
     });
 
+  // ── agent enroll: this machine becomes a registered agent's host (#2967) ────
+  //
+  // The scripted path of the register flow (MC spec §14.1): the one-time
+  // enrollment token from the Agents page or `create_enrollment_token` is the
+  // credential, so no `oxagen login` is needed. The work is the same
+  // `@oxagen/tacho/cli` routine `oxagen tacho enroll` runs.
+  agent
+    .command("enroll")
+    .description(
+      "Enroll this machine as a registered agent's host with a one-time enrollment token: device key, host credential, tachod service, harness hooks",
+    )
+    .requiredOption(
+      "--token <token>",
+      "The single-use enrollment token (oxe_1time_…), shown once at registration",
+    )
+    .option(
+      "--harness <list>",
+      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+    )
+    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option("--no-service", "Do not install the user service")
+    .option("--force", "Enroll again even if already enrolled")
+    .action(
+      async (opts: {
+        token: string;
+        harness?: string;
+        port?: number;
+        service?: boolean;
+        force?: boolean;
+      }) => {
+        const { handleAgentEnroll } = await import(
+          "./commands/agent-enroll.js"
+        );
+        if (!(await handleAgentEnroll(opts))) process.exitCode = 1;
+      },
+    );
+
   // ── env: workspace environments ─────────────────────────────────────────────
 
   const env = program

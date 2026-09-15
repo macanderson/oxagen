@@ -36,6 +36,9 @@ const appRelativePath = z
   .max(2048)
   .regex(/^\/(?![/\\])[^\s\x00-\x1f\x7f]*$/, "app-relative path required");
 
+/** The most governed action units one purchase buys. */
+export const PURCHASE_GAU_MAX = 1_000_000;
+
 export const billingGauBucketPurchase = registerCapability({
   name: "purchase_gau_bucket",
   domain: "billing",
@@ -56,7 +59,7 @@ export const billingGauBucketPurchase = registerCapability({
   },
   input: z.object({
     /** Units to buy; a whole number of blocks at the contracted block size. */
-    quantityGau: z.number().int().positive().max(1_000_000),
+    quantityGau: z.number().int().positive().max(PURCHASE_GAU_MAX),
     /** Where Checkout returns on success, relative to the app origin. */
     successPath: appRelativePath,
     /** Where Checkout returns on cancel, relative to the app origin. */

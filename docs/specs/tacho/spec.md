@@ -205,6 +205,14 @@ Hook payload handling is digest-first: `tool_input` and `tool_response` are hash
 
 `--managed` (or `--print-managed` for MDM tooling) writes the same hooks and env block into Claude Code's managed settings file (`/Library/Application Support/ClaudeCode/managed-settings.json` on macOS, `/etc/claude-code/managed-settings.json` on Linux) together with `allowManagedHooksOnly: true`, `disableBypassPermissionsMode: true`, and the signed enrollment document. In this mode a user cannot remove the hooks from user or project settings, cannot run `--dangerously-skip-permissions`, and `tacho-hook` verifies the enrollment signature offline at every start. This is the design's "enterprise gateway" posture; the record still labels it `client_attested`, because the process remains one Oxagen does not run.
 
+### 5.6 The single-use enrollment token (`oxagen agent enroll --token`)
+
+The register flow (MC spec §7.2, App. E `enroll_host`; #2967) enrols a host without an operator session on the machine. `create_enrollment_token` (org Owner or Admin) mints a token for one registered agent — `oxe_1time_` and 26 Crockford characters, shown once, stored as its SHA-256 digest in `tacho.enrollment_tokens`, good for thirty minutes by default and sixty at most. The machine presents it to `POST /v1/tacho/enroll` (`enroll_host`, public, under the `/v1/tacho/*` pre-auth ceilings) with the same host facts as §5.2 and, when it ran inside a repository, the git remote.
+
+`enroll_host` resolves the tenant from the token, locks the token row, and in that transaction mints exactly what §5.2 mints — the `tacho_host_v1` key, the signed claims under the domain of `tacho-enrollment-signing.ts`, the initial bundle — with the host bound to the token's agent (`tacho.hosts.agent_id`, `agent_principal_id`), so the host's agent key is the agent's `org_ns.ws_ns.slug` rather than a `cc-<hostname>` key, and every session it reports is that agent's run. The token is then marked used by that host. A second presentation is `conflict: token_used`, an expired one `conflict: token_expired`, an unknown one `not_found: token_unknown`, and every refusal increments `rejected_count` for the installer's "token rejected" screen. The response adds the agent id and the organization and workspace slugs the host did not know, which the host file records.
+
+`oxagen agent enroll --token …` drives this path with the §5.1 routine; `oxagen tacho enroll` keeps the operator path. The first frame the new host ingests is what opens the organization's onboarding gate (`org.onboarding_state`; ADR-065).
+
 ---
 
 ## 6. The evidence contract

@@ -57,6 +57,12 @@ import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
+import { tachoEnrollmentTokenCreate } from "./tacho.enrollment_token.create";
+import { tachoHostEnroll } from "./tacho.host.enroll";
+import { onboardingStateGet } from "./onboarding.state.get";
+import { onboardingAdvance } from "./onboarding.advance";
+import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
+import { repositoryMainBind } from "./repository.main.bind";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runProofGet } from "./run.proof.get";
@@ -553,6 +559,12 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoEnrollmentTokenCreate,
+  tachoHostEnroll,
+  onboardingStateGet,
+  onboardingAdvance,
+  onboardingFirstFrameGet,
+  repositoryMainBind,
   runList,
   runGet,
   runFrameBodyGet,
@@ -847,6 +859,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoEnrollmentTokenCreate,
+  tachoHostEnroll,
+  onboardingStateGet,
+  onboardingAdvance,
+  onboardingFirstFrameGet,
+  repositoryMainBind,
   runList,
   runGet,
   runFrameBodyGet,

@@ -1035,6 +1035,9 @@ describe("getRepoInfo", () => {
   it("sends GET /repos/{owner}/{repo} and maps the repo fields", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       makeResponse({
+        id: 1296269,
+        name: "widgets",
+        owner: { login: "acme" },
         full_name: "acme/widgets",
         html_url: "https://github.com/acme/widgets",
         default_branch: "develop",
@@ -1050,6 +1053,9 @@ describe("getRepoInfo", () => {
     expect(url).toBe("https://api.github.com/repos/acme/widgets");
     expect(init.method).toBe("GET");
     expect(result).toEqual({
+      id: "1296269",
+      owner: "acme",
+      name: "widgets",
       fullName: "acme/widgets",
       htmlUrl: "https://github.com/acme/widgets",
       defaultBranch: "develop",

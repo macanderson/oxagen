@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   selectTachoEvents: vi.fn(),
   withTenantDb: vi.fn(),
   loggerError: vi.fn(),
+  unlockOnboardingGate: vi.fn(),
   recordSpend: vi.fn(),
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
@@ -48,6 +49,9 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 vi.mock("./logger", () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn() },
+}));
+vi.mock("./lib/onboarding", () => ({
+  unlockOnboardingGate: mocks.unlockOnboardingGate,
 }));
 
 vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
@@ -357,6 +361,7 @@ beforeEach(() => {
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
     ref: `evb:v1:test:${input.digest.slice(7)}`,
   }));
+  mocks.unlockOnboardingGate.mockResolvedValue(false);
   mocks.recordSpend.mockResolvedValue(undefined);
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
@@ -528,6 +533,84 @@ describe("ingest_tacho_events", () => {
       chainVerified: false,
       chainBreakAtSeq: 0,
     });
+  });
+
+  it("opens the onboarding gate on a new root session, binding it to the host's agent (#2967)", async () => {
+    const db = fakeDb();
+    db.hosts[0]!["agentId"] = "agent-uuid";
+    db.hosts[0]!["agentPrincipalId"] = "agent-principal-uuid";
+    wire(db);
+    mocks.unlockOnboardingGate.mockResolvedValueOnce(true);
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+      },
+      CONTEXT,
+    );
+    expect(mocks.unlockOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.unlockOnboardingGate.mock.calls[0]?.[1]).toMatchObject({
+      orgId: CONTEXT.orgId,
+      runPublicId: "tse_fake0000000000000001",
+      agentId: "agent-uuid",
+    });
+    // The session is the agent's run, not only the host's.
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      agentId: "agent-uuid",
+      agentPrincipalId: "agent-principal-uuid",
+    });
+  });
+
+  it("leaves the gate alone for a continuation batch and for a subagent's session", async () => {
+    const db = fakeDb();
+    const events = session();
+    db.sessions.set(SESSION, {
+      id: "s1",
+      publicId: "tse_s1",
+      seqCount: 3,
+      lastHash: events[2]?.hash,
+      chainVerified: true,
+      hostId: HOST_ID,
+    });
+    wire(db);
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: events.slice(3),
+      },
+      CONTEXT,
+    );
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
+
+    const child = fakeDb();
+    wire(child);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const subagent: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+      }),
+    ]) {
+      const sealed = sealEvent(
+        { ...draft, parent_session_uuid: SESSION },
+        cursor,
+      );
+      cursor = sealed.next;
+      subagent.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: subagent,
+      },
+      CONTEXT,
+    );
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
   });
 
   it("continues a known session only from its recorded head", async () => {
