@@ -1,6 +1,6 @@
 "use client";
-// The sidebar (mockup `sidebar()`): brand, organization and workspace
-// switchers, the Workspace and Organization sections, and the data-plane line.
+// The sidebar (mockup `sidebar()`): brand, the organization and workspace
+// tiles, and the Workspace and Organization sections.
 import { OxagenWordmark } from "@oxagen/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,7 +13,7 @@ import {
   sidebarSections,
 } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
-import { activeWorkspace, type ShellData } from "./shell-data";
+import type { ShellData } from "./shell-data";
 import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
 
 /** Sidebar sections for the current URL. Shared by the desktop rail, the phone drawer and <MobileNav>. */
@@ -23,9 +23,8 @@ export function useSidebarSections(data: ShellData): {
   pathname: string;
 } {
   const pathname = usePathname();
-  const urlWs = parseShellPath(pathname).ws;
-  const ws = activeWorkspace(data, urlWs);
-  return { sections: sidebarSections(data.org, ws), ws, pathname };
+  const ws = parseShellPath(pathname).ws;
+  return { sections: sidebarSections(data.org.slug, ws), ws, pathname };
 }
 
 export function SidebarNav({
@@ -87,35 +86,14 @@ export function SidebarHeader({ data }: { data: ShellData }) {
   return (
     <div className="border-b border-sidebar-border px-3.5 pb-3 pt-4">
       <Link
-        href={`/${encodeURIComponent(data.org)}`}
+        href={`/${encodeURIComponent(data.org.slug)}`}
         className="mb-3 inline-flex rounded-sm px-1 focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={tApp("name")}
       >
         <OxagenWordmark className="h-6" />
       </Link>
-      {data.context.ok ? (
-        <>
-          <OrgSwitcher context={data.context.value} />
-          <WorkspaceSwitcher context={data.context.value} current={ws} />
-        </>
-      ) : (
-        <p className="truncate px-1 font-mono text-xs text-sidebar-nav-label-fg">
-          {data.org}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** The data-plane line; nothing when the context read failed. */
-export function SidebarFooter({ data }: { data: ShellData }) {
-  const t = useTranslations("shell.sidebar");
-  if (!data.context.ok) return null;
-  return (
-    <div className="border-t border-sidebar-border p-2.5">
-      <p className="px-1 font-mono text-[11px] text-sidebar-nav-label-fg">
-        {t("footer", { plane: data.context.value.org.dataPlane })}
-      </p>
+      <OrgSwitcher org={data.org} />
+      <WorkspaceSwitcher current={ws} />
     </div>
   );
 }
@@ -130,7 +108,6 @@ export function Sidebar({ data }: { data: ShellData }) {
     >
       <SidebarHeader data={data} />
       <SidebarNav data={data} />
-      <SidebarFooter data={data} />
     </aside>
   );
 }

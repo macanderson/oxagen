@@ -1,43 +1,60 @@
-// shellSource: the viewer gate first, then the one data source's shell port.
-// This file proves the shell reads through dataSource() and reads nothing for
-// a refused organization.
+// shellSource: the viewer gate is the whole read. This file proves the shell
+// renders what requireViewer resolved and nothing for a refused organization.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ORG_ONLY_WORKSPACE_ID } from "@/data/scope";
 
 const requireViewer = vi.fn();
 vi.mock("@/server/scope", () => ({ requireViewer }));
-const shellPort = { context: vi.fn() };
-const dataSource = vi.fn(() => ({ shell: shellPort }));
-vi.mock("@/data/source", () => ({ dataSource }));
 
 const { shellSource } = await import("./source");
 
-const USER_ID = "usr_marcusbell";
-const scope = {
-  orgId: "7a000000-0000-4000-8000-0000000000a1",
-  workspaceId: ORG_ONLY_WORKSPACE_ID,
+const viewer = {
+  userId: "usr_marcusbell",
+  user: {
+    id: "usr_marcusbell",
+    email: "marcus.bell@acme.example",
+    name: "Marcus Bell",
+    image: null,
+  },
+  orgRole: "owner",
+  scope: {
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    workspaceId: "00000000-0000-0000-0000-000000000000",
+  },
+  org: {
+    id: "7a000000-0000-4000-8000-0000000000a1",
+    slug: "acme",
+    name: "Acme Robotics",
+  },
+  ws: null,
 };
 
 beforeEach(() => {
   requireViewer.mockReset();
-  requireViewer.mockResolvedValue({ userId: USER_ID, scope });
-  dataSource.mockClear();
+  requireViewer.mockResolvedValue(viewer);
 });
 
 describe("shellSource", () => {
-  it("reads through dataSource().shell for the viewer requireViewer admits", async () => {
+  it("hands the organization and the person requireViewer admits to the shell", async () => {
     expect(await shellSource("acme")).toEqual({
-      port: shellPort,
-      scope,
-      userId: USER_ID,
+      org: { slug: "acme", name: "Acme Robotics" },
+      viewer: { name: "Marcus Bell", email: "marcus.bell@acme.example" },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme");
-    expect(dataSource).toHaveBeenCalledTimes(1);
   });
 
-  it("reads nothing when requireViewer refuses the organization (negative)", async () => {
+  it("keeps a viewer with no recorded name as null, never an invented one", async () => {
+    requireViewer.mockResolvedValue({
+      ...viewer,
+      user: { ...viewer.user, name: null },
+    });
+    expect((await shellSource("acme")).viewer).toEqual({
+      name: null,
+      email: "marcus.bell@acme.example",
+    });
+  });
+
+  it("renders nothing when requireViewer refuses the organization (negative)", async () => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(shellSource("globex")).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(dataSource).not.toHaveBeenCalled();
   });
 });

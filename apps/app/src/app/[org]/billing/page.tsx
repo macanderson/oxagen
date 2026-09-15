@@ -1,12 +1,15 @@
-import { notBacked } from "@/data/not-backed";
-import { PageState } from "@/ui/page-state";
-import { PlaceholderPage } from "@/ui/placeholder-page";
+import { getTranslations } from "next-intl/server";
+import { PageHeader } from "@/ui/page-header";
 
-// Batch 0 skeleton; its Batch 2 page lane replaces it.
-export default function BillingPage() {
+// The title alone until WL-38 builds the Billing page (ARCHITECTURE.md §8).
+export default async function BillingPage() {
+  const t = await getTranslations("routes");
   return (
-    <PlaceholderPage route="billing">
-      <PageState page="billing" result={notBacked("M2", "G13")} />
-    </PlaceholderPage>
+    <main
+      id="main"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10"
+    >
+      <PageHeader title={t("billing.title")} />
+    </main>
   );
 }

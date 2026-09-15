@@ -3,6 +3,7 @@ import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
+  recordSpend: vi.fn(),
   streamText: vi.fn(),
   generateObject: vi.fn(),
   insertTokenUsage: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/billing")>()),
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
+  recordSpend: mocks.recordSpend,
 }));
 vi.mock("@opentelemetry/api", () => ({
   SpanKind: { CLIENT: 2 },

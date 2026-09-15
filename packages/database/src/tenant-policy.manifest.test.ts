@@ -103,11 +103,14 @@ describe("tenant policy manifest", () => {
     expect(entry?.policyClass).toBe("workspace_only");
   });
 
-  it("there are no org_or_global tables", () => {
+  it("the price book is the one org_or_global table (ADR-060)", () => {
+    // cost.price_entries: org_id NULL rows are the platform list prices every
+    // tenant reads, an org's negotiated rows are its own. Every other tenant
+    // table carries org_id NOT NULL.
     const orgOrGlobal = POLICY_MANIFEST.filter(
       (e) => e.policyClass === "org_or_global",
     ).map((e) => e.table);
-    expect(orgOrGlobal).toEqual([]);
+    expect(orgOrGlobal).toEqual(["cost.price_entries"]);
   });
 
   it("excludes tables that carry neither org_id nor a scoping workspace_id", () => {
@@ -134,14 +137,16 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 94 as of WL-27, which dropped billing.governed_action_counters with the
-    // annual meter it counted. Was 95 as of billing.contract_terms,
-    // billing.gau_buckets and billing.gau_settlements (ADR-055, WL-24), and 92
-    // before those. An earlier note read "97 as of org.model_credentials" while
-    // the assertion said 91, so it had already drifted from the number it was
-    // describing — a count nobody can check against its own comment is a pin
-    // with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(94);
+    // 98 as of billing.spend_counters, cost.price_entries, cost.run_totals
+    // and cost.daily_totals (ADR-060, G2962) over WL-27's 94, which dropped
+    // billing.governed_action_counters with the annual meter it counted. Was
+    // 95 as of billing.contract_terms, billing.gau_buckets and
+    // billing.gau_settlements (ADR-055, WL-24), and 92 before those. An
+    // earlier note read "97 as of org.model_credentials" while the assertion
+    // said 91, so it had already drifted from the number it was describing — a
+    // count nobody can check against its own comment is a pin with no ratchet
+    // behind it.
+    expect(POLICY_MANIFEST.length).toBe(98);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

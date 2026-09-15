@@ -1,5 +1,5 @@
 {
-  "generatedCount": 244,
+  "generatedCount": 252,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -637,6 +637,17 @@
       "consumes": []
     },
     {
+      "name": "export_statement",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "fetch_commands",
       "domain": "control",
       "surfaces": [
@@ -1103,12 +1114,34 @@
       "consumes": []
     },
     {
+      "name": "get_run_cost",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_schema_registry",
       "domain": "schema",
       "surfaces": [
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1122,6 +1155,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend_drill",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1673,6 +1717,17 @@
       "consumes": []
     },
     {
+      "name": "list_price_entries",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
@@ -1758,6 +1813,17 @@
       "surfaces": [
         "api",
         "agent",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_waste",
+      "domain": "spend",
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "component": null,
@@ -2322,6 +2388,17 @@
       "consumes": []
     },
     {
+      "name": "set_auto_topup",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_connection_mappings",
       "domain": "connection",
       "surfaces": [
@@ -2374,6 +2451,14 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_org_billing_terms",
+      "domain": "billing",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

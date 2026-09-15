@@ -5,7 +5,7 @@
 // shape is checked here, before any read.
 import "server-only";
 import { InvitationView, toOrgRole } from "@/data/contracts/invitations";
-import { type Read, readError, readOk } from "@/data/not-backed";
+import { type Read, readError, readOk } from "@/data/read";
 import { type InvitationRecord, systemLookups } from "@/server/tenancy-lookups";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;

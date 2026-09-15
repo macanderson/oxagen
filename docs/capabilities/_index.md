@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**232 capabilities across 36 domains.**
+**239 capabilities across 38 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -90,6 +90,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
 - [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
+- [billing.auto_topup.set](billing.auto_topup.set.md) — Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys. Owner/Admin only
 - [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
 - [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
 - [billing.contract_rate.get](billing.contract_rate.get.md) — The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's
@@ -97,6 +98,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
 - [billing.gau_bucket.get](billing.gau_bucket.get.md) — The organization's governed action unit bucket for the current month: billing mode, period, units included, purchased, carried forward, used and remaining, plus invoice thresholds or auto top-up state
 - [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
+- [billing.org_terms.set](billing.org_terms.set.md) — Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut. On no surface; run through `pnpm billing:terms`
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook
 - [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series
@@ -105,6 +107,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
 - [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
+
+## Cost (1)
+
+- [cost.price_entry.list](cost.price_entry.list.md) — List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over
 
 ## Capability (2)
 
@@ -270,8 +276,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
-## Run (2)
+## Run (3)
 
+- [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
 - [run.get](run.get.md) — Read one run's header and, for an evidence-ledger run, one page of its frames from an opaque cursor, optionally waiting for a new frame; a wrapped-agent run answers its header with frames: null
 - [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
 
@@ -301,6 +308,13 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
 
+## Spend (4)
+
+- [spend.drill](spend.drill.md) — Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis
+- [spend.get](spend.get.md) — Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart
+- [spend.statement.export](spend.statement.export.md) — Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart
+- [spend.waste](spend.waste.md) — List this workspace's wasted spend over a day range by cause, each cause a pattern read off the cost rollup with the runs that prove it: the total wasted with its basis, its share of spend, and the largest cause
+
 ## Secret (8)
 
 - [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
@@ -316,7 +330,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Tacho (9)
+## Tacho (10)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
 - [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient

@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // Vercel AI Gateway (@ai-sdk/gateway) and must not expose vendor SDKs or
 // ClickHouse internals to callers.
 const mocks = vi.hoisted(() => ({
+  recordSpend: vi.fn(),
   embed: vi.fn(),
   embedMany: vi.fn(),
   embeddingModel: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    recordSpend: mocks.recordSpend,
   };
 });
 vi.mock("@oxagen/telemetry", async (importOriginal) => {

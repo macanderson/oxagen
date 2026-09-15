@@ -28,6 +28,7 @@ import {
   type KernelIAMCheckFn,
   type KernelSecurityEvent,
 } from "./kernel";
+import { createPlatformOperatorContext } from "./platform-operator";
 
 const ctx: CapabilityContext = {
   orgId: "00000000-0000-0000-0000-000000000001",
@@ -1283,5 +1284,193 @@ describe("registerHandlersOnce", () => {
 
     expect(registerA).toHaveBeenCalledTimes(1);
     expect(registerB).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * INV-31 (apps/app/ARCHITECTURE.md §4, §3.9 item 12): a `platformOnly`
+ * capability is unreachable from every surface. The kernel refuses it before
+ * the IAM check unless the context carries a binding
+ * `createPlatformOperatorContext` minted, and refuses any other value on that
+ * field as a forged platform binding.
+ *
+ * The IAM runtime below always allows, so a refusal here can only have come
+ * from the platform-operator check: an IAM allow is the state every
+ * non-enterprise organisation is in, which is why the check exists.
+ */
+describe("invoke() platformOnly enforcement", () => {
+  const platformCap = () =>
+    registerCapability({
+      name: "test.platform_only",
+      domain: "test",
+      description: "platform-operator only",
+      mode: "sync" as const,
+      surfaces: [] as const,
+      layers: ["unit"] as const,
+      scoped: false,
+      platformOnly: true,
+      noBillingGate: true,
+      mutates: true,
+      sensitivity: "high" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ value: z.string() }),
+      output: z.object({ value: z.string() }),
+    });
+
+  /** No tenant: a platform operator acts on an organisation, not inside one. */
+  const operatorCtx = (): CapabilityContext => ({
+    orgId: "",
+    workspaceId: "",
+    userId: null,
+    apiKeyId: null,
+    requestId: "req-operator",
+    surface: "runner",
+    messageId: null,
+  });
+
+  const allowEverything: KernelIAMCheckFn = async () => ({
+    outcome: "allow",
+    principal: null,
+  });
+
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearSecurityEventEmitter();
+  });
+
+  it("refuses a context with no platformOperator field, and audits the refusal", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    setKernelIAMRuntime(allowEverything, /* enforced */ true);
+    platformCap();
+    let handlerRan = false;
+    registerHandler("test.platform_only", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    await expect(
+      invoke("test.platform_only", { value: "x" }, operatorCtx()),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.platform_only",
+        outcome: "deny",
+        errorCode: "authz_denied",
+      }),
+    );
+  });
+
+  it("refuses the IAM check as well — the refusal lands before it runs", async () => {
+    const check = vi.fn(allowEverything);
+    setKernelIAMRuntime(check, /* enforced */ true);
+    platformCap();
+    registerHandler("test.platform_only", async () => async (input) => input);
+
+    await expect(
+      invoke("test.platform_only", { value: "x" }, operatorCtx()),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it("refuses `platformOperator: true` as a forged binding, and audits it", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    setKernelIAMRuntime(allowEverything, /* enforced */ true);
+    platformCap();
+    let handlerRan = false;
+    registerHandler("test.platform_only", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    const forged = {
+      ...operatorCtx(),
+      platformOperator: true,
+    } as unknown as CapabilityContext;
+
+    await expect(
+      invoke("test.platform_only", { value: "x" }, forged),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.platform_only",
+        outcome: "deny",
+        errorCode: "authz_denied",
+      }),
+    );
+  });
+
+  it("refuses a spread copy of a minted binding, and audits it", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    setKernelIAMRuntime(allowEverything, /* enforced */ true);
+    platformCap();
+    let handlerRan = false;
+    registerHandler("test.platform_only", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    const minted = createPlatformOperatorContext({ requestId: "req-operator" });
+    const copied = {
+      ...operatorCtx(),
+      platformOperator: { ...minted },
+    } as CapabilityContext;
+
+    await expect(
+      invoke("test.platform_only", { value: "x" }, copied),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.platform_only",
+        outcome: "deny",
+        errorCode: "authz_denied",
+      }),
+    );
+  });
+
+  it("runs the handler for a minted binding", async () => {
+    setKernelIAMRuntime(allowEverything, /* enforced */ true);
+    platformCap();
+    registerHandler("test.platform_only", async () => async (input) => input);
+
+    const out = await invoke(
+      "test.platform_only",
+      { value: "ok" },
+      {
+        ...operatorCtx(),
+        platformOperator: createPlatformOperatorContext({
+          requestId: "req-operator",
+        }),
+      },
+    );
+    expect(out).toEqual({ value: "ok" });
+  });
+
+  it("refuses a forged binding on an ordinary capability too", async () => {
+    setKernelIAMRuntime(allowEverything, /* enforced */ true);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    const forged = {
+      ...ctx,
+      platformOperator: { principalKind: "platform_operator", requestId: "r" },
+    } as unknown as CapabilityContext;
+
+    await expect(
+      invoke("test.echo", { value: "x" }, forged),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
   });
 });
