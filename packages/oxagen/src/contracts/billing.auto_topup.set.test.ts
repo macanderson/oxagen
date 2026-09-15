@@ -13,7 +13,11 @@ describe("set_auto_topup contract", () => {
     expect(billingAutoTopupSet.scoped).toBe(true);
     expect(billingAutoTopupSet.noBillingGate).toBe(true);
     expect(billingAutoTopupSet.sensitivity).toBe("high");
-    expect(billingAutoTopupSet.platformOnly).toBeUndefined();
+    // Read through the registry rather than the exported literal: the kernel
+    // checks `platformOnly` on the registered `CapabilityDeclaration`, where
+    // the field is declared optional. The literal's inferred type omits a key
+    // this contract never writes, so naming it there is a type error.
+    expect(getCapability("set_auto_topup")?.platformOnly).toBeUndefined();
   });
 
   it("grants Owner and Admin, and no one else", () => {
