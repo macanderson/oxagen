@@ -1,9 +1,12 @@
 /**
  * billing-settings.ts — per-org billing automation settings.
  *
- * Handles auto-reload preferences and dunning state for each org. The
- * `org_billing_settings` row is created on first access (upsert semantics)
- * so callers never deal with a missing row.
+ * Handles auto-reload preferences and dunning state for each org. Two
+ * readers of the same row: `getOrgBillingSettings` creates a default row on
+ * first access (upsert semantics) for the credits and dunning paths, and
+ * `readOrgBillingSettings` is a plain SELECT for the GAU path (ADR-055 §5),
+ * which answers with the column defaults for an org with no row and never
+ * inserts, so a read never writes.
  */
 
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
@@ -29,6 +32,24 @@ export interface OrgBillingSettings {
   suspendedAt: Date | null;
 }
 
+/**
+ * The GAU billing mode and auto top-up preferences (ADR-055 §5). Read by the
+ * gate, the recorder and `get_gau_bucket` through {@link readOrgBillingSettings}.
+ */
+export interface OrgGauBillingSettings {
+  orgId: string;
+  /** The org's Stripe customer, written once by ensureStripeCustomer. */
+  stripeCustomerId: string | null;
+  /** true → invoice billing (never capped); false → prepaid. */
+  approvedForInvoiceBilling: boolean;
+  /** Read only in invoice billing; stored and inert in prepaid. */
+  invoiceGauMax: number;
+  autoTopupEnabled: boolean;
+  /** Blocks charged per auto top-up. */
+  autoTopupBlocks: number;
+  dunningState: "active" | "grace" | "suspended";
+}
+
 // ── Internal defaults ─────────────────────────────────────────────────────────
 
 const DEFAULT_THRESHOLD_CENTS = 500;
@@ -37,6 +58,21 @@ const DEFAULT_LOW_BALANCE_THRESHOLD_CENTS = 500;
 /** ADR-053 §3: $20 a month of platform-paid assistant tokens unless raised. */
 export const DEFAULT_ASSISTANT_SPEND_CAP_CENTS = 2_000;
 const MIN_RELOAD_AMOUNT_CENTS = 100; // $1.00 minimum
+
+/**
+ * The GAU columns' defaults (`packages/database/src/schema/billing.ts`,
+ * org_billing_settings): what an org with no row is on. Prepaid, capped at
+ * 100,000 uninvoiced GAUs should an operator approve invoice billing, auto
+ * top-up on, one block per top-up.
+ */
+const GAU_SETTINGS_DEFAULTS = {
+  stripeCustomerId: null,
+  approvedForInvoiceBilling: false,
+  invoiceGauMax: 100_000,
+  autoTopupEnabled: true,
+  autoTopupBlocks: 1,
+  dunningState: "active",
+} as const satisfies Omit<OrgGauBillingSettings, "orgId">;
 
 // ── Mapping helper ────────────────────────────────────────────────────────────
 
@@ -133,6 +169,45 @@ export async function getOrgBillingSettings(
   );
 
   return rowToSettings(row);
+}
+
+// ── readOrgBillingSettings ────────────────────────────────────────────────────
+
+/**
+ * The org's GAU billing settings: a SELECT, never an INSERT.
+ *
+ * An org with no `org_billing_settings` row answers with the column defaults.
+ * The gate, the recorder and `get_gau_bucket` read through this, so none of
+ * them creates a row; the row appears on the first write that needs it
+ * (`set_auto_topup`, `set_org_billing_terms`, `ensureStripeCustomer`).
+ * Runs inside the caller's tenant scope.
+ */
+export async function readOrgBillingSettings(
+  orgId: string,
+): Promise<OrgGauBillingSettings> {
+  const row = await withTenantDb((tx) =>
+    tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.orgId, orgId),
+      columns: {
+        stripeCustomerId: true,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: true,
+        autoTopupEnabled: true,
+        autoTopupBlocks: true,
+        dunningState: true,
+      },
+    }),
+  );
+  if (!row) return { orgId, ...GAU_SETTINGS_DEFAULTS };
+  return {
+    orgId,
+    stripeCustomerId: row.stripeCustomerId,
+    approvedForInvoiceBilling: row.approvedForInvoiceBilling,
+    invoiceGauMax: Number(row.invoiceGauMax),
+    autoTopupEnabled: row.autoTopupEnabled,
+    autoTopupBlocks: Number(row.autoTopupBlocks),
+    dunningState: row.dunningState as OrgGauBillingSettings["dunningState"],
+  };
 }
 
 // ── updateAutoReloadSettings ──────────────────────────────────────────────────
