@@ -1,16 +1,16 @@
-import { redirect } from "next/navigation";
-
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { dataSource } from "@/data/source";
 import {
   CliConsentForm,
-  authorizeParamErrors,
   authorizeReturnPath,
-  getAuthUser,
-  loadCliScopes,
+  checkAuthorizeParams,
+  loadConsentChoices,
   readAuthorizeParams,
-  withNext,
 } from "@/features/auth";
+import { requireUser } from "@/server/viewer";
+import { redirectTo } from "@/shared/navigation";
+import { routes } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthHeading,
@@ -38,8 +38,8 @@ async function CliAuthorize({
 }) {
   const params = readAuthorizeParams(await searchParams);
   const t = await getTranslations("auth.cli");
-  const errors = authorizeParamErrors(params);
-  if (errors.length > 0) {
+  const checked = checkAuthorizeParams(params);
+  if (!checked.ok) {
     return (
       <AuthColumn>
         <AuthHeading kicker={t("title")} title={t("invalidTitle")} />
@@ -50,7 +50,7 @@ async function CliAuthorize({
         >
           <p>{t("invalidBody")}</p>
           <ul className="mt-2 list-inside list-disc text-left">
-            {errors.map((e) => (
+            {checked.errors.map((e) => (
               <li key={e}>{t(`invalid.${e}`)}</li>
             ))}
           </ul>
@@ -59,15 +59,27 @@ async function CliAuthorize({
     );
   }
 
-  const user = await getAuthUser();
-  if (!user) redirect(withNext("/login", authorizeReturnPath(params)));
-  const orgs = await loadCliScopes(user.id);
+  const returnPath = authorizeReturnPath(params);
+  const ctx = await requireUser(returnPath);
+  const choices = await loadConsentChoices(ctx, dataSource());
+  if (!choices.ok) {
+    return (
+      <AuthColumn>
+        <AuthHeading kicker={t("title")} title={t("title")} />
+        <OutcomePanel
+          tone="deny"
+          testId="cli-unavailable"
+          title={t("errors.failed")}
+        />
+      </AuthColumn>
+    );
+  }
   // A brand-new account (`oxagen auth login --signup`, the desktop installer's
   // "Create an account", or a social sign-up that landed here) has nothing to
   // authorize yet: create the organization and its first workspace, then come
   // back to this consent page with the PKCE parameters intact.
-  if (orgs.length === 0)
-    redirect(withNext("/new-organization", authorizeReturnPath(params)));
+  if (choices.value.length === 0)
+    redirectTo(routes.newOrganization(returnPath));
   return (
     <AuthColumn>
       <AuthHeading
@@ -75,7 +87,7 @@ async function CliAuthorize({
         title={t("title")}
         lead={t("lead", { label: params.label })}
       />
-      <CliConsentForm params={params} orgs={orgs} />
+      <CliConsentForm params={params} orgs={choices.value} />
     </AuthColumn>
   );
 }

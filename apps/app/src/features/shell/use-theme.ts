@@ -54,7 +54,10 @@ export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
-    document.cookie = themeCookieString(next, location.protocol === "https:");
+    document.cookie = themeCookieString(
+      next,
+      document.URL.startsWith("https:"),
+    );
     setThemeState(next);
   }, []);
 

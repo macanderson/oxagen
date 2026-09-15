@@ -5,12 +5,13 @@
 // organization lands on its first workspace's Fleet page, or on `destination`
 // when the page was given one (the CLI consent page).
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { eyebrow, panel } from "@/ui/control-styles";
+import { useNavigate } from "@/ui/navigation";
+import type { SafePath } from "@/shared/safe-path";
 import { createOrganizationAction } from "../actions";
 import {
   OrganizationForm as Schema,
@@ -29,10 +30,10 @@ export function OrganizationForm({
 }: {
   initialName?: string;
   /** A same-origin path, already sanitised by the screen, to go to instead of the Fleet page. */
-  destination?: string;
+  destination?: SafePath;
 }) {
   const t = useTranslations("onboarding");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [values, setValues] = useState<Values>(() => {
     const slug = toSlug(initialName);
     return {
@@ -80,7 +81,7 @@ export function OrganizationForm({
     try {
       const result = await createOrganizationAction(values);
       if (result.ok) {
-        router.push(destination ?? result.to);
+        navigate.push(destination ?? result.to);
         return;
       }
       setErrors(result.fields ?? {});

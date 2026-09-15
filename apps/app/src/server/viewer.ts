@@ -22,9 +22,11 @@
 // the read or write and the page renders `denied`.
 import "server-only";
 import { headers } from "next/headers";
-import { notFound, permanentRedirect, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
+import { permanentRedirectTo, redirectTo } from "@/shared/navigation";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
 import { type InvitationRecord, systemLookups } from "./tenancy-lookups";
@@ -200,22 +202,21 @@ const requireCtx = cache(
           ? OrgCtx.mint(MINT, result.org)
           : WsCtx.mint(MINT, { ...result.org, ...result.ws });
       case "unauthenticated":
-        return redirect("/login");
+        return redirectTo(routes.login());
       case "not_found":
         return notFound();
       case "mfa_enroll":
-        return redirect(MFA_ENROLL_PATH);
+        return redirectTo(MFA_ENROLL_PATH);
       case "redirect": {
         const url = await requestUrl();
-        return permanentRedirect(
-          canonicalPath({
-            pathname: url?.pathname ?? "",
-            search: url?.search ?? "",
-            base: "/",
-            from: { org: orgSlug, ws: wsSlug ?? null },
-            to: { org: result.org, ws: result.ws },
-          }),
-        );
+        const canonical = canonicalPath({
+          pathname: url?.pathname ?? "",
+          search: url?.search ?? "",
+          base: "/",
+          from: { org: orgSlug, ws: wsSlug ?? null },
+          to: { org: result.org, ws: result.ws },
+        });
+        return permanentRedirectTo(sanitizeNext(canonical, routes.root()));
       }
     }
   },
@@ -227,12 +228,14 @@ export function requireViewer(org: string, ws?: string): Promise<OrgCtx> {
   return requireCtx(org, ws);
 }
 
-/** Signed in, no organization yet; a signed-out request goes to /login. */
-export const requireUser = cache(async (): Promise<PretenantCtx> => {
-  const session = await getSession();
-  if (!session) return redirect("/login");
-  return PretenantCtx.mint(MINT, { userId: session.user.id });
-});
+/** Signed in, no organization yet; a signed-out request goes to /login, and on to `next` once signed in. */
+export const requireUser = cache(
+  async (next?: SafePath): Promise<PretenantCtx> => {
+    const session = await getSession();
+    if (!session) return redirectTo(routes.login(next));
+    return PretenantCtx.mint(MINT, { userId: session.user.id });
+  },
+);
 
 /**
  * The signed-in person an invitation is addressed to, for the accept and
@@ -245,7 +248,7 @@ export const requireInvitee = cache(
     token: string,
   ): Promise<{ ctx: InviteeCtx; invitation: InvitationRecord }> => {
     const session = await getSession();
-    if (!session) return redirect("/login");
+    if (!session) return redirectTo(routes.login());
     const invitation = await systemLookups.invitationByToken(token);
     if (
       !invitation ||

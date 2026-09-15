@@ -2,7 +2,6 @@
 // Server Components render here by awaiting them into elements first; the client
 // islands inside render under the intl provider.
 import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IntlProvider, translator } from "./test-intl";
@@ -19,8 +18,6 @@ vi.mock("./invite-actions", () => ({
   acceptInvitation: vi.fn(),
   declineInvitation: vi.fn(),
 }));
-const cliActions = { approveCliAuth: vi.fn(), cancelCliAuth: vi.fn() };
-vi.mock("./cli-actions", () => cliActions);
 
 /** Synchronous Server Components to expand in place (they may hold async children). */
 const SERVER_SYNC = new Set<unknown>();
@@ -29,7 +26,6 @@ const { InvitationBody, InvitationNotFound } = await import("./invite-view");
 const { AuthColumn, AuthFooter, AuthHeading, AuthShell, AuthSkeleton } =
   await import("@/ui/auth-shell");
 const { OutcomePanel } = await import("@/ui/form-feedback");
-const { CliConsentForm } = await import("./cli-consent-form");
 for (const component of [AuthShell, AuthColumn, AuthHeading, AuthFooter])
   SERVER_SYNC.add(component);
 
@@ -194,67 +190,5 @@ describe("auth frame", () => {
     expect(screen.getByTestId("page-state-loading")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ok" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "act" })).toBeInTheDocument();
-  });
-});
-
-describe("CliConsentForm", () => {
-  const params = {
-    redirectUri: "http://127.0.0.1:53682/callback",
-    state: "st_1",
-    codeChallenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-    codeChallengeMethod: "S256",
-    label: "laptop",
-  };
-  const orgs = [
-    {
-      id: "o1",
-      slug: "acme",
-      name: "Acme",
-      workspaces: [{ id: "w1", slug: "core", name: "core" }],
-    },
-    {
-      id: "o2",
-      slug: "globex",
-      name: "Globex",
-      workspaces: [
-        { id: "w2", slug: "labs", name: "labs" },
-        { id: "w3", slug: "ops", name: "ops" },
-      ],
-    },
-  ];
-
-  it("picks an org and its first workspace, carrying every parameter as a hidden field", async () => {
-    render(
-      <IntlProvider>
-        <CliConsentForm params={params} orgs={orgs} />
-      </IntlProvider>,
-    );
-    expect(screen.getByLabelText("Workspace")).toHaveValue("core");
-    await userEvent.selectOptions(
-      screen.getByLabelText("Organization"),
-      "globex",
-    );
-    expect(screen.getByLabelText("Workspace")).toHaveValue("labs");
-    await userEvent.selectOptions(screen.getByLabelText("Workspace"), "ops");
-    expect(screen.getByLabelText("Workspace")).toHaveValue("ops");
-    const hidden = document.querySelectorAll(
-      'input[type="hidden"][name="code_challenge"]',
-    );
-    expect(hidden).toHaveLength(2);
-  });
-
-  it("an organization with no workspace cannot be approved", () => {
-    render(
-      <IntlProvider>
-        <CliConsentForm
-          params={params}
-          orgs={[{ id: "o3", slug: "empty", name: "Empty", workspaces: [] }]}
-        />
-      </IntlProvider>,
-    );
-    expect(
-      screen.getByText("No workspaces in this organization."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
   });
 });

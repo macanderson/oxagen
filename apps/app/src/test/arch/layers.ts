@@ -2,7 +2,8 @@
 // consumed by import-graph.test.ts. Paths are posix and relative to `src/`
 // without extension; a directory import ends in `/index` (parse.ts).
 //
-// Three readings this file settles, each recorded in the WL-01 PR:
+// Readings this file settles, each recorded in the PR that made it (WL-01
+// unless named):
 // - The named rows of the platform allowlist add to the base row ("everything
 //   else under src/"): kernel.ts reports to telemetry (§3.2 steps 0 and 6), so
 //   the base row's `captureError` must reach it.
@@ -12,6 +13,18 @@
 // - `src/i18n/**` has no row in §2; it is treated as a leaf like `src/shared`
 //   (it may import only itself). The one edge into it, `app/layout.tsx` →
 //   `@/i18n/catalogs`, is a baseline entry for WL-33's root-layout rewrite.
+// - WL-12: `src/shared` "imports nothing internal" is read as nothing outside
+//   `src/shared`: §3.8's navigation.ts takes the SafePath and LoopbackUri types
+//   its siblings define.
+// - WL-12: a feature may import `@/server/session`. §3.7 moves getAuthUser and
+//   the Better Auth server calls there, and their callers are the sign-in
+//   flows' server actions and the auth API handler under `features/auth`, the
+//   shell's user menu and the invitation page; a "use client" module still may
+//   not reach it (INV-21).
+// - WL-12: `src/features/auth/auth-client.ts` may import
+//   `@oxagen/auth/client`. The browser's Better Auth client cannot live in
+//   `src/server/session.ts` (INV-21), and §3.8 names auth-client.ts as the home
+//   of the SafePath-typed callbackURL wrapper.
 import type { ImportEdge } from "./parse";
 
 export type Directive = "use client" | "use server" | null;
@@ -90,7 +103,7 @@ const ALLOWED: Record<
     if (isFeatureBarrel(target)) return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
-    if (target === "server/viewer") return true;
+    if (target === "server/viewer" || target === "server/session") return true;
     // `kernelWrite`, only from a "use server" module; its types from anywhere.
     if (target === "server/kernel") {
       return (
@@ -125,7 +138,7 @@ const ALLOWED: Record<
     target === "data/read" ||
     under(target, "shared") ||
     under(target, "server"),
-  shared: () => false,
+  shared: (_from, target) => under(target, "shared"),
   proxy: (_from, target) => under(target, "shared"),
   i18n: (_from, target) => under(target, "i18n"),
 };
@@ -210,6 +223,7 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
     "@oxagen/agent/register",
   ],
   "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
+  "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
   "src/server/tenancy-lookups.ts": ["@oxagen/database", "drizzle-orm"],
   "instrumentation.ts": [
     "@oxagen/oxagen/kernel",

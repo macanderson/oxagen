@@ -31,7 +31,6 @@
     "@oxagen/plugins": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "@oxagen/tenancy": "workspace:*",
     "@oxagen/ui": "workspace:*",
     "drizzle-orm": "0.45.2",
     "lucide-react": "1.45.0",

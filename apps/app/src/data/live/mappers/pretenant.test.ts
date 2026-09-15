@@ -1,10 +1,10 @@
-// The shell mappers over real contract outputs: each sample is parsed by the
+// The organization and workspace choice mappers over real contract outputs: each sample is parsed by the
 // contract's own output schema first, so a sample the contract would reject
 // cannot make a mapper test pass.
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { describe, expect, it } from "vitest";
-import { toOrgChoices, toWorkspaceChoices } from "./shell";
+import { toOrgChoices, toWorkspaceChoices } from "./pretenant";
 
 const orgs = orgList.output.parse({
   organizations: [

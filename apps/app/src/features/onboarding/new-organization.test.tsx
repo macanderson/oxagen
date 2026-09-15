@@ -1,23 +1,14 @@
 // The screen is an async Server Component; the tests call it and walk the
 // element tree it returns, which covers both branches without an RSC renderer.
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "../auth/test-intl";
 
-const redirect = vi.fn((to: string) => {
-  throw new Error(`NEXT_REDIRECT ${to}`);
-});
-vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (ns: string) => Promise.resolve(translator(ns)),
 }));
-const getAuthUser = vi.fn();
-vi.mock("@/features/auth", async () => ({
-  ...(await vi.importActual<typeof import("../auth/safe-next")>(
-    "../auth/safe-next",
-  )),
-  getAuthUser,
-}));
+const requireUser = vi.fn();
+vi.mock("@/server/viewer", () => ({ requireUser }));
 
 const { NewOrganizationScreen } = await import("./new-organization");
 const { OrganizationForm } = await import("./ui/organization-form");
@@ -40,49 +31,50 @@ function elements(node: ReactNode): AnyElement[] {
   return out;
 }
 
+beforeEach(() => {
+  requireUser.mockReset();
+  requireUser.mockResolvedValue({ userId: "usr_marcusbell" });
+});
+
 describe("NewOrganizationScreen", () => {
-  it("sends a signed-out visit to log in and back here", async () => {
-    getAuthUser.mockResolvedValue(null);
-    await expect(NewOrganizationScreen({ searchParams: Promise.resolve({}) })).rejects.toThrow(
-      "NEXT_REDIRECT /login?next=%2Fnew-organization",
-    );
+  it("gates on a signed-in person who comes back here after log in (negative)", async () => {
+    requireUser.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    await expect(
+      NewOrganizationScreen({ searchParams: Promise.resolve({}) }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(requireUser).toHaveBeenCalledWith("/new-organization");
   });
 
   it("renders the heading and the organization form for a signed-in person", async () => {
-    getAuthUser.mockResolvedValue({ id: "usr_marcusbell" });
-    const tree = elements(await NewOrganizationScreen({ searchParams: Promise.resolve({}) }));
-    expect(redirect).not.toHaveBeenCalled();
+    const tree = elements(
+      await NewOrganizationScreen({ searchParams: Promise.resolve({}) }),
+    );
     const heading = tree.find((e) => e.type === AuthHeading);
     expect(heading?.props.title).toBe("Name your organization");
-    expect(tree.some((e) => e.type === OrganizationForm)).toBe(true);
+    const form = tree.find((e) => e.type === OrganizationForm);
+    expect(form?.props.destination).toBeUndefined();
   });
 
-  it("carries a requested destination to log in and to the form", async () => {
+  it("carries a requested destination through log in and to the form", async () => {
     const authorize = "/cli/authorize?state=abc&label=laptop";
-    getAuthUser.mockResolvedValueOnce(null);
-    await expect(
-      NewOrganizationScreen({
-        searchParams: Promise.resolve({ returnTo: authorize }),
-      }),
-    ).rejects.toThrow(
-      `NEXT_REDIRECT /login?next=${encodeURIComponent(
-        `/new-organization?next=${encodeURIComponent(authorize)}`,
-      )}`,
-    );
-
-    getAuthUser.mockResolvedValue({ id: "usr_marcusbell" });
     const withDestination = elements(
       await NewOrganizationScreen({
-        searchParams: Promise.resolve({ next: authorize }),
+        searchParams: Promise.resolve({ returnTo: authorize }),
       }),
     ).find((e) => e.type === OrganizationForm);
+    expect(requireUser).toHaveBeenCalledWith(
+      `/new-organization?next=${encodeURIComponent(authorize)}`,
+    );
     expect(withDestination?.props.destination).toBe(authorize);
+  });
 
+  it("drops a destination that is not a same-origin path (negative)", async () => {
     const refused = elements(
       await NewOrganizationScreen({
         searchParams: Promise.resolve({ next: "//evil.example" }),
       }),
     ).find((e) => e.type === OrganizationForm);
+    expect(requireUser).toHaveBeenCalledWith("/new-organization");
     expect(refused?.props.destination).toBeUndefined();
   });
 });

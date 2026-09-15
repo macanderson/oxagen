@@ -2,7 +2,6 @@
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
 // tiles, and the Workspace and Organization sections.
 import { OxagenWordmark } from "@oxagen/ui";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
@@ -15,6 +14,8 @@ import {
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
 import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
+import { routes } from "@/shared/safe-path";
+import { SafeLink } from "@/ui/navigation";
 
 /** Sidebar sections for the current URL. Shared by the desktop rail, the phone drawer and <MobileNav>. */
 export function useSidebarSections(data: ShellData): {
@@ -53,8 +54,8 @@ export function SidebarNav({
               const current = isNavItemCurrent(item.key, pathname);
               return (
                 <li key={item.key}>
-                  <Link
-                    href={item.href}
+                  <SafeLink
+                    to={item.href}
                     aria-current={current ? "page" : undefined}
                     data-nav={item.key}
                     onClick={onNavigate}
@@ -69,7 +70,7 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
-                  </Link>
+                  </SafeLink>
                 </li>
               );
             })}
@@ -85,13 +86,13 @@ export function SidebarHeader({ data }: { data: ShellData }) {
   const tApp = useTranslations("app");
   return (
     <div className="border-b border-sidebar-border px-3.5 pb-3 pt-4">
-      <Link
-        href={`/${encodeURIComponent(data.org.slug)}`}
+      <SafeLink
+        to={routes.people(data.org.slug)}
         className="mb-3 inline-flex rounded-sm px-1 focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={tApp("name")}
       >
         <OxagenWordmark className="h-6" />
-      </Link>
+      </SafeLink>
       <OrgSwitcher org={data.org} />
       <WorkspaceSwitcher current={ws} />
     </div>

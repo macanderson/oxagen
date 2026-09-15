@@ -1,8 +1,7 @@
-import Link from "next/link";
-
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { LoginForm, OAuthButtons, readNext, withNext } from "@/features/auth";
+import { LoginForm, OAuthButtons } from "@/features/auth";
+import { readNext, routes } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,
@@ -10,6 +9,7 @@ import {
   AuthSkeleton,
 } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
 
 export default function LoginPage(props: PageProps<"/login">) {
   return (
@@ -41,9 +41,9 @@ async function Login({
       </div>
       <AuthFooter>
         {t("login.newHere")}{" "}
-        <Link href={withNext("/signup", next)} className={linkText}>
+        <SafeLink to={routes.signup(next)} className={linkText}>
           {t("login.createAccount")}
-        </Link>
+        </SafeLink>
       </AuthFooter>
       <AuthFooter>{t("login.haveInvite")}</AuthFooter>
     </AuthColumn>

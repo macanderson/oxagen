@@ -191,9 +191,6 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../../packages/tenancy
       '@oxagen/ui':
         specifier: workspace:*
         version: link:../../packages/ui

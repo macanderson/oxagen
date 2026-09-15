@@ -2,16 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const client = {
-  signIn: { email: vi.fn() },
+  signIn: { email: vi.fn(), social: vi.fn() },
   signUp: { email: vi.fn() },
   twoFactor: { verifyTotp: vi.fn(), verifyBackupCode: vi.fn() },
 };
 vi.mock("@oxagen/auth/client", () => ({ authClient: client }));
 
-const auth = await import("./client-auth");
+const auth = await import("./auth-client");
+const { routes } = await import("@/shared/safe-path");
 
 beforeEach(() => {
   client.signIn.email.mockReset();
+  client.signIn.social.mockReset();
   client.signUp.email.mockReset();
   client.twoFactor.verifyTotp.mockReset();
   client.twoFactor.verifyBackupCode.mockReset();
@@ -98,9 +100,23 @@ describe("liveVerifyTwoFactor", () => {
   });
 });
 
+describe("liveSignInSocial", () => {
+  it("starts social sign-in with the SafePath callback", async () => {
+    client.signIn.social.mockResolvedValue({});
+    await auth.liveSignInSocial({
+      provider: "github",
+      callbackURL: routes.fleet("acme", "core"),
+    });
+    expect(client.signIn.social).toHaveBeenCalledWith({
+      provider: "github",
+      callbackURL: "/acme/core",
+    });
+  });
+});
+
 describe("pending next", () => {
   it("is taken once", () => {
-    auth.rememberPendingNext("/acme");
+    auth.rememberPendingNext(routes.people("acme"));
     expect(auth.takePendingNext()).toBe("/acme");
     expect(auth.takePendingNext()).toBeNull();
   });
@@ -117,7 +133,7 @@ describe("pending next", () => {
         throw new Error("denied");
       });
     expect(() => {
-      auth.rememberPendingNext("/acme");
+      auth.rememberPendingNext(routes.people("acme"));
     }).not.toThrow();
     expect(auth.takePendingNext()).toBeNull();
     spy.mockRestore();

@@ -3,13 +3,13 @@
 // email verification when the deployment requires it, otherwise straight to
 // creating its organization.
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { liveSignUp } from "./client-auth";
+import { liveSignUp } from "./auth-client";
 import { AFTER_SIGNUP } from "./routes";
-import { withNext } from "./safe-next";
+import { routes, type SafePath } from "@/shared/safe-path";
+import { useNavigate } from "@/ui/navigation";
 import {
   type FieldErrors,
   PASSWORD_MIN,
@@ -23,9 +23,9 @@ import { formText } from "./form-text";
 
 type SignupField = "name" | "email" | "password";
 
-export function SignupForm({ next = AFTER_SIGNUP }: { next?: string }) {
+export function SignupForm({ next = AFTER_SIGNUP }: { next?: SafePath }) {
   const t = useTranslations("auth");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [errors, setErrors] = useState<FieldErrors<SignupField>>({});
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
@@ -52,15 +52,11 @@ export function SignupForm({ next = AFTER_SIGNUP }: { next?: string }) {
         setOutcome(result.outcome);
         return;
       }
-      router.replace(
+      navigate.replace(
         result.needsVerification
-          ? withNext(
-              `/verify?email=${encodeURIComponent(parsed.data.email)}`,
-              next,
-            )
+          ? routes.verify({ email: parsed.data.email, next })
           : next,
       );
-      router.refresh();
     } catch {
       setOutcome("unavailable");
     } finally {

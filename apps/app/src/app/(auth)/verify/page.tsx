@@ -2,12 +2,8 @@ import Link from "next/link";
 
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  AFTER_SIGNUP,
-  VerifyPanel,
-  firstParam,
-  readNext,
-} from "@/features/auth";
+import { AFTER_SIGNUP, VerifyPanel } from "@/features/auth";
+import { firstParam, readNext } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,
@@ -48,7 +44,7 @@ async function Verify({
       <VerifyPanel email={email} expired={expired} next={next} />
       <AuthFooter>
         {t("verify.wrongAddress")}{" "}
-        <Link href={"/signup"} className={linkText}>
+        <Link href="/signup" className={linkText}>
           {t("verify.startOver")}
         </Link>
       </AuthFooter>

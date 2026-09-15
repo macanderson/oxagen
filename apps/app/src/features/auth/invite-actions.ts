@@ -8,14 +8,15 @@
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { kernelWrite } from "@/server/kernel";
+import { getAuthUser } from "@/server/session";
 import { systemLookups } from "@/server/tenancy-lookups";
 import { requireInvitee } from "@/server/viewer";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { decideInvitation } from "./invitation";
 import { isInvitationToken, toInvitationView } from "./invitations";
-import { getAuthUser } from "./session";
 
 export type InviteActionResult =
-  | { ok: true; to: string }
+  | { ok: true; to: SafePath }
   | {
       ok: false;
       reason: "not_found" | "closed" | "sign_in" | "wrong_account" | "failed";
@@ -53,8 +54,8 @@ async function decide(
       : await kernelWrite(ctx, orgMemberInviteDecline, input);
   if (!result.ok) return { ok: false, reason: "failed" };
   return decision === "accept"
-    ? { ok: true, to: `/${read.value.orgSlug}` }
-    : { ok: true, to: "/" };
+    ? { ok: true, to: routes.people(read.value.orgSlug) }
+    : { ok: true, to: routes.root() };
 }
 
 export async function acceptInvitation(

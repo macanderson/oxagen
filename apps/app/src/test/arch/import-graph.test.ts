@@ -206,6 +206,11 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "handlers-barrel.ts": [
     { at: "src/features/auth/cli-actions.ts", expect: "platform" },
   ],
+  "auth-client.ts": [
+    { at: "src/features/auth/auth-client.ts", expect: null },
+    { at: "src/features/auth/ui/oauth-buttons.tsx", expect: "platform" },
+    { at: "src/server/session.ts", expect: null },
+  ],
   "auth-cli-auth.ts": [
     { at: "src/features/auth/cli-actions.ts", expect: "platform" },
     { at: "src/server/session.ts", expect: null },
@@ -265,6 +270,15 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   ],
   "shared-imports-internal.ts": [
     { at: "src/shared/safe-path.ts", expect: "layer" },
+  ],
+  "shared-imports-shared.ts": [
+    { at: "src/shared/navigation.ts", expect: null },
+    { at: "src/proxy.ts", expect: null },
+  ],
+  "features-imports-session.ts": [
+    { at: "src/features/auth/actions.ts", expect: null },
+    { at: "src/features/shell/source.ts", expect: null },
+    { at: "src/ui/user-menu.tsx", expect: "layer" },
   ],
   "proxy-imports-server.ts": [
     { at: "src/proxy.ts", expect: "layer" },

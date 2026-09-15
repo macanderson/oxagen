@@ -24,7 +24,10 @@ const ctx = unsafeMint(OrgCtx, {
 });
 
 const context = vi.fn();
-const source = { shell: { context } };
+const source = {
+  pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
+  shell: { context },
+};
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],
   workspaces: [{ slug: "core-platform", name: "Core platform" }],

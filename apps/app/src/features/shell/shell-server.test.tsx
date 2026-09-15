@@ -47,7 +47,10 @@ describe("ShellChrome", () => {
       orgName: "Acme Robotics",
       orgRole: "owner",
     });
-    const source = { shell: { context: vi.fn() } };
+    const source = {
+      pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
+      shell: { context: vi.fn() },
+    };
     const element: ReactElement<{ data: ShellData }> = await ShellChrome({
       ctx,
       source,

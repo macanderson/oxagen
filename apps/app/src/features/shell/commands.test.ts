@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { pathOf } from "@/shared/safe-path";
 import { buildCommands, filterCommands, moveHighlight } from "./commands";
 
 const labels = { nav: (key: string) => `nav:${key}` };
@@ -45,7 +46,9 @@ describe("filterCommands", () => {
     expect(filterCommands(commands, "NAV:TOOLS").map((c) => c.id)).toEqual([
       "go:tools",
     ]);
-    const accented = [{ id: "x", label: "Politique générale", href: "/x" }];
+    const accented = [
+      { id: "x", label: "Politique générale", href: pathOf("x") },
+    ];
     expect(filterCommands(accented, "generale")).toHaveLength(1);
   });
 
