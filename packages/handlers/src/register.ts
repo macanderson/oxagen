@@ -136,6 +136,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.credits.purchase"))
         .billingCreditsPurchaseHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "purchase_gau_bucket",
+    async () =>
+      (await import("./billing.gau_bucket.purchase"))
+        .billingGauBucketPurchaseHandler as CapabilityHandlerFn,
+  );
   // ADR-052 — the governed-action meter's own read surfaces: the published
   // price, this organisation's position against it, the run→action calculator,
   // and the retention posture.

@@ -52,6 +52,7 @@ import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
+import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -90,6 +91,7 @@ import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
+import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -385,6 +387,23 @@ const ROUTES: ThinRoute[] = [
     method: "GET",
     capability: billingContractRateGet.name,
     expectedInput: {},
+    status: 200,
+  },
+  {
+    file: "billing.gau_bucket.purchase",
+    route: billingGauBucketPurchaseRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingGauBucketPurchase.name,
+    body: {
+      quantityGau: 10_000,
+      successPath: "/acme/billing?checkout=success",
+      cancelPath: "/acme/billing?checkout=cancel",
+    },
+    invalidBody: {
+      quantityGau: 10_000,
+      successPath: "https://evil.example/",
+      cancelPath: "/acme/billing",
+    },
     status: 200,
   },
   {

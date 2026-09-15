@@ -83,6 +83,7 @@ import { billingActionUsage } from "./billing.action_usage";
 import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
+import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
 import { billingInvoiceList } from "./billing.invoice.list";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
@@ -453,6 +454,7 @@ export {
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
@@ -704,6 +706,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,

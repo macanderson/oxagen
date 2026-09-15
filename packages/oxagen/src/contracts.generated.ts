@@ -70,6 +70,7 @@ import "./contracts/billing.budget.set";
 import "./contracts/billing.contract_rate.get";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.evidence_retention";
+import "./contracts/billing.gau_bucket.purchase";
 import "./contracts/billing.invoice.list";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription_upgrade.start";

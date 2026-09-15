@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**232 capabilities across 36 domains.**
+**233 capabilities across 36 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -86,7 +86,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
 
-## Billing (12)
+## Billing (13)
 
 - [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
 - [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
@@ -96,6 +96,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [billing.contract_rate.get](billing.contract_rate.get.md) — The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
+- [billing.gau_bucket.purchase](billing.gau_bucket.purchase.md) — Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks
 - [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook

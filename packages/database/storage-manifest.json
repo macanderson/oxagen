@@ -1745,6 +1745,17 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "purchase_gau_bucket",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "purge_conversations",
       "reads": [],
@@ -2599,7 +2610,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9572f3b473738436d8966dffa64270fdaf4bd9095944f4ca6e9924db0d042d02",
+  "contentHash": "5fba8aa4b34efe0fced222c57fd8657e3d927631d3ae9689bb2e54f45e455c50",
   "domains": [
     {
       "name": "agent",
