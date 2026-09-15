@@ -28869,6 +28869,7 @@
                     "pause",
                     "resume",
                     "cancel",
+                    "steer",
                     "message",
                     "revoke",
                     "refresh_bundle",
@@ -28890,6 +28891,58 @@
                   "type": "object",
                   "additionalProperties": {}
                 },
+                "requested_mode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "next_step",
+                        "interrupt",
+                        "turn_boundary"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "delivery_mode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "next_step",
+                        "interrupt",
+                        "turn_boundary"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "degraded_reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "issued_at": {
                   "type": "string"
                 },
@@ -28909,6 +28962,10 @@
                 "command",
                 "session_uuid",
                 "payload",
+                "requested_mode",
+                "delivery_mode",
+                "degraded_reason",
+                "reason",
                 "issued_at",
                 "expires_at"
               ],

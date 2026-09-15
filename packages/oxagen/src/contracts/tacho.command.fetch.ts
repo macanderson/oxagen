@@ -1,26 +1,38 @@
 /**
- * The idle-host control poll (docs/specs/tacho/spec.md section 7.4):
- * acknowledge the outcomes of earlier commands and receive pending ones,
- * together with the same control envelope every ingest carries.
- * Machine-to-machine, authenticated by the host's API key.
+ * `fetch_commands` (Mission Control spec Appendix E, "control channel;
+ * headless"): the idle-host control poll of `docs/specs/tacho/spec.md`
+ * section 7.4. A host acknowledges the commands it took and applied, in the
+ * §7.4 status vocabulary, and receives the pending ones together with the
+ * control envelope every ingest carries. Machine-to-machine, authenticated by
+ * the host's API key.
+ *
+ * Registered in place of `fetch_tacho_commands` under its Appendix E name
+ * (ADR-025, no alias). The body carries `schema: "tacho.commands.v2"`: a v1
+ * collector, which acknowledged with `outcome` from the five-word set, is
+ * refused by the strict shape.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
+  TACHO_COMMANDS_SCHEMA,
   controlEnvelopeSchema,
   hostEnrollmentIdSchema,
-  tachoCommandOutcomeSchema,
+  tachoCommandAckStatusSchema,
 } from "../tacho/schemas";
 
 export const tachoCommandFetch = registerCapability({
-  name: "fetch_tacho_commands",
-  domain: "tacho",
+  name: "fetch_commands",
+  domain: "control",
   description:
-    "Acknowledge applied Tacho commands and fetch the pending ones with the host's control envelope.",
+    "Acknowledge applied commands and fetch the pending ones with the host's control envelope.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs"],
   scoped: true,
+  mutates: true,
+  // The control channel is how a pause or a revoke reaches a running agent;
+  // gating it on a bucket would let a lapsed invoice leave an agent
+  // unstoppable.
   noBillingGate: true,
   sensitivity: "high",
   defaultEffect: "deny",
@@ -30,14 +42,17 @@ export const tachoCommandFetch = registerCapability({
   },
   input: z
     .object({
+      schema: z.literal(TACHO_COMMANDS_SCHEMA),
       host_enrollment_id: hostEnrollmentIdSchema,
       acknowledgements: z
         .array(
           z
             .object({
               command_id: z.string().min(1),
-              outcome: tachoCommandOutcomeSchema.exclude(["pending"]),
+              /** `applied` is the only success word: the effect is in the record. */
+              status: tachoCommandAckStatusSchema,
               detail: z.string().max(512).optional(),
+              /** The frame sequence the effect landed on (Appendix A.6). */
               applied_at_seq: z.number().int().nonnegative().optional(),
               session_uuid: z.string().uuid().optional(),
             })
@@ -65,5 +80,5 @@ export const tachoCommandFetch = registerCapability({
     .strict(),
 });
 
-export type TachoCommandFetchInput = z.output<typeof tachoCommandFetch.input>;
-export type TachoCommandFetchOutput = z.output<typeof tachoCommandFetch.output>;
+export type FetchCommandsInput = z.output<typeof tachoCommandFetch.input>;
+export type FetchCommandsOutput = z.output<typeof tachoCommandFetch.output>;

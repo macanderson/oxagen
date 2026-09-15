@@ -225,6 +225,7 @@ import "./contracts/system.install.instructions";
 import "./contracts/tacho.bundle.get";
 import "./contracts/tacho.command.dispatch";
 import "./contracts/tacho.command.fetch";
+import "./contracts/tacho.command.list";
 import "./contracts/tacho.enrollment.create";
 import "./contracts/tacho.enrollment.revoke";
 import "./contracts/tacho.events.ingest";

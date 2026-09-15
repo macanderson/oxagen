@@ -313,18 +313,25 @@ Tool calls to the Oxagen MCP endpoint (`mcp__oxagen__*`) are not evaluated here 
 
 While an elevation is pending, the collector shows it in `oxagen tacho status` and the control plane shows it in the approvals queue with the four-hop chain (`design/approval-tokens.md` §4).
 
-### 7.4 Commands: pause, resume, cancel, message, revoke
+### 7.4 Commands: pause, resume, cancel, steer, message, revoke
 
-`control_tacho_session` and `control_tacho_host` write a command row; the collector receives commands in the next ingest response or, when idle, from a long-poll on `GET /v1/tacho/inbox?after=<seq>`. Effects:
+*Amended 2026-09-14 (issue #2953, ADR-056): `steer` joins the set with a delivery mode, the status vocabulary is the Mission Control spec's §7.4 set, and the control channel is `tacho.commands.v2`.*
+
+`dispatch_command` writes one `tacho.control_commands` row per recipient run (one run, every live run of an agent, or every live run in the workspace); `revoke_tacho_enrollment` writes the host-level `revoke`. The collector receives commands in the next ingest response or, when idle, from the long-poll `fetch_commands` (`POST /v1/tacho/commands`, body `schema: "tacho.commands.v2"`). Effects:
 
 | Command | Effect on an enrolled Claude Code session | Guarantee |
 |---|---|---|
 | `pause` | next `UserPromptSubmit` and `PreToolUse` are denied with the reason; the current tool call completes | guaranteed at the next boundary |
 | `resume` | clears the pause | guaranteed |
 | `cancel` | every further prompt and tool call is denied; `tachod` sends `SIGTERM` to the `claude` process it has matched to the session (by transcript path and cwd) | soft cancel guaranteed; process termination best effort and recorded as `oxagen:kill_attempted` with the outcome |
-| `message` | injected as `additionalContext` at the next `UserPromptSubmit` (or `SessionStart` for a resumed session) | delivered at the next boundary |
+| `steer` | injected as `additionalContext` at the next `UserPromptSubmit` (or `SessionStart` for a resumed session) and chained as `oxagen:command_applied` with `command.name = steer`, `command.requested_mode`, `command.delivery_mode`, `command.degraded_reason` and `command.interrupted = 0` — the Mission Control spec's `control.steer` frame in the wrapper vocabulary | delivered at the next boundary; see the degradation rule below |
+| `message` | as `steer`, with `command.name = message` | delivered at the next boundary |
 | `revoke` (host) | host status `suspended`; every session denied at its next boundary; API key revoked; `tacho-hook` reads `suspended` from the bundle and denies even if the daemon is down | guaranteed while the hooks are installed; visible as `hooks_removed` if not |
 | deny-generation bump / emergency deny | the ingest response carries the new generation; the cached bundle is stale (§7.2) | guaranteed for non-read-only tools |
+
+**Delivery modes and the degradation rule.** A `steer` or `message` carries a requested mode from the Mission Control spec §7.3 (`next_step`, `interrupt`, `turn_boundary`). The hook adapter injects at the next prompt boundary and cannot stop a call in flight, so `next_step` and `turn_boundary` land as asked and `interrupt` degrades to `next_step`; the control plane resolves this at dispatch and records `requested_mode`, `delivery_mode` and `degraded_reason = harness_tier` on the row and on the frame. Every interface shows the mode that was achieved, never the one requested. A session at `observe` tier has no adapter in its path: a command addressed to it directly is refused, and a broadcast records it as `failed` with `observe_tier`.
+
+**Status vocabulary.** A command row moves through `queued` (accepted by Oxagen), `sent` (drained onto the control channel), `received` (the collector has it), `acknowledged`, `applied` (the effect is in the record; the only success status, with `applied_at_seq` naming the frame), `cancelled` (withdrawn or superseded by a later command of the same kind on the same run before delivery), `expired` (the expiry passed with no boundary reached) or `failed` (the collector refused it, or the session was gone). The collector acknowledges in the five statuses it can assert about itself — `received`, `acknowledged`, `applied`, `expired`, `failed`; `sent` is Oxagen's act and stays Oxagen's to record. Who writes `expired` follows who owns the row: a row is Oxagen's while `queued` and the collector's once it leaves on the wire. Oxagen writes `expired` on a `queued` row past its expiry at the host's next poll, and `list_commands` derives the same word for a `queued` row before that poll; a row the collector holds reads as recorded until the collector settles it. The collector checks the deadline at receipt and again at the boundary that would inject a steer, and acknowledges `expired` (`expired before a boundary`) for an item whose expiry passed with no boundary reached, chaining no frame for it. An acknowledgement that arrives after the clock passed lands, so the report and the run's chain never disagree; an interface reads `expires_at` to show a held row as past expiry and awaiting the host.
 
 These are the same operations `stella-serve` exposes as `/pause`, `/resume`, `/cancel`, `/steer`; the names are aligned so the fleet UI has one verb set.
 

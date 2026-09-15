@@ -34,7 +34,11 @@ const CONSOLE_CONTRACTS = [
   "list_workspaces",
   "create_api_key",
   "revoke_api_key",
-  "dispatch_tacho_command",
+  // `dispatch_tacho_command` until this lane renamed it, with no alias
+  // (ADR-025). `list_commands` is the delivery report beside it and is a
+  // console read by the same argument, so it belongs on this list too.
+  "dispatch_command",
+  "list_commands",
   "authorize_cli",
   "change_member_role",
   "remove_org_member",
