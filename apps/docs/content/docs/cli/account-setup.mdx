@@ -37,7 +37,7 @@ Run `oxagen login` to authenticate. The default flow opens a browser-based OAuth
 oxagen login            # opens a browser — follow the prompt, then pick your org and workspace
 ```
 
-After logging in, an interactive picker lets you choose your org and workspace. To pre-select them and skip the picker:
+After signing in, the consent page asks which org and workspace the CLI should act in. Both pickers stay open even when you belong to only one. When you approve, the browser lands on `app.oxagen.sh/cli/complete` and the token is already in your terminal. To pre-select the org and workspace and skip the picker:
 
 ```bash
 oxagen login --org your-org-slug --workspace your-workspace-slug

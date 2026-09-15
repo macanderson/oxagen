@@ -253,7 +253,7 @@ function staticSurface(root, brand) {
   emit(`${root}/favicon.ico`, ico(icoParts));
   emit(`${root}/apple-touch-icon.png`, raster(tileDark, 180));
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
-  for (const b of ["oxagen", "stella"]) {
+  for (const b of [brand]) {
     emit(
       `${root}/assets/brand/${b}-wordmark.svg`,
       readFileSync(svg(`${b}-wordmark-adaptive.svg`)),
