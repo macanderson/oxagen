@@ -5,15 +5,8 @@
   "e2e-files apps/app_deprecated/e2e spec-outside-apps-app",
   "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app",
   "layer src/features/auth/invitations.ts:9 @/server/tenancy-lookups",
-  "layer src/features/auth/invite-actions.ts:13 @/server/tenancy-lookups",
   "platform instrumentation.ts:59 @oxagen/telemetry",
   "platform instrumentation.ts:81 @oxagen/telemetry",
   "platform instrumentation.ts:83 @oxagen/database/security",
-  "platform instrumentation.ts:85 @oxagen/database",
-  "platform src/features/onboarding/create-organization.ts:122 @oxagen/handlers/iam-provision",
-  "platform src/features/onboarding/create-organization.ts:123 @oxagen/handlers/workspace-agents",
-  "platform src/features/onboarding/create-organization.ts:178 @oxagen/handlers/workspace-registry-seed",
-  "platform src/features/onboarding/create-organization.ts:185 @oxagen/handlers/workspace-environment-seed",
-  "platform src/features/onboarding/create-organization.ts:67 @oxagen/database",
-  "platform src/features/onboarding/create-organization.ts:68 @oxagen/handlers/logger"
+  "platform instrumentation.ts:85 @oxagen/database"
 ]

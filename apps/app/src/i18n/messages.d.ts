@@ -219,6 +219,7 @@ type Messages = {
       };
       closedTitle: string;
       failed: string;
+      denied: string;
     };
     cli: {
       title: string;
@@ -253,14 +254,13 @@ type Messages = {
       orgNameTooLong: string;
       slugInvalid: string;
       slugReserved: string;
-      namespaceInvalid: string;
       workspaceNameRequired: string;
       workspaceNameTooLong: string;
       workspaceSlugInvalid: string;
       workspaceSlugReserved: string;
       slugTaken: string;
-      namespaceTaken: string;
       failed: string;
+      denied: string;
     };
     organization: {
       eyebrow: string;
@@ -269,8 +269,6 @@ type Messages = {
       name: string;
       slug: string;
       slugHint: string;
-      namespace: string;
-      namespaceHint: string;
       workspaceTitle: string;
       workspaceName: string;
       workspaceSlug: string;

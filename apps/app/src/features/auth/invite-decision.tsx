@@ -9,6 +9,12 @@ import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { LoaderCircle } from "lucide-react";
 
+/** The refusal the alert names: another account, a closed invitation, or any other failure. */
+type Failure = "denied" | "closed" | "failed";
+
+const failureOf = (reason: string): Failure =>
+  reason === "denied" ? "denied" : reason === "conflict" ? "closed" : "failed";
+
 export function InviteDecision({
   token,
   orgName,
@@ -19,29 +25,25 @@ export function InviteDecision({
   const t = useTranslations("auth.invite");
   const navigate = useNavigate();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [declined, setDeclined] = useState(false);
 
   async function run(kind: "accept" | "decline") {
     if (pending) return;
     setPending(kind);
-    setFailed(false);
+    setFailure(null);
     try {
-      const result =
-        kind === "accept"
-          ? await acceptInvitation(token)
-          : await declineInvitation(token);
-      if (!result.ok) {
-        setFailed(true);
-        return;
+      if (kind === "accept") {
+        const result = await acceptInvitation(token);
+        if (result.ok) navigate.replace(result.value.to);
+        else setFailure(failureOf(result.reason));
+      } else {
+        const result = await declineInvitation(token);
+        if (result.ok) setDeclined(true);
+        else setFailure(failureOf(result.reason));
       }
-      if (kind === "decline") {
-        setDeclined(true);
-        return;
-      }
-      navigate.replace(result.value.to);
     } catch {
-      setFailed(true);
+      setFailure("failed");
     } finally {
       setPending(null);
     }
@@ -61,8 +63,14 @@ export function InviteDecision({
 
   return (
     <div className="flex flex-col gap-3">
-      {failed ? (
-        <FormAlert testId="invite-failure">{t("failed")}</FormAlert>
+      {failure ? (
+        <FormAlert testId="invite-failure">
+          {failure === "denied"
+            ? t("denied")
+            : failure === "closed"
+              ? t("closedTitle")
+              : t("failed")}
+        </FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button

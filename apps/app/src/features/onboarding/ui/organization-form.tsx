@@ -1,9 +1,9 @@
 "use client";
-// Create an organization (mockup `obOrg` @ mc-baseline-w1): name it, its
-// address and immutable namespace, and the first workspace. The address and
-// namespace follow the name until someone edits them by hand. A created
-// organization lands on its first workspace's Fleet page, or on `destination`
-// when the page was given one (the CLI consent page).
+// Create an organization (mockup `obOrg`): name it and its address, and name
+// the first workspace. Each address follows its name until someone edits it by
+// hand. `create_org` derives the immutable namespace from the address. A
+// created organization lands on its first workspace's Fleet page, or on
+// `destination` when the page was given one (the CLI consent page).
 
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
@@ -18,11 +18,26 @@ import {
   type OrganizationField,
   type OrgFormErrorKey,
   organizationFieldErrors,
-  suggestNamespace,
   toSlug,
 } from "../org-form";
 
 type Values = Record<OrganizationField, string>;
+type FieldErrors = Partial<Record<OrganizationField, OrgFormErrorKey>>;
+type Refusal = Extract<
+  Awaited<ReturnType<typeof createOrganizationAction>>,
+  { ok: false }
+>;
+
+/** The field errors a refusal names: a refused field, or a taken address. */
+function refusalFields(result: Refusal): FieldErrors {
+  if (result.reason === "invalid")
+    return organizationFieldErrors([
+      { path: [result.field ?? ""], message: result.code },
+    ]);
+  if (result.reason === "conflict" && result.code === "slug_taken")
+    return { slug: "slugTaken" };
+  return {};
+}
 
 export function OrganizationForm({
   initialName = "",
@@ -34,43 +49,35 @@ export function OrganizationForm({
 }) {
   const t = useTranslations("onboarding");
   const navigate = useNavigate();
-  const [values, setValues] = useState<Values>(() => {
-    const slug = toSlug(initialName);
-    return {
-      name: initialName,
-      slug,
-      namespace: suggestNamespace(slug),
-      workspaceName: "",
-      workspaceSlug: "",
-    };
-  });
+  const [values, setValues] = useState<Values>(() => ({
+    name: initialName,
+    slug: toSlug(initialName),
+    workspaceName: "",
+    workspaceSlug: "",
+  }));
   const [touched, setTouched] = useState<
     Partial<Record<OrganizationField, boolean>>
   >({});
-  const [errors, setErrors] = useState<
-    Partial<Record<OrganizationField, OrgFormErrorKey>>
-  >({});
-  const [failed, setFailed] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [alert, setAlert] = useState<"failed" | "denied" | null>(null);
   const [pending, setPending] = useState(false);
 
   function update(field: OrganizationField, value: string) {
     setValues((prev) => {
       const next = { ...prev, [field]: value };
       if (field === "name" && !touched.slug) next.slug = toSlug(value);
-      if ((field === "name" || field === "slug") && !touched.namespace)
-        next.namespace = suggestNamespace(next.slug);
       if (field === "workspaceName" && !touched.workspaceSlug)
         next.workspaceSlug = toSlug(value);
       return next;
     });
-    if (field === "slug" || field === "namespace" || field === "workspaceSlug")
+    if (field === "slug" || field === "workspaceSlug")
       setTouched((prev) => ({ ...prev, [field]: true }));
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    setFailed(false);
+    setAlert(null);
     const parsed = Schema.safeParse(values);
     if (!parsed.success) {
       setErrors(organizationFieldErrors(parsed.error.issues));
@@ -84,17 +91,12 @@ export function OrganizationForm({
         navigate.push(destination ?? result.value.to);
         return;
       }
-      const refused =
-        (result.reason === "invalid" || result.reason === "conflict") &&
-        result.field !== undefined
-          ? organizationFieldErrors([
-              { path: [result.field], message: result.code },
-            ])
-          : {};
-      setErrors(refused);
-      setFailed(Object.keys(refused).length === 0);
+      const fields = refusalFields(result);
+      setErrors(fields);
+      if (Object.keys(fields).length === 0)
+        setAlert(result.reason === "denied" ? "denied" : "failed");
     } catch {
-      setFailed(true);
+      setAlert("failed");
     } finally {
       setPending(false);
     }
@@ -121,9 +123,9 @@ export function OrganizationForm({
       className="flex min-w-0 flex-col"
     >
       <div className={`${panel} mt-5 flex flex-col gap-4 p-4 sm:p-5`}>
-        {failed ? (
-          <FormAlert testId="organization-failed">
-            {t("errors.failed")}
+        {alert ? (
+          <FormAlert testId={`organization-${alert}`}>
+            {t(`errors.${alert}`)}
           </FormAlert>
         ) : null}
         <Field
@@ -133,29 +135,15 @@ export function OrganizationForm({
           label={t("organization.name")}
           {...bind("name")}
         />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field
-            id="org-slug"
-            type="text"
-            spellCheck={false}
-            className="font-mono"
-            label={t("organization.slug")}
-            hint={t("organization.slugHint", { slug: values.slug || "…" })}
-            {...bind("slug")}
-          />
-          <Field
-            id="org-namespace"
-            type="text"
-            spellCheck={false}
-            maxLength={6}
-            className="font-mono"
-            label={t("organization.namespace")}
-            hint={t("organization.namespaceHint", {
-              example: `${values.namespace || "…"}.<ws>.<agent>`,
-            })}
-            {...bind("namespace")}
-          />
-        </div>
+        <Field
+          id="org-slug"
+          type="text"
+          spellCheck={false}
+          className="font-mono"
+          label={t("organization.slug")}
+          hint={t("organization.slugHint", { slug: values.slug || "…" })}
+          {...bind("slug")}
+        />
         <div className="border-t border-border pt-4">
           <h2 className={`${eyebrow} mb-3`}>
             {t("organization.workspaceTitle")}

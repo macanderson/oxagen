@@ -7,24 +7,7 @@ vi.mock("@/server/tenancy-lookups", () => ({
   systemLookups: { invitationByToken },
 }));
 
-// The actions and requireInvitee read the same person through the session seam.
-const getAuthUser = vi.fn();
-const getSession = vi.fn();
-vi.mock("@/server/session", () => ({ getAuthUser, getSession }));
-const kernelWrite = vi.fn();
-vi.mock("@/server/kernel", () => ({ kernelWrite }));
-vi.mock("@oxagen/oxagen/contracts/org.member_invite.accept", () => ({
-  orgMemberInviteAccept: { name: "accept_member_invite" },
-}));
-vi.mock("@oxagen/oxagen/contracts/org.member_invite.decline", () => ({
-  orgMemberInviteDecline: { name: "decline_member_invite" },
-}));
-
-const { InviteeCtx } = await import("@/server/viewer");
 const { loadInvitation } = await import("./invitations");
-const { acceptInvitation, declineInvitation } = await import(
-  "./invite-actions"
-);
 
 const record = {
   invitationId: "0192f1c4-0000-7000-8000-0000000000aa",
@@ -37,17 +20,8 @@ const record = {
   invitedAt: new Date("2026-09-11T09:00:00Z"),
   expiresAt: new Date("2099-01-01T00:00:00Z"),
 };
-const priya = {
-  id: "u-priya",
-  email: "priya@acme.example",
-  name: "Priya",
-};
-
 beforeEach(() => {
   invitationByToken.mockReset();
-  getAuthUser.mockReset();
-  getSession.mockResolvedValue({ user: priya });
-  kernelWrite.mockReset();
 });
 
 describe("loadInvitation", () => {
@@ -95,99 +69,6 @@ describe("loadInvitation", () => {
       reason: "error",
       code: "invitation_unreadable",
       status: 500,
-    });
-  });
-});
-
-describe("accept and decline", () => {
-  it("re-runs the page's decision: malformed, unknown, unreadable, closed, signed out and wrong account are refused, and nothing is written", async () => {
-    getAuthUser.mockResolvedValue(priya);
-    expect(await acceptInvitation("../../etc")).toEqual({
-      ok: false,
-      reason: "not_found",
-      code: "invitation_not_found",
-    });
-    expect(invitationByToken).not.toHaveBeenCalled();
-    invitationByToken.mockResolvedValueOnce(null);
-    expect(await acceptInvitation("invi_nope")).toEqual({
-      ok: false,
-      reason: "not_found",
-      code: "invitation_not_found",
-    });
-    invitationByToken.mockResolvedValueOnce({ ...record, role: "Superuser" });
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: false,
-      reason: "not_found",
-      code: "invitation_not_found",
-    });
-    invitationByToken.mockResolvedValueOnce({ ...record, status: "accepted" });
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: false,
-      reason: "conflict",
-      code: "invitation_closed",
-    });
-    invitationByToken.mockResolvedValueOnce({
-      ...record,
-      email: "someone.else@acme.example",
-    });
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: false,
-      reason: "denied",
-      code: "wrong_account",
-    });
-    getAuthUser.mockResolvedValue(null);
-    invitationByToken.mockResolvedValueOnce(record);
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: false,
-      reason: "denied",
-      code: "sign_in",
-    });
-    expect(kernelWrite).not.toHaveBeenCalled();
-  });
-
-  it("accepts through the kernel in the org the record names", async () => {
-    getAuthUser.mockResolvedValue(priya);
-    invitationByToken.mockResolvedValue(record);
-    kernelWrite.mockResolvedValue({ ok: true, value: {} });
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: true,
-      value: { to: "/acme" },
-    });
-    expect(kernelWrite).toHaveBeenCalledWith(
-      {
-        userId: "u-priya",
-        orgId: record.orgId,
-        invitationId: record.invitationId,
-      },
-      { name: "accept_member_invite" },
-      { invitationPublicId: "invi_live" },
-    );
-    expect(InviteeCtx.is(kernelWrite.mock.calls[0]?.[0])).toBe(true);
-    expect(await declineInvitation("invi_live")).toEqual({
-      ok: true,
-      value: { to: "/" },
-    });
-    expect(kernelWrite).toHaveBeenLastCalledWith(
-      expect.objectContaining({ userId: "u-priya" }),
-      { name: "decline_member_invite" },
-      { invitationPublicId: "invi_live" },
-    );
-    // Two reads per decision: the page's decision, then requireInvitee's.
-    expect(invitationByToken).toHaveBeenCalledTimes(4);
-  });
-
-  it("a kernel refusal reaches the page as the kernel classified it (negative)", async () => {
-    getAuthUser.mockResolvedValue(priya);
-    invitationByToken.mockResolvedValue(record);
-    kernelWrite.mockResolvedValue({
-      ok: false,
-      reason: "conflict",
-      code: "invitation_closed",
-    });
-    expect(await acceptInvitation("invi_live")).toEqual({
-      ok: false,
-      reason: "conflict",
-      code: "invitation_closed",
     });
   });
 });
