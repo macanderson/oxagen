@@ -131,6 +131,48 @@
       ]
     },
 
+    "@oxagen/docs#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "content/**",
+        "public/**",
+        "next.config.*",
+        "tsconfig.json",
+        "package.json",
+        "../../tools/scripts/gen-architecture-docs.ts",
+        "../../tools/scripts/lib/archdocs/**",
+        "../../apps/*/package.json",
+        "../../packages/*/package.json",
+        "../../tools/*/package.json",
+        "../../packages/database/storage-manifest.json",
+        "../../packages/database/src/**",
+        "../../packages/telemetry/src/**",
+        "../../packages/ontology/src/schema.cypher",
+        "../../packages/oxagen/capabilities.manifest.json",
+        "../../packages/handlers/src/register.ts",
+        "../../packages/inngest-functions/src/**",
+        "../../packages/config/src/**",
+        "../../apps/api/src/**",
+        "../../apps/mcp/src/tools/**",
+        "../../apps/cli/src/program.ts",
+        "../../.github/workflows/*.yml",
+        "../../docs/adr/*.md",
+        "../../infra/**",
+        "../../docker-compose.dev.yml",
+        "!**/*.test.ts",
+        "!**/__tests__/**"
+      ],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "passThroughEnv": [
+        "VERCEL",
+        "VERCEL_URL",
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "NEXT_PHASE"
+      ]
+    },
+
     "typecheck": {
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []

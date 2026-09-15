@@ -935,7 +935,7 @@ function about(m: Model, refCount: number): Section {
   return {
     id: "about",
     title: "About this atlas",
-    lede: "Generated, not written. Regenerate with pnpm docs:architecture; check freshness with pnpm docs:architecture --check.",
+    lede: "Generated, not written. The docs build regenerates it from the tree; pnpm docs:architecture --check proves the cited sources still exist and the output is deterministic.",
     body:
       `<h3>Inputs</h3><ul class="notes">` +
       [
@@ -954,7 +954,7 @@ function about(m: Model, refCount: number): Section {
         .map((s) => `<li>${s}</li>`)
         .join("") +
       `</ul><h3>Curated flows</h3><p>${flows.length} mechanism diagrams are hand-described in <code>tools/scripts/lib/archdocs/flows.ts</code> because they encode order, which no manifest records. Each cites the files and symbols it depicts (${refCount} references); the generator fails when any cited file or symbol is missing, so a flow cannot outlive the code it draws.</p>` +
-      `<h3>Determinism</h3><p>No timestamps, no random ids, no network. Two builds of the same tree produce identical bytes, which is what lets CI run the <code>--check</code> mode alongside the other manifest guards.</p>`,
+      `<h3>Determinism</h3><p>No timestamps, no random ids, no network. Two builds of the same tree produce identical bytes. The output is not committed: <code>apps/docs</code> regenerates it as a <code>prebuild</code> step, so the published atlas always matches the tree it shipped with, and CI's <code>--check</code> guards the two things that can rot, cited sources and determinism.</p>`,
   };
 }
 
