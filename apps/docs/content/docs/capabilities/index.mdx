@@ -1,6 +1,6 @@
 ---
 title: Capability registry
-description: Every action in Oxagen is a typed capability contract: declared once, enforced everywhere, and browsable in the governance catalog.
+description: "Every action in Oxagen is a typed capability contract: declared once, enforced everywhere, and browsable in the governance catalog."
 ---
 
 A **capability** is the unit of action in Oxagen. Each one is a typed contract declared once in the in-process registry and exposed identically across every surface it opts into: the REST API, the MCP server, the in-app agent, and the CLI. There is no side door: if an action exists, it exists as a capability, and it runs through the `invoke()` kernel with IAM, metering, and audit applied.
