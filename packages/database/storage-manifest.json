@@ -56,6 +56,17 @@
       "writes": []
     },
     {
+      "domain": "workspace",
+      "name": "archive_workspace",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -228,6 +239,17 @@
       "writes": []
     },
     {
+      "domain": "iam",
+      "name": "create_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -371,6 +393,17 @@
       "name": "delete_model_credential",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "delete_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2144,6 +2177,17 @@
       "writes": []
     },
     {
+      "domain": "iam",
+      "name": "set_role_grants",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "set_routing_policy",
       "reads": [],
@@ -2588,7 +2632,7 @@
       "writes": []
     }
   ],
-  "contentHash": "51c54cb7eedee9ad46056e1e5fb8e5f69c86cb6032a49d794efefcdc170ce2e4",
+  "contentHash": "d1df76081135aa1c1ba3c344240b4879fb7f6eed96acaadb860e04be32877e84",
   "domains": [
     {
       "name": "agent",

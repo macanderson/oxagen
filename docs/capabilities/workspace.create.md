@@ -34,14 +34,19 @@ within the tenant and forms the second segment of every URL
 - ClickHouse: emit a `workspace.created` row in `events`.
 - Neo4j: upsert `(:Workspace { public_id })` and `(:Tenant)-[:OWNS]->(:Workspace)`.
 
+## Access
+
+Org `Owner` or `Admin`, or the `Owner` of the workspace the call is scoped to, checked in the handler (`assertOrgRole`, INV-29). `noBillingGate`: creating a workspace is a settings write, never a governed action (ADR-052 exclusion 2). A context with no signed-in user is refused before any read.
+
 ## Errors
 
-| code              | meaning                                              |
-| ----------------- | ---------------------------------------------------- |
-| `slug_taken`      | Slug collides within the tenant.                     |
-| `invalid_slug`    | Slug fails the regex validator.                      |
-| `tenant_missing`  | No active tenant on the request context.             |
-| `forbidden`       | Caller lacks `workspace:create` in the tenant.       |
+| code | reason | meaning |
+| --- | --- | --- |
+| `forbidden` | `no_principal` | No signed-in user on the request. |
+| `forbidden` | `org_role_required` | The user holds none of the accepted roles. |
+| `not_found` | `org_not_found` | The org row the context names is missing. |
+| `conflict` | `slug_taken` | Slug collides within the org (pre-check, or the unique index on a race). |
+| `invalid_input` | — | Slug fails the contract's validator (kernel). |
 
 ## SPEC references
 

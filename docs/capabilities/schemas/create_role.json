@@ -1,0 +1,208 @@
+{
+  "name": "create_role",
+  "domain": "iam",
+  "description": "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions, for a tier the kernel does not enforce roles on, and for a name already used in the same scope kind.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "iam"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 64,
+        "description": "Immutable once created; prefix with the kind: agent., svc."
+      },
+      "scopeKind": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ],
+        "description": "org: assigned org-wide; workspace: assigned in one workspace at a time"
+      },
+      "description": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 500
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "permissions": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "run.read",
+            "run.control",
+            "run.approve",
+            "agent.read",
+            "agent.register",
+            "agent.roles.assign",
+            "tool.read",
+            "tool.grant",
+            "repo.read",
+            "repo.configure",
+            "graph.search",
+            "context.recall",
+            "steering.read",
+            "steering.propose",
+            "invoice.read",
+            "budget.set",
+            "audit.read",
+            "frame.read"
+          ]
+        },
+        "description": "Catalogue permission ids the role allows (ADR-057)"
+      }
+    },
+    "required": [
+      "name",
+      "scopeKind",
+      "permissions"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "role": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Public role id (rol_…)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopeKind": {
+            "type": "string",
+            "enum": [
+              "org",
+              "workspace"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "human for the seeded membership roles; agent for the seeded agent roles and every custom role, which only assign_agent_role binds"
+          },
+          "isSystemDefault": {
+            "type": "boolean",
+            "description": "True for system-seeded roles (Owner, Admin, …) — not user-deletable"
+          },
+          "version": {
+            "type": "string"
+          },
+          "memberCount": {
+            "type": "integer",
+            "description": "Active (non-deleted, non-expired) principal assignments holding this role"
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "capability": {
+                  "type": "string",
+                  "description": "Capability name the grant applies to"
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "deny",
+                    "require_approval"
+                  ]
+                }
+              },
+              "required": [
+                "capability",
+                "effect"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Capability grants carried by the role (empty when includeGrants=false)"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Catalogue permission ids every capability of which the role allows (empty when includeGrants=false)"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601"
+          },
+          "createdBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "scopeKind",
+          "kind",
+          "isSystemDefault",
+          "version",
+          "memberCount",
+          "grants",
+          "permissions",
+          "createdAt",
+          "createdBy"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "role"
+    ],
+    "additionalProperties": false
+  }
+}

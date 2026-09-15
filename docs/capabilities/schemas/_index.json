@@ -1,5 +1,5 @@
 {
-  "generatedCount": 238,
+  "generatedCount": 243,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -52,6 +52,18 @@
     {
       "name": "archive_conversation",
       "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "archive_workspace",
+      "domain": "workspace",
       "surfaces": [
         "api",
         "mcp",
@@ -250,6 +262,18 @@
       "consumes": []
     },
     {
+      "name": "create_role",
+      "domain": "iam",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_schema_version",
       "domain": "schema",
       "surfaces": [
@@ -407,6 +431,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "delete_role",
+      "domain": "iam",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1458,6 +1494,17 @@
       "consumes": []
     },
     {
+      "name": "list_invoices",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_mcp_consents",
       "domain": "agent",
       "surfaces": [
@@ -2335,6 +2382,18 @@
     {
       "name": "set_plugin_secret",
       "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_role_grants",
+      "domain": "iam",
       "surfaces": [
         "api",
         "mcp",

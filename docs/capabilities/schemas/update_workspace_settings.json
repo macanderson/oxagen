@@ -1,7 +1,7 @@
 {
   "name": "update_workspace_settings",
   "domain": "workspace",
-  "description": "Update the active workspace's general settings (partial): name, slug, and description. Routes the workspace settings edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
+  "description": "Update a workspace's general settings (partial): name, slug, and description. The active workspace unless workspaceId names another one in the organization. Org Owners and Admins, and the workspace's Owner or Admin, are checked in the handler.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -24,6 +24,9 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
       "name": {
         "type": "string",
         "minLength": 1,

@@ -1,17 +1,17 @@
 {
-  "name": "create_workspace",
+  "name": "archive_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
+  "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived.",
   "mode": "sync",
   "surfaces": [
     "api",
     "mcp",
     "agent"
   ],
-  "sensitivity": "medium",
+  "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
-    "riskLevel": "low",
+    "riskLevel": "high",
     "category": "workspace"
   },
   "chain": {
@@ -24,20 +24,13 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "name": {
+      "workspaceId": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 120
-      },
-      "slug": {
-        "type": "string",
-        "minLength": 2,
-        "maxLength": 40
+        "description": "Public workspace id (wrk_…)"
       }
     },
     "required": [
-      "name",
-      "slug"
+      "workspaceId"
     ],
     "additionalProperties": false
   },
@@ -45,28 +38,26 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "publicId": {
+      "id": {
+        "type": "string",
+        "description": "Public workspace id"
+      },
+      "slug": {
         "type": "string"
       },
       "name": {
         "type": "string"
       },
-      "slug": {
-        "type": "string"
-      },
-      "orgSlug": {
-        "type": "string"
-      },
-      "createdAt": {
-        "type": "string"
+      "archivedAt": {
+        "type": "string",
+        "description": "ISO-8601"
       }
     },
     "required": [
-      "publicId",
-      "name",
+      "id",
       "slug",
-      "orgSlug",
-      "createdAt"
+      "name",
+      "archivedAt"
     ],
     "additionalProperties": false
   }
