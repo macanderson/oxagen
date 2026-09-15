@@ -120,6 +120,30 @@ describe("Open a Context PR", () => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
   });
+
+  it("still offers the re-run once the checks have passed, because the head can move under them", async () => {
+    openContextPr.mockResolvedValue({ ok: true, value: { status: "checks_running" } });
+    render(<ProposalWrites {...TARGET} status="checks_passed" />, {
+      wrapper: intl,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run the checks again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run the checks" }));
+    await waitFor(() => {
+      expect(openContextPr).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "prp_01k5ru4a",
+      );
+    });
+  });
+
+  it("offers no write on a merged proposal (negative)", () => {
+    render(<ProposalWrites {...TARGET} status="merged" />, { wrapper: intl });
+    expect(
+      screen.queryByRole("button", { name: "Run the checks again" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
 });
 
 describe("Dismiss", () => {

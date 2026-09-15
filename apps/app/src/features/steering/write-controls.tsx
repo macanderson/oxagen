@@ -128,8 +128,14 @@ export function ProposalWrites({
   status,
 }: Target & { status: ProposalStatus }) {
   const t = useTranslations("steering.actions");
-  const settled =
-    status === "checks_passed" || status === "merged" || status === "rejected";
+  // Only `merged` and `rejected` are terminal. `checks_passed` is not: when the
+  // head moves after the checks clear, merge_context_pr refuses with
+  // `head_moved` and tells the person to run the checks again
+  // (packages/handlers/src/context.pr.merge.ts). Suppressing the re-run control
+  // in that state hid the only thing that invokes open_context_pr, so the
+  // Context PR could not be merged from the app after any later edit. Merge
+  // stays gated on `checks_passed` on its own, below.
+  const settled = status === "merged" || status === "rejected";
   const rerun = status !== "proposed";
   const prs = routes.steering(org, ws, { tab: "prs", proposal: proposalId });
   return (
