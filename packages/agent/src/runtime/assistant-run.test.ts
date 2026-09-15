@@ -246,6 +246,8 @@ function fakeStore(options: { failAppendCall?: number } = {}) {
     listRunAttempts: async () => [],
     readAttemptState: async () => ({}) as never,
     readAttemptEventsSince: async () => [],
+    compactSealedAttempts: async () => 0,
+    setRunSummary: async () => false,
     getFinalizationHandle: async () => null,
   };
   return { store, runs, attempts, batches, seals };
