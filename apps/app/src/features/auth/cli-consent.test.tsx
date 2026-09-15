@@ -42,6 +42,7 @@ const source = {
     toolbelt: vi.fn(),
     incidents: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 
 beforeEach(() => {

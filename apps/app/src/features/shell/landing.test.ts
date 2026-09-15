@@ -47,6 +47,7 @@ const source = {
     toolbelt: vi.fn(),
     incidents: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };

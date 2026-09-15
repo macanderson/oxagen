@@ -70,6 +70,7 @@ describe("ShellChrome", () => {
         toolbelt: vi.fn(),
         incidents: vi.fn(),
       },
+      org: { members: vi.fn() },
     };
     const element: ReactElement<{ data: ShellData }> = await ShellChrome({
       ctx,

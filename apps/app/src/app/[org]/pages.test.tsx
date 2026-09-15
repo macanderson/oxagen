@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // Every route under /[org] renders between WL-08 and its page item
 // (ARCHITECTURE.md §8): the four gap-lane pages render their one UNRECORDED
-// row under the title, the rev1 pages render the title alone. Each page names
-// itself once from its pages.* key (§1.2), resolves its viewer first and
-// renders nothing for a person requireViewer refuses. Fleet hands its viewer,
-// the data source and the runs cursor to the Fleet feature (WL-34); the three
-// Agents routes hand theirs, with the agent, the tab and the cursor the URL
-// names, to the Agents feature (#2956); Billing hands its viewer, the data
+// row under the title, and the other rev1 pages render the title alone. Each
+// page names itself once from its pages.* key (§1.2), resolves its viewer first
+// and renders nothing for a person requireViewer refuses. Fleet hands its
+// viewer, the data source and the runs cursor to the Fleet feature (WL-34); the
+// three Agents routes hand theirs, with the agent, the tab and the cursor the
+// URL names, to the Agents feature (#2956); Billing hands its viewer, the data
 // source, the checkout outcome and the invoices cursor to the Billing feature
-// (WL-38); Run, People and API keys gain their bodies in WL-35 to WL-37.
+// (WL-38); People renders its sections from org.members. Run and API keys gain
+// their bodies in WL-35 and WL-37.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -25,21 +26,26 @@ const {
   Agents,
   Agent,
   AgentSource,
-  dataSource,
-} = vi.hoisted(() => ({
-  requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
-  Billing: vi.fn((_props: Record<string, unknown>) => null),
-  Fleet: vi.fn((_props: Record<string, unknown>) => null),
-  Agents: vi.fn((_props: Record<string, unknown>) => null),
-  Agent: vi.fn((_props: Record<string, unknown>) => null),
-  AgentSource: vi.fn((_props: Record<string, unknown>) => null),
-  dataSource: vi.fn(() => "live-source"),
-}));
+  members,
+  source,
+} = vi.hoisted(() => {
+  const members = vi.fn();
+  return {
+    requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+    Billing: vi.fn((_props: Record<string, unknown>) => null),
+    Fleet: vi.fn((_props: Record<string, unknown>) => null),
+    Agents: vi.fn((_props: Record<string, unknown>) => null),
+    Agent: vi.fn((_props: Record<string, unknown>) => null),
+    AgentSource: vi.fn((_props: Record<string, unknown>) => null),
+    members,
+    source: { org: { members } },
+  };
+});
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
-vi.mock("@/data/source", () => ({ dataSource }));
+vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
@@ -76,7 +82,6 @@ const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
 
 const REV1: [string, string[], Load][] = [
   ["run", WS, () => import("./[ws]/runs/[run]/page")],
-  ["people", ORG, () => import("./page")],
   ["apiKeys", ORG, () => import("./api-keys/page")],
 ];
 
@@ -110,7 +115,7 @@ describe("the Billing page", () => {
     expect(Billing).toHaveBeenCalledOnce();
     expect(Billing.mock.calls[0]?.[0]).toEqual({
       ctx,
-      source: "live-source",
+      source,
       checkout: "success",
       cursor: "c2",
     });
@@ -142,7 +147,7 @@ describe("the Fleet page", () => {
     expect(Fleet).toHaveBeenCalledOnce();
     expect(Fleet.mock.calls[0]?.[0]).toEqual({
       ctx,
-      source: "live-source",
+      source,
       cursor: "c2",
     });
   });
@@ -168,7 +173,7 @@ describe("the Agents pages", () => {
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Agents.mock.calls.at(-1)?.[0]).toEqual({
       ctx,
-      source: "live-source",
+      source,
       cursor: "c2",
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
@@ -183,7 +188,7 @@ describe("the Agents pages", () => {
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Agent.mock.calls.at(-1)?.[0]).toEqual({
       ctx,
-      source: "live-source",
+      source,
       agent: "release-bot",
       tab: "incidents",
       cursor: "c3",
@@ -210,7 +215,7 @@ describe("the Agents pages", () => {
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(AgentSource.mock.calls.at(-1)?.[0]).toEqual({
       ctx,
-      source: "live-source",
+      source,
       agent: "release-bot",
     });
   });
@@ -230,6 +235,37 @@ describe("rev1 pages before their page item", () => {
   );
 });
 
+describe("Organization › People", () => {
+  it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    members.mockResolvedValue({
+      ok: true,
+      value: {
+        members: [
+          {
+            id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+            name: "Marcus Bell",
+            email: "marcus.bell@acme.example",
+            role: "owner",
+            joinedAt: "2026-03-02T09:15:00.000Z",
+          },
+        ],
+        invitations: [],
+      },
+    });
+    await expectPageTitle(
+      await import("./page"),
+      routeProps(SEGMENTS),
+      title("people"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(members).toHaveBeenCalledWith(ctx);
+    expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
 describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
@@ -239,6 +275,7 @@ describe("a person requireViewer refuses", () => {
     ["agent", AGENT] as const,
     ["agentSource", AGENT_SOURCE] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
+    ["people", () => import("./page")] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(

@@ -4,6 +4,7 @@ import type { DataSource } from "@/data/ports";
 import { agents } from "./agents";
 import { approvals } from "./approvals";
 import { billing } from "./billing";
+import { org } from "./org";
 import { pretenant } from "./pretenant";
 import { runs } from "./runs";
 import { shell } from "./shell";
@@ -15,4 +16,5 @@ export const liveSource: DataSource = {
   approvals,
   agents,
   billing,
+  org,
 };
