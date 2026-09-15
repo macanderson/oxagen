@@ -92,9 +92,15 @@ export const routes = {
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),
-  /** Billing; `cursor` opens a later page of its invoices. */
-  billing: (org: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, "billing"), { cursor: q?.cursor }),
+  /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
+  billing: (
+    org: string,
+    q?: { cursor: string } | { checkout: "success" | "cancel" },
+  ): SafePath =>
+    withQuery(pathOf(org, "billing"), {
+      cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
+      checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
+    }),
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),

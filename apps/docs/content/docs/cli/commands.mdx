@@ -106,6 +106,13 @@ oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
 ```
 
 `register` mints the identity (`register_agent`): the agent row, its delegated principal, the default agent role and one long-lived credential, printed once and never recoverable. The definition is a file, `.oxagen/agents/<slug>.toml`, committed to the workspace repository through `commit_agent_definition`. `status` reads `get_agent`: the identity, its credentials (prefix and dates, never the secret), the roles on its principal, the hosts enrolled under its key and the definition of record the last commit cached. `unenroll` revokes the agent's live host enrollments through `revoke_tacho_enrollment`, or one host with `--host`. `register` and `unenroll` are org Owner/Admin writes: the key `oxagen login` minted authenticates as the user who approved the login, and the handler checks that user's org role. The credential `register` prints is locked to its purpose and is not accepted as a bearer by the API or the MCP server; it is the credential the run-token exchange of the spec consumes.
+## oxagen agent enroll: put this machine under a registered agent's key
+
+```bash
+oxagen agent enroll --token <oxe_1time_…> [--harness claude-code|codex|claude-code,codex] [--port <n>] [--no-service] [--force]
+```
+
+The scripted path of the register flow (Mission Control spec §14.1). The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed: the control plane resolves the organization, the workspace and the agent from it, and the host file records what it answered. The routine is the one `oxagen tacho enroll` runs: the device key, the host credential, the `tachod` user service and the harness hooks. A token that was already used or has expired is refused (`token_used`, `token_expired`); issue a new one. The git remote of the directory the command runs in is reported so the onboarding gate can offer it as the workspace's main repository.
 
 ## oxagen agent env: bind agents to environments
 

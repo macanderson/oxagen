@@ -8,7 +8,7 @@
  * and the selection state.
  */
 
-import { useCallback, useState, useTransition } from "react";
+import { type JSX, useCallback, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -60,7 +60,7 @@ export function ConsentForm({
   state,
   codeChallenge,
   orgs,
-}: ConsentFormProps) {
+}: ConsentFormProps): JSX.Element {
   const defaultOrg = orgs[0];
   const [selectedOrgSlug, setSelectedOrgSlug] = useState<string>(
     defaultOrg?.slug ?? "",
@@ -151,10 +151,13 @@ export function ConsentForm({
         {/* Org picker */}
         <div className="space-y-2">
           <Label htmlFor="org-select">Organization</Label>
+          {/* Stays enabled with a single org: a disabled picker reads as a
+              broken one, and opening it is how the user confirms which org
+              the CLI is about to be scoped to. */}
           <Select
             value={selectedOrgSlug}
             onValueChange={handleOrgChange}
-            disabled={isPending || orgs.length <= 1}
+            disabled={isPending}
           >
             <SelectTrigger id="org-select">
               <SelectValue placeholder="Select an organization" />
@@ -177,7 +180,7 @@ export function ConsentForm({
             onValueChange={(v) => {
               if (v) setSelectedWsSlug(v);
             }}
-            disabled={isPending || workspaces.length <= 1}
+            disabled={isPending || workspaces.length === 0}
           >
             <SelectTrigger id="ws-select">
               <SelectValue placeholder="Select a workspace" />

@@ -26,9 +26,11 @@ vi.mock("./logger", () => ({
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
 import {
-  agentSlugFor,
   deviceKeyFingerprint,
   resolveAllowedEndpoints,
+} from "./lib/tacho-host-enroll";
+import {
+  agentSlugFor,
   tachoEnrollmentCreateHandler,
 } from "./tacho.enrollment.create";
 
