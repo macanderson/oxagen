@@ -196,6 +196,34 @@ describe("the GitHub seam", () => {
     });
   });
 
+  it("runs each workspace's calls under its own token when two workspaces resolve the same repository", async () => {
+    const putA = vi.fn(async () => ({ commitSha: "ca", htmlUrl: "" }));
+    const putB = vi.fn(async () => ({ commitSha: "cb", htmlUrl: "" }));
+    const byToken: Record<string, GitHubClient> = {
+      "tok-a": fakeClient({ putFile: putA }),
+      "tok-b": fakeClient({ putFile: putB }),
+    };
+    const gh = createSteeringGitHub({
+      readConnection: async () => ({ owner: "a-intel", repo: "platform" }),
+      resolveToken: async (scope) => `tok-${scope.workspaceId}`,
+      client: (token) => byToken[token]!,
+    });
+    const repoA = await gh.resolveRepository({
+      orgId: "org",
+      workspaceId: "a",
+    });
+    const repoB = await gh.resolveRepository({
+      orgId: "org",
+      workspaceId: "b",
+    });
+    expect(repoA).toEqual(repoB);
+    const args = { path: "p", content: "c", message: "m", branch: "x" };
+    expect(await gh.putFile(repoA, args)).toEqual({ commitSha: "ca" });
+    expect(await gh.putFile(repoB, args)).toEqual({ commitSha: "cb" });
+    expect(putA).toHaveBeenCalledTimes(1);
+    expect(putB).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses to act on a repository it did not resolve", async () => {
     const { gh } = seam(fakeClient());
     await expect(

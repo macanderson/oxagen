@@ -131,9 +131,12 @@ export function createSteeringGitHub(
     client: (token) => createGitHubClient({ token }),
   },
 ): SteeringGitHub {
-  const clients = new Map<string, GitHubClient>();
+  // Keyed by the handle `resolveRepository` returned, so a client built with
+  // one workspace's token serves only the calls made with that workspace's
+  // handle; two workspaces connected to one repository never share an entry.
+  const clients = new WeakMap<SteeringRepository, GitHubClient>();
   const clientFor = (repo: SteeringRepository): GitHubClient => {
-    const gh = clients.get(repo.fullName);
+    const gh = clients.get(repo);
     if (!gh)
       throw new Error(`[context.steering] no client for ${repo.fullName}`);
     return gh;
@@ -157,7 +160,7 @@ export function createSteeringGitHub(
         fullName: info.fullName,
         defaultBranch: info.defaultBranch,
       };
-      clients.set(repo.fullName, gh);
+      clients.set(repo, gh);
       return repo;
     },
     async readFile(repo, path, ref) {
