@@ -1,5 +1,7 @@
-// archive_workspace: the role gate, the two refusals and the write.
+// archive_workspace: the role gate, the three refusals and the write.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const { tenant, db, emitted } = vi.hoisted(() => ({
   tenant: {
@@ -11,6 +13,14 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
   db: {
     /** The workspace row the select answers, or none. */
     workspace: null as Record<string, unknown> | null,
+    /** How many registered agents the count answers. */
+    agentCount: 0,
+    /** The agent count's WHERE, rendered with its params. */
+    agentQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    /** The workspace id of the tenant scope each transaction opened in. */
+    scopes: [] as Array<string | undefined>,
+    /** The tenant scope the write ran in. */
+    writeScope: undefined as string | undefined,
     updates: [] as Array<Record<string, unknown>>,
   },
   emitted: [] as Array<Record<string, unknown>>,
@@ -18,6 +28,8 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  const { getScope } = await import("@oxagen/tenancy");
+  const dialect = new PgDialect();
   const rowsFor = (table: unknown): unknown[] => {
     if (table === real.schema.apiKeys)
       return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
@@ -27,6 +39,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return tenant.roleName ? [{ roleName: tenant.roleName }] : [];
     if (table === real.schema.workspaces)
       return db.workspace ? [db.workspace] : [];
+    if (table === real.schema.agents) return [{ n: db.agentCount }];
     throw new Error("unexpected table");
   };
   const fakeDb = {
@@ -34,7 +47,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       from: (table: unknown) => {
         const chain = {
           innerJoin: () => chain,
-          where: () => chain,
+          where: (cond: SQL) => {
+            if (table === real.schema.agents)
+              db.agentQueries.push(dialect.sqlToQuery(cond));
+            return Object.assign(Promise.resolve(rowsFor(table)), chain);
+          },
           limit: () => Promise.resolve(rowsFor(table)),
         };
         return chain;
@@ -44,13 +61,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       set: (values: Record<string, unknown>) => ({
         where: async () => {
           db.updates.push(values);
+          db.writeScope = getScope()?.workspaceId;
         },
       }),
     }),
   };
   return {
     ...real,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      db.scopes.push(getScope()?.workspaceId);
+      return fn(fakeDb);
+    },
   };
 });
 
@@ -79,7 +100,7 @@ const ctx: CapabilityContext = {
 };
 
 const ACTIVE = {
-  id: "ws-uuid",
+  id: "00000000-0000-0000-0000-0000000000f1",
   publicId: "wrk_core",
   slug: "core",
   name: "Core",
@@ -101,6 +122,10 @@ beforeEach(() => {
   tenant.roleName = "Owner";
   tenant.keyCreator = "00000000-0000-0000-0000-00000000000e";
   db.workspace = { ...ACTIVE };
+  db.agentCount = 0;
+  db.agentQueries.length = 0;
+  db.scopes.length = 0;
+  db.writeScope = undefined;
   db.updates.length = 0;
   emitted.length = 0;
 });
@@ -120,7 +145,7 @@ describe("archive_workspace", () => {
         eventType: "workspace.archived",
         actorUserId: ctx.userId,
         orgId: ctx.orgId,
-        workspaceId: "ws-uuid",
+        workspaceId: ACTIVE.id,
         capability: "archive_workspace",
         outcome: "success",
       }),
@@ -192,6 +217,29 @@ describe("archive_workspace", () => {
       reason: "workspace_not_found",
     });
     expect(db.updates).toHaveLength(0);
+  });
+
+  it("counts the target workspace's registered agents in that workspace's tenant scope, leaving out archived, deleted and the seeded qa-chat agent", async () => {
+    await run();
+    expect(db.agentQueries).toHaveLength(1);
+    const { sql, params } = db.agentQueries[0]!;
+    expect(sql).toMatch(/"agents"\."org_id" = \$1/);
+    expect(sql).toMatch(/"agents"\."workspace_id" = \$2/);
+    expect(sql).toMatch(/"agents"\."status" <> \$3/);
+    expect(sql).toMatch(/"agents"\."slug" <> \$4/);
+    expect(sql).toMatch(/"agents"\."deleted_at" is null/);
+    expect(params).toEqual([ctx.orgId, ACTIVE.id, "archived", "qa-chat"]);
+    expect(db.writeScope).toBe(ACTIVE.id);
+  });
+
+  it("refuses a workspace with registered agents with conflict / workspace_has_agents and writes nothing (negative)", async () => {
+    db.agentCount = 2;
+    const err = await run().catch((e) => e);
+    expect(isHandlerError(err) && err.code).toBe("conflict");
+    expect(isHandlerError(err) && err.reason).toBe("workspace_has_agents");
+    expect(String(err.message)).toContain("Core has 2 registered agent(s)");
+    expect(db.updates).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
   });
 
   it("refuses a workspace already archived with conflict / already_archived (negative)", async () => {

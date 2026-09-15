@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -8,10 +10,11 @@ const mocks = vi.hoisted(() => ({
   txInsertWsReturning: vi.fn(),
   txInsertWsUsers: vi.fn(),
   txFn: vi.fn(),
-  /** The actor's principal and org role, as assertOrgRole reads them. */
+  /** The actor's principal, org role and workspace role, as assertOrgRole reads them. */
   tenant: {
     principalId: "prn_1" as string | null,
     roleName: "Owner" as string | null,
+    workspaceRoleName: null as string | null,
     /** The creator an API key resolves to, or none. */
     keyCreator: "u_1" as string | null,
   },
@@ -68,6 +71,7 @@ vi.mock("./workspace-environment-seed", () => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  const dialect = new PgDialect();
   return {
     ...real,
     db: () => ({
@@ -87,11 +91,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           workspaces: { findFirst: mocks.wsFindFirst },
         },
         // The role gate reads principals then role assignments (answered by
-        // table); namespace derivation reads the org's existing workspace
-        // namespaces before inserting — empty means the slug-derived
-        // namespace is used as-is.
+        // table, and for assignments by the scope the WHERE pins: an org-wide
+        // assignment has `workspace_id is null`, a workspace assignment
+        // carries the id); namespace derivation reads the org's existing
+        // workspace namespaces before inserting — empty means the
+        // slug-derived namespace is used as-is.
         select: () => ({
           from: (table: unknown) => {
+            let lastWhere: SQL | null = null;
             const rows = (): unknown[] => {
               if (table === real.schema.apiKeys)
                 return mocks.tenant.keyCreator
@@ -101,15 +108,23 @@ vi.mock("@oxagen/database", async (importOriginal) => {
                 return mocks.tenant.principalId
                   ? [{ id: mocks.tenant.principalId }]
                   : [];
-              if (table === real.schema.principalRoleAssignments)
-                return mocks.tenant.roleName
-                  ? [{ roleName: mocks.tenant.roleName }]
-                  : [];
+              if (table === real.schema.principalRoleAssignments) {
+                const pinsWorkspace =
+                  lastWhere !== null &&
+                  /"workspace_id" = \$/.test(dialect.sqlToQuery(lastWhere).sql);
+                const name = pinsWorkspace
+                  ? mocks.tenant.workspaceRoleName
+                  : mocks.tenant.roleName;
+                return name ? [{ roleName: name }] : [];
+              }
               return [];
             };
             const chain = {
               innerJoin: () => chain,
-              where: () => Object.assign(Promise.resolve(rows()), chain),
+              where: (cond: SQL) => {
+                lastWhere = cond;
+                return Object.assign(Promise.resolve(rows()), chain);
+              },
               limit: () => Promise.resolve(rows()),
             };
             return chain;
@@ -143,6 +158,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     // Restore defaults
     mocks.tenant.principalId = "prn_1";
     mocks.tenant.roleName = "Owner";
+    mocks.tenant.workspaceRoleName = null;
     mocks.tenant.keyCreator = "u_1";
     mocks.orgFindFirst.mockResolvedValue({ slug: "acme" });
     mocks.wsFindFirst.mockResolvedValue(null);
@@ -222,6 +238,25 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       expect(mocks.txInsertWs).not.toHaveBeenCalled();
     },
   );
+
+  it("lets a workspace Owner with no org role create a workspace", async () => {
+    mocks.tenant.roleName = "Member";
+    mocks.tenant.workspaceRoleName = "Owner";
+    await expect(
+      workspaceCreateHandler({ name: "Owned", slug: "owned" }, CTX),
+    ).resolves.toMatchObject({ publicId: "ws_pub_1" });
+    expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a workspace Admin with no org role with forbidden / org_role_required and writes nothing (negative)", async () => {
+    mocks.tenant.roleName = "Member";
+    mocks.tenant.workspaceRoleName = "Admin";
+    await expect(refusal({ name: "Test", slug: "test" })).resolves.toEqual({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(mocks.txInsertWs).not.toHaveBeenCalled();
+  });
 
   it("lets an org Admin create a workspace", async () => {
     mocks.tenant.roleName = "Admin";

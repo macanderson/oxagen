@@ -1,7 +1,7 @@
 {
   "name": "archive_workspace",
   "domain": "workspace",
-  "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived.",
+  "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   "mode": "sync",
   "surfaces": [
     "api",

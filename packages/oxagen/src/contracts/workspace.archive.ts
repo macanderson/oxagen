@@ -2,20 +2,23 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /**
- * archive_workspace — freeze a workspace (issue #2964).
+ * archive_workspace — archive a workspace (issue #2964).
  *
  * Archiving records `archived_at` and who archived it. From then on the
  * workspace leaves `list_workspaces` (the switcher and the CLI picker) unless
  * the caller asks for archived rows; its runs, frames and records stay
  * readable and its slug stays taken. The handler refuses a workspace already
- * archived (`conflict`, `already_archived`) and one that is not in the org
- * (`not_found`). Recorded as the `workspace.archived` security event.
+ * archived (`conflict`, `already_archived`), one with a registered agent
+ * (`conflict`, `workspace_has_agents`; the seeded `qa-chat` agent does not
+ * count) and one that is not in the org (`not_found`). The kernel does not
+ * refuse runs in an archived workspace. Recorded as the `workspace.archived`
+ * security event.
  */
 export const workspaceArchive = registerCapability({
   name: "archive_workspace",
   domain: "workspace",
   description:
-    "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived.",
+    "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

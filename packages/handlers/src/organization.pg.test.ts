@@ -4,8 +4,9 @@
 // second custom role of the same name in either scope kind by the unique
 // indexes, replaces the grants, is refused a delete
 // while an agent holds the role and allowed after; creates a second
-// workspace, sees it in the list, archives it, sees it leave the list unless
-// asked, and is refused a second archive. The second workspace is created
+// workspace, sees it in the list, is refused its archive while an agent is
+// registered there, archives it once the agent is archived, sees it leave the
+// list unless asked, and is refused a second archive. The second workspace is created
 // through an API key the Admin created, the MCP path, which acts as the key's
 // creator. Runs wherever DATABASE_URL points
 // at a migrated database — CI's `test` job migrates Postgres with Atlas
@@ -373,7 +374,7 @@ describe.skipIf(!enabled)(
       ).resolves.toEqual({ code: "conflict", reason: "system_role_readonly" });
     });
 
-    it("walks the workspaces: create through an API key, list, archive, list without and with archived rows, refuse a second archive", async () => {
+    it("walks the workspaces: create through an API key, list, refuse an archive over a registered agent, archive, list without and with archived rows, refuse a second archive", async () => {
       const keyCall: CapabilityContext = {
         ...admin,
         userId: null,
@@ -389,7 +390,10 @@ describe.skipIf(!enabled)(
       expect(created.orgSlug).toBe(orgSlug);
       const [createdRow] = await withSystemDb((tx) =>
         tx
-          .select({ createdByUserId: schema.workspaces.createdByUserId })
+          .select({
+            id: schema.workspaces.id,
+            createdByUserId: schema.workspaces.createdByUserId,
+          })
           .from(schema.workspaces)
           .where(eq(schema.workspaces.publicId, created.publicId)),
       );
@@ -414,6 +418,38 @@ describe.skipIf(!enabled)(
         "core",
         "data",
       ]);
+
+      // An agent registered in the workspace holds the archive; the seeded
+      // qa-chat agent does not.
+      const [agent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId: createdRow!.id,
+            slug: "ingest",
+            name: "ingest",
+            agentType: "sdk",
+            createdByUserId: userId,
+          })
+          .returning({ id: schema.agents.id }),
+      );
+      await expect(
+        refusal(
+          scoped(() =>
+            workspaceArchiveHandler(
+              workspaceArchive.input.parse({ workspaceId: created.publicId }),
+              admin,
+            ),
+          ),
+        ),
+      ).resolves.toEqual({ code: "conflict", reason: "workspace_has_agents" });
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ status: "archived" })
+          .where(eq(schema.agents.id, agent!.id)),
+      );
 
       const archived = await scoped(() =>
         workspaceArchiveHandler(
