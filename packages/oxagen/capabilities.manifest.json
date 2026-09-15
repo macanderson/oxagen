@@ -1263,6 +1263,24 @@
       }
     },
     {
+      "name": "get_contract_rate",
+      "file": "billing.contract_rate.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",

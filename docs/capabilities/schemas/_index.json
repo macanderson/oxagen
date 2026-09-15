@@ -1,5 +1,5 @@
 {
-  "generatedCount": 248,
+  "generatedCount": 249,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -766,6 +766,18 @@
     {
       "name": "get_connection_mappings",
       "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_contract_rate",
+      "domain": "billing",
       "surfaces": [
         "api",
         "mcp",

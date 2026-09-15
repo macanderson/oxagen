@@ -44,7 +44,19 @@ export type ContractTerms =
       effectiveFrom: Date;
       effectiveTo: Date | null;
     } & GauTerms)
-  | ({ source: "published_tier"; tier: PlanTier } & GauTerms);
+  | ({
+      source: "published_tier";
+      tier: PlanTier;
+      /**
+       * When the published figures took effect: the plan row's `updated_at`.
+       * `billing.plans` carries no effective window of its own, and the one
+       * instant on the row that a rate change moves is the audit column the
+       * writer (`pnpm billing:stripe-sync`, or the seed) stamps.
+       */
+      effectiveFrom: Date;
+      /** Published terms are open-ended; only a negotiated row ends. */
+      effectiveTo: null;
+    } & GauTerms);
 
 /** The subscription fields `periodFor` slices a month out of. */
 export interface GauSubscriptionPeriod {
@@ -65,6 +77,7 @@ interface PlanTermsRow {
   ratePerGauMicros: bigint;
   blockSizeGau: number;
   includedGauPerMonth: number;
+  updatedAt: Date;
 }
 
 function termsOf(row: {
@@ -129,6 +142,7 @@ export async function resolveGauEntitlement(
           ratePerGauMicros: schema.plans.ratePerGauMicros,
           blockSizeGau: schema.plans.blockSizeGau,
           includedGauPerMonth: schema.plans.includedGauPerMonth,
+          updatedAt: schema.plans.updatedAt,
           billingInterval: schema.subscriptions.billingInterval,
           currentPeriodStart: schema.subscriptions.currentPeriodStart,
           currentPeriodEnd: schema.subscriptions.currentPeriodEnd,
@@ -154,6 +168,7 @@ export async function resolveGauEntitlement(
           ratePerGauMicros: schema.plans.ratePerGauMicros,
           blockSizeGau: schema.plans.blockSizeGau,
           includedGauPerMonth: schema.plans.includedGauPerMonth,
+          updatedAt: schema.plans.updatedAt,
         })
         .from(schema.plans)
         .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
@@ -196,7 +211,13 @@ export async function resolveGauEntitlement(
     };
   }
   return {
-    terms: { source: "published_tier", tier, ...termsOf(published) },
+    terms: {
+      source: "published_tier",
+      tier,
+      effectiveFrom: published.updatedAt,
+      effectiveTo: null,
+      ...termsOf(published),
+    },
     subscription,
   };
 }
