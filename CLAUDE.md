@@ -4,12 +4,14 @@
 
 ## Mission
 
-Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. We sell to the enterprise team that runs the agents and answers for them — not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on four things:
+Oxagen is the control plane for the agents an enterprise runs. Every agent operates under a **mandate** — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
 
-- **Teach:** a Neo4j graph + ontology that hands an agent the company's knowledge and rules when it starts a job, and takes back what the run learned.
-- **Govern:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
-- **Explain:** every run saved as one trace — who asked, what it read, what it changed, what proved it, what it cost.
-- **Learn:** proven runs leave behind skills, tools, tuned settings, and knowledge; later they train a model the customer owns.
+- **Access** (security sets it): the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, the actions it is permitted.
+- **Budget & rules** (FinOps sets it): what it may spend, under which commercial terms, and the business rules it must obey.
+- **Equipment** (engineering sets it): the knowledge it is handed at the start of a job, the skills and tools it may use, the steering it runs under.
+- **Record** (the platform keeps it): what the run read, what it changed, what proved it, what it cost — one trace; proven runs leave behind skills, tools, tuned settings, and knowledge, and later train a model the customer owns.
+
+The mechanism is the typed capability contract, which binds identity → knowledge scope → permitted action → commercial terms → outcome → audit record into one object enforced at `invoke()` time.
 
 Revenue is the platform billed by use, fine-tuning runs at a flat fee, and hosting at cost. There is no margin line, so we do not build resale or re-bill machinery.
 
