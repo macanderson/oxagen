@@ -309,6 +309,24 @@ type Messages = {
         enterprise: string;
       };
     };
+    purchase: {
+      title: string;
+      quantity: string;
+      step: string;
+      total: string;
+      wholeBlocks: string;
+      savesCard: string;
+      submit: string;
+      submitting: string;
+      denied: string;
+      errors: {
+        invalid: string;
+        aboveMax: string;
+        denied: string;
+        conflict: string;
+        unavailable: string;
+      };
+    };
     invoices: {
       title: string;
       empty: string;
