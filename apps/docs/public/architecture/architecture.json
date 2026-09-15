@@ -521,6 +521,15 @@
    "slug": "spend-price-book-as-data-rollup-store-budgets-in-micros",
    "status": "Accepted",
    "title": "Spend: the price book as data, the rollup store, budgets in micros"
+  },
+  {
+   "date": "2026-09-15",
+   "epic": "Unfiled",
+   "file": "docs/adr/ADR-063-organization-the-permission-catalogue.md",
+   "number": 63,
+   "slug": "organization-the-permission-catalogue",
+   "status": "Accepted",
+   "title": "Organization: the permission catalogue"
   }
  ],
  "apiRoutes": [
@@ -1350,6 +1359,27 @@
    "tier": "org+workspace"
   },
   {
+   "capability": "create_role",
+   "file": "apps/api/src/routes/v1/iam.role.create.ts",
+   "method": "POST",
+   "path": "/v1/:org_slug/:workspace_slug/iam/roles",
+   "tier": "org+workspace"
+  },
+  {
+   "capability": "delete_role",
+   "file": "apps/api/src/routes/v1/iam.role.delete.ts",
+   "method": "POST",
+   "path": "/v1/:org_slug/:workspace_slug/iam/roles/delete",
+   "tier": "org+workspace"
+  },
+  {
+   "capability": "set_role_grants",
+   "file": "apps/api/src/routes/v1/iam.role.grants.set.ts",
+   "method": "POST",
+   "path": "/v1/:org_slug/:workspace_slug/iam/roles/grants",
+   "tier": "org+workspace"
+  },
+  {
    "capability": "list_iam_roles",
    "file": "apps/api/src/routes/v1/iam.role.list.ts",
    "method": "GET",
@@ -2151,6 +2181,13 @@
    "file": "apps/api/src/routes/v1/workspace.create.ts",
    "method": "POST",
    "path": "/v1/:org_slug/:workspace_slug/workspaces",
+   "tier": "org+workspace"
+  },
+  {
+   "capability": "archive_workspace",
+   "file": "apps/api/src/routes/v1/workspace.archive.ts",
+   "method": "POST",
+   "path": "/v1/:org_slug/:workspace_slug/workspaces/archive",
    "tier": "org+workspace"
   },
   {
@@ -4656,6 +4693,44 @@
   },
   {
    "domain": "iam",
+   "file": "iam.role.create.ts",
+   "handlerFile": "packages/handlers/src/iam.role.create.ts",
+   "layers": {
+    "api": true,
+    "docs": true,
+    "mcp": true,
+    "schema": true,
+    "unit": true
+   },
+   "mode": "sync",
+   "name": "create_role",
+   "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+   ]
+  },
+  {
+   "domain": "iam",
+   "file": "iam.role.delete.ts",
+   "handlerFile": "packages/handlers/src/iam.role.delete.ts",
+   "layers": {
+    "api": true,
+    "docs": true,
+    "mcp": true,
+    "schema": true,
+    "unit": true
+   },
+   "mode": "sync",
+   "name": "delete_role",
+   "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+   ]
+  },
+  {
+   "domain": "iam",
    "file": "iam.role.list.ts",
    "handlerFile": "packages/handlers/src/iam.role.list.ts",
    "layers": {
@@ -4668,6 +4743,25 @@
    },
    "mode": "sync",
    "name": "list_iam_roles",
+   "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+   ]
+  },
+  {
+   "domain": "iam",
+   "file": "iam.role.grants.set.ts",
+   "handlerFile": "packages/handlers/src/iam.role.grants.set.ts",
+   "layers": {
+    "api": true,
+    "docs": true,
+    "mcp": true,
+    "schema": true,
+    "unit": true
+   },
+   "mode": "sync",
+   "name": "set_role_grants",
    "surfaces": [
     "agent",
     "api",
@@ -6941,12 +7035,30 @@
   },
   {
    "domain": "workspace",
+   "file": "workspace.archive.ts",
+   "handlerFile": "packages/handlers/src/workspace.archive.ts",
+   "layers": {
+    "api": true,
+    "docs": true,
+    "mcp": true,
+    "schema": true,
+    "unit": true
+   },
+   "mode": "sync",
+   "name": "archive_workspace",
+   "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+   ]
+  },
+  {
+   "domain": "workspace",
    "file": "workspace.create.ts",
    "handlerFile": "packages/handlers/src/workspace.create.ts",
    "layers": {
     "api": true,
     "docs": true,
-    "e2e": false,
     "mcp": true,
     "schema": true,
     "unit": true
@@ -12697,6 +12809,17 @@
     "writes": []
    },
    {
+    "domain": "workspace",
+    "name": "archive_workspace",
+    "reads": [],
+    "surfaces": [
+     "agent",
+     "api",
+     "mcp"
+    ],
+    "writes": []
+   },
+   {
     "domain": "agent",
     "name": "assign_agent_role",
     "reads": [],
@@ -12878,6 +13001,17 @@
     "writes": []
    },
    {
+    "domain": "iam",
+    "name": "create_role",
+    "reads": [],
+    "surfaces": [
+     "agent",
+     "api",
+     "mcp"
+    ],
+    "writes": []
+   },
+   {
     "domain": "schema",
     "name": "create_schema_version",
     "reads": [],
@@ -13021,6 +13155,17 @@
     "name": "delete_model_credential",
     "reads": [],
     "surfaces": [
+     "api",
+     "mcp"
+    ],
+    "writes": []
+   },
+   {
+    "domain": "iam",
+    "name": "delete_role",
+    "reads": [],
+    "surfaces": [
+     "agent",
      "api",
      "mcp"
     ],
@@ -14961,6 +15106,17 @@
     "writes": []
    },
    {
+    "domain": "iam",
+    "name": "set_role_grants",
+    "reads": [],
+    "surfaces": [
+     "agent",
+     "api",
+     "mcp"
+    ],
+    "writes": []
+   },
+   {
     "domain": "router",
     "name": "set_routing_policy",
     "reads": [],
@@ -15414,7 +15570,7 @@
     "writes": []
    }
   ],
-  "contentHash": "3b1c43527897d226f5c138b82748be87aee461860260a5faa794f465de4b42c8",
+  "contentHash": "b66ed4bb4ac8b32e68716b7d7f8180cca2bcc79777496ee9fc3e293aa25762ac",
   "domains": [
    {
     "name": "agent",
@@ -30711,6 +30867,18 @@
       "nullable": true,
       "primaryKey": false,
       "type": "text"
+     },
+     {
+      "name": "archived_at",
+      "nullable": true,
+      "primaryKey": false,
+      "type": "timestamp with time zone"
+     },
+     {
+      "name": "archived_by_user_id",
+      "nullable": true,
+      "primaryKey": false,
+      "type": "uuid"
      }
     ],
     "domain": "workspace",
@@ -30835,6 +31003,9 @@
   "graph.node.search",
   "graph.search",
   "graph.stats",
+  "iam.role.create",
+  "iam.role.delete",
+  "iam.role.grants.set",
   "iam.role.list",
   "integration.configure",
   "integration.delete",
@@ -30945,6 +31116,7 @@
   "user.preferences.read",
   "user.preferences.write",
   "user.workspace_preferences.read",
+  "workspace.archive",
   "workspace.budget_policy.read",
   "workspace.budget_policy.write",
   "workspace.create",
