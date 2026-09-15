@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Revoke a Tacho host enrollment. Mounted on the org-scoped router behind session auth. */
+/** Revoke a Tacho host enrollment. Operator action: an org Owner or Admin, by session or by the API key `oxagen login` minted for them; a machine-bound key is refused. Mounted on the org-scoped router. */
 export const tachoEnrollmentRevokeRoute = new Hono<AppEnv>();
 
 tachoEnrollmentRevokeRoute.post("/", async (c) => {

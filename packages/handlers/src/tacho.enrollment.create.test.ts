@@ -56,12 +56,15 @@ const PEM = generateKeyPairSync("ed25519")
   .toString();
 
 let inserted: Array<{ table: string; values: Record<string, unknown> }> = [];
+/** The API key a bearer request presented, as the operator lookup reads it. */
+let keyRow: Record<string, unknown> | undefined;
 
 function happyDb(clash = false): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         query: {
+          apiKeys: { findFirst: async () => keyRow },
           organizations: { findFirst: async () => ({ namespace: "acme" }) },
           workspaces: { findFirst: async () => ({ namespace: "core" }) },
           tachoHosts: {
@@ -182,6 +185,44 @@ describe("create_tacho_enrollment", () => {
     await expect(tachoEnrollmentCreateHandler(INPUT, CONTEXT)).rejects.toThrow(
       /TACHO_BUNDLE_SIGNING_PRIVATE_KEY/,
     );
+    expect(inserted).toEqual([]);
+  });
+
+  it("acts for the person who minted an `oxagen login` key, never for a machine's key", async () => {
+    // The desktop app and `tacho enroll` hold only the key `oxagen login`
+    // minted, and the API hands a handler no user for any bearer key.
+    happyDb();
+    const creator = "00000000-0000-0000-0000-0000000000bb";
+    const keyContext = { ...CONTEXT, userId: null, apiKeyId: "key-cli" };
+    keyRow = {
+      scope: {},
+      createdByUserId: creator,
+      stellaTelemetryEnrollmentId: null,
+    };
+    const output = await tachoEnrollmentCreateHandler(INPUT, keyContext);
+    expect(output.apiKey).toMatch(/^ox_/);
+    expect(mocks.resolveActorOrgRole).toHaveBeenCalledWith(
+      CONTEXT.orgId,
+      creator,
+    );
+    const host = inserted.find((row) => row.table === "hosts");
+    expect(host?.values["createdByUserId"]).toBe(creator);
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: creator }),
+    );
+
+    inserted = [];
+    keyRow = {
+      scope: {
+        purpose: "tacho_host_v1",
+        host_enrollment_id: output.hostEnrollmentId,
+      },
+      createdByUserId: creator,
+      stellaTelemetryEnrollmentId: null,
+    };
+    await expect(
+      tachoEnrollmentCreateHandler(INPUT, keyContext),
+    ).rejects.toThrow(/does not act for a person/);
     expect(inserted).toEqual([]);
   });
 
