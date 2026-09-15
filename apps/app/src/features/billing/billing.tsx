@@ -1,7 +1,8 @@
 // Billing (ARCHITECTURE.md §1.4): what the organization is subscribed to, how
 // it is billed past its allowance, how much of this month's bucket is left,
-// whether auto top-up refills it, the rate it pays and its invoices. The page
-// makes four reads; money appears only in the rate block and the invoices.
+// whether auto top-up refills it, the rate it pays, buying more units and its
+// invoices. The page makes four reads; money appears only in the rate block,
+// the purchase total and the invoices.
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
 import { AutoTopup } from "./auto-topup";
@@ -11,6 +12,7 @@ import { CheckoutBanner, checkoutOutcome } from "./checkout-banner";
 import { ContractRateBlock } from "./contract-rate";
 import { Invoices } from "./invoices";
 import { Plan } from "./plan";
+import { PurchaseForm } from "./purchase-form";
 
 export async function Billing({
   ctx,
@@ -43,6 +45,12 @@ export async function Billing({
         editable={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
       />
       <ContractRateBlock rate={rate} />
+      <PurchaseForm
+        org={ctx.orgSlug}
+        bucket={bucket}
+        rate={rate}
+        allowed={ctx.orgRole === "owner" || ctx.orgRole === "billing"}
+      />
       <Invoices invoices={invoices} cursor={cursor} org={ctx.orgSlug} />
     </div>
   );

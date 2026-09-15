@@ -127,6 +127,12 @@ describe("routes", () => {
     expect(routes.billing("acme", { cursor: "c 2&x" })).toBe(
       "/acme/billing?cursor=c+2%26x",
     );
+    expect(routes.billing("acme", { checkout: "success" })).toBe(
+      "/acme/billing?checkout=success",
+    );
+    expect(routes.billing("acme", { checkout: "cancel" })).toBe(
+      "/acme/billing?checkout=cancel",
+    );
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {
