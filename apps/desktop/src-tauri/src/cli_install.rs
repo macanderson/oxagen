@@ -194,23 +194,33 @@ pub fn path_var_contains(path_var: &str, dir: &Path) -> bool {
 // "Is this ours to replace" (pure)
 // ---------------------------------------------------------------------
 
-/// Whether `path` looks like somewhere only this app's installer could have
-/// pointed a link at: the app bundle, an AppImage/AppTranslocation/mounted
-/// image, a Windows Program Files install, or the durable
-/// `<data-local>/oxagen/bin` copy — as opposed to a Homebrew Cellar path (or
-/// any other third-party `oxagen`), which happens to contain the literal
-/// word "oxagen" too but never puts it directly ahead of a `bin` segment or
-/// inside an `Oxagen.app` bundle.
+/// Whether `path` is somewhere only this app's installer points a link at,
+/// so a link into it is ours to replace. Exact locations, never a substring
+/// guess: the durable copy (`durable_bin_dir()`, compared as a path), an
+/// `Oxagen.app/Contents/MacOS` bundle wherever it sits (which covers
+/// /Applications, a mounted .dmg and App Translocation), an AppImage mount
+/// (`/tmp/.mount_Oxagen*`), or `Program Files\Oxagen`. A developer checkout
+/// (`~/src/oxagen/bin/oxagen`), a Homebrew Cellar path, another user's data
+/// directory or a volume that merely has "oxagen" in its name is someone
+/// else's.
 pub fn is_oxagen_managed_path(path: &Path) -> bool {
+    is_oxagen_managed_path_in(path, &durable_bin_dir())
+}
+
+/// `is_oxagen_managed_path` with the durable directory passed in, so the
+/// rule is testable without the real user's data directory.
+pub fn is_oxagen_managed_path_in(path: &Path, durable: &Path) -> bool {
+    if path.starts_with(durable) {
+        return true;
+    }
     let lower = path.to_string_lossy().replace('\\', "/").to_lowercase();
-    lower.contains("oxagen.app/contents/macos")
-        || lower.contains("/oxagen/bin/")
-        || lower.ends_with("/oxagen/bin")
-        || lower.contains(".mount_oxagen")
-        || (lower.contains("apptranslocation") && lower.contains("oxagen.app"))
-        || (lower.starts_with("/volumes/") && lower.contains("oxagen"))
-        || lower.contains("program files/oxagen/")
-        || lower.contains("program files (x86)/oxagen/")
+    let segments: Vec<&str> = lower.split('/').filter(|s| !s.is_empty()).collect();
+    let in_bundle = segments.windows(3).any(|w| w == ["oxagen.app", "contents", "macos"]);
+    let in_appimage = lower.starts_with("/tmp/.mount_oxagen");
+    let in_program_files = segments
+        .windows(2)
+        .any(|w| (w[0] == "program files" || w[0] == "program files (x86)") && w[1] == "oxagen");
+    in_bundle || in_appimage || in_program_files
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,8 +367,17 @@ fn path_export_line(dir: &str) -> String {
     format!("export PATH=\"{dir}:$PATH\"")
 }
 
-fn block_text(dir: &str) -> String {
-    format!("{MARKER_BEGIN}\n{}\n{MARKER_END}\n", path_export_line(dir))
+/// The line break a profile already uses, so an inserted block matches it.
+fn eol_of(text: &str) -> &'static str {
+    if text.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    }
+}
+
+fn block_text(dir: &str, eol: &str) -> String {
+    format!("{MARKER_BEGIN}{eol}{}{eol}{MARKER_END}{eol}", path_export_line(dir))
 }
 
 /// The whole-file content for the fish profile: fish's own `conf.d` file is
@@ -367,48 +386,81 @@ pub fn fish_add_path_content(dir: &str) -> String {
     format!("{MARKER_BEGIN}\nfish_add_path {dir}\n{MARKER_END}\n")
 }
 
-/// Remove exactly the marker block (and the line ending right after it) from
-/// `existing`, restoring everything else byte-for-byte. A no-op (returns
-/// `existing` unchanged) when no block is present.
-pub fn remove_path_block(existing: &str) -> String {
-    let Some(start) = existing.find(MARKER_BEGIN) else {
-        return existing.to_string();
-    };
-    let Some(end_rel) = existing[start..].find(MARKER_END) else {
-        return existing.to_string();
-    };
-    let mut end = start + end_rel + MARKER_END.len();
-    if existing[end..].starts_with("\r\n") {
-        end += 2;
-    } else if existing[end..].starts_with('\n') {
-        end += 1;
-    }
-    let before = &existing[..start];
-    let begin = if let Some(trimmed) = before.strip_suffix("\r\n\r\n") {
-        trimmed.len() + 2
-    } else if let Some(trimmed) = before.strip_suffix("\n\n") {
-        trimmed.len() + 1
-    } else {
-        start
-    };
-    format!("{}{}", &existing[..begin], &existing[end..])
+/// Whether a line is the one line our block carries between its markers.
+fn is_path_export_line(line: &str) -> bool {
+    line.starts_with("export PATH=\"") && line.ends_with(":$PATH\"")
 }
 
-/// Insert (or move, if already present) the marker block for `dir` into
-/// `existing`. Idempotent: calling it twice with the same `dir` yields the
-/// same content as calling it once. Content outside the block is preserved
-/// byte-for-byte.
+/// The byte ranges of every block this module wrote: exactly a start marker
+/// line, one `export PATH="…:$PATH"` line and an end marker line. Anything
+/// else is not ours and is never used as a range boundary: a start marker
+/// whose end line the user deleted, or a block the user added lines to. So a
+/// user's own line can never fall inside a range. Each range also covers the
+/// one line break `upsert_path_block` puts in front of a block, which is what
+/// makes removal restore the file byte for byte.
+fn find_path_blocks(text: &str) -> Vec<(usize, usize)> {
+    // (start of line, the line without its break, end including its break)
+    let mut lines: Vec<(usize, &str, usize)> = Vec::new();
+    let mut pos = 0;
+    while pos < text.len() {
+        let rest = &text[pos..];
+        let (len, brk) = match rest.find('\n') {
+            Some(i) if i > 0 && rest.as_bytes()[i - 1] == b'\r' => (i - 1, 2),
+            Some(i) => (i, 1),
+            None => (rest.len(), 0),
+        };
+        lines.push((pos, &rest[..len], pos + len + brk));
+        pos += len + brk;
+    }
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i + 2 < lines.len() {
+        let begin = lines[i].0;
+        if lines[i].1 == MARKER_BEGIN && is_path_export_line(lines[i + 1].1) && lines[i + 2].1 == MARKER_END {
+            let floor = ranges.last().map_or(0, |r| r.1);
+            let before = &text[floor..begin];
+            let start = if before.ends_with("\r\n") {
+                begin - 2
+            } else if before.ends_with('\n') {
+                begin - 1
+            } else {
+                begin
+            };
+            ranges.push((start, lines[i + 2].2));
+            i += 3;
+        } else {
+            i += 1;
+        }
+    }
+    ranges
+}
+
+/// Remove every block this module wrote, and the one line break in front of
+/// each, leaving every other byte as it was. A no-op without a block.
+pub fn remove_path_block(existing: &str) -> String {
+    let mut out = String::with_capacity(existing.len());
+    let mut cursor = 0;
+    for (start, end) in find_path_blocks(existing) {
+        out.push_str(&existing[cursor..start]);
+        cursor = end;
+    }
+    out.push_str(&existing[cursor..]);
+    out
+}
+
+/// Append the block for `dir`, replacing any block this module wrote before.
+/// Exactly one line break separates it from what precedes it (none in an
+/// empty file) and it uses the file's own line endings, so
+/// `remove_path_block(&upsert_path_block(x, d)) == x` for every `x`, and a
+/// second identical upsert changes nothing.
 pub fn upsert_path_block(existing: &str, dir: &str) -> String {
     let without = remove_path_block(existing);
-    let block = block_text(dir);
+    let eol = eol_of(&without);
+    let block = block_text(dir, eol);
     if without.is_empty() {
         block
-    } else if without.ends_with("\n\n") || without.ends_with("\r\n\r\n") {
-        format!("{without}{block}")
-    } else if without.ends_with('\n') {
-        format!("{without}\n{block}")
     } else {
-        format!("{without}\n\n{block}")
+        format!("{without}{eol}{block}")
     }
 }
 
@@ -958,31 +1010,39 @@ mod tests {
 
     #[test]
     fn recognizes_oxagen_owned_locations() {
-        assert!(is_oxagen_managed_path(Path::new(
-            "/Applications/Oxagen.app/Contents/MacOS/oxagen"
-        )));
-        assert!(is_oxagen_managed_path(Path::new(
-            "/Users/dev/Library/Application Support/oxagen/bin/oxagen"
-        )));
-        assert!(is_oxagen_managed_path(Path::new("/home/dev/.local/share/oxagen/bin/tacho")));
-        assert!(is_oxagen_managed_path(Path::new("/tmp/.mount_OxagenAb12Cd/usr/bin/oxagen")));
-        assert!(is_oxagen_managed_path(Path::new(
-            "/private/var/folders/x/T/AppTranslocation/1234/d/Oxagen.app/Contents/MacOS/oxagen"
-        )));
-        assert!(is_oxagen_managed_path(Path::new("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen")));
-        assert!(is_oxagen_managed_path(Path::new("C:\\Program Files\\Oxagen\\bin\\oxagen.exe")));
+        let durable = Path::new("/Users/dev/Library/Application Support/oxagen/bin");
+        let ours = |p: &str| is_oxagen_managed_path_in(Path::new(p), durable);
+        assert!(ours("/Applications/Oxagen.app/Contents/MacOS/oxagen"));
+        assert!(ours("/Users/dev/Library/Application Support/oxagen/bin/oxagen"));
+        assert!(is_oxagen_managed_path_in(
+            Path::new("/home/dev/.local/share/oxagen/bin/tacho"),
+            Path::new("/home/dev/.local/share/oxagen/bin"),
+        ));
+        assert!(ours("/tmp/.mount_OxagenAb12Cd/usr/bin/oxagen"));
+        assert!(ours("/private/var/folders/x/T/AppTranslocation/1234/d/Oxagen.app/Contents/MacOS/oxagen"));
+        assert!(ours("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen"));
+        assert!(ours("C:\\Program Files\\Oxagen\\bin\\oxagen.exe"));
+        // The real durable directory, through the public wrapper.
+        assert!(is_oxagen_managed_path(&durable_bin_dir().join("oxagen")));
     }
 
     #[test]
     fn rejects_third_party_locations_that_merely_contain_the_word() {
-        // Homebrew: the segment right before "bin" is a version, not
-        // "oxagen" — same literal word, different shape.
-        assert!(!is_oxagen_managed_path(Path::new(
-            "/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen"
-        )));
-        assert!(!is_oxagen_managed_path(Path::new("/opt/homebrew/bin/oxagen")));
-        assert!(!is_oxagen_managed_path(Path::new("/usr/local/bin/oxagen")));
-        assert!(!is_oxagen_managed_path(Path::new("/home/dev/bin/oxagen")));
+        let durable = Path::new("/Users/dev/Library/Application Support/oxagen/bin");
+        let ours = |p: &str| is_oxagen_managed_path_in(Path::new(p), durable);
+        assert!(!ours("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen"));
+        assert!(!ours("/opt/homebrew/bin/oxagen"));
+        assert!(!ours("/usr/local/bin/oxagen"));
+        assert!(!ours("/home/dev/bin/oxagen"));
+        // A developer checkout has an `oxagen/bin` pair but is not the copy.
+        assert!(!ours("/Users/dev/src/oxagen/bin/oxagen"));
+        // Another user's durable copy is not this user's.
+        assert!(!ours("/Users/other/Library/Application Support/oxagen/bin/oxagen"));
+        // A volume with the word in its name but no app bundle.
+        assert!(!ours("/Volumes/oxagen-tools/bin/oxagen"));
+        // Names that only resemble the bundle or the install directory.
+        assert!(!ours("/Applications/NotOxagen.app/Contents/MacOS/oxagen"));
+        assert!(!ours("C:\\Program Files\\OxagenTools\\oxagen.exe"));
     }
 
     // ---- decide_symlink_action ----
@@ -996,9 +1056,15 @@ mod tests {
             decide_symlink_action(&ExistingLink::Symlink(target.to_path_buf()), target),
             LinkAction::AlreadyCorrect
         );
-        // An older app location or the durable copy: recognized, replace.
-        let stale = PathBuf::from("/Users/dev/Library/Application Support/oxagen/bin/oxagen");
+        // An older app location (a mounted .dmg) or the durable copy:
+        // recognized, replace.
+        let stale = PathBuf::from("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen");
         assert_eq!(decide_symlink_action(&ExistingLink::Symlink(stale), target), LinkAction::Replace);
+        let durable = durable_bin_dir().join("oxagen");
+        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(durable), target), LinkAction::Replace);
+        // A developer checkout: not ours, leave it.
+        let checkout = PathBuf::from("/Users/dev/src/oxagen/bin/oxagen");
+        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(checkout), target), LinkAction::Skip);
         // A Homebrew install: not recognized, leave it.
         let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
         assert_eq!(decide_symlink_action(&ExistingLink::Symlink(foreign), target), LinkAction::Skip);
@@ -1132,11 +1198,39 @@ mod tests {
     }
 
     #[test]
-    fn upsert_then_remove_round_trips_to_the_original() {
-        let original = "export EDITOR=vim\n";
-        let inserted = upsert_path_block(original, "/home/dev/.local/bin");
-        let removed = remove_path_block(&inserted);
-        assert_eq!(removed, original);
+    fn upsert_then_remove_restores_every_file_byte_for_byte() {
+        for original in ["", "a", "a\n", "a\n\n", "\n", "a\r\n", "a\r\n\r\n", "export EDITOR=vim\n"] {
+            let inserted = upsert_path_block(original, "/home/dev/.local/bin");
+            assert_eq!(remove_path_block(&inserted), original, "round trip of {original:?}");
+            assert_eq!(
+                upsert_path_block(&inserted, "/home/dev/.local/bin"),
+                inserted,
+                "second upsert of {original:?}"
+            );
+        }
+        // A CRLF profile gets a CRLF block.
+        assert!(upsert_path_block("a\r\n", "/x").ends_with("# <<< oxagen <<<\r\n"));
+    }
+
+    #[test]
+    fn an_orphan_start_marker_is_never_a_range_boundary() {
+        // The user deleted our end line; their own lines follow the orphan.
+        let original = "# >>> oxagen >>>\nexport PATH=\"/old:$PATH\"\nexport KEEP=me\n";
+        assert_eq!(remove_path_block(original), original);
+        let once = upsert_path_block(original, "/home/dev/.local/bin");
+        let twice = upsert_path_block(&once, "/home/dev/.local/bin");
+        assert!(twice.contains("export KEEP=me"));
+        assert_eq!(twice, once);
+        assert_eq!(remove_path_block(&twice), original);
+    }
+
+    #[test]
+    fn a_block_the_user_edited_is_left_alone() {
+        let edited = "# >>> oxagen >>>\nexport PATH=\"/x/bin:$PATH\"\nexport MINE=1\n# <<< oxagen <<<\n";
+        assert_eq!(remove_path_block(edited), edited);
+        let upserted = upsert_path_block(edited, "/x/bin");
+        assert!(upserted.starts_with(edited));
+        assert_eq!(remove_path_block(&upserted), edited);
     }
 
     #[test]
@@ -1197,11 +1291,12 @@ mod tests {
     #[test]
     fn link_one_creates_replaces_and_skips_on_real_symlinks() {
         let dir = unique_temp_dir("link-one");
-        // A directory shaped like a durable Oxagen bin dir, so
-        // is_oxagen_managed_path recognizes links into it as ours.
+        // An older app bundle's MacOS directory, so is_oxagen_managed_path
+        // recognizes links into it as ours.
         let old_oxagen_dir = std::env::temp_dir().join(format!("oxagen-cli-install-test-old-app-{}", std::process::id()));
-        fs::create_dir_all(old_oxagen_dir.join("oxagen").join("bin")).unwrap();
-        let stale_target = old_oxagen_dir.join("oxagen").join("bin").join("oxagen");
+        let old_macos = old_oxagen_dir.join("Oxagen.app").join("Contents").join("MacOS");
+        fs::create_dir_all(&old_macos).unwrap();
+        let stale_target = old_macos.join("oxagen");
         fs::write(&stale_target, b"stale").unwrap();
 
         let foreign_dir = std::env::temp_dir().join("not-oxagen-at-all");
