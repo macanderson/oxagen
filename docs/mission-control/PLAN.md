@@ -1,10 +1,12 @@
-# Mission Control — build plan
+# Oxagen Mission Control: build plan
 
-Status: draft, 2026-09-12.
-Source of truth: `docs/specs/mission-control/spec.md`
-(§14 Mission Control, §16 carry over / leave behind, §17 delivery plan, Appendix A/E/F);
-the implementation plan is `docs/specs/mission-control/plan.md`.
-Reference implementation: `mc.html` in https://github.com/macanderson/tmp-oxagen-mockups.
+| | |
+|---|---|
+| **Status** | Draft |
+| **Date** | 2026-09-12 |
+| **Owner** | Mac Anderson |
+| **Source** | `docs/specs/mission-control/spec.md` (§14 Mission Control, §16 carry over / leave behind, §17 delivery plan, Appendix A/E/F); the implementation plan is `docs/specs/mission-control/plan.md` |
+| **Reference implementation** | `mc.html` in https://github.com/macanderson/tmp-oxagen-mockups |
 
 This plan does not restate the spec. It records the decisions the spec left open, the
 measurements that back them, and the order the work happens in.
@@ -45,10 +47,10 @@ can reach.
 | Set | Files | LOC | Disposition |
 |---|---|---|---|
 | Reachable from a surviving route | 318 | 43,685 | **keep** |
-| Reachable **only** from a dying route | 318 | 61,539 | delete — proven unreachable |
+| Reachable **only** from a dying route | 318 | 61,539 | delete: proven unreachable |
 | Tests belonging to those dying files | 197 | 43,036 | delete with their subjects |
 | **Total deletion** | **515** | **104,575** | 53% of `apps/app/src` |
-| `packages/ui` | — | 9,860 | **keep** |
+| `packages/ui` | none | 9,860 | **keep** |
 
 An earlier estimate in this document put the deletion at ~85,000 LOC of components based on
 directory names. Reachability is the better instrument and disagrees with it in both
@@ -58,11 +60,11 @@ and it condemns files in innocuous-looking ones. The manifest is
 
 Reachability also found 28 files that nothing imports at all. All 28 are legitimate framework
 entry points (`app/manifest.ts`, `app/robots.ts`, server actions, `*.d.ts`, vitest setup), not
-dead code — an import walk cannot see a framework convention, so it reports them as orphans.
+dead code. An import walk cannot see a framework convention, so it reports them as orphans.
 The other 422 "orphans" are test files, which nothing imports by construction.
 
-The stack — `next@16.3.1`, `react@19.2.6`, `@base-ui/react`, Tailwind, `better-auth`,
-`lucide-react`, `motion` — is current and is what a greenfield choice would land on.
+The stack (`next@16.3.1`, `react@19.2.6`, `@base-ui/react`, Tailwind, `better-auth`,
+`lucide-react`, `motion`) is current and is what a greenfield choice would land on.
 
 The deciding detail is the design system, not the framework: `packages/ui/src/styles/globals.css`
 already implements the house brand the mockups are drawn in (Space Grotesk at 600, `--ink`
@@ -74,8 +76,8 @@ pages against the mockup.**
 
 ### 2.2 Map before delete
 
-Deletion is the right first move — every later step's cost scales with what is still in the
-tree — but it runs second, not first.
+Deletion is the right first move, because every later step's cost scales with what is still
+in the tree. It still runs second, not first.
 
 The asset inside the 47 unabsorbed contracts and the ~85k LOC of components is not the code.
 It is the **encoded decisions**: Zod schemas, validation messages, edge cases that were hit in
@@ -89,11 +91,11 @@ extracting means re-deriving from DDL what already exists in TypeScript and pass
 The generated deletion manifest classifies a contract as a deletion candidate when no target
 tool names it in `Absorbs`. That is a binary test, and the spec is not binary: Appendix E says
 of `list_roles` that it is "folded into `get_agent` and the Tools page." A folded read side is
-not a deletion — its schema still has to land somewhere.
+not a deletion: its schema still has to land somewhere.
 
 Contracts flagged as candidates that are probably folds, not deletes, and need a human call:
 `list_iam_roles`, `get_org_settings`, `get_workspace_settings`, `get_prompt_settings`, and the
-four `repo/*` reads (`get_pr`, `get_pr_diff`, `list_branches`, `get_ci_status`) — the spec
+four `repo/*` reads (`get_pr`, `get_pr_diff`, `list_branches`, `get_ci_status`), because the spec
 keeps the GitHub App and the code graph.
 
 **The deletion manifest is a proposal that gets reviewed, never executed blind.**
@@ -107,7 +109,7 @@ keeps the GitHub App and the code graph.
 | **P2 Delete** | The reviewed deletion manifest applied: unabsorbed contracts, absorbed routes, page-bound components, and the leave-behind packages | `pnpm typecheck` and `pnpm test` pass. No route 404s that Appendix F says should redirect |
 | **P3 Fixtures** | `mc.html`'s `DB`/`AGENTS`/`ORG` extracted to typed fixtures shared by the UI and the handler tests | A screen and its handler assert against the same fixture |
 | **P4 Design** | The 22 `NEW` tools' schemas, written against Appendix A's DDL and the mockup's rendered fields | Each has a schema, a risk grade, a default effect, and a test |
-| **P5 Run slice** | `/{org}/{ws}/runs/{run}` end to end — frame player, transport, cost strip, chain status | The §17 M1 acceptance test: a run can be halted mid-loop from the UI, and an exported run verifies offline |
+| **P5 Run slice** | `/{org}/{ws}/runs/{run}` end to end: frame player, transport, cost strip, chain status | The §17 M1 acceptance test: a run can be halted mid-loop from the UI, and an exported run verifies offline |
 
 P5 is deliberately the hardest screen. It exercises the frame envelope, the ledger invariants,
 and the recorder in one pass. Fleet is easier and teaches nothing that de-risks the rest.
