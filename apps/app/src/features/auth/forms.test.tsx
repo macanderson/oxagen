@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "./test-intl";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
@@ -18,18 +19,14 @@ const live = {
   liveSignIn: vi.fn(),
   liveSignUp: vi.fn(),
   liveVerifyTwoFactor: vi.fn(),
+  liveSignInSocial: vi.fn(),
   rememberPendingNext: vi.fn(),
   takePendingNext: vi.fn(),
 };
-vi.mock("./client-auth", () => live);
+vi.mock("./auth-client", () => live);
 
 const inviteActions = { acceptInvitation: vi.fn(), declineInvitation: vi.fn() };
 vi.mock("./invite-actions", () => inviteActions);
-
-const signInSocial = vi.fn();
-vi.mock("@oxagen/auth/client", () => ({
-  authClient: { signIn: { social: signInSocial } },
-}));
 
 const { LoginForm } = await import("./login-form");
 const { SignupForm } = await import("./signup-form");
@@ -54,6 +51,8 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  // Storage holds no remembered destination unless a test puts one there.
+  live.takePendingNext.mockReturnValue(null);
 });
 afterEach(() => {
   cleanup();
@@ -61,7 +60,7 @@ afterEach(() => {
 
 describe("LoginForm", () => {
   it("shows a message under each empty field and calls nothing", async () => {
-    renderWithIntl(<LoginForm next="/" />);
+    renderWithIntl(<LoginForm next={routes.root()} />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(screen.getByText("Enter your work email.")).toBeInTheDocument();
     expect(screen.getByLabelText("Work email")).toHaveAttribute(
@@ -79,7 +78,7 @@ describe("LoginForm", () => {
       ok: false,
       outcome: "wrongCredentials",
     });
-    renderWithIntl(<LoginForm next="/" />);
+    renderWithIntl(<LoginForm next={routes.root()} />);
     await userEvent.type(
       screen.getByLabelText("Work email"),
       "marcus.bell@acme.example",
@@ -101,7 +100,7 @@ describe("LoginForm", () => {
 
   it("a second factor continues at /two-factor carrying next, and remembers it", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: true });
-    renderWithIntl(<LoginForm next="/acme" />);
+    renderWithIntl(<LoginForm next={routes.people("acme")} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -116,7 +115,7 @@ describe("LoginForm", () => {
       ok: false,
       outcome: "emailNotVerified",
     });
-    renderWithIntl(<LoginForm next="/" />);
+    renderWithIntl(<LoginForm next={routes.root()} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -127,7 +126,7 @@ describe("LoginForm", () => {
 
   it("a thrown client error reads as unavailable", async () => {
     live.liveSignIn.mockRejectedValue(new Error("network"));
-    renderWithIntl(<LoginForm next="/" />);
+    renderWithIntl(<LoginForm next={routes.root()} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -138,7 +137,7 @@ describe("LoginForm", () => {
 
   it("a plain success goes to next", async () => {
     live.liveSignIn.mockResolvedValue({ ok: true, twoFactor: false });
-    renderWithIntl(<LoginForm next="/acme" />);
+    renderWithIntl(<LoginForm next={routes.people("acme")} />);
     await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -182,7 +181,7 @@ describe("SignupForm", () => {
 
   it("a deployment that requires verification sends the new account to verify", async () => {
     live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: true });
-    renderWithIntl(<SignupForm next="/invite/invi_1" />);
+    renderWithIntl(<SignupForm next={routes.invite("invi_1")} />);
     await fill();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
@@ -212,7 +211,7 @@ describe("SignupForm", () => {
 
 describe("TwoFactorForm", () => {
   it("validates six digits", async () => {
-    renderWithIntl(<TwoFactorForm next="/" />);
+    renderWithIntl(<TwoFactorForm next={routes.root()} />);
     await userEvent.type(screen.getByLabelText("Authentication code"), "123");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     expect(
@@ -225,7 +224,7 @@ describe("TwoFactorForm", () => {
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next="/acme" />);
+    renderWithIntl(<TwoFactorForm next={routes.people("acme")} />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "000000",
@@ -250,7 +249,7 @@ describe("TwoFactorForm", () => {
   it("resumes at the destination remembered before Better Auth's redirect", async () => {
     live.takePendingNext.mockReturnValue("/acme/core-platform");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next="/" />);
+    renderWithIntl(<TwoFactorForm next={routes.root()} />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "602914",
@@ -264,7 +263,7 @@ describe("TwoFactorForm", () => {
   it("ignores a remembered destination that is not same-origin", async () => {
     live.takePendingNext.mockReturnValue("//evil.example");
     live.liveVerifyTwoFactor.mockResolvedValue({ ok: true });
-    renderWithIntl(<TwoFactorForm next="/" />);
+    renderWithIntl(<TwoFactorForm next={routes.root()} />);
     await userEvent.type(
       screen.getByLabelText("Authentication code"),
       "602914",
@@ -280,7 +279,7 @@ describe("TwoFactorForm", () => {
       ok: false,
       outcome: "codeWrong",
     });
-    renderWithIntl(<TwoFactorForm next="/" />);
+    renderWithIntl(<TwoFactorForm next={routes.root()} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Use a recovery code instead" }),
     );
@@ -486,13 +485,13 @@ describe("InviteDecision", () => {
 
 describe("OAuthButtons", () => {
   it("starts social sign-in with the sanitised callback", async () => {
-    signInSocial.mockResolvedValue({});
-    renderWithIntl(<OAuthButtons callbackURL="/acme" />);
+    live.liveSignInSocial.mockResolvedValue(undefined);
+    renderWithIntl(<OAuthButtons callbackURL={routes.people("acme")} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Continue with GitHub" }),
     );
     await waitFor(() => {
-      expect(signInSocial).toHaveBeenCalledWith({
+      expect(live.liveSignInSocial).toHaveBeenCalledWith({
         provider: "github",
         callbackURL: "/acme",
       });

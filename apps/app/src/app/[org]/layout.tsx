@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { dataSource } from "@/data/source";
 import { ShellChrome, ShellFrame } from "@/features/shell";
 import { requireViewer } from "@/server/viewer";
 
@@ -26,5 +27,5 @@ async function OrganizationChrome({
 }) {
   const { org } = await params;
   const ctx = await requireViewer(org);
-  return <ShellChrome ctx={ctx} />;
+  return <ShellChrome ctx={ctx} source={dataSource()} />;
 }

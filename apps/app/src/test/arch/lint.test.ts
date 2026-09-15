@@ -18,12 +18,41 @@ type Probe = {
 };
 
 const PROBE_DIR = "src/test/arch/probes/lint";
-/** INV-02: the viewer seam and its test helper are the only exemptions. */
+/**
+ * INV-02: the viewer seam and its test helper are the only exemptions; the two
+ * navigation modules, which restate the rule for their own exemptions, keep it.
+ */
 const VIEWER_SEAM: readonly Placement[] = [
   { at: "src/features/shell/probe.ts", fails: true },
   { at: "src/server/kernel.test.ts", fails: true },
+  { at: "src/shared/navigation.ts", fails: true },
+  { at: "src/ui/navigation.tsx", fails: true },
   { at: "src/server/viewer.ts", fails: false },
   { at: "src/server/viewer.testing.ts", fails: false },
+];
+/** INV-13: a redirect happens only in src/shared/navigation.ts. */
+const REDIRECT_SINK: readonly Placement[] = [
+  { at: "src/features/auth/cli-actions.ts", fails: true },
+  { at: "src/server/viewer.ts", fails: true },
+  { at: "src/proxy.ts", fails: true },
+  { at: "src/app/github/setup/route.ts", fails: true },
+  { at: "src/ui/navigation.tsx", fails: true },
+  { at: "src/shared/navigation.ts", fails: false },
+];
+/** INV-13: useRouter and a computed link target only in src/ui/navigation.tsx. */
+const CLIENT_SINK: readonly Placement[] = [
+  { at: "src/features/auth/login-form.tsx", fails: true },
+  { at: "src/features/shell/sidebar.tsx", fails: true },
+  { at: "src/app/(auth)/login/page.tsx", fails: true },
+  { at: "src/app/cli/authorize/page.tsx", fails: true },
+  { at: "src/ui/navigation.tsx", fails: false },
+];
+/** INV-13: location.* everywhere, the two navigation modules included. */
+const EVERYWHERE: readonly Placement[] = [
+  { at: "src/features/shell/use-theme.ts", fails: true },
+  { at: "src/shared/navigation.ts", fails: true },
+  { at: "src/ui/navigation.tsx", fails: true },
+  { at: "src/server/viewer.ts", fails: true },
 ];
 const PROBES: Readonly<Record<string, Probe>> = {
   "type-assertion.ts": {
@@ -38,6 +67,54 @@ const PROBES: Readonly<Record<string, Probe>> = {
     rule: "no-restricted-syntax",
     placements: VIEWER_SEAM,
   },
+  "redirect-import.ts": {
+    rule: "no-restricted-imports",
+    placements: REDIRECT_SINK,
+  },
+  "permanent-redirect-import.ts": {
+    rule: "no-restricted-imports",
+    placements: REDIRECT_SINK,
+  },
+  "next-response-redirect.ts": {
+    rule: "no-restricted-syntax",
+    placements: REDIRECT_SINK,
+  },
+  "response-redirect.ts": {
+    rule: "no-restricted-syntax",
+    placements: REDIRECT_SINK,
+  },
+  "use-router.tsx": {
+    rule: "no-restricted-imports",
+    placements: CLIENT_SINK,
+  },
+  "use-router-import.ts": {
+    rule: "no-restricted-imports",
+    placements: [
+      { at: "src/shared/navigation.ts", fails: true },
+      { at: "src/server/viewer.ts", fails: true },
+    ],
+  },
+  "link-href.tsx": { rule: "no-restricted-syntax", placements: CLIENT_SINK },
+  "anchor-href.tsx": {
+    rule: "no-restricted-syntax",
+    placements: CLIENT_SINK,
+  },
+  "form-action.tsx": {
+    rule: "no-restricted-syntax",
+    placements: CLIENT_SINK,
+  },
+  "literal-link.tsx": {
+    rule: "no-restricted-syntax",
+    placements: [
+      { at: "src/features/auth/login-form.tsx", fails: false },
+      { at: "src/app/(auth)/login/page.tsx", fails: false },
+    ],
+  },
+  "window-location.ts": {
+    rule: "no-restricted-syntax",
+    placements: EVERYWHERE,
+  },
+  "bare-location.ts": { rule: "no-restricted-syntax", placements: EVERYWHERE },
 };
 
 const eslint = new ESLint({

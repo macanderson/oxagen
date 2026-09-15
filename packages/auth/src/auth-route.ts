@@ -1,10 +1,11 @@
-// The Better Auth API route, carried over from apps/app_deprecated/src/app/api/
-// auth/[...all]/route.ts. Better Auth's handler is a plain fetch handler, so the
-// route calls it directly (the app does not depend on better-auth itself).
+// The Better Auth API route handler, carried over from apps/app_deprecated/src/
+// app/api/auth/[...all]/route.ts. Better Auth's handler is a plain fetch
+// handler; apps/app reaches this module through its session seam
+// (apps/app/src/server/session.ts), the one app module that imports
+// @oxagen/auth.
 //
 // A failed or rate-limited sign-in attempt emits `auth.sign_in_failed` (SOC 2
 // CC6: brute-force lockouts must be auditable).
-import "server-only";
 
 /** Security events before a session exists carry the org sentinel (packages/auth/src/auth.ts). */
 export const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
@@ -52,7 +53,7 @@ export type AuthRouteDeps = {
 
 async function loadDeps(): Promise<AuthRouteDeps> {
   const [{ auth }, { emitSecurityEvent }] = await Promise.all([
-    import("@oxagen/auth/server"),
+    import("./auth"),
     import("@oxagen/database/security"),
   ]);
   return {

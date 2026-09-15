@@ -7,11 +7,12 @@ import {
   orgHref,
   workspaceHref,
 } from "./nav";
+import type { SafePath } from "@/shared/safe-path";
 
 export type Command = {
   id: string;
   label: string;
-  href: string;
+  href: SafePath;
 };
 
 export type CommandLabels = {
@@ -24,7 +25,7 @@ export function buildCommands(
 ): Command[] {
   const { org, ws } = ctx;
   const out: Command[] = [];
-  const go = (key: NavKey, href: string) =>
+  const go = (key: NavKey, href: SafePath) =>
     out.push({ id: `go:${key}`, label: labels.nav(key), href });
 
   if (ws !== null)

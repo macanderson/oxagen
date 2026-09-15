@@ -7,6 +7,8 @@
 // The mockup's "Scenarios" item is demo chrome, not one of the ten pages
 // (spec App. F), so it is not here.
 
+import { pathOf, type SafePath } from "@/shared/safe-path";
+
 export type WorkspaceNavKey =
   | "fleet"
   | "agents"
@@ -58,18 +60,15 @@ const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
   spend: "spend",
 };
 
-const enc = encodeURIComponent;
-
-export function orgHref(org: string, key: NavKey): string {
-  const base = `/${enc(org)}`;
+export function orgHref(org: string, key: NavKey): SafePath {
   switch (key) {
     case "organization":
-      return base;
+      return pathOf(org);
     case "billing":
     case "audit":
-      return `${base}/${key}`;
+      return pathOf(org, key);
     case "apiKeys":
-      return `${base}/api-keys`;
+      return pathOf(org, "api-keys");
     default:
       throw new Error(`${key} is a workspace page, not an organization page`);
   }
@@ -79,10 +78,9 @@ export function workspaceHref(
   org: string,
   ws: string,
   key: WorkspaceNavKey,
-): string {
-  const base = `/${enc(org)}/${enc(ws)}`;
-  if (key === "fleet") return base;
-  return `${base}/${WORKSPACE_SEGMENT[key]}`;
+): SafePath {
+  if (key === "fleet") return pathOf(org, ws);
+  return pathOf(org, ws, WORKSPACE_SEGMENT[key]);
 }
 
 export type ShellPath = {
@@ -139,7 +137,7 @@ export function isNavItemCurrent(key: NavKey, pathname: string): boolean {
 
 export type NavItem = {
   key: NavKey;
-  href: string;
+  href: SafePath;
 };
 
 export type NavSection = {
@@ -171,9 +169,9 @@ export function sidebarSections(org: string, ws: string | null): NavSection[] {
 }
 
 export type Crumb =
-  | { kind: "nav"; key: NavKey; href: string | null }
-  | { kind: "name"; text: string; href: string | null }
-  | { kind: "id"; text: string; href: string | null };
+  | { kind: "nav"; key: NavKey; href: SafePath | null }
+  | { kind: "name"; text: string; href: SafePath | null }
+  | { kind: "id"; text: string; href: SafePath | null };
 
 /** Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has no href. */
 export function breadcrumbs(
@@ -182,20 +180,18 @@ export function breadcrumbs(
 ): Crumb[] {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return [];
-  const out: Crumb[] = [
-    { kind: "name", text: names.org, href: `/${enc(org)}` },
-  ];
+  const out: Crumb[] = [{ kind: "name", text: names.org, href: pathOf(org) }];
   if (ws === null) {
     const key = currentNavKey(pathname);
     if (key === "apiKeys") {
-      out.push({ kind: "nav", key: "organization", href: `/${enc(org)}` });
+      out.push({ kind: "nav", key: "organization", href: pathOf(org) });
       out.push({ kind: "nav", key, href: null });
     } else if (key !== null) {
       out.push({ kind: "nav", key, href: null });
     }
     return finish(out);
   }
-  const base = `/${enc(org)}/${enc(ws)}`;
+  const base = pathOf(org, ws);
   out.push({ kind: "name", text: names.ws ?? ws, href: base });
   const [head, id, sub, subId] = rest;
   switch (head) {
@@ -207,9 +203,9 @@ export function breadcrumbs(
       if (id !== undefined) out.push({ kind: "id", text: id, href: null });
       break;
     case "agents":
-      out.push({ kind: "nav", key: "agents", href: `${base}/agents` });
+      out.push({ kind: "nav", key: "agents", href: pathOf(org, ws, "agents") });
       if (id !== undefined) {
-        const agentHref = `${base}/agents/${enc(id)}`;
+        const agentHref = pathOf(org, ws, "agents", id);
         out.push({ kind: "id", text: id, href: agentHref });
         if (sub === "source")
           out.push({ kind: "id", text: "source", href: null });

@@ -5,6 +5,8 @@
 // real session and membership check is `requireViewer` in every layout and page.
 // Appendix F legacy redirects are added at cutover (plan §4.11, Batch 5).
 import { type NextRequest, NextResponse } from "next/server";
+import { responseRedirect } from "@/shared/navigation";
+import { routes, sanitizeNext } from "@/shared/safe-path";
 
 /**
  * Reachable without a session: the sign-in flows, invitations, the auth API and
@@ -41,9 +43,8 @@ export function proxy(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
   if (isPublicPath(pathname)) return NextResponse.next();
   if (hasSessionCookie(req)) return NextResponse.next();
-  const login = new URL("/login", req.url);
-  if (pathname !== "/") login.searchParams.set("next", `${pathname}${search}`);
-  return NextResponse.redirect(login);
+  const next = sanitizeNext(`${pathname}${search}`, routes.root());
+  return responseRedirect(req, routes.login(next));
 }
 
 export const config = {

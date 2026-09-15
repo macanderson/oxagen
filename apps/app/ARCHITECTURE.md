@@ -154,20 +154,20 @@ Metering and roles are separate gates. The billing gate above runs for every org
                                                        │ src/server/session ─► @oxagen/auth
                                                        │ src/server/tenancy-lookups ─► @oxagen/database
                                                        └──────────────────────────┘
-   src/shared: pure, imports nothing internal (safe-path, loopback-uri, checkout-url, slug rules, navigation).
+   src/shared: pure, imports only src/shared (safe-path, loopback-uri, checkout-url, slug rules, navigation).
 ```
 
 | Layer | One-line rule | May import (internal) |
 |---|---|---|
 | `src/app/**` | A route resolves its viewer, picks a feature and does nothing else. `route.ts` is a one-line delegation. | `@/features/<page>` (barrel only), `@/server/viewer`, `@/data/source`, `@/ui/*`, `@/shared/*` |
-| `src/features/<page>/**` | Owns a page's sections, client islands and server actions. Never touches a store or `invoke`. | own folder, `@/ui/*`, `@/data/{read,contracts,ports,unrecorded}`, `@/server/viewer`, `@/server/kernel` (`kernelWrite`, only from a `"use server"` module), `@/server/sse` (stream handler only), `@/shared/*`; another page only through `@/features/<x>` |
+| `src/features/<page>/**` | Owns a page's sections, client islands and server actions. Never touches a store or `invoke`. | own folder, `@/ui/*`, `@/data/{read,contracts,ports,unrecorded}`, `@/server/viewer`, `@/server/session`, `@/server/kernel` (`kernelWrite`, only from a `"use server"` module), `@/server/sse` (stream handler only), `@/shared/*`; another page only through `@/features/<x>` |
 | `src/ui/**` | Presentational: props in, markup out. | `@/ui/*`, `@/data/read` (types), `@/data/contracts/*` (types), `@/data/unrecorded`, `@/shared/*` |
 | `src/data/read.ts`, `src/data/contracts/**`, `src/data/unrecorded.ts` | Pure vocabulary: `Read<T>`, `PageKey`, `PAGE_FAILURES`, zod view models, `Money` + `mulMicros`, the unrecorded table. | `zod`, each other |
 | `src/data/ports.ts` | The typed list of reads a page may make. Every method has a production caller. | `@/data/{read,contracts}`, `@/server/viewer` (ctx types) |
 | `src/data/source.ts` | The one composition point: returns the live `DataSource`. | `./live` |
 | `src/data/live/**` | One file per port. Each method is `kernelRead` plus a mapper typed from contract output. | `@/data/{read,contracts,ports}`, `@/server/kernel`, `@oxagen/oxagen/contracts/*` (declarations only) |
 | `src/server/**` | Seams to platform packages. | `@/data/read`, `@/shared/*`, each other; never `@/features/*`, `@/data/live`, `@/data/source` |
-| `src/shared/**` | Pure and edge-safe. | nothing internal |
+| `src/shared/**` | Pure and edge-safe. | `@/shared/*` |
 | `"use client"` files | Client islands. | never `@/server/*` (types excepted), `@/data/source`, `@/data/live/*`, or a feature barrel |
 
 **Platform-package allowlist (INV-03 and INV-05, one table, one arch test).** Outside these modules, `src/` may import `@oxagen/*` only as `@oxagen/oxagen/contracts/*` (type and declaration imports) and `captureError` from `@oxagen/telemetry`.
@@ -176,6 +176,7 @@ Metering and roles are separate gates. The billing gate above runs for every org
 |---|---|
 | `src/server/kernel.ts` | `@oxagen/oxagen`, `@oxagen/oxagen/kernel`, `@oxagen/oxagen/registry`, `@oxagen/oxagen/types`, `@oxagen/handlers/register`, `@oxagen/agent/register` |
 | `src/server/session.ts` | `@oxagen/auth`, `@oxagen/auth/*` |
+| `src/features/auth/auth-client.ts` | `@oxagen/auth/client` (the browser Better Auth client; `session.ts` is server-only and a `"use client"` module cannot import it, INV-21) |
 | `src/server/tenancy-lookups.ts` | `@oxagen/database`, `drizzle-orm` (never `sql`) |
 | `instrumentation.ts` (app root) | `@oxagen/oxagen/kernel` (gate setters), the five `bootstrap*` package entries |
 | everything else under `src/` | `@oxagen/oxagen/contracts/*`; `captureError` from `@oxagen/telemetry` |
@@ -223,7 +224,7 @@ export class InviteeCtx { #brand!: true; declare readonly userId: string; declar
 export function requireViewer(org: string): Promise<OrgCtx>;            // redirect /login · notFound · MFA · 308 canonical
 export function requireViewer(org: string, ws: string): Promise<WsCtx>;
 export function resolveViewer(org: string, ws?: string): Promise<ViewerResolution>; // route handlers: no interrupts
-export function requireUser(): Promise<PretenantCtx>;                   // signed in, no org yet
+export function requireUser(next?: SafePath): Promise<PretenantCtx>;    // signed in, no org yet; signed out → /login?next=<next>
 export function resolveInvitee(token: string): Promise<InviteeResolution>; // the page: not_found | anonymous | wrong_email | expired | invitee — no interrupts
 export function requireInvitee(token: string): Promise<{ ctx: InviteeCtx; invitation: InvitationView }>; // the accept/decline actions: redirect /login · notFound
 ```
@@ -426,6 +427,7 @@ export function parseCheckoutUrl(raw: string): ExternalCheckoutUrl | null;      
 
 // src/shared/navigation.ts     — the only module that calls next/navigation redirect()
 export function redirectTo(path: SafePath): never;
+export function permanentRedirectTo(path: SafePath): never;                    // 308 to a renamed org's or workspace's canonical slug (viewer.ts)
 export function redirectToLoopback(uri: LoopbackUri, q: { code: string; state: string } | { error: "access_denied"; state: string }): never;
 export function redirectToCheckout(url: ExternalCheckoutUrl): never;
 export function responseRedirect(req: Request, path: SafePath): NextResponse;      // route handlers and proxy.ts

@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const redirect = vi.fn((to: string) => {
-  throw new Error(`NEXT_REDIRECT ${to}`);
-});
-vi.mock("next/navigation", () => ({ redirect }));
-const getAuthUser = vi.fn();
-vi.mock("../auth/session", () => ({ getAuthUser }));
+const requireUser = vi.fn();
+vi.mock("@/server/viewer", () => ({ requireUser }));
 
 // --- the live write's collaborators -------------------------------------------------
 const inserted: Array<{ table: string; values: Record<string, unknown> }> = [];
@@ -108,8 +104,8 @@ const user = { id: "u-owner", email: "priya@acme.example", name: "Priya" };
 beforeEach(() => {
   inserted.length = 0;
   failInsert = null;
-  getAuthUser.mockReset();
-  getAuthUser.mockResolvedValue(user);
+  requireUser.mockReset();
+  requireUser.mockResolvedValue({ userId: user.id });
   for (const fn of [
     logger.error,
     bootstrapOrgIAM,
@@ -121,11 +117,13 @@ beforeEach(() => {
 });
 
 describe("createOrganizationAction", () => {
-  it("sends a signed-out person to log in", async () => {
-    getAuthUser.mockResolvedValue(null);
+  it("gates on a signed-in person who comes back to organization creation, writing nothing (negative)", async () => {
+    requireUser.mockRejectedValue(new Error("NEXT_REDIRECT"));
     await expect(createOrganizationAction(form)).rejects.toThrow(
-      "NEXT_REDIRECT /login?next=%2Fnew-organization",
+      "NEXT_REDIRECT",
     );
+    expect(requireUser).toHaveBeenCalledWith("/new-organization");
+    expect(inserted).toHaveLength(0);
   });
 
   it("re-validates every field, writing nothing (negative)", async () => {
