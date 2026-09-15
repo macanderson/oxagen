@@ -82,3 +82,4 @@ first. Move a row into its epic when one fits.
 - [ADR-053](./ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md) — The in-app agent runs on Stella's headless engine, and a token is billed only when Oxagen paid for it
 - [ADR-054](./ADR-054-the-migration-connection-carries-the-rls-bypass.md) — The migration connection carries `app.rls_bypass`; the registries policy keeps its narrower WITH CHECK
 - [ADR-055](./ADR-055-an-oxagen-login-key-acts-for-its-creator-on-host-enrollment.md) — An `oxagen login` key acts for its creator on Tacho host enrollment; machine-bound keys never do
+- [ADR-066](./ADR-066-two-names-agent-control-plane-and-agent-fleet-management.md) — Oxagen has two names, the agent control plane and agent fleet management; spend is part of the fleet; the agent asks for the keys
