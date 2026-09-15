@@ -1,4 +1,4 @@
-# Mission Control — tool traceability matrix
+# Oxagen Mission Control: tool traceability matrix
 
 Generated from Appendix E of `2026-09-11-oxagen-mission-control-spec.md` joined against
 the `registerCapability()` declarations in `packages/oxagen/src/contracts/`.
@@ -42,48 +42,48 @@ Regenerate with `tools/scripts/mission-control/build-matrix.mjs`.
 | `get_agent` | INHERIT | `get_agent_def`, `get_agent_role` | low | deny |
 | `list_agents` | INHERIT | `list_agent_defs` | low | deny |
 | `set_agent_role` | INHERIT | `assign_agent_role`, `revoke_agent_role` | high | deny |
-| `set_role_grants` | NEW | — | — | — |
+| `set_role_grants` | NEW | none | none | none |
 
 ## Wrapping and control (14)
 
 | Tool | Grade | Inherits schema from | Risk | Effect |
 |---|---|---|---|---|
-| `enroll_host` | INHERIT | `create_tacho_enrollment` | — | deny |
-| `revoke_enrollment` | INHERIT | `revoke_tacho_enrollment` | — | deny |
-| `list_hosts` | INHERIT | `list_tacho_hosts` | — | deny |
-| `get_policy_bundle` | INHERIT | `get_tacho_bundle`, `get_registry_config` | — | deny |
+| `enroll_host` | INHERIT | `create_tacho_enrollment` | none | deny |
+| `revoke_enrollment` | INHERIT | `revoke_tacho_enrollment` | none | deny |
+| `list_hosts` | INHERIT | `list_tacho_hosts` | none | deny |
+| `get_policy_bundle` | INHERIT | `get_tacho_bundle`, `get_registry_config` | none | deny |
 | `ingest_frames` | INHERIT | `ingest_tacho_events`, `record_execution`, `ingest_stella_operational_telemetry`, `debug_execution` | high | deny |
-| `fetch_commands` | INHERIT | `fetch_tacho_commands` | — | deny |
-| `dispatch_command` | INHERIT | `dispatch_tacho_command` | — | deny |
+| `fetch_commands` | INHERIT | `fetch_tacho_commands` | none | deny |
+| `dispatch_command` | INHERIT | `dispatch_tacho_command` | none | deny |
 | `list_runs` | INHERIT | `list_executions`, `list_tacho_sessions` | low | deny |
-| `get_run` | INHERIT | `get_tacho_session`, `get_execution_trace`, `get_message_execution` | — | deny |
-| `export_run` | NEW | — | — | — |
-| `list_approvals` | NEW | — | — | — |
+| `get_run` | INHERIT | `get_tacho_session`, `get_execution_trace`, `get_message_execution` | none | deny |
+| `export_run` | NEW | none | none | none |
+| `list_approvals` | NEW | none | none | none |
 | `resolve_approval` | INHERIT | `resolve_approval`, `resolve_mcp_consent` | low | deny |
-| `send_message` | NEW | — | — | — |
-| `list_messages` | NEW | — | — | — |
+| `send_message` | NEW | none | none | none |
+| `list_messages` | NEW | none | none | none |
 
 ## Toolbelt (17)
 
 | Tool | Grade | Inherits schema from | Risk | Effect |
 |---|---|---|---|---|
-| `register_tool_server` | INHERIT | `register_mcp_server`, `set_mcp_enabled` | — | deny |
-| `remove_tool_server` | INHERIT | `delete_mcp_server` | — | deny |
+| `register_tool_server` | INHERIT | `register_mcp_server`, `set_mcp_enabled` | none | deny |
+| `remove_tool_server` | INHERIT | `delete_mcp_server` | none | deny |
 | `list_tool_servers` | INHERIT | `list_mcp_servers`, `resolve_mcp_servers`, `list_mcp_consents` | medium | deny |
 | `import_tools` | INHERIT | `list_tool_declarations`, `publish_tool_declaration`, `list_agent_tools` | low | deny |
-| `approve_tool_schema` | NEW | — | — | — |
+| `approve_tool_schema` | NEW | none | none | none |
 | `search_tools` | INHERIT | `search_command_menu`, `suggest_commands` | low | deny |
-| `load_tools` | NEW | — | — | — |
+| `load_tools` | NEW | none | none | none |
 | `set_connection` | INHERIT | `set_model_credential`, `verify_model_credential`, `upsert_secret_key`, `set_secret_value`, `set_plugin_secret`, `reauth_plugin_credential` | high | deny |
 | `delete_connection` | INHERIT | `delete_connection`, `delete_model_credential`, `delete_secret_key`, `unset_secret_value`, `revoke_plugin_credential` | high | deny |
 | `list_connections` | INHERIT | `list_connections`, `list_secret_keys`, `get_model_credential` | low | deny |
-| `grant_mandate` | NEW | — | — | — |
-| `set_approval_rules` | NEW | — | — | — |
-| `revoke_mandate` | NEW | — | — | — |
-| `list_mandates` | NEW | — | — | — |
-| `set_policy` | NEW | — | — | — |
-| `simulate_policy` | NEW | — | — | — |
-| `set_kill_switch` | NEW | — | — | — |
+| `grant_mandate` | NEW | none | none | none |
+| `set_approval_rules` | NEW | none | none | none |
+| `revoke_mandate` | NEW | none | none | none |
+| `list_mandates` | NEW | none | none | none |
+| `set_policy` | NEW | none | none | none |
+| `simulate_policy` | NEW | none | none | none |
+| `set_kill_switch` | NEW | none | none | none |
 
 ## Ontology and knowledge (13)
 
@@ -108,7 +108,7 @@ Regenerate with `tools/scripts/mission-control/build-matrix.mjs`.
 | Tool | Grade | Inherits schema from | Risk | Effect |
 |---|---|---|---|---|
 | `append_record` | INHERIT | `write_memory`, `save_memory`, `attach_memory_evidence`, `cite_memory`, `cite_reference` | low | deny |
-| `get_record` | NEW | — | — | — |
+| `get_record` | NEW | none | none | none |
 | `list_records` | INHERIT | `list_context_records`, `list_memories`, `list_memory_citations`, `get_citation_stats` | low | deny |
 | `retract_record` | INHERIT | `delete_memory`, `demote_memory` | medium | deny |
 | `recall_context` | INHERIT | `recall_memory` | low | deny |
@@ -123,11 +123,11 @@ Regenerate with `tools/scripts/mission-control/build-matrix.mjs`.
 |---|---|---|---|---|
 | `get_spend` | INHERIT | `get_usage_breakdown`, `list_routing_stats`, `get_repo_metrics` | low | deny |
 | `list_findings` | INHERIT | `list_error_clusters` | low | deny |
-| `get_reconciliation` | NEW | — | — | — |
-| `export_statement` | NEW | — | — | — |
+| `get_reconciliation` | NEW | none | none | none |
+| `export_statement` | NEW | none | none | none |
 | `set_budget` | INHERIT | `set_spend_budget`, `get_spend_budget`, `update_user_budget`, `get_user_budget`, `get_budget_policy` | low | deny |
 | `set_model_route` | INHERIT | `update_model_settings`, `get_model_settings`, `preview_routing_decision`, `get_routing_policy` | low | deny |
-| `set_funding_source` | NEW | — | — | — |
+| `set_funding_source` | NEW | none | none | none |
 | `get_subscription` | INHERIT | `get_subscription` | low | deny |
 | `change_subscription` | INHERIT | `start_subscription_upgrade`, `purchase_credits` | medium | deny |
 
@@ -138,25 +138,25 @@ Regenerate with `tools/scripts/mission-control/build-matrix.mjs`.
 | `query_audit_log` | INHERIT | `query_audit_log`, `get_auth_alerts` | low | deny |
 | `export_data` | INHERIT | `export_data` | low | deny |
 | `erase_data` | INHERIT | `erase_data` | high | deny |
-| `set_legal_hold` | NEW | — | — | — |
-| `list_incidents` | NEW | — | — | — |
-| `set_event_subscription` | NEW | — | — | — |
-| `list_event_subscriptions` | NEW | — | — | — |
+| `set_legal_hold` | NEW | none | none | none |
+| `list_incidents` | NEW | none | none | none |
+| `set_event_subscription` | NEW | none | none | none |
+| `list_event_subscriptions` | NEW | none | none | none |
 
 ## Assistant and account (6)
 
 | Tool | Grade | Inherits schema from | Risk | Effect |
 |---|---|---|---|---|
-| `ask_assistant` | INHERIT | `send_message`, `post_conversation_message`, `add_conversation_attachment` | — | deny |
+| `ask_assistant` | INHERIT | `send_message`, `post_conversation_message`, `add_conversation_attachment` | none | deny |
 | `list_conversations` | INHERIT | `list_conversations`, `rename_conversation`, `archive_conversation`, `delete_conversation`, `export_conversation`, `purge_conversations`, `list_conversation_files` | low | deny |
 | `set_preferences` | INHERIT | `update_user_preferences`, `get_user_preferences`, `update_workspace_user_preferences`, `get_workspace_user_preferences`, `set_auth_alerts` | low | deny |
-| `list_notifications` | INHERIT | `list_notifications` | — | deny |
-| `mark_notification` | INHERIT | `mark_notification` | — | deny |
+| `list_notifications` | INHERIT | `list_notifications` | none | deny |
+| `mark_notification` | INHERIT | `mark_notification` | none | deny |
 | `get_install_instructions` | INHERIT | `get_install_instructions` | low | deny |
 
 ---
 
-## Deletion candidates — contracts no target tool absorbs (47)
+## Deletion candidates: contracts no target tool absorbs (47)
 
 | Contract | File | Domain |
 |---|---|---|

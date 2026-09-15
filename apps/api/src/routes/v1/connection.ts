@@ -156,6 +156,20 @@ connectionRoute.post("/:id/resync", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
+  // The event below is GitHub's: its fields (owner, repo, defaultBranch) and its
+  // Inngest function exist for no other connector, and `ingestion/sync.requested`
+  // logs "unsupported connector" for everything else. Answering `queued: true`
+  // for a Slack or Linear connection would report a resync that never runs.
+  if (conn.connectorId !== "github") {
+    return c.json(
+      {
+        error: `resync is not supported for connector "${conn.connectorId}"`,
+        connectorId: conn.connectorId,
+      },
+      409,
+    );
+  }
+
   // Fire initial sync event — the Inngest function handles retry/dedup.
   const deliveryConfig = conn.deliveryConfig as Record<string, unknown> | null;
   await eventClient.send({

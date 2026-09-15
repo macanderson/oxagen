@@ -26,8 +26,10 @@ Closes #
 
 ## Vision Alignment
 
-<!-- How does this advance the wedge (metering→billing, contract governance, graph
-     grounding, vendor neutrality, fleet lineage)? Routine maintenance/fixes/tests
+<!-- Which clause of an agent's mandate does this let a team set (access, budget &
+     rules, equipment), or how does it help the platform enforce or record it
+     (metering→billing, contract governance, graph grounding, vendor neutrality,
+     fleet lineage, run evidence)? Routine maintenance/fixes/tests
      are neutral by definition — just say so. If the Vision Gate posts a `drifts`
      verdict, justify the exception here. See docs/VISION.md. -->
 

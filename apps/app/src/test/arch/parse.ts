@@ -63,7 +63,7 @@ export function listFiles(dir: string): string[] {
 function isTestOnly(file: string): boolean {
   return (
     file.startsWith("src/test/") ||
-    /\.(test|type-test|builders|stories)\.tsx?$/.test(file) ||
+    /\.(test|type-test|builders)\.tsx?$/.test(file) ||
     file.endsWith(".d.ts") ||
     file === "src/server/viewer.testing.ts"
   );

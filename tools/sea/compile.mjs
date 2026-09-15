@@ -86,7 +86,34 @@ writeFileSync(
     2,
   ),
 );
-run(process.execPath, ["--experimental-sea-config", config]);
+// A Node built with `--disable-single-executable-application` (Homebrew's
+// node 26 formula is one) answers with "Single executable application is
+// disabled." and exit 1. Say what that means and what to do, rather than
+// leaving the sentence buried in a build log above a bare exit code.
+const blobStep = spawnSync(
+  process.execPath,
+  ["--experimental-sea-config", config],
+  {
+    encoding: "utf8",
+  },
+);
+process.stdout.write(blobStep.stdout ?? "");
+process.stderr.write(blobStep.stderr ?? "");
+if (blobStep.status !== 0) {
+  if (
+    /single executable application is disabled/i.test(blobStep.stderr ?? "")
+  ) {
+    console.error(
+      `✖ ${process.execPath} (node ${process.version}) was built without single-executable support, so no binary can be produced.\n` +
+        "  Use a Node that has it — the official installer, nvm (`nvm use 24`), or any build made without --disable-single-executable-application — and run this again.",
+    );
+  } else {
+    console.error(
+      `✖ ${process.execPath} --experimental-sea-config ${config} exited ${blobStep.status ?? "signal"}`,
+    );
+  }
+  process.exit(blobStep.status ?? 1);
+}
 
 // 2. copy node
 rmSync(target, { force: true });

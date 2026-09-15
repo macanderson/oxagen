@@ -4,9 +4,18 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { getLinkedSocialProvider } from "./linked-provider";
 import { buildOrgSignupPrefill } from "@/lib/oauth-prefill";
 import { createOrgAction } from "./actions";
+import { safeReturnTo } from "@/lib/return-to";
 
-export default async function NewTenantPage() {
+export default async function NewTenantPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const session = await getSessionOrRedirect();
+  // Where to go once the organization exists: the CLI consent page when the
+  // account was created from the installer's browser login, else the new
+  // workspace.
+  const returnTo = safeReturnTo((await searchParams)["returnTo"]);
 
   // Seed the form from the signed-in user's profile. Better Auth populates
   // name / email / avatar from the Google or GitHub OAuth profile at sign-in;
@@ -30,7 +39,11 @@ export default async function NewTenantPage() {
           Organizations own billing and member access. A default workspace is
           created for you.
         </p>
-        <NewOrgForm action={createOrgAction} prefill={prefill} />
+        <NewOrgForm
+          action={createOrgAction}
+          prefill={prefill}
+          returnTo={returnTo}
+        />
       </Panel>
     </div>
   );
