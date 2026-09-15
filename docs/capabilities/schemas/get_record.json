@@ -1,0 +1,364 @@
+{
+  "name": "get_record",
+  "domain": "context",
+  "description": "Get one context record: a published record by ctr_ id or lineage id with its versions and publishing PR, or an appended record by cta_ id with its provenance",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recordId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "A ctr_ public id, a lineage id, or a cta_ public id"
+      }
+    },
+    "required": [
+      "recordId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "source": {
+            "const": "published"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "lineageId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "rule",
+                      "constraint",
+                      "procedure",
+                      "fact",
+                      "memory",
+                      "preference"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "force": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "must",
+                      "should",
+                      "may",
+                      "info"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "constraintEffect": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "require",
+                      "forbid"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sharingScope": {
+                "type": "string",
+                "enum": [
+                  "repository",
+                  "workspace"
+                ]
+              },
+              "statement": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "retired",
+                  "superseded"
+                ]
+              },
+              "version": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "checksum": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "commit": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "publishedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "lineageId",
+              "title",
+              "kind",
+              "force",
+              "constraintEffect",
+              "sharingScope",
+              "statement",
+              "status",
+              "version",
+              "checksum",
+              "commit",
+              "path",
+              "publishedAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "checksum": {
+                  "type": "string"
+                },
+                "isLatest": {
+                  "type": "boolean"
+                },
+                "publishedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "checksum",
+                "isLatest",
+                "publishedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "proposalId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "record",
+          "versions",
+          "proposalId",
+          "prUrl"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "source": {
+            "const": "appended"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "observation",
+                  "memory",
+                  "knowledge",
+                  "evidence",
+                  "record_proposal",
+                  "context_use",
+                  "context_use_feedback"
+                ]
+              },
+              "lineageId": {
+                "type": "string"
+              },
+              "statement": {
+                "type": "string"
+              },
+              "sharingScope": {
+                "type": "string",
+                "enum": [
+                  "repository",
+                  "workspace"
+                ]
+              },
+              "recordHash": {
+                "type": "string"
+              },
+              "sourceRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidenceLinks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "proposalId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "lineageId",
+              "statement",
+              "sharingScope",
+              "recordHash",
+              "sourceRefs",
+              "evidenceLinks",
+              "proposalId",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "source",
+          "record"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

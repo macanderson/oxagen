@@ -62,10 +62,21 @@ interface GHRef {
 interface GHPull {
   number: number;
   html_url: string;
+  body?: string | null;
 }
 
 interface GHErrorBody {
   message?: string;
+}
+
+interface GHCheckRun {
+  id: number;
+  html_url: string;
+}
+
+interface GHMerge {
+  sha: string;
+  merged: boolean;
 }
 
 interface GHContentsFile {
@@ -123,6 +134,7 @@ interface GHPullDetail {
   body: string | null;
   base: { ref: string };
   head: { ref: string; sha: string | null };
+  merge_commit_sha?: string | null;
   additions?: number;
   deletions?: number;
   changed_files?: number;
@@ -277,6 +289,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       throw new GitHubApiError(res.status, message);
     }
 
+    // A DELETE answers 204 with no body.
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   }
 
@@ -605,6 +619,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       baseRef: data.base.ref,
       headRef: data.head.ref,
       headSha: data.head.sha,
+      mergeCommitSha: data.merge_commit_sha ?? null,
       additions: data.additions ?? 0,
       deletions: data.deletions ?? 0,
       changedFiles: data.changed_files ?? 0,
@@ -705,15 +720,37 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       "GET",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}/files?per_page=100`,
     );
-    return data.map((f) => ({
-      path: f.filename,
-      previousPath: f.previous_filename ?? null,
-      status: normaliseFileStatus(f.status),
-      additions: f.additions,
-      deletions: f.deletions,
-      changes: f.changes,
-      patch: f.patch ?? null,
-    }));
+    return data.map(toPrFile);
+  }
+
+  async function compareCommits(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubPrFile[]> {
+    const data = await request<{ files?: GHPullFile[] }>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/compare/${encodeURIComponent(args.base)}...${encodeURIComponent(args.head)}`,
+    );
+    return (data.files ?? []).map(toPrFile);
+  }
+
+  async function findOpenPullRequest(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    base: string;
+  }): Promise<{ number: number; htmlUrl: string; body: string } | null> {
+    const query = `state=open&head=${encodeURIComponent(`${args.owner}:${args.head}`)}&base=${encodeURIComponent(args.base)}`;
+    const data = await request<GHPull[]>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls?${query}`,
+    );
+    const pr = data[0];
+    return pr
+      ? { number: pr.number, htmlUrl: pr.html_url, body: pr.body ?? "" }
+      : null;
   }
 
   async function listBranches(args: {
@@ -744,6 +781,76 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return branches;
   }
 
+  async function createCheckRun(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    headSha: string;
+    conclusion: "success" | "failure";
+    title: string;
+    summary: string;
+    startedAt: string;
+    completedAt: string;
+  }): Promise<{ id: number; htmlUrl: string }> {
+    const data = await request<GHCheckRun>(
+      "POST",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/check-runs`,
+      {
+        name: args.name,
+        head_sha: args.headSha,
+        status: "completed",
+        conclusion: args.conclusion,
+        started_at: args.startedAt,
+        completed_at: args.completedAt,
+        output: { title: args.title, summary: args.summary },
+      },
+    );
+    return { id: data.id, htmlUrl: data.html_url };
+  }
+
+  async function mergePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    mergeMethod?: "merge" | "squash" | "rebase";
+    commitTitle?: string;
+    sha?: string;
+  }): Promise<{ sha: string; merged: boolean }> {
+    const body: Record<string, unknown> = {};
+    if (args.mergeMethod !== undefined) body.merge_method = args.mergeMethod;
+    if (args.commitTitle !== undefined) body.commit_title = args.commitTitle;
+    if (args.sha !== undefined) body.sha = args.sha;
+    const data = await request<GHMerge>(
+      "PUT",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${args.number}/merge`,
+      body,
+    );
+    return { sha: data.sha, merged: data.merged };
+  }
+
+  async function closePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<void> {
+    await request<GHPull>(
+      "PATCH",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}`,
+      { state: "closed" },
+    );
+  }
+
+  async function deleteBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<void> {
+    await request<void>(
+      "DELETE",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/git/refs/heads/${filePath(args.branch)}`,
+    );
+  }
+
   return {
     getAuthenticatedUser,
     getRepoInfo,
@@ -759,7 +866,13 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,
+    compareCommits,
+    findOpenPullRequest,
     listBranches,
+    createCheckRun,
+    mergePullRequest,
+    closePullRequest,
+    deleteBranch,
   };
 }
 
@@ -799,6 +912,18 @@ function normaliseStatusState(state: string): GitHubCommitStatus["state"] {
     default:
       return "pending";
   }
+}
+
+function toPrFile(f: GHPullFile): GitHubPrFile {
+  return {
+    path: f.filename,
+    previousPath: f.previous_filename ?? null,
+    status: normaliseFileStatus(f.status),
+    additions: f.additions,
+    deletions: f.deletions,
+    changes: f.changes,
+    patch: f.patch ?? null,
+  };
 }
 
 function normaliseFileStatus(status: string): GitHubPrFile["status"] {

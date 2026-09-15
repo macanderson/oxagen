@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**257 capabilities across 38 domains.**
+**270 capabilities across 38 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -149,11 +149,20 @@ Capabilities granted to an agent as a set have a page of their own:
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
 - [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
-## Context (3)
+## Context (12)
 
 - [context.record.list](context.record.list.md) — List the steering context records registered in the active workspace with lifecycle status
 - [context.record.promote](context.record.promote.md) — Append a lifecycle action to a context record's hash-chained promotions ledger
 - [context.record.publish](context.record.publish.md) — Publish a steering context record into the workspace agent-asset registry
+- [context.records.list](context.records.list.md) — List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path
+- [context.records.get](context.records.get.md) — Get one published record (with versions and its publishing PR) or one appended record
+- [context.records.append](context.records.append.md) — Append one context record, the protocol's context/append; a directive is refused
+- [context.proposal.create](context.proposal.create.md) — Open a record proposal: the record it should become, the rationale and its support
+- [context.proposal.list](context.proposal.list.md) — List the workspace's record proposals with their Context PR state
+- [context.proposal.dismiss](context.proposal.dismiss.md) — Reject a record proposal with a reason
+- [context.pr.open](context.pr.open.md) — Open a proposal's Context PR: branch, record file, pull request and the six checks as GitHub check runs
+- [context.pr.get](context.pr.get.md) — Get a proposal's Context PR: state, checks, what merge will do, the promotion event once merged
+- [context.pr.merge](context.pr.merge.md) — Merge a proposal's Context PR and publish its record: promotion event, steering version, steering.published
 
 ## Conversation (9)
 
@@ -185,7 +194,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [graph.search](graph.search.md) — Natural-language semantic search across eligible shared workspace knowledge, ranked by vector similarity
 - [graph.stats](graph.stats.md) — Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type
 
-## Iam (1)
+## Iam (4)
 
 - [iam.role.create](iam.role.create.md) — `create_role`: a custom role from the permission catalogue; one allow grant per capability, within the granter's ceiling (ADR-063)
 - [iam.role.delete](iam.role.delete.md) — `delete_role`: remove a custom role nobody holds
@@ -376,7 +385,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
 - [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
 
-## Workspace (10)
+## Workspace (11)
 
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only

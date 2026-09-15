@@ -1,5 +1,5 @@
 {
-  "generatedCount": 268,
+  "generatedCount": 277,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -40,6 +40,18 @@
     {
       "name": "add_plugin_registry",
       "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "append_record",
+      "domain": "context",
       "surfaces": [
         "api",
         "mcp",
@@ -576,6 +588,16 @@
       "consumes": []
     },
     {
+      "name": "dismiss_proposal",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dispatch_command",
       "domain": "control",
       "surfaces": [
@@ -836,6 +858,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_context_pr",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1125,6 +1158,18 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_record",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1836,6 +1881,29 @@
       "consumes": []
     },
     {
+      "name": "list_proposals",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
@@ -1963,6 +2031,26 @@
       "consumes": []
     },
     {
+      "name": "merge_context_pr",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "open_context_pr",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "parse_memory_import",
       "domain": "agent",
       "surfaces": [
@@ -2071,6 +2159,18 @@
     {
       "name": "promote_memory",
       "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "propose_record",
+      "domain": "context",
       "surfaces": [
         "api",
         "mcp",

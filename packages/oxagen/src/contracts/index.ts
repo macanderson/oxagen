@@ -178,6 +178,15 @@ import { toolDeclarationList } from "./tool.declaration.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
+import { contextRecordsList } from "./context.records.list";
+import { contextRecordsGet } from "./context.records.get";
+import { contextRecordsAppend } from "./context.records.append";
+import { contextProposalCreate } from "./context.proposal.create";
+import { contextProposalList } from "./context.proposal.list";
+import { contextProposalDismiss } from "./context.proposal.dismiss";
+import { contextPrOpen } from "./context.pr.open";
+import { contextPrGet } from "./context.pr.get";
+import { contextPrMerge } from "./context.pr.merge";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -315,6 +324,39 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
+// capability, so exported here to satisfy the file-coverage guard.
+export {
+  recordKindSchema,
+  recordForceSchema,
+  constraintEffectSchema,
+  publishedSharingScopeSchema,
+  appendKindSchema,
+  proposalStatusSchema,
+  governanceModeSchema,
+  checkNameSchema,
+  CHECK_NAMES,
+  checkResultSchema,
+  proposedRecordSchema,
+  proposalSupportSchema,
+  proposalViewSchema,
+  publishedRecordSchema,
+} from "./context.steering.shared";
+export type {
+  RecordKind,
+  RecordForce,
+  ConstraintEffect,
+  PublishedSharingScope,
+  AppendKind,
+  ProposalStatus,
+  GovernanceMode,
+  CheckName,
+  CheckResult,
+  ProposalView,
+  PublishedRecordView,
+} from "./context.steering.shared";
+export { contextPrSchema } from "./context.pr.open";
+export type { ContextPr } from "./context.pr.open";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
@@ -592,6 +634,15 @@ export {
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordsList,
+  contextRecordsGet,
+  contextRecordsAppend,
+  contextProposalCreate,
+  contextProposalList,
+  contextProposalDismiss,
+  contextPrOpen,
+  contextPrGet,
+  contextPrMerge,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -871,6 +922,15 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordsList,
+  contextRecordsGet,
+  contextRecordsAppend,
+  contextProposalCreate,
+  contextProposalList,
+  contextProposalDismiss,
+  contextPrOpen,
+  contextPrGet,
+  contextPrMerge,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,

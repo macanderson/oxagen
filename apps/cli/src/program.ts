@@ -174,6 +174,45 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── context: a steering proposal on a lineage (propose_record) ──────────────
+
+  const contextCmd = program
+    .command("context")
+    .description("Steering: record a proposal on a lineage");
+  contextCmd
+    .command("propose")
+    .description(
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
+    )
+    .requiredOption(
+      "--lineage <id>",
+      "The lineage id (the file stem under .oxagen/rules/)",
+    )
+    .requiredOption(
+      "--kind <kind>",
+      "rule | constraint | procedure | fact | memory | preference",
+    )
+    .requiredOption("--force <force>", "must | should | may | info")
+    .requiredOption("--scope <scope>", "workspace | repository")
+    .requiredOption("--statement <text>", "The single-sentence claim")
+    .requiredOption("--rationale <text>", "Why the record should be published")
+    .option("--effect <effect>", "require | forbid — a constraint only")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        lineage: string;
+        kind: string;
+        force: string;
+        scope: string;
+        statement: string;
+        rationale: string;
+        effect?: string;
+        json?: boolean;
+      }) => {
+        const { contextPropose } = await import("./commands/context.js");
+        await contextPropose(opts);
+      },
+    );
   // ── run: the recorded run (export_run) ──────────────────────────────────────
 
   const runCmd = program
