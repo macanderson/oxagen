@@ -1,13 +1,17 @@
 // The drawings a generated image is made of.
 //
-// Two layers. The honeycomb is the brand's own cell (the cluster in
+// Three layers. The honeycomb is the brand's own cell (the cluster in
 // oxagen-house-brand/build/marks.py, the constellation --tex-hex draws behind
-// the hero in oxagen.css) scattered as a field of rings and flat blocks with
-// exactly one cell in gold. Over or beside it sits one of seven hairline drawings of the things
-// the writing is about: a knowledge graph, an ontology, an agent's loop, a
-// tool call, a policy gate, an audit ledger, a meter. Hairlines in the
-// theme's quiet tones, so a drawing reads as a watermark rather than a
-// figure; never a gradient, never a translucent fill.
+// the hero in oxagen.css). A banner scatters it as a weather of rings and
+// flat blocks that clusters differently for every seed, clears around one
+// focus and stays quiet on the left, where a page sets its title over it;
+// exactly one cell is gold. Round the focus sit hairline halo rings in the
+// cell's own shape. At the focus sits one of seven hairline drawings of the
+// things the writing is about: a knowledge graph, an ontology, an agent's
+// loop, a tool call, a policy gate, an audit ledger, a meter. Hairlines in
+// the theme's quiet tones, so a drawing reads as a watermark rather than a
+// figure; never a gradient, never a translucent fill. The share card keeps
+// the older raised panel, since a card carries its own title.
 //
 // Everything takes a seeded `rand`, so an image is a pure function of its
 // seed and rebuilds identically.
@@ -124,6 +128,128 @@ export function lattice(o) {
         `<g fill="none" stroke="${t.line}" stroke-width="1" stroke-opacity="${LATTICE_STEPS[i][1]}">${cells.join("")}</g>`,
     )
     .join("");
+}
+
+/** The stroke opacities a field cell may take, quietest first. */
+export const FIELD_BANDS = [0.22, 0.4, 0.62, 0.9];
+
+/** A value in [0, 1], clamped. */
+const unit = (v) => Math.min(1, Math.max(0, v));
+
+/**
+ * The honeycomb as weather: every cell of the lattice decides, from a seeded
+ * low-frequency wave and its place in the box, whether it is drawn, how
+ * loud, and whether it is a hairline ring or a flat block. The wave gives
+ * every seed its own clusters; the box's left `quiet` fraction thins out so
+ * a title can sit over it; an ellipse round `focus` (half-axes `clear`) is
+ * left empty for a drawing, with a ragged edge so the hole reads as
+ * weather rather than a cut. One cell beside the clearing is gold, the only
+ * gold in the picture.
+ * @param {{ rand: () => number, t?: object, x: number, y: number, w: number, h: number,
+ *   cell: number, focus: { x: number, y: number }, clear: { x: number, y: number },
+ *   quiet?: number }} o cell is a cell's half-width in px
+ */
+export function field(o) {
+  const t = o.t ?? INK;
+  const { rand } = o;
+  const quiet = o.quiet ?? 0.45;
+  const rx = o.cell;
+  const ry = rx * CELL_ASPECT;
+  const pitchX = rx * 2;
+  const pitchY = ry * 1.5;
+  const cols = Math.ceil(o.w / pitchX) + 2;
+  const rows = Math.ceil(o.h / pitchY) + 2;
+  // two waves each way; the frequencies and phases are the seed's
+  const k = [
+    1.1 + rand() * 1.4,
+    0.9 + rand() * 1.4,
+    2.0 + rand() * 2.4,
+    0.8 + rand() * 1.6,
+  ];
+  const ph = [rand(), rand(), rand()].map((v) => v * Math.PI * 2);
+  const weather = (u, v) =>
+    0.5 +
+    0.25 *
+      Math.sin(u * k[0] * Math.PI + ph[0]) *
+      Math.cos(v * k[1] * Math.PI + ph[1]) +
+    0.25 * Math.sin(u * k[2] * Math.PI + v * k[3] * Math.PI + ph[2]);
+  const rings = FIELD_BANDS.map(() => []);
+  const blocks = { [t.line]: [], [t.rule]: [] };
+  const candidates = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cx = o.x - rx + col * pitchX + (row % 2 ? rx : 0);
+      const cy = o.y - ry + row * pitchY;
+      const u = (cx - o.x) / o.w;
+      const v = (cy - o.y) / o.h;
+      const wv = weather(u, v);
+      const d = Math.hypot(
+        (cx - o.focus.x) / o.clear.x,
+        (cy - o.focus.y) / o.clear.y,
+      );
+      // the gold cell is picked from every position in a band beside the
+      // clearing, drawn or not, so every seed has exactly one; the band
+      // sits in the middle of the picture, where every crop and every mask
+      // a page lays over it still shows the cell whole
+      if (d > 1.1 && d < 1.75 && u > 0.5 && u < 0.97 && v > 0.2 && v < 0.62) {
+        candidates.push([cx, cy]);
+      }
+      // the clearing, with a ragged edge
+      if (d < 1 + 0.3 * wv) continue;
+      const hush = unit((quiet - u) / quiet);
+      // the quiet side thins out; elsewhere the troughs of the wave are empty
+      if (wv < 0.42 + 0.3 * hush) continue;
+      const near = unit((1.6 - d) / 0.6);
+      const points = hexPoints(cx, cy, rx, ry);
+      if (d > 1.15 && hush < 0.5) {
+        if (wv > 0.76) {
+          blocks[wv > 0.87 ? t.rule : t.line].push(points);
+          continue;
+        }
+      }
+      const a = (0.22 + 1.6 * (wv - 0.42)) * (1 - 0.6 * hush) + 0.12 * near;
+      let band = 0;
+      for (let i = 0; i < FIELD_BANDS.length; i++) {
+        if (a >= FIELD_BANDS[i]) band = i;
+      }
+      rings[band].push(points);
+    }
+  }
+  const polys = (cells) =>
+    cells.map((p) => `<polygon points="${p}"/>`).join("");
+  const out = rings.map(
+    (cells, i) =>
+      `<g fill="none" stroke="${t.dim}" stroke-width="1.2" stroke-opacity="${FIELD_BANDS[i]}">${polys(cells)}</g>`,
+  );
+  for (const [fill, cells] of Object.entries(blocks)) {
+    out.push(`<g fill="${fill}" stroke="none">${polys(cells)}</g>`);
+  }
+  const [gx, gy] = candidates[Math.floor(rand() * candidates.length)];
+  out.push(
+    `<polygon points="${hexPoints(gx, gy, rx, ry)}" fill="${t.gold}" stroke="none"/>`,
+  );
+  return out.join("");
+}
+
+/** The halo rings' scale steps outward from the clearing, and their opacities. */
+export const HALO = [
+  [1.06, 0.6],
+  [1.3, 0.42],
+  [1.58, 0.28],
+  [1.9, 0.16],
+];
+
+/**
+ * Hairline rings in the cell's own shape round a focus, stepping outward
+ * and fading in hard steps: depth without a gradient.
+ * @param {{ t?: object, focus: { x: number, y: number }, clear: { x: number, y: number } }} o
+ */
+export function halo(o) {
+  const t = o.t ?? INK;
+  return HALO.map(
+    ([k, a]) =>
+      `<polygon points="${hexPoints(o.focus.x, o.focus.y, o.clear.x * k, o.clear.x * k * CELL_ASPECT)}" fill="none" stroke="${t.dim}" stroke-width="2" stroke-opacity="${a}"/>`,
+  ).join("");
 }
 
 export const PANEL_BAR = 56;
