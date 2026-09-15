@@ -36,6 +36,8 @@ export default defineConfig({
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
         "src/**/*.d.ts",
+        // Compiled by tsc, never executed (INV-24).
+        "src/**/*.type-test.ts",
         "src/test/**",
         // Route files are exercised by the Playwright suite against a running
         // server, not in isolation.

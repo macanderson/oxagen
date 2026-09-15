@@ -1,8 +1,13 @@
 import { getTranslations } from "next-intl/server";
+import { requireViewer } from "@/server/viewer";
 import { PageHeader } from "@/ui/page-header";
 
 // The title alone until WL-38 builds the Billing page (ARCHITECTURE.md §8).
-export default async function BillingPage() {
+export default async function BillingPage({
+  params,
+}: PageProps<"/[org]/billing">) {
+  const { org } = await params;
+  await requireViewer(org);
   const t = await getTranslations("routes");
   return (
     <main

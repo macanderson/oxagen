@@ -2,13 +2,7 @@ import Link from "next/link";
 
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  LoginForm,
-  OAuthButtons,
-  sanitizeNext,
-  nextParam,
-  withNext,
-} from "@/features/auth";
+import { LoginForm, OAuthButtons, readNext, withNext } from "@/features/auth";
 import {
   AuthColumn,
   AuthFooter,
@@ -32,7 +26,7 @@ async function Login({
 }) {
   const params = await searchParams;
   // Only a same-origin relative path survives; anything else lands on "/".
-  const next = sanitizeNext(nextParam(params));
+  const next = readNext(params);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

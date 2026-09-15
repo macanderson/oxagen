@@ -3,7 +3,7 @@ import {
   DEFAULT_NEXT,
   MAX_NEXT_LENGTH,
   firstParam,
-  nextParam,
+  readNext,
   sanitizeNext,
   withNext,
 } from "./safe-next";
@@ -67,13 +67,37 @@ describe("firstParam", () => {
   });
 });
 
-describe("nextParam", () => {
-  it("reads next, falling back to the CLI's returnTo", () => {
-    const authorize = "/cli/authorize?state=abc&label=laptop";
-    expect(nextParam({ returnTo: authorize })).toBe(authorize);
-    expect(nextParam({ next: "/acme", returnTo: authorize })).toBe("/acme");
-    expect(nextParam({ returnTo: ["/a", "/b"] })).toBe("/a");
-    expect(nextParam({})).toBeUndefined();
+describe("readNext", () => {
+  const authorize = "/cli/authorize?state=abc&label=laptop";
+
+  it("honours the CLI's returnTo when next is absent", () => {
+    expect(readNext({ returnTo: authorize })).toBe(authorize);
+    expect(readNext({ returnTo: ["/a", "/b"] })).toBe("/a");
+  });
+
+  it("lets next win when both are present", () => {
+    expect(readNext({ next: "/acme", returnTo: authorize })).toBe("/acme");
+  });
+
+  it.each([
+    ["protocol-relative host", "//evil"],
+    ["absolute URL", "https://evil"],
+  ])("refuses a %s through returnTo", (_label, raw) => {
+    expect(readNext({ returnTo: raw })).toBe(DEFAULT_NEXT);
+    expect(readNext({ returnTo: raw }, "/new-organization")).toBe(
+      "/new-organization",
+    );
+  });
+
+  it("does not fall through to returnTo when next is refused", () => {
+    expect(readNext({ next: "//evil", returnTo: authorize })).toBe(
+      DEFAULT_NEXT,
+    );
+  });
+
+  it("returns the fallback when neither is present", () => {
+    expect(readNext({})).toBe(DEFAULT_NEXT);
+    expect(readNext({}, "/new-organization")).toBe("/new-organization");
   });
 });
 

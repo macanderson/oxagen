@@ -9,7 +9,10 @@ import type { GithubSetupQueries, GithubSetupTargetRow } from "./github-setup";
 function installationOf(deliveryConfig: unknown): string | null {
   if (deliveryConfig === null || typeof deliveryConfig !== "object")
     return null;
-  const value = (deliveryConfig as { installationId?: unknown }).installationId;
+  const value =
+    "installationId" in deliveryConfig
+      ? deliveryConfig.installationId
+      : undefined;
   return typeof value === "string" || typeof value === "number"
     ? String(value)
     : null;

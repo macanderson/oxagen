@@ -8,9 +8,8 @@
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { invokeTool } from "@/server/invoke";
-import type { Viewer } from "@/server/scope";
 import { systemLookups } from "@/server/tenancy-lookups";
-import { ORG_ONLY_WS } from "@/server/tenant-scope";
+import { requireInvitee } from "@/server/viewer";
 import { decideInvitation } from "./invitation";
 import { isInvitationToken, toInvitationView } from "./invitations";
 import { getAuthUser } from "./session";
@@ -43,28 +42,15 @@ async function decide(
   if (verdict.kind === "wrong-account")
     return { ok: false, reason: "wrong_account" };
 
+  // The invitee is not a member yet, so the context names the invitation's
+  // organization and the signed-in person it is addressed to; IAM and the
+  // handler decide.
+  const { ctx } = await requireInvitee(token);
   try {
-    // The invitee is not a member yet, so requireViewer has no Viewer to give.
-    // This one names the invitation's organization and the signed-in person;
-    // IAM and the handler decide (the handler matches the invited address).
-    const { orgId } = record;
-    const viewer: Viewer = {
-      userId: user.id,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name || null,
-        image: null,
-      },
-      orgRole: "invitee",
-      scope: { orgId, workspaceId: ORG_ONLY_WS },
-      org: { id: orgId, slug: read.value.orgSlug, name: read.value.orgName },
-      ws: null,
-    };
     const input = { invitationPublicId: token };
     if (decision === "accept")
-      await invokeTool(viewer, orgMemberInviteAccept, input);
-    else await invokeTool(viewer, orgMemberInviteDecline, input);
+      await invokeTool(ctx, orgMemberInviteAccept, input);
+    else await invokeTool(ctx, orgMemberInviteDecline, input);
     return decision === "accept"
       ? { ok: true, to: `/${read.value.orgSlug}` }
       : { ok: true, to: "/" };

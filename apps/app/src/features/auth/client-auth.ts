@@ -30,11 +30,18 @@ export async function liveSignIn(input: {
   password: string;
   rememberMe: boolean;
 }): Promise<ClientAuthResult> {
-  const reply = (await (await client()).signIn.email(input)) as BetterAuthReply;
+  const reply: BetterAuthReply = await (await client()).signIn.email(input);
   const failed = fail(reply);
   if (failed) return failed;
-  const data = reply.data as { twoFactorRedirect?: boolean } | null | undefined;
-  return { ok: true, twoFactor: data?.twoFactorRedirect === true };
+  const { data } = reply;
+  return {
+    ok: true,
+    twoFactor:
+      typeof data === "object" &&
+      data !== null &&
+      "twoFactorRedirect" in data &&
+      data.twoFactorRedirect === true,
+  };
 }
 
 export async function liveSignUp(input: {
@@ -42,12 +49,16 @@ export async function liveSignUp(input: {
   email: string;
   password: string;
 }): Promise<ClientAuthResult> {
-  const reply = (await (await client()).signUp.email(input)) as BetterAuthReply;
+  const reply: BetterAuthReply = await (await client()).signUp.email(input);
   const failed = fail(reply);
   if (failed) return failed;
   // With email verification required Better Auth creates the user but issues no session token.
-  const data = reply.data as { token?: string | null } | null | undefined;
-  return { ok: true, needsVerification: !data?.token };
+  const { data } = reply;
+  const token =
+    typeof data === "object" && data !== null && "token" in data
+      ? data.token
+      : null;
+  return { ok: true, needsVerification: !token };
 }
 
 export async function liveVerifyTwoFactor(input: {
