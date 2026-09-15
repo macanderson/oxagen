@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { decideInvitation } from "./invitation";
 
-// The invitation behind a token comes from the system lookups seam
-// (src/server/tenancy-lookups.ts, tested beside it); here it is scripted per test.
-const invitationByToken = vi.fn();
-vi.mock("@/server/tenancy-lookups", () => ({
-  systemLookups: { invitationByToken },
-}));
+// The invitation behind a token comes from the viewer seam's anonymous read
+// (src/server/viewer.ts, tested beside it); here it is scripted per test.
+const readInvitation = vi.fn();
+vi.mock("@/server/viewer", () => ({ readInvitation }));
 
 const { loadInvitation } = await import("./invitations");
 
@@ -21,22 +20,12 @@ const record = {
   expiresAt: new Date("2099-01-01T00:00:00Z"),
 };
 beforeEach(() => {
-  invitationByToken.mockReset();
+  readInvitation.mockReset();
 });
 
 describe("loadInvitation", () => {
-  it("refuses a malformed token without a lookup", async () => {
-    expect(await loadInvitation("../../etc")).toEqual({
-      ok: false,
-      reason: "error",
-      code: "invitation_not_found",
-      status: 404,
-    });
-    expect(invitationByToken).not.toHaveBeenCalled();
-  });
-
   it("maps the record to the view model, the stored role to the spec's lowercase enum", async () => {
-    invitationByToken.mockResolvedValue(record);
+    readInvitation.mockResolvedValue(record);
     expect(await loadInvitation("invi_live")).toEqual({
       ok: true,
       value: {
@@ -50,16 +39,34 @@ describe("loadInvitation", () => {
         expiresAt: "2099-01-01T00:00:00.000Z",
       },
     });
-    expect(invitationByToken).toHaveBeenCalledWith("invi_live");
+    expect(readInvitation).toHaveBeenCalledWith("invi_live");
   });
 
-  it("reads a missing invitation as not found, and a row outside the enums as an error", async () => {
-    invitationByToken.mockResolvedValueOnce(null);
-    expect(await loadInvitation("invi_gone")).toMatchObject({
+  it("reads an unknown or malformed token as not found (negative)", async () => {
+    readInvitation.mockResolvedValue(null);
+    expect(await loadInvitation("../../etc")).toEqual({
       ok: false,
+      reason: "error",
       code: "invitation_not_found",
+      status: 404,
     });
-    invitationByToken.mockResolvedValueOnce({
+  });
+
+  it("reads an expired invitation, which the page closes as expired", async () => {
+    readInvitation.mockResolvedValue({
+      ...record,
+      expiresAt: new Date("2026-09-12T09:00:00Z"),
+    });
+    const read = await loadInvitation("invi_old");
+    if (!read.ok) throw new Error("expected the invitation to read");
+    expect(read.value.expiresAt).toBe("2026-09-12T09:00:00.000Z");
+    expect(
+      decideInvitation(read.value, null, new Date("2026-09-15T00:00:00Z")),
+    ).toEqual({ kind: "closed", status: "expired" });
+  });
+
+  it("reads a row outside the enums as an error (negative)", async () => {
+    readInvitation.mockResolvedValue({
       ...record,
       role: "Superuser",
       expiresAt: null,

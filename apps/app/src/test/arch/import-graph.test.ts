@@ -202,7 +202,19 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/server/kernel.ts", expect: null },
   ],
   // INV-03, INV-05: refused by omission.
-  "tenancy.ts": [{ at: "src/server/kernel.ts", expect: "platform" }],
+  "tenancy.ts": [
+    { at: "src/server/kernel.ts", expect: "platform" },
+    { at: "instrumentation.ts", expect: "platform" },
+  ],
+  // #3048: the process bootstrap's four named entries, and nothing past them.
+  "instrumentation-bootstrap-entries.ts": [
+    { at: "instrumentation.ts", expect: null },
+    { at: "src/server/kernel.ts", expect: "platform" },
+    { at: "src/data/live/audit.ts", expect: "platform" },
+  ],
+  "instrumentation-fifth-entry.ts": [
+    { at: "instrumentation.ts", expect: "platform" },
+  ],
   "handlers-barrel.ts": [
     { at: "src/features/auth/cli-actions.ts", expect: "platform" },
   ],
@@ -229,9 +241,11 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   ],
   "telemetry-chselect.ts": [
     { at: "src/data/live/audit.ts", expect: "platform" },
+    { at: "instrumentation.ts", expect: "platform" },
   ],
   "telemetry-namespace.ts": [
     { at: "src/data/live/audit.ts", expect: "platform" },
+    { at: "instrumentation.ts", expect: "platform" },
   ],
   "telemetry-side-effect.ts": [
     { at: "src/data/live/audit.ts", expect: "platform" },
@@ -274,6 +288,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "shared-imports-shared.ts": [
     { at: "src/shared/navigation.ts", expect: null },
     { at: "src/proxy.ts", expect: null },
+  ],
+  // #3049: the invitation page reads through the viewer seam, never the lookups.
+  "features-imports-tenancy-lookups.ts": [
+    { at: "src/features/auth/invitations.ts", expect: "layer" },
+    { at: "src/server/viewer.ts", expect: null },
+  ],
+  "features-imports-viewer-invitation.ts": [
+    { at: "src/features/auth/invitations.ts", expect: null },
   ],
   "features-imports-session.ts": [
     { at: "src/features/auth/actions.ts", expect: null },

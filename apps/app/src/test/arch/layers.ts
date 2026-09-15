@@ -223,6 +223,23 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/**
+ * Bindings a row admits from a specifier its module list does not name whole
+ * (#3048). `instrumentation.ts` is the process bootstrap: it wires the tracer,
+ * the RLS connection guard and the security event emitter, as
+ * `apps/api/src/bootstrap.ts` and `apps/mcp/src/middleware.ts` do. Any other
+ * binding from these specifiers, a namespace or a side-effect import is refused.
+ */
+const PLATFORM_NAMED_ROWS: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  "instrumentation.ts": {
+    "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
+    "@oxagen/database/security": ["makeSecurityEventInserter"],
+    "@oxagen/database": ["assertRlsConnectionSafe"],
+  },
+};
+
 /** The base row, "everything else under src/": contract declarations, and one telemetry export. */
 const BASE_SPECIFIERS = ["@oxagen/oxagen/contracts/*"] as const;
 const BASE_NAMED: Readonly<Record<string, readonly string[]>> = {
@@ -236,6 +253,8 @@ export function platformAllows(appFile: string, edge: ImportEdge): boolean {
   if ([...row, ...BASE_SPECIFIERS].some((p) => matches(p, specifier))) {
     return true;
   }
-  const names = BASE_NAMED[specifier];
-  return names !== undefined && onlyNames(edge, names);
+  return onlyNames(edge, [
+    ...(BASE_NAMED[specifier] ?? []),
+    ...(PLATFORM_NAMED_ROWS[appFile]?.[specifier] ?? []),
+  ]);
 }
