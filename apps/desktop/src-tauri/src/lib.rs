@@ -98,6 +98,8 @@ fn host_view(host: &Value) -> Value {
         "claude_execpath",
         "codex_version",
         "codex_execpath",
+        "stella_version",
+        "stella_execpath",
         "wrapper_version",
         "hook_command",
         "daemon_command",
