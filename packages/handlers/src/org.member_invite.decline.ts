@@ -11,7 +11,7 @@
 //      defaultRoles grants Owner/Admin allow).
 //   4. Mark invitation 'declined'. The seat is immediately freed.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
@@ -50,12 +50,18 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<
   );
 
   if (!invitation) {
-    throw new Error(`Invitation '${input.invitationPublicId}' not found`);
+    throw new HandlerError({
+      code: "not_found",
+      reason: "invitation_not_found",
+      message: `Invitation '${input.invitationPublicId}' not found`,
+    });
   }
   if (invitation.status !== "pending") {
-    throw new Error(
-      `Invitation '${input.invitationPublicId}' is no longer pending (status: ${invitation.status})`,
-    );
+    throw new HandlerError({
+      code: "conflict",
+      reason: "invitation_closed",
+      message: `Invitation '${input.invitationPublicId}' is no longer pending (status: ${invitation.status})`,
+    });
   }
 
   // ── Mark declined ─────────────────────────────────────────────────────────────

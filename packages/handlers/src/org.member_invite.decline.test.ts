@@ -89,7 +89,10 @@ describe("orgMemberInviteDeclineHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteDeclineHandler({ invitationPublicId: "inv_MISSING" }, ctx),
-    ).rejects.toThrow("not found");
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "invitation_not_found",
+    });
   });
 
   it("invitation already declined → throws 'no longer pending'", async () => {
@@ -102,7 +105,7 @@ describe("orgMemberInviteDeclineHandler", () => {
         { invitationPublicId: "inv_DECLINE01" },
         ctx,
       ),
-    ).rejects.toThrow("no longer pending");
+    ).rejects.toMatchObject({ code: "conflict", reason: "invitation_closed" });
   });
 
   it("happy path → returns declined status, does not throw", async () => {

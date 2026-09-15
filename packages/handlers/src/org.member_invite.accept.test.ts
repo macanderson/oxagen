@@ -148,7 +148,10 @@ describe("orgMemberInviteAcceptHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_MISSING" }, ctx),
-    ).rejects.toThrow("not found");
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "invitation_not_found",
+    });
   });
 
   it("invitation already accepted → throws", async () => {
@@ -158,7 +161,7 @@ describe("orgMemberInviteAcceptHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_X" }, ctx),
-    ).rejects.toThrow("no longer pending");
+    ).rejects.toMatchObject({ code: "conflict", reason: "invitation_closed" });
   });
 
   it("expired invitation → throws expired error", async () => {
@@ -171,7 +174,7 @@ describe("orgMemberInviteAcceptHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_EXPIRED" }, ctx),
-    ).rejects.toThrow("expired");
+    ).rejects.toMatchObject({ code: "conflict", reason: "invitation_expired" });
   });
 
   it("expired invitation with failing mark-expired update → logs warning, still throws expired", async () => {
@@ -189,7 +192,7 @@ describe("orgMemberInviteAcceptHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_EXPIRED" }, ctx),
-    ).rejects.toThrow("expired");
+    ).rejects.toMatchObject({ code: "conflict", reason: "invitation_expired" });
 
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.objectContaining({ invitationPublicId: "inv_EXPIRED" }),
@@ -210,7 +213,7 @@ describe("orgMemberInviteAcceptHandler", () => {
     const ctx = makeCtx();
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_X" }, ctx),
-    ).rejects.toThrow("not issued to your email");
+    ).rejects.toMatchObject({ code: "forbidden", reason: "wrong_email" });
   });
 
   it("happy path → creates membership, provisions principal, assigns role", async () => {

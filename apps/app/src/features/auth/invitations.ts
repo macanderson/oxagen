@@ -12,12 +12,12 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const INVITATION_NOT_FOUND = "invitation_not_found";
 
-export function isInvitationToken(token: string): boolean {
+function isInvitationToken(token: string): boolean {
   return TOKEN_PATTERN.test(token);
 }
 
 /** The stored row as the page's view model; a row outside the enums is unreadable, never guessed at. */
-export function toInvitationView(
+function toInvitationView(
   token: string,
   record: InvitationRecord,
 ): Read<InvitationView> {

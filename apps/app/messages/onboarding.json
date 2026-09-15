@@ -5,14 +5,13 @@
       "orgNameTooLong": "Use at most 120 characters.",
       "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
       "slugReserved": "That address is used by an Oxagen page. Pick another.",
-      "namespaceInvalid": "Use 2–6 lowercase letters or digits.",
       "workspaceNameRequired": "Enter a name for the first workspace.",
       "workspaceNameTooLong": "Use at most 80 characters.",
       "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
       "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
       "slugTaken": "That address belongs to another organization. Pick a different one.",
-      "namespaceTaken": "That namespace belongs to another organization. Pick a different 2–6 character namespace.",
-      "failed": "The organization could not be created. Nothing was saved; try again."
+      "failed": "The organization could not be created. Nothing was saved; try again.",
+      "denied": "This account may not create an organization."
     },
     "organization": {
       "eyebrow": "Create your organization",
@@ -21,8 +20,6 @@
       "name": "Organization name",
       "slug": "Address",
       "slugHint": "Mission Control lives at /{slug}. You can change the address later.",
-      "namespace": "Namespace",
-      "namespaceHint": "2–6 characters and immutable. Every agent key starts with it, as in {example}.",
       "workspaceTitle": "First workspace",
       "workspaceName": "Workspace name",
       "workspaceSlug": "Workspace address",

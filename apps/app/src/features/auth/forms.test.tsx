@@ -441,7 +441,10 @@ describe("VerifyPanel", () => {
 
 describe("InviteDecision", () => {
   it("accept replaces the page with the organization", async () => {
-    inviteActions.acceptInvitation.mockResolvedValue({ ok: true, to: "/acme" });
+    inviteActions.acceptInvitation.mockResolvedValue({
+      ok: true,
+      value: { to: "/acme" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Accept invitation" }),
@@ -452,7 +455,10 @@ describe("InviteDecision", () => {
   });
 
   it("decline confirms without navigating", async () => {
-    inviteActions.declineInvitation.mockResolvedValue({ ok: true, to: "/" });
+    inviteActions.declineInvitation.mockResolvedValue({
+      ok: true,
+      value: { invitationPublicId: "invi_1", status: "declined" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     expect(await screen.findByTestId("invite-declined")).toHaveTextContent(
@@ -461,25 +467,45 @@ describe("InviteDecision", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("a refused decision is announced", async () => {
+  it("names the refusal: another account, a closed invitation, any other failure", async () => {
+    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
+    const accept = () =>
+      userEvent.click(
+        screen.getByRole("button", { name: "Accept invitation" }),
+      );
     inviteActions.acceptInvitation.mockResolvedValueOnce({
       ok: false,
-      reason: "failed",
+      reason: "denied",
+      code: "wrong_email",
     });
-    renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Accept invitation" }),
+    await accept();
+    expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
+      "This account may not answer this invitation",
     );
+    inviteActions.declineInvitation.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "invitation_expired",
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
+      "This invitation is closed",
+    );
+    inviteActions.acceptInvitation.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
+    });
+    await accept();
     expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
       "could not be accepted",
     );
     inviteActions.acceptInvitation.mockRejectedValueOnce(new Error("boom"));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Accept invitation" }),
-    );
+    await accept();
     expect(await screen.findByTestId("invite-failure")).toHaveTextContent(
       "could not be accepted",
     );
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
