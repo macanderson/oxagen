@@ -9,6 +9,8 @@ import {
   clientBoundaryRefuses,
   isPlatformSpecifier,
   layerAllows,
+  MINT_IMPORTERS,
+  MINT_MODULE,
   platformAllows,
 } from "./layers";
 import {
@@ -91,6 +93,29 @@ describe("import graph", () => {
         unexpected: [],
         stale: [],
       });
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+
+  it(
+    "only viewer.ts and viewer.testing.ts import the MINT token, test files included",
+    () => {
+      const importers = listFiles("src")
+        .filter(
+          (file) =>
+            /\.tsx?$/.test(file) && !file.startsWith("src/test/arch/probes/"),
+        )
+        .filter((file) =>
+          importEdges(parse(readSource(file))).some((edge) => {
+            const target = resolveInternal(file, edge.specifier);
+            return target?.kind === "module" && target.path === MINT_MODULE;
+          }),
+        )
+        .map((file) => file.replace(/^src\//, "").replace(/\.tsx?$/, ""));
+      expect(
+        importers.filter((file) => !MINT_IMPORTERS.includes(file)),
+      ).toEqual([]);
+      expect(importers).toContain("server/viewer");
     },
     WHOLE_TREE_TIMEOUT_MS,
   );
@@ -223,7 +248,7 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "app-imports-feature-internals.tsx": [
     { at: "src/app/[org]/page.tsx", expect: "layer" },
   ],
-  "export-from-server.ts": [{ at: "src/data/scope.ts", expect: "layer" }],
+  "export-from-server.ts": [{ at: "src/data/read.ts", expect: "layer" }],
   "computed-import.ts": [
     { at: "src/features/fleet/reads.ts", expect: "layer" },
   ],
@@ -263,8 +288,16 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "feature-imports-builders.ts": [
     { at: "src/features/shell/probe.ts", expect: "layer" },
   ],
-  "server-imports-viewer-testing.ts": [
+  "imports-viewer-testing.ts": [
     { at: "src/server/viewer.ts", expect: "layer" },
+    { at: "src/features/shell/source.ts", expect: "layer" },
+  ],
+  // INV-02: the MINT token, importable by the viewer seam and its test helper alone.
+  "imports-viewer-mint.ts": [
+    { at: "src/server/viewer.ts", expect: null },
+    { at: "src/server/viewer.testing.ts", expect: null },
+    { at: "src/server/kernel.ts", expect: "layer" },
+    { at: "src/features/shell/source.ts", expect: "layer" },
   ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },

@@ -43,9 +43,11 @@ export const ORG_SEGMENTS = {
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
 export function orgSegmentKey(segment: string): NavKey | null {
-  return Object.hasOwn(ORG_SEGMENTS, segment)
-    ? ORG_SEGMENTS[segment as keyof typeof ORG_SEGMENTS]
-    : null;
+  return isOrgSegment(segment) ? ORG_SEGMENTS[segment] : null;
+}
+
+function isOrgSegment(segment: string): segment is keyof typeof ORG_SEGMENTS {
+  return Object.hasOwn(ORG_SEGMENTS, segment);
 }
 
 const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
@@ -121,10 +123,11 @@ export function currentNavKey(pathname: string): NavKey | null {
     return orgSegmentKey(head);
   }
   if (head === undefined || head === "runs") return "fleet";
-  const found = (
-    Object.entries(WORKSPACE_SEGMENT) as [WorkspaceNavKey, string][]
-  ).find(([, segment]) => segment === head);
-  return found ? found[0] : null;
+  return (
+    WORKSPACE_NAV.find(
+      (key) => key !== "fleet" && WORKSPACE_SEGMENT[key] === head,
+    ) ?? null
+  );
 }
 
 /** Whether a sidebar item is the current page. API keys sit under Organization. */

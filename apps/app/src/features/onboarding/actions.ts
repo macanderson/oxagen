@@ -7,6 +7,7 @@ import {
   OrganizationForm,
   type OrganizationField,
   type OrgFormErrorKey,
+  organizationFieldErrors,
 } from "./org-form";
 
 export type CreateOrganizationState =
@@ -29,13 +30,7 @@ export async function createOrganizationAction(
 
   const parsed = OrganizationForm.safeParse(input);
   if (!parsed.success) {
-    const fields: Partial<Record<OrganizationField, OrgFormErrorKey>> = {};
-    for (const issue of parsed.error.issues) {
-      const field = issue.path[0] as OrganizationField | undefined;
-      if (field && !fields[field])
-        fields[field] = issue.message as OrgFormErrorKey;
-    }
-    return { ok: false, fields };
+    return { ok: false, fields: organizationFieldErrors(parsed.error.issues) };
   }
 
   const { createOrganization } = await import("./create-organization");

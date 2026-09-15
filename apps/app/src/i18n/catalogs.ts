@@ -71,24 +71,25 @@ export function catalogStems(entries: readonly string[]): string[] {
   return [SHARED_CATALOG, ...rest];
 }
 
+function isCatalogObject(value: unknown): value is Messages {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Parse one catalog's text. A catalog is a JSON object of namespaces. */
 export function parseCatalog(stem: string, text: string): Messages {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    // JSON.parse throws nothing but SyntaxError.
-    throw new CatalogError(
-      `${stem}.json`,
-      `not valid JSON (${(error as SyntaxError).message})`,
-    );
+    // JSON.parse throws nothing but SyntaxError, whose String() names it.
+    throw new CatalogError(`${stem}.json`, `not valid JSON (${String(error)})`);
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+  if (!isCatalogObject(parsed))
     throw new CatalogError(
       `${stem}.json`,
       "a catalog must be a JSON object of namespaces",
     );
-  return parsed as Messages;
+  return parsed;
 }
 
 /** Merge catalogs by top-level namespace. A namespace claimed twice is a lane collision, so it throws. */

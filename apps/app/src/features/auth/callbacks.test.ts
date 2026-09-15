@@ -14,9 +14,10 @@ const query = {
   sourceConnections: { findMany: vi.fn() },
 };
 const filters: string[] = [];
-const recording = new Proxy(query, {
+const tables: Record<string, Record<string, (o: unknown) => unknown>> = query;
+const recording = new Proxy(tables, {
   get: (target, table: string) =>
-    new Proxy(target[table as keyof typeof query], {
+    new Proxy(target[table] ?? {}, {
       get:
         (methods, method: string) =>
         (options: Parameters<typeof describeQuery>[0]) => {
@@ -24,9 +25,7 @@ const recording = new Proxy(query, {
           filters.push(
             `${table}.${method} ${d.where ?? ""} ${d.orderBy ?? ""}`.trim(),
           );
-          return (methods as Record<string, (o: unknown) => unknown>)[method]?.(
-            options,
-          );
+          return methods[method]?.(options);
         },
     }),
 });
@@ -34,8 +33,9 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) => fn({ query: recording }),
 }));
 
-const getAuthUser = vi.fn();
-vi.mock("./session", () => ({ getAuthUser }));
+// approveCliAuth reads the signed-in person through requireUser and the server session seam.
+const getSession = vi.fn();
+vi.mock("@/server/session", () => ({ getSession }));
 const actorCanManageApiKeys = vi.fn();
 vi.mock("@oxagen/handlers", () => ({ actorCanManageApiKeys }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -55,6 +55,7 @@ const { approveCliAuth, cancelCliAuth } = await import("./cli-actions");
 const github = await import("./github-setup");
 const { githubSetupQueries } = await import("./github-setup-queries");
 
+const user = { id: "u1", email: "a@b.co", name: "A", image: null };
 const CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 const valid = {
   redirect_uri: "http://127.0.0.1:53682/callback",
@@ -72,7 +73,7 @@ beforeEach(() => {
   filters.length = 0;
   for (const table of Object.values(query))
     for (const fn of Object.values(table)) fn.mockReset();
-  getAuthUser.mockReset();
+  getSession.mockReset();
   actorCanManageApiKeys.mockReset();
   createCliAuthCode.mockReset();
   redirect.mockClear();
@@ -178,14 +179,14 @@ describe("approveCliAuth", () => {
   }
 
   it("sends a signed-out person to log in", async () => {
-    getAuthUser.mockResolvedValue(null);
+    getSession.mockResolvedValue(null);
     await expect(approveCliAuth(null, form(approve))).rejects.toThrow(
       "NEXT_REDIRECT /login",
     );
   });
 
   it("re-validates every parameter", async () => {
-    getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
+    getSession.mockResolvedValue({ user });
     expect(
       await approveCliAuth(
         null,
@@ -198,7 +199,7 @@ describe("approveCliAuth", () => {
   });
 
   it("refuses a workspace the user is not a member of, and a user who cannot manage keys", async () => {
-    getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
+    getSession.mockResolvedValue({ user });
     memberOfAcme();
     expect(
       await approveCliAuth(
@@ -214,7 +215,7 @@ describe("approveCliAuth", () => {
   });
 
   it("mints a code bound to the scope and challenge, then redirects to the loopback listener", async () => {
-    getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
+    getSession.mockResolvedValue({ user });
     memberOfAcme();
     actorCanManageApiKeys.mockResolvedValue(true);
     await expect(approveCliAuth(null, form(approve))).rejects.toThrow(
@@ -234,7 +235,7 @@ describe("approveCliAuth", () => {
   });
 
   it("reports a failure to mint as failed", async () => {
-    getAuthUser.mockResolvedValue({ id: "u1", email: "a@b.co", name: "A" });
+    getSession.mockResolvedValue({ user });
     memberOfAcme();
     actorCanManageApiKeys.mockResolvedValue(true);
     createCliAuthCode.mockRejectedValue(new Error("db"));
