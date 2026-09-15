@@ -217,6 +217,7 @@ function fakeStore(options: { failAppendCall?: number } = {}) {
         maxAttempts: 1,
         engine: input.engine,
         resumedFrom: null,
+        forkedFromRunSeq: null,
       };
     },
     appendAttemptBatch: async (input) => {
