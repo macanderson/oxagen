@@ -12730,6 +12730,14 @@
    "triggers": []
   },
   {
+   "cron": "10 * * * *",
+   "file": "packages/inngest-functions/src/functions/billing.gau-close.ts",
+   "id": "billing.gau-close",
+   "retries": 3,
+   "sends": [],
+   "triggers": []
+  },
+  {
    "cron": "0 1 * * *",
    "file": "packages/inngest-functions/src/functions/cost.daily-rollup.ts",
    "id": "cost.daily-rollup",

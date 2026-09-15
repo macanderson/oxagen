@@ -8,7 +8,7 @@
  * fresh view.
  */
 
-import { withTenantDb, schema } from "@oxagen/database";
+import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
@@ -124,12 +124,16 @@ export interface DefaultPaymentMethod {
  * A DB-only read of the mirror, never a provider call: the GAU gate reads it
  * on every governed action to tell a Free org that must save a card from a
  * prepaid org whose auto top-up could not run, and the recorder reads it
- * before claiming a top-up episode. Runs inside the caller's tenant scope.
+ * before claiming a top-up episode. Runs inside the caller's tenant scope;
+ * `opts.system` routes it through `withSystemDb` for the close job and the
+ * platform-operator handler, which run with none.
  */
 export async function readDefaultPaymentMethod(
   orgId: string,
+  opts?: { system?: boolean },
 ): Promise<DefaultPaymentMethod | null> {
-  const row = await withTenantDb((tx) =>
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const row = await runner((tx) =>
     tx.query.paymentMethods.findFirst({
       where: and(
         eq(schema.paymentMethods.orgId, orgId),

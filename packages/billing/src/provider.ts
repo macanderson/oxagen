@@ -229,6 +229,12 @@ export interface BillingInvoice {
   orgId: string | null;
   /** Reason this invoice was created ("subscription_create", "subscription_cycle", etc.). */
   billingReason: string | null;
+  /**
+   * The governed-action settlement this invoice settles, from
+   * `metadata.gau_settlement_id`; null for every other invoice. The webhook
+   * routes `invoice.paid` and `invoice.payment_failed` on it (ADR-055 §6).
+   */
+  gauSettlementId: string | null;
   lineItems: BillingInvoiceLineItem[];
 }
 
@@ -309,6 +315,57 @@ export interface BillingCheckoutPaymentMethod {
   expMonth: number | null;
   expYear: number | null;
 }
+
+// ── Governed-action settlement invoices ──────────────────────────────────────
+
+/** The `oxagen_kind` a settlement invoice carries (ARCHITECTURE.md §3.9 item 11). */
+export type GauInvoiceKind =
+  | "gau_auto_topup"
+  | "gau_interim"
+  | "gau_period_close";
+
+/**
+ * How Stripe collects a settlement invoice: from the org's default card, or
+ * by emailing the hosted invoice when the org has saved none.
+ */
+export type GauInvoiceCollection =
+  | { method: "charge_automatically"; defaultPaymentMethodId: string }
+  | { method: "send_invoice"; daysUntilDue: number };
+
+export interface BillingGauInvoiceInput {
+  customerId: string;
+  orgId: string;
+  /** The settlement row's id: the invoice metadata the webhook routes on, and the prefix of every idempotency key. */
+  settlementId: string;
+  kind: GauInvoiceKind;
+  quantityGau: number;
+  /** Micro-dollars per GAU, charged exactly as the line's unit amount. */
+  ratePerGauMicros: bigint;
+  /** ISO 4217, lower case. */
+  currency: string;
+  description: string;
+  collection: GauInvoiceCollection;
+}
+
+/** A settlement's invoice, addressed by both ids so each request can be keyed on the settlement. */
+export interface BillingGauInvoiceRef {
+  settlementId: string;
+  invoiceId: string;
+}
+
+export interface BillingGauInvoicePayment {
+  /** `paid`: collected. `open`: finalized and unpaid; Stripe owns collection from here. */
+  status: "paid" | "open";
+  amountCents: number;
+  hostedInvoiceUrl: string | null;
+}
+
+/** What `deleteOrVoidDraftInvoice` found and did. `absent`: already void or deleted. */
+export type BillingDraftInvoiceOutcome =
+  | "deleted"
+  | "voided"
+  | "paid"
+  | "absent";
 
 // ── Credit-pack line items ───────────────────────────────────────────────────
 
@@ -479,6 +536,33 @@ export interface BillingProvider {
 
   /** Retrieve a full invoice including line items. */
   getInvoice(invoiceId: string): Promise<BillingInvoice>;
+
+  /**
+   * Create a settlement's invoice as a draft (`auto_advance: false`) with its
+   * one line: `quantityGau` units at the per-GAU rate. Stripe never finalizes
+   * or collects the draft on its own.
+   */
+  createGauInvoice(
+    input: BillingGauInvoiceInput,
+  ): Promise<{ invoiceId: string }>;
+
+  /**
+   * Do what is left of a settlement invoice by Stripe's own state: finalize a
+   * draft (`auto_advance: true`), charge an open `charge_automatically`
+   * invoice off-session. Answers `open` for every outcome that leaves a
+   * finalized, unpaid invoice with Stripe; throws for anything else.
+   */
+  finalizeAndPayGauInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<BillingGauInvoicePayment>;
+
+  /**
+   * Remove a superseded settlement's invoice: delete a draft, void an open
+   * invoice, leave a paid, void or deleted one alone.
+   */
+  deleteOrVoidDraftInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<{ outcome: BillingDraftInvoiceOutcome }>;
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
 

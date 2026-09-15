@@ -99,6 +99,7 @@ const {
   readBucket,
   remainingGau,
   carriedFrom,
+  uninvoicedGau,
   assertGauAvailable,
   GauExhaustedError,
 } = await import("./gau-bucket");
@@ -753,5 +754,44 @@ describe("assertGauAvailable", () => {
       periodEnd: CAL_SEP.end,
     });
     expect(withReason.message).toMatch(/add a payment method/i);
+  });
+});
+
+// ── uninvoicedGau ─────────────────────────────────────────────────────────────
+
+describe("uninvoicedGau", () => {
+  const counts = (over: Partial<Parameters<typeof uninvoicedGau>[0]>) => ({
+    includedGau: 100,
+    purchasedGau: 0,
+    carriedGau: 0,
+    usedGau: 0,
+    overageInvoicedGau: 0,
+    ...over,
+  });
+
+  it("is zero while consumption is inside the allowance", () => {
+    expect(uninvoicedGau(counts({ usedGau: 40 }))).toBe(0);
+  });
+
+  it("subtracts what interim and period-close settlements already claimed", () => {
+    expect(
+      uninvoicedGau(counts({ usedGau: 350, overageInvoicedGau: 200 })),
+    ).toBe(50);
+  });
+
+  it("counts purchased and carried units against the overage", () => {
+    expect(
+      uninvoicedGau(counts({ purchasedGau: 30, carriedGau: 20, usedGau: 350 })),
+    ).toBe(200);
+  });
+
+  it("floors at zero when a settlement claimed more than the current overage", () => {
+    // Possible after a grant lands between the claim and this read: purchased
+    // units move the overage down while overage_invoiced_gau stays put.
+    expect(
+      uninvoicedGau(
+        counts({ purchasedGau: 300, usedGau: 350, overageInvoicedGau: 200 }),
+      ),
+    ).toBe(0);
   });
 });

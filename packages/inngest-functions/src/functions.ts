@@ -1,4 +1,5 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
+import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
@@ -43,6 +44,7 @@ import { runSummarize } from "./functions/run.summarize";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   billingDunningSweep,
+  billingGauClose,
   costRunRollup,
   costDailyRollup,
   securityAuditPartitionRollover,

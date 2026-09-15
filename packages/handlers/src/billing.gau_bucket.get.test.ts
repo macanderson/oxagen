@@ -42,7 +42,6 @@ import {
   lastAutoTopupQuery,
   pastDueQuery,
   postgresGauBucketQueries,
-  uninvoicedGau,
   type AutoTopupAttempt,
 } from "./billing.gau_bucket.get";
 import { makeCTX } from "./test-utils/fixtures";
@@ -516,6 +515,66 @@ describe("get_gau_bucket settlement queries", () => {
   });
 });
 
+// ── the shipped settlement reads ──────────────────────────────────────────────
+
+/**
+ * `postgresGauBucketQueries.pastDue` and `.lastAutoTopup` against an executor
+ * that answers the settlement query with the rows given, the way the ledger
+ * holds them once the recorder, the webhooks and the close job have written:
+ * `open` from settleGauOpen, `paid` from settleGauPaid, `failed` from
+ * settleGauFailed, and `pending` only while a claim awaits Stripe.
+ */
+function answeringSettlements(rows: unknown[]) {
+  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+    const chain: Record<string, unknown> = {};
+    Object.assign(chain, {
+      from: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+      limit: () => Promise.resolve(rows),
+    });
+    return Promise.resolve(fn({ select: () => chain }));
+  });
+}
+
+describe("get_gau_bucket settlement reads", () => {
+  it.each(["paid", "open", "failed"] as const)(
+    "reports a %s auto top-up as the last attempt",
+    async (status) => {
+      const at = new Date("2026-09-12T10:00:00.000Z");
+      answeringSettlements([{ at, status }]);
+      await expect(
+        postgresGauBucketQueries.lastAutoTopup(ORG, BUCKET),
+      ).resolves.toEqual({ at, status });
+    },
+  );
+
+  it("reports no last attempt when the month has no settled top-up", async () => {
+    answeringSettlements([]);
+    await expect(
+      postgresGauBucketQueries.lastAutoTopup(ORG, BUCKET),
+    ).resolves.toBeNull();
+  });
+
+  it("refuses a status the page cannot name (negative)", async () => {
+    answeringSettlements([{ at: new Date(), status: "pending" }]);
+    await expect(
+      postgresGauBucketQueries.lastAutoTopup(ORG, BUCKET),
+    ).rejects.toThrow(RangeError);
+  });
+
+  it("is past due while an open overage settlement is found, and not once none is", async () => {
+    answeringSettlements([{ id: "set_open" }]);
+    await expect(postgresGauBucketQueries.pastDue(ORG, BUCKET)).resolves.toBe(
+      true,
+    );
+    answeringSettlements([]);
+    await expect(postgresGauBucketQueries.pastDue(ORG, BUCKET)).resolves.toBe(
+      false,
+    );
+  });
+});
+
 // ── a read never writes ───────────────────────────────────────────────────────
 
 /**
@@ -602,42 +661,5 @@ describe("get_gau_bucket never writes", () => {
     expect(
       log.filter((op) => op !== "select" && !op.startsWith("select:")),
     ).toEqual([]);
-  });
-});
-
-// ── the uninvoiced formula ────────────────────────────────────────────────────
-
-describe("uninvoicedGau", () => {
-  it("is zero while consumption is inside the allowance", () => {
-    expect(uninvoicedGau(bucketView({ includedGau: 100, usedGau: 40 }))).toBe(
-      0,
-    );
-  });
-
-  it("subtracts what interim and period-close settlements already claimed", () => {
-    expect(
-      uninvoicedGau(
-        bucketView({
-          includedGau: 100,
-          usedGau: 350,
-          overageInvoicedGau: 200,
-        }),
-      ),
-    ).toBe(50);
-  });
-
-  it("floors at zero when a settlement claimed more than the current overage", () => {
-    // Possible after a grant lands between the claim and this read: purchased
-    // units move the overage down while overage_invoiced_gau stays put.
-    expect(
-      uninvoicedGau(
-        bucketView({
-          includedGau: 100,
-          purchasedGau: 300,
-          usedGau: 350,
-          overageInvoicedGau: 200,
-        }),
-      ),
-    ).toBe(0);
   });
 });

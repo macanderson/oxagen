@@ -20,8 +20,10 @@
  *  12. Unhandled event type → stored, no dispatcher, returns "applied".
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { FakeGauStore } from "./test-utils/gau-fake-tx";
 import type {
+  BillingInvoice,
   BillingWebhookEvent,
   BillingDispute,
   BillingRefundedCharge,
@@ -69,26 +71,42 @@ vi.mock("./grants", async (importOriginal) => {
 });
 
 // The governed-action Checkout grant (gau-settlements.ts) has its own tests;
-// here only the dispatch on the session's oxagen_kind is asserted.
+// here only the dispatch on the session's oxagen_kind is asserted. The
+// settlement writers the invoice branches call are the real ones, running on
+// the in-memory GAU store.
 const grantGauPurchaseForCheckoutMock = vi.fn().mockResolvedValue(undefined);
-vi.mock(
-  "./gau-settlements",
-  () =>
-    ({
-      grantGauPurchaseForCheckout: grantGauPurchaseForCheckoutMock,
-    }) satisfies Pick<
-      typeof import("./gau-settlements"),
-      "grantGauPurchaseForCheckout"
-    >,
-);
+vi.mock("./gau-settlements", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./gau-settlements")>();
+  return {
+    ...real,
+    grantGauPurchaseForCheckout: grantGauPurchaseForCheckoutMock,
+  };
+});
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  const { conditionMocks } = await import("./test-utils/gau-conditions");
+  return { ...real, ...conditionMocks };
+});
+
+// The grant reads the org's terms on the settlement's transaction.
+const readGauEntitlementMock = vi.fn();
+vi.mock("./contract-terms", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./contract-terms")>();
+  return { ...real, readGauEntitlement: readGauEntitlementMock };
+});
 
 // Mock dunning handlers. Spread the REAL module so resolveOrgFromInvoice — which
 // the real receipts.ts imports — stays available; only the two lifecycle handlers
 // are stubbed so their DB writes don't run in this dispatch test.
 const onInvoicePaymentFailedMock = vi.fn().mockResolvedValue(undefined);
 const onInvoiceRecoveredMock = vi.fn().mockResolvedValue(undefined);
+const realDunning: { module: typeof import("./dunning") | null } = {
+  module: null,
+};
 vi.mock("./dunning", async (importOriginal) => {
   const real = await importOriginal<typeof import("./dunning")>();
+  realDunning.module = real;
   return {
     ...real,
     onInvoicePaymentFailed: onInvoicePaymentFailedMock,
@@ -201,18 +219,35 @@ const dbState: { instance: ReturnType<typeof makeDb> | null } = {
   instance: null,
 };
 
+/** When set, withTenantDb is the real one, which refuses outside a scope. */
+const tenantScope: {
+  enforced: boolean;
+  realWithTenantDb: typeof import("@oxagen/database")["withTenantDb"] | null;
+} = { enforced: false, realWithTenantDb: null };
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  tenantScope.realWithTenantDb = real.withTenantDb;
   return {
     ...real,
     db: () => dbState.instance,
-    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      tenantScope.enforced
+        ? tenantScope.realWithTenantDb!(fn)
+        : fn(dbState.instance),
     withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   };
 });
 
 // Import after mocks.
 const { processStripeEvent } = await import("./webhooks");
+const { settleGauPaid } = await import("./gau-settlements");
+// Loaded after the mocks: the fake store imports gau-bucket, which reaches
+// every module mocked above.
+const { fakeGauExecutor, makeFakeGauStore, makeFakeGauTx } = await import(
+  "./test-utils/gau-fake-tx"
+);
+const { schema } = await import("@oxagen/database");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -305,6 +340,7 @@ describe("processStripeEvent", () => {
       subscriptionId: "sub_test_001",
       orgId: "org-abc",
       billingReason: "subscription_create",
+      gauSettlementId: null,
       lineItems: [],
     };
 
@@ -355,6 +391,7 @@ describe("processStripeEvent", () => {
       subscriptionId: "sub_test_001",
       orgId: "org-abc",
       billingReason: "subscription_create",
+      gauSettlementId: null,
       lineItems: [],
     };
 
@@ -394,6 +431,7 @@ describe("processStripeEvent", () => {
       subscriptionId: "sub_test_001",
       orgId: "org-abc",
       billingReason: "subscription_cycle",
+      gauSettlementId: null,
       lineItems: [],
     };
 
@@ -455,6 +493,7 @@ describe("processStripeEvent", () => {
         subscriptionId: null,
         orgId: "org-abc",
         billingReason: null,
+        gauSettlementId: null,
         lineItems: [],
       },
     });
@@ -489,6 +528,7 @@ describe("processStripeEvent", () => {
         subscriptionId: null,
         orgId: "org-abc",
         billingReason: null,
+        gauSettlementId: null,
         lineItems: [],
       },
     });
@@ -523,6 +563,7 @@ describe("processStripeEvent", () => {
         subscriptionId: null,
         orgId: "org-abc",
         billingReason: null,
+        gauSettlementId: null,
         lineItems: [],
       },
     });
@@ -727,6 +768,7 @@ describe("processStripeEvent", () => {
       subscriptionId: null,
       orgId: "org-abc",
       billingReason: "manual",
+      gauSettlementId: null,
       lineItems: [],
     };
 
@@ -899,5 +941,256 @@ describe("processStripeEvent", () => {
     expect(result).toEqual({ status: "applied" });
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
     expect(syncInvoiceMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Governed-action settlement invoices (ADR-055 §6; ARCHITECTURE.md §3.9)
+// ---------------------------------------------------------------------------
+
+describe("processStripeEvent — governed-action settlement invoices", () => {
+  const ORG = "00000000-0000-0000-0000-00000000a0a1";
+  const NOW = new Date("2026-09-15T12:00:00.000Z");
+  const SEPTEMBER = new Date("2026-09-01T00:00:00.000Z");
+  const AUGUST = new Date("2026-08-01T00:00:00.000Z");
+
+  let store: FakeGauStore;
+  /** The event-ledger double of the latest delivery; GAU tables go to the store. */
+  let ledger: ReturnType<typeof makeDb>;
+  let delivery = 0;
+
+  function seedBucket(overrides: Record<string, unknown> = {}) {
+    const row = {
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      periodStart: SEPTEMBER,
+      periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      includedGau: 5_000,
+      purchasedGau: 0,
+      carriedGau: 0,
+      usedGau: 5_000,
+      overageInvoicedGau: 0,
+      interimSeq: 0,
+      topupSeq: 1,
+      openTopupSettlementId: null as string | null,
+      closedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...overrides,
+    };
+    store.buckets.push(row);
+    return row;
+  }
+
+  /** A pending auto top-up that holds its bucket's episode open. */
+  function seedTopup(bucket: ReturnType<typeof seedBucket>) {
+    const row = {
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      bucketId: bucket.id,
+      kind: "auto_topup",
+      seq: 1,
+      quantityGau: 5_000,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      status: "pending",
+      stripeCheckoutSessionId: null,
+      stripeInvoiceId: "in_topup_001",
+      createdAt: NOW,
+      settledAt: null,
+    };
+    store.settlements.push(row);
+    bucket.openTopupSettlementId = row.id;
+    return row;
+  }
+
+  function gauInvoice(settlementId: string, paid: boolean): BillingInvoice {
+    return {
+      id: "in_topup_001",
+      providerInvoiceId: "in_topup_001",
+      number: "INV-GAU-002",
+      status: paid ? "paid" : "open",
+      amountDueCents: 2500,
+      amountPaidCents: paid ? 2500 : 0,
+      amountRemainingCents: paid ? 0 : 2500,
+      currency: "usd",
+      periodStart: NOW,
+      periodEnd: NOW,
+      dueAt: null,
+      paidAt: paid ? NOW : null,
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/topup",
+      invoicePdfUrl: null,
+      subscriptionId: null,
+      orgId: ORG,
+      billingReason: "manual",
+      gauSettlementId: settlementId,
+      lineItems: [],
+    };
+  }
+
+  /** One delivery of a fresh Stripe event carrying `invoice`. */
+  async function deliver(
+    type: "invoice.paid" | "invoice.payment_failed" | "invoice.created",
+    invoice: BillingInvoice,
+  ) {
+    ledger = makeDb([{ id: `row-gau-${++delivery}` }]);
+    const gau = fakeGauExecutor(store);
+    const isGau = (t: unknown) =>
+      t === schema.gauBuckets || t === schema.gauSettlements;
+    dbState.instance = {
+      ...ledger,
+      insert: ((t: unknown) =>
+        isGau(t) ? gau.insert(t) : ledger.insert()) as typeof ledger.insert,
+      update: ((t: unknown) =>
+        isGau(t) ? gau.update(t) : ledger.update()) as typeof ledger.update,
+      select: gau.select,
+    } as ReturnType<typeof makeDb>;
+    return processStripeEvent(
+      makeWebhookEvent({
+        providerEventId: `evt_gau_${delivery}`,
+        type,
+        subscriptionId: undefined,
+        invoice,
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    store = makeFakeGauStore();
+    readGauEntitlementMock.mockResolvedValue({
+      terms: {
+        source: "published_tier",
+        tier: "free",
+        effectiveFrom: SEPTEMBER,
+        effectiveTo: null,
+        currency: "usd",
+        ratePerGauMicros: 5_000n,
+        blockSizeGau: 5_000,
+        includedGauPerMonth: 5_000,
+      },
+      subscription: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    tenantScope.enforced = false;
+  });
+
+  it("invoice.paid settles the row paid after mirroring the invoice, and a second delivery grants nothing more", async () => {
+    const bucket = seedBucket();
+    const row = seedTopup(bucket);
+    const statusAtSync: string[] = [];
+    syncInvoiceMock.mockImplementation(async () => {
+      statusAtSync.push(row.status);
+    });
+
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+
+    expect(statusAtSync).toEqual(["pending", "paid"]);
+    expect(row.status).toBe("paid");
+    expect(bucket).toMatchObject({
+      purchasedGau: 5_000,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("grants once when the synchronous paid result landed before the webhook", async () => {
+    const bucket = seedBucket();
+    const row = seedTopup(bucket);
+    await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+
+    expect(bucket.purchasedGau).toBe(5_000);
+  });
+
+  it("invoice.payment_failed leaves the row open with its episode, and Stripe's paid retry ends it paid, granted and cleared", async () => {
+    const bucket = seedBucket();
+    const row = seedTopup(bucket);
+
+    await deliver("invoice.payment_failed", gauInvoice(row.id, false));
+    expect(row.status).toBe("open");
+    expect(bucket).toMatchObject({
+      purchasedGau: 0,
+      openTopupSettlementId: row.id,
+    });
+
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+    expect(row.status).toBe("paid");
+    expect(bucket).toMatchObject({
+      purchasedGau: 5_000,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("invoice.paid after rollover grants to the current month's bucket", async () => {
+    const august = seedBucket({
+      periodStart: AUGUST,
+      periodEnd: SEPTEMBER,
+    });
+    const row = seedTopup(august);
+
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+
+    const september = store.buckets.find(
+      (b) => (b.periodStart as Date).getTime() === SEPTEMBER.getTime(),
+    );
+    expect(september).toMatchObject({ purchasedGau: 5_000, usedGau: 0 });
+    expect(august).toMatchObject({
+      purchasedGau: 0,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("neither branch reaches the org's dunning state: no grace on a declined settlement invoice, no recovery on a paid one", async () => {
+    const row = seedTopup(seedBucket());
+    onInvoicePaymentFailedMock.mockImplementationOnce(
+      realDunning.module!.onInvoicePaymentFailed,
+    );
+    onInvoiceRecoveredMock.mockImplementationOnce(
+      realDunning.module!.onInvoiceRecovered,
+    );
+
+    await deliver("invoice.payment_failed", gauInvoice(row.id, false));
+    expect(ledger.update).not.toHaveBeenCalled();
+
+    await deliver("invoice.paid", gauInvoice(row.id, true));
+    expect(ledger.update).not.toHaveBeenCalled();
+    expect(row.status).toBe("paid");
+  });
+
+  it("invoice.created settles nothing", async () => {
+    const bucket = seedBucket();
+    const row = seedTopup(bucket);
+
+    await deliver("invoice.created", gauInvoice(row.id, false));
+
+    expect(row.status).toBe("pending");
+    expect(syncInvoiceMock).toHaveBeenCalledWith("in_topup_001");
+  });
+
+  it("runs both branches with no active tenant scope under TENANT_RLS_ENFORCEMENT_ENABLED", async () => {
+    vi.stubEnv("TENANT_RLS_ENFORCEMENT_ENABLED", "true");
+    tenantScope.enforced = true;
+    const bucket = seedBucket();
+    const row = seedTopup(bucket);
+
+    await expect(
+      deliver("invoice.payment_failed", gauInvoice(row.id, false)),
+    ).resolves.toEqual({ status: "applied" });
+    await expect(
+      deliver("invoice.paid", gauInvoice(row.id, true)),
+    ).resolves.toEqual({ status: "applied" });
+
+    expect(row.status).toBe("paid");
+    expect(bucket.purchasedGau).toBe(5_000);
+    await expect(
+      tenantScope.realWithTenantDb!(async () => undefined),
+    ).rejects.toThrow("No active tenant scope");
   });
 });

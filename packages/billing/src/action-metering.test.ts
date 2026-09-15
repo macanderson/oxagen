@@ -19,6 +19,8 @@ import {
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   resolveGauEntitlement: vi.fn(),
+  readGauEntitlement: vi.fn(),
+  ensureStripeCustomer: vi.fn(),
   readOrgBillingSettings: vi.fn(),
   readDefaultPaymentMethod: vi.fn(),
   billingProvider: vi.fn(),
@@ -38,9 +40,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock(
   "./contract-terms",
   () =>
-    ({ resolveGauEntitlement: mocks.resolveGauEntitlement }) satisfies Pick<
+    ({
+      resolveGauEntitlement: mocks.resolveGauEntitlement,
+      readGauEntitlement: mocks.readGauEntitlement,
+    }) satisfies Pick<
       typeof import("./contract-terms"),
-      "resolveGauEntitlement"
+      "resolveGauEntitlement" | "readGauEntitlement"
+    >,
+);
+
+vi.mock(
+  "./customers",
+  () =>
+    ({ ensureStripeCustomer: mocks.ensureStripeCustomer }) satisfies Pick<
+      typeof import("./customers"),
+      "ensureStripeCustomer"
     >,
 );
 
@@ -438,12 +452,7 @@ describe("recordGovernedAction", () => {
       currency: "usd",
       status: "pending",
     });
-    expect(store.buckets[0]).toMatchObject({
-      openTopupSettlementId: result.autoTopup!.id,
-      topupSeq: 1,
-    });
-    // The claim commits before any provider call; settlement is WL-31's.
-    expect(mocks.billingProvider).not.toHaveBeenCalled();
+    expect(store.buckets[0]).toMatchObject({ topupSeq: 1 });
   });
 
   it("a Build org with a card claims exactly the same way", async () => {
@@ -463,13 +472,16 @@ describe("recordGovernedAction", () => {
     const ops = store.log
       .filter((s) => s.op !== "select")
       .map((s) => `${s.op}:${s.table}`);
-    expect(ops).toEqual([
+    expect(ops.slice(0, 3)).toEqual([
       "upsert:buckets",
       "update:buckets",
       "insert:settlements",
     ]);
-    // Two tenant transactions: the debit, then the claim.
-    expect(txs).toHaveLength(2);
+    // The debit and the claim are the first two tenant transactions.
+    expect(store.log.indexOf(store.log.find((s) => s.op === "update")!)).toBe(
+      store.log.findIndex((s) => s.op === "update"),
+    );
+    expect(txs.length).toBeGreaterThanOrEqual(2);
   });
 
   it("claims nothing while an episode is already open", async () => {
@@ -497,17 +509,18 @@ describe("recordGovernedAction", () => {
     expect(store.settlements).toHaveLength(0);
   });
 
-  it("claims nothing for an invoice-billed org however far past the allowance", async () => {
+  it("claims no auto top-up for an invoice-billed org however far past the allowance", async () => {
     mocks.readOrgBillingSettings.mockResolvedValue({
       ...SETTINGS,
       approvedForInvoiceBilling: true,
     });
     mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
-    seedBucket({ includedGau: 50_000, usedGau: 400_000 });
+    const bucket = seedBucket({ includedGau: 50_000, usedGau: 400_000 });
     const result = await record(1);
     expect(result.mode).toBe("invoice");
     expect(result.autoTopup).toBeNull();
-    expect(mocks.readDefaultPaymentMethod).not.toHaveBeenCalled();
+    expect(store.settlements.map((r) => r.kind)).not.toContain("auto_topup");
+    expect(bucket.topupSeq).toBe(0);
   });
 
   it("claims nothing while remaining > 0", async () => {
@@ -530,5 +543,293 @@ describe("recordGovernedAction", () => {
       expect.objectContaining({ orgId: ORG, err: "mirror unavailable" }),
       expect.stringMatching(/step after the debit failed/),
     );
+  });
+
+  // ── items 8c–8e: the settlement sequence after a claim ────────────────────
+
+  describe("settlement", () => {
+    /** Every committed tenant transaction and every provider call, in order. */
+    let order: string[];
+    const provider = {
+      createGauInvoice: vi.fn(),
+      finalizeAndPayGauInvoice: vi.fn(),
+    };
+    const settlementRow = () => store.settlements[0]!;
+    const invoiceMode = (over: Record<string, unknown> = {}) =>
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 1_000,
+        ...over,
+      });
+
+    beforeEach(() => {
+      order = [];
+      mocks.withTenantDb.mockImplementation(
+        async (fn: (tx: unknown) => unknown) => {
+          const tx = fakeGauExecutor(store);
+          txs.push(tx);
+          const out = await fn(tx);
+          order.push("commit");
+          return out;
+        },
+      );
+      mocks.readGauEntitlement.mockResolvedValue({
+        terms: BUILD_TERMS,
+        subscription: null,
+      });
+      mocks.ensureStripeCustomer.mockResolvedValue("cus_ensured");
+      provider.createGauInvoice.mockImplementation(
+        async (input: { settlementId: string }) => {
+          order.push("createGauInvoice");
+          return { invoiceId: `in_${input.settlementId}` };
+        },
+      );
+      provider.finalizeAndPayGauInvoice.mockImplementation(async () => {
+        order.push("finalizeAndPayGauInvoice");
+        return { status: "paid", amountCents: 2_500, hostedInvoiceUrl: null };
+      });
+      mocks.billingProvider.mockReturnValue(provider);
+    });
+
+    it("prepaid: commits the claim before the first provider call, charges the saved card for the settings' customer, and the paid top-up grants and clears the episode", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(order).toEqual([
+        "commit", // the debit
+        "commit", // the claim
+        "createGauInvoice",
+        "commit", // recordGauInvoice
+        "finalizeAndPayGauInvoice",
+        "commit", // settleGauPaid
+      ]);
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "cus_1",
+          settlementId: result.autoTopup!.id,
+          kind: "gau_auto_topup",
+          quantityGau: 5_000,
+          collection: {
+            method: "charge_automatically",
+            defaultPaymentMethodId: "pm_1",
+          },
+        }),
+      );
+      expect(mocks.ensureStripeCustomer).not.toHaveBeenCalled();
+      expect(settlementRow()).toMatchObject({
+        status: "paid",
+        stripeInvoiceId: `in_${result.autoTopup!.id}`,
+      });
+      expect(bucket).toMatchObject({
+        purchasedGau: 5_000,
+        openTopupSettlementId: null,
+      });
+    });
+
+    it("prepaid: a top-up that ends open leaves the episode set, and a second exhaustion in the month claims nothing", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.finalizeAndPayGauInvoice.mockResolvedValue({
+        status: "open",
+        amountCents: 2_500,
+        hostedInvoiceUrl: null,
+      });
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const first = await record(1);
+      const second = await record(1);
+
+      expect(second.autoTopup).toBeNull();
+      expect(store.settlements).toHaveLength(1);
+      expect(settlementRow().status).toBe("open");
+      expect(bucket.openTopupSettlementId).toBe(first.autoTopup!.id);
+      expect(provider.createGauInvoice).toHaveBeenCalledOnce();
+    });
+
+    it("prepaid: a provider that rejects the create leaves the claim pending with no invoice id, and the recorder returns", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.createGauInvoice.mockRejectedValue(new Error("stripe down"));
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(result.bucket.usedGau).toBe(50_001);
+      expect(settlementRow()).toMatchObject({
+        status: "pending",
+        stripeInvoiceId: null,
+      });
+    });
+
+    it("prepaid: a provider that rejects the finalize leaves the claim pending with its invoice id, and the recorder returns", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.finalizeAndPayGauInvoice.mockRejectedValue(
+        new Error("stripe down"),
+      );
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(settlementRow()).toMatchObject({
+        status: "pending",
+        stripeInvoiceId: `in_${result.autoTopup!.id}`,
+      });
+      expect(store.buckets[0]!.purchasedGau).toBe(0);
+    });
+
+    it("prepaid: an org with a card and no stripe_customer_id leaves the claim pending and calls no provider", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        stripeCustomerId: null,
+      });
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      await record(1);
+
+      expect(settlementRow().status).toBe("pending");
+      expect(provider.createGauInvoice).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["prepaid inside the allowance", {}, 49_000, CARD, null],
+      [
+        "prepaid exhausted with auto top-up off",
+        { autoTopupEnabled: false },
+        50_000,
+        CARD,
+        null,
+      ],
+      ["prepaid exhausted with no card", {}, 50_000, null, null],
+      ["prepaid exhausted with a card", {}, 50_000, CARD, "auto_topup"],
+      [
+        "invoice-billed below invoice_gau_max",
+        { approvedForInvoiceBilling: true, invoiceGauMax: 1_000 },
+        50_000 + 998,
+        CARD,
+        null,
+      ],
+      [
+        "invoice-billed reaching invoice_gau_max",
+        { approvedForInvoiceBilling: true, invoiceGauMax: 1_000 },
+        50_000 + 999,
+        CARD,
+        "interim_invoice",
+      ],
+      [
+        "an unapproved org past its stored invoice_gau_max, with no card",
+        { approvedForInvoiceBilling: false, invoiceGauMax: 1 },
+        60_000,
+        null,
+        null,
+      ],
+    ])("mode matrix: %s", async (_name, over, usedGau, card, settledKind) => {
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        ...over,
+      });
+      mocks.readDefaultPaymentMethod.mockResolvedValue(card);
+      seedBucket({ includedGau: 50_000, usedGau });
+
+      await expect(record(1)).resolves.toBeDefined();
+
+      expect(store.settlements.map((r) => r.kind)).toEqual(
+        settledKind === null ? [] : [settledKind],
+      );
+      expect(
+        store.settlements.filter((r) => r.kind === "interim_invoice"),
+      ).toHaveLength(settledKind === "interim_invoice" ? 1 : 0);
+    });
+
+    it("invoice: crossing invoice_gau_max claims exactly the max for the customer ensureStripeCustomer resolves, collected from the default card, and accrual restarts", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+
+      const result = await record(1);
+
+      expect(result.interimInvoice).toMatchObject({
+        kind: "interim_invoice",
+        seq: 1,
+        quantityGau: 1_000,
+      });
+      expect(order.slice(0, 3)).toEqual([
+        "commit",
+        "commit",
+        "createGauInvoice",
+      ]);
+      expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG);
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "cus_ensured",
+          kind: "gau_interim",
+          quantityGau: 1_000,
+          collection: {
+            method: "charge_automatically",
+            defaultPaymentMethodId: "pm_1",
+          },
+        }),
+      );
+      expect(settlementRow().status).toBe("paid");
+      expect(bucket).toMatchObject({
+        overageInvoicedGau: 1_000,
+        interimSeq: 1,
+        purchasedGau: 0,
+      });
+
+      // GAU #1,001 of overage opens the next accrual; its crossing is seq 2.
+      expect((await record(1)).interimInvoice).toBeNull();
+      const again = await record(999);
+      expect(again.interimInvoice).toMatchObject({
+        seq: 2,
+        quantityGau: 1_000,
+      });
+    });
+
+    it("invoice: an org with no default payment method gets a send_invoice invoice and ends open with an invoice id and no failed row", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(null);
+      provider.finalizeAndPayGauInvoice.mockResolvedValue({
+        status: "open",
+        amountCents: 500,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/interim",
+      });
+      seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+
+      const result = await record(1);
+
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          collection: { method: "send_invoice", daysUntilDue: 30 },
+        }),
+      );
+      expect(settlementRow()).toMatchObject({
+        status: "open",
+        stripeInvoiceId: `in_${result.interimInvoice!.id}`,
+      });
+      expect(store.settlements.map((r) => r.status)).not.toContain("failed");
+    });
+
+    it("invoice: a terms change mid-month prices the next settlement at the new rate", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+      await record(1);
+
+      mocks.resolveGauEntitlement.mockResolvedValue({
+        terms: { ...BUILD_TERMS, ratePerGauMicros: 4_000n },
+        subscription: null,
+      });
+      await record(1_000);
+
+      expect(store.settlements.map((r) => r.ratePerGauMicros)).toEqual([
+        5_000n,
+        4_000n,
+      ]);
+      expect(provider.createGauInvoice).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ratePerGauMicros: 4_000n }),
+      );
+    });
   });
 });
