@@ -15,17 +15,26 @@
 // The capability is unscoped and the call carries no tenant, so the upsert
 // runs on withSystemDb (inside setOrgBillingTerms) keyed on the input's orgId.
 //
-// Switching invoice billing off on an org with uninvoiced overage must also
-// close the accrual — claimInterimInvoice plus the settlement sequence. That
-// lands in WL-31 with the rest of gau_settlements in motion; until then this
-// handler writes the terms and nothing else.
+// Switching invoice billing off closes the accrual in the same call:
+// closeInvoiceAccrual claims every uninvoiced GAU of the current bucket as one
+// interim settlement and invoices it, so no overage is stranded between the
+// modes (apps/app/ARCHITECTURE.md §3.9 item 12). It runs before the write, so
+// a write that fails leaves the org invoice-billed with a legitimate interim
+// invoice and a re-run of the script finds nothing left to claim. Turning
+// invoice billing on writes no settlement: purchased units stay usable as carry.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   billingOrgTermsSet,
   type BillingOrgTermsSetOutput,
 } from "@oxagen/oxagen/contracts/billing.org_terms.set";
-import { setOrgBillingTerms, type OrgBillingTerms } from "@oxagen/billing";
+import {
+  closeInvoiceAccrual,
+  readOrgBillingSettings,
+  setOrgBillingTerms,
+  type OrgBillingTerms,
+  type OrgGauBillingSettings,
+} from "@oxagen/billing";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { logger } from "./logger";
 
@@ -34,11 +43,27 @@ export type OrgBillingTermsWriter = (
   terms: OrgBillingTerms,
 ) => Promise<OrgBillingTerms>;
 
+/** What the handler reads and writes. Every one runs with no tenant scope. */
+export type OrgBillingTermsDeps = {
+  /** The org's billing mode before this call. */
+  current: (
+    orgId: string,
+  ) => Promise<Pick<OrgGauBillingSettings, "approvedForInvoiceBilling">>;
+  write: OrgBillingTermsWriter;
+  /** Claim and invoice the current bucket's uninvoiced overage. */
+  closeAccrual: (orgId: string) => Promise<unknown>;
+};
+
 export function createBillingOrgTermsSetHandler(
-  write: OrgBillingTermsWriter,
+  deps: OrgBillingTermsDeps,
 ): CapabilityHandler<typeof billingOrgTermsSet> {
   return async (input, ctx): Promise<BillingOrgTermsSetOutput> => {
-    const stored = await write({
+    const before = await deps.current(input.orgId);
+    if (before.approvedForInvoiceBilling && !input.approvedForInvoiceBilling) {
+      await deps.closeAccrual(input.orgId);
+    }
+
+    const stored = await deps.write({
       orgId: input.orgId,
       approvedForInvoiceBilling: input.approvedForInvoiceBilling,
       invoiceGauMax: input.invoiceGauMax,
@@ -82,5 +107,8 @@ export function createBillingOrgTermsSetHandler(
   };
 }
 
-export const billingOrgTermsSetHandler =
-  createBillingOrgTermsSetHandler(setOrgBillingTerms);
+export const billingOrgTermsSetHandler = createBillingOrgTermsSetHandler({
+  current: (orgId) => readOrgBillingSettings(orgId, { system: true }),
+  write: setOrgBillingTerms,
+  closeAccrual: (orgId) => closeInvoiceAccrual(orgId),
+});

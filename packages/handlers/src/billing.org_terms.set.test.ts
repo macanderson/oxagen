@@ -6,7 +6,9 @@
  * rest of the contract's promise — the row is keyed on the INPUT's orgId
  * rather than on any tenant the context might carry, the stored row is what
  * comes back, and the mutation is audited against the target org before the
- * handler resolves (the caller is a process that exits on return).
+ * handler resolves (the caller is a process that exits on return). Switching
+ * invoice billing off closes the accrual before the write; what the close
+ * writes is closeInvoiceAccrual's, tested in packages/billing.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +24,7 @@ vi.mock("@oxagen/database/security", () => ({
 
 import {
   createBillingOrgTermsSetHandler,
+  type OrgBillingTermsDeps,
   type OrgBillingTermsWriter,
 } from "./billing.org_terms.set";
 
@@ -47,14 +50,28 @@ type StoredTerms = {
 
 function makeStore(seed: Record<string, StoredTerms> = {}) {
   const rows = new Map(Object.entries(seed));
+  const log: string[] = [];
   const write: OrgBillingTermsWriter = async (terms) => {
+    log.push("write");
     rows.set(terms.orgId, {
       approvedForInvoiceBilling: terms.approvedForInvoiceBilling,
       invoiceGauMax: terms.invoiceGauMax,
     });
     return terms;
   };
-  return { rows, write: vi.fn(write) };
+  const deps: OrgBillingTermsDeps = {
+    // An org with no row is on the column default: prepaid.
+    current: async (orgId) => ({
+      approvedForInvoiceBilling:
+        rows.get(orgId)?.approvedForInvoiceBilling ?? false,
+    }),
+    write: vi.fn(write),
+    closeAccrual: vi.fn(async () => {
+      log.push("closeAccrual");
+      return null;
+    }),
+  };
+  return { rows, log, deps, write: deps.write };
 }
 
 describe("set_org_billing_terms handler", () => {
@@ -65,7 +82,7 @@ describe("set_org_billing_terms handler", () => {
 
   it("approves an org for invoice billing and returns the stored row", async () => {
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     const out = await handler(
       {
@@ -91,7 +108,7 @@ describe("set_org_billing_terms handler", () => {
     const store = makeStore({
       [ORG]: { approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
     });
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     await handler(
       {
@@ -107,7 +124,7 @@ describe("set_org_billing_terms handler", () => {
 
   it("stores the ceiling for an unapproved org, where it is inert", async () => {
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     const out = await handler(
       {
@@ -124,7 +141,7 @@ describe("set_org_billing_terms handler", () => {
 
   it("keys the row on the input's org, not on any tenant in the context", async () => {
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     await handler(
       {
@@ -145,7 +162,7 @@ describe("set_org_billing_terms handler", () => {
 
   it("audits the mutation against the target org with no acting user", async () => {
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     await handler(
       {
@@ -175,7 +192,7 @@ describe("set_org_billing_terms handler", () => {
       }),
     );
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     let resolved = false;
     const run = handler(
@@ -201,7 +218,7 @@ describe("set_org_billing_terms handler", () => {
       new Error("security_events insert failed after 3 attempts"),
     );
     const store = makeStore();
-    const handler = createBillingOrgTermsSetHandler(store.write);
+    const handler = createBillingOrgTermsSetHandler(store.deps);
 
     await expect(
       handler(
@@ -216,7 +233,10 @@ describe("set_org_billing_terms handler", () => {
     const failing: OrgBillingTermsWriter = async () => {
       throw new Error("foreign key violated: no such org");
     };
-    const handler = createBillingOrgTermsSetHandler(failing);
+    const handler = createBillingOrgTermsSetHandler({
+      ...makeStore().deps,
+      write: failing,
+    });
 
     await expect(
       handler(
@@ -225,5 +245,84 @@ describe("set_org_billing_terms handler", () => {
       ),
     ).rejects.toThrow();
     expect(mocks.emitSecurityEventAsync).not.toHaveBeenCalled();
+  });
+
+  it("closes the accrual before the write when it switches invoice billing off", async () => {
+    const store = makeStore({
+      [ORG]: { approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
+    });
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await handler(
+      { orgId: ORG, approvedForInvoiceBilling: false, invoiceGauMax: 250_000 },
+      operatorCtx(),
+    );
+
+    expect(store.deps.closeAccrual).toHaveBeenCalledOnce();
+    expect(store.deps.closeAccrual).toHaveBeenCalledWith(ORG);
+    expect(store.log).toEqual(["closeAccrual", "write"]);
+  });
+
+  it("closes no accrual when it switches invoice billing on", async () => {
+    const store = makeStore();
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await handler(
+      { orgId: ORG, approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
+      operatorCtx(),
+    );
+
+    expect(store.deps.closeAccrual).not.toHaveBeenCalled();
+  });
+
+  it("closes no accrual for a prepaid org that stays prepaid", async () => {
+    const store = makeStore({
+      [ORG]: { approvedForInvoiceBilling: false, invoiceGauMax: 250_000 },
+    });
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await handler(
+      { orgId: ORG, approvedForInvoiceBilling: false, invoiceGauMax: 1 },
+      operatorCtx(),
+    );
+
+    expect(store.deps.closeAccrual).not.toHaveBeenCalled();
+  });
+
+  it("closes no accrual for an invoice-billed org that stays invoice-billed", async () => {
+    const store = makeStore({
+      [ORG]: { approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
+    });
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await handler(
+      { orgId: ORG, approvedForInvoiceBilling: true, invoiceGauMax: 500_000 },
+      operatorCtx(),
+    );
+
+    expect(store.deps.closeAccrual).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when closing the accrual fails, so a re-run still sees the org invoice-billed", async () => {
+    const store = makeStore({
+      [ORG]: { approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
+    });
+    vi.mocked(store.deps.closeAccrual).mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await expect(
+      handler(
+        {
+          orgId: ORG,
+          approvedForInvoiceBilling: false,
+          invoiceGauMax: 250_000,
+        },
+        operatorCtx(),
+      ),
+    ).rejects.toThrow("connection reset");
+    expect(store.write).not.toHaveBeenCalled();
+    expect(store.rows.get(ORG)?.approvedForInvoiceBilling).toBe(true);
   });
 });

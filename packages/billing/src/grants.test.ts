@@ -190,6 +190,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     subscriptionId: "sub_test_001",
     orgId: "org-abc",
     billingReason: "subscription_create",
+    gauSettlementId: null,
     lineItems: [],
     ...overrides,
   };
@@ -385,6 +386,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
       makeInvoice({
         subscriptionId: null,
         billingReason: "subscription_create",
+        gauSettlementId: null,
       }),
     );
 

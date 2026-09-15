@@ -10,7 +10,11 @@ import {
   grantPlanCreditsForInvoicePaid,
   grantCreditPackForCheckout,
 } from "./grants";
-import { grantGauPurchaseForCheckout } from "./gau-settlements";
+import {
+  grantGauPurchaseForCheckout,
+  settleGauOpen,
+  settleGauPaid,
+} from "./gau-settlements";
 import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
 import { sendPaymentReceipt } from "./receipts";
 import {
@@ -157,6 +161,20 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
     case "invoice.payment_failed": {
       if (!event.invoice) return;
       await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
+      // A governed-action settlement invoice (auto top-up, interim,
+      // month-end) settles its ledger row. settleGauPaid grants once however
+      // many times paid arrives, settleGauOpen touches only a pending row, and
+      // neither invoice carries a subscription, so the dunning functions below
+      // leave the org's dunning state alone (ADR-055 §6).
+      const settlementId = event.invoice.gauSettlementId;
+      if (settlementId !== null && event.type !== "invoice.created") {
+        const paid = event.type === "invoice.paid";
+        await withSystemDb((tx) =>
+          paid
+            ? settleGauPaid(tx, settlementId)
+            : settleGauOpen(tx, settlementId),
+        );
+      }
       // Deposit the plan's included credits on the first invoice and every
       // renewal. Idempotent per event (ledger unique key).
       if (event.type === "invoice.paid") {

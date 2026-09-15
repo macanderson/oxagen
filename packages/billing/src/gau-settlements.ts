@@ -1,34 +1,84 @@
 /**
- * gau-settlements.ts — the settlement ledger's writers (ADR-055 §6,
- * apps/app/ARCHITECTURE.md §3.9 items 7, 8c and 11).
+ * gau-settlements.ts — the settlement ledger in motion (ADR-055 §6,
+ * apps/app/ARCHITECTURE.md §3.9 items 7, 8c, 8d, 10, 11 and 12).
  *
  * Every writer takes its executor first, the shape `tryInsertGrantLedger(tx,
- * …)` has: the recorder passes a `withTenantDb` transaction, the webhooks and
- * the close job a `withSystemDb` one. The one entry point that opens its own
- * transaction is `grantGauPurchaseForCheckout`, the webhook grant, which is
- * the whole of what a paid Checkout does.
+ * …)` has: the recorder passes a `withTenantDb` transaction, the webhooks,
+ * the close job and the operator handler a `withSystemDb` one. The claims
+ * (`claimAutoTopup`, `claimInterimInvoice`, the period-close claim) insert a
+ * `pending` row in the claim's transaction; the caller commits it before the
+ * settlement sequence (`settleGauInvoice`) makes its first provider call, so
+ * a crash after the commit leaves a row the hourly job resumes. `paid` is the
+ * only terminal status, and `settleGauPaid` grants once whichever of the
+ * synchronous result, the first `invoice.paid` or Stripe's retry lands first.
  */
 
 // tenancy: system bypass via withSystemDb in grantGauPurchaseForCheckout (the
-// checkout.session.completed webhook: the org comes from the session metadata
-// and no tenant scope is active; withTenantDb there throws TenantScopeError
-// under enforced RLS).
+// checkout.session.completed webhook: the org comes from the session metadata),
+// in closeInvoiceAccrual (set_org_billing_terms: an unscoped platform-operator
+// call keyed on its input's org), and in closeEndedGauPeriods and
+// resumePendingGauSettlements (the billing.gau-close job, across every org).
+// None runs inside a tenant scope, and withTenantDb there throws
+// TenantScopeError under enforced RLS.
 
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
+import { readOrgBillingSettings } from "./billing-settings";
 import { billingProvider } from "./client";
 import { readGauEntitlement } from "./contract-terms";
+import { ensureStripeCustomer } from "./customers";
 import {
   ensureCurrentBucket,
   gauRemainingSql,
+  gauUninvoicedSql,
   periodFor,
+  remainingGau,
+  uninvoicedGau,
   type GauBucketRow,
 } from "./gau-bucket";
 import { logger } from "./logger";
+import { readDefaultPaymentMethod } from "./payment-methods";
 import type { GauTerms } from "./pricing";
-import type { BillingCheckoutSession } from "./provider";
+import type { BillingCheckoutSession, GauInvoiceKind } from "./provider";
 
 export type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
+
+type SettlementTerms = Pick<GauTerms, "ratePerGauMicros" | "currency">;
+
+/** The `pending` row a claim inserts, at the rate and currency in force at claim time. */
+async function insertPendingSettlement(
+  tx: Tx,
+  args: {
+    id: string;
+    bucket: Pick<GauBucketRow, "id" | "orgId">;
+    kind: "auto_topup" | "interim_invoice" | "period_close";
+    seq: number;
+    quantityGau: number;
+    terms: SettlementTerms;
+  },
+): Promise<GauSettlementRow> {
+  const rows = await tx
+    .insert(schema.gauSettlements)
+    .values({
+      id: args.id,
+      orgId: args.bucket.orgId,
+      bucketId: args.bucket.id,
+      kind: args.kind,
+      seq: args.seq,
+      quantityGau: args.quantityGau,
+      ratePerGauMicros: args.terms.ratePerGauMicros,
+      currency: args.terms.currency,
+      status: "pending",
+    })
+    .returning();
+  const row = rows[0];
+  if (!row) {
+    throw new Error("billing: gau_settlements insert returned no row");
+  }
+  return row;
+}
+
+// ── The claims ──────────────────────────────────────────────────────────────
 
 /**
  * Claim the bucket's auto top-up episode and insert its `pending` settlement.
@@ -43,11 +93,7 @@ export type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
  * Postgres re-evaluates the WHERE after the row lock is granted, so of N
  * concurrent recorders exactly one gets a row back and the rest get null; the
  * unique index on `(bucket_id, kind, seq)` backs that up. The settlement is
- * inserted in the same transaction, `pending`, with the terms' rate and
- * currency recorded at claim time (`quantity_gau = blocks × block_size_gau`).
- * The caller commits before its first provider call, so a crash after the
- * commit leaves a `pending` row a job can resume rather than a paid invoice
- * nothing remembers.
+ * inserted in the same transaction (`quantity_gau = blocks × block_size_gau`).
  *
  * Returns null when the episode was already open or the bucket is no longer
  * exhausted — no row is written in that case.
@@ -76,26 +122,542 @@ export async function claimAutoTopup(
     .returning({ topupSeq: schema.gauBuckets.topupSeq });
   const seq = claimed[0]?.topupSeq;
   if (seq === undefined) return null;
+  return insertPendingSettlement(tx, {
+    id: settlementId,
+    bucket,
+    kind: "auto_topup",
+    seq,
+    quantityGau: Math.max(1, Math.floor(blocks)) * terms.blockSizeGau,
+    terms,
+  });
+}
 
-  const rows = await tx
-    .insert(schema.gauSettlements)
-    .values({
-      id: settlementId,
-      orgId: bucket.orgId,
-      bucketId: bucket.id,
-      kind: "auto_topup",
-      seq,
-      quantityGau: Math.max(1, Math.floor(blocks)) * terms.blockSizeGau,
-      ratePerGauMicros: terms.ratePerGauMicros,
-      currency: terms.currency,
-      status: "pending",
+/**
+ * Claim `quantity` GAUs of the bucket's uninvoiced overage for an interim
+ * invoice and insert its `pending` settlement.
+ *
+ *   UPDATE billing.gau_buckets
+ *      SET overage_invoiced_gau = overage_invoiced_gau + :quantity,
+ *          interim_seq = interim_seq + 1
+ *    WHERE id = :bucket
+ *      AND used_gau − included_gau − purchased_gau − carried_gau
+ *          − overage_invoiced_gau >= :quantity
+ *   RETURNING interim_seq
+ *
+ * The re-checked WHERE gives one claim per threshold crossing; a second
+ * crossing in the month gets the next seq, and accrual restarts past the
+ * claimed quantity because the claim subtracts exactly that. The recorder
+ * passes `invoice_gau_max`; closing the accrual when invoice billing is
+ * switched off passes the whole uninvoiced figure. Never touches
+ * `purchased_gau`. Returns null when the UPDATE touched no row.
+ */
+export async function claimInterimInvoice(
+  tx: Tx,
+  bucket: Pick<GauBucketRow, "id" | "orgId">,
+  terms: SettlementTerms,
+  quantity: number,
+): Promise<GauSettlementRow | null> {
+  const claimed = await tx
+    .update(schema.gauBuckets)
+    .set({
+      overageInvoicedGau: sql`${schema.gauBuckets.overageInvoicedGau} + ${quantity}`,
+      interimSeq: sql`${schema.gauBuckets.interimSeq} + 1`,
+      updatedAt: sql`now()`,
     })
+    .where(
+      and(
+        eq(schema.gauBuckets.id, bucket.id),
+        gte(gauUninvoicedSql(), quantity),
+      ),
+    )
+    .returning({ interimSeq: schema.gauBuckets.interimSeq });
+  const seq = claimed[0]?.interimSeq;
+  if (seq === undefined) return null;
+  return insertPendingSettlement(tx, {
+    id: crypto.randomUUID(),
+    bucket,
+    kind: "interim_invoice",
+    seq,
+    quantityGau: quantity,
+    terms,
+  });
+}
+
+// ── The settlement writers ──────────────────────────────────────────────────
+
+/** `SET stripe_invoice_id = :invoice WHERE id = :id AND stripe_invoice_id IS NULL`. */
+export async function recordGauInvoice(
+  tx: Tx,
+  id: string,
+  stripeInvoiceId: string,
+): Promise<void> {
+  await tx
+    .update(schema.gauSettlements)
+    .set({ stripeInvoiceId })
+    .where(
+      and(
+        eq(schema.gauSettlements.id, id),
+        isNull(schema.gauSettlements.stripeInvoiceId),
+      ),
+    );
+}
+
+/**
+ * Mark a settlement paid and, for the kinds that buy units, grant them:
+ *
+ *   UPDATE gau_settlements SET status = 'paid', settled_at = now()
+ *    WHERE id = :id AND status <> 'paid' RETURNING *
+ *
+ * and only when that returned a row, for `checkout` and `auto_topup`, the
+ * quantity onto the org's CURRENT bucket through `ensureCurrentBucket` (a
+ * payment Stripe collects after rollover lands on the month it arrives in,
+ * never on a closed bucket whose carry was already computed) and
+ * `open_topup_settlement_id` cleared wherever it names this row. The guard
+ * makes every arrival after the first a no-op; a row that was `open` or
+ * `failed` still grants when its invoice is paid. Returns the updated row,
+ * or null when it was already paid.
+ */
+export async function settleGauPaid(
+  tx: Tx,
+  id: string,
+  now: Date = new Date(),
+): Promise<GauSettlementRow | null> {
+  const rows = await tx
+    .update(schema.gauSettlements)
+    .set({ status: "paid", settledAt: sql`now()` })
+    .where(
+      and(
+        eq(schema.gauSettlements.id, id),
+        ne(schema.gauSettlements.status, "paid"),
+      ),
+    )
     .returning();
   const row = rows[0];
-  if (!row) {
-    throw new Error("billing: gau_settlements insert returned no row");
+  if (!row) return null;
+  if (row.kind === "checkout" || row.kind === "auto_topup") {
+    const { terms, subscription } = await readGauEntitlement(
+      tx,
+      row.orgId,
+      now,
+    );
+    await ensureCurrentBucket(tx, row.orgId, {
+      period: periodFor(subscription, now),
+      terms,
+      usedDelta: 0,
+      purchasedDelta: row.quantityGau,
+    });
+    await tx
+      .update(schema.gauBuckets)
+      .set({ openTopupSettlementId: null, updatedAt: sql`now()` })
+      .where(eq(schema.gauBuckets.openTopupSettlementId, row.id));
   }
   return row;
+}
+
+async function settlePending(
+  tx: Tx,
+  id: string,
+  status: "open" | "failed",
+): Promise<GauSettlementRow | null> {
+  const rows = await tx
+    .update(schema.gauSettlements)
+    .set({ status })
+    .where(
+      and(
+        eq(schema.gauSettlements.id, id),
+        eq(schema.gauSettlements.status, "pending"),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Stripe holds a finalized, unpaid invoice for a `pending` row. An auto
+ * top-up keeps its episode open, so the month gets no second automatic
+ * attempt until this row is paid, a Checkout clears it, or the month ends.
+ */
+export async function settleGauOpen(
+  tx: Tx,
+  id: string,
+): Promise<GauSettlementRow | null> {
+  return settlePending(tx, id, "open");
+}
+
+/** Oxagen holds no collectable invoice for a `pending` row (item 7). */
+export async function settleGauFailed(
+  tx: Tx,
+  id: string,
+): Promise<GauSettlementRow | null> {
+  return settlePending(tx, id, "failed");
+}
+
+// ── The settlement sequence ─────────────────────────────────────────────────
+
+/** The payment term of an emailed settlement invoice. */
+const GAU_INVOICE_DAYS_UNTIL_DUE = 30;
+
+const INVOICE_KINDS: Partial<
+  Record<string, { kind: GauInvoiceKind; description: string }>
+> = {
+  auto_topup: {
+    kind: "gau_auto_topup",
+    description: "Oxagen governed action units: auto top-up",
+  },
+  interim_invoice: {
+    kind: "gau_interim",
+    description: "Oxagen governed action units: interim overage",
+  },
+  period_close: {
+    kind: "gau_period_close",
+    description: "Oxagen governed action units: month-end overage",
+  },
+};
+
+/**
+ * Where a settlement sequence runs: the executor its writes commit on, the
+ * Stripe customer the invoice is for, and the org's default card (null →
+ * the invoice is emailed).
+ */
+export interface GauSettlementScope {
+  run: <T>(fn: (tx: Tx) => Promise<T>) => Promise<T>;
+  customerId: () => Promise<string>;
+  defaultPaymentMethodId: () => Promise<string | null>;
+}
+
+/** The scope of a caller with no tenant: the job and the operator handler. */
+function systemSettlementScope(orgId: string): GauSettlementScope {
+  return {
+    run: withSystemDb,
+    customerId: () => ensureStripeCustomer(orgId, { system: true }),
+    defaultPaymentMethodId: async () =>
+      (await readDefaultPaymentMethod(orgId, { system: true }))
+        ?.stripePaymentMethodId ?? null,
+  };
+}
+
+async function createSettlementInvoice(
+  row: GauSettlementRow,
+  scope: GauSettlementScope,
+): Promise<string> {
+  const invoice = INVOICE_KINDS[row.kind];
+  if (invoice === undefined) {
+    throw new Error(`billing: a ${row.kind} settlement carries no invoice`);
+  }
+  const [customerId, paymentMethodId] = await Promise.all([
+    scope.customerId(),
+    scope.defaultPaymentMethodId(),
+  ]);
+  const { invoiceId } = await billingProvider().createGauInvoice({
+    customerId,
+    orgId: row.orgId,
+    settlementId: row.id,
+    kind: invoice.kind,
+    quantityGau: row.quantityGau,
+    ratePerGauMicros: row.ratePerGauMicros,
+    currency: row.currency,
+    description: invoice.description,
+    collection:
+      paymentMethodId === null
+        ? { method: "send_invoice", daysUntilDue: GAU_INVOICE_DAYS_UNTIL_DUE }
+        : {
+            method: "charge_automatically",
+            defaultPaymentMethodId: paymentMethodId,
+          },
+  });
+  await scope.run((tx) => recordGauInvoice(tx, row.id, invoiceId));
+  return invoiceId;
+}
+
+/**
+ * Turn a committed `pending` settlement into a Stripe invoice and settle it
+ * from Stripe's answer: `createGauInvoice` when the row holds no invoice id,
+ * `recordGauInvoice` (committed), `finalizeAndPayGauInvoice`, then
+ * `settleGauPaid` or `settleGauOpen`. A row that already holds an invoice id
+ * goes straight to `finalizeAndPayGauInvoice`, which does only what is left.
+ *
+ * Never throws: a failure is logged and leaves the row `pending` — with no
+ * invoice id when the create failed, with the id when finalizing did — for
+ * the close job to resume. Returns the status the row was left in.
+ */
+export async function settleGauInvoice(
+  row: GauSettlementRow,
+  scope: GauSettlementScope,
+): Promise<"paid" | "open" | "pending"> {
+  const context = { settlementId: row.id, orgId: row.orgId, kind: row.kind };
+  try {
+    const invoiceId =
+      row.stripeInvoiceId ?? (await createSettlementInvoice(row, scope));
+    const payment = await billingProvider().finalizeAndPayGauInvoice({
+      settlementId: row.id,
+      invoiceId,
+    });
+    await scope.run((tx) =>
+      payment.status === "paid"
+        ? settleGauPaid(tx, row.id)
+        : settleGauOpen(tx, row.id),
+    );
+    logger.info(
+      { ...context, invoiceId, status: payment.status },
+      "billing: gau settlement invoiced",
+    );
+    return payment.status;
+  } catch (error) {
+    logger.error(
+      {
+        ...context,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "billing: gau settlement left pending for the close job",
+    );
+    return "pending";
+  }
+}
+
+/**
+ * Close the invoice-billing accrual of the org's current bucket: claim every
+ * uninvoiced GAU as one interim settlement and run the settlement sequence.
+ * `set_org_billing_terms` calls it when it switches invoice billing off, so
+ * no overage is stranded between the modes (item 12). Returns the claimed
+ * row, or null when nothing was uninvoiced.
+ */
+export async function closeInvoiceAccrual(
+  orgId: string,
+  now: Date = new Date(),
+): Promise<GauSettlementRow | null> {
+  const claimed = await withSystemDb(async (tx) => {
+    const { terms, subscription } = await readGauEntitlement(tx, orgId, now);
+    const period = periodFor(subscription, now);
+    const buckets = await tx
+      .select()
+      .from(schema.gauBuckets)
+      .where(
+        and(
+          eq(schema.gauBuckets.orgId, orgId),
+          eq(schema.gauBuckets.periodStart, period.start),
+        ),
+      )
+      .limit(1);
+    const bucket = buckets[0];
+    if (bucket === undefined) return null;
+    const quantity = uninvoicedGau(bucket);
+    return quantity > 0
+      ? claimInterimInvoice(tx, bucket, terms, quantity)
+      : null;
+  });
+  if (claimed !== null) {
+    await settleGauInvoice(claimed, systemSettlementScope(orgId));
+  }
+  return claimed;
+}
+
+// ── The close job's steps (billing.gau-close) ───────────────────────────────
+
+const GAU_JOB_PAGE_SIZE = 100;
+const HOUR_MS = 60 * 60 * 1000;
+/** How long Stripe keeps a request's result under its idempotency key. */
+const IDEMPOTENCY_WINDOW_MS = 24 * HOUR_MS;
+
+/** One keyset page of a job step: rows seen, and the cursor of the next page or null. */
+export interface GauJobPage {
+  processed: number;
+  nextCursor: string | null;
+}
+
+function pageOf(rows: { id: string }[]): GauJobPage {
+  return {
+    processed: rows.length,
+    nextCursor:
+      rows.length === GAU_JOB_PAGE_SIZE ? (rows.at(-1)?.id ?? null) : null,
+  };
+}
+
+async function closeGauPeriod(bucket: GauBucketRow, now: Date): Promise<void> {
+  const settings = await readOrgBillingSettings(bucket.orgId, {
+    system: true,
+  });
+  const quantity = uninvoicedGau(bucket);
+  const unclosed = and(
+    eq(schema.gauBuckets.id, bucket.id),
+    isNull(schema.gauBuckets.closedAt),
+  );
+  if (!settings.approvedForInvoiceBilling || quantity === 0) {
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.gauBuckets)
+        .set({ closedAt: sql`now()`, updatedAt: sql`now()` })
+        .where(unclosed),
+    );
+    return;
+  }
+  const claimed = await withSystemDb(async (tx) => {
+    const { terms } = await readGauEntitlement(tx, bucket.orgId, now);
+    const closed = await tx
+      .update(schema.gauBuckets)
+      .set({
+        closedAt: sql`now()`,
+        overageInvoicedGau: sql`${schema.gauBuckets.overageInvoicedGau} + ${quantity}`,
+        updatedAt: sql`now()`,
+      })
+      .where(unclosed)
+      .returning({ id: schema.gauBuckets.id });
+    if (closed.length === 0) return null;
+    return insertPendingSettlement(tx, {
+      id: crypto.randomUUID(),
+      bucket,
+      kind: "period_close",
+      seq: 0,
+      quantityGau: quantity,
+      terms,
+    });
+  });
+  if (claimed !== null) {
+    await settleGauInvoice(claimed, systemSettlementScope(bucket.orgId));
+  }
+}
+
+/**
+ * Step 1: close every bucket whose month has ended. An invoice-billed month
+ * with uninvoiced overage claims it as one `period_close` settlement (seq 0)
+ * with `closed_at`, commits, and runs the settlement sequence; every other
+ * month gets `closed_at` only. Keyset-paged on the bucket id.
+ */
+export async function closeEndedGauPeriods(
+  cursor: string | null,
+  now: Date = new Date(),
+): Promise<GauJobPage> {
+  const buckets = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(schema.gauBuckets)
+      .where(
+        and(
+          lte(schema.gauBuckets.periodEnd, now),
+          isNull(schema.gauBuckets.closedAt),
+          cursor === null ? undefined : gt(schema.gauBuckets.id, cursor),
+        ),
+      )
+      .orderBy(asc(schema.gauBuckets.id))
+      .limit(GAU_JOB_PAGE_SIZE),
+  );
+  for (const bucket of buckets) {
+    try {
+      await closeGauPeriod(bucket, now);
+    } catch (error) {
+      logger.error(
+        {
+          bucketId: bucket.id,
+          orgId: bucket.orgId,
+          err: error instanceof Error ? error.message : String(error),
+        },
+        "billing: gau period close failed; the next run retries it",
+      );
+    }
+  }
+  return pageOf(buckets);
+}
+
+async function resumeSettlement(
+  row: GauSettlementRow,
+  now: Date,
+): Promise<void> {
+  const context = { settlementId: row.id, orgId: row.orgId, kind: row.kind };
+
+  if (row.kind === "auto_topup") {
+    const buckets = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.gauBuckets)
+        .where(eq(schema.gauBuckets.id, row.bucketId))
+        .limit(1),
+    );
+    const bucket = buckets[0];
+    if (bucket !== undefined && remainingGau(bucket) > 0) {
+      // A Checkout landed in between: the top-up is owed nothing, and a
+      // draft it left behind is removed so nobody can finalize it later.
+      let outcome: string | null = null;
+      if (row.stripeInvoiceId !== null) {
+        ({ outcome } = await billingProvider().deleteOrVoidDraftInvoice({
+          settlementId: row.id,
+          invoiceId: row.stripeInvoiceId,
+        }));
+      }
+      if (outcome === "paid") {
+        await withSystemDb((tx) => settleGauPaid(tx, row.id, now));
+        logger.info(
+          context,
+          "billing: superseded gau auto top-up was already paid; settled paid",
+        );
+        return;
+      }
+      await withSystemDb((tx) => settleGauFailed(tx, row.id));
+      logger.warn(
+        { ...context, reason: "superseded", invoiceOutcome: outcome },
+        "billing: gau auto top-up superseded by a purchase; marked failed",
+      );
+      return;
+    }
+  }
+
+  if (
+    row.stripeInvoiceId === null &&
+    now.getTime() - row.createdAt.getTime() > IDEMPOTENCY_WINDOW_MS
+  ) {
+    await withSystemDb((tx) => settleGauFailed(tx, row.id));
+    logger.error(
+      {
+        ...context,
+        alert: "billing_gau_settlement_stale",
+        reason: "idempotency_key_expired",
+      },
+      "billing: gau settlement never reached Stripe inside the idempotency window; marked failed",
+    );
+    return;
+  }
+
+  await settleGauInvoice(row, systemSettlementScope(row.orgId));
+}
+
+/**
+ * Step 2: resume every `pending` settlement older than an hour, from
+ * Stripe's own state (item 10). Keyset-paged on the settlement id.
+ */
+export async function resumePendingGauSettlements(
+  cursor: string | null,
+  now: Date = new Date(),
+): Promise<GauJobPage> {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(schema.gauSettlements)
+      .where(
+        and(
+          eq(schema.gauSettlements.status, "pending"),
+          lt(
+            schema.gauSettlements.createdAt,
+            new Date(now.getTime() - HOUR_MS),
+          ),
+          cursor === null ? undefined : gt(schema.gauSettlements.id, cursor),
+        ),
+      )
+      .orderBy(asc(schema.gauSettlements.id))
+      .limit(GAU_JOB_PAGE_SIZE),
+  );
+  for (const row of rows) {
+    try {
+      await resumeSettlement(row, now);
+    } catch (error) {
+      logger.error(
+        {
+          settlementId: row.id,
+          orgId: row.orgId,
+          err: error instanceof Error ? error.message : String(error),
+        },
+        "billing: gau settlement resume failed; the next run retries it",
+      );
+    }
+  }
+  return pageOf(rows);
 }
 
 // ── The Checkout grant ──────────────────────────────────────────────────────

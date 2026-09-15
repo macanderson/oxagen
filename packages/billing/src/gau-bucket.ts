@@ -141,6 +141,23 @@ export function remainingGau(b: GauCounts): number {
 }
 
 /**
+ * Overage this month that no settlement has claimed yet:
+ * `max(0, used − included − purchased − carried) − overage_invoiced`, floored
+ * at zero. The recorder's interim threshold, the close job and
+ * `get_gau_bucket` read it; `claimInterimInvoice` re-checks the same
+ * subtraction under the row lock (gauUninvoicedSql).
+ */
+export function uninvoicedGau(
+  b: GauCounts & { overageInvoicedGau: number },
+): number {
+  const overage = Math.max(
+    0,
+    b.usedGau - b.includedGau - b.purchasedGau - b.carriedGau,
+  );
+  return Math.max(0, overage - b.overageInvoicedGau);
+}
+
+/**
  * The carry into a new month from the month before it (ADR-055 §4):
  * `min(prev.purchased + prev.carried, max(0, prev.remaining))`. Bought units
  * survive a month boundary; included ones do not; nothing carries from an
@@ -179,6 +196,18 @@ let gauRemainingSqlExpr: SQL<number> | undefined;
 export function gauRemainingSql(): SQL<number> {
   gauRemainingSqlExpr ??= sql<number>`${schema.gauBuckets.includedGau} + ${schema.gauBuckets.purchasedGau} + ${schema.gauBuckets.carriedGau} - ${schema.gauBuckets.usedGau}`;
   return gauRemainingSqlExpr;
+}
+
+let gauUninvoicedSqlExpr: SQL<number> | undefined;
+
+/**
+ * `used − included − purchased − carried − overage_invoiced` as SQL, for the
+ * interim claim's re-checked WHERE. Built on first call for the reason
+ * `gauRemainingSql` is.
+ */
+export function gauUninvoicedSql(): SQL<number> {
+  gauUninvoicedSqlExpr ??= sql<number>`${schema.gauBuckets.usedGau} - ${schema.gauBuckets.includedGau} - ${schema.gauBuckets.purchasedGau} - ${schema.gauBuckets.carriedGau} - ${schema.gauBuckets.overageInvoicedGau}`;
+  return gauUninvoicedSqlExpr;
 }
 
 /** The latest bucket that ended before `periodStart`, or null. */

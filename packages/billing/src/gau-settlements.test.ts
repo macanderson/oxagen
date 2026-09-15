@@ -1,13 +1,14 @@
 /**
- * Unit tests for gau-settlements.ts — claimAutoTopup (ADR-055 §6,
- * ARCHITECTURE.md §3.9 item 8c) and grantGauPurchaseForCheckout (item 11).
+ * Unit tests for gau-settlements.ts — the claims, the settlement writers, the
+ * settlement sequence, the accrual close and the close job's two steps
+ * (ADR-055 §6, ARCHITECTURE.md §3.9 items 7, 8c, 8d, 10, 11 and 12; INV-30).
  *
  * Runs against the in-memory executor in test-utils/gau-fake-tx.ts, which
  * mirrors the re-checked claim UPDATE, the session-keyed settlement insert
  * and the payment-method mirror upsert, and records every statement. The
  * terms and the settings are module doubles, each `satisfies Pick<…>` so a
  * rename of the real export fails here at typecheck; the provider is a fake
- * with the four methods the grant calls.
+ * that records the calls the grant, the settlement sequence and the job make.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -15,6 +16,8 @@ import {
   makeFakeGauTx,
   type FakeGauStore,
 } from "./test-utils/gau-fake-tx";
+import type { Tx } from "@oxagen/database";
+import type { GauSettlementRow, GauSettlementScope } from "./gau-settlements";
 import type { BillingCheckoutSession, BillingProvider } from "./provider";
 
 const mocks = vi.hoisted(() => ({
@@ -25,10 +28,14 @@ const mocks = vi.hoisted(() => ({
   resolveGauEntitlement: vi.fn(),
   readOrgBillingSettings: vi.fn(),
   assertOrgCanConsume: vi.fn(),
+  ensureStripeCustomer: vi.fn(),
   provider: {
     getCheckoutPaymentMethod: vi.fn(),
     getDefaultPaymentMethodId: vi.fn(),
     setDefaultPaymentMethod: vi.fn(),
+    createGauInvoice: vi.fn(),
+    finalizeAndPayGauInvoice: vi.fn(),
+    deleteOrVoidDraftInvoice: vi.fn(),
   },
 }));
 
@@ -81,6 +88,15 @@ vi.mock(
 );
 
 vi.mock(
+  "./customers",
+  () =>
+    ({ ensureStripeCustomer: mocks.ensureStripeCustomer }) satisfies Pick<
+      typeof import("./customers"),
+      "ensureStripeCustomer"
+    >,
+);
+
+vi.mock(
   "./client",
   () =>
     ({
@@ -88,9 +104,21 @@ vi.mock(
     }) satisfies Pick<typeof import("./client"), "billingProvider">,
 );
 
-const { claimAutoTopup, grantGauPurchaseForCheckout } = await import(
-  "./gau-settlements"
-);
+const {
+  claimAutoTopup,
+  claimInterimInvoice,
+  closeEndedGauPeriods,
+  closeInvoiceAccrual,
+  grantGauPurchaseForCheckout,
+  recordGauInvoice,
+  resumePendingGauSettlements,
+  settleGauFailed,
+  settleGauInvoice,
+  settleGauOpen,
+  settleGauPaid,
+} = await import("./gau-settlements");
+const { uninvoicedGau } = await import("./gau-bucket");
+const { logger } = await import("./logger");
 const { assertGauAvailable, GauExhaustedError } = await import("./gau-bucket");
 
 const ORG = "00000000-0000-0000-0000-00000000a0a1";
@@ -116,7 +144,7 @@ function seedBucket(overrides: Record<string, unknown>) {
     overageInvoicedGau: 0,
     interimSeq: 0,
     topupSeq: 0,
-    openTopupSettlementId: null,
+    openTopupSettlementId: null as string | null,
     closedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -570,5 +598,899 @@ describe("grantGauPurchaseForCheckout", () => {
     await grantGauPurchaseForCheckout(paidSession());
 
     expect(order.slice(0, 2)).toEqual(["commit", "provider"]);
+  });
+});
+
+// ── Settlements in motion ───────────────────────────────────────────────────
+
+const HOUR = 60 * 60 * 1000;
+const AUGUST = {
+  start: new Date("2026-08-01T00:00:00.000Z"),
+  end: new Date("2026-09-01T00:00:00.000Z"),
+};
+
+/** Settings as readOrgBillingSettings answers them. */
+function settingsWith(over: Record<string, unknown> = {}) {
+  return {
+    orgId: ORG,
+    stripeCustomerId: "cus_gau_001",
+    approvedForInvoiceBilling: false,
+    invoiceGauMax: 100_000,
+    autoTopupEnabled: true,
+    autoTopupBlocks: 1,
+    dunningState: "active",
+    ...over,
+  };
+}
+
+function seedSettlement(overrides: Record<string, unknown>): GauSettlementRow {
+  const row = {
+    id: crypto.randomUUID(),
+    orgId: ORG,
+    bucketId: crypto.randomUUID(),
+    kind: "auto_topup",
+    seq: 1,
+    quantityGau: 5_000,
+    ratePerGauMicros: 5_000n,
+    currency: "usd",
+    status: "pending",
+    stripeCheckoutSessionId: null,
+    stripeInvoiceId: null,
+    createdAt: new Date(NOW.getTime() - 2 * HOUR),
+    settledAt: null,
+    ...overrides,
+  };
+  store.settlements.push(row);
+  return row as unknown as GauSettlementRow;
+}
+
+/** The settlement row as the store holds it now. */
+const settlement = (id: string) => store.settlements.find((r) => r.id === id)!;
+
+/** Every provider call and every committed system transaction, in order. */
+let events: string[];
+
+/**
+ * The world these tests run in: `now` is 15 September, the org is on the
+ * Free published terms with no subscription, every system transaction runs
+ * on the fake store and logs its commit, and the real withTenantDb refuses —
+ * nothing on these paths may reach for a tenant scope. The fake provider
+ * creates an invoice per settlement, pays it, and deletes a draft.
+ */
+function inMotion() {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    events = [];
+    const tx = makeFakeGauTx(store);
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (t: unknown) => unknown) => {
+        const out = await fn(tx);
+        events.push("commit");
+        return out;
+      },
+    );
+    mocks.withTenantDb.mockImplementation(mocks.realWithTenantDb!);
+    mocks.readGauEntitlement.mockResolvedValue(FREE_ENTITLEMENT);
+    mocks.readOrgBillingSettings.mockResolvedValue(settingsWith());
+    mocks.ensureStripeCustomer.mockResolvedValue("cus_gau_001");
+    mocks.provider.getCheckoutPaymentMethod.mockResolvedValue(null);
+    mocks.provider.createGauInvoice.mockImplementation(
+      async (input: { settlementId: string }) => {
+        events.push(`create:${input.settlementId}`);
+        return { invoiceId: `in_${input.settlementId}` };
+      },
+    );
+    mocks.provider.finalizeAndPayGauInvoice.mockImplementation(
+      async (ref: { invoiceId: string }) => {
+        events.push(`finalize:${ref.invoiceId}`);
+        return { status: "paid", amountCents: 2_500, hostedInvoiceUrl: null };
+      },
+    );
+    mocks.provider.deleteOrVoidDraftInvoice.mockImplementation(
+      async (ref: { invoiceId: string }) => {
+        events.push(`deleteOrVoid:${ref.invoiceId}`);
+        return { outcome: "deleted" };
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+}
+
+/** A scope on the fake store, the way the recorder and the job build theirs. */
+function scopeWith(paymentMethodId: string | null): GauSettlementScope {
+  return {
+    run: ((fn: (tx: Tx) => Promise<unknown>) =>
+      mocks.withSystemDb(fn)) as GauSettlementScope["run"],
+    customerId: async () => "cus_gau_001",
+    defaultPaymentMethodId: async () => paymentMethodId,
+  };
+}
+
+/** Provider calls only, without the commits. */
+const providerCalls = () => events.filter((e) => e !== "commit");
+
+describe("claimInterimInvoice", () => {
+  it("claims exactly the quantity as one pending interim_invoice at the terms' rate, and uninvoiced restarts", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 + 100_250 });
+
+    const row = await claimInterimInvoice(
+      makeFakeGauTx(store),
+      bucket,
+      FREE_TERMS,
+      100_000,
+    );
+
+    expect(row).toMatchObject({
+      orgId: ORG,
+      bucketId: bucket.id,
+      kind: "interim_invoice",
+      seq: 1,
+      quantityGau: 100_000,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      status: "pending",
+      stripeInvoiceId: null,
+    });
+    expect(store.buckets[0]).toMatchObject({
+      overageInvoicedGau: 100_000,
+      interimSeq: 1,
+      purchasedGau: 0,
+    });
+    // GAU #100,001 of overage opens the next accrual.
+    expect(uninvoicedGau(bucket)).toBe(250);
+  });
+
+  it("gives a second crossing in the same month seq 2", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 + 100_000 });
+    const tx = makeFakeGauTx(store);
+    const first = await claimInterimInvoice(tx, bucket, FREE_TERMS, 100_000);
+    bucket.usedGau += 100_000;
+    const second = await claimInterimInvoice(tx, bucket, FREE_TERMS, 100_000);
+
+    expect(first?.seq).toBe(1);
+    expect(second?.seq).toBe(2);
+    expect(store.buckets[0]!.overageInvoicedGau).toBe(200_000);
+  });
+
+  it("claims nothing below the quantity (the re-checked WHERE) and writes no row", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 + 99_999 });
+    const row = await claimInterimInvoice(
+      makeFakeGauTx(store),
+      bucket,
+      FREE_TERMS,
+      100_000,
+    );
+    expect(row).toBeNull();
+    expect(store.settlements).toHaveLength(0);
+    expect(store.buckets[0]).toMatchObject({
+      overageInvoicedGau: 0,
+      interimSeq: 0,
+    });
+  });
+
+  it("of 20 concurrent claims at the threshold exactly one gets a row", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 + 100_000 });
+    const tx = makeFakeGauTx(store);
+    const rows = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        claimInterimInvoice(tx, bucket, FREE_TERMS, 100_000),
+      ),
+    );
+    expect(rows.filter((r) => r !== null)).toHaveLength(1);
+    expect(store.settlements).toHaveLength(1);
+  });
+});
+
+describe("recordGauInvoice", () => {
+  it("records the invoice id on a row that holds none", async () => {
+    const row = seedSettlement({});
+    await recordGauInvoice(makeFakeGauTx(store), row.id, "in_001");
+    expect(settlement(row.id).stripeInvoiceId).toBe("in_001");
+  });
+
+  it("never overwrites an id already recorded", async () => {
+    const row = seedSettlement({ stripeInvoiceId: "in_first" });
+    await recordGauInvoice(makeFakeGauTx(store), row.id, "in_second");
+    expect(settlement(row.id).stripeInvoiceId).toBe("in_first");
+  });
+});
+
+describe("settleGauPaid", () => {
+  inMotion();
+
+  /** An exhausted September bucket whose auto top-up episode is the row. */
+  function openEpisode(status: string) {
+    const bucket = seedBucket({ usedGau: 5_000, topupSeq: 1 });
+    const row = seedSettlement({ bucketId: bucket.id, status });
+    bucket.openTopupSettlementId = row.id;
+    return { bucket, row };
+  }
+
+  it("marks an open auto top-up paid, grants its quantity and clears the episode", async () => {
+    const { bucket, row } = openEpisode("open");
+
+    const paid = await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+
+    expect(paid).toMatchObject({ id: row.id, status: "paid" });
+    expect(settlement(row.id).settledAt).toBeInstanceOf(Date);
+    expect(bucket).toMatchObject({
+      purchasedGau: 5_000,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("grants once when called twice", async () => {
+    const { bucket, row } = openEpisode("pending");
+    const tx = makeFakeGauTx(store);
+
+    await settleGauPaid(tx, row.id, NOW);
+    const again = await settleGauPaid(tx, row.id, NOW);
+
+    expect(again).toBeNull();
+    expect(bucket.purchasedGau).toBe(5_000);
+  });
+
+  it("changes nothing on a row already paid", async () => {
+    const { bucket, row } = openEpisode("paid");
+
+    expect(await settleGauPaid(makeFakeGauTx(store), row.id, NOW)).toBeNull();
+
+    expect(bucket).toMatchObject({
+      purchasedGau: 0,
+      openTopupSettlementId: row.id,
+    });
+    expect(store.log.filter((s) => s.table === "buckets")).toEqual([]);
+  });
+
+  it("grants a failed row whose invoice is paid after all", async () => {
+    const { bucket, row } = openEpisode("failed");
+    await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+    expect(settlement(row.id).status).toBe("paid");
+    expect(bucket.purchasedGau).toBe(5_000);
+  });
+
+  it("after rollover grants to the current month's bucket and leaves the settlement's own bucket as it was", async () => {
+    const august = seedBucket({
+      periodStart: AUGUST.start,
+      periodEnd: AUGUST.end,
+      usedGau: 5_000,
+      topupSeq: 1,
+    });
+    const row = seedSettlement({ bucketId: august.id, status: "open" });
+    august.openTopupSettlementId = row.id;
+
+    await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+
+    const september = store.buckets.find(
+      (b) => (b.periodStart as Date).getTime() === SEPTEMBER.start.getTime(),
+    );
+    expect(september).toMatchObject({ purchasedGau: 5_000, usedGau: 0 });
+    expect(august).toMatchObject({
+      purchasedGau: 0,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("grants nothing for an invoice-kind settlement: overage is never purchased units", async () => {
+    const bucket = seedBucket({ usedGau: 200_000 });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      kind: "interim_invoice",
+      quantityGau: 100_000,
+      status: "open",
+    });
+
+    await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+
+    expect(settlement(row.id).status).toBe("paid");
+    expect(bucket.purchasedGau).toBe(0);
+    expect(mocks.readGauEntitlement).not.toHaveBeenCalled();
+  });
+});
+
+describe("settleGauOpen and settleGauFailed", () => {
+  inMotion();
+
+  it("move a pending row and nothing else", async () => {
+    const tx = makeFakeGauTx(store);
+    const pending = seedSettlement({ status: "pending" });
+    const open = seedSettlement({ status: "open" });
+    const paid = seedSettlement({ status: "paid" });
+
+    expect(await settleGauOpen(tx, pending.id)).toMatchObject({
+      status: "open",
+    });
+    expect(await settleGauFailed(tx, open.id)).toBeNull();
+    expect(await settleGauOpen(tx, paid.id)).toBeNull();
+    expect(await settleGauFailed(tx, paid.id)).toBeNull();
+
+    expect(store.settlements.map((r) => r.status)).toEqual([
+      "open",
+      "open",
+      "paid",
+    ]);
+  });
+
+  it("a top-up that ends open leaves the episode set, and a second exhaustion in the month claims nothing", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    const tx = makeFakeGauTx(store);
+    const row = await claimAutoTopup(tx, bucket, FREE_TERMS, 1);
+    await settleGauOpen(tx, row!.id);
+
+    bucket.usedGau += 1_000;
+    expect(await claimAutoTopup(tx, bucket, FREE_TERMS, 1)).toBeNull();
+
+    expect(bucket.openTopupSettlementId).toBe(row!.id);
+    expect(store.settlements).toHaveLength(1);
+  });
+
+  it("a paid Checkout clears the open episode, and the next exhaustion claims again", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    const tx = makeFakeGauTx(store);
+    const first = await claimAutoTopup(tx, bucket, FREE_TERMS, 1);
+    await settleGauOpen(tx, first!.id);
+
+    await grantGauPurchaseForCheckout(paidSession());
+    expect(bucket.openTopupSettlementId).toBeNull();
+
+    bucket.usedGau = 15_000;
+    const second = await claimAutoTopup(tx, bucket, FREE_TERMS, 1);
+    expect(second).toMatchObject({ seq: 2, status: "pending" });
+  });
+});
+
+describe("settleGauInvoice", () => {
+  inMotion();
+
+  function claimedTopup() {
+    const bucket = seedBucket({ usedGau: 5_000, topupSeq: 1 });
+    const row = seedSettlement({ bucketId: bucket.id });
+    bucket.openTopupSettlementId = row.id;
+    return { bucket, row };
+  }
+
+  it("creates the invoice, records its id, finalizes and pays it, then grants and clears the episode", async () => {
+    const { bucket, row } = claimedTopup();
+
+    const outcome = await settleGauInvoice(row, scopeWith("pm_checkout_001"));
+
+    expect(outcome).toBe("paid");
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith({
+      customerId: "cus_gau_001",
+      orgId: ORG,
+      settlementId: row.id,
+      kind: "gau_auto_topup",
+      quantityGau: 5_000,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      description: "Oxagen governed action units: auto top-up",
+      collection: {
+        method: "charge_automatically",
+        defaultPaymentMethodId: "pm_checkout_001",
+      },
+    });
+    // The id is committed before finalizing, and the grant after the answer.
+    expect(events).toEqual([
+      `create:${row.id}`,
+      "commit",
+      `finalize:in_${row.id}`,
+      "commit",
+    ]);
+    expect(settlement(row.id)).toMatchObject({
+      status: "paid",
+      stripeInvoiceId: `in_${row.id}`,
+    });
+    expect(bucket).toMatchObject({
+      purchasedGau: 5_000,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("an org with no default card gets a send_invoice invoice due in 30 days, ends open with the id and no failed row, and a later invoice.paid marks it paid", async () => {
+    const bucket = seedBucket({ usedGau: 105_000 });
+    const row = await claimInterimInvoice(
+      makeFakeGauTx(store),
+      bucket,
+      FREE_TERMS,
+      100_000,
+    );
+    mocks.provider.finalizeAndPayGauInvoice.mockResolvedValueOnce({
+      status: "open",
+      amountCents: 50_000,
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/interim",
+    });
+
+    expect(await settleGauInvoice(row!, scopeWith(null))).toBe("open");
+
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "gau_interim",
+        quantityGau: 100_000,
+        collection: { method: "send_invoice", daysUntilDue: 30 },
+      }),
+    );
+    expect(settlement(row!.id)).toMatchObject({
+      status: "open",
+      stripeInvoiceId: `in_${row!.id}`,
+    });
+    expect(store.settlements.filter((r) => r.status === "failed")).toEqual([]);
+
+    // invoice.paid, whenever the customer pays the hosted invoice.
+    await settleGauPaid(makeFakeGauTx(store), row!.id, NOW);
+    // get_gau_bucket's pastDue: an open interim_invoice or period_close row.
+    const pastDue = store.settlements.some(
+      (r) =>
+        (r.kind === "interim_invoice" || r.kind === "period_close") &&
+        r.status === "open",
+    );
+    expect(settlement(row!.id).status).toBe("paid");
+    expect(pastDue).toBe(false);
+  });
+
+  it("leaves the row pending with no invoice id when the provider rejects the create, and does not throw", async () => {
+    const { row } = claimedTopup();
+    mocks.provider.createGauInvoice.mockRejectedValueOnce(
+      new Error("stripe unreachable"),
+    );
+
+    expect(await settleGauInvoice(row, scopeWith("pm_1"))).toBe("pending");
+
+    expect(settlement(row.id)).toMatchObject({
+      status: "pending",
+      stripeInvoiceId: null,
+    });
+    expect(mocks.provider.finalizeAndPayGauInvoice).not.toHaveBeenCalled();
+  });
+
+  it("leaves the row pending with its invoice id when the provider rejects the finalize", async () => {
+    const { bucket, row } = claimedTopup();
+    mocks.provider.finalizeAndPayGauInvoice.mockRejectedValueOnce(
+      new Error("stripe unreachable"),
+    );
+
+    expect(await settleGauInvoice(row, scopeWith("pm_1"))).toBe("pending");
+
+    expect(settlement(row.id)).toMatchObject({
+      status: "pending",
+      stripeInvoiceId: `in_${row.id}`,
+    });
+    expect(bucket.purchasedGau).toBe(0);
+  });
+
+  it("sends a row that already holds an invoice id straight to finalizeAndPayGauInvoice", async () => {
+    const { row } = claimedTopup();
+    settlement(row.id).stripeInvoiceId = "in_held";
+
+    await settleGauInvoice(
+      { ...row, stripeInvoiceId: "in_held" },
+      scopeWith("pm_1"),
+    );
+
+    expect(mocks.provider.createGauInvoice).not.toHaveBeenCalled();
+    expect(mocks.provider.finalizeAndPayGauInvoice).toHaveBeenCalledWith({
+      settlementId: row.id,
+      invoiceId: "in_held",
+    });
+  });
+
+  it("grants once when the webhook's invoice.paid follows a synchronous paid", async () => {
+    const { bucket, row } = claimedTopup();
+    await settleGauInvoice(row, scopeWith("pm_1"));
+    await settleGauPaid(makeFakeGauTx(store), row.id, NOW);
+    expect(bucket.purchasedGau).toBe(5_000);
+  });
+
+  it("invoices no checkout row: it is logged and left, with no provider call", async () => {
+    const row = seedSettlement({ kind: "checkout", seq: null });
+    expect(await settleGauInvoice(row, scopeWith("pm_1"))).toBe("pending");
+    expect(mocks.provider.createGauInvoice).not.toHaveBeenCalled();
+  });
+});
+
+describe("closeInvoiceAccrual", () => {
+  inMotion();
+
+  it("claims every uninvoiced GAU of the current bucket as one interim_invoice and leaves uninvoiced at 0", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 + 7_321 });
+    mocks.provider.finalizeAndPayGauInvoice.mockResolvedValueOnce({
+      status: "open",
+      amountCents: 3_661,
+      hostedInvoiceUrl: null,
+    });
+
+    const row = await closeInvoiceAccrual(ORG, NOW);
+
+    expect(row).toMatchObject({ kind: "interim_invoice", quantityGau: 7_321 });
+    expect(store.settlements).toHaveLength(1);
+    expect(settlement(row!.id)).toMatchObject({
+      status: "open",
+      stripeInvoiceId: `in_${row!.id}`,
+    });
+    expect(uninvoicedGau(bucket)).toBe(0);
+    expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG, {
+      system: true,
+    });
+    // No card saved: the invoice is emailed.
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: { method: "send_invoice", daysUntilDue: 30 },
+      }),
+    );
+  });
+
+  it("collects from the org's default card when one is saved", async () => {
+    seedBucket({ usedGau: 6_000 });
+    store.paymentMethods.push({
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      stripePaymentMethodId: "pm_default",
+      isDefault: true,
+      deletedAt: null,
+    });
+    await closeInvoiceAccrual(ORG, NOW);
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: {
+          method: "charge_automatically",
+          defaultPaymentMethodId: "pm_default",
+        },
+      }),
+    );
+  });
+
+  it("claims nothing and calls no provider when nothing is uninvoiced", async () => {
+    seedBucket({ usedGau: 4_000 });
+    expect(await closeInvoiceAccrual(ORG, NOW)).toBeNull();
+    expect(store.settlements).toHaveLength(0);
+    expect(providerCalls()).toEqual([]);
+  });
+
+  it("claims nothing for an org with no bucket this month", async () => {
+    expect(await closeInvoiceAccrual(ORG, NOW)).toBeNull();
+    expect(store.settlements).toHaveLength(0);
+  });
+});
+
+describe("closeEndedGauPeriods", () => {
+  inMotion();
+
+  const endedAugust = (over: Record<string, unknown>) =>
+    seedBucket({ periodStart: AUGUST.start, periodEnd: AUGUST.end, ...over });
+
+  it("invoices an ended invoice-billed month's uninvoiced overage as one period_close settlement (seq 0) and closes it", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue(
+      settingsWith({ approvedForInvoiceBilling: true }),
+    );
+    const bucket = endedAugust({ usedGau: 5_000 + 12_345 });
+
+    const page = await closeEndedGauPeriods(null, NOW);
+
+    expect(page).toEqual({ processed: 1, nextCursor: null });
+    expect(store.settlements).toHaveLength(1);
+    expect(store.settlements[0]).toMatchObject({
+      bucketId: bucket.id,
+      kind: "period_close",
+      seq: 0,
+      quantityGau: 12_345,
+      status: "paid",
+    });
+    expect(bucket.closedAt).toBeInstanceOf(Date);
+    expect(uninvoicedGau(bucket)).toBe(0);
+    expect(mocks.readOrgBillingSettings).toHaveBeenCalledWith(ORG, {
+      system: true,
+    });
+    expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG, {
+      system: true,
+    });
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "gau_period_close" }),
+    );
+  });
+
+  it("prices the settlement at the terms in force at close, after a mid-month change", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue(
+      settingsWith({ approvedForInvoiceBilling: true }),
+    );
+    mocks.readGauEntitlement.mockResolvedValue({
+      ...FREE_ENTITLEMENT,
+      terms: { ...FREE_ENTITLEMENT.terms, ratePerGauMicros: 4_000n },
+    });
+    endedAugust({ usedGau: 6_000 });
+
+    await closeEndedGauPeriods(null, NOW);
+
+    expect(store.settlements[0]).toMatchObject({ ratePerGauMicros: 4_000n });
+  });
+
+  it("closes an ended prepaid month with closed_at only, whatever it overdrew", async () => {
+    const bucket = endedAugust({ usedGau: 9_000 });
+    await closeEndedGauPeriods(null, NOW);
+    expect(bucket.closedAt).toBeInstanceOf(Date);
+    expect(bucket.overageInvoicedGau).toBe(0);
+    expect(store.settlements).toHaveLength(0);
+    expect(providerCalls()).toEqual([]);
+  });
+
+  it("closes an ended invoice-billed month with nothing uninvoiced with closed_at only", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue(
+      settingsWith({ approvedForInvoiceBilling: true }),
+    );
+    const bucket = endedAugust({ usedGau: 4_000 });
+    await closeEndedGauPeriods(null, NOW);
+    expect(bucket.closedAt).toBeInstanceOf(Date);
+    expect(store.settlements).toHaveLength(0);
+  });
+
+  it("leaves a month that has not ended untouched", async () => {
+    const bucket = seedBucket({ usedGau: 9_000 });
+    expect(await closeEndedGauPeriods(null, NOW)).toEqual({
+      processed: 0,
+      nextCursor: null,
+    });
+    expect(bucket.closedAt).toBeNull();
+  });
+
+  it("pages by bucket id", async () => {
+    for (let i = 0; i < 101; i++) endedAugust({ usedGau: 0 });
+
+    const first = await closeEndedGauPeriods(null, NOW);
+    const second = await closeEndedGauPeriods(first.nextCursor, NOW);
+
+    expect(first.processed).toBe(100);
+    expect(first.nextCursor).not.toBeNull();
+    expect(second).toEqual({ processed: 1, nextCursor: null });
+    expect(store.buckets.every((b) => b.closedAt instanceof Date)).toBe(true);
+  });
+
+  it("logs a bucket it could not close and carries on with the page", async () => {
+    endedAugust({ usedGau: 0 });
+    endedAugust({ usedGau: 0 });
+    mocks.readOrgBillingSettings.mockRejectedValueOnce(
+      new Error("settings unavailable"),
+    );
+    const error = vi.spyOn(logger, "error");
+
+    const page = await closeEndedGauPeriods(null, NOW);
+
+    expect(page.processed).toBe(2);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: "settings unavailable" }),
+      expect.stringMatching(/period close failed/),
+    );
+    expect(store.buckets.map((b) => b.closedAt === null).sort()).toEqual([
+      false,
+      true,
+    ]);
+  });
+});
+
+describe("resumePendingGauSettlements", () => {
+  inMotion();
+
+  it("supersedes an auto top-up whose bucket a Checkout refilled: deletes its draft first, marks it failed, and calls nothing else", async () => {
+    const bucket = seedBucket({ usedGau: 5_000, purchasedGau: 10_000 });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      stripeInvoiceId: "in_draft",
+    });
+    let statusAtDelete: unknown;
+    mocks.provider.deleteOrVoidDraftInvoice.mockImplementationOnce(async () => {
+      statusAtDelete = settlement(row.id).status;
+      return { outcome: "deleted" };
+    });
+    const warn = vi.spyOn(logger, "warn");
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(mocks.provider.deleteOrVoidDraftInvoice).toHaveBeenCalledOnce();
+    expect(mocks.provider.deleteOrVoidDraftInvoice).toHaveBeenCalledWith({
+      settlementId: row.id,
+      invoiceId: "in_draft",
+    });
+    expect(statusAtDelete).toBe("pending");
+    expect(mocks.provider.finalizeAndPayGauInvoice).not.toHaveBeenCalled();
+    expect(mocks.provider.createGauInvoice).not.toHaveBeenCalled();
+    expect(settlement(row.id).status).toBe("failed");
+    expect(bucket.purchasedGau).toBe(10_000);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ settlementId: row.id, reason: "superseded" }),
+      expect.any(String),
+    );
+  });
+
+  it("settles a superseded top-up paid and grants it when Stripe reports its invoice paid", async () => {
+    const bucket = seedBucket({
+      usedGau: 5_000,
+      purchasedGau: 10_000,
+      topupSeq: 1,
+    });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      stripeInvoiceId: "in_paid",
+    });
+    bucket.openTopupSettlementId = row.id;
+    mocks.provider.deleteOrVoidDraftInvoice.mockResolvedValueOnce({
+      outcome: "paid",
+    });
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(settlement(row.id).status).toBe("paid");
+    expect(bucket).toMatchObject({
+      purchasedGau: 15_000,
+      openTopupSettlementId: null,
+    });
+  });
+
+  it("marks a superseded top-up with no invoice id failed with no provider call", async () => {
+    const bucket = seedBucket({ usedGau: 5_000, purchasedGau: 10_000 });
+    const row = seedSettlement({ bucketId: bucket.id });
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(settlement(row.id).status).toBe("failed");
+    expect(providerCalls()).toEqual([]);
+  });
+
+  it("re-issues the create with the same settlement keys for a row that never got an invoice id, inside 24 hours", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      createdAt: new Date(NOW.getTime() - 23 * HOUR),
+    });
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ settlementId: row.id }),
+    );
+    expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG, {
+      system: true,
+    });
+    expect(settlement(row.id)).toMatchObject({
+      status: "paid",
+      stripeInvoiceId: `in_${row.id}`,
+    });
+  });
+
+  it("marks a row with no invoice id older than 24 hours failed and raises the stale alert, with no provider call", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      createdAt: new Date(NOW.getTime() - 25 * HOUR),
+    });
+    const error = vi.spyOn(logger, "error");
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(settlement(row.id).status).toBe("failed");
+    expect(providerCalls()).toEqual([]);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settlementId: row.id,
+        alert: "billing_gau_settlement_stale",
+        reason: "idempotency_key_expired",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("only finalizes a row that holds an invoice id", async () => {
+    const bucket = seedBucket({ usedGau: 105_000 });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      kind: "interim_invoice",
+      quantityGau: 100_000,
+      stripeInvoiceId: "in_interim",
+      createdAt: new Date(NOW.getTime() - 30 * HOUR),
+    });
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(mocks.provider.createGauInvoice).not.toHaveBeenCalled();
+    expect(mocks.provider.deleteOrVoidDraftInvoice).not.toHaveBeenCalled();
+    expect(mocks.provider.finalizeAndPayGauInvoice).toHaveBeenCalledWith({
+      settlementId: row.id,
+      invoiceId: "in_interim",
+    });
+    expect(settlement(row.id).status).toBe("paid");
+  });
+
+  it("leaves a row younger than an hour and every settled row alone", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    seedSettlement({
+      bucketId: bucket.id,
+      createdAt: new Date(NOW.getTime() - HOUR / 2),
+    });
+    for (const status of ["open", "paid", "failed"]) {
+      seedSettlement({ bucketId: bucket.id, status });
+    }
+    const before = structuredClone(store.settlements);
+
+    expect(await resumePendingGauSettlements(null, NOW)).toEqual({
+      processed: 0,
+      nextCursor: null,
+    });
+    expect(store.settlements).toEqual(before);
+    expect(providerCalls()).toEqual([]);
+  });
+
+  it("logs a row it could not resume and carries on with the page", async () => {
+    const bucket = seedBucket({ usedGau: 5_000, purchasedGau: 10_000 });
+    const rows = [
+      seedSettlement({ bucketId: bucket.id, stripeInvoiceId: "in_a" }),
+      seedSettlement({ bucketId: bucket.id, stripeInvoiceId: "in_b" }),
+    ];
+    mocks.provider.deleteOrVoidDraftInvoice.mockRejectedValueOnce(
+      new Error("timeout"),
+    );
+    const error = vi.spyOn(logger, "error");
+
+    await resumePendingGauSettlements(null, NOW);
+
+    expect(rows.map((r) => settlement(r.id).status).sort()).toEqual([
+      "failed",
+      "pending",
+    ]);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: "timeout" }),
+      expect.stringMatching(/resume failed/),
+    );
+  });
+});
+
+describe("the close job's steps together", () => {
+  inMotion();
+
+  function seedEverything() {
+    mocks.readOrgBillingSettings.mockResolvedValue(
+      settingsWith({ approvedForInvoiceBilling: true }),
+    );
+    seedBucket({
+      periodStart: AUGUST.start,
+      periodEnd: AUGUST.end,
+      usedGau: 8_000,
+    });
+    const september = seedBucket({ usedGau: 5_000, purchasedGau: 10_000 });
+    seedSettlement({ bucketId: september.id, stripeInvoiceId: "in_draft" });
+    seedSettlement({ bucketId: september.id, kind: "interim_invoice" });
+  }
+
+  async function runJob() {
+    await closeEndedGauPeriods(null, NOW);
+    await resumePendingGauSettlements(null, NOW);
+  }
+
+  it("changes nothing when run a second time", async () => {
+    seedEverything();
+    await runJob();
+    const buckets = structuredClone(store.buckets);
+    const settlements = structuredClone(store.settlements);
+    const calls = providerCalls().length;
+
+    await runJob();
+
+    expect(store.buckets).toEqual(buckets);
+    expect(store.settlements).toEqual(settlements);
+    expect(providerCalls()).toHaveLength(calls);
+  });
+
+  it("makes every write with no active tenant scope", async () => {
+    seedEverything();
+    await runJob();
+    // Every row moved, so every write ran, and none of it through the real
+    // withTenantDb, which refuses outside a scope.
+    expect(store.settlements.map((r) => r.status)).not.toContain("pending");
+    expect(
+      store.buckets.every(
+        (b) => b.closedAt !== null || (b.periodEnd as Date) > NOW,
+      ),
+    ).toBe(true);
+    await expect(
+      mocks.realWithTenantDb!(async () => undefined),
+    ).rejects.toThrow("No active tenant scope");
   });
 });

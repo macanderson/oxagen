@@ -96,8 +96,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     db: () => dbMocks,
-    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    // Spies, so a test can assert which runner a read routed through.
+    withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
+    withSystemDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
   };
 });
 
@@ -202,6 +207,22 @@ describe("readDefaultPaymentMethod", () => {
   it("returns null when the org has saved no default card", async () => {
     _findFirstResult = undefined;
     expect(await readDefaultPaymentMethod("org-001")).toBeNull();
+  });
+
+  it("reads inside the caller's tenant scope by default", async () => {
+    const { withSystemDb, withTenantDb } = await import("@oxagen/database");
+    await readDefaultPaymentMethod("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("reads through withSystemDb with { system: true }, for the close job and the operator handler", async () => {
+    const { withSystemDb, withTenantDb } = await import("@oxagen/database");
+    _findFirstResult = makeDbPm({ isDefault: true });
+    const result = await readDefaultPaymentMethod("org-001", { system: true });
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+    expect(result?.stripePaymentMethodId).toBe("pm_001");
   });
 
   it("never calls the provider or creates a customer", async () => {
