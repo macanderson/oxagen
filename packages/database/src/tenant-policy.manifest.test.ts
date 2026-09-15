@@ -134,14 +134,15 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 96 as of evidence.run_exports (ADR-058, #2952). Was 95 as of
-    // billing.contract_terms, billing.gau_buckets and
-    // billing.gau_settlements (ADR-055, WL-24). Was 92 as of
-    // billing.governed_action_counters (ADR-052). An earlier note read "97 as
-    // of org.model_credentials" while the assertion said 91, so it had already
-    // drifted from the number it was describing — a count nobody can check
-    // against its own comment is a pin with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(96);
+    // 95 as of WL-27, which dropped billing.governed_action_counters with the
+    // annual meter it counted; evidence.run_exports (ADR-058, #2952) had made
+    // it 96 over the 95 of billing.contract_terms, billing.gau_buckets and
+    // billing.gau_settlements (ADR-055, WL-24), and 92 before those. An
+    // earlier note read "97 as of org.model_credentials" while the assertion
+    // said 91, so it had already drifted from the number it was describing — a
+    // count nobody can check against its own comment is a pin with no ratchet
+    // behind it.
+    expect(POLICY_MANIFEST.length).toBe(95);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
@@ -160,18 +161,16 @@ describe("tenant policy manifest", () => {
     }
   });
 
-  it("covers billing.governed_action_counters as org_only (ADR-052)", () => {
-    // Named as well as counted. The count above catches a table that gains an
-    // org_id without a policy; it cannot catch this one being swapped for a
-    // different table while the total stays the same, and the governed-action
-    // counter is the row a customer's invoice is computed from.
-    const entry = POLICY_MANIFEST.find(
-      (e) => e.table === "billing.governed_action_counters",
-    );
-    expect(entry).toBeDefined();
-    // org_only rather than standard: the allowance and the volume band are both
-    // annual and org-wide, so the table carries no workspace_id to scope by.
-    expect(entry?.policyClass).toBe("org_only");
+  it("no longer carries billing.governed_action_counters (WL-27)", () => {
+    // The annual counter and its table were dropped with the dollar-denominated
+    // meter they served; billing.gau_buckets is the row a customer's GAU
+    // invoice is computed from now. A policy entry for a table that no longer
+    // exists makes the generated RLS migration name a missing relation.
+    expect(
+      POLICY_MANIFEST.some(
+        (e) => e.table === "billing.governed_action_counters",
+      ),
+    ).toBe(false);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {
