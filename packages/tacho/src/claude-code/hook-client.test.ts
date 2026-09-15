@@ -431,6 +431,41 @@ describe("runTachoHook for Stella and custom agents", () => {
     });
   });
 
+  it("tells a Stella session on a suspended host why in prompt text, and denies its tool calls", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        host_status: "suspended",
+      }),
+    );
+    const down = async (): Promise<never> => {
+      throw new Error("ECONNREFUSED");
+    };
+    const started = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({ event: "SessionStart", cwd: "/repo" }),
+      harness: "stella",
+      harnessPid: () => 7,
+      post: down,
+    });
+    expect(started).toMatchObject({ path: "local", exitCode: 0 });
+    expect(started.stdout).toBe(
+      "Oxagen: This host is suspended by its Oxagen operator. Tool calls will be refused.\n",
+    );
+    const tool = await runTachoHook({
+      paths,
+      env: {},
+      stdin: STELLA_PRE,
+      harness: "stella",
+      harnessPid: () => 7,
+      post: down,
+    });
+    expect(JSON.parse(tool.stdout)).toMatchObject({ action: "deny" });
+  });
+
   it("prints no JSON on an unenrolled Stella SessionStart and names Stella for a payload it cannot read", async () => {
     const paths = scratchPaths();
     expect(

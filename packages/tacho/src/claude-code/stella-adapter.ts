@@ -26,7 +26,9 @@
  * or a non-zero exit is a deny, so every answer is either a valid decision,
  * `{}`, or (for SessionStart) plain text: Stella appends SessionStart
  * stdout to the system prompt verbatim, so a JSON document there would
- * become prompt text.
+ * become prompt text. SessionStart is not a veto point either, so a blocked
+ * host or session cannot be stopped there; it is told why in prose, and
+ * PreToolUse denies every tool call while the block holds.
  */
 import { spawnSync } from "node:child_process";
 import { digestJcs, type JsonValue } from "../digest";
@@ -145,7 +147,11 @@ function reasonOf(value: unknown, fallback: string): string {
  *   - `permissionDecision: "ask"` → `require_approval`;
  *   - `permissionDecision: "allow"` → `allow`;
  *   - `decision: "block"` (UserPromptSubmit) → `deny`;
- *   - `continue: false` (SessionStart) → `deny` with the stop reason;
+ *   - SessionStart `continue: false` → the stop reason as prompt text
+ *     ("Oxagen: <reason> Tool calls will be refused."): Stella cannot veto
+ *     a session start, and PreToolUse refuses every call for a suspended,
+ *     revoked or paused host and a paused or cancelled session;
+ *   - `continue: false` on any other event → `deny` with the stop reason;
  *   - SessionStart `additionalContext` → that text, which Stella adds to the
  *     system prompt;
  *   - anything else → `{}` (no decision), or nothing for SessionStart.
@@ -159,6 +165,9 @@ export function stellaAnswer(
     : {};
   const permission = specific["permissionDecision"];
   const permissionReason = specific["permissionDecisionReason"];
+  if (event === "SessionStart" && response["continue"] === false) {
+    return `Oxagen: ${reasonOf(response["stopReason"], "This session is stopped by its Oxagen operator.")} Tool calls will be refused.\n`;
+  }
   let decision: Record<string, unknown> | undefined;
   if (permission === "deny")
     decision = {

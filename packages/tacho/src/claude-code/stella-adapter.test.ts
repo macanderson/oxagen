@@ -201,13 +201,30 @@ describe("stella answer", () => {
     expect(stellaAnswer({ decision: "block" }, "UserPromptSubmit")).toContain(
       "Blocked by Oxagen policy.",
     );
+    // SessionStart is no veto point and its stdout is prompt text: a block
+    // is explained in prose, never printed as a decision.
     expect(
       stellaAnswer(
-        { continue: false, stopReason: "host suspended" },
+        {
+          continue: false,
+          stopReason: "This host is suspended by its Oxagen operator.",
+        },
         "SessionStart",
       ),
-    ).toBe('{"action":"deny","reason":"host suspended"}\n');
-    expect(stellaAnswer({ continue: false }, "SessionStart")).toContain(
+    ).toBe(
+      "Oxagen: This host is suspended by its Oxagen operator. Tool calls will be refused.\n",
+    );
+    expect(stellaAnswer({ continue: false }, "SessionStart")).toBe(
+      "Oxagen: This session is stopped by its Oxagen operator. Tool calls will be refused.\n",
+    );
+    expect(stellaAnswer({ continue: false }, "SessionStart")).not.toContain(
+      "action",
+    );
+    // Anywhere Stella does read decisions, a stop is still a deny.
+    expect(
+      stellaAnswer({ continue: false, stopReason: "stop" }, "PostToolUse"),
+    ).toBe('{"action":"deny","reason":"stop"}\n');
+    expect(stellaAnswer({ continue: false }, "PostToolUse")).toContain(
       "Stopped by Oxagen policy.",
     );
   });
