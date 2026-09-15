@@ -8,6 +8,7 @@
 **Risk level:** low (no approval)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
+**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler for a signed-in caller (`assertOrgRole`, INV-29); an API-key call carries no user and is authorized by the kernel
 
 ## Intent
 
@@ -51,6 +52,7 @@ One `agent.context_appends` row (INSERT-only for the application role) and, for 
 
 | code | reason | meaning |
 | --- | --- | --- |
+| `forbidden` | `org_role_required` | A signed-in caller holds none of the accepted roles. |
 | `conflict` | `directive_requires_context_pr` | A directive reaches the workspace only through a Context PR. |
 | `conflict` | `proposal_fields_required` / `proposal_fields_refused` | `proposal` is present exactly on `record_proposal`. |
 | `conflict` | `constraint_effect_mismatch` | A constraint declares `require` or `forbid`; no other kind carries an effect. |

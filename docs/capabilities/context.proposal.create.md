@@ -8,6 +8,7 @@
 **Risk level:** medium (no approval — the Context PR is the review)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
+**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler for a signed-in caller (`assertOrgRole`, INV-29); an API-key call carries no user and is authorized by the kernel
 
 ## Intent
 
@@ -43,4 +44,5 @@ One `agent.context_proposals` row in the `proposed` state.
 
 | code | meaning |
 | --- | --- |
+| `forbidden` | A signed-in caller holds none of the accepted roles (`org_role_required`). |
 | `invalid_input` | A constraint without an effect, an effect on another kind, a lineage id that is not a file stem. |

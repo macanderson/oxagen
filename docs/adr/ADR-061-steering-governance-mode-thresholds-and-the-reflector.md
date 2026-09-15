@@ -85,12 +85,17 @@ branches from the production branch that already holds the squash, so
 there is no add/add conflict and no "a pull request already exists" 422.
 `open_context_pr` records the branch on the row before it calls GitHub, so a
 call that failed after GitHub opened the PR is retried onto that PR, and a
-dismissal of that proposal finds the PR on its branch and closes it. An open
-PR on the branch that the proposal did not record is refused
-`lineage_pr_open`. Every status write names the statuses it moves from and
+dismissal of that proposal finds the PR on its branch and closes it. Every
+proposal on a lineage shares the branch, so a PR found there is a proposal's
+only when its body names that proposal (`Proposal \`<id>\``, written by
+`prBody`); any other open PR on the branch is refused `lineage_pr_open` and
+left open by a dismissal. Every status write names the statuses it moves from and
 throws `proposal_<status>` when another call moved the proposal first, so a
 dismissal never overwrites a merge and a check run never overwrites a
-dismissal.
+dismissal. Each check write and the outcome write are also tied to the head
+the checks read (`AND head_sha = …`): a re-run that recorded a newer head
+wins, and the earlier run is refused `head_moved` before it can mark a
+commit it did not check as passed.
 
 The three writes that gate on a role — `open_context_pr`,
 `merge_context_pr`, `dismiss_proposal` — declare the `api` surface only.
@@ -98,8 +103,11 @@ The API's bearer path (`apps/api/src/middleware/auth.ts`), every MCP
 context (`apps/mcp/src/context.ts`) and the CLI's token are an API key,
 which carries no user; `assertOrgRole` and the merge gate refuse such a
 context with `no_principal` before anything is read. The CLI's `oxagen
-context propose` therefore records the proposal (`propose_record`, no role
-gate); the PR is opened, checked and merged from Mission Control. Mapping an
+context propose` therefore records the proposal (`propose_record`); the PR
+is opened, checked and merged from Mission Control. `propose_record` and
+`append_record` check the contract's roles (org Owner or Admin, workspace
+Owner or Member) when the call carries a user, and leave an API-key call,
+which carries none, to the kernel's key authorization. Mapping an
 API key to its creator for these writes would be a decision of its own,
 not taken here.
 

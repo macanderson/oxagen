@@ -54,7 +54,9 @@ force = "should"
 - The file stem is the lineage id; the path is `.oxagen/rules/<lineage>.toml`;
   the branch is `context/<lineage>`.
 - `set_id` is the repository's full name with `/` as `.`.
-- `origin` is `user` for a person's proposal and `inferred` for an agent's.
+- `origin` is `user` for a proposal a person raised and `inferred` for one an
+  agent raised over an API key (the proposal has no `created_by_user_id`),
+  whoever opens the PR.
 - Only members Stella's `Record` struct carries enter the file. Stella
   re-serializes the typed struct before it recomputes the hash and would drop
   anything else from its preimage.
@@ -81,9 +83,11 @@ same PR, against its current head (`head_sha` re-read from GitHub), and is
 refused `base_moved` when the PR no longer targets the production branch. The
 branch is written to the row before GitHub is touched, so a call that failed
 after GitHub opened the PR is retried onto that PR; an open PR on the branch
-the row did not record is refused `lineage_pr_open`. At most one proposal per
-lineage is in an open-PR state (`context_proposals_open_pr_idx`), and every
-status write applies only from the statuses it names.
+whose body does not name the proposal is refused `lineage_pr_open`. At most
+one proposal per lineage is in an open-PR state
+(`context_proposals_open_pr_idx`), every status write applies only from the
+statuses it names, and each check write and the outcome write apply only
+while the row's head is the one the checks read (`head_moved` otherwise).
 
 `merge_context_pr` is refused until `checks_passed`, unless the caller is a
 reviewer the governance mode allows, when the PR's head is no longer the
@@ -96,12 +100,15 @@ promotion event on the ledger (`agent.context_promotions`, `action = promote`,
 `policy_version = governance:<mode>`), the proposal to `merged`, and the
 `steering.published` audit event. The workspace's steering version is the
 ledger length. `dismiss_proposal` closes an open PR (one found on the branch
-when the row never recorded its number) and deletes its branch, and writes
-`rejected` only to a proposal that is not merged.
+whose body names the proposal, when the row never recorded its number) and
+deletes its branch, and writes `rejected` only to a proposal that is not
+merged.
 
 `open_context_pr`, `merge_context_pr` and `dismiss_proposal` gate on the
 caller's role and so need a signed-in user; they declare the `api` surface
 only, since an API key (the MCP and CLI bearer) carries no user.
+`propose_record` and `append_record` check the contract's roles for a
+signed-in caller and leave an API-key call to the kernel.
 
 ## The checks
 
