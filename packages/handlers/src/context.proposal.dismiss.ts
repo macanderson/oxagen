@@ -1,7 +1,8 @@
 // audit-exempt: a dismissed proposal steered nothing and publishes nothing; the kernel capability.invoke_* audit records who dismissed it.
 //
 // dismiss_proposal (ADR-061): Owner/Admin (or the workspace Owner) rejects a
-// proposal with a reason. A proposal that started a Context PR has the PR
+// proposal with a reason; the acting user is the signed-in user or the
+// creator of the API key (resolveActingUserId). A proposal that started a Context PR has the PR
 // closed and its branch deleted first, so the next proposal on the lineage
 // opens a fresh branch and PR; that includes a proposal whose open failed
 // after GitHub opened the PR, whose PR is found on its branch and named in
@@ -29,8 +30,9 @@ export function createDismissProposalHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextProposalDismiss> {
   return async (input, ctx) => {
+    const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
-      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin"], workspace: ["Owner"] },
     );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
@@ -82,7 +84,7 @@ export function createDismissProposalHandler(
           status: "rejected",
           dismissedAt: deps.now(),
           dismissedReason: input.reason,
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         DISMISSABLE,
       );

@@ -437,8 +437,9 @@ The settlement states of §8 and the `billing.invoices` mirror stand as
 designed. Review found one defect against §8 and §9: an `auto_topup` row
 that the close job marks `failed` for `idempotency_key_expired` keeps the
 bucket's `open_topup_settlement_id`. `packages/billing/src/gau-settlements.ts:625-637`
-calls `settleGauFailed`, which changes only the status, so the month gets no
-second automatic attempt. WL-65 clears the episode in the same transaction.
+called `settleGauFailed`, which changed only the status, so the month got no
+second automatic attempt. #3073 fixed it on `app-rebuild`: `settleGauFailed`
+clears `open_topup_settlement_id` in the same transaction.
 
 ### 15. What is retired
 

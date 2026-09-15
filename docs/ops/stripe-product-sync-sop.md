@@ -186,21 +186,33 @@ deploy target. Locally, `.env.local` already carries `OXAGEN_TARGET_MARGIN`.
 
 ---
 
-## 6. Production run order: HELD (maintainer decision, 2026-09-15)
+## 6. Production run order (maintainer decision 4, 2026-09-15, option (a))
 
-The maintainer decided the order for bringing production onto this
-catalogue:
+The maintainer first asked to migrate production and then run both syncs
+against it. The `app-rebuild` migrations are not purely additive, so the
+decision was revised to option (a).
 
-1. Migrate the production database (`db-migrate.yml`).
-2. Run `stripe-sync` against production (`stripe-sync.yml`, dispatched with
-   `apply`). It uses the sandbox key production holds (§0).
-3. Run `billing:price-book-sync --apply` with the production `DATABASE_URL`
-   from Parameter Store.
+**Now:**
 
-**All three steps are held.** The `app-rebuild` migrations are not purely
-additive, so step 1 waits on a check of every non-additive statement against
-production data. Do not run any of the three steps against production until
-the maintainer lifts the hold.
+1. #3080 carries the three additive ADR-060 cost migrations to `main`:
+   `20260915020000_cost_price_book_and_rollups`,
+   `20260915020100_rls_cost_tables` and
+   `20260915020200_run_totals_operator_key`. Merging applies nothing;
+   `db-migrate.yml` is `workflow_dispatch` only.
+2. Dry-run `infra/tools/run-db-migrations.sh <main tip>/packages/database`
+   from the app node over SSM. Proceed only on `Pending Files: 3` and
+   `Next Version: 20260915020000`. Then run it with `--apply`, with
+   `ALLOW_DIRTY` unset.
+3. Run `pnpm billing:price-book-sync --apply` from an `app-rebuild` checkout
+   against the production `DATABASE_URL` from Parameter Store, through an SSM
+   tunnel via the app node.
+
+**At the WL-52 cutover:** every other `app-rebuild` migration, then
+`stripe-sync` against production (`stripe-sync.yml`, dispatched with `apply`;
+it uses the sandbox key production holds, §0), which also upserts
+`billing.plans`. The plan GAU columns arrive only with
+`20260914165423_gau_buckets_and_contract_terms`, so the upsert cannot run
+before it. Do not run `stripe-sync --apply` against production before then.
 
 ---
 

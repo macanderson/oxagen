@@ -97,17 +97,28 @@ the checks read (`AND head_sha = …`): a re-run that recorded a newer head
 wins, and the earlier run is refused `head_moved` before it can mark a
 commit it did not check as passed.
 
-The three writes that gate on a role — `open_context_pr`,
-`merge_context_pr`, `dismiss_proposal` — declare the `api` surface only.
-The API's bearer path (`apps/api/src/middleware/auth.ts`), every MCP
-context (`apps/mcp/src/context.ts`) and the CLI's token are an API key,
-which carries no user; `assertOrgRole` and the merge gate refuse such a
-context with `no_principal` before anything is read. The CLI's `oxagen
-context propose` therefore records the proposal (`propose_record`); the PR
-is opened, checked and merged from Mission Control. `propose_record` and
-`append_record` check the contract's roles (org Owner or Admin, workspace
-Owner or Member) when the call carries a user, and leave an API-key call,
-which carries none, to the kernel's key authorization. Mapping an
+The three PR writes — `open_context_pr`, `merge_context_pr`,
+`dismiss_proposal` — declare the `api` surface only. The API's bearer path
+(`apps/api/src/middleware/auth.ts`), every MCP context
+(`apps/mcp/src/context.ts`) and the CLI's token are an API key, which
+carries no user. The CLI's `oxagen context propose` records the proposal
+(`propose_record`); the PR is opened, checked and merged from Mission
+Control.
+
+Amended 2026-09-15 (maintainer decision; apps/app/ARCHITECTURE.md §9):
+`open_context_pr`, `dismiss_proposal`, `propose_record` and `append_record`
+gate the acting user, the signed-in user or the creator of the API key
+(`resolveActingUserId`), on the contract's roles with `assertOrgRole`. A
+key with no recorded creator is refused `no_principal`. The author columns
+of a proposal and an append stay the signed-in user, null for a key, so a
+Context PR still stamps an agent's proposal `inferred`. `merge_context_pr`
+keeps its reviewer gate on the signed-in user: an API key is refused
+`no_principal` there.
+
+The paragraph as first written: `assertOrgRole` and the merge gate refused
+an API-key context with `no_principal` before anything was read, and
+`propose_record` and `append_record` checked the contract's roles only when
+the call carried a user. Mapping an
 API key to its creator for these writes would be a decision of its own,
 not taken here.
 
