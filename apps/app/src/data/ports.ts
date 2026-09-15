@@ -10,6 +10,7 @@ import type {
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
+import type { MemberList } from "./contracts/org";
 import type {
   OrgChoice,
   ShellContext,
@@ -57,6 +58,8 @@ export interface DataSource {
       q: { cursor: string | null },
     ): Promise<Read<InvoicePage>>;
   };
+  /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
+  org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
   /**
    * The Steering page's three noBillingGate reads on the workspace; caller:
    * features/steering/steering.tsx.

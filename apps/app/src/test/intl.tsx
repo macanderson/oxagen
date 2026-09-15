@@ -1,4 +1,4 @@
-// Test support for the sign-in, organization-creation, Billing and Steering components: the real catalogs,
+// Test support for the sign-in, organization-creation, Billing, Organization and Steering components: the real catalogs,
 // a client provider, and a server `getTranslations` stand-in that formats ICU
 // arguments the simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
@@ -7,6 +7,7 @@ import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import en from "../../messages/en.json";
 import onboarding from "../../messages/onboarding.json";
+import organization from "../../messages/organization.json";
 import steering from "../../messages/steering.json";
 import ui from "../../messages/ui.json";
 
@@ -15,6 +16,7 @@ export const messages = {
   ...auth,
   ...billing,
   ...onboarding,
+  ...organization,
   ...steering,
   ...ui,
 };

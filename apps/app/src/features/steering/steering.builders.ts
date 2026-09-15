@@ -177,6 +177,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       contractRate: refuse,
       invoices: refuse,
     },
+    org: { members: refuse },
     steering: {
       records: (...args) => {
         calls.records.push(args);

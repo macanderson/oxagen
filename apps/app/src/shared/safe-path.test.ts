@@ -141,6 +141,7 @@ describe("routes", () => {
     expect(pathOf("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(routes.fleet("a/b", "..")).toBe("/a%2Fb/..");
     expect(routes.people("\\evil")).toBe("/%5Cevil");
+    expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
   });
 
   it("refuses to build a protocol-relative path from an empty first segment (negative)", () => {
