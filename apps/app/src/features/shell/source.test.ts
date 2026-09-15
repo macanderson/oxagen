@@ -27,6 +27,12 @@ const context = vi.fn();
 const source = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context },
+  billing: {
+    plan: vi.fn(),
+    bucket: vi.fn(),
+    contractRate: vi.fn(),
+    invoices: vi.fn(),
+  },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

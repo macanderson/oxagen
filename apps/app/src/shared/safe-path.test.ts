@@ -123,6 +123,10 @@ describe("routes", () => {
     expect(routes.resetPassword()).toBe("/reset-password");
     expect(routes.invite("invi_1")).toBe("/invite/invi_1");
     expect(routes.cliAuthorize({})).toBe("/cli/authorize");
+    expect(routes.billing("acme")).toBe("/acme/billing");
+    expect(routes.billing("acme", { cursor: "c 2&x" })).toBe(
+      "/acme/billing?cursor=c+2%26x",
+    );
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {

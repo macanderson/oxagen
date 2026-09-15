@@ -234,6 +234,121 @@ type Messages = {
       };
     };
   };
+  billing: {
+    units: {
+      gau: string;
+    };
+    range: string;
+    checkout: {
+      success: string;
+      cancel: string;
+    };
+    plan: {
+      title: string;
+      none: string;
+      plan: string;
+      status: string;
+      interval: string;
+      intervals: {
+        month: string;
+        year: string;
+      };
+      period: string;
+    };
+    mode: {
+      title: string;
+      prepaid: string;
+      prepaidNoCard: string;
+      invoice: string;
+      uninvoiced: string;
+      invoiced: string;
+      pastDue: string;
+    };
+    bucket: {
+      title: string;
+      period: string;
+      included: string;
+      purchased: string;
+      carried: string;
+      used: string;
+      remaining: string;
+      overdrawn: string;
+      exhaustedNoCard: string;
+    };
+    autoTopup: {
+      title: string;
+      enabled: string;
+      blocks: string;
+      perTopup: string;
+      readOnly: string;
+      savedCard: string;
+      savedCardUnlabelled: string;
+      noCard: string;
+      attempt: {
+        none: string;
+        paid: string;
+        open: string;
+        failed: string;
+      };
+    };
+    rate: {
+      title: string;
+      perGau: string;
+      perBlock: string;
+      blockSize: string;
+      currency: string;
+      included: string;
+      effective: string;
+      openEnded: string;
+      source: string;
+      published: string;
+      negotiated: string;
+      negotiatedNoRef: string;
+      tiers: {
+        free: string;
+        build: string;
+        scale: string;
+        enterprise: string;
+      };
+    };
+    invoices: {
+      title: string;
+      empty: string;
+      columns: {
+        number: string;
+        kind: string;
+        status: string;
+        period: string;
+        amountDue: string;
+        amountPaid: string;
+        invoice: string;
+      };
+      unnumbered: string;
+      view: string;
+      unpublished: string;
+      kinds: {
+        subscription: string;
+        gau_purchase: string;
+        gau_auto_topup: string;
+        gau_interim: string;
+        gau_period_close: string;
+      };
+      statuses: {
+        open: string;
+        paid: string;
+        uncollectible: string;
+        void: string;
+      };
+      pager: string;
+      older: string;
+      newest: string;
+    };
+    failure: {
+      denied: string;
+      pendingApproval: string;
+      error: string;
+    };
+  };
   onboarding: {
     errors: {
       orgNameRequired: string;

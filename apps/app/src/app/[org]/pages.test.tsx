@@ -3,8 +3,10 @@
 // (ARCHITECTURE.md §8): the four gap-lane pages render their one UNRECORDED
 // row under the title, the rev1 pages render the title alone. Each page names
 // itself once from its pages.* key (§1.2), resolves its viewer first and
-// renders nothing for a person requireViewer refuses. Fleet, Run, People, API
-// keys and Billing gain their bodies in WL-34 to WL-38.
+// renders nothing for a person requireViewer refuses. Billing hands its viewer,
+// the data source, the checkout outcome and the invoices cursor to the Billing
+// feature (WL-38); Fleet, Run, People and API keys gain their bodies in WL-34
+// to WL-37.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -14,10 +16,14 @@ import {
   routeProps,
 } from "@/test/render-page";
 
-const { requireViewer } = vi.hoisted(() => ({
+const { requireViewer, Billing, dataSource } = vi.hoisted(() => ({
   requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+  Billing: vi.fn((_props: Record<string, unknown>) => null),
+  dataSource: vi.fn(() => "live-source"),
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
+vi.mock("@/features/billing", () => ({ Billing }));
+vi.mock("@/data/source", () => ({ dataSource }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
@@ -48,8 +54,9 @@ const REV1: [string, string[], Load][] = [
   ["run", WS, () => import("./[ws]/runs/[run]/page")],
   ["people", ORG, () => import("./page")],
   ["apiKeys", ORG, () => import("./api-keys/page")],
-  ["billing", ORG, () => import("./billing/page")],
 ];
+
+const BILLING: Load = () => import("./billing/page");
 
 describe("gap-lane pages", () => {
   it.each(GAP_LANE)(
@@ -64,6 +71,38 @@ describe("gap-lane pages", () => {
       );
     },
   );
+});
+
+describe("the Billing page", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the checkout outcome and the invoices cursor to Billing", async () => {
+    const ctx = { orgSlug: "acme" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await BILLING(),
+      routeProps(SEGMENTS, { checkout: "success", cursor: "c2" }),
+      title("billing"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Billing).toHaveBeenCalledOnce();
+    expect(Billing.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source: "live-source",
+      checkout: "success",
+      cursor: "c2",
+    });
+  });
+
+  it("hands Billing no checkout outcome and the newest invoices when the URL carries neither", async () => {
+    await expectPageTitle(
+      await BILLING(),
+      routeProps(SEGMENTS),
+      title("billing"),
+    );
+    expect(Billing.mock.calls[0]?.[0]).toMatchObject({
+      checkout: null,
+      cursor: null,
+    });
+  });
 });
 
 describe("rev1 pages before their page item", () => {
@@ -83,6 +122,7 @@ describe("rev1 pages before their page item", () => {
 describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
+    ["billing", BILLING] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));

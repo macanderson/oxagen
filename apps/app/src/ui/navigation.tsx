@@ -2,10 +2,11 @@
 // Client-side navigation (ARCHITECTURE.md §3.8, INV-13): the only useRouter
 // importer and the only file with a computed href or form action. Links take a
 // SafePath, so a target that did not come from sanitizeNext or a route builder
-// does not compile.
+// does not compile; the one external link takes a HostedInvoiceUrl.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ComponentProps } from "react";
+import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { SafePath } from "@/shared/safe-path";
 
 export function useNavigate(): {
@@ -39,4 +40,14 @@ export function SafeForm({
   action: SafePath | ((formData: FormData) => void | Promise<void>);
 }) {
   return <form action={action} {...props} />;
+}
+
+/** A Stripe-hosted invoice page, opened in a new tab without handing it this window. */
+export function HostedInvoiceLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: HostedInvoiceUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
 }
