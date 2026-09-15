@@ -9,6 +9,8 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 /** Org roles permitted to manage API keys. */
 export const API_KEY_AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
 
+const ORG_ROLE_ASSIGNMENT_LIMIT = 50;
+
 /** The request identity an operator capability receives from the kernel. */
 export interface OperatorContext {
   orgId: string;
@@ -128,7 +130,10 @@ export async function resolveActorOrgRole(
             gt(schema.principalRoleAssignments.expiresAt, new Date()),
           ),
         ),
-      );
+      )
+      // A principal holds a handful of org roles; the bound only guards a
+      // runaway row set, never which role is chosen.
+      .limit(ORG_ROLE_ASSIGNMENT_LIMIT);
 
     const names = assigned.map((row) => row.roleName);
     return (
