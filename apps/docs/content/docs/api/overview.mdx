@@ -1,6 +1,6 @@
 ---
 title: API overview
-description: The Oxagen REST API — versioned, authenticated, capability-parity with the MCP server and in-app agent.
+description: "The Oxagen REST API: versioned, authenticated, capability-parity with the MCP server and in-app agent."
 ---
 
 The Oxagen REST API exposes every platform capability as versioned HTTP endpoints. It is the programmatic surface for server-to-server integrations, custom tooling, and automation pipelines that do not use MCP.
@@ -73,7 +73,7 @@ Each entry in `tools` carries `name`, `description`, `domain`, `category`, `risk
 
 **Capability parity.** Every capability available via the REST API is also available via the MCP server and the in-app agent. The underlying contract registry is the single source of truth for all three surfaces. If you build an automation with the API, it works identically if you switch to MCP.
 
-**Thin shell, shared logic.** The API server is a thin routing layer over the shared platform library. Business logic lives in the shared layer, not in route handlers. This means API behavior is consistent with app behavior — no divergence.
+**Thin shell, shared logic.** The API server is a thin routing layer over the shared platform library. Business logic lives in the shared layer, not in route handlers. This means API behavior is consistent with app behavior: no divergence.
 
 **Versioned.** All endpoints carry the `/v1/` prefix. Breaking changes will be introduced in a new version with a parallel migration window.
 
@@ -155,7 +155,7 @@ Note: some UI-only actions (plan approval flows, billing page interactions) are 
 
 ## Rate limits
 
-The API enforces rate limits. When a limit is exceeded, the response is `429 Too Many Requests` with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. Specific per-plan limits are not yet published — contact support if you encounter sustained rate-limiting.
+The API enforces rate limits. When a limit is exceeded, the response is `429 Too Many Requests` with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. Specific per-plan limits are not yet published: contact support if you encounter sustained rate-limiting.
 
 ## Streaming
 

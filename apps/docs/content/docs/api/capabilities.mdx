@@ -13,7 +13,7 @@ Every capability is declared once, in the platform contract registry. A declarat
 - Its risk level, and whether it needs approval before it runs
 - Its default IAM roles and effects
 
-The registry is the single source of truth. Every API route and every MCP tool reads from it, so a capability behaves the same way on every surface it declares. Parity is structural — nobody keeps the surfaces in sync by hand.
+The registry is the single source of truth. Every API route and every MCP tool reads from it, so a capability behaves the same way on every surface it declares. Parity is structural: nobody keeps the surfaces in sync by hand.
 
 `pnpm check:manifest` compares the registry against the routes and tools that exist and reports any gap as a warning.
 
@@ -29,12 +29,12 @@ fourth appears only when it is the only way to keep the name unique.
 | `verb_noun_qualifier` | `list_agent_tools`, `resolve_mcp_consent`, `set_plugin_secret` |
 
 Names are globally unique across the registry, and a capability's name is the
-same string everywhere — REST route dispatch, MCP tool name, model-facing tool
+same string everywhere: REST route dispatch, MCP tool name, model-facing tool
 name, IAM grants, audit records, and metering. There is no separate
 model-facing spelling.
 
 **Names are stable, and there is no alias layer.** If a capability is ever
-renamed, the old name stops resolving — the registry does not carry a
+renamed, the old name stops resolving: the registry does not carry a
 compatibility alias, so a rename is a breaking change and ships in a new API
 version. Pin your integration to the names in the table below, and read the
 release notes before upgrading across a version boundary.
@@ -142,7 +142,7 @@ A selection of the capabilities available in the current release, grouped by dom
 | `set_plugin_secret`        | API, MCP        | High   |
 | `set_auth_alerts`          | API, MCP        | Low    |
 
-`set_plugin_enabled` is one capability, not two — the same call toggles a plugin at org scope or at workspace scope, depending on the scope you pass.
+`set_plugin_enabled` is one capability, not two: the same call toggles a plugin at org scope or at workspace scope, depending on the scope you pass.
 
 ### System
 
@@ -165,7 +165,7 @@ Run `pnpm check:manifest --json` in the monorepo to print the full route/tool pa
 
 These flows only exist in the app UI. They have no contract, so you cannot reach them from the API or MCP:
 
-- In-stream tool-call approval. It needs the chat UI's live stream — call `resolve_approval` afterwards instead.
+- In-stream tool-call approval. It needs the chat UI's live stream: call `resolve_approval` afterwards instead.
 - The Stripe Customer Portal redirect. For programmatic upgrades, use `start_subscription_upgrade`.
 - OAuth plugin credential flows, which require a browser redirect.
 

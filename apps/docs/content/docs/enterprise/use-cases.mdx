@@ -1,13 +1,13 @@
 ---
 title: Enterprise use cases
-description: Six concrete scenarios where Oxagen solves the most common enterprise AI governance challenges — for CIOs and security leaders.
+description: Six concrete scenarios where Oxagen solves the most common enterprise AI governance challenges, for CIOs and security leaders.
 ---
 
 ## Stop shadow AI without banning it
 
-**The problem.** Your security team knows employees are using ChatGPT, Claude.ai, and a dozen other AI tools for work. Some are pasting customer data into public models. Some are building automations with no oversight. You can block these sites — but that just drives the behavior underground and makes your company less competitive. Banning AI is not the answer. Governing it is.
+**The problem.** Your security team knows employees are using ChatGPT, Claude.ai, and a dozen other AI tools for work. Some are pasting customer data into public models. Some are building automations with no oversight. You can block these sites, but that just drives the behavior underground and makes your company less competitive. Banning AI is not the answer. Governing it is.
 
-**How Oxagen solves it.** Oxagen gives your employees a capable AI that works within your governance boundaries. One organization. One audit log. One IAM model. Every action — model call, tool invocation, automation — passes through the same `invoke()` boundary, is checked against the caller's role grants, and writes a security event to Postgres. Each IAM decision is also written to a hash-chained ClickHouse table.
+**How Oxagen solves it.** Oxagen gives your employees a capable AI that works within your governance boundaries. One organization. One audit log. One IAM model. Every action, model call, tool invocation, automation, passes through the same `invoke()` boundary, is checked against the caller's role grants, and writes a security event to Postgres. Each IAM decision is also written to a hash-chained ClickHouse table.
 
 When an employee uses the Oxagen agent instead of an unsanctioned tool, your security team goes from blind to fully sighted: who asked what, which model answered, what data was involved, and whether the action was authorized. They can answer "what AI actions happened this week?" with a query, not a survey.
 
@@ -26,7 +26,7 @@ When an employee uses the Oxagen agent instead of an unsanctioned tool, your sec
 **How Oxagen solves it.** Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The controls your auditors need are built into the architecture:
 
 - **CC6 (access control):** Role-based IAM. On Enterprise, every capability call is resolved against the caller's role grants, and a principal with no matching grant gets the capability's declared default (deny for most). Owners and Admins can revoke any session at **Organization → Access → Sessions** and any API key at **Organization → Developer → Tokens**. Every IAM decision writes an audit row with the resolver's trace, so your auditor can see which rule decided. Org-enforced policies and a screen for approving access requests are not available yet.
-- **CC7 (monitoring):** Two audit stores. Postgres `security.security_events` holds 54 typed event kinds — auth, API keys, billing, capability calls, org membership, secrets, and privacy requests — in monthly partitions kept for 7 years. ClickHouse `audit_events` holds every IAM decision for 7 years; each row's hash is chained to the previous row for the same org and capability, so a removed or inserted row breaks the chain.
+- **CC7 (monitoring):** Two audit stores. Postgres `security.security_events` holds 54 typed event kinds, auth, API keys, billing, capability calls, org membership, secrets, and privacy requests, in monthly partitions kept for 7 years. ClickHouse `audit_events` holds every IAM decision for 7 years; each row's hash is chained to the previous row for the same org and capability, so a removed or inserted row breaks the chain.
 - **CC9 (risk mitigation):** Capabilities that declare `requiresApproval` pause the in-app agent's turn until the user approves; the request is recorded and expires after five minutes. Oxagen governs agents but does not run their code, so there is no execution sandbox for it to hold (ADR-043).
 
 **Organization → Security → Compliance** shows a SOC 2 control catalog whose statuses come from live signals: whether audit events are flowing, the MFA policy, RLS enforcement, and API key age. The artifact you hand an auditor is the audit log itself: **Organization → Security → Audit** downloads it as an HMAC-signed CSV or NDJSON file (Owner or Admin, Enterprise plan).
@@ -41,9 +41,9 @@ When an employee uses the Oxagen agent instead of an unsanctioned tool, your sec
 
 ## Give each business unit an isolated workspace
 
-**The problem.** You need to roll out AI to multiple teams — Marketing, Engineering, Finance, Legal — but each team has different data sensitivities, different approved tools, and different governance requirements. You cannot give Finance access to Engineering's agent memory. You cannot let Marketing's automations trigger Legal's document workflows by accident.
+**The problem.** You need to roll out AI to multiple teams, Marketing, Engineering, Finance, Legal, but each team has different data sensitivities, different approved tools, and different governance requirements. You cannot give Finance access to Engineering's agent memory. You cannot let Marketing's automations trigger Legal's document workflows by accident.
 
-**How Oxagen solves it.** Workspaces are the unit of isolation. Each team gets its own workspace with its own member roster, knowledge graph, agent configurations, and tool policy. Workspace data is isolated at the Postgres RLS layer — a query against Finance's data will never return Marketing's rows, regardless of what code is written.
+**How Oxagen solves it.** Workspaces are the unit of isolation. Each team gets its own workspace with its own member roster, knowledge graph, agent configurations, and tool policy. Workspace data is isolated at the Postgres RLS layer: a query against Finance's data will never return Marketing's rows, regardless of what code is written.
 
 Access inside each workspace follows roles. Org roles (Owner, Admin, Compliance, Billing) apply across the organization; workspace roles (Owner, Member, Viewer) apply per workspace, so one person can be a Member in Engineering and a Viewer in Finance. Org-enforced policies that lock a capability for every workspace, and per-workspace capability overrides, are not available yet.
 
@@ -54,8 +54,8 @@ Access inside each workspace follows roles. Org roles (Owner, Admin, Compliance,
 4. SSO and SCIM directory sync are not available yet, so membership is managed by invitation.
 
 **Controls backing this:**
-- Postgres RLS with `FORCE ROW LEVEL SECURITY` — database-enforced, not application-enforced.
-- Neo4j and ClickHouse scoped at the session seam — fail-closed, not fail-open.
+- Postgres RLS with `FORCE ROW LEVEL SECURITY`: database-enforced, not application-enforced.
+- Neo4j and ClickHouse scoped at the session seam: fail-closed, not fail-open.
 - Workspace-scoped role assignments and workspace-scoped plugin installs.
 - An automated integration test suite proves cross-tenant queries return zero rows.
 
@@ -65,7 +65,7 @@ Access inside each workspace follows roles. Org roles (Owner, Admin, Compliance,
 
 **The problem.** Different teams have signed up for different AI providers. Engineering uses Anthropic. Data science uses Azure OpenAI. Finance insists on a private endpoint. You have three separate billing relationships, three separate usage logs, and three separate governance policies. When your CISO asks "which models have access to customer data?", there is no single answer.
 
-**How Oxagen solves it.** Oxagen routes all inference through one gateway with one governance model. The Vercel AI Gateway sits between Oxagen and the model providers — your company holds no provider API keys in application code or environment variables. An org Owner or Admin can store the organization's own OpenRouter or Vercel AI Gateway key instead. The in-app agent's completions then run on that key, and every call still passes through the same IAM, audit, and metering layer.
+**How Oxagen solves it.** Oxagen routes all inference through one gateway with one governance model. The Vercel AI Gateway sits between Oxagen and the model providers: your company holds no provider API keys in application code or environment variables. An org Owner or Admin can store the organization's own OpenRouter or Vercel AI Gateway key instead. The in-app agent's completions then run on that key, and every call still passes through the same IAM, audit, and metering layer.
 
 **What BYOK enables:**
 - One organization-level key, for OpenRouter or the Vercel AI Gateway. Keys for private Azure or Bedrock endpoints are not supported.
@@ -78,23 +78,23 @@ Access inside each workspace follows roles. Org roles (Owner, Admin, Compliance,
 **Controls backing this:**
 - `set_model_credential` capability (org Owner or Admin only; no workspace role can reach it).
 - AES-256-GCM envelope encryption of stored keys.
-- Model handle resolution via `modelIdOf()` — symbolic handles, not hard-coded provider slugs.
+- Model handle resolution via `modelIdOf()`: symbolic handles, not hard-coded provider slugs.
 - `model_credential.set` / `model_credential.revoked` events in `security.security_events`.
 
 ---
 
-## Metered AI spend with hard guardrails
+## Metered AI spend with hard ceilings
 
 **The problem.** You approved a pilot budget for AI tools. Two months in, one team has burned through 80% of it. You have no visibility into which models are being called, which automations are the biggest spenders, or how to stop a runaway agent before it blows the budget. Finance is asking for a detailed breakdown you cannot produce.
 
-**How Oxagen solves it.** The credit ledger is the single source of truth for AI spend. 1 credit = $0.01. Every model call, tool invocation, and image generation debits credits from the org's balance atomically — no double-spend, no free rides past zero balance. The credit balance enforces a hard stop: when an org's credits reach zero, subsequent agent calls return 402 before touching any model.
+**How Oxagen solves it.** The credit ledger is the single source of truth for AI spend. 1 credit = $0.01. Every model call, tool invocation, and image generation debits credits from the org's balance atomically: no double-spend, no free rides past zero balance. The credit balance enforces a hard stop: when an org's credits reach zero, subsequent agent calls return 402 before touching any model.
 
 **Usage analytics** in **Organization → Billing → Usage** breaks down usage by model, by surface, and by workspace, over the last 7, 30, or 90 days or month to date.
 
 The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit trail for all balance mutations (SOC 2 requirement). `billing.credit_balances` is a real-time cached mirror enforced with a non-negative `CHECK (balance_cents >= 0)` constraint. The usage page has no export button; Finance can pull the same breakdown with `get_usage_breakdown` over the API or MCP.
 
 **Controls backing this:**
-- `billing.credit_ledger` — immutable append-only audit trail for all balance mutations.
+- `billing.credit_ledger`: immutable append-only audit trail for all balance mutations.
 - `billing.credit_balances` with `CHECK (balance_cents >= 0)` at the database layer (cached mirror).
 - Pre-turn admission gate: 402 before any model call when balance is zero.
 - `SELECT ... FOR UPDATE` serialization prevents double-spend races.

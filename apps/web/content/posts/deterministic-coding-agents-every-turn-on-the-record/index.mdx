@@ -81,7 +81,7 @@ Hashes rather than payloads keeps the record small and still verifiable, but onl
 
 Here is what each layer pins, and the review question it answers:
 
-| Record | What it pins | What review can finally ask |
+| Record | What it pins | What review can now ask |
 |---|---|---|
 | Session | Principal, repository, branch, model id, toolchain versions | Who ran this, against what, with which tools |
 | Turn | Prompt hash, sampling parameters, timestamp | What was asked, and under what settings |
@@ -93,7 +93,7 @@ Note that none of these require the model to be deterministic. They require the 
 
 ## The parts you can actually pin
 
-Some of the run is genuinely reproducible, and it is worth separating that from the part that is not.
+Some of the run is reproducible, and it is worth separating that from the part that is not.
 
 The pinnable parts are the toolchain version, the container image, the repository commit, the prompt text, the model identifier, the sampling parameters, and the recorded input and output of every tool call. Record those and a colleague can replay the same sequence of actions against the same tree, even if a fresh generation would diverge.
 

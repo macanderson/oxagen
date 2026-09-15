@@ -1,9 +1,9 @@
 ---
 title: Chat streaming
-description: How to consume the chat SSE stream — event types, request fields, and connection management.
+description: "How to consume the chat SSE stream: event types, request fields, and connection management."
 ---
 
-The chat capability (`send_message`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses — there is no separate "streaming API vs. web API."
+The chat capability (`send_message`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses: there is no separate "streaming API vs. web API."
 
 ## Endpoint
 
@@ -96,7 +96,7 @@ The stream resumes automatically after resolution. `decision` is `"approved"` or
 
 ## Message threading
 
-Pass `conversationId` to continue an existing thread. The route loads the last 50 messages from the conversation automatically — no message ID is needed to maintain history.
+Pass `conversationId` to continue an existing thread. The route loads the last 50 messages from the conversation automatically: no message ID is needed to maintain history.
 
 Omit `conversationId` to start a new conversation. Persist the conversation ID returned in the first response for subsequent messages in the same thread.
 

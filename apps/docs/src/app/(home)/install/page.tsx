@@ -20,13 +20,13 @@ const STEPS = [
   {
     step: "01",
     title: "Install the agent skills",
-    body: "The skills pack ships the agent's reusable capabilities — workflows, prompts, and tool definitions the CLI loads at startup. One npx command unpacks them to ~/.oxagen/skills.",
+    body: "The skills pack ships the agent's reusable capabilities, workflows, prompts, and tool definitions the CLI loads at startup. One npx command unpacks them to ~/.oxagen/skills.",
     command: SKILLS_CMD,
   },
   {
     step: "02",
     title: "Install the binary",
-    body: "install.sh detects your platform, fetches the matching oxagen binary, verifies its checksum, and places it in ~/.local/bin — a directory already on your PATH, no shell-profile edits required.",
+    body: "install.sh detects your platform, fetches the matching oxagen binary, verifies its checksum, and places it in ~/.local/bin, a directory already on your PATH, no shell-profile edits required.",
     command: INSTALL_CMD,
   },
   {
@@ -41,7 +41,7 @@ const STEPS = [
 const NEXT_STEPS = [
   {
     title: "Quickstart",
-    body: "Log in, pick a workspace, ask your first question — five minutes end to end.",
+    body: "Log in, pick a workspace, ask your first question, five minutes end to end.",
     href: "/docs/cli/quickstart",
   },
   {
@@ -51,7 +51,7 @@ const NEXT_STEPS = [
   },
   {
     title: "Commands",
-    body: "The full command reference — agent loop, knowledge graph queries, configuration.",
+    body: "The full command reference, agent loop, knowledge graph queries, configuration.",
     href: "/docs/cli/commands",
   },
 ];
@@ -90,8 +90,8 @@ export default function InstallPage(): ReactNode {
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 oxagen
               </code>{" "}
-              CLI brings the governed agent to your terminal — the same
-              knowledge graph, the same RBAC-scoped retrieval, the same audited{" "}
+              CLI brings the governed agent to your terminal: the same knowledge
+              graph, the same RBAC-scoped retrieval, the same audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
@@ -135,7 +135,7 @@ export default function InstallPage(): ReactNode {
               Skills, binary, <span className="lp-grad-text">go</span>.
             </h2>
             <p className="mt-4 text-base text-muted-foreground">
-              Two commands to install, one to verify — exactly the sequence the
+              Two commands to install, one to verify: exactly the sequence the
               terminal above is typing.
             </p>
           </div>
@@ -180,14 +180,14 @@ export default function InstallPage(): ReactNode {
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 install.sh
               </code>{" "}
-              does four predictable things and nothing else — read it before you
+              does four predictable things and nothing else: read it before you
               run it, we insist.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
                 [
                   "Detects your platform",
-                  "macOS or Linux, arm64 or x64 — and fetches the matching prebuilt binary.",
+                  "macOS or Linux, arm64 or x64, and fetches the matching prebuilt binary.",
                 ],
                 [
                   "Verifies the checksum",
@@ -195,7 +195,7 @@ export default function InstallPage(): ReactNode {
                 ],
                 [
                   "Installs to ~/.local/bin",
-                  "The XDG-standard user binary directory, already on PATH in modern shells — no profile edits.",
+                  "The XDG-standard user binary directory, already on PATH in modern shells: no profile edits.",
                 ],
                 [
                   "Never needs sudo",
@@ -217,7 +217,7 @@ export default function InstallPage(): ReactNode {
             <p className="ox-eyebrow">Need a different route?</p>
             <p className="mt-3 text-sm text-muted-foreground">
               For a CI runner or an ephemeral container, build the portable
-              single-file bundle — one <code className="font-mono">.mjs</code>{" "}
+              single-file bundle: one <code className="font-mono">.mjs</code>{" "}
               you can copy anywhere and run under plain Node 20.
             </p>
             <div className="mt-5 flex flex-col items-start gap-3">
@@ -226,7 +226,7 @@ export default function InstallPage(): ReactNode {
             <p className="mt-5 text-sm text-muted-foreground">
               The CLI is on npm too, but a global{" "}
               <code className="font-mono">npm i -g</code> is not reliably
-              standalone yet. Every option — npm, source builds, the bundle — is
+              standalone yet. Every option, npm, source builds, the bundle, is
               covered in the{" "}
               <Link
                 href="/docs/cli/installation"
@@ -255,8 +255,8 @@ export default function InstallPage(): ReactNode {
             </h2>
             <p className="mt-4 max-w-xl text-base text-muted-foreground">
               The CLI speaks to the same governed platform as the app and the
-              API — log in and your workspace knowledge graph is on the other
-              end of the prompt.
+              API: log in and your workspace knowledge graph is on the other end
+              of the prompt.
             </p>
           </div>
           <div className="mt-12 grid gap-5 md:grid-cols-3">
