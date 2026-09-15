@@ -474,6 +474,16 @@
       "writes": []
     },
     {
+      "domain": "control",
+      "name": "dispatch_command",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "dispatch_schema_reconcile",
       "reads": [],
@@ -481,15 +491,6 @@
         "api",
         "cli",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "dispatch_tacho_command",
-      "reads": [],
-      "surfaces": [
-        "api"
       ],
       "writes": []
     },
@@ -558,8 +559,8 @@
       "writes": []
     },
     {
-      "domain": "tacho",
-      "name": "fetch_tacho_commands",
+      "domain": "control",
+      "name": "fetch_commands",
       "reads": [],
       "surfaces": [
         "api"
@@ -679,6 +680,17 @@
     {
       "domain": "connection",
       "name": "get_connection_mappings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_contract_rate",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1251,6 +1263,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "list_commands",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2637,7 +2659,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b11eeecf44f75345cad46cc2bfb2e306f69401b54b9b778bcbcf976dc0c7d8e5",
+  "contentHash": "be3a7175045f3f38974880ca5f7cd51972ab144168bc908e4b367c64bab588f7",
   "domains": [
     {
       "name": "agent",
@@ -15477,7 +15499,7 @@
         },
         {
           "name": "host_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
@@ -15486,6 +15508,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "target_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "target_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "command",
@@ -15498,6 +15532,30 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "requested_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "delivery_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "degraded_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "issued_by_principal_id",

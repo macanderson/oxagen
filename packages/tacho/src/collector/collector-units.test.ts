@@ -68,6 +68,10 @@ function command(overrides: Partial<DeliveredCommand>): DeliveredCommand {
     command: "pause",
     session_uuid: null,
     payload: {},
+    requested_mode: null,
+    delivery_mode: null,
+    degraded_reason: null,
+    reason: null,
     issued_at: "2026-09-10T10:00:00.000Z",
     expires_at: null,
     ...overrides,
@@ -118,6 +122,16 @@ describe("inbox", () => {
           session_uuid: uuid,
           payload: {},
         }),
+        command({
+          id: "st",
+          command: "steer",
+          session_uuid: uuid,
+          payload: { text: "use staging" },
+          requested_mode: "interrupt",
+          delivery_mode: "next_step",
+          degraded_reason: "harness_tier",
+          expires_at: "2026-09-10T11:00:00.000Z",
+        }),
         command({ id: "r", command: "resume", session_uuid: uuid }),
         command({ id: "k", command: "kill", session_uuid: uuid }),
         command({ id: "c", command: "cancel", session_uuid: uuid }),
@@ -139,7 +153,9 @@ describe("inbox", () => {
           command: "message",
           payload: { text: "all hands" },
         }),
-        command({ id: "hp", command: "pause" }),
+        // The row's reason travels as `reason`; a row queued before the
+        // column existed carries it in the payload.
+        command({ id: "hp", command: "pause", reason: "fleet hold" }),
         command({
           id: "hrv",
           command: "revoke",
@@ -150,12 +166,13 @@ describe("inbox", () => {
       deps,
     );
     const acks = Object.fromEntries(
-      result.acknowledgements.map((a) => [a.command_id, a.outcome]),
+      result.acknowledgements.map((a) => [a.command_id, a.status]),
     );
     expect(acks).toEqual({
       p: "applied",
-      m: "delivered",
+      m: "received",
       m0: "failed",
+      st: "received",
       r: "applied",
       k: "applied",
       c: "applied",
@@ -163,17 +180,31 @@ describe("inbox", () => {
       x: "expired",
       nf: "failed",
       hrb: "applied",
-      hm: "delivered",
+      hm: "received",
       hp: "applied",
       hrv: "applied",
       bad: "failed",
     });
-    expect(record.control.paused).toBe("operator pause");
+    expect(
+      result.acknowledgements.find((a) => a.command_id === "x")?.detail,
+    ).toMatch(/expired/);
+    expect(record.control.paused).toBe("fleet hold");
     expect(record.control.cancelled).toBe("operator cancel");
     expect(record.control.messages.map((m) => m.text)).toEqual([
       "wrap up",
+      "use staging",
       "all hands",
     ]);
+    expect(record.control.messages[1]).toEqual({
+      id: "st",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+      expiresAt: "2026-09-10T11:00:00.000Z",
+    });
+    expect(record.control.messages[0]?.expiresAt).toBeNull();
     expect(kills).toEqual(["4242:SIGKILL", "4242:SIGTERM"]);
     expect(refreshed).toBe(1);
     expect(suspended).toBe("offboarded");
@@ -247,7 +278,22 @@ describe("registry", () => {
     expect(record.sealed).toBe(true);
     expect(never.sealed).toBe(true);
     expect(registry.sweep(() => true, 1)).toEqual([]);
+    // A queued steer keeps its deadline across a daemon restart, so the
+    // boundary after the restart still refuses to inject it past expiry; a
+    // state file written before steer carried `{ id, text }` only.
+    record.control.messages.push({
+      id: "cmd_steer",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "next_step",
+      deliveryMode: "next_step",
+      degradedReason: null,
+      expiresAt: "2026-09-10T11:00:00.000Z",
+    });
     const state = registry.state();
+    const legacy = state.sessions.find((s) => s.harnessSessionId === "sess-1");
+    if (legacy === undefined) throw new Error("no persisted session");
+    legacy.control.messages.push({ id: "cmd_old", text: "wrap up" });
     const restored = new SessionRegistry({
       context: CONTEXT,
       scope: TEST_ENROLLMENT,
@@ -258,6 +304,26 @@ describe("registry", () => {
     expect(back?.recorder.chainCursor).toEqual(record.recorder.chainCursor);
     expect(back?.pid).toBe(4242);
     expect(back?.sealed).toBe(true);
+    expect(back?.control.messages).toEqual([
+      {
+        id: "cmd_steer",
+        text: "use staging",
+        command: "steer",
+        requestedMode: "next_step",
+        deliveryMode: "next_step",
+        degradedReason: null,
+        expiresAt: "2026-09-10T11:00:00.000Z",
+      },
+      {
+        id: "cmd_old",
+        text: "wrap up",
+        command: "message",
+        requestedMode: null,
+        deliveryMode: null,
+        degradedReason: null,
+        expiresAt: null,
+      },
+    ]);
     const continued = back?.recorder.sealCollectorEvent("oxagen:notification", {
       notification_type: "after-restart",
     });
