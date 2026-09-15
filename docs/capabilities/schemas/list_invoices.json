@@ -1,0 +1,136 @@
+{
+  "name": "list_invoices",
+  "domain": "billing",
+  "description": "List the organization's invoices, newest first, in one cursor-paged list: number, status, what each invoice charged for (the subscription, a block purchase, an auto top-up, an interim or a period-close charge), amounts due and paid, period and the Stripe-hosted page.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string",
+              "description": "Prefixed public identifier (inv_)"
+            },
+            "number": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "paid",
+                "uncollectible",
+                "void"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "subscription",
+                "gau_purchase",
+                "gau_auto_topup",
+                "gau_interim",
+                "gau_period_close"
+              ]
+            },
+            "amountDueMicros": {
+              "type": "string"
+            },
+            "amountPaidMicros": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "periodStart": {
+              "type": "string"
+            },
+            "periodEnd": {
+              "type": "string"
+            },
+            "hostedInvoiceUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "publicId",
+            "number",
+            "status",
+            "kind",
+            "amountDueMicros",
+            "amountPaidMicros",
+            "currency",
+            "periodStart",
+            "periodEnd",
+            "hostedInvoiceUrl"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "items",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

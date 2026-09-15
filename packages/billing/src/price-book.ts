@@ -268,12 +268,15 @@ export async function loadPriceBook(args: {
 }
 
 /**
- * The entries the active tenant may read — the list and its own negotiated
- * rows, which is what the `org_or_global` policy admits — effective at `at`,
- * ordered for a list: provider, model, class, latest first.
+ * The entries the organization may read — the list and its own negotiated
+ * rows, the same set the `org_or_global` policy admits — effective at `at`,
+ * ordered for a list: provider, model, class, latest first. The org predicate
+ * is in the query as well as the policy, since a stack with RLS enforcement
+ * off runs the query under `app.rls_bypass`.
  */
 export async function listPriceEntries(args: {
   at: Date;
+  orgId: string;
 }): Promise<PriceEntry[]> {
   const rows = await withTenantDb((tx) =>
     tx
@@ -281,6 +284,10 @@ export async function listPriceEntries(args: {
       .from(schema.priceEntries)
       .where(
         and(
+          or(
+            isNull(schema.priceEntries.orgId),
+            eq(schema.priceEntries.orgId, args.orgId),
+          ),
           lte(schema.priceEntries.effectiveFrom, args.at),
           or(
             isNull(schema.priceEntries.effectiveTo),
@@ -298,7 +305,7 @@ export async function listPriceEntries(args: {
   return rows.map(rowToEntry);
 }
 
-export interface PriceBookSyncResult {
+interface PriceBookSyncResult {
   /** Rows written (inserted or updated in place, before they have shipped). */
   written: number;
   /** Rows whose price was unchanged. */

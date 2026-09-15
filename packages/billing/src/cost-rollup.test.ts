@@ -128,6 +128,31 @@ describe("priceFrame", () => {
     expect(p.priceEntryIds).toEqual([]);
   });
 
+  it("leaves a frame unpriced when no entry prices its model and it reports no figure", () => {
+    const p = priceFrame(
+      BOOK,
+      ORG,
+      frame({ model: "mystery-9", reportedCostMicros: null }),
+    );
+    expect(p.scaled).toBe(null);
+    expect(p.basis).toBe(null);
+    expect(p.priceEntryIds).toEqual([]);
+  });
+
+  it("keeps the classes the book priced as an estimate when the rest is unpriced", () => {
+    const p = priceFrame(
+      BOOK,
+      ORG,
+      frame({
+        tokens: tokens({ input_uncached: 1000, reasoning: 50 }),
+        reportedCostMicros: null,
+      }),
+    );
+    expect(p.scaled).toBe(3_000_000_000n);
+    expect(p.basis).toBe("estimated");
+    expect(p.priceEntryIds).toEqual(["pe_in"]);
+  });
+
   it("prefers the organization's negotiated row over the list row", () => {
     const negotiated = entry({
       id: "pe_neg",
@@ -255,6 +280,54 @@ describe("rollupRun", () => {
     expect(record.breakdown.models.map((m) => [m.model, m.basis])).toEqual([
       ["claude-sonnet-5", "gateway_observed"],
       ["mystery-9", "estimated"],
+    ]);
+  });
+
+  it("answers no cost and no basis for a run whose only frames are unpriced, never a zero", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame({ model: "mystery-9", reportedCostMicros: null }),
+        frame({ model: "mystery-9", reportedCostMicros: null }),
+      ],
+    });
+    expect(record.costMicros).toBe(null);
+    expect(record.costBasis).toBe(null);
+    expect(record.modelCalls).toBe(2);
+    expect(record.tokens).toEqual(
+      tokens({ input_uncached: 2000, output: 200 }),
+    );
+    expect(record.priceEntryIds).toEqual([]);
+    expect(record.breakdown.models).toEqual([
+      expect.objectContaining({
+        model: "mystery-9",
+        calls: 2,
+        costMicros: null,
+        basis: null,
+      }),
+    ]);
+  });
+
+  it("prices the run from its priced frames alone when one frame is unpriced", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame(),
+        frame({ model: "mystery-9", reportedCostMicros: null }),
+      ],
+    });
+    expect(record.costMicros).toBe(4500n);
+    expect(record.costBasis).toBe("gateway_observed");
+    expect(record.modelCalls).toBe(2);
+    expect(
+      record.breakdown.models.map((m) => [m.model, m.costMicros, m.basis]),
+    ).toEqual([
+      ["claude-sonnet-5", 4500n, "gateway_observed"],
+      ["mystery-9", null, null],
     ]);
   });
 

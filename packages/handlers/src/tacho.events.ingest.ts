@@ -624,8 +624,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     return { chainBreaks, verified, control, spendDeltas, sealedRoots };
   });
 
-  // The spend counter and the seal event are best-effort: the batch is
-  // accepted once the rows are written, and neither may fail the intake.
+  // The spend counter is best-effort: the batch is accepted once the rows
+  // are written, and the counter write may not fail the intake.
   for (const spend of result.spendDeltas) {
     try {
       await recordSpend({
@@ -641,20 +641,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       );
     }
   }
-  for (const runId of result.sealedRoots) {
-    try {
-      await eventClient.send({
-        name: "cost/run.sealed",
-        data: { runId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      });
-    } catch (err) {
-      logger.error(
-        { err, runId },
-        "tacho.events.ingest: cost/run.sealed dispatch failed; the nightly sweep rolls the run up",
-      );
-    }
-  }
-
   const inserts = input.events.map((event) => ({
     event,
     chainVerified: result.verified.get(event.session_uuid) ?? false,
@@ -672,6 +658,23 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       "tacho.events.ingest: append failed",
     );
     throw err;
+  }
+
+  // The seal event goes out after the batch's frames are in ClickHouse: the
+  // rollup job reads tacho_events as soon as it receives the event, and the
+  // sweep does not revisit a run whose rollup postdates its seal.
+  for (const runId of result.sealedRoots) {
+    try {
+      await eventClient.send({
+        name: "cost/run.sealed",
+        data: { runId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      });
+    } catch (err) {
+      logger.error(
+        { err, runId },
+        "tacho.events.ingest: cost/run.sealed dispatch failed; the nightly sweep rolls the run up",
+      );
+    }
   }
 
   return {

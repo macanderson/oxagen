@@ -1,5 +1,5 @@
 {
-  "generatedCount": 243,
+  "generatedCount": 244,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1484,6 +1484,17 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_invoices",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

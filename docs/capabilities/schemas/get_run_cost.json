@@ -192,30 +192,37 @@
                       "minimum": 0
                     },
                     "cost": {
-                      "type": "object",
-                      "properties": {
-                        "micros": {
-                          "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "micros": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "basis": {
+                              "type": "string",
+                              "enum": [
+                                "gateway_observed",
+                                "client_attested",
+                                "mixed",
+                                "estimated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "micros",
+                            "currency",
+                            "basis"
+                          ],
+                          "additionalProperties": false
                         },
-                        "currency": {
-                          "type": "string"
-                        },
-                        "basis": {
-                          "type": "string",
-                          "enum": [
-                            "gateway_observed",
-                            "client_attested",
-                            "mixed",
-                            "estimated"
-                          ]
+                        {
+                          "type": "null"
                         }
-                      },
-                      "required": [
-                        "micros",
-                        "currency",
-                        "basis"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     "tokens": {
                       "type": "object",

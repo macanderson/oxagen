@@ -9,7 +9,7 @@ import {
   spendDrill,
   type SpendDrillOutput,
 } from "@oxagen/oxagen/contracts/spend.drill";
-import { divideHalfEven, type RunTotalsRecord } from "@oxagen/billing";
+import { divideHalfEven, type RunTotalsRecord, utcDay } from "@oxagen/billing";
 import {
   daysBetween,
   money,
@@ -18,7 +18,6 @@ import {
   type RunFilter,
   type SpendScope,
   sumFigures,
-  utcDay,
 } from "./spend.shared";
 
 export type SpendDrillDeps = {

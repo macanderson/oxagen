@@ -94,23 +94,31 @@ micros_per_million` at full precision, sums the run, and rounds once, half to
 even, to whole micros; cents are rounded once more at the statement line and
 nowhere earlier (spec §12.3). `cache_hit_rate` is `cache_read ÷
 (input_uncached + cache_read)` weighted by each frame's spend, token-weighted
-when nothing cost anything, null with no input tokens. A run with no model
-frame has `cost_micros` and `cost_basis` null together (a CHECK pairs them).
+when nothing cost anything, null with no input tokens. A frame the book
+prices nothing of, whose record carries no figure, is unpriced; a run or
+model group with no priced frame has `cost_micros` and `cost_basis` null
+together (a CHECK pairs them). A wrapped run's cache writes are the
+`cache_creation_tokens` figure its token-bearing sources carry, priced as 5m
+writes, as the ledger branch prices `cache_write_tokens`.
 
 The jobs live in `packages/inngest-functions`: `cost.run-rollup` on
 `cost/run.sealed` rebuilds the run's row and then its workspace-day's groups,
 with concurrency one per run and retries on a degraded frame store;
 `cost.daily-rollup` at 01:00 UTC rolls up every sealed run whose row is
-missing or older than its seal (a lost event) and rebuilds yesterday's groups
-for every workspace with a run. The one seal writer in this repository, the
-tacho ingest handler, emits `cost/run.sealed` on an `agent_stop` of a root
-session; the evidence ledger's `sealAttempt` has no in-repository caller, so a
-ledger run's row arrives with the nightly sweep until a caller exists to emit
-the event.
+missing or older than its seal (a lost event) and rebuilds the groups of
+yesterday for every workspace with a run and of the workspace-day each swept
+run started on. The one seal writer in this repository, the tacho ingest
+handler, emits `cost/run.sealed` on an `agent_stop` of a root session, after
+the batch's frames are appended to ClickHouse, since the job reads them on
+receipt and the sweep passes a run whose row postdates its seal; the evidence
+ledger's `sealAttempt` has no in-repository caller, so a ledger run's row
+arrives with the nightly sweep until a caller exists to emit the event.
 
 The handlers (`packages/handlers/src/spend.*.ts`, `run.cost.ts`,
 `cost.price_entry.list.ts`) read Postgres only, through `withTenantDb` with
-explicit `org_id` and `workspace_id` predicates beside RLS. `list_runs` and
+explicit `org_id` and `workspace_id` predicates beside RLS (the price-book
+read names `org_id IS NULL OR org_id = <org>`, the same set the policy
+admits). `list_runs` and
 `get_run` read `cost` and `basis` from `cost.run_totals` and answer `cost:
 null` for a run with no row; they no longer read ClickHouse or the tacho
 session's own total.
@@ -122,7 +130,8 @@ session's own total.
 `mixed`: the figure sums frames observed by both. `estimated`: a frame's
 model had no price entry; the frame contributes what its own record reported
 (the harness's or the gateway's figure) or the classes the book could price,
-and the figure inherits the label. Folding is monotone: equal stays, any
+and the figure inherits the label. A frame with neither is unpriced and
+contributes no figure and no basis. Folding is monotone: equal stays, any
 estimate makes the whole an estimate, two different observed bases are
 `mixed`. The four values are the CHECK on both tables and the contract enum.
 The issue's test list named `estimated_unknown_model` for a run with no price

@@ -1,7 +1,7 @@
 // audit-exempt: read-only — lists the price book the organization is priced against; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
-// `list_price_entries` (ADR-060 §1): the rows RLS admits to the active tenant
-// (the list catalog and its own negotiated rows), effective at `at`.
+// `list_price_entries` (ADR-060 §1): the list catalog and the organization's
+// own negotiated rows, effective at `at`.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   costPriceEntryList,
@@ -10,16 +10,19 @@ import {
 import { listPriceEntries, type PriceEntry } from "@oxagen/billing";
 
 export type PriceEntryListDeps = {
-  listPriceEntries: (args: { at: Date }) => Promise<PriceEntry[]>;
+  listPriceEntries: (args: {
+    at: Date;
+    orgId: string;
+  }) => Promise<PriceEntry[]>;
   now: () => Date;
 };
 
 export function createPriceEntryListHandler(
   deps: PriceEntryListDeps,
 ): CapabilityHandler<typeof costPriceEntryList> {
-  return async (input): Promise<CostPriceEntryListOutput> => {
+  return async (input, ctx): Promise<CostPriceEntryListOutput> => {
     const at = input.at === undefined ? deps.now() : new Date(input.at);
-    const entries = await deps.listPriceEntries({ at });
+    const entries = await deps.listPriceEntries({ at, orgId: ctx.orgId });
     return {
       at: at.toISOString(),
       entries: entries.map((e) => ({

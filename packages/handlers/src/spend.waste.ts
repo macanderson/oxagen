@@ -11,10 +11,13 @@ import {
   spendWasteList,
   type SpendWasteListOutput,
 } from "@oxagen/oxagen/contracts/spend.waste";
-import type { CostBasis, RunTotalsRecord } from "@oxagen/billing";
+import {
+  type CostBasis,
+  foldBasis,
+  type RunTotalsRecord,
+} from "@oxagen/billing";
 import {
   cost,
-  foldBases,
   readRunTotals,
   type RunFilter,
   type SpendScope,
@@ -74,7 +77,9 @@ export function createSpendWasteHandler(
       .sort((a, b) => (a.micros > b.micros ? -1 : a.micros < b.micros ? 1 : 0));
 
     const wastedMicros = hits.reduce((sum, h) => sum + h.micros, 0n);
-    const basis = foldBases(hits.map((h) => h.basis));
+    const basis = hits
+      .map((h) => h.basis)
+      .reduce<CostBasis | null>(foldBasis, null);
     const wasted =
       hits.length === 0 ? null : cost(wastedMicros, currency, basis);
 

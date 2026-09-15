@@ -351,6 +351,10 @@ describe("ingest_tacho_events", () => {
         workspaceId: CONTEXT.workspaceId,
       },
     });
+    // The rollup job reads ClickHouse on receipt, so the frames land first.
+    expect(mocks.insertTachoEvents.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendEvent.mock.invocationCallOrder[0] as number,
+    );
 
     const row = db.sessions.get(SESSION);
     expect(row).toMatchObject({
@@ -581,6 +585,7 @@ describe("ingest_tacho_events", () => {
       ),
     ).rejects.toThrow("clickhouse down");
     expect(mocks.loggerError).toHaveBeenCalledOnce();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
   });
 
   it("folds every counted kind into the session delta", () => {

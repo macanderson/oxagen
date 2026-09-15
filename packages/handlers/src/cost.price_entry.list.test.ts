@@ -37,7 +37,10 @@ describe("list_price_entries", () => {
   it("lists the book effective now when no instant is given", async () => {
     const h = harness([]);
     const out = await h.handler({}, ctx());
-    expect(h.listPriceEntries).toHaveBeenCalledWith({ at: NOW });
+    expect(h.listPriceEntries).toHaveBeenCalledWith({
+      at: NOW,
+      orgId: SCOPE.orgId,
+    });
     expect(out).toEqual({ at: NOW.toISOString(), entries: [] });
     expect(() => costPriceEntryList.output.parse(out)).not.toThrow();
   });
@@ -47,6 +50,7 @@ describe("list_price_entries", () => {
     await h.handler({ at: "2026-08-01T00:00:00.000Z" }, ctx());
     expect(h.listPriceEntries).toHaveBeenCalledWith({
       at: new Date("2026-08-01T00:00:00.000Z"),
+      orgId: SCOPE.orgId,
     });
   });
 

@@ -10,9 +10,13 @@ import {
   STATEMENT_COLUMNS,
 } from "@oxagen/oxagen/contracts/spend.statement.export";
 import type { SpendGroupKind } from "@oxagen/oxagen/contracts/spend.shared";
-import { microsToCentsHalfEven, type DailyTotalsRecord } from "@oxagen/billing";
+import {
+  microsToCentsHalfEven,
+  type DailyTotalsRecord,
+  utcDay,
+} from "@oxagen/billing";
 import { groupRows } from "./spend.get";
-import { readDailyTotals, type SpendScope, utcDay } from "./spend.shared";
+import { readDailyTotals, type SpendScope } from "./spend.shared";
 
 export type SpendStatementDeps = {
   readDailyTotals: (

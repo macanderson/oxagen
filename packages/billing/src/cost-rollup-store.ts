@@ -37,7 +37,7 @@ const totals = schema.runTotals;
 const daily = schema.dailyTotals;
 
 /** What a rollup needs to know about a run before it reads the frames. */
-export interface RunSource {
+interface RunSource {
   meta: RunMeta;
   frames: FrameRunRef;
 }
@@ -61,9 +61,7 @@ function grade(value: string | null): RunMeta["replayGrade"] {
  * The run's own record by public id: a V2 ledger run (`arun_…`) or a root
  * tacho session (`tse_…`). Null when neither store has it.
  */
-export async function loadRunSource(
-  publicId: string,
-): Promise<RunSource | null> {
+async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("arun_")) {
     const rows = await withSystemDb((tx) =>
       tx
@@ -184,7 +182,7 @@ export async function loadRunSource(
 }
 
 /** A ledger run's tool calls: its `tool.call_completed` events; an encrypted payload names no tool. */
-export async function readLedgerToolCalls(args: {
+async function readLedgerToolCalls(args: {
   orgId: string;
   workspaceId: string;
   runUuid: string;
@@ -228,7 +226,7 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
 }
 
 /** The reads a run rollup makes; production defaults, tests inject fakes. */
-export interface RunRollupDeps {
+interface RunRollupDeps {
   loadRunSource: (publicId: string) => Promise<RunSource | null>;
   readModelCalls: (args: {
     orgId: string;
@@ -284,12 +282,12 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
 type ModelBreakdownJson = Omit<ModelBreakdown, "costMicros" | "costByClass"> & {
-  costMicros: string;
+  costMicros: string | null;
   costByClass: Record<keyof ModelBreakdown["costByClass"], string>;
 };
 
 /** jsonb carries the per-model costs as decimal strings; bring them back to bigint. */
-export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
+function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   const raw = value as {
     models: ModelBreakdownJson[];
     tools: RunTotalsRecord["breakdown"]["tools"];
@@ -297,7 +295,7 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   return {
     models: raw.models.map((m) => ({
       ...m,
-      costMicros: BigInt(m.costMicros),
+      costMicros: m.costMicros === null ? null : BigInt(m.costMicros),
       costByClass: Object.fromEntries(
         Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
       ) as ModelBreakdown["costByClass"],
@@ -306,11 +304,11 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   };
 }
 
-export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
+function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
   return {
     models: breakdown.models.map((m) => ({
       ...m,
-      costMicros: m.costMicros.toString(),
+      costMicros: m.costMicros === null ? null : m.costMicros.toString(),
       costByClass: Object.fromEntries(
         Object.entries(m.costByClass).map(([k, v]) => [k, v.toString()]),
       ),
@@ -320,7 +318,7 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
 }
 
 /** Insert or replace the run's row; the row's identity is the run's public id. */
-export async function upsertRunTotals(
+async function upsertRunTotals(
   record: RunTotalsRecord,
   rolledUpAt: Date,
 ): Promise<void> {
@@ -393,7 +391,7 @@ async function readCarried(runId: string) {
   };
 }
 
-export const productionRunRollupDeps: RunRollupDeps = {
+const productionRunRollupDeps: RunRollupDeps = {
   loadRunSource,
   readModelCalls: async (args) =>
     (await readModelCallFrames(args)).map(toFrame),
@@ -453,7 +451,7 @@ export function dayBounds(day: string): { start: Date; next: Date } {
 }
 
 /** Every run row of one workspace that started on `day`. */
-export async function readRunTotalsForDay(args: {
+async function readRunTotalsForDay(args: {
   orgId: string;
   workspaceId: string;
   day: string;
@@ -477,7 +475,7 @@ export async function readRunTotalsForDay(args: {
 }
 
 /** Replace the workspace-day's group rows in one transaction. */
-export async function replaceDailyTotals(
+async function replaceDailyTotals(
   args: { orgId: string; workspaceId: string; day: string },
   rows: readonly DailyTotalsRecord[],
   rolledUpAt: Date,
@@ -517,13 +515,13 @@ export async function replaceDailyTotals(
   });
 }
 
-export interface DailyRollupDeps {
+interface DailyRollupDeps {
   readRuns: typeof readRunTotalsForDay;
   write: typeof replaceDailyTotals;
   now: () => Date;
 }
 
-export const productionDailyRollupDeps: DailyRollupDeps = {
+const productionDailyRollupDeps: DailyRollupDeps = {
   readRuns: readRunTotalsForDay,
   write: replaceDailyTotals,
   now: () => new Date(),

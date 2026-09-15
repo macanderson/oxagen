@@ -56,10 +56,20 @@ describe("get_run_cost contract", () => {
         rollup: { ...rollup, cacheHitRate: 2 },
       }).success,
     ).toBe(false);
+    // A model group none of whose frames was priced carries no figure.
     expect(
       runCostGet.output.safeParse({
         runId: "tse_abc123",
         rollup: { ...rollup, byModel: [{ ...rollup.byModel[0], cost: null }] },
+      }).success,
+    ).toBe(true);
+    expect(
+      runCostGet.output.safeParse({
+        runId: "tse_abc123",
+        rollup: {
+          ...rollup,
+          byModel: [{ ...rollup.byModel[0], cost: { micros: "1" } }],
+        },
       }).success,
     ).toBe(false);
   });

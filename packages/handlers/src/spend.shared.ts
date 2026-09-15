@@ -17,7 +17,9 @@ import type {
 import { schema, withTenantDb } from "@oxagen/database";
 import {
   dayBounds,
+  foldBasis,
   runTotalsRowToRecord,
+  utcDay,
   type CostBasis,
   type DailyTotalsRecord,
   type RunTotalsRecord,
@@ -47,19 +49,8 @@ export function cost(
   return { micros: micros.toString(), currency, basis };
 }
 
-/** The basis a sum of figures carries: equal stays, any estimate is an estimate, else mixed. */
-export function foldBases(bases: readonly CostBasis[]): CostBasis | null {
-  let out: CostBasis | null = null;
-  for (const b of bases) {
-    if (out === null || out === b) out = b;
-    else if (out === "estimated" || b === "estimated") out = "estimated";
-    else out = "mixed";
-  }
-  return out;
-}
-
 /** The figure fields every rollup row carries, summed. */
-export interface FigureSource {
+interface FigureSource {
   costMicros: bigint | null;
   costBasis: CostBasis | null;
   currency: string;
@@ -101,7 +92,11 @@ export function sumFigures(sources: readonly FigureSource[]): SpendFigure {
     }
   }
   return {
-    cost: cost(micros, currency, foldBases(bases)),
+    cost: cost(
+      micros,
+      currency,
+      bases.reduce<CostBasis | null>(foldBasis, null),
+    ),
     calls,
     runs,
     proven: proven === null ? null : money(proven, currency),
@@ -260,11 +255,6 @@ export async function readRunTotalsByIds(
       { ...runTotalsRowToRecord(r), rolledUpAt: r.rolledUpAt },
     ]),
   );
-}
-
-/** `YYYY-MM-DD` for an instant, in UTC. */
-export function utcDay(at: Date): string {
-  return at.toISOString().slice(0, 10);
 }
 
 /** Every day from `from` to `to` inclusive. */

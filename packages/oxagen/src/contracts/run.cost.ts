@@ -29,7 +29,8 @@ export const runCostRollupSchema = z
           model: z.string(),
           provider: z.string().nullable(),
           calls: z.number().int().nonnegative(),
-          cost: costSchema,
+          /** Null when no frame of the model was priced. */
+          cost: costSchema.nullable(),
           tokens: tokenCountsSchema,
         })
         .strict(),

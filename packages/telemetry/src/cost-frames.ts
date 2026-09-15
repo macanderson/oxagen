@@ -12,13 +12,17 @@
  * The tacho table receives the same model call from more than one source
  * (hook, collector, OTel log, transcript); the token-bearing sources are
  * `otel_log`, `collector` and `hook`, the same rule the ingest handler folds
- * session totals by, and FINAL collapses a redelivered (session, seq).
+ * session totals by, and FINAL collapses a redelivered (session, seq). Those
+ * sources carry cache writes as one `cache_creation_tokens` figure (the
+ * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
+ * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
+ * writes, the same rule the ledger branch applies to `cache_write_tokens`.
  */
 import { breakerEnvConfig } from "./breaker-config";
 import { getBreaker } from "./circuit-breaker";
 import { clickhouse } from "./clickhouse";
 
-export type CostFrameBasis = "gateway_observed" | "client_attested";
+type CostFrameBasis = "gateway_observed" | "client_attested";
 
 export interface ModelCallFrameRow {
   /** RFC 3339. */
@@ -36,7 +40,7 @@ export interface ModelCallFrameRow {
   basis: CostFrameBasis;
 }
 
-export interface ToolCallFrameRow {
+interface ToolCallFrameRow {
   /** Null when the frame names no tool. */
   name: string | null;
 }
@@ -115,13 +119,11 @@ export async function readModelCallFrames(args: {
         formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
         model,
         provider,
-        coalesce(input_tokens, 0)             AS input_uncached,
-        coalesce(cache_read_tokens, 0)        AS cache_read,
-        coalesce(cache_creation_5m_tokens, 0) AS cache_write_5m,
-        coalesce(cache_creation_1h_tokens, 0) AS cache_write_1h,
-        coalesce(output_tokens, 0)            AS output,
-        coalesce(thinking_tokens, 0)          AS reasoning,
-        cost_usd_micros                       AS cost_micros
+        coalesce(input_tokens, 0)          AS input_uncached,
+        coalesce(cache_read_tokens, 0)     AS cache_read,
+        coalesce(cache_creation_tokens, 0) AS cache_write_5m,
+        coalesce(output_tokens, 0)         AS output,
+        cost_usd_micros                    AS cost_micros
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID}
         AND root_session_uuid = {rootSessionUuid:UUID}
@@ -145,9 +147,7 @@ export async function readModelCallFrames(args: {
     input_uncached: string;
     cache_read: string;
     cache_write_5m: string;
-    cache_write_1h: string;
     output: string;
-    reasoning: string;
     cost_micros: string | null;
   };
   const rows = (await result.json()) as Row[];
@@ -158,9 +158,9 @@ export async function readModelCallFrames(args: {
     inputUncached: Number(r.input_uncached),
     cacheRead: Number(r.cache_read),
     cacheWrite5m: Number(r.cache_write_5m),
-    cacheWrite1h: Number(r.cache_write_1h),
+    cacheWrite1h: 0,
     output: Number(r.output),
-    reasoning: Number(r.reasoning),
+    reasoning: 0,
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
   }));

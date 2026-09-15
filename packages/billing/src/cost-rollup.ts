@@ -15,8 +15,10 @@
  * `gateway_observed`, a harness-reported one `client_attested`; a run whose
  * frames differ is `mixed`. A frame whose model no price entry prices is
  * `estimated`: it contributes the cost its own record carries, or the classes
- * the book could price, and the run inherits the label. A run with no model
- * frame has no cost and no basis, never a zero.
+ * the book could price, and the run inherits the label. A frame the book
+ * prices nothing of and whose record carries no figure is unpriced: it has
+ * no cost and no basis, and a run or model group with no priced frame has
+ * none either, never a zero.
  */
 import type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 import {
@@ -28,7 +30,7 @@ import {
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 
 /** The token classes a model-call frame carries (spec §12.6). */
-export const TOKEN_CLASSES = [
+const TOKEN_CLASSES = [
   "input_uncached",
   "cache_read",
   "cache_write_5m",
@@ -36,7 +38,7 @@ export const TOKEN_CLASSES = [
   "output",
   "reasoning",
 ] as const;
-export type TokenClass = (typeof TOKEN_CLASSES)[number];
+type TokenClass = (typeof TOKEN_CLASSES)[number];
 export type TokenCounts = Record<TokenClass, number>;
 
 export const ZERO_TOKENS: TokenCounts = {
@@ -49,7 +51,7 @@ export const ZERO_TOKENS: TokenCounts = {
 };
 
 /** Who observed a single frame. */
-export type FrameBasis = "gateway_observed" | "client_attested";
+type FrameBasis = "gateway_observed" | "client_attested";
 
 /** One model call, normalized from either frame store. */
 export interface ModelCallFrame {
@@ -91,18 +93,19 @@ export interface ModelBreakdown {
   provider: string | null;
   calls: number;
   tokens: TokenCounts;
-  costMicros: bigint;
+  /** Null when no frame of the model was priced. */
+  costMicros: bigint | null;
   /** The same cost split by token class, each rounded once; a class the book priced nothing for is 0. */
   costByClass: Record<TokenClass, bigint>;
-  basis: CostBasis;
+  basis: CostBasis | null;
 }
 
-export interface ToolBreakdown {
+interface ToolBreakdown {
   name: string;
   calls: number;
 }
 
-export interface RunBreakdown {
+interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
 }
@@ -183,11 +186,11 @@ const PRICE_CLASS: Record<TokenClass, PriceTokenClass> = {
 };
 
 interface PricedFrame {
-  /** A million times the frame's micro-USD. */
-  scaled: bigint;
+  /** A million times the frame's micro-USD; null when the frame is unpriced. */
+  scaled: bigint | null;
   /** The same, by token class; an estimated frame's reported figure sits under `output`. */
   scaledByClass: Record<TokenClass, bigint>;
-  basis: CostBasis;
+  basis: CostBasis | null;
   priceEntryIds: string[];
 }
 
@@ -205,7 +208,8 @@ const zeroScaled = (): Record<TokenClass, bigint> => ({
  * entry at the frame's instant; a class no entry prices makes the frame
  * `estimated`, and the frame then contributes what its own record reported
  * (the harness's or the gateway's figure), or the classes the book priced
- * when it reported nothing.
+ * when it reported nothing. A frame with no priced class and no reported
+ * figure is unpriced: `scaled` and `basis` are null.
  */
 export function priceFrame(
   book: PriceBook,
@@ -244,6 +248,8 @@ export function priceFrame(
       priceEntryIds: [...ids],
     };
   }
+  if (missed && ids.size === 0)
+    return { scaled: null, scaledByClass, basis: null, priceEntryIds: [] };
   return {
     scaled,
     scaledByClass,
@@ -281,7 +287,7 @@ export function cacheHitRate(
 
 // ── Run rollup ────────────────────────────────────────────────────────────────
 
-export interface RollupInput {
+interface RollupInput {
   meta: RunMeta;
   modelCalls: readonly ModelCallFrame[];
   toolCalls: readonly ToolCallFrame[];
@@ -301,37 +307,40 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       provider: string | null;
       calls: number;
       tokens: TokenCounts;
-      scaled: bigint;
+      scaled: bigint | null;
       scaledByClass: Record<TokenClass, bigint>;
       basis: CostBasis | null;
     }
   >();
   const priced: { tokens: TokenCounts; scaled: bigint }[] = [];
-  let scaledTotal = 0n;
+  let scaledTotal: bigint | null = null;
   let basis: CostBasis | null = null;
 
   for (const frame of input.modelCalls) {
     const p = priceFrame(book, meta.orgId, frame);
-    scaledTotal += p.scaled;
-    basis = foldBasis(basis, p.basis);
     for (const id of p.priceEntryIds) priceEntryIds.add(id);
     addTokens(tokens, frame.tokens);
-    priced.push({ tokens: frame.tokens, scaled: p.scaled });
+    priced.push({ tokens: frame.tokens, scaled: p.scaled ?? 0n });
     const group = byModel.get(frame.model) ?? {
       provider: frame.provider,
       calls: 0,
       tokens: { ...ZERO_TOKENS },
-      scaled: 0n,
+      scaled: null,
       scaledByClass: zeroScaled(),
       basis: null,
     };
     group.calls += 1;
     addTokens(group.tokens, frame.tokens);
-    group.scaled += p.scaled;
-    for (const c of TOKEN_CLASSES) group.scaledByClass[c] += p.scaledByClass[c];
-    group.basis = foldBasis(group.basis, p.basis);
     group.provider ??= frame.provider;
     byModel.set(frame.model, group);
+    // An unpriced frame counts as a call and carries its tokens; it adds no
+    // figure and no basis to the run or its model group.
+    if (p.scaled === null || p.basis === null) continue;
+    scaledTotal = (scaledTotal ?? 0n) + p.scaled;
+    basis = foldBasis(basis, p.basis);
+    group.scaled = (group.scaled ?? 0n) + p.scaled;
+    for (const c of TOKEN_CLASSES) group.scaledByClass[c] += p.scaledByClass[c];
+    group.basis = foldBasis(group.basis, p.basis);
   }
 
   const byTool = new Map<string, number>();
@@ -348,9 +357,10 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
     modelCalls,
     toolCalls,
     tokens,
-    costMicros: modelCalls === 0 ? null : divideHalfEven(scaledTotal, MILLION),
+    costMicros:
+      scaledTotal === null ? null : divideHalfEven(scaledTotal, MILLION),
     currency: USD,
-    costBasis: modelCalls === 0 ? null : basis,
+    costBasis: scaledTotal === null ? null : basis,
     priceEntryIds: [...priceEntryIds].sort(),
     cacheHitRate: cacheHitRate(priced),
     breakdown: {
@@ -360,15 +370,15 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
           provider: g.provider,
           calls: g.calls,
           tokens: g.tokens,
-          costMicros: divideHalfEven(g.scaled, MILLION),
+          costMicros:
+            g.scaled === null ? null : divideHalfEven(g.scaled, MILLION),
           costByClass: Object.fromEntries(
             TOKEN_CLASSES.map((c) => [
               c,
               divideHalfEven(g.scaledByClass[c], MILLION),
             ]),
           ) as Record<TokenClass, bigint>,
-          // A group always holds at least one priced frame, so a basis exists.
-          basis: g.basis ?? "estimated",
+          basis: g.scaled === null ? null : g.basis,
         }))
         .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0)),
       tools: [...byTool.entries()]

@@ -42,11 +42,7 @@ export function createRunCostHandler(
           model: m.model,
           provider: m.provider,
           calls: m.calls,
-          cost: {
-            micros: m.costMicros.toString(),
-            currency: row.currency,
-            basis: m.basis,
-          },
+          cost: cost(m.costMicros, row.currency, m.basis),
           tokens: m.tokens,
         })),
         byTool: row.breakdown.tools,

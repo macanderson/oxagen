@@ -38,7 +38,7 @@ The rollup:
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
 | `retries` | integer or null | the harness's API retry count; null for a ledger run |
 | `productiveRatio` | number or null | null until the grading lane writes it |
-| `byModel` | object[] | `{ model, provider, calls, cost, tokens }`, one per model the frames used; each `cost` carries its own basis |
+| `byModel` | object[] | `{ model, provider, calls, cost, tokens }`, one per model the frames used; each `cost` carries its own basis, or is null when none of the model's frames was priced |
 | `byTool` | object[] | `{ name, calls }` |
 | `priceEntryIds` | string[] | the `cost.price_entries` rows the frames were priced with (spec §12.2) |
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
