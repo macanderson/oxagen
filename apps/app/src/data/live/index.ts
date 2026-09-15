@@ -4,5 +4,6 @@ import type { DataSource } from "@/data/ports";
 import { billing } from "./billing";
 import { pretenant } from "./pretenant";
 import { shell } from "./shell";
+import { steering } from "./steering";
 
-export const liveSource: DataSource = { pretenant, shell, billing };
+export const liveSource: DataSource = { pretenant, shell, billing, steering };

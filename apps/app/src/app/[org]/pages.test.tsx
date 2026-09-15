@@ -5,8 +5,9 @@
 // itself once from its pages.* key (§1.2), resolves its viewer first and
 // renders nothing for a person requireViewer refuses. Billing hands its viewer,
 // the data source, the checkout outcome and the invoices cursor to the Billing
-// feature (WL-38); Fleet, Run, People and API keys gain their bodies in WL-34
-// to WL-37.
+// feature (WL-38), and Steering hands its viewer, the data source and the query
+// to the Steering feature (#2961); Fleet, Run, People and API keys gain their
+// bodies in WL-34 to WL-37.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -16,13 +17,17 @@ import {
   routeProps,
 } from "@/test/render-page";
 
-const { requireViewer, Billing, dataSource } = vi.hoisted(() => ({
+const { requireViewer, Billing, Steering, dataSource } = vi.hoisted(() => ({
   requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
   Billing: vi.fn((_props: Record<string, unknown>) => null),
+  Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
+    <p data-testid="steering-body" data-tab={props.searchParams.tab} />
+  )),
   dataSource: vi.fn(() => "live-source"),
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/billing", () => ({ Billing }));
+vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/data/source", () => ({ dataSource }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -45,9 +50,10 @@ const title = translator("pages");
 const GAP_LANE: [string, Load][] = [
   ["agents", () => import("./[ws]/agents/page")],
   ["tools", () => import("./[ws]/tools/page")],
-  ["steering", () => import("./[ws]/steering/page")],
   ["spend", () => import("./[ws]/spend/page")],
 ];
+
+const STEERING: Load = () => import("./[ws]/steering/page");
 
 const REV1: [string, string[], Load][] = [
   ["fleet", WS, () => import("./[ws]/page")],
@@ -105,6 +111,30 @@ describe("the Billing page", () => {
   });
 });
 
+describe("the Steering page", () => {
+  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the query to Steering", async () => {
+    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await STEERING(),
+      routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+      title("steering"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Steering).toHaveBeenCalledOnce();
+    expect(Steering.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source: "live-source",
+      searchParams: { tab: "prs", proposal: "prp_1" },
+    });
+    expect(screen.getByTestId("steering-body")).toHaveAttribute(
+      "data-tab",
+      "prs",
+    );
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
 describe("rev1 pages before their page item", () => {
   it.each(REV1)(
     "pages.%s resolves its viewer, names the page once and renders no body, never a NotRecorded row (negative)",
@@ -123,6 +153,7 @@ describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
+    ["steering", STEERING] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));

@@ -6,6 +6,28 @@
     },
     "dialog": {
       "close": "Close"
+    },
+    "record": {
+      "kinds": {
+        "rule": "rule",
+        "constraint": "constraint",
+        "procedure": "procedure",
+        "fact": "fact",
+        "memory": "memory",
+        "preference": "preference"
+      },
+      "unclassified": "unclassified",
+      "force": "force {force}",
+      "effects": {
+        "require": "require",
+        "forbid": "forbid"
+      },
+      "scope": "Scope",
+      "scopes": {
+        "repository": "repository",
+        "workspace": "workspace"
+      },
+      "lineage": "Lineage"
     }
   }
 }

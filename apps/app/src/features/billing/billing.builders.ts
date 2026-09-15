@@ -189,6 +189,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
         return Promise.resolve(reads.invoices);
       },
     },
+    steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };
 }

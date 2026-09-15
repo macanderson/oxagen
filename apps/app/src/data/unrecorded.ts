@@ -8,7 +8,6 @@
 export const UNRECORDED = {
   agents: { gap: null },
   tools: { gap: null },
-  steering: { gap: null },
   spend: { gap: null },
   "run.frames_wrapped": { gap: "G6" },
 } as const satisfies Record<string, { gap: `G${number}` | null }>;

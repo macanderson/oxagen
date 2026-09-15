@@ -2,8 +2,8 @@
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet, Run and Organization ports in WL-34 to WL-37, the
-// Billing port in WL-38.
-import type { OrgCtx, PretenantCtx } from "@/server/viewer";
+// Billing port in WL-38, the Steering port with its gap lane (#2961).
+import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   ContractRate,
   GauBucket,
@@ -15,6 +15,12 @@ import type {
   ShellContext,
   WorkspaceChoice,
 } from "./contracts/shell";
+import type {
+  ContextPr,
+  ProposalPage,
+  RecordKind,
+  RecordPage,
+} from "./contracts/steering";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -50,5 +56,20 @@ export interface DataSource {
       ctx: OrgCtx,
       q: { cursor: string | null },
     ): Promise<Read<InvoicePage>>;
+  };
+  /**
+   * The Steering page's three noBillingGate reads on the workspace; caller:
+   * features/steering/steering.tsx.
+   */
+  steering: {
+    /** list_records, status active: one page of the records in force, of one kind or all */
+    records(
+      ctx: WsCtx,
+      q: { kind: RecordKind | null; offset: number },
+    ): Promise<Read<RecordPage>>;
+    /** list_proposals: one page, newest first */
+    proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
+    /** get_context_pr: one proposal's state machine, checks and what merge will do */
+    contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
   };
 }
