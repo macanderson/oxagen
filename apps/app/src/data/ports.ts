@@ -11,6 +11,7 @@ import type {
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
+import type { MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -64,4 +65,6 @@ export interface DataSource {
       q: { cursor: string | null },
     ): Promise<Read<InvoicePage>>;
   };
+  /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
+  org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
 }

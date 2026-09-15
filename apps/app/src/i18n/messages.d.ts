@@ -436,6 +436,49 @@ type Messages = {
       pending: string;
     };
   };
+  organization: {
+    tabs: {
+      label: string;
+      people: string;
+      apiKeys: string;
+    };
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
+    };
+    people: {
+      title: string;
+      person: string;
+      role: string;
+      joined: string;
+      empty: string;
+    };
+    invitations: {
+      title: string;
+      email: string;
+      role: string;
+      sent: string;
+      expires: string;
+      never: string;
+      empty: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    error: {
+      title: string;
+      body: string;
+    };
+  };
   shell: {
     skipToContent: string;
     loading: string;

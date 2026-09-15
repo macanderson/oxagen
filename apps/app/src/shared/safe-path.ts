@@ -88,6 +88,7 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  apiKeys: (org: string): SafePath => pathOf(org, "api-keys"),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),

@@ -133,6 +133,7 @@ describe("routes", () => {
     expect(pathOf("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(routes.fleet("a/b", "..")).toBe("/a%2Fb/..");
     expect(routes.people("\\evil")).toBe("/%5Cevil");
+    expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
   });
 
   it("carries Fleet's runs cursor as a query and builds a run's path", () => {

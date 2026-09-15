@@ -1,5 +1,5 @@
 {
-  "generatedCount": 277,
+  "generatedCount": 281,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -576,6 +576,17 @@
       "consumes": []
     },
     {
+      "name": "dismiss_finding",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
       "surfaces": [
@@ -928,6 +939,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_finding_evidence",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1666,6 +1688,17 @@
       "consumes": []
     },
     {
+      "name": "list_findings",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_iam_roles",
       "domain": "iam",
       "surfaces": [
@@ -2317,6 +2350,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_finding_fix",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
