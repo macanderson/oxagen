@@ -99,7 +99,13 @@ const SEPTEMBER = {
 
 function entitlement(over: Partial<GauEntitlement> = {}): GauEntitlement {
   return {
-    terms: { source: "published_tier", tier: "free", ...TERMS },
+    terms: {
+      source: "published_tier",
+      tier: "free",
+      effectiveFrom: new Date("2026-06-01T00:00:00.000Z"),
+      effectiveTo: null,
+      ...TERMS,
+    },
     subscription: {
       billingInterval: "month",
       currentPeriodStart: SEPTEMBER.start,
