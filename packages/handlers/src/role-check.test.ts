@@ -478,10 +478,10 @@ describe("INV-29: every role gate acts as the resolved user", () => {
     it("reads an exported function declaration's body", () => {
       const source = parseSource(
         "probe.ts",
-        `export async function handler(_input, ctx) {\n  await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n}`,
+        `export async function probeHandler(_input, ctx) {\n  await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n}`,
       );
-      expect(handlerCallsAssertOrgRole(source, "handler")).toBe(true);
-      expect(soleHandlerExport(source)).toBe("handler");
+      expect(handlerCallsAssertOrgRole(source, "probeHandler")).toBe(true);
+      expect(soleHandlerExport(source)).toBe("probeHandler");
     });
   });
 });
