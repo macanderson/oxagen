@@ -63,7 +63,7 @@ describe("workspaceListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: "usr_session",
         apiKeyId: null,
@@ -88,7 +88,7 @@ describe("workspaceListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: null,
         apiKeyId: "aky_test",
@@ -106,7 +106,7 @@ describe("workspaceListHandler", () => {
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_no_creator" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -120,7 +120,7 @@ describe("workspaceListHandler", () => {
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_deleted" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -133,7 +133,7 @@ describe("workspaceListHandler", () => {
   it("throws immediately when neither userId nor apiKeyId is set (unauthenticated)", async () => {
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: null }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");

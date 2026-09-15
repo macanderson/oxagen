@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   txInsertWsReturning: vi.fn(),
   txInsertWsUsers: vi.fn(),
   txFn: vi.fn(),
+  /** The actor's principal and org role, as assertOrgRole reads them. */
+  tenant: {
+    principalId: "prn_1" as string | null,
+    roleName: "Owner" as string | null,
+  },
 }));
 
 // Defaults: org found, no conflicting slug
@@ -79,9 +84,31 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           organizations: { findFirst: mocks.orgFindFirst },
           workspaces: { findFirst: mocks.wsFindFirst },
         },
-        // Namespace derivation reads the org's existing workspace namespaces
-        // before inserting; empty means the slug-derived namespace is used as-is.
-        select: () => ({ from: () => ({ where: async () => [] }) }),
+        // The role gate reads principals then role assignments (answered by
+        // table); namespace derivation reads the org's existing workspace
+        // namespaces before inserting — empty means the slug-derived
+        // namespace is used as-is.
+        select: () => ({
+          from: (table: unknown) => {
+            const rows = (): unknown[] => {
+              if (table === real.schema.principals)
+                return mocks.tenant.principalId
+                  ? [{ id: mocks.tenant.principalId }]
+                  : [];
+              if (table === real.schema.principalRoleAssignments)
+                return mocks.tenant.roleName
+                  ? [{ roleName: mocks.tenant.roleName }]
+                  : [];
+              return [];
+            };
+            const chain = {
+              innerJoin: () => chain,
+              where: () => Object.assign(Promise.resolve(rows()), chain),
+              limit: () => Promise.resolve(rows()),
+            };
+            return chain;
+          },
+        }),
         insert: (table: unknown): unknown => {
           insertCountRef.n++;
           if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
@@ -94,7 +121,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { workspaceCreateHandler } from "./workspace.create";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -108,6 +135,8 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     mocks.txInsertWs.mockClear();
     mocks.txInsertWsReturning.mockClear();
     // Restore defaults
+    mocks.tenant.principalId = "prn_1";
+    mocks.tenant.roleName = "Owner";
     mocks.orgFindFirst.mockResolvedValue({ slug: "acme" });
     mocks.wsFindFirst.mockResolvedValue(null);
     mocks.txInsertWsReturning.mockResolvedValue([
@@ -121,33 +150,69 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     ]);
   });
 
-  // ── auth guard ───────────────────────────────────────────────────────────
+  // ── role gate (INV-29) ────────────────────────────────────────────────────
 
-  it("throws when userId is null (unauthenticated request)", async () => {
+  async function refusal(
+    input: { name: string; slug: string },
+    ctx: CapabilityContext = CTX,
+  ) {
+    const err = await workspaceCreateHandler(input, ctx).catch((e) => e);
+    if (!isHandlerError(err))
+      throw new Error(`expected a HandlerError, got ${err}`);
+    return { code: err.code, reason: err.reason };
+  }
+
+  it("refuses a context with no user before any query (negative)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      workspaceCreateHandler({ name: "Test", slug: "test" }, anonCtx),
-    ).rejects.toThrow("workspace.create requires an authenticated user");
+      refusal({ name: "Test", slug: "test" }, anonCtx),
+    ).resolves.toEqual({
+      code: "forbidden",
+      reason: "no_principal",
+    });
+    expect(mocks.orgFindFirst).not.toHaveBeenCalled();
+  });
+
+  it.each(["Member", "Billing", "Compliance", "Viewer"])(
+    "refuses an org %s with forbidden / org_role_required and writes nothing (negative)",
+    async (roleName) => {
+      mocks.tenant.roleName = roleName;
+      await expect(refusal({ name: "Test", slug: "test" })).resolves.toEqual({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+      expect(mocks.txInsertWs).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lets an org Admin create a workspace", async () => {
+    mocks.tenant.roleName = "Admin";
+    const result = await workspaceCreateHandler(
+      { name: "Admin Ws", slug: "admin-ws" },
+      CTX,
+    );
+    expect(result.slug).toBe("default");
   });
 
   // ── tenant guard ──────────────────────────────────────────────────────────
 
-  it("throws when the org is not found (tenant lookup failure)", async () => {
+  it("refuses with not_found when the org row is missing", async () => {
     mocks.orgFindFirst.mockResolvedValueOnce(null);
-
-    await expect(
-      workspaceCreateHandler({ name: "Dev", slug: "dev" }, CTX),
-    ).rejects.toThrow("tenant not found");
+    await expect(refusal({ name: "Dev", slug: "dev" })).resolves.toEqual({
+      code: "not_found",
+      reason: "org_not_found",
+    });
   });
 
   // ── slug conflict guard ──────────────────────────────────────────────────
 
-  it("throws a friendly error when the slug already exists in this tenant", async () => {
+  it("refuses with conflict / slug_taken when the slug already exists in this org (negative)", async () => {
     mocks.wsFindFirst.mockResolvedValueOnce({ id: "existing_ws" });
-
-    await expect(
-      workspaceCreateHandler({ name: "Dupe", slug: "default" }, CTX),
-    ).rejects.toThrow('slug "default" already in use for this tenant');
+    await expect(refusal({ name: "Dupe", slug: "default" })).resolves.toEqual({
+      code: "conflict",
+      reason: "slug_taken",
+    });
+    expect(mocks.txInsertWs).not.toHaveBeenCalled();
   });
 
   // ── happy path ───────────────────────────────────────────────────────────

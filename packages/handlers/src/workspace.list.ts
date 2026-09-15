@@ -80,6 +80,8 @@ export const workspaceListHandler: CapabilityHandler<
         `You are not a member of organization "${input.orgSlug}"`,
       );
     }
+    // Archived workspaces leave the switcher and the CLI picker; the
+    // Organization › Workspaces section asks for them (archive_workspace).
     const rows = await tx
       .select({
         id: schema.workspaces.id,
@@ -88,6 +90,7 @@ export const workspaceListHandler: CapabilityHandler<
         namespace: schema.workspaces.namespace,
         name: schema.workspaces.name,
         role: schema.workspaceUsers.role,
+        archivedAt: schema.workspaces.archivedAt,
       })
       .from(schema.workspaces)
       .leftJoin(
@@ -97,7 +100,14 @@ export const workspaceListHandler: CapabilityHandler<
           eq(schema.workspaceUsers.userId, resolvedUserId),
         ),
       )
-      .where(eq(schema.workspaces.orgId, org.id));
+      .where(
+        input.includeArchived
+          ? eq(schema.workspaces.orgId, org.id)
+          : and(
+              eq(schema.workspaces.orgId, org.id),
+              isNull(schema.workspaces.archivedAt),
+            ),
+      );
     return {
       organization: {
         id: org.id,
@@ -113,6 +123,7 @@ export const workspaceListHandler: CapabilityHandler<
         namespace: r.namespace,
         name: r.name,
         role: r.role ?? null,
+        archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
       })),
     };
   });

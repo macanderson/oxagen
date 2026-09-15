@@ -10,11 +10,32 @@ const mocks = vi.hoisted(() => {
   // the absence of) a history write.
   const insertValues = vi.fn().mockResolvedValue(undefined);
   const insert = vi.fn(() => ({ values: insertValues }));
-  return { findFirst: vi.fn(), where, set, update, insert, insertValues };
+  return {
+    findFirst: vi.fn(),
+    where,
+    set,
+    update,
+    insert,
+    insertValues,
+    /** The actor's principal and org role, as assertOrgRole reads them. */
+    tenant: {
+      principalId: "prn_1" as string | null,
+      roleName: "Owner" as string | null,
+    },
+  };
 });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  // The role gate's two reads are answered by table; the handler's own reads
+  // go through query.workspaces.findFirst.
+  const rowsFor = (table: unknown): unknown[] => {
+    if (table === real.schema.principals)
+      return mocks.tenant.principalId ? [{ id: mocks.tenant.principalId }] : [];
+    if (table === real.schema.principalRoleAssignments)
+      return mocks.tenant.roleName ? [{ roleName: mocks.tenant.roleName }] : [];
+    throw new Error("unexpected table");
+  };
   return {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -22,14 +43,37 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         query: { workspaces: { findFirst: mocks.findFirst } },
         update: mocks.update,
         insert: mocks.insert,
+        select: () => ({
+          from: (table: unknown) => {
+            const chain = {
+              innerJoin: () => chain,
+              where: () => chain,
+              limit: () => Promise.resolve(rowsFor(table)),
+            };
+            return chain;
+          },
+        }),
       }),
   };
 });
 
 import { workspaceSettingsWriteHandler } from "./workspace.settings.write";
+import { isHandlerError } from "@oxagen/oxagen";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const EXISTING = { name: "Research", slug: "research", description: "old" };
+const EXISTING = {
+  id: CTX.workspaceId,
+  name: "Research",
+  slug: "research",
+  description: "old",
+};
+
+const refusal = async (p: Promise<unknown>) => {
+  const err = await p.catch((e) => e);
+  if (!isHandlerError(err))
+    throw new Error(`expected a HandlerError, got ${err}`);
+  return { code: err.code, reason: err.reason };
+};
 
 describe("workspace.settings.write handler", () => {
   beforeEach(() => {
@@ -41,6 +85,59 @@ describe("workspace.settings.write handler", () => {
     mocks.insert.mockClear();
     mocks.insertValues.mockReset();
     mocks.insertValues.mockResolvedValue(undefined);
+    mocks.tenant.principalId = "prn_1";
+    mocks.tenant.roleName = "Owner";
+  });
+
+  // ── Role gate (INV-29) ───────────────────────────────────────────────────
+
+  it.each(["Member", "Billing", "Compliance", "Viewer"])(
+    "refuses an org %s with forbidden / org_role_required and reads nothing (negative)",
+    async (roleName) => {
+      mocks.tenant.roleName = roleName;
+      await expect(
+        refusal(workspaceSettingsWriteHandler({ name: "X" }, CTX)),
+      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a context with no user (negative)", async () => {
+    await expect(
+      refusal(
+        workspaceSettingsWriteHandler({ name: "X" }, { ...CTX, userId: null }),
+      ),
+    ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+  });
+
+  // ── Target workspace ─────────────────────────────────────────────────────
+
+  it("updates the workspace workspaceId names, by public id in the org, and captures its slug history under that id", async () => {
+    mocks.findFirst
+      .mockResolvedValueOnce({ ...EXISTING, id: "ws-other-uuid" })
+      .mockResolvedValueOnce({ ...EXISTING, slug: "renamed" });
+    const out = await workspaceSettingsWriteHandler(
+      { workspaceId: "wrk_other", slug: "renamed" },
+      CTX,
+    );
+    expect(out.slug).toBe("renamed");
+    const insertRow = mocks.insertValues.mock.calls[0]![0] as {
+      workspaceId: string;
+    };
+    expect(insertRow.workspaceId).toBe("ws-other-uuid");
+  });
+
+  it("refuses with not_found when workspaceId names a workspace outside the org (negative)", async () => {
+    mocks.findFirst.mockResolvedValueOnce(undefined);
+    await expect(
+      refusal(
+        workspaceSettingsWriteHandler(
+          { workspaceId: "wrk_elsewhere", name: "X" },
+          CTX,
+        ),
+      ),
+    ).resolves.toEqual({ code: "not_found", reason: "workspace_not_found" });
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("updates the name and description columns independently", async () => {
@@ -122,15 +219,15 @@ describe("workspace.settings.write handler", () => {
     expect(out.slug).toBe("research");
   });
 
-  it("maps a unique-violation on slug to a friendly error", async () => {
+  it("maps a unique-violation on slug to conflict / slug_taken", async () => {
     mocks.findFirst.mockResolvedValueOnce(EXISTING);
     mocks.where.mockRejectedValueOnce({ code: "23505" });
     await expect(
-      workspaceSettingsWriteHandler({ slug: "taken" }, CTX),
-    ).rejects.toThrow(/already in use/);
+      refusal(workspaceSettingsWriteHandler({ slug: "taken" }, CTX)),
+    ).resolves.toEqual({ code: "conflict", reason: "slug_taken" });
   });
 
-  it("maps a Drizzle-wrapped unique-violation (code on .cause) to a friendly error", async () => {
+  it("maps a Drizzle-wrapped unique-violation (code on .cause) to conflict / slug_taken", async () => {
     // Production path: drizzle wraps the postgres.js error and the SQLSTATE
     // lives on `.cause`, not the top level. The shared isUniqueViolation walks
     // the cause chain; a top-level-only check would miss this and leak raw SQL.
@@ -141,15 +238,15 @@ describe("workspace.settings.write handler", () => {
       cause: { code: "23505", constraint_name: "workspaces_org_slug_idx" },
     });
     await expect(
-      workspaceSettingsWriteHandler({ slug: "taken" }, CTX),
-    ).rejects.toThrow(/already in use/);
+      refusal(workspaceSettingsWriteHandler({ slug: "taken" }, CTX)),
+    ).resolves.toEqual({ code: "conflict", reason: "slug_taken" });
   });
 
-  it("throws when the workspace is not found", async () => {
+  it("refuses with not_found when the active workspace is not in the org", async () => {
     mocks.findFirst.mockResolvedValueOnce(undefined);
     await expect(
-      workspaceSettingsWriteHandler({ name: "X" }, CTX),
-    ).rejects.toThrow("Workspace not found");
+      refusal(workspaceSettingsWriteHandler({ name: "X" }, CTX)),
+    ).resolves.toEqual({ code: "not_found", reason: "workspace_not_found" });
   });
 
   // ── Slug-history capture ────────────────────────────────────────────────────
@@ -208,7 +305,7 @@ describe("workspace.settings.write handler", () => {
     mocks.where.mockRejectedValueOnce({ code: "23505" });
     await expect(
       workspaceSettingsWriteHandler({ slug: "taken" }, CTX),
-    ).rejects.toThrow(/already in use/);
+    ).rejects.toThrow(/already exists/);
     // The history insert ran first (so the surrounding tx would roll it back),
     // and the update was attempted after.
     expect(mocks.insert).toHaveBeenCalledTimes(1);
