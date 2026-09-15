@@ -1152,6 +1152,44 @@ describe("closeInvoiceAccrual", () => {
     expect(await closeInvoiceAccrual(ORG, NOW)).toBeNull();
     expect(store.settlements).toHaveLength(0);
   });
+
+  it("invoices an ended month the close job has not closed yet as one period_close, and a later job run changes nothing", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue(
+      settingsWith({ approvedForInvoiceBilling: true }),
+    );
+    const august = seedBucket({
+      periodStart: AUGUST.start,
+      periodEnd: AUGUST.end,
+      usedGau: 5_000 + 7_321,
+    });
+
+    expect(await closeInvoiceAccrual(ORG, NOW)).toBeNull();
+
+    expect(store.settlements).toHaveLength(1);
+    expect(store.settlements[0]).toMatchObject({
+      bucketId: august.id,
+      kind: "period_close",
+      seq: 0,
+      quantityGau: 7_321,
+    });
+    expect(august.closedAt).toBeInstanceOf(Date);
+    expect(uninvoicedGau(august)).toBe(0);
+
+    // The switch has landed: the job now sees a prepaid org.
+    mocks.readOrgBillingSettings.mockResolvedValue(settingsWith());
+    const before = structuredClone({
+      buckets: store.buckets,
+      settlements: store.settlements,
+    });
+    expect(await closeEndedGauPeriods(null, NOW)).toEqual({
+      processed: 0,
+      nextCursor: null,
+    });
+    expect({
+      buckets: store.buckets,
+      settlements: store.settlements,
+    }).toEqual(before);
+  });
 });
 
 describe("closeEndedGauPeriods", () => {

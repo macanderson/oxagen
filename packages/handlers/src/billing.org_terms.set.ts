@@ -16,11 +16,14 @@
 // runs on withSystemDb (inside setOrgBillingTerms) keyed on the input's orgId.
 //
 // Switching invoice billing off closes the accrual in the same call:
-// closeInvoiceAccrual claims every uninvoiced GAU of the current bucket as one
-// interim settlement and invoices it, so no overage is stranded between the
-// modes (apps/app/ARCHITECTURE.md §3.9 item 12). It runs before the write, so
-// a write that fails leaves the org invoice-billed with a legitimate interim
-// invoice and a re-run of the script finds nothing left to claim. Turning
+// closeInvoiceAccrual closes every ended month the close job has not closed
+// yet (a period_close settlement for its uninvoiced overage), then claims
+// every uninvoiced GAU of the current bucket as one interim settlement and
+// invoices it, so no overage is stranded between the modes
+// (apps/app/ARCHITECTURE.md §3.9 item 12). It runs before the write, while
+// the org is still invoice-billed, so a write that fails leaves the org
+// invoice-billed with legitimate invoices and a re-run of the script finds
+// nothing left to claim. Turning
 // invoice billing on writes no settlement: purchased units stay usable as carry.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -50,7 +53,7 @@ export type OrgBillingTermsDeps = {
     orgId: string,
   ) => Promise<Pick<OrgGauBillingSettings, "approvedForInvoiceBilling">>;
   write: OrgBillingTermsWriter;
-  /** Claim and invoice the current bucket's uninvoiced overage. */
+  /** Invoice the uninvoiced overage of every ended, unclosed month and of the current bucket. */
   closeAccrual: (orgId: string) => Promise<unknown>;
 };
 

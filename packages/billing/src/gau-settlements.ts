@@ -414,43 +414,6 @@ export async function settleGauInvoice(
   }
 }
 
-/**
- * Close the invoice-billing accrual of the org's current bucket: claim every
- * uninvoiced GAU as one interim settlement and run the settlement sequence.
- * `set_org_billing_terms` calls it when it switches invoice billing off, so
- * no overage is stranded between the modes (item 12). Returns the claimed
- * row, or null when nothing was uninvoiced.
- */
-export async function closeInvoiceAccrual(
-  orgId: string,
-  now: Date = new Date(),
-): Promise<GauSettlementRow | null> {
-  const claimed = await withSystemDb(async (tx) => {
-    const { terms, subscription } = await readGauEntitlement(tx, orgId, now);
-    const period = periodFor(subscription, now);
-    const buckets = await tx
-      .select()
-      .from(schema.gauBuckets)
-      .where(
-        and(
-          eq(schema.gauBuckets.orgId, orgId),
-          eq(schema.gauBuckets.periodStart, period.start),
-        ),
-      )
-      .limit(1);
-    const bucket = buckets[0];
-    if (bucket === undefined) return null;
-    const quantity = uninvoicedGau(bucket);
-    return quantity > 0
-      ? claimInterimInvoice(tx, bucket, terms, quantity)
-      : null;
-  });
-  if (claimed !== null) {
-    await settleGauInvoice(claimed, systemSettlementScope(orgId));
-  }
-  return claimed;
-}
-
 // ── The close job's steps (billing.gau-close) ───────────────────────────────
 
 const GAU_JOB_PAGE_SIZE = 100;
@@ -514,6 +477,66 @@ async function closeGauPeriod(bucket: GauBucketRow, now: Date): Promise<void> {
   if (claimed !== null) {
     await settleGauInvoice(claimed, systemSettlementScope(bucket.orgId));
   }
+}
+
+/**
+ * Close the org's invoice-billing accrual. `set_org_billing_terms` calls it
+ * before it switches invoice billing off, so no overage is stranded between
+ * the modes (item 12). First every bucket whose month has ended and that the
+ * close job has not closed yet is closed the way the job closes it, while the
+ * org is still invoice-billed: its uninvoiced overage becomes a `period_close`
+ * settlement. Then every uninvoiced GAU of the current bucket is claimed as
+ * one interim settlement and the settlement sequence runs. Returns the
+ * current bucket's claimed row, or null when nothing was uninvoiced there.
+ */
+export async function closeInvoiceAccrual(
+  orgId: string,
+  now: Date = new Date(),
+): Promise<GauSettlementRow | null> {
+  // The hourly close job leaves an org at most a few ended, unclosed months,
+  // so one page holds them all.
+  const ended = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(schema.gauBuckets)
+      .where(
+        and(
+          eq(schema.gauBuckets.orgId, orgId),
+          lte(schema.gauBuckets.periodEnd, now),
+          isNull(schema.gauBuckets.closedAt),
+        ),
+      )
+      .orderBy(asc(schema.gauBuckets.periodStart))
+      .limit(GAU_JOB_PAGE_SIZE),
+  );
+  for (const bucket of ended) {
+    await closeGauPeriod(bucket, now);
+  }
+
+  const claimed = await withSystemDb(async (tx) => {
+    const { terms, subscription } = await readGauEntitlement(tx, orgId, now);
+    const period = periodFor(subscription, now);
+    const buckets = await tx
+      .select()
+      .from(schema.gauBuckets)
+      .where(
+        and(
+          eq(schema.gauBuckets.orgId, orgId),
+          eq(schema.gauBuckets.periodStart, period.start),
+        ),
+      )
+      .limit(1);
+    const bucket = buckets[0];
+    if (bucket === undefined) return null;
+    const quantity = uninvoicedGau(bucket);
+    return quantity > 0
+      ? claimInterimInvoice(tx, bucket, terms, quantity)
+      : null;
+  });
+  if (claimed !== null) {
+    await settleGauInvoice(claimed, systemSettlementScope(orgId));
+  }
+  return claimed;
 }
 
 /**
