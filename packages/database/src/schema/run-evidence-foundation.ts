@@ -29,6 +29,7 @@ import { evidenceSchema } from "./_schemas";
 import {
   appendOnlyAuditMixin,
   auditMixin,
+  hexIdMixin,
   idMixin,
   orgScopeMixin,
 } from "./_mixins";
@@ -133,7 +134,7 @@ export const SHA256_DIGEST_PATTERN = "^sha256:[0-9a-f]{64}$";
 export const retentionPolicyVersions = evidenceSchema.table(
   "retention_policy_versions",
   {
-    ...idMixin("rpv"),
+    ...hexIdMixin("rpv"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
     // Monotonically increasing per (org, workspace). Version 1 is the first
