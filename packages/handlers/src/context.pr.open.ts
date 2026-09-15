@@ -83,16 +83,9 @@ export function createOpenContextPrHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextPrOpen> {
   return async (input, ctx) => {
-    // A Context PR needs a signed-in person; an API key carries no user.
-    if (!ctx.userId) {
-      throw new HandlerError({
-        code: "forbidden",
-        reason: "no_principal",
-        message: "No signed-in user on the request",
-      });
-    }
+    const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
-      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
     );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
@@ -200,7 +193,7 @@ export function createOpenContextPrHandler(
           stampedRecordId: record.record_id,
           recordHash: record.record_hash,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         ["proposed"],
       );
@@ -213,7 +206,7 @@ export function createOpenContextPrHandler(
           governanceMode: mode,
           headSha: pr.headSha,
           checks: pendingChecks(),
-          updatedByUserId: ctx.userId ?? null,
+          updatedByUserId: actingUserId,
         },
         OPEN_PR,
       );
