@@ -120,7 +120,11 @@ describe("get_spend", () => {
       daily: [daily({ costMicros: 700n, costBasis: "client_attested" })],
       runs: [
         pricedRun(700n),
-        pricedRun(300n, { operatorPrincipalId: null, verdict: "flipped" }),
+        pricedRun(300n, {
+          operatorPrincipalId: null,
+          operatorKey: null,
+          verdict: "flipped",
+        }),
         run({ verdict: "failing" }),
       ],
     });

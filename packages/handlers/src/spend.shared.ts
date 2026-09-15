@@ -198,7 +198,7 @@ function runFilterPredicate(filter: RunFilter) {
     case "all":
       return undefined;
     case "operator":
-      return eq(totals.operatorPrincipalId, filter.key);
+      return eq(totals.operatorKey, filter.key);
     case "agent":
       return eq(totals.agentKey, filter.key);
     case "tool":

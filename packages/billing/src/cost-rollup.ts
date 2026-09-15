@@ -76,6 +76,8 @@ export interface RunMeta {
   orgId: string;
   workspaceId: string;
   operatorPrincipalId: string | null;
+  /** The operator's principal public id (`prn_…`): the key of its `operator` group, the id `list_runs` answers. */
+  operatorKey: string | null;
   agentPrincipalId: string | null;
   agentKey: string | null;
   taskRef: string | null;
@@ -503,7 +505,7 @@ export function dailyTotalsFromRuns(
     const day = utcDay(run.startedAt);
     const base = { orgId: run.orgId, workspaceId: run.workspaceId, day };
     const levels: [SpendGroupKind, string | null][] = [
-      ["operator", run.operatorPrincipalId],
+      ["operator", run.operatorKey],
       ["agent", run.agentKey],
       ["task", run.taskRef],
     ];

@@ -23,6 +23,36 @@ describe("get_spend_drill contract", () => {
     ).toBe(false);
   });
 
+  it("takes an operator key as a principal public id and any bounded string for an agent or a tool", () => {
+    // The key an operator row of get_spend and a run of list_runs carry; the
+    // store filters on that column, so an agent key or a uuid is refused here.
+    const operator = spendDrill.input.safeParse({
+      kind: "operator",
+      key: "acme.core.cc",
+    });
+    expect(operator.success).toBe(false);
+    expect(operator.error?.issues.map((i) => i.path)).toEqual([["key"]]);
+    expect(
+      spendDrill.input.safeParse({
+        kind: "operator",
+        key: "0192d4a8-7c1e-7a00-8000-0000000000a1",
+      }).success,
+    ).toBe(false);
+    expect(
+      spendDrill.input.safeParse({
+        kind: "operator",
+        key: "prn_0123456789abcdefghjkmn",
+      }).success,
+    ).toBe(true);
+    expect(
+      spendDrill.input.safeParse({ kind: "agent", key: "acme.core.cc" })
+        .success,
+    ).toBe(true);
+    expect(
+      spendDrill.input.safeParse({ kind: "tool", key: "Bash" }).success,
+    ).toBe(true);
+  });
+
   it("answers a daily series whose money is micros with a basis, or null", () => {
     const out = {
       kind: "tool",

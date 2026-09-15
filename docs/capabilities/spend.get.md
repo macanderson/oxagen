@@ -18,7 +18,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `period` | object | yes | `{ from, to }`, UTC days `YYYY-MM-DD`, `to` on or after `from` |
+| `period` | object | yes | `{ from, to }`, UTC days `YYYY-MM-DD`, `to` on or after `from`, at most 92 days (`SPEND_RANGE_DAYS_MAX`): one read folds at most a quarter of the workspace's runs |
 | `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task` |
 
 ## Output
@@ -41,7 +41,7 @@ A figure:
 | `accepted` | money or null | spend on runs a human accepted; null until one is recorded |
 | `productiveRatio` | number or null | 0..1, run-weighted; null until the grading lane writes it |
 
-A row adds `key` (a principal id, an agent key `org_ns.ws_ns.slug`, a model id, a tool name or a task reference), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`).
+A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; or a task reference), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`).
 
 ## Basis
 

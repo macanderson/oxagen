@@ -2637,7 +2637,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ea0a29a3013ab87de0bada3fd0d239626966ac5bdbae1854fa5087b87457d79e",
+  "contentHash": "b11eeecf44f75345cad46cc2bfb2e306f69401b54b9b778bcbcf976dc0c7d8e5",
   "domains": [
     {
       "name": "agent",
@@ -10072,6 +10072,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "operator_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "agent_principal_id",

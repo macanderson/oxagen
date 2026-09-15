@@ -69,7 +69,8 @@ const meta: RunMeta = {
   runSource: "tacho",
   orgId: ORG,
   workspaceId: WS,
-  operatorPrincipalId: "pr-op",
+  operatorPrincipalId: "0192d4a8-7c1e-7a00-8000-0000000000a1",
+  operatorKey: "prn_0123456789abcdefghjkmn",
   agentPrincipalId: "pr-agent",
   agentKey: "acme.core.cc",
   taskRef: null,
@@ -382,6 +383,7 @@ describe("dailyTotalsFromRuns", () => {
           runId: "arun_2",
           runSource: "ledger",
           operatorPrincipalId: null,
+          operatorKey: null,
           taskRef: "OXA-1",
           startedAt: new Date("2026-09-14T23:59:59.000Z"),
         },
@@ -409,9 +411,13 @@ describe("dailyTotalsFromRuns", () => {
     expect(agent.provenMicros).toBe(100n);
     expect(agent.acceptedMicros).toBe(0n);
 
-    // The second run names no operator: nothing is attributed to that level for it.
-    expect(find("operator", "pr-op")!.runs).toBe(1);
-    expect(find("operator", "pr-op")!.provenMicros).toBe(null);
+    // An operator group's key is the principal's public id, the id list_runs
+    // answers; the uuid stays off the wire. The second run names no operator:
+    // nothing is attributed to that level for it.
+    const operator = find("operator", meta.operatorKey!)!;
+    expect(operator.runs).toBe(1);
+    expect(operator.provenMicros).toBe(null);
+    expect(find("operator", meta.operatorPrincipalId!)).toBeUndefined();
     expect(find("task", "OXA-1")!.runs).toBe(1);
 
     const sonnet = find("model", "claude-sonnet-5")!;

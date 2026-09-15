@@ -33,6 +33,7 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
+const principals = schema.principals;
 const totals = schema.runTotals;
 const daily = schema.dailyTotals;
 
@@ -70,6 +71,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           orgId: runs.orgId,
           workspaceId: runs.workspaceId,
           initiatingPrincipalId: runs.initiatingPrincipalId,
+          operatorKey: principals.publicId,
           agentPrincipalId: runs.agentPrincipalId,
           orgNamespace: schema.organizations.namespace,
           workspaceNamespace: schema.workspaces.namespace,
@@ -97,6 +99,13 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           eq(schema.organizations.id, runs.orgId),
         )
         .leftJoin(schema.agents, eq(schema.agents.id, runs.agentId))
+        .leftJoin(
+          principals,
+          and(
+            eq(principals.id, runs.initiatingPrincipalId),
+            eq(principals.orgId, runs.orgId),
+          ),
+        )
         .where(and(eq(runs.publicId, publicId), eq(runs.specVersion, 2)))
         .limit(1),
     );
@@ -113,6 +122,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         orgId: row.orgId,
         workspaceId: row.workspaceId,
         operatorPrincipalId: row.initiatingPrincipalId,
+        operatorKey: row.operatorKey,
         agentPrincipalId: row.agentPrincipalId,
         agentKey:
           row.orgNamespace && row.workspaceNamespace && row.agentSlug
@@ -140,6 +150,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           agentKey: sessions.agentKey,
           agentPrincipalId: sessions.agentPrincipalId,
           initiatingPrincipalId: sessions.initiatingPrincipalId,
+          operatorKey: principals.publicId,
           startedAt: sessions.startedAt,
           sealedAt: sessions.sealedAt,
           numTurns: sessions.numTurns,
@@ -148,6 +159,13 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           replayGrade: sessions.replayGrade,
         })
         .from(sessions)
+        .leftJoin(
+          principals,
+          and(
+            eq(principals.id, sessions.initiatingPrincipalId),
+            eq(principals.orgId, sessions.orgId),
+          ),
+        )
         .where(
           and(
             eq(sessions.publicId, publicId),
@@ -165,6 +183,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         orgId: row.orgId,
         workspaceId: row.workspaceId,
         operatorPrincipalId: row.initiatingPrincipalId,
+        operatorKey: row.operatorKey,
         agentPrincipalId: row.agentPrincipalId,
         agentKey: row.agentKey,
         taskRef: null,
@@ -254,6 +273,7 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     orgId: row.orgId,
     workspaceId: row.workspaceId,
     operatorPrincipalId: row.operatorPrincipalId,
+    operatorKey: row.operatorKey,
     agentPrincipalId: row.agentPrincipalId,
     agentKey: row.agentKey,
     taskRef: row.taskRef,
@@ -328,6 +348,7 @@ async function upsertRunTotals(
     runId: record.runId,
     runSource: record.runSource,
     operatorPrincipalId: record.operatorPrincipalId,
+    operatorKey: record.operatorKey,
     agentPrincipalId: record.agentPrincipalId,
     agentKey: record.agentKey,
     taskRef: record.taskRef,

@@ -178,6 +178,9 @@ export const runTotals = costSchema.table(
     runId: text("run_id").notNull().unique(),
     runSource: text("run_source").notNull(),
     operatorPrincipalId: uuid("operator_principal_id"),
+    // The operator's public id (`prn_…`); the level "by operator" groups on
+    // and the drill filters on, so the wire never carries the uuid.
+    operatorKey: text("operator_key"),
     agentPrincipalId: uuid("agent_principal_id"),
     // `org_ns.ws_ns.slug` (ADR-024); the level "by agent" groups on.
     agentKey: text("agent_key"),
@@ -275,8 +278,9 @@ export const dailyTotals = costSchema.table(
     // The UTC day the runs started on.
     day: date("day", { mode: "string" }).notNull(),
     groupKind: text("group_kind").notNull(),
-    // operator: the principal's uuid · agent: the agent key · model: the model
-    // id · tool: the tool or capability name · task: the task reference.
+    // operator: the principal's public id (`prn_…`) · agent: the agent key ·
+    // model: the model id · tool: the tool or capability name · task: the
+    // task reference.
     groupKey: text("group_key").notNull(),
     // Set on model rows.
     provider: text("provider"),

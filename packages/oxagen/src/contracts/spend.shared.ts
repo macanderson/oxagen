@@ -53,14 +53,41 @@ export const monthSchema = z
   .string()
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "a YYYY-MM month");
 
-/** Inclusive day range; `to` on or after `from`. */
+/**
+ * The longest window a spend read covers, in days: a quarter. `get_spend` and
+ * `list_waste` fold every run row of the range in the handler, and
+ * `get_spend_drill`'s trailing window has the same ceiling, so one request
+ * reads at most this many days of a workspace's runs.
+ */
+export const SPEND_RANGE_DAYS_MAX = 92;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Days from `from` to `to` inclusive; both `YYYY-MM-DD`. */
+function spanDays(from: string, to: string): number {
+  return (
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS +
+    1
+  );
+}
+
+/** Inclusive day range; `to` on or after `from`, at most `SPEND_RANGE_DAYS_MAX` days. */
 export const dayRangeSchema = z
   .object({ from: daySchema, to: daySchema })
   .strict()
   .refine((r) => r.from <= r.to, {
     message: "to must be on or after from",
     path: ["to"],
+  })
+  .refine((r) => spanDays(r.from, r.to) <= SPEND_RANGE_DAYS_MAX, {
+    message: `at most ${SPEND_RANGE_DAYS_MAX} days`,
+    path: ["to"],
   });
+
+/** A principal's public id (`prn_…`, spec §4.3): the key of an `operator` group. */
+export const principalPublicIdSchema = z
+  .string()
+  .regex(/^prn_[0-9a-z]+$/, "a principal public id (prn_…)");
 
 /** The token classes every model call is normalized to (spec §12.6). */
 export const tokenCountsSchema = z

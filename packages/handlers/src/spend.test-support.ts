@@ -22,7 +22,8 @@ export function ctx(): CapabilityContext {
   };
 }
 
-export const OPERATOR = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+/** The operator's principal public id: the key of its operator group. */
+export const OPERATOR = "prn_0123456789abcdefghjkmn";
 
 let seq = 0;
 
@@ -33,7 +34,8 @@ export function run(over: Partial<RunTotalsRecord> = {}): RunTotalsRecord {
     runSource: "tacho",
     orgId: SCOPE.orgId,
     workspaceId: SCOPE.workspaceId,
-    operatorPrincipalId: OPERATOR,
+    operatorPrincipalId: "0192d4a8-7c1e-7a00-8000-0000000000a1",
+    operatorKey: OPERATOR,
     agentPrincipalId: null,
     agentKey: "acme.core.cc",
     taskRef: null,

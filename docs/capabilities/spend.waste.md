@@ -18,7 +18,7 @@ Spend the frames show bought nothing, by cause, with the runs that prove it (Mis
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `period` | object | yes | `{ from, to }`, UTC days, `to` on or after `from` |
+| `period` | object | yes | `{ from, to }`, UTC days, `to` on or after `from`, at most 92 days (`SPEND_RANGE_DAYS_MAX`) |
 
 ## Output
 

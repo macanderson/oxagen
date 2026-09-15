@@ -15,7 +15,9 @@ import {
   costSchema,
   daySchema,
   moneySchema,
+  principalPublicIdSchema,
   ratioSchema,
+  SPEND_RANGE_DAYS_MAX,
   spendFigureSchema,
 } from "./spend.shared";
 
@@ -31,7 +33,28 @@ export const drillDaySchema = z
   .strict();
 
 export const DRILL_DAYS_DEFAULT = 30;
-export const DRILL_DAYS_MAX = 92;
+export const DRILL_DAYS_MAX = SPEND_RANGE_DAYS_MAX;
+
+/**
+ * The input's fields. Exported on their own because the registered `input`
+ * is a ZodEffects (the key rule below) and has no `.shape`; the MCP tool
+ * builds its parameter schema from this object and `invoke()` parses the
+ * refined input on every surface.
+ */
+export const spendDrillInputObject = z
+  .object({
+    kind: drillKindSchema,
+    /** The operator's principal public id (`prn_…`), the agent key, or the tool name. */
+    key: z.string().min(1).max(256),
+    /** Trailing window ending today, in days. */
+    days: z
+      .number()
+      .int()
+      .min(1)
+      .max(DRILL_DAYS_MAX)
+      .default(DRILL_DAYS_DEFAULT),
+  })
+  .strict();
 
 export const spendDrill = registerCapability({
   name: "get_spend_drill",
@@ -50,20 +73,19 @@ export const spendDrill = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  input: z
-    .object({
-      kind: drillKindSchema,
-      /** The operator's principal id, the agent key, or the tool name. */
-      key: z.string().min(1).max(256),
-      /** Trailing window ending today, in days. */
-      days: z
-        .number()
-        .int()
-        .min(1)
-        .max(DRILL_DAYS_MAX)
-        .default(DRILL_DAYS_DEFAULT),
-    })
-    .strict(),
+  // An operator key is the principal's public id, the id `list_runs` answers
+  // as `operatorId` and `get_spend` answers as an operator row's `key`; the
+  // store filters on that column, so any other string is refused here.
+  input: spendDrillInputObject.superRefine((value, ctx) => {
+    if (value.kind !== "operator") return;
+    const key = principalPublicIdSchema.safeParse(value.key);
+    if (key.success) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["key"],
+      message: "an operator key is a principal public id (prn_…)",
+    });
+  }),
   output: z
     .object({
       kind: drillKindSchema,

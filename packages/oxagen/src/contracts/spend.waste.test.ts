@@ -13,6 +13,19 @@ describe("list_waste contract", () => {
     expect(spendWasteList.input.safeParse({}).success).toBe(false);
   });
 
+  it("refuses a range longer than a quarter", () => {
+    expect(
+      spendWasteList.input.safeParse({
+        period: { from: "2026-07-01", to: "2026-09-30" },
+      }).success,
+    ).toBe(true);
+    expect(
+      spendWasteList.input.safeParse({
+        period: { from: "2026-07-01", to: "2026-10-01" },
+      }).success,
+    ).toBe(false);
+  });
+
   it("names each cause, costs it with a basis, and cites at most ten runs", () => {
     const out = {
       period: { from: "2026-09-01", to: "2026-09-30" },

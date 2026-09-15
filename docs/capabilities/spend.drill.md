@@ -19,8 +19,8 @@ One operator, agent or tool over a trailing window: the Spend drill page (Missio
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `kind` | enum | yes | `operator`, `agent`, `tool` |
-| `key` | string | yes | the operator's principal id, the agent key, or the tool name; 1-256 characters |
-| `days` | integer | no | 1-92, default 30; the window ends today (UTC) |
+| `key` | string | yes | for `operator`, the principal's public id `prn_…` (the `operatorId` of `list_runs`, the `key` of a `get_spend` operator row; any other string is `invalid_input`); for `agent`, the agent key; for `tool`, the tool name; 1-256 characters |
+| `days` | integer | no | 1-92 (`DRILL_DAYS_MAX`, the same quarter `SPEND_RANGE_DAYS_MAX` caps `get_spend` at), default 30; the window ends today (UTC) |
 
 ## Output
 

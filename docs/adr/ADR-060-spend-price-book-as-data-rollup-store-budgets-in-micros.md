@@ -123,6 +123,16 @@ admits). `list_runs` and
 null` for a run with no row; they no longer read ClickHouse or the tacho
 session's own total.
 
+An operator on the wire is the principal's public id (`prn_…`), the same id
+`list_runs` answers as `operatorId`: `cost.run_totals` carries it as
+`operator_key` beside the uuid, the `operator` level of `cost.daily_totals`
+groups on it and `get_spend_drill` filters on it, and the drill contract
+refuses any other string for `kind: "operator"` so a wrong key is
+`invalid_input` rather than a Postgres cast error. Every spend read is bounded
+to a quarter: `get_spend` and `list_waste` refuse a `period` longer than
+`SPEND_RANGE_DAYS_MAX` (92) days and `get_spend_drill`'s window has the same
+ceiling, since the handlers fold the range's run rows in memory.
+
 ### 4. The basis vocabulary
 
 `gateway_observed`: the `@oxagen/ai` gateway priced the call.

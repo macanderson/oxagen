@@ -1,18 +1,23 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
+import {
+  spendDrill,
+  spendDrillInputObject,
+} from "@oxagen/oxagen/contracts/spend.drill";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
+// Built from the contract's base object (the refined `input` has no `.shape`);
+// invoke() parses the refined input, so the operator-key rule holds here too.
 export const schema = {
-  ...spendDrill.input.shape,
-  kind: spendDrill.input.shape.kind.describe(
+  ...spendDrillInputObject.shape,
+  kind: spendDrillInputObject.shape.kind.describe(
     "What the key names: an operator, an agent or a tool",
   ),
-  key: spendDrill.input.shape.key.describe(
-    "The operator's principal id, the agent key (org_ns.ws_ns.slug) or the tool name",
+  key: spendDrillInputObject.shape.key.describe(
+    "The operator's principal public id (prn_…), the agent key (org_ns.ws_ns.slug) or the tool name",
   ),
-  days: spendDrill.input.shape.days.describe(
+  days: spendDrillInputObject.shape.days.describe(
     "Trailing window ending today, in days (1–92; default 30)",
   ),
 };

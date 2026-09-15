@@ -22,7 +22,7 @@ function harness(rows: RunTotalsRecord[]) {
           case "all":
             return true;
           case "operator":
-            return r.operatorPrincipalId === f.key;
+            return r.operatorKey === f.key;
           case "agent":
             return r.agentKey === f.key;
           case "tool":
@@ -87,6 +87,7 @@ describe("get_spend_drill", () => {
       pricedRun(500n, {
         startedAt: new Date("2026-09-14T02:00:00Z"),
         operatorPrincipalId: "0192d4a8-7c1e-7a00-8000-0000000000b2",
+        operatorKey: "prn_zzzzzzzzzzzzzzzzzzzzzz",
       }),
       run({ startedAt: new Date("2026-09-14T03:00:00Z") }),
     ]);

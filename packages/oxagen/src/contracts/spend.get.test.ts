@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spendGet, spendRowSchema } from "./spend.get";
+import { SPEND_RANGE_DAYS_MAX } from "./spend.shared";
 
 const figure = {
   cost: { micros: "41265", currency: "USD", basis: "gateway_observed" },
@@ -49,6 +50,29 @@ describe("get_spend contract", () => {
         period: { from: "2026-09-01", to: "2026-09-30" },
         groupBy: "tool",
         filter: {},
+      }).success,
+    ).toBe(false);
+  });
+
+  it("caps the range at a quarter, so one read folds at most that many days of runs", () => {
+    expect(SPEND_RANGE_DAYS_MAX).toBe(92);
+    // 2026-07-01 to 2026-09-30 is 92 days; one more day is refused.
+    expect(
+      spendGet.input.safeParse({
+        period: { from: "2026-07-01", to: "2026-09-30" },
+        groupBy: "operator",
+      }).success,
+    ).toBe(true);
+    const over = spendGet.input.safeParse({
+      period: { from: "2026-07-01", to: "2026-10-01" },
+      groupBy: "operator",
+    });
+    expect(over.success).toBe(false);
+    expect(over.error?.issues.map((i) => i.path)).toEqual([["period", "to"]]);
+    expect(
+      spendGet.input.safeParse({
+        period: { from: "2020-01-01", to: "2099-12-31" },
+        groupBy: "operator",
       }).success,
     ).toBe(false);
   });
