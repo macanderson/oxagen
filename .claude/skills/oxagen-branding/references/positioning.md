@@ -14,6 +14,20 @@ Not observability. Not governance. Not evals. Not guardrails. Not a trust layer.
 
 ## The lead line and when to use each line
 
+**Decision, 2026-09-15 (Mac):** the dod does not ship yet, so the dod lines are
+held until it does. Until then the lead is the bill. The three lines below the
+rule come from the shipped house ads in `oxagenai/oxagen-brand` and are the only
+lead lines for the site, ads, and outreach today. When the dod lands, the dod
+lines move back to the top of this table; nothing else changes.
+
+| Line | Use it for | Why it works |
+|---|---|---|
+| **Can you explain your AI bill? Neither can your provider.** | The top of the site, cold email subject lines, the bill ad | Names the pain the buyer feels this month, and the product proves it today: every call priced by token class, attributed to the person, agent, run, turn, and step. |
+| **Stop wasting money on AI.** | The Oxagen product page, the waste ad | Fewer tokens, same answers. The claim the record can back now. |
+| **Never re-explain yourself to AI ever again.** | The memory ad, the knowledge graph section | Taught once, known by every agent you run. |
+
+Held until the dod ships:
+
 | Line | Use it for | Why it works |
 |---|---|---|
 | **The agent doesn't get to decide it's done.** | Rooms, decks, the top of the site, cold email subject lines | Names the failure every engineering lead has lived. The reader finishes the thought. |
@@ -22,7 +36,7 @@ Not observability. Not governance. Not evals. Not guardrails. Not a trust layer.
 | **Prove it to someone who doesn't trust you.** | The verify feature, audit and insurance conversations | Names the outside dependency, which is the moat. |
 | **Steer. Govern. Observe.** | Footer, favicon-sized places, the existing three pillars | Retained from the current system. Never the lead; the lead is the dod. |
 
-Do not write new taglines. If a surface needs a line, pick one above.
+Do not write new taglines. If a surface needs a line, pick one above, from the live rows.
 
 ## The pitch, three sentences
 

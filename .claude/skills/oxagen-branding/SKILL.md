@@ -34,7 +34,7 @@ Every other tool watches the agent and reports. Oxagen decides when the agent is
 
 The category is **the control plane for agent work**. Do not say observability, governance, or evals; those are owned, and all three mean watch and report.
 
-The lead line is **The agent doesn't get to decide it's done.** Other approved lines and when to use each are in `references/positioning.md`.
+The lead line today is **Can you explain your AI bill? Neither can your provider.** The dod line, **The agent doesn't get to decide it's done.**, is held until the dod ships. The full table and the decision are in `references/positioning.md`.
 
 ## Voice, the short version
 

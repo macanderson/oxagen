@@ -4,20 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: the control plane for agent work</title>
-<meta name="description" content="Oxagen locks a definition of done into every agent run before it starts, blocks the run from ending until it holds, and proves the result to anyone with the export. Wrap Claude Code in sixty seconds.">
+<meta name="description" content="Can you explain your AI bill? Oxagen prices every model call by token class, attributes it to the person, the agent, the run, the turn, and the step, and stops a run between steps when it hits a hard ceiling. Wrap Claude Code in sixty seconds.">
 <link rel="canonical" href="https://oxagen.sh/">
 <meta name="theme-color" content="#10100F">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/">
 <meta property="og:site_name" content="Oxagen">
-<meta property="og:title" content="The agent doesn't get to decide it's done.">
-<meta property="og:description" content="Oxagen is the control plane for agent work. It locks a definition of done into every run before the first tool call, blocks the run until it holds, and settles the result into a signed record anyone can verify offline.">
+<meta property="og:title" content="Can you explain your AI bill? Neither can your provider.">
+<meta property="og:description" content="Every token, itemized. Oxagen explains every run: what it did, and what it cost, attributed to the person who ran it and the agent that made it. Stop wasting money on AI.">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
-<meta name="twitter:title" content="The agent doesn't get to decide it's done.">
-<meta name="twitter:description" content="The control plane for agent work. Define done before the agent starts. Prove it after.">
+<meta name="twitter:title" content="Can you explain your AI bill? Neither can your provider.">
+<meta name="twitter:description" content="Every token, itemized. Stop wasting money on AI.">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -151,7 +151,7 @@
         <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
         <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
           <a href="/products/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
-          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane for agent work. Done is defined before the run and proved after.</span></a>
+          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane for agent work. Every token itemized, every run on the record.</span></a>
           <a href="/products/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control: laptop, your VPC, or air-gapped.</span></a>
           <div class="drop-sep"></div>
           <div class="drop-foot">one loop · three deployments</div>
@@ -191,13 +191,14 @@
   <section class="hero tex tex-hex" id="top">
     <div class="wrap hero-in">
       <div class="hero-copy">
-        <p class="eyebrow">The control plane for agent work</p>
-        <h1>The agent doesn't get to decide<br><span class="gold">it's done.</span></h1>
+        <p class="eyebrow">Every token, itemized.</p>
+        <h1>Can you explain your AI bill?<br><span class="gold">Neither can your provider.</span></h1>
         <p class="hero-sub">
-          Oxagen <strong>locks a definition of done</strong> into every run before the
-          agent's first tool call and <strong>blocks the run from ending</strong> until it
-          holds. When it does, the result is settled into a signed record anyone can
-          verify offline.
+          Oxagen wraps the agents you already run and <strong>prices every model call by
+          token class</strong>, cache reads and writes included, attributed to the person
+          who ran it, the agent, the run, the turn, and the step. Set a hard ceiling and a
+          run <strong>stops between steps</strong>, never mid-tool. Fewer tokens. Same
+          answers.
         </p>
         <div class="hero-ctas">
           <a class="btn btn-primary ext" href="https://docs.oxagen.sh/install" target="_blank" rel="noopener">Wrap Claude Code in sixty seconds <span class="arr">→</span></a>
@@ -208,7 +209,7 @@
 
       <!-- role="img": without a role the aria-label on a plain div is dropped,
            and the typed-out lines below are decoration, not readable content. -->
-      <div class="term" role="img" aria-label="A simulated run: the definition of done is locked before the first tool call, the agent's first stop is blocked with the failing checks, the second stop holds, and an export verifies offline.">
+      <div class="term" role="img" aria-label="A simulated session: one run read back with its cost per step, a workspace ceiling with live burn and a projection, and a cost projection priced from the rate card.">
         <div class="app-bar" aria-hidden="true">
           <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
           <span class="app-title">oxagen · zsh</span>
@@ -219,22 +220,23 @@
       <script type="application/json" id="heroScript">
       [
         [
-          {"cls":"cmd","text":"claude \"fix the flaky checkout test\""},
-          {"cls":"t-dim","text":"◆ dod locked before tool call 1 · sha256:4c1f…9e02"},
-          {"cls":"t-diff","text":"  unit    pnpm test checkout        must exit 0"},
-          {"cls":"t-diff","text":"  scope   diff inside apps/web/**    must hold"},
-          {"cls":"t-diff","text":"  review  signed by a named person   after the run"}
+          {"cls":"cmd","text":"oxagen trace run_01J9AB3K"},
+          {"cls":"t-dim","text":"◆ operator ada@acme · agent ci-fixer · 3 turns · 41 steps"},
+          {"cls":"t-diff","text":"  step 12  model   input 18k · cache read 61k · output 1k    $0.09"},
+          {"cls":"t-diff","text":"  step 13  tool    pnpm test checkout                        $0.00"},
+          {"cls":"t-diff","text":"  step 41  model   input 22k · cache read 64k · output 3k    $0.14"},
+          {"cls":"t-ok","text":"✔ $1.84 · priced by token class · attributed to team/payments"}
         ],
         [
-          {"cls":"t-dim","text":"◆ agent tries to stop"},
-          {"cls":"t-note","text":"■ Stop blocked. Broken: unit, scope."},
-          {"cls":"t-dim","text":"◆ agent keeps working · 2 tool calls · $0.31"},
-          {"cls":"t-ok","text":"✔ dod held · run settled · seal ok"}
+          {"cls":"cmd","text":"oxagen budget show"},
+          {"cls":"t-dim","text":"◆ workspace ceiling $900/mo · live burn $612 · projected $1,140"},
+          {"cls":"t-note","text":"■ threshold_95 · the last warning before denial"},
+          {"cls":"t-ok","text":"✔ at the line, the next run stops between steps, never mid-tool"}
         ],
         [
-          {"cls":"cmd","text":"oxagen dod verify run_01J9AB3K.json"},
-          {"cls":"t-dim","text":"◆ no account · no network · 14 frames read"},
-          {"cls":"t-ok","text":"✔ verdict matches. held. seal ok."}
+          {"cls":"cmd","text":"oxagen cost --in 200000 --out 40000"},
+          {"cls":"t-dim","text":"◆ priced from the rate card · no network call"},
+          {"cls":"t-ok","text":"✔ you know what it costs before you run it"}
         ]
       ]
       </script>
@@ -246,7 +248,6 @@
     <div class="ticker-track">
       <span class="tick-item">
         <span><b>oxagen</b> tacho enroll</span><span class="sep">·</span>
-        <span><b>oxagen</b> dod verify</span><span class="sep">·</span>
         <span><b>oxagen</b> graph search</span><span class="sep">·</span>
         <span><b>oxagen</b> budget</span><span class="sep">·</span>
         <span><b>oxagen</b> cost</span><span class="sep">·</span>
@@ -296,9 +297,9 @@
           <div class="meta">
             <span class="kicker">Platform</span>
             <h3>Oxagen</h3>
-            <p>The control plane for agent work. Locks a definition of done into every run,
-            blocks the run until it holds, and settles the result into a record your auditor
-            can recompute offline.</p>
+            <p>The control plane for agent work. Prices every call, attributes it to the
+            person and the agent, caps spend with a hard ceiling, and keeps every run on
+            the record.</p>
             <span class="go">See Mission Control <span class="arr">→</span></span>
           </div>
         </a>
@@ -365,13 +366,12 @@
             <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 16h6"/></svg>
           </div>
           <h3>Every run, on the record</h3>
-          <p>One run, frame by frame: who asked, what the agent read, what it changed, what
-          proved it, and what it cost. Export it and anyone can recompute the verdict with no
-          account and no network.</p>
+          <p>One run, frame by frame: who asked, what the agent read, what it changed, and
+          what each step cost. Hash-chained as it happens, exportable when you need it.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen dod verify run_01J9AB3K.json</span></div>
-            <div><span class="i">◆</span> 14 frames read · seal checked</div>
-            <div><span class="g">✔</span> verdict matches. held. seal ok.</div>
+            <div><span class="p">$</span> <span class="c">oxagen trace run_01J9AB3K</span></div>
+            <div><span class="i">◆</span> 41 frames · hash-chained · $1.84 attributed</div>
+            <div><span class="g">✔</span> record sealed · exportable</div>
           </div>
         </article>
 
@@ -509,16 +509,17 @@
         </div>
         <div class="step reveal reveal-d1">
           <span class="step-num mono">STEP 02</span>
-          <h3>Lock</h3>
-          <p>Before the first tool call, the run gets a definition of done: the commands that
-          must pass, the paths that must not change, the judgment a person signs. The agent
-          can read it and cannot change it.</p>
+          <h3>Price</h3>
+          <p>Every model call and tool call is priced as it happens, by token class, and
+          attributed to the person who ran it, the agent, the run, the turn, and the step.
+          The bill stops being a total.</p>
         </div>
         <div class="step reveal reveal-d2">
           <span class="step-num mono">STEP 03</span>
-          <h3>Settle</h3>
-          <p>The run cannot end until the checks hold. When they do, Oxagen settles the
-          result into a signed record, and anyone with the export can recompute it.</p>
+          <h3>Cap</h3>
+          <p>Set a ceiling per organization and per workspace. Live burn and a projection on
+          every page, a warning at 50, 80, and 95 percent, and a run that stops between
+          steps when it reaches the line.</p>
         </div>
       </div>
     </div>
@@ -614,14 +615,14 @@
       <div class="demo-box reveal">
         <div>
           <p class="eyebrow">Get a demo</p>
-          <h2>One run, one blocked stop, one held dod</h2>
-          <p class="demo-sub">Bring a repo. In twenty minutes you watch a run lock its
-          definition of done, get blocked when the agent tries to stop early, and end held,
-          on your codebase. If it is not obvious in the first ten, the call ends.</p>
+          <h2>Your bill, explained, in twenty minutes</h2>
+          <p class="demo-sub">Bring a repo. Wrap one machine, run one task, and read what it
+          cost by person, agent, run, turn, and step. If it is not obvious in the first ten,
+          the call ends.</p>
           <ul class="demo-hints">
             <li>Live, on your codebase, not a canned deck</li>
             <li>Straight answers on rollout, pricing, and security review</li>
-            <li>You keep the export from the run</li>
+            <li>You keep the run record</li>
           </ul>
         </div>
 
