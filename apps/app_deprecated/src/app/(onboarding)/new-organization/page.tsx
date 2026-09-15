@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { Panel } from "@/components/ui/panel";
 import { NewOrgForm } from "@/components/org/new-organization-form";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -10,7 +11,7 @@ export default async function NewTenantPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}): Promise<JSX.Element> {
   const session = await getSessionOrRedirect();
   // Where to go once the organization exists: the CLI consent page when the
   // account was created from the installer's browser login, else the new

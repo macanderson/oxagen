@@ -81,6 +81,24 @@
         "enterprise": "Enterprise"
       }
     },
+    "purchase": {
+      "title": "Buy governed action units",
+      "quantity": "Governed action units",
+      "step": "in blocks of {count} GAU",
+      "total": "Total at your contracted rate",
+      "wholeBlocks": "Choose a whole number of blocks to see the total",
+      "savesCard": "Checkout saves your card; auto top-up runs from then on",
+      "submit": "Continue to Checkout",
+      "submitting": "Opening Checkout…",
+      "denied": "An owner or a billing member can buy governed action units.",
+      "errors": {
+        "invalid": "Choose a whole number of blocks.",
+        "aboveMax": "You can buy at most {max} GAU at once.",
+        "denied": "Your role cannot buy governed action units. An owner or a billing member can.",
+        "conflict": "This organization is billed by invoice, so it does not buy units in blocks.",
+        "unavailable": "Checkout could not be opened. Nothing was charged."
+      }
+    },
     "invoices": {
       "title": "Invoices",
       "empty": "No invoices yet.",

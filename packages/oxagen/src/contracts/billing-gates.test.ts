@@ -58,6 +58,14 @@ const CONSOLE_CONTRACTS = [
   "create_workspace",
   "update_workspace_settings",
   "archive_workspace",
+  // The #2962 lane: the Spend page's reads, its ceiling write and its
+  // statement export (ADR-052 exclusion 2: reading and capping your own spend).
+  "get_spend",
+  "get_spend_drill",
+  "list_waste",
+  "get_spend_budget",
+  "set_spend_budget",
+  "export_statement",
 ] as const;
 
 /** The one rev1 governed action. */

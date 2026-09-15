@@ -47,12 +47,12 @@ export function PwaSplash() {
       role="presentation"
     >
       {/*
-        * The house spinner: ONE animated SVG that follows the tab's colour
-        * scheme and stills itself under prefers-reduced-motion, both from
-        * inside the file. It replaces the dark/light GIF pair — an adaptive
-        * mark does not need a variant per theme. Falls back to a pure-CSS ring
-        * if the asset fails to load.
-        */}
+       * The house spinner: ONE animated SVG that follows the tab's colour
+       * scheme and stills itself under prefers-reduced-motion, both from
+       * inside the file. It replaces the dark/light GIF pair — an adaptive
+       * mark does not need a variant per theme. Falls back to a pure-CSS ring
+       * if the asset fails to load.
+       */}
       {imgFailed ? (
         <span className={styles.cssSpinner} aria-hidden="true" />
       ) : (

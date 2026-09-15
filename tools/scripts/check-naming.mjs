@@ -121,6 +121,8 @@ const ACTIONS = new Set([
   "install",
   "uninstall",
   "register",
+  "enroll", // a host consumes its one-time token (spec App. E `enroll_host`)
+  "advance", // the onboarding gate moves one step (`advance_onboarding`)
   "reauth",
   "rotate",
   "revoke",

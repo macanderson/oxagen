@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import Link from "next/link";
 import { OxagenWordmark } from "@/components/ui/brand";
 import { LoginForm } from "@/components/auth/login-form";
@@ -13,7 +14,7 @@ export default async function SignupPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}): Promise<JSX.Element> {
   const params = await searchParams;
   const returnTo = safeReturnTo(params["returnTo"] ?? params["next"]);
   return (

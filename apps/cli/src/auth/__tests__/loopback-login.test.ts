@@ -73,9 +73,18 @@ function redirectUriFromAuthorizeUrl(authorizeUrl: string): string {
   return r;
 }
 
-/** Send a GET request to the loopback server and wait for the response to end. */
-function sendCallback(port: number, query: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+/** What the loopback server answered the browser with. */
+interface CallbackResponse {
+  status: number;
+  location: string | null;
+}
+
+/**
+ * Send a GET request to the loopback server and wait for the response to end.
+ * Resolves with the status and Location the browser would have followed.
+ */
+function sendCallback(port: number, query: string): Promise<CallbackResponse> {
+  return new Promise<CallbackResponse>((resolve, reject) => {
     const req = http.request(
       {
         hostname: "127.0.0.1",
@@ -85,7 +94,12 @@ function sendCallback(port: number, query: string): Promise<void> {
       },
       (res) => {
         res.resume();
-        res.on("end", resolve);
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            location: res.headers.location ?? null,
+          }),
+        );
         res.on("error", reject);
       },
     );
@@ -135,7 +149,13 @@ describe("browserLogin", () => {
       code: "authcode_xyz",
       state,
     }).toString();
-    await sendCallback(port, query);
+    const answer = await sendCallback(port, query);
+
+    // The browser ends on the app's completion page, not on HTML served from
+    // the loopback port: a localhost address as the last thing the user sees
+    // reads as a misdirected redirect.
+    expect(answer.status).toBe(302);
+    expect(answer.location).toBe("https://app.test.oxagen.sh/cli/complete");
 
     const result = await loginPromise;
     expect(result).toEqual({

@@ -127,6 +127,12 @@ describe("routes", () => {
     expect(routes.billing("acme", { cursor: "c 2&x" })).toBe(
       "/acme/billing?cursor=c+2%26x",
     );
+    expect(routes.billing("acme", { checkout: "success" })).toBe(
+      "/acme/billing?checkout=success",
+    );
+    expect(routes.billing("acme", { checkout: "cancel" })).toBe(
+      "/acme/billing?checkout=cancel",
+    );
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {
@@ -138,5 +144,23 @@ describe("routes", () => {
 
   it("refuses to build a protocol-relative path from an empty first segment (negative)", () => {
     expect(() => routes.fleet("", "evil.example")).toThrow("unsafe_path");
+  });
+
+  it("builds a run and a Spend view with every value encoded", () => {
+    expect(routes.run("acme", "core-platform", "arun_01k5")).toBe(
+      "/acme/core-platform/runs/arun_01k5",
+    );
+    expect(routes.spend("acme", "core-platform", { tab: "waste" })).toBe(
+      "/acme/core-platform/spend?tab=waste",
+    );
+    expect(
+      routes.spend("acme", "core-platform", {
+        tab: "agent",
+        drill: "acme/core-platform/triage&tab=x",
+      }),
+    ).toBe(
+      "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage%26tab%3Dx",
+    );
+    expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });
