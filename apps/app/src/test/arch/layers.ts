@@ -13,18 +13,6 @@
 // - `src/i18n/**` has no row in §2; it is treated as a leaf like `src/shared`
 //   (it may import only itself). The one edge into it, `app/layout.tsx` →
 //   `@/i18n/catalogs`, is a baseline entry for WL-33's root-layout rewrite.
-// - WL-12: `src/shared` "imports nothing internal" is read as nothing outside
-//   `src/shared`: §3.8's navigation.ts takes the SafePath and LoopbackUri types
-//   its siblings define.
-// - WL-12: a feature may import `@/server/session`. §3.7 moves getAuthUser and
-//   the Better Auth server calls there, and their callers are the sign-in
-//   flows' server actions and the auth API handler under `features/auth`, the
-//   shell's user menu and the invitation page; a "use client" module still may
-//   not reach it (INV-21).
-// - WL-12: `src/features/auth/auth-client.ts` may import
-//   `@oxagen/auth/client`. The browser's Better Auth client cannot live in
-//   `src/server/session.ts` (INV-21), and §3.8 names auth-client.ts as the home
-//   of the SafePath-typed callbackURL wrapper.
 import type { ImportEdge } from "./parse";
 
 export type Directive = "use client" | "use server" | null;

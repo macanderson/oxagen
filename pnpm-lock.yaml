@@ -231,6 +231,9 @@ importers:
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../../packages/run-ledger
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
