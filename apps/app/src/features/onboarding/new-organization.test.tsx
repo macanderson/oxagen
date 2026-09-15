@@ -2,17 +2,12 @@
 // element tree it returns, which covers both branches without an RSC renderer.
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { translator } from "@/test/intl";
 
-vi.mock("next-intl/server", () => ({
-  getTranslations: (ns: string) => Promise.resolve(translator(ns)),
-}));
 const requireUser = vi.fn();
 vi.mock("@/server/viewer", () => ({ requireUser }));
 
 const { NewOrganizationScreen } = await import("./new-organization");
 const { OrganizationForm } = await import("./ui/organization-form");
-const { AuthHeading } = await import("@/ui/auth-shell");
 
 type AnyElement = ReactElement<Record<string, unknown>>;
 
@@ -45,12 +40,10 @@ describe("NewOrganizationScreen", () => {
     expect(requireUser).toHaveBeenCalledWith("/new-organization");
   });
 
-  it("renders the heading and the organization form for a signed-in person", async () => {
+  it("renders the organization form for a signed-in person", async () => {
     const tree = elements(
       await NewOrganizationScreen({ searchParams: Promise.resolve({}) }),
     );
-    const heading = tree.find((e) => e.type === AuthHeading);
-    expect(heading?.props.title).toBe("Name your organization");
     const form = tree.find((e) => e.type === OrganizationForm);
     expect(form?.props.destination).toBeUndefined();
   });

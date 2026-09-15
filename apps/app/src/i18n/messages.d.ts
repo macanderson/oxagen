@@ -6,34 +6,26 @@ type Messages = {
     name: string;
     description: string;
   };
-  routes: {
-    organization: {
-      title: string;
-    };
-    apiKeys: {
-      title: string;
-    };
-    billing: {
-      title: string;
-    };
-    fleet: {
-      title: string;
-    };
-    run: {
-      title: string;
-    };
-    agents: {
-      title: string;
-    };
-    tools: {
-      title: string;
-    };
-    steering: {
-      title: string;
-    };
-    spend: {
-      title: string;
-    };
+  pages: {
+    login: string;
+    signup: string;
+    verify: string;
+    twoFactor: string;
+    forgotPassword: string;
+    resetPassword: string;
+    invitation: string;
+    invitationNotFound: string;
+    newOrganization: string;
+    cliAuthorize: string;
+    fleet: string;
+    run: string;
+    agents: string;
+    tools: string;
+    steering: string;
+    spend: string;
+    people: string;
+    apiKeys: string;
+    billing: string;
   };
   unrecorded: {
     agents: string;
@@ -118,7 +110,6 @@ type Messages = {
     };
     signup: {
       eyebrow: string;
-      title: string;
       lead: string;
       submit: string;
       pending: string;
@@ -128,7 +119,6 @@ type Messages = {
     };
     verify: {
       eyebrow: string;
-      title: string;
       lead: string;
       leadNoEmail: string;
       expired: string;
@@ -177,7 +167,6 @@ type Messages = {
     };
     invite: {
       eyebrow: string;
-      title: string;
       invited: string;
       invitedOn: string;
       organization: string;

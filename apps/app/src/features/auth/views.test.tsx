@@ -24,10 +24,11 @@ vi.mock("./invite-actions", () => ({
 const SERVER_SYNC = new Set<unknown>();
 
 const { InvitationBody, InvitationNotFound } = await import("./invite-view");
-const { AuthColumn, AuthFooter, AuthHeading, AuthShell, AuthSkeleton } =
-  await import("@/ui/auth-shell");
+const { AuthColumn, AuthFooter, AuthShell, AuthSkeleton } = await import(
+  "@/ui/auth-shell"
+);
 const { OutcomePanel } = await import("@/ui/form-feedback");
-for (const component of [AuthShell, AuthColumn, AuthHeading, AuthFooter])
+for (const component of [AuthShell, AuthColumn, AuthFooter])
   SERVER_SYNC.add(component);
 
 type ServerComponent = (
@@ -162,7 +163,7 @@ describe("auth frame", () => {
     await renderServer(
       <AuthShell aside={<span>aside</span>}>
         <AuthColumn wide>
-          <AuthHeading kicker="Kicker" title="Title" lead="Lead" />
+          <h1>Title</h1>
           <AuthFooter>Footer</AuthFooter>
         </AuthColumn>
       </AuthShell>,

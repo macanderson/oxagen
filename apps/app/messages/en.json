@@ -3,34 +3,26 @@
     "name": "Oxagen",
     "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
   },
-  "routes": {
-    "organization": {
-      "title": "Organization"
-    },
-    "apiKeys": {
-      "title": "API keys"
-    },
-    "billing": {
-      "title": "Billing"
-    },
-    "fleet": {
-      "title": "Fleet"
-    },
-    "run": {
-      "title": "Run"
-    },
-    "agents": {
-      "title": "Agents"
-    },
-    "tools": {
-      "title": "Tools"
-    },
-    "steering": {
-      "title": "Steering"
-    },
-    "spend": {
-      "title": "Spend"
-    }
+  "pages": {
+    "login": "Log in",
+    "signup": "Govern the agents you already run.",
+    "verify": "Check your email",
+    "twoFactor": "Two-factor authentication",
+    "forgotPassword": "Reset your password",
+    "resetPassword": "Set a new password",
+    "invitation": "Join {org} on Oxagen",
+    "invitationNotFound": "This invitation link does not work",
+    "newOrganization": "Name your organization",
+    "cliAuthorize": "Authorize the Oxagen CLI",
+    "fleet": "Fleet",
+    "run": "Run",
+    "agents": "Agents",
+    "tools": "Tools",
+    "steering": "Steering",
+    "spend": "Spend",
+    "people": "Organization",
+    "apiKeys": "API keys",
+    "billing": "Billing"
   },
   "unrecorded": {
     "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",

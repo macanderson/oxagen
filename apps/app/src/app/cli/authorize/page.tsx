@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
@@ -11,13 +12,14 @@ import {
 import { requireUser } from "@/server/viewer";
 import { redirectTo } from "@/shared/navigation";
 import { routes } from "@/shared/safe-path";
-import {
-  AuthColumn,
-  AuthHeading,
-  AuthShell,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { AuthColumn, AuthShell, AuthSkeleton } from "@/ui/auth-shell";
 import { OutcomePanel } from "@/ui/form-feedback";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("cliAuthorize") };
+}
 
 // The authorize leg of the CLI's loopback OAuth + PKCE login (RFC 8252). A bad
 // redirect_uri is never followed, not even to report an error: it renders here.
@@ -37,12 +39,15 @@ async function CliAuthorize({
   searchParams: PageProps<"/cli/authorize">["searchParams"];
 }) {
   const params = readAuthorizeParams(await searchParams);
-  const t = await getTranslations("auth.cli");
+  const [t, pages] = await Promise.all([
+    getTranslations("auth.cli"),
+    getTranslations("pages"),
+  ]);
   const checked = checkAuthorizeParams(params);
   if (!checked.ok) {
     return (
       <AuthColumn>
-        <AuthHeading kicker={t("title")} title={t("invalidTitle")} />
+        <PageHeader title={pages("cliAuthorize")} />
         <OutcomePanel
           tone="deny"
           testId="cli-invalid"
@@ -65,7 +70,7 @@ async function CliAuthorize({
   if (!choices.ok) {
     return (
       <AuthColumn>
-        <AuthHeading kicker={t("title")} title={t("title")} />
+        <PageHeader title={pages("cliAuthorize")} />
         <OutcomePanel
           tone="deny"
           testId="cli-unavailable"
@@ -82,10 +87,9 @@ async function CliAuthorize({
     redirectTo(routes.newOrganization(returnPath));
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("title")}
-        title={t("title")}
-        lead={t("lead", { label: params.label })}
+      <PageHeader
+        title={pages("cliAuthorize")}
+        description={t("lead", { label: params.label })}
       />
       <CliConsentForm params={params} orgs={choices.value} />
     </AuthColumn>
