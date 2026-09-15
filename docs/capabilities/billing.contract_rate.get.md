@@ -40,7 +40,7 @@ Empty object. Tenant scope is resolved from the request context.
 | `agreementRef`        | `string` or `null`                               | The negotiated row's agreement reference; `null` for a published tier.        |
 | `tier`                | `"free" \| "build" \| "scale" \| "enterprise"`   | The entitlement's tier; a negotiated row carries none of its own.             |
 | `currency`            | `string` (ISO 4217, lower case)                  | As `billing.plans.currency` stores it.                                        |
-| `ratePerGauMicros`    | `string` (decimal digits)                        | Micro-dollars per GAU (1 cent = 10,000 micros). A string, never a float.      |
+| `ratePerGauMicros`    | `string` (decimal digits)                        | Micro-dollars per GAU (1 cent = 10,000 micros), as a decimal string.          |
 | `blockSizeGau`        | `number` (positive integer)                      | GAUs per purchased block. The one place this figure is printed.               |
 | `includedGauPerMonth` | `number` (non-negative integer)                  | GAUs included in every month of a subscription.                               |
 | `effectiveFrom`       | `string` (ISO 8601)                              | The agreement's start; for a published tier, when the plan row was written.    |
