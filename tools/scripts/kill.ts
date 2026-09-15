@@ -23,7 +23,7 @@ async function bestEffort(cmd: string, args: string[]): Promise<void> {
   }
 }
 
-// Storybook (apps/app on 6007, packages/ui on 6008) spawns a Vite preview
+// Storybook (apps/app_deprecated on 6007, packages/ui on 6008) spawns a Vite preview
 // child that can outlive the repo-scoped pkill above; free the ports directly
 // so the next `pnpm dev` never trips a "port already in use". Only listeners on
 // these two ports are touched — no other process is affected.
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   );
   await bestEffort("pkill", ["-f", pattern]);
 
-  // Free the Storybook ports (apps/app 6007, packages/ui 6008) explicitly.
+  // Free the Storybook ports (apps/app_deprecated 6007, packages/ui 6008) explicitly.
   await killStorybookPorts();
 
   // The Stripe CLI and Inngest dev server are standalone Go binaries the
