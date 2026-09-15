@@ -15,11 +15,16 @@ import type { NextRequest } from "next/server";
 // /two-factor is the sign-in second-factor step: after password auth the user
 // holds only a short-lived 2FA cookie (NOT a full session cookie), so the
 // hasSession() guard below would bounce them to /login and wedge the flow.
+// /cli/complete is where the CLI's loopback listener sends the browser once
+// `oxagen login` holds its token. It shows nothing tenant-scoped, and the
+// browser that finished the consent flow may not be the one holding the app
+// cookie, so it must not bounce to /login.
 const PUBLIC_PATHS = [
   /^\/login(?:\/|$)/,
   /^\/signup(?:\/|$)/,
   /^\/verify(?:\/|$)/,
   /^\/two-factor(?:\/|$)/,
+  /^\/cli\/complete(?:\/|$)/,
 ];
 
 // Better Auth names the session cookie `<cookiePrefix>.session_token` and adds

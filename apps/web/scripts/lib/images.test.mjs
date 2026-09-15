@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { SUBJECTS, TREATMENTS } from "./art.mjs";
-import { BANNER, bannerSvg, OG, ogSvg, THUMB, wordmark } from "./images.mjs";
+import {
+  BANNER,
+  bannerSvg,
+  CLEAR,
+  FOCUS,
+  OG,
+  ogSvg,
+  THUMB,
+  wordmark,
+} from "./images.mjs";
 import { INK } from "./theme.mjs";
 
 const gold = (svg) => (svg.match(/fill="#D6962C"/g) ?? []).length;
@@ -8,8 +17,8 @@ const paper = /fill="#F2EEE5"|fill="#F8F5EE"/g;
 
 describe("sizes", () => {
   it("are the ones the site and the networks expect", () => {
-    expect(BANNER).toEqual({ w: 1600, h: 900 });
-    expect(THUMB).toEqual({ w: 800, h: 450 });
+    expect(BANNER).toEqual({ w: 2400, h: 1200 });
+    expect(THUMB).toEqual({ w: 960, h: 480 });
     expect(OG).toEqual({ w: 1200, h: 630 });
   });
 });
@@ -27,18 +36,20 @@ describe("wordmark", () => {
 });
 
 describe("bannerSvg", () => {
-  it("is a full-size document on ink: the lattice, one panel with one gold dot, and a drawing", () => {
+  it("is a full-bleed field on ink: rings, blocks, halo, one gold cell, and a drawing, with no panel", () => {
     const svg = bannerSvg({ seed: "a-post" });
     expect(svg).toMatch(
-      /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="1600" height="900"/,
+      /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="2400" height="1200"/,
     );
     expect(svg).toContain(
-      `<rect width="1600" height="900" fill="${INK.ground}"/>`,
+      `<rect width="2400" height="1200" fill="${INK.ground}"/>`,
     );
-    expect(svg).toContain(`rx="12" fill="${INK.panel}"`);
+    expect(svg).not.toContain('rx="12"');
+    expect(svg).not.toContain(`fill="${INK.panel}"`);
     expect(gold(svg)).toBe(1);
+    expect(svg).toContain(`<g fill="${INK.line}" stroke="none">`);
+    expect(svg).toContain('stroke-width="2" stroke-opacity="0.6"');
     expect(svg).toContain('<g fill="none" stroke=');
-    expect(svg).toContain("stroke-opacity=");
     expect(svg).not.toMatch(/gradient|<text/i);
   });
 
@@ -50,29 +61,26 @@ describe("bannerSvg", () => {
     }
   });
 
-  it("keeps the panel inside the middle band every crop of it shows", () => {
-    const svg = bannerSvg({ seed: "a-post" });
-    const [, x, y, w, h] = svg.match(
-      /<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)" rx="12"/,
-    );
-    // the post hero shows 21:9 of the middle: rows 107 to 793
-    expect(Number(y)).toBeGreaterThanOrEqual(107);
-    expect(Number(y) + Number(h)).toBeLessThanOrEqual(793);
-    // and centred, so the pillar hero's band keeps the panel's middle
-    expect(Number(x) * 2 + Number(w)).toBe(1600);
-    expect(Number(y) * 2 + Number(h)).toBe(900);
+  it("keeps the drawing right of centre and inside the middle 21:9 band a wide hero crops to", () => {
+    expect(FOCUS.x - CLEAR.x).toBeGreaterThan(0.4);
+    expect(FOCUS.x + CLEAR.x).toBeLessThanOrEqual(1);
+    // 2400 wide at 21:9 is 1029 tall: rows 86 to 1114
+    expect((FOCUS.y - CLEAR.y) * 1200).toBeGreaterThanOrEqual(86);
+    expect((FOCUS.y + CLEAR.y) * 1200).toBeLessThanOrEqual(1114);
+    // the drawing is punched in the ground, since there is no panel under it
+    const svg = bannerSvg({ seed: "a-post", treatment: "graph" });
+    expect(svg).toContain(`fill="${INK.ground}"`);
   });
 
-  it("names the drawing's subject in the panel's bar", () => {
+  it("draws every treatment, and a different picture for each", () => {
+    const seen = new Set();
     for (const treatment of TREATMENTS) {
       const svg = bannerSvg({ seed: "a", treatment });
       expect(svg).toContain('<g fill="none"');
-      // the label is outlines, so compare against the same text set alone
       expect(SUBJECTS[treatment]).toEqual(expect.any(String));
+      seen.add(svg);
     }
-    expect(bannerSvg({ seed: "a", treatment: "graph" })).not.toBe(
-      bannerSvg({ seed: "a", treatment: "meter" }),
-    );
+    expect(seen.size).toBe(TREATMENTS.length);
   });
 
   it("is deterministic and varies by seed", () => {
