@@ -197,12 +197,12 @@ only believe. The check does not depend on the model cooperating.
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. Two of its five jobs sit exactly
-here. Grounding means answers come from a Neo4j graph plus an ontology, so a
-response is cited and time-aware by construction rather than by prompt
-instruction. Explaining means the lineage of an answer, the nodes, the edges,
-and the sources behind it, is a record you can pull up later. Neither job makes
-a model smarter. Both make a wrong answer visible, which is the part that
+Oxagen is the control plane for the agents you run. It does not run them. Two
+clauses of an agent's mandate sit exactly here. The knowledge an agent is
+handed comes from a Neo4j graph plus an ontology, so a response is cited and
+time-aware by construction rather than by prompt instruction. The record keeps
+the lineage of an answer, the nodes, the edges, and the sources behind it, so
+you can pull it up later. Neither clause makes a model smarter. Both make a wrong answer visible, which is the part that
 matters when someone asks why the agent said what it said.
 
 [^1]: Ji et al. (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys 55(12). https://arxiv.org/abs/2202.03629

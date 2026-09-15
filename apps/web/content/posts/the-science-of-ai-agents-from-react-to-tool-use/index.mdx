@@ -63,7 +63,7 @@ Voyager added the piece the others left out: skills that survive the episode.[^8
 | Memory | Generative Agents | Ablating memory, reflection, or planning each lowered believability ratings |
 | Skill retention | Voyager | 3.3x unique items, 2.3x distance, up to 15.3x faster tech-tree milestones |
 
-Read the table as an architecture, not a menu. Each row is a different failure the loop has when that piece is missing. An agent with no memory repeats work. An agent with no reflection repeats mistakes. An agent with no planner commits to its first idea. An agent with no skill library relearns the same procedure every session and pays for it every time.
+Read the table as an architecture, not a menu. Each row is a different failure the loop has when that piece is missing. An agent with no memory repeats work. An agent with no reflection repeats mistakes. An agent with no planner commits to its first idea. An agent with no skill library relearns the same procedure every run and pays for it every time.
 
 ## What is still unsolved
 
@@ -83,7 +83,7 @@ Planning searches, tool use grounds, memory persists, and reflection corrects. R
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. The research line above is why the governance layer is shaped the way it is: a typed contract binds identity, knowledge scope, permitted action, commercial terms, verified outcome, and audit record, which is the external signal that reflection needs and the tool-placement record that debugging needs. Grounding sits in a Neo4j graph with an ontology, so an answer cites time-aware structure rather than whatever the retriever happened to return. And because planners buy accuracy with inference, every governed action is metered from ClickHouse through to Stripe, so the cost of the extra search is a line item rather than a surprise.
+Oxagen is the control plane for the agents you run. It does not run them. The research line above is why the mandate is shaped the way it is: one object binds identity, knowledge scope, permitted action, commercial terms, outcome, and audit record, which is the external signal that reflection needs and the tool-placement record that debugging needs. The knowledge an agent is handed sits in a Neo4j graph with an ontology, so an answer cites time-aware structure rather than whatever the retriever happened to return. And because planners buy accuracy with inference, every governed action is priced and attributed to the run, the turn, and the step, so the cost of the extra search is a line item rather than a surprise.
 
 [^1]: Wang, L., Ma, C., Feng, X., Zhang, Z., Yang, H., Zhang, J., Chen, Z., Tang, J., Chen, X., Lin, Y., Zhao, W. X., Wei, Z., & Wen, J.-R. (2023). *A Survey on Large Language Model based Autonomous Agents*. arXiv. https://arxiv.org/abs/2308.11432
 [^2]: Xi, Z., Chen, W., Guo, X., He, W., Ding, Y., Hong, B., Zhang, M., Wang, J., Jin, S., Zhou, E., Zheng, R., Fan, X., Wang, X., Xiong, L., Zhou, Y., Wang, W., Jiang, C., Zou, Y., Liu, X., Yin, Z., Dou, S., Weng, R., Cheng, W., Zhang, Q., Qin, W., Zheng, Y., Qiu, X., Huang, X., & Gui, T. (2023). *The Rise and Potential of Large Language Model Based Agents: A Survey*. arXiv. https://arxiv.org/abs/2309.07864
