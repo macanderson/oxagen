@@ -52,6 +52,7 @@ const stripeMethods = {
   checkout: {
     sessions: {
       create: vi.fn(),
+      retrieve: vi.fn(),
       listLineItems: vi.fn(),
     },
   },
@@ -575,6 +576,23 @@ describe("StripeProvider", () => {
       expect(invoice.paidAt).toBeInstanceOf(Date);
     });
 
+    it("binds a Checkout-issued GAU invoice to its org from invoice.metadata.org_id with no subscription", async () => {
+      // A payment-mode session with invoice_creation issues an invoice whose
+      // only tenant reference is the metadata the session carried.
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          subscription: null,
+          parent: null,
+          billing_reason: "manual",
+          metadata: { oxagen_kind: "gau_purchase", org_id: "org-gau" },
+        }),
+      );
+      const invoice = await provider.getInvoice("in_gau_001");
+      expect(invoice.orgId).toBe("org-gau");
+      expect(invoice.subscriptionId).toBeNull();
+      expect(invoice.billingReason).toBe("manual");
+    });
+
     it("maps unknown invoice status to 'draft'", async () => {
       stripeMethods.invoices.retrieve.mockResolvedValue(
         makeStripeInvoice({ status: "unknown_status" }),
@@ -696,6 +714,148 @@ describe("StripeProvider", () => {
     });
   });
 
+  describe("createGauCheckout", () => {
+    const input = {
+      customerId: "cus_test_001",
+      orgId: "org-1",
+      quantityGau: 10_000,
+      blocks: 2,
+      blockPriceCents: 2_500,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      successUrl: "https://app.example.com/acme/billing?checkout=success",
+      cancelUrl: "https://app.example.com/acme/billing?checkout=cancel",
+    };
+    const metadata = {
+      oxagen_kind: "gau_purchase",
+      org_id: "org-1",
+      gau_quantity: "10000",
+      block_size_gau: "5000",
+      rate_per_gau_micros: "5000",
+      currency: "usd",
+    };
+
+    it("builds a payment-mode session from one price_data line at the block price, quantity blocks, with an invoice and the card saved off-session", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+
+      const result = await provider.createGauCheckout(input);
+
+      expect(result).toEqual({
+        sessionId: "cs_test_001",
+        url: "https://checkout.stripe.com/pay/test_001",
+      });
+      expect(stripeMethods.checkout.sessions.create).toHaveBeenCalledOnce();
+      expect(stripeMethods.checkout.sessions.create).toHaveBeenCalledWith({
+        mode: "payment",
+        customer: "cus_test_001",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: 2_500,
+              product_data: {
+                name: "Oxagen governed action units",
+                metadata: { oxagen_kind: "gau_block" },
+              },
+            },
+            quantity: 2,
+          },
+        ],
+        metadata,
+        invoice_creation: { enabled: true, invoice_data: { metadata } },
+        payment_method_types: ["card"],
+        payment_intent_data: { setup_future_usage: "off_session" },
+        success_url: "https://app.example.com/acme/billing?checkout=success",
+        cancel_url: "https://app.example.com/acme/billing?checkout=cancel",
+        automatic_tax: { enabled: false },
+        customer_update: undefined,
+      });
+    });
+
+    it("never sends a pre-created price: the one line is price_data", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+      await provider.createGauCheckout(input);
+      const params = stripeMethods.checkout.sessions.create.mock
+        .calls[0]![0] as { line_items: Array<Record<string, unknown>> };
+      expect(params.line_items).toHaveLength(1);
+      expect(params.line_items[0]).not.toHaveProperty("price");
+    });
+
+    it("throws when Stripe returns no checkout URL", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession({ url: null }),
+      );
+      await expect(provider.createGauCheckout(input)).rejects.toThrow(
+        "checkout URL",
+      );
+    });
+  });
+
+  describe("getCheckoutPaymentMethod", () => {
+    it("retrieves the session with payment_intent.payment_method expanded and returns the card", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: {
+          id: "pi_001",
+          payment_method: makeStripePaymentMethod(),
+        },
+      });
+
+      const pm = await provider.getCheckoutPaymentMethod("cs_test_001");
+
+      expect(stripeMethods.checkout.sessions.retrieve).toHaveBeenCalledWith(
+        "cs_test_001",
+        { expand: ["payment_intent.payment_method"] },
+      );
+      expect(pm).toEqual({
+        id: "pm_test_001",
+        type: "card",
+        brand: "visa",
+        last4: "4242",
+        expMonth: 12,
+        expYear: 2028,
+      });
+    });
+
+    it("returns null when the payment method arrived as an id, the shape a one-level expansion leaves", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: { id: "pi_001", payment_method: "pm_test_001" },
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toBeNull();
+    });
+
+    it("returns null when the session has no payment intent", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: null,
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toBeNull();
+    });
+
+    it("returns null card details for a non-card payment method", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: {
+          id: "pi_001",
+          payment_method: { id: "pm_link_001", type: "link" },
+        },
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toEqual({
+        id: "pm_link_001",
+        type: "link",
+        brand: null,
+        last4: null,
+        expMonth: null,
+        expYear: null,
+      });
+    });
+  });
+
   describe("getCheckoutSessionCreditPacks", () => {
     it("extracts creditsPerUnit from price metadata", async () => {
       const mockPaginatorResult = [
@@ -771,6 +931,40 @@ describe("StripeProvider", () => {
       expect(event.type).toBe("checkout.session.completed");
       expect(event.checkoutSession?.id).toBe("cs_001");
       expect(event.checkoutSession?.mode).toBe("payment");
+      expect(event.checkoutSession?.invoiceId).toBeNull();
+      expect(event.checkoutSession?.customerId).toBeNull();
+    });
+
+    it("carries the invoice and customer of a checkout.session.completed event, whether Stripe sent ids or expanded objects", () => {
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        makeStripeEvent("checkout.session.completed", {
+          id: "cs_002",
+          mode: "payment",
+          payment_status: "paid",
+          customer: "cus_002",
+          metadata: { oxagen_kind: "gau_purchase", org_id: "org-1" },
+          subscription: null,
+          invoice: "in_002",
+        }),
+      );
+      const byId = provider.parseWebhookEvent("raw_body", "sig_003b");
+      expect(byId.checkoutSession?.invoiceId).toBe("in_002");
+      expect(byId.checkoutSession?.customerId).toBe("cus_002");
+
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        makeStripeEvent("checkout.session.completed", {
+          id: "cs_003",
+          mode: "payment",
+          payment_status: "paid",
+          customer: { id: "cus_003" },
+          metadata: {},
+          subscription: null,
+          invoice: { id: "in_003" },
+        }),
+      );
+      const expanded = provider.parseWebhookEvent("raw_body", "sig_003c");
+      expect(expanded.checkoutSession?.invoiceId).toBe("in_003");
+      expect(expanded.checkoutSession?.customerId).toBe("cus_003");
     });
 
     it("parses a payment_method.attached event", () => {

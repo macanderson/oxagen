@@ -3,12 +3,12 @@
 // signs in through Better Auth. The destination is the sanitised `next` the
 // page passed down.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { liveSignIn, rememberPendingNext } from "./client-auth";
-import { withNext } from "./safe-next";
+import { liveSignIn, rememberPendingNext } from "./auth-client";
+import { routes, type SafePath } from "@/shared/safe-path";
+import { useNavigate } from "@/ui/navigation";
 import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -16,13 +16,13 @@ import { linkText, panel } from "@/ui/control-styles";
 import { formText } from "./form-text";
 
 export type LoginFormProps = {
-  next: string;
+  next: SafePath;
   initialOutcome?: AuthOutcomeKey | null;
 };
 
 export function LoginForm({ next, initialOutcome = null }: LoginFormProps) {
   const t = useTranslations("auth");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [errors, setErrors] = useState<FieldErrors<"email" | "password">>({});
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(initialOutcome);
   const [pending, setPending] = useState(false);
@@ -49,19 +49,13 @@ export function LoginForm({ next, initialOutcome = null }: LoginFormProps) {
       const result = await liveSignIn(parsed.data);
       if (!result.ok) {
         if (result.outcome === "emailNotVerified") {
-          router.push(
-            withNext(
-              `/verify?email=${encodeURIComponent(parsed.data.email)}`,
-              next,
-            ),
-          );
+          navigate.push(routes.verify({ email: parsed.data.email, next }));
           return;
         }
         setOutcome(result.outcome);
         return;
       }
-      router.replace(result.twoFactor ? withNext("/two-factor", next) : next);
-      router.refresh();
+      navigate.replace(result.twoFactor ? routes.twoFactor(next) : next);
     } catch {
       setOutcome("unavailable");
     } finally {

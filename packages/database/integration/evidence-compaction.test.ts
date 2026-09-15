@@ -1,6 +1,6 @@
 /**
  * Frame compaction — live-database proof (Mission Control spec §13.2, §13.3;
- * ADR-058; migration 20260915130000_run_recorder_replay.sql §7).
+ * ADR-058; migration 20260915150000_run_recorder_replay.sql §7).
  *
  * `agent.compact_sealed_attempt_events()` is SECURITY DEFINER and granted to
  * the app role, so the hot window has to hold inside the function: it takes

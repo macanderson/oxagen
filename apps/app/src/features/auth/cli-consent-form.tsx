@@ -1,10 +1,15 @@
 "use client";
 // Pick the organization and workspace the CLI may act in, then approve or
-// cancel. Presentation only: the actions re-validate everything.
+// cancel. Presentation only: the actions re-check everything.
 import { useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
-import { approveCliAuth, cancelCliAuth } from "./cli-actions";
-import type { CliAuthorizeParams, OrgOption } from "./cli-authorize";
+import {
+  approveCliAuth,
+  cancelCliAuth,
+  type CliActionState,
+} from "./cli-actions";
+import type { CliAuthorizeParams } from "./cli-authorize";
+import type { ConsentOrg } from "./cli-consent";
 import { FormAlert } from "@/ui/form-feedback";
 import {
   buttonPrimary,
@@ -13,6 +18,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { SafeForm } from "@/ui/navigation";
 
 function Hidden({ params }: { params: CliAuthorizeParams }) {
   return (
@@ -30,34 +36,48 @@ function Hidden({ params }: { params: CliAuthorizeParams }) {
   );
 }
 
+/** The catalog key for an action's refusal. */
+function failureKey(state: CliActionState) {
+  if (state === null || state.ok) return null;
+  switch (state.reason) {
+    case "invalid":
+      return "invalidBody";
+    case "denied":
+      return "errors.notPermitted";
+    case "not_found":
+      return "errors.notFound";
+    default:
+      return "errors.failed";
+  }
+}
+
 export function CliConsentForm({
   params,
   orgs,
 }: {
   params: CliAuthorizeParams;
-  orgs: OrgOption[];
+  orgs: ConsentOrg[];
 }) {
   const t = useTranslations("auth.cli");
   const [orgSlug, setOrgSlug] = useState(orgs[0]?.slug ?? "");
   const org = orgs.find((o) => o.slug === orgSlug) ?? orgs[0];
   const workspaces = org?.workspaces ?? [];
   const [wsSlug, setWsSlug] = useState(workspaces[0]?.slug ?? "");
-  const [approveState, approve, approving] = useActionState(
-    approveCliAuth,
-    null,
-  );
-  const [cancelState, cancel, cancelling] = useActionState(cancelCliAuth, null);
-  const error = approveState?.error ?? cancelState?.error ?? null;
+  const [approveState, approve, approving] = useActionState<
+    CliActionState,
+    FormData
+  >(approveCliAuth, null);
+  const [cancelState, cancel, cancelling] = useActionState<
+    CliActionState,
+    FormData
+  >(cancelCliAuth, null);
+  const failure = failureKey(approveState) ?? failureKey(cancelState);
   const busy = approving || cancelling;
 
   return (
     <div className={`${panel} flex flex-col gap-5 p-5 sm:p-6`}>
-      {error ? (
-        <FormAlert testId="cli-error">
-          {error === "invalid" ? t("invalidBody") : t(`errors.${error}`)}
-        </FormAlert>
-      ) : null}
-      <form
+      {failure ? <FormAlert testId="cli-error">{t(failure)}</FormAlert> : null}
+      <SafeForm
         action={approve}
         className="flex flex-col gap-4"
         aria-label={t("title")}
@@ -103,7 +123,7 @@ export function CliConsentForm({
             name="workspace_slug"
             className={`${inputBase} ${mono}`}
             value={wsSlug}
-            disabled={busy || workspaces.length === 0}
+            disabled={busy}
             onChange={(e) => {
               setWsSlug(e.target.value);
             }}
@@ -114,9 +134,6 @@ export function CliConsentForm({
               </option>
             ))}
           </select>
-          {workspaces.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("noWorkspaces")}</p>
-          ) : null}
         </div>
         <div className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
@@ -134,8 +151,8 @@ export function CliConsentForm({
         >
           {approving ? t("approving") : t("approve")}
         </button>
-      </form>
-      <form action={cancel}>
+      </SafeForm>
+      <SafeForm action={cancel}>
         <Hidden params={params} />
         <button
           type="submit"
@@ -144,7 +161,7 @@ export function CliConsentForm({
         >
           {cancelling ? t("cancelling") : t("cancel")}
         </button>
-      </form>
+      </SafeForm>
     </div>
   );
 }

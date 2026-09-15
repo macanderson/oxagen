@@ -1,13 +1,13 @@
 ---
 title: Chat interface
-description: The chat surface beyond the message stream — pinned repo/environment context, slash commands, generative UI cards, and graph-grounded citations.
+description: "The chat surface beyond the message stream: pinned repo/environment context, slash commands, generative UI cards, and graph-grounded citations."
 ---
 
 The in-app chat composer is more than a text box. This page covers the
 surface features that shape how a turn is scoped and how its results are
 shown: pinning a repository/environment to the conversation, slash commands,
 the generative UI card registry, and the citation strip that grounds an
-answer in the knowledge graph. Oxagen has no coding runtime — chat cannot
+answer in the knowledge graph. Oxagen has no coding runtime: chat cannot
 open a sandbox or edit a repository; it can only read what a connected repo
 reports (CI status, PR diffs, PR metadata).
 
@@ -16,69 +16,69 @@ reports (CI status, PR diffs, PR metadata).
 A persistent context bar sits directly above the composer, letting you choose
 a connected GitHub repository and a workspace environment and **pin** them to
 the conversation. Once pinned, the assistant knows which repo/environment you
-mean on every future turn in that conversation — you don't have to repeat
+mean on every future turn in that conversation: you don't have to repeat
 "in the billing repo" on every message.
 
 - The repo and environment selections are independent; pin one, both, or
   neither.
 - Pinning is optional. It only matters for the read-only repo-observability
   tools (`repo.pr.get`, `repo.ci.status`, `repo.pr.diff`, …) and the `/pr`,
-  `/diff`, `/ci` slash commands below — if nothing is pinned and a command
+  `/diff`, `/ci` slash commands below: if nothing is pinned and a command
   needs a repo, the assistant asks you to pin one rather than guessing.
 
 ## Slash commands
 
 Typing `/` in the composer opens an autocomplete menu of slash commands. A
-slash command is not a hard client-side router — the composer sends the
+slash command is not a hard client-side router: the composer sends the
 literal text (e.g. `/ci main`) and the agent, told about each command in its
 system prompt, maps it to the right capability. The one exception is `/pin`,
 which the composer intercepts and handles locally.
 
 | Command | Arguments | What it does |
 |---|---|---|
-| `/pr` | `<pr-number>` | Shows pull-request stats — comments, checks, and files changed (renders the PR-stats card). |
+| `/pr` | `<pr-number>` | Shows pull-request stats: comments, checks, and files changed (renders the PR-stats card). |
 | `/diff` | `<pr-number>` | Shows the git diff (file patches) for a pull request (renders the code-diff card). |
 | `/ci` | `[ref]` | Shows CI/check status for a branch, commit, or PR head; defaults to the pinned repo's default branch. |
-| `/repos` | — | Lists the GitHub repositories connected to the workspace, so you can pick one to pin. |
-| `/pin` | — | Pins the currently selected org/repo + environment to this chat (handled locally by the composer, not sent as a message). |
+| `/repos` | none | Lists the GitHub repositories connected to the workspace, so you can pick one to pin. |
+| `/pin` | none | Pins the currently selected org/repo + environment to this chat (handled locally by the composer, not sent as a message). |
 
 The `/pr`, `/diff`, and `/ci` commands act on whichever repository is
-[pinned](#pinning-repo--environment-context) to the conversation — if nothing
+[pinned](#pinning-repo--environment-context) to the conversation: if nothing
 is pinned, the assistant asks you to pin one instead of guessing.
 
 ## Generative UI cards
 
 Tool results that benefit from a purpose-built view render as cards instead of
-plain text — the model returns structured output (`generateObject`) and the
+plain text: the model returns structured output (`generateObject`) and the
 client maps the component type to a React renderer from a shared card
 registry, never a server-rendered tree. Cards relevant to the chat surfaces
 above include:
 
 | Card | Shown for |
 |---|---|
-| Code diff card | `/diff`, `repo.pr.diff`, or any tool returning a unified diff — per-file patches with add/remove counts. |
-| PR stats card | `/pr`, `repo.pr.get` — comments, review status, checks, and files-changed summary. |
-| CI status card | `/ci`, `repo.ci.status` — check-run and commit-status results for a ref. |
+| Code diff card | `/diff`, `repo.pr.diff`, or any tool returning a unified diff: per-file patches with add/remove counts. |
+| PR stats card | `/pr`, `repo.pr.get`: comments, review status, checks, and files-changed summary. |
+| CI status card | `/ci`, `repo.ci.status`: check-run and commit-status results for a ref. |
 
 These sit alongside the approval and memory-recall cards already covered
-elsewhere — see [Tools and capabilities](/docs/agent/tools-and-capabilities)
+elsewhere: see [Tools and capabilities](/docs/agent/tools-and-capabilities)
 for the tool surface that produces them.
 
 ## Graph-grounded citations
 
 When a turn recalls workspace memories to ground its answer, the chat surfaces
-a **"Grounded in"** citation strip beneath the assistant's response — concrete
+a **"Grounded in"** citation strip beneath the assistant's response: concrete
 proof of which knowledge-graph facts backed the answer, not just an
 unverifiable claim.
 
 - Each recalled memory is cited by the knowledge-graph node it is **about**,
   using the shared `NodeRef` chip: a colour-coded label, a hover/click property
-  popover, and a copyable id — never a bare UUID, matching the same citation
+  popover, and a copyable id: never a bare UUID, matching the same citation
   convention used everywhere else a node or edge is referenced in the UI.
 - Each citation includes a **"View in graph"** deep link that opens the graph
   explorer focused on that exact node (`?focus=<publicId>`), so a cited fact
   is one click from its live graph context.
-- Recall runs concurrently with the model's turn, best-effort — resolving
+- Recall runs concurrently with the model's turn, best-effort: resolving
   citations never delays the first streamed token, and the strip persists
   across a page refresh (it's stored as a message content block, not
   recomputed each render).

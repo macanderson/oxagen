@@ -823,6 +823,63 @@ export function buildProgram(): Command {
     .command("agent")
     .description("Govern the workspace's registered agents");
 
+  // ── agent identity: register_agent / get_agent / revoke_tacho_enrollment (MC spec §14.1) ──
+
+  agent
+    .command("register")
+    .description(
+      "Register an agent identity and print its credential once — Owner/Admin only",
+    )
+    .requiredOption("--slug <slug>", "Lowercase words joined by hyphens")
+    .requiredOption("--name <name>", "Display name")
+    .requiredOption(
+      "--harness <harness>",
+      "stella | claude-code | claude-agent-sdk | custom",
+    )
+    .option("--description <text>", "What the agent is for")
+    .option("--validity-days <n>", "Credential lifetime in days (1–365)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        slug?: string;
+        name?: string;
+        harness?: string;
+        description?: string;
+        validityDays?: string;
+        json?: boolean;
+      }) => {
+        const { agentRegister } = await import("./commands/agent.js");
+        await agentRegister(opts);
+      },
+    );
+  agent
+    .command("status <agent>")
+    .description(
+      "Identity, credentials, roles, hosts and the definition of record for one agent (id or slug)",
+    )
+    .option("--json", "Output JSON")
+    .action(async (agent: string, opts: { json?: boolean }) => {
+      const { agentStatus } = await import("./commands/agent.js");
+      await agentStatus(agent, opts);
+    });
+  agent
+    .command("unenroll <agent>")
+    .description(
+      "Revoke the agent's live host enrollments (or one host with --host) — Owner/Admin only",
+    )
+    .option("--host <tch_id>", "Only this host")
+    .option("--reason <text>", "Recorded on the host and in the revoke command")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        agent: string,
+        opts: { host?: string; reason?: string; json?: boolean },
+      ) => {
+        const { agentUnenroll } = await import("./commands/agent.js");
+        await agentUnenroll(agent, opts);
+      },
+    );
+
   const agentEnv = agent
     .command("env")
     .description("Bind an agent to an environment");

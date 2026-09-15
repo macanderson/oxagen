@@ -7,6 +7,7 @@ import { type SyntheticEvent, useState } from "react";
 import { requestPasswordReset, resetPassword } from "./actions";
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
+  type AuthErrorKey,
   type FieldErrors,
   ForgotPasswordSchema,
   PASSWORD_MIN,
@@ -20,7 +21,7 @@ import { formText } from "./form-text";
 
 export function ForgotPasswordForm() {
   const t = useTranslations("auth");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthErrorKey | null>(null);
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -172,7 +173,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     );
   }
 
-  const message = (key: string | undefined) =>
+  const message = (key: AuthErrorKey | undefined) =>
     key ? t(`errors.${key}`) : undefined;
   return (
     <form

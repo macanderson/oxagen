@@ -3,13 +3,13 @@
 // holding only Better Auth's short-lived two-factor cookie, so the route is
 // public. An authenticator code or a single-use recovery code completes sign-in.
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { liveVerifyTwoFactor, takePendingNext } from "./client-auth";
-import { DEFAULT_NEXT, sanitizeNext } from "./safe-next";
-import { TwoFactorSchema, fieldErrors } from "./schemas";
+import { liveVerifyTwoFactor, takePendingNext } from "./auth-client";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
+import { useNavigate } from "@/ui/navigation";
+import { type AuthErrorKey, TwoFactorSchema, fieldErrors } from "./schemas";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { linkText, panel } from "@/ui/control-styles";
@@ -17,11 +17,11 @@ import { formText } from "./form-text";
 
 type Method = "totp" | "backup";
 
-export function TwoFactorForm({ next }: { next: string }) {
+export function TwoFactorForm({ next }: { next: SafePath }) {
   const t = useTranslations("auth");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [method, setMethod] = useState<Method>("totp");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthErrorKey | null>(null);
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -43,14 +43,15 @@ export function TwoFactorForm({ next }: { next: string }) {
     try {
       // A live sign-in that stopped here may have lost ?next= to Better Auth's own redirect.
       const destination =
-        next !== DEFAULT_NEXT ? next : sanitizeNext(takePendingNext());
+        next !== routes.root()
+          ? next
+          : sanitizeNext(takePendingNext(), routes.root());
       const result = await liveVerifyTwoFactor(parsed.data);
       if (!result.ok) {
         setOutcome(result.outcome);
         return;
       }
-      router.replace(destination);
-      router.refresh();
+      navigate.replace(destination);
     } catch {
       setOutcome("unavailable");
     } finally {

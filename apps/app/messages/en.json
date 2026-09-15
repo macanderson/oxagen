@@ -1,76 +1,28 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run.",
-    "skipToContent": "Skip to content"
+    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
   },
-  "routes": {
-    "home": {
-      "title": "Mission Control"
-    },
-    "login": {
-      "title": "Log in"
-    },
-    "signup": {
-      "title": "Create your account"
-    },
-    "verify": {
-      "title": "Verify your email"
-    },
-    "twoFactor": {
-      "title": "Two-factor authentication"
-    },
-    "forgotPassword": {
-      "title": "Reset your password"
-    },
-    "resetPassword": {
-      "title": "Choose a new password"
-    },
-    "invite": {
-      "title": "Accept your invitation"
-    },
-    "newOrganization": {
-      "title": "Create your organization"
-    },
-    "cliAuthorize": {
-      "title": "Authorize the Oxagen CLI"
-    },
-    "githubSetup": {
-      "title": "Finish connecting GitHub"
-    },
-    "organization": {
-      "title": "Organization"
-    },
-    "apiKeys": {
-      "title": "API keys"
-    },
-    "billing": {
-      "title": "Billing"
-    },
-    "audit": {
-      "title": "Audit"
-    },
-    "fleet": {
-      "title": "Fleet"
-    },
-    "run": {
-      "title": "Run"
-    },
-    "agents": {
-      "title": "Agents"
-    },
-    "tools": {
-      "title": "Tools"
-    },
-    "ontology": {
-      "title": "Ontology"
-    },
-    "steering": {
-      "title": "Steering"
-    },
-    "spend": {
-      "title": "Spend"
-    }
+  "pages": {
+    "login": "Log in",
+    "signup": "Govern the agents you already run.",
+    "verify": "Check your email",
+    "twoFactor": "Two-factor authentication",
+    "forgotPassword": "Reset your password",
+    "resetPassword": "Set a new password",
+    "invitation": "Join {org} on Oxagen",
+    "invitationNotFound": "This invitation link does not work",
+    "newOrganization": "Name your organization",
+    "cliAuthorize": "Authorize the Oxagen CLI",
+    "fleet": "Fleet",
+    "run": "Run",
+    "agents": "Agents",
+    "tools": "Tools",
+    "steering": "Steering",
+    "spend": "Spend",
+    "people": "Organization",
+    "apiKeys": "API keys",
+    "billing": "Billing"
   },
   "unrecorded": {
     "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",
@@ -79,19 +31,6 @@
     "spend": "Spend by operator and agent, and costed findings, are not recorded here yet.",
     "run": {
       "frames_wrapped": "Frames of a wrapped run are not recorded yet."
-    }
-  },
-  "states": {
-    "denied": {
-      "title": "You do not have access",
-      "body": "This needs the {permission} permission. Ask an organization admin to grant it."
-    },
-    "error": {
-      "title": "This could not load",
-      "body": "Error {code} (HTTP {status}). Try again in a moment."
-    },
-    "empty": {
-      "title": "Nothing here yet"
     }
   },
   "notFound": {

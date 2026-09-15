@@ -163,6 +163,69 @@ describe("billing.contract_rate.get handler", () => {
   });
 });
 
+// ── billing.gau_bucket.purchase ──────────────────────────────────────────────
+
+import handler_billingGauBucketPurchase, {
+  schema as billingGauBucketPurchaseSchema,
+  metadata as billingGauBucketPurchaseMetadata,
+} from "./billing.gau_bucket.purchase";
+
+describe("billing.gau_bucket.purchase handler", () => {
+  const args = {
+    quantityGau: 10_000,
+    successPath: "/acme/billing?checkout=success",
+    cancelPath: "/acme/billing?checkout=cancel",
+  };
+  const output = {
+    checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test",
+    quantityGau: 10_000,
+    blockSizeGau: 5_000,
+    blocks: 2,
+  };
+
+  it("is registered under the contract's name as a non-idempotent write", () => {
+    expect(billingGauBucketPurchaseMetadata.name).toBe("purchase_gau_bucket");
+    expect(billingGauBucketPurchaseMetadata.annotations?.readOnlyHint).toBe(
+      false,
+    );
+    expect(billingGauBucketPurchaseMetadata.annotations?.idempotentHint).toBe(
+      false,
+    );
+    expect(Object.keys(billingGauBucketPurchaseSchema)).toEqual([
+      "quantityGau",
+      "successPath",
+      "cancelPath",
+    ]);
+  });
+
+  it("invokes purchase_gau_bucket with the arguments on the mcp surface and forwards the session", async () => {
+    mocks.invoke.mockResolvedValue(output);
+
+    const result = await handler_billingGauBucketPurchase(args);
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "purchase_gau_bucket",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual(output);
+  });
+
+  it("refuses an output whose checkout URL is not a URL", async () => {
+    mocks.invoke.mockResolvedValue({ ...output, checkoutUrl: "cs_test" });
+    await expect(handler_billingGauBucketPurchase(args)).rejects.toThrow();
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("invoice_billed"));
+    await expect(handler_billingGauBucketPurchase(args)).rejects.toThrow(
+      "invoice_billed",
+    );
+  });
+});
+
 // ── billing.subscription.upgrade.start ───────────────────────────────────────
 
 import handler_billingSubscriptionUpgradeStart, {

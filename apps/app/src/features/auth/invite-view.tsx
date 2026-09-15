@@ -7,7 +7,8 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import type { InvitationView } from "@/data/contracts/invitations";
 import type { InvitationDecision } from "./invitation";
 import { InviteDecision } from "./invite-decision";
-import { withNext } from "./safe-next";
+import { routes } from "@/shared/safe-path";
+import { SafeLink } from "@/ui/navigation";
 import { OutcomePanel } from "@/ui/form-feedback";
 import {
   buttonPrimary,
@@ -39,7 +40,7 @@ export async function InvitationBody({
 }) {
   const t = await getTranslations("auth.invite");
   const format = await getFormatter();
-  const here = `/invite/${invitation.token}`;
+  const here = routes.invite(invitation.token);
 
   if (decision.kind === "closed") {
     return (
@@ -67,9 +68,9 @@ export async function InvitationBody({
         testId="invite-wrong-account"
         title={t("wrongAccountTitle")}
         actions={
-          <Link href={withNext("/login", here)} className={buttonSecondary}>
+          <SafeLink to={routes.login(here)} className={buttonSecondary}>
             {t("logInAsOther")}
-          </Link>
+          </SafeLink>
         }
       >
         {t("wrongAccountBody", {
@@ -122,21 +123,21 @@ export async function InvitationBody({
             {t("signInLead", { email: invitation.email })}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link href={withNext("/login", here)} className={buttonPrimary}>
+            <SafeLink to={routes.login(here)} className={buttonPrimary}>
               {t("logIn")}
-            </Link>
-            <Link href={withNext("/signup", here)} className={buttonSecondary}>
+            </SafeLink>
+            <SafeLink to={routes.signup(here)} className={buttonSecondary}>
               {t("signUp")}
-            </Link>
+            </SafeLink>
           </div>
         </div>
       )}
       {decision.kind === "accept" ? (
         <p className="text-xs text-muted-foreground">
           {t("signedInAs", { email: invitation.email })} ·{" "}
-          <Link href={withNext("/login", here)} className={linkText}>
+          <SafeLink to={routes.login(here)} className={linkText}>
             {t("notYou")}
-          </Link>
+          </SafeLink>
         </p>
       ) : null}
     </section>

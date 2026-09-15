@@ -90,6 +90,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "archive_workspace",
+    async () =>
+      (await import("./workspace.archive"))
+        .workspaceArchiveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_orgs",
     async () =>
       (await import("./org.list")).orgListHandler as CapabilityHandlerFn,
@@ -151,6 +157,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./billing.credits.purchase"))
         .billingCreditsPurchaseHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "purchase_gau_bucket",
+    async () =>
+      (await import("./billing.gau_bucket.purchase"))
+        .billingGauBucketPurchaseHandler as CapabilityHandlerFn,
   );
   // ADR-052 — the governed-action meter's own read surfaces: the published
   // price, the run→action calculator, and the retention posture.
@@ -864,6 +876,53 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./run.get")).runGetHandler as CapabilityHandlerFn,
   );
+  // Agent identity and the definition of record (MC spec §6.2, ADR-057,
+  // #2956). The two identity reads live in packages/agent; these are the
+  // credential-minting and revoking writes beside api.key.* and tacho.*, the
+  // definition commit through @oxagen/github, the belt read over the runtime's
+  // own decision, and the incident list.
+  registerHandler(
+    "register_agent",
+    async () =>
+      (await import("./agent.register"))
+        .agentRegisterHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "rotate_agent_credential",
+    async () =>
+      (await import("./agent.credential.rotate"))
+        .agentCredentialRotateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "suspend_agent",
+    async () =>
+      (await import("./agent.suspend"))
+        .agentSuspendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "retire_agent",
+    async () =>
+      (await import("./agent.retire"))
+        .agentRetireHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "commit_agent_definition",
+    async () =>
+      (await import("./agent.definition.commit"))
+        .agentDefinitionCommitHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_agent_toolbelt",
+    async () =>
+      (await import("./agent.toolbelt.get"))
+        .agentToolbeltGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_incidents",
+    async () =>
+      (await import("./tacho.incident.list"))
+        .tachoIncidentListHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_run_frame_body",
     async () =>
@@ -964,6 +1023,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./iam.role.list"))
         .iamRoleListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_role",
+    async () =>
+      (await import("./iam.role.create"))
+        .iamRoleCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_role_grants",
+    async () =>
+      (await import("./iam.role.grants.set"))
+        .iamRoleGrantsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_role",
+    async () =>
+      (await import("./iam.role.delete"))
+        .iamRoleDeleteHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_auth_alerts",

@@ -1,19 +1,19 @@
 "use client";
 // Accept or decline, for the invited account (mockup `obInvite` @ mc-baseline-w1).
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import {
-  type InviteActionResult,
-  acceptInvitation,
-  declineInvitation,
-} from "./invite-actions";
+import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
+import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { LoaderCircle } from "lucide-react";
 
-type Failure = Extract<InviteActionResult, { ok: false }>["reason"];
+/** The refusal the alert names: another account, a closed invitation, or any other failure. */
+type Failure = "denied" | "closed" | "failed";
+
+const failureOf = (reason: string): Failure =>
+  reason === "denied" ? "denied" : reason === "conflict" ? "closed" : "failed";
 
 export function InviteDecision({
   token,
@@ -23,7 +23,7 @@ export function InviteDecision({
   orgName: string;
 }) {
   const t = useTranslations("auth.invite");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [declined, setDeclined] = useState(false);
@@ -33,20 +33,15 @@ export function InviteDecision({
     setPending(kind);
     setFailure(null);
     try {
-      const result =
-        kind === "accept"
-          ? await acceptInvitation(token)
-          : await declineInvitation(token);
-      if (!result.ok) {
-        setFailure(result.reason);
-        return;
+      if (kind === "accept") {
+        const result = await acceptInvitation(token);
+        if (result.ok) navigate.replace(result.value.to);
+        else setFailure(failureOf(result.reason));
+      } else {
+        const result = await declineInvitation(token);
+        if (result.ok) setDeclined(true);
+        else setFailure(failureOf(result.reason));
       }
-      if (kind === "decline") {
-        setDeclined(true);
-        return;
-      }
-      router.replace(result.to);
-      router.refresh();
     } catch {
       setFailure("failed");
     } finally {
@@ -69,7 +64,13 @@ export function InviteDecision({
   return (
     <div className="flex flex-col gap-3">
       {failure ? (
-        <FormAlert testId="invite-failure">{t("failed")}</FormAlert>
+        <FormAlert testId="invite-failure">
+          {failure === "denied"
+            ? t("denied")
+            : failure === "closed"
+              ? t("closedTitle")
+              : t("failed")}
+        </FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button

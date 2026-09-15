@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { pathOf } from "@/shared/safe-path";
 import { buildCommands, filterCommands, moveHighlight } from "./commands";
 
 const labels = { nav: (key: string) => `nav:${key}` };
@@ -6,18 +7,16 @@ const labels = { nav: (key: string) => `nav:${key}` };
 describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
 
-  it("offers every page route, and nothing else", () => {
+  it("offers the seven sidebar pages and API keys, and nothing else", () => {
     expect(commands.map((c) => c.href)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
-      "/acme/core-platform/ontology",
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
       "/acme",
       "/acme/api-keys",
       "/acme/billing",
-      "/acme/audit",
     ]);
     expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
@@ -29,8 +28,14 @@ describe("buildCommands", () => {
       "/acme",
       "/acme/api-keys",
       "/acme/billing",
-      "/acme/audit",
     ]);
+  });
+
+  it("offers no Ontology graph question and no Audit export (negative)", () => {
+    for (const c of commands) {
+      expect(c.href).not.toMatch(/\/(ontology|audit)(\/|$)/);
+      expect(c.id).toMatch(/^go:/);
+    }
   });
 });
 
@@ -45,7 +50,9 @@ describe("filterCommands", () => {
     expect(filterCommands(commands, "NAV:TOOLS").map((c) => c.id)).toEqual([
       "go:tools",
     ]);
-    const accented = [{ id: "x", label: "Politique générale", href: "/x" }];
+    const accented = [
+      { id: "x", label: "Politique générale", href: pathOf("x") },
+    ];
     expect(filterCommands(accented, "generale")).toHaveLength(1);
   });
 

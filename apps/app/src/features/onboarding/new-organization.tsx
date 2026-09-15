@@ -1,9 +1,8 @@
 // /new-organization as a Server Component: the signed-in person, then the
-// organization form. A signed-out visitor is sent to /login and back here.
-import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
-import { DEFAULT_NEXT, getAuthUser, readNext, withNext } from "@/features/auth";
-import { AuthColumn, AuthHeading } from "@/ui/auth-shell";
+// organization form. A signed-out visitor is sent to /login and back here. The
+// route renders the column and its PageHeader around this screen.
+import { requireUser } from "@/server/viewer";
+import { readNext, routes } from "@/shared/safe-path";
 import { OrganizationForm } from "./ui/organization-form";
 
 export async function NewOrganizationScreen({
@@ -15,15 +14,8 @@ export async function NewOrganizationScreen({
   // account here with itself as the destination, so the CLI's PKCE round trip
   // finishes; with none, the form lands on the new workspace's Fleet page.
   const next = readNext(await searchParams);
-  const user = await getAuthUser();
-  if (!user) redirect(withNext("/login", withNext("/new-organization", next)));
-  const t = await getTranslations("onboarding.organization");
+  await requireUser(routes.newOrganization(next));
   return (
-    <AuthColumn wide>
-      <AuthHeading kicker={t("eyebrow")} title={t("title")} lead={t("lead")} />
-      <OrganizationForm
-        destination={next === DEFAULT_NEXT ? undefined : next}
-      />
-    </AuthColumn>
+    <OrganizationForm destination={next === routes.root() ? undefined : next} />
   );
 }

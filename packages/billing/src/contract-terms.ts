@@ -21,7 +21,7 @@
  */
 
 import { and, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import type { GauTerms } from "./pricing";
 import { ENTITLED_SUBSCRIPTION_STATUSES } from "./tier";
@@ -95,87 +95,86 @@ function termsOf(row: {
 }
 
 /**
- * The organisation's effective terms and its entitled subscription, in one
- * tenant-scoped round trip. Runs inside the caller's tenant scope: the kernel
- * enters it before the gate and re-enters it for the recorder.
+ * The organisation's effective terms and its entitled subscription, read on
+ * the caller's executor. The gate and the recorder pass a tenant-scoped
+ * transaction through {@link resolveGauEntitlement}; the webhook grant, which
+ * runs with no tenant scope, passes its `withSystemDb` transaction.
  */
-export async function resolveGauEntitlement(
+export async function readGauEntitlement(
+  tx: Tx,
   orgId: string,
   now: Date = new Date(),
 ): Promise<GauEntitlement> {
-  const { negotiated, entitled, free } = await withTenantDb(async (tx) => {
-    const [n, e, f] = await Promise.all([
-      // Effective: started, and not yet ended. The partial unique index on
-      // (org_id) WHERE effective_to IS NULL keeps one open row per org; a row
-      // with a future effective_to is still in force until that instant.
-      tx
-        .select({
-          agreementRef: schema.contractTerms.agreementRef,
-          currency: schema.contractTerms.currency,
-          ratePerGauMicros: schema.contractTerms.ratePerGauMicros,
-          blockSizeGau: schema.contractTerms.blockSizeGau,
-          includedGauPerMonth: schema.contractTerms.includedGauPerMonth,
-          effectiveFrom: schema.contractTerms.effectiveFrom,
-          effectiveTo: schema.contractTerms.effectiveTo,
-        })
-        .from(schema.contractTerms)
-        .where(
-          and(
-            eq(schema.contractTerms.orgId, orgId),
-            lte(schema.contractTerms.effectiveFrom, now),
-            or(
-              isNull(schema.contractTerms.effectiveTo),
-              gt(schema.contractTerms.effectiveTo, now),
-            ),
+  const [n, e, f] = await Promise.all([
+    // Effective: started, and not yet ended. The partial unique index on
+    // (org_id) WHERE effective_to IS NULL keeps one open row per org; a row
+    // with a future effective_to is still in force until that instant.
+    tx
+      .select({
+        agreementRef: schema.contractTerms.agreementRef,
+        currency: schema.contractTerms.currency,
+        ratePerGauMicros: schema.contractTerms.ratePerGauMicros,
+        blockSizeGau: schema.contractTerms.blockSizeGau,
+        includedGauPerMonth: schema.contractTerms.includedGauPerMonth,
+        effectiveFrom: schema.contractTerms.effectiveFrom,
+        effectiveTo: schema.contractTerms.effectiveTo,
+      })
+      .from(schema.contractTerms)
+      .where(
+        and(
+          eq(schema.contractTerms.orgId, orgId),
+          lte(schema.contractTerms.effectiveFrom, now),
+          or(
+            isNull(schema.contractTerms.effectiveTo),
+            gt(schema.contractTerms.effectiveTo, now),
           ),
-        )
-        .orderBy(desc(schema.contractTerms.effectiveFrom))
-        .limit(1),
-      // The entitled subscription and its plan: the join plan-allowance.ts
-      // makes, with the entitled-status list shared rather than restated
-      // (#1384: two copies of that list once disagreed and switched a
-      // security control off).
-      tx
-        .select({
-          tier: schema.plans.tier,
-          currency: schema.plans.currency,
-          ratePerGauMicros: schema.plans.ratePerGauMicros,
-          blockSizeGau: schema.plans.blockSizeGau,
-          includedGauPerMonth: schema.plans.includedGauPerMonth,
-          updatedAt: schema.plans.updatedAt,
-          billingInterval: schema.subscriptions.billingInterval,
-          currentPeriodStart: schema.subscriptions.currentPeriodStart,
-          currentPeriodEnd: schema.subscriptions.currentPeriodEnd,
-        })
-        .from(schema.subscriptions)
-        .innerJoin(
-          schema.plans,
-          eq(schema.subscriptions.planId, schema.plans.id),
-        )
-        .where(
-          and(
-            eq(schema.subscriptions.orgId, orgId),
-            inArray(schema.subscriptions.status, [
-              ...ENTITLED_SUBSCRIPTION_STATUSES,
-            ]),
-          ),
-        )
-        .limit(1),
-      tx
-        .select({
-          tier: schema.plans.tier,
-          currency: schema.plans.currency,
-          ratePerGauMicros: schema.plans.ratePerGauMicros,
-          blockSizeGau: schema.plans.blockSizeGau,
-          includedGauPerMonth: schema.plans.includedGauPerMonth,
-          updatedAt: schema.plans.updatedAt,
-        })
-        .from(schema.plans)
-        .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
-        .limit(1),
-    ]);
-    return { negotiated: n[0], entitled: e[0], free: f[0] };
-  });
+        ),
+      )
+      .orderBy(desc(schema.contractTerms.effectiveFrom))
+      .limit(1),
+    // The entitled subscription and its plan: the join plan-allowance.ts
+    // makes, with the entitled-status list shared rather than restated
+    // (#1384: two copies of that list once disagreed and switched a
+    // security control off).
+    tx
+      .select({
+        tier: schema.plans.tier,
+        currency: schema.plans.currency,
+        ratePerGauMicros: schema.plans.ratePerGauMicros,
+        blockSizeGau: schema.plans.blockSizeGau,
+        includedGauPerMonth: schema.plans.includedGauPerMonth,
+        updatedAt: schema.plans.updatedAt,
+        billingInterval: schema.subscriptions.billingInterval,
+        currentPeriodStart: schema.subscriptions.currentPeriodStart,
+        currentPeriodEnd: schema.subscriptions.currentPeriodEnd,
+      })
+      .from(schema.subscriptions)
+      .innerJoin(schema.plans, eq(schema.subscriptions.planId, schema.plans.id))
+      .where(
+        and(
+          eq(schema.subscriptions.orgId, orgId),
+          inArray(schema.subscriptions.status, [
+            ...ENTITLED_SUBSCRIPTION_STATUSES,
+          ]),
+        ),
+      )
+      .limit(1),
+    tx
+      .select({
+        tier: schema.plans.tier,
+        currency: schema.plans.currency,
+        ratePerGauMicros: schema.plans.ratePerGauMicros,
+        blockSizeGau: schema.plans.blockSizeGau,
+        includedGauPerMonth: schema.plans.includedGauPerMonth,
+        updatedAt: schema.plans.updatedAt,
+      })
+      .from(schema.plans)
+      .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
+      .limit(1),
+  ]);
+  const negotiated = n[0];
+  const entitled = e[0];
+  const free = f[0];
 
   const subscription: GauSubscriptionPeriod | null = entitled
     ? {
@@ -220,6 +219,18 @@ export async function resolveGauEntitlement(
     },
     subscription,
   };
+}
+
+/**
+ * The organisation's effective terms and its entitled subscription, in one
+ * tenant-scoped round trip. Runs inside the caller's tenant scope: the kernel
+ * enters it before the gate and re-enters it for the recorder.
+ */
+export async function resolveGauEntitlement(
+  orgId: string,
+  now: Date = new Date(),
+): Promise<GauEntitlement> {
+  return withTenantDb((tx) => readGauEntitlement(tx, orgId, now));
 }
 
 /**

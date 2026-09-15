@@ -1,18 +1,18 @@
 ---
 title: Local development
-description: How Oxagen detects a developer machine via OXAGEN_LOCAL_DEV and deterministically relaxes deployed-only controls — without ever weakening a real deployment.
+description: How Oxagen detects a developer machine via OXAGEN_LOCAL_DEV and deterministically relaxes deployed-only controls, without ever weakening a real deployment.
 ---
 
 ## Overview
 
 A handful of controls are meant to be **on in deployed environments and off on a developer
-machine** — chiefly mandatory email verification, the mandatory OAuth-token-encryption key,
+machine**: chiefly mandatory email verification, the mandatory OAuth-token-encryption key,
 and hardened cookies / rate limits. Oxagen decides which mode it is in through a single,
 deterministic predicate.
 
 ## The `OXAGEN_LOCAL_DEV` flag
 
-`pnpm dev` sets `OXAGEN_LOCAL_DEV=1` for the entire local stack automatically — you do not
+`pnpm dev` sets `OXAGEN_LOCAL_DEV=1` for the entire local stack automatically: you do not
 normally set it by hand. It marks the process tree as a developer machine so the auth layer
 reliably relaxes its deployed-only controls.
 
@@ -22,7 +22,7 @@ The auth configuration is built **once**, at module load. Deriving "is this loca
 `NODE_ENV` alone is unreliable at that moment:
 
 - `next dev` sets `NODE_ENV=development` slightly late, so the auth module could snapshot
-  `production` during early boot and bake in `requireEmailVerification: true` — which
+  `production` during early boot and bake in `requireEmailVerification: true`: which
   intermittently returned `403 EMAIL_NOT_VERIFIED` on local sign-in until an unrelated
   recompile re-evaluated the module.
 - `tsx`-run services (`apps/api`, `apps/mcp`) never set `NODE_ENV` at all.
@@ -42,7 +42,7 @@ When Oxagen resolves to a local/development environment, it:
 
 The predicate that honors `OXAGEN_LOCAL_DEV` is gated on `process.env.VERCEL`, which is
 always set on a real Vercel deployment. **On a deployed environment the flag is ignored**,
-even if it accidentally leaks into a deployed env file — so it is structurally incapable of
+even if it accidentally leaks into a deployed env file, so it is structurally incapable of
 relaxing production controls.
 
 A process is treated as local when **any** of these hold:
@@ -52,7 +52,7 @@ A process is treated as local when **any** of these hold:
 | `OXAGEN_LOCAL_DEV=1` and **not** on a Vercel deploy | `pnpm dev` (`tools/scripts/dev.ts`) |
 | `NODE_ENV=development` or `NODE_ENV=test` | the runtime / test harness |
 | `VERCEL_ENV=development` | Vercel "Development" environment |
-| `E2E_TEST=true` | the Playwright end-to-end harness |
+| `E2E_TEST=true` | the Playwright browser test harness |
 
 ## When you'd set it manually
 

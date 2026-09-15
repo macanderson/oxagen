@@ -1,17 +1,14 @@
-// The organization form: name the organization, its address and immutable
-// namespace, and the first workspace. Issues carry keys under
-// `onboarding.errors.*`. The address and namespace rules are the spec's:
-//   namespace: 2–6 lowercase letters or digits, immutable (App. A
-//              `org.organizations.namespace`, the live `organizations_namespace_check`)
-//   slug:      lowercase letters, digits and hyphens (the `create_org` contract,
-//              which also owns the reserved org and workspace slug sets)
+// The organization form: name the organization, its address and the first
+// workspace. Issues carry keys under `onboarding.errors.*`. An address is
+// lowercase letters, digits and hyphens; the `create_org` contract owns the
+// reserved org and workspace slug sets and derives the immutable namespace
+// from the address.
 import { z } from "zod";
 import {
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
 } from "@oxagen/oxagen/contracts/org.create";
 
-const NAMESPACE_PATTERN = /^[a-z0-9]{2,6}$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /** Lowercase, hyphen-separated, trimmed of edge hyphens, at most `max` characters. */
@@ -26,25 +23,16 @@ export function toSlug(input: string, max = 40): string {
     .replace(/-+$/g, "");
 }
 
-/** A namespace suggestion from a slug: its first alphanumeric run, cut to six characters. */
-export function suggestNamespace(slug: string): string {
-  const compact =
-    slug.split("-").find((part) => part.length >= 2) ?? slug.replace(/-/g, "");
-  return compact.replace(/[^a-z0-9]/g, "").slice(0, 6);
-}
-
 const ORG_FORM_ERROR_KEYS = [
   "orgNameRequired",
   "orgNameTooLong",
   "slugInvalid",
   "slugReserved",
-  "namespaceInvalid",
   "workspaceNameRequired",
   "workspaceNameTooLong",
   "workspaceSlugInvalid",
   "workspaceSlugReserved",
   "slugTaken",
-  "namespaceTaken",
 ] as const;
 export type OrgFormErrorKey = (typeof ORG_FORM_ERROR_KEYS)[number];
 
@@ -65,10 +53,6 @@ export const OrganizationForm = z.object({
   slug: slug("slugInvalid").refine((s) => !RESERVED_ORG_SLUGS.has(s), {
     error: "slugReserved",
   }),
-  namespace: z
-    .string()
-    .trim()
-    .regex(NAMESPACE_PATTERN, { error: "namespaceInvalid" }),
   workspaceName: z
     .string()
     .trim()
@@ -81,8 +65,7 @@ export const OrganizationForm = z.object({
     },
   ),
 });
-export type OrganizationFormInput = z.input<typeof OrganizationForm>;
-export type OrganizationFormValue = z.output<typeof OrganizationForm>;
+type OrganizationFormInput = z.input<typeof OrganizationForm>;
 export type OrganizationField = keyof OrganizationFormInput;
 
 /** Each field's first error from a failed parse, as a catalog key; an issue outside both sets is dropped. */

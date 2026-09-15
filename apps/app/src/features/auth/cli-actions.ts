@@ -1,112 +1,68 @@
 "use server";
-// Approve or cancel a CLI login (RFC 8252 loopback + PKCE). See cli-authorize.ts
-// for the invariants. Approve mints a single-use code bound to the chosen scope
-// and the CLI's PKCE challenge, then sends the browser to the loopback listener.
-import { redirect } from "next/navigation";
-import { requireUser } from "@/server/viewer";
-import { authorizeParamErrors, loadCliScopes } from "./cli-authorize";
+// Approve or cancel a CLI login (RFC 8252 loopback + PKCE); see cli-authorize.ts
+// for the invariants. Approve mints a single-use code through authorize_cli for
+// the organization and workspace the viewer resolves to, bound to the CLI's
+// PKCE challenge, then hands it to the loopback listener. Cancel asks for the
+// same signed-in person before it answers the listener.
+import { authCliAuthorize } from "@oxagen/oxagen/contracts/auth.cli.authorize";
+import type { ActionResult } from "@/server/kernel";
+import { kernelWrite } from "@/server/kernel";
+import { requireUser, requireViewer } from "@/server/viewer";
+import { parseLoopbackUri } from "@/shared/loopback-uri";
+import { redirectToLoopback } from "@/shared/navigation";
+import { checkAuthorizeParams, readAuthorizeParams } from "./cli-authorize";
 
-export type CliErrorKey =
-  | "notMember"
-  | "notPermitted"
-  | "notFound"
-  | "failed"
-  | "invalid";
+export type CliActionState = ActionResult<never> | null;
 
-export type CliActionState = { error: CliErrorKey } | null;
+const PARAM_FIELDS = [
+  "redirect_uri",
+  "state",
+  "code_challenge",
+  "code_challenge_method",
+  "label",
+] as const;
 
-function field(form: FormData, name: string): string {
+function text(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
+}
+
+function invalid(field: string | undefined): ActionResult<never> {
+  return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
 
 export async function approveCliAuth(
   _prev: CliActionState,
   form: FormData,
-): Promise<CliActionState> {
-  const { userId } = await requireUser();
-
-  const params = {
-    redirectUri: field(form, "redirect_uri"),
-    state: field(form, "state"),
-    codeChallenge: field(form, "code_challenge"),
-    codeChallengeMethod: field(form, "code_challenge_method"),
-    label: field(form, "label") || "Oxagen CLI",
-  };
-  if (authorizeParamErrors(params).length > 0) return { error: "invalid" };
-  const orgSlug = field(form, "org_slug");
-  const workspaceSlug = field(form, "workspace_slug");
-  if (!orgSlug || !workspaceSlug) return { error: "notFound" };
-
-  // Resolve the selection against the user's own memberships: an id the client
-  // did not get from us, or a workspace they are not a member of, never resolves.
-  const scopes = await loadCliScopes(userId);
-  const org = scopes.find((o) => o.slug === orgSlug);
-  const workspace = org?.workspaces.find((w) => w.slug === workspaceSlug);
-  if (!org || !workspace) return { error: "notMember" };
-
-  let code: string;
-  try {
-    const [{ actorCanManageApiKeys }, { runInTenantScope }, cliAuth] =
-      await Promise.all([
-        import("@oxagen/handlers"),
-        import("@oxagen/tenancy"),
-        import("@oxagen/auth/cli-auth"),
-      ]);
-    // An organization role assignment carries a null workspace_id, which the
-    // IAM tables' RLS admits under any workspace of the organization.
-    const canManage = await runInTenantScope(
-      { orgId: org.id, workspaceId: workspace.id },
-      () => actorCanManageApiKeys(org.id, userId),
-    );
-    if (!canManage) return { error: "notPermitted" };
-    code = cliAuth.generateCliAuthCode();
-    await cliAuth.createCliAuthCode(
-      code,
-      {
-        userId,
-        orgId: org.id,
-        workspaceId: workspace.id,
-        orgSlug,
-        workspaceSlug,
-        codeChallenge: params.codeChallenge,
-        redirectUri: params.redirectUri,
-        label: params.label,
-      },
-      Date.now(),
-    );
-  } catch (err) {
-    const { logger } = await import("@oxagen/handlers/logger");
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "[cli-authorize] approve failed",
-    );
-    return { error: "failed" };
-  }
-  redirect(
-    `${params.redirectUri}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(params.state)}`,
+): Promise<ActionResult<never>> {
+  const checked = checkAuthorizeParams(
+    readAuthorizeParams(
+      Object.fromEntries(PARAM_FIELDS.map((name) => [name, text(form, name)])),
+    ),
   );
+  if (!checked.ok) return invalid(checked.errors[0]);
+  const { request } = checked;
+  const ctx = await requireViewer(
+    text(form, "org_slug"),
+    text(form, "workspace_slug"),
+  );
+  const result = await kernelWrite(ctx, authCliAuthorize, request);
+  if (!result.ok) return result;
+  return redirectToLoopback(request.redirectUri, {
+    code: result.value.code,
+    state: request.state,
+  });
 }
 
-// Server actions must be async functions even when, like this one, they await nothing.
-// eslint-disable-next-line @typescript-eslint/require-await -- a "use server" export has to be async
 export async function cancelCliAuth(
   _prev: CliActionState,
   form: FormData,
-): Promise<CliActionState> {
-  const redirectUri = field(form, "redirect_uri");
-  const state = field(form, "state");
-  const errors = authorizeParamErrors({
-    redirectUri,
-    state,
-    codeChallenge: field(form, "code_challenge"),
-    codeChallengeMethod: field(form, "code_challenge_method"),
-    label: "",
-  });
-  // Only a validated loopback URI is ever followed.
-  if (errors.includes("redirectUri") || errors.includes("state"))
-    return { error: "invalid" };
-  redirect(
-    `${redirectUri}?error=access_denied&state=${encodeURIComponent(state)}`,
-  );
+): Promise<ActionResult<never>> {
+  await requireUser();
+  // Only a checked loopback URI is ever followed.
+  const redirectUri = parseLoopbackUri(text(form, "redirect_uri"));
+  const state = text(form, "state");
+  if (redirectUri === null) return invalid("redirectUri");
+  if (state === "") return invalid("state");
+  return redirectToLoopback(redirectUri, { error: "access_denied", state });
 }

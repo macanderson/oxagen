@@ -2,14 +2,14 @@
 // The top bar (mockup `topbar()`): phone menu, breadcrumbs, the ⌘K search
 // button and the user menu.
 import { Menu, Search } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
-import { breadcrumbs } from "./nav";
+import { breadcrumbs, parseShellPath } from "./nav";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { UserMenu } from "./user-menu";
+import { SafeLink } from "@/ui/navigation";
 
 const iconButton =
   "relative grid size-8 place-items-center rounded-md border border-app-topbar-border text-app-link-fg hover:text-app-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring";
@@ -17,8 +17,13 @@ const iconButton =
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const pathname = usePathname();
-  // The workspace's name arrives with `shell.context` (WL-11); the slug stands in.
-  const crumbs = breadcrumbs(pathname, { org: data.org.name, ws: null });
+  const { ws } = parseShellPath(pathname);
+  const { context } = data;
+  // A workspace `shell.context` does not list keeps its slug as the crumb.
+  const wsName = context.ok
+    ? (context.value.workspaces.find((w) => w.slug === ws)?.name ?? null)
+    : null;
+  const crumbs = breadcrumbs(pathname, { org: data.org.name, ws: wsName });
   return (
     <nav aria-label={t("topbar.breadcrumbs")} className="min-w-0 flex-1">
       <ol className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -44,12 +49,12 @@ function Breadcrumbs({ data }: { data: ShellData }) {
                     {label}
                   </span>
                 ) : (
-                  <Link
-                    href={crumb.href}
+                  <SafeLink
+                    to={crumb.href}
                     className="text-app-link-fg hover:text-app-link-hover-fg"
                   >
                     {label}
-                  </Link>
+                  </SafeLink>
                 )}
               </li>
             </Fragment>

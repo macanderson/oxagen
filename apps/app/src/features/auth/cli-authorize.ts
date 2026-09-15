@@ -1,20 +1,18 @@
 // /cli/authorize: the authorize leg of the CLI's RFC 8252 loopback OAuth + PKCE
 // login, carried over from apps/app_deprecated/src/app/cli/authorize.
 //
-// Security invariants (unchanged from the deprecated app):
+// Security invariants:
 //   1. A bad redirect_uri is never followed, not even to report an error
-//      (RFC 8252 §7.3): parameter errors render inline.
-//   2. Every parameter is re-validated in the approve action; nothing from the
-//      client is trusted, and slugs resolve to ids server-side.
-//   3. Workspace membership and the API-key management permission are checked
-//      explicitly, because apps/app does not bootstrap IAM for these reads.
-import "server-only";
-import {
-  CLI_AUTH_PKCE_METHOD,
-  isLoopbackRedirectUri,
-  isValidCodeChallenge,
-} from "@oxagen/auth/cli-auth";
-import { firstParam } from "./safe-next";
+//      (RFC 8252 §7.3): parameter errors render inline, and only a LoopbackUri
+//      reaches a redirect.
+//   2. Every parameter is re-checked in the approve and cancel actions; nothing
+//      from the client is trusted, and the organization and workspace resolve
+//      through requireViewer.
+//   3. The code is minted by authorize_cli, whose handler checks the role.
+// The challenge, method and state rules are the contract's own schemas.
+import { authCliAuthorize } from "@oxagen/oxagen/contracts/auth.cli.authorize";
+import { type LoopbackUri, parseLoopbackUri } from "@/shared/loopback-uri";
+import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 export type CliAuthorizeParams = {
   redirectUri: string;
@@ -30,19 +28,22 @@ export type CliParamError =
   | "codeChallengeMethod"
   | "state";
 
-export type WorkspaceOption = { id: string; slug: string; name: string };
-export type OrgOption = {
-  id: string;
-  slug: string;
-  name: string;
-  workspaces: WorkspaceOption[];
+/** A checked request: the loopback target branded and the method narrowed to the one the contract accepts. */
+type CliAuthorizeRequest = {
+  redirectUri: LoopbackUri;
+  state: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  label: string;
 };
 
-export const DEFAULT_CLI_LABEL = "Oxagen CLI";
+const DEFAULT_CLI_LABEL = "Oxagen CLI";
 
-type SearchParams = Record<string, string | string[] | undefined>;
+const { shape } = authCliAuthorize.input;
 
-export function readAuthorizeParams(params: SearchParams): CliAuthorizeParams {
+export function readAuthorizeParams(
+  params: Readonly<Record<string, string | string[] | undefined>>,
+): CliAuthorizeParams {
   const label = (firstParam(params.label) ?? "").trim().slice(0, 120);
   return {
     redirectUri: firstParam(params.redirect_uri) ?? "",
@@ -53,78 +54,40 @@ export function readAuthorizeParams(params: SearchParams): CliAuthorizeParams {
   };
 }
 
-export function authorizeParamErrors(p: CliAuthorizeParams): CliParamError[] {
+export function checkAuthorizeParams(
+  p: CliAuthorizeParams,
+):
+  | { ok: true; request: CliAuthorizeRequest }
+  | { ok: false; errors: CliParamError[] } {
+  const redirectUri = parseLoopbackUri(p.redirectUri);
+  const method = shape.codeChallengeMethod.safeParse(p.codeChallengeMethod);
   const errors: CliParamError[] = [];
-  if (!isLoopbackRedirectUri(p.redirectUri)) errors.push("redirectUri");
-  if (!isValidCodeChallenge(p.codeChallenge)) errors.push("codeChallenge");
-  if (p.codeChallengeMethod !== CLI_AUTH_PKCE_METHOD)
-    errors.push("codeChallengeMethod");
-  if (!p.state) errors.push("state");
-  return errors;
+  if (redirectUri === null) errors.push("redirectUri");
+  if (!shape.codeChallenge.safeParse(p.codeChallenge).success)
+    errors.push("codeChallenge");
+  if (!method.success) errors.push("codeChallengeMethod");
+  if (!shape.state.safeParse(p.state).success) errors.push("state");
+  if (redirectUri === null || !method.success || errors.length > 0)
+    return { ok: false, errors };
+  return {
+    ok: true,
+    request: {
+      redirectUri,
+      state: p.state,
+      codeChallenge: p.codeChallenge,
+      codeChallengeMethod: method.data,
+      label: p.label,
+    },
+  };
 }
 
-/** The query string that brings a signed-out person back to this exact request after logging in. */
-export function authorizeReturnPath(p: CliAuthorizeParams): string {
-  const query = new URLSearchParams({
+/** This exact request, for a signed-out person to come back to after logging in. */
+export function authorizeReturnPath(p: CliAuthorizeParams): SafePath {
+  return routes.cliAuthorize({
     redirect_uri: p.redirectUri,
     state: p.state,
     code_challenge: p.codeChallenge,
     code_challenge_method: p.codeChallengeMethod,
     label: p.label,
-  });
-  return `/cli/authorize?${query.toString()}`;
-}
-
-/** Group org and workspace memberships into the picker's shape, keeping only workspaces of orgs the user belongs to. */
-export function groupScopes(
-  orgs: ReadonlyArray<{ id: string; slug: string; name: string }>,
-  workspaces: ReadonlyArray<{
-    id: string;
-    slug: string;
-    name: string;
-    orgId: string;
-  }>,
-): OrgOption[] {
-  const byOrg = new Map<string, OrgOption>();
-  for (const org of orgs) byOrg.set(org.id, { ...org, workspaces: [] });
-  const seen = new Set<string>();
-  for (const ws of workspaces) {
-    const org = byOrg.get(ws.orgId);
-    if (!org || seen.has(ws.id)) continue;
-    seen.add(ws.id);
-    org.workspaces.push({ id: ws.id, slug: ws.slug, name: ws.name });
-  }
-  return [...byOrg.values()].filter((o) => o.workspaces.length > 0);
-}
-
-/** The orgs and member workspaces a user can authorize the CLI against. */
-export async function loadCliScopes(userId: string): Promise<OrgOption[]> {
-  const { withSystemDb } = await import("@oxagen/database");
-  // tenancy: unscoped seam (cross-tenant identity resolution before a scope exists;
-  // every row is filtered to the signed-in user's own memberships)
-  return withSystemDb(async (tx) => {
-    const orgMemberships = await tx.query.orgUsers.findMany({
-      where: (ou, { eq }) => eq(ou.userId, userId),
-      columns: { orgId: true },
-    });
-    const wsMemberships = await tx.query.workspaceUsers.findMany({
-      where: (wu, { eq }) => eq(wu.userId, userId),
-      columns: { workspaceId: true },
-    });
-    const orgIds = orgMemberships.map((m) => m.orgId);
-    const wsIds = wsMemberships.map((m) => m.workspaceId);
-    if (orgIds.length === 0 || wsIds.length === 0) return [];
-    const [orgs, workspaces] = await Promise.all([
-      tx.query.organizations.findMany({
-        where: (o, { inArray }) => inArray(o.id, orgIds),
-        columns: { id: true, slug: true, name: true },
-      }),
-      tx.query.workspaces.findMany({
-        where: (w, { and, inArray }) =>
-          and(inArray(w.id, wsIds), inArray(w.orgId, orgIds)),
-        columns: { id: true, slug: true, name: true, orgId: true },
-      }),
-    ]);
-    return groupScopes(orgs, workspaces);
   });
 }

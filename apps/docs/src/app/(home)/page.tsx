@@ -8,36 +8,36 @@ import { CopyCommand } from "@/components/landing/copy-command";
 import { HexField } from "@/components/ui/hex-field";
 
 export const metadata: Metadata = {
-  title: "Oxagen Docs — the governed control plane for AI agents",
+  title: "Oxagen docs: the control plane for agent work",
   description:
-    "Oxagen teaches every agent your team runs — Stella, or your own — your business, governs what it may do, explains every run, and learns from each one. Docs for the API, MCP server, CLI, and in-app agent.",
+    "Wrap the agents you already run, put every run on the record with its cost, and decide what each agent may do before it does it. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
 };
 
-/* The four jobs, mirrored from oxagen.sh and docs.oxagen.sh/docs. */
+/* What the control plane holds, mirrored from docs.oxagen.sh/docs. */
 const FOUR_JOBS = [
   {
-    title: "Teach",
-    body: "Oxagen gives every agent your company's knowledge and rules at run time, from a typed knowledge graph — not by training a model. The agent starts each job already knowing your customers, your code, and how you work.",
-    href: "/docs/knowledge",
-    cta: "The knowledge graph",
+    title: "Wrap",
+    body: "oxagen tacho enroll installs hooks in Claude Code and Codex on one machine. From then on every run there is recorded as a hash-chained sequence of frames and shipped to your workspace. The agent keeps working the way it works today.",
+    href: "/docs/cli/desktop",
+    cta: "Wrap a machine",
   },
   {
     title: "Govern",
-    body: "Every agent gets an identity, a role, and a budget. Every action — model call, tool invocation, code execution, memory write — passes a single invoke() kernel boundary that checks it against those before it runs. There is no alternate path.",
+    body: "Every agent has an identity, a role, and a budget. Every capability, whether a model call, a tool call, or a memory write, passes one invoke() boundary that checks it against those before it runs. There is no second path.",
     href: "/docs/governance/overview",
     cta: "Roles and RBAC",
   },
   {
-    title: "Explain",
-    body: "Every run is saved as a trace next to the data it touched: who asked, what the agent read, what it changed, what proved it, and what it cost.",
+    title: "Record",
+    body: "Every run is saved next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores, one with chain-hash tamper evidence.",
     href: "/docs/security/audit-logging",
     cta: "Audit logging",
   },
   {
-    title: "Learn",
-    body: "Proven runs write skills, tools, and tuned settings back to the graph the next run starts with. Over time, the proven runs can train a model you own.",
-    href: "/docs/agent/memory",
-    cta: "Agent memory",
+    title: "Spend",
+    body: "Every model call and tool call is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and workspace stop a run between steps, never mid-tool.",
+    href: "/docs/billing",
+    cta: "Billing and budgets",
   },
 ];
 
@@ -45,12 +45,12 @@ const FOUR_JOBS = [
 const SURFACES = [
   {
     title: "Getting started",
-    body: "Sign up, create your organization and workspace, send your first message.",
+    body: "Sign up, create your organization and workspace, wrap one machine.",
     href: "/docs/getting-started",
   },
   {
     title: "CLI",
-    body: "Install the oxagen CLI to govern, ground, explain, meter, and rate your agents from the terminal — Stella runs them, Oxagen governs the run.",
+    body: "Query the graph, cap spend, read a run, and manage keys from the terminal. Stella runs the agent; Oxagen governs the run.",
     href: "/docs/cli",
   },
   {
@@ -65,7 +65,7 @@ const SURFACES = [
   },
   {
     title: "In-app agent",
-    body: "A governed turn loop over the fleet record and the knowledge graph — what your agents did, what context they had, what it cost, what is pending approval.",
+    body: "A governed turn loop over the fleet record and the knowledge graph: what your agents did, what context they had, what it cost, what is waiting on approval.",
     href: "/docs/agent/overview",
   },
   {
@@ -105,21 +105,20 @@ export default function HomePage(): ReactNode {
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
-                Teach. Govern. Explain. Learn.
+                Define done before the agent starts. Prove it after.
               </span>
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              The governed control plane{" "}
-              <span className="lp-grad-text">for AI agents</span>.
+              The control plane{" "}
+              <span className="lp-grad-text">for agent work</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen teaches every agent your team runs — Stella, or your own —
-              your business, governs what it{"'"}s allowed to know and do,
-              explains every run in one trace, and learns from the ones that
-              pass. These docs cover the API, MCP server, CLI, and in-app agent
-              that make up the control plane — all through one audited{" "}
+              Oxagen sits beside the agents you already run. It records every
+              run frame by frame with its cost, and decides what each agent may
+              do before it does it. These docs cover the CLI, the REST API, the
+              MCP server, and Mission Control, all behind one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
@@ -158,15 +157,15 @@ export default function HomePage(): ReactNode {
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1fr_1.1fr] lg:py-28">
           <div>
-            <span className="ox-eyebrow">How Teach works</span>
+            <span className="ox-eyebrow">The knowledge graph</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
               A graph, not a <span className="lp-grad-text">fine-tune</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              Teaching an agent your business does not mean training a model —
-              it means handing the agent a typed knowledge graph at run time.
-              The naive pattern stuffs every document into the prompt until the
-              window saturates; Oxagen retrieves only the precise, authorized
+              Grounding an agent in your business does not mean training a
+              model. It means handing the agent a typed knowledge graph at run
+              time. The naive pattern stuffs every document into the prompt
+              until the window saturates. Oxagen retrieves only the authorized
               slice the task needs, so the window stays open and the model stays
               sharp.
             </p>
@@ -174,11 +173,11 @@ export default function HomePage(): ReactNode {
               {[
                 [
                   "Typed knowledge graph",
-                  "Entities and relationships in Neo4j — retrieval targets meaning, not a wall of text.",
+                  "Entities and relationships in Neo4j. Retrieval targets meaning, not a wall of text.",
                 ],
                 [
                   "RBAC-scoped retrieval",
-                  "The graph only returns what the caller is authorized to see; isolation is enforced, not hoped for.",
+                  "The graph returns only what the caller is authorized to see. Isolation is enforced, not hoped for.",
                 ],
                 [
                   "Metered + instrumented",
@@ -208,7 +207,7 @@ export default function HomePage(): ReactNode {
           <div className="max-w-2xl">
             <span className="ox-eyebrow">The platform</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Four jobs. One platform. One loop.
+              What the control plane holds.
             </h2>
           </div>
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-2">
@@ -287,11 +286,12 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Start <span className="lp-grad-text">teaching</span> your agents.
+            Put your first run{" "}
+            <span className="lp-grad-text">on the record</span>.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
-            Install the CLI and ask your codebase a question, or read the
-            getting-started guide to stand up an organization and workspace.
+            Install the CLI and wrap one machine, or read the getting-started
+            guide to stand up an organization and workspace.
           </p>
           <div className="mt-8">
             <CopyCommand command={INSTALL_CMD} />

@@ -4,7 +4,7 @@
 **Domain:** model
 **Mode:** sync
 **Scope:** unscoped (platform metadata, not tenant data)
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent

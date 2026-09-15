@@ -13,6 +13,8 @@ import type { AppEnv } from "../app";
  * from the request and delegates all identity logic to the transport-agnostic
  * resolvers in @oxagen/auth. Sets userId / apiKeyId / orgId / workspaceId on
  * the Hono context; downstream org/workspace middleware reads those values.
+ * A bearer key's `userId` is the resolver's: the approving user for a CLI
+ * session key, null for every other key.
  */
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const authHeader = c.req.header("authorization");
@@ -24,13 +26,15 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
         malformed: "Malformed API key",
         invalid: "Invalid API key",
         expired: "API key expired",
+        purpose_locked:
+          "API key is locked to a purpose this surface does not serve",
       };
       const { kind } = result as ApiKeyResolutionError;
       throw new HTTPException(401, {
         message: messages[kind] ?? "Unauthorized",
       });
     }
-    c.set("userId", null);
+    c.set("userId", result.userId);
     c.set("apiKeyId", result.apiKeyId);
     // API keys pre-bind scope; downstream org/workspace middleware skips
     // slug resolution when these are already set.

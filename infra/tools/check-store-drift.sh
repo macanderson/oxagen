@@ -290,6 +290,29 @@ ch_curl_config() {
   printf 'user = "%s:%s"\n' "$user" "$password"
 }
 
+# neo_result_names FILE
+#
+# The names in one cypher-shell `--format plain` result: the `name` header
+# dropped, quotes stripped, blank lines removed. Returns 2 when FILE does not
+# open with that header, because then it is not a result at all.
+#
+# The header is the proof the query ran. On 2026-09-15 the runner's default
+# Java was 17, the cypher-shell apt package wanted 21, and cypher-shell printed
+# "Unsupported Java 17 detected" and exited 0 with no rows — for every query,
+# including the one right after the schema had been applied. Reading that as a
+# result gave "55 declared, 0 present" against a database that carried all 55,
+# and filed an issue saying production was behind (#3036). An empty answer and
+# a refused one look identical once the header is dropped; only the header
+# tells them apart, so it is required rather than skipped.
+neo_result_names() {
+  local file=$1
+  if [[ ! -f $file ]] || [[ "$(head -n 1 "$file")" != "name" ]]; then
+    echo "neo_result_names: not a cypher-shell result (no 'name' header): $file" >&2
+    return 2
+  fi
+  tail -n +2 "$file" | tr -d '"' | sed '/^$/d'
+}
+
 # ---------------------------------------------------------------------------
 # Sourcing stops here. Below this line the script talks to two databases.
 # ---------------------------------------------------------------------------
@@ -430,12 +453,20 @@ elif require_declarations "Neo4j" "$WORK/neo-declared.txt"; then
        > "$WORK/neo-c.txt" 2>"$WORK/neo-err.txt" &&
      neo_cypher "SHOW INDEXES YIELD name RETURN name" \
        > "$WORK/neo-i.txt" 2>>"$WORK/neo-err.txt"; then
-    # Each result carries a `name` header line, dropped here. A constraint's
-    # backing index repeats the constraint's name; sort -u absorbs that.
-    { tail -n +2 "$WORK/neo-c.txt"; tail -n +2 "$WORK/neo-i.txt"; } |
-      tr -d '"' | sed '/^$/d' | sort -u > "$WORK/neo-present.txt"
-    report_drift "Neo4j" "$WORK/neo-declared.txt" "$WORK/neo-present.txt"
-    bump_status $?
+    # Each result must open with its `name` header — see neo_result_names for
+    # the exit-0-with-nothing that this catches. A constraint's backing index
+    # repeats the constraint's name; sort -u absorbs that.
+    if neo_result_names "$WORK/neo-c.txt" > "$WORK/neo-c-names.txt" &&
+       neo_result_names "$WORK/neo-i.txt" > "$WORK/neo-i-names.txt"; then
+      sort -u "$WORK/neo-c-names.txt" "$WORK/neo-i-names.txt" > "$WORK/neo-present.txt"
+      report_drift "Neo4j" "$WORK/neo-declared.txt" "$WORK/neo-present.txt"
+      bump_status $?
+    else
+      echo "::error::Neo4j answered without a result header, so the query did not run. The store's state is unknown, which is not the same as current."
+      cat "$WORK/neo-c.txt" "$WORK/neo-i.txt" "$WORK/neo-err.txt" 2>/dev/null |
+        sed '/^$/d' | sed 's/^/::error::  /' | head -5
+      bump_status 2
+    fi
   else
     echo "::error::Neo4j could not be queried. The store's state is unknown, which is not the same as current."
     sed 's/^/::error::  /' "$WORK/neo-err.txt" | head -5

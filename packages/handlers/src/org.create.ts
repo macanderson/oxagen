@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import {
   schema,
@@ -30,6 +30,12 @@ export const organizationCreateHandler: CapabilityHandler<
     throw new Error("organization.create requires an authenticated user");
   }
   const userId = ctx.userId;
+  const slugTaken = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "slug_taken",
+      message: `slug "${input.slug}" already in use`,
+    });
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
   // rows; no tenant scope exists yet because the new org does not exist yet, and
   // ctx.orgId is the caller's current org, not the one being created) (see docs/specs/tenancy-rls/spec.md)
@@ -41,9 +47,7 @@ export const organizationCreateHandler: CapabilityHandler<
       columns: { id: true },
     }),
   );
-  if (existing) {
-    throw new Error(`slug "${input.slug}" already in use`);
-  }
+  if (existing) throw slugTaken();
 
   try {
     const created = await withSystemDb(async (tx) => {
@@ -163,12 +167,12 @@ export const organizationCreateHandler: CapabilityHandler<
       },
     };
   } catch (err) {
-    if (isUniqueViolation(err)) {
+    if (isUniqueViolation(err, "organizations_slug_idx")) {
       logger.warn(
         { slug: input.slug, orgId: ctx.orgId },
         "organization.create: slug conflict",
       );
-      throw new Error(`slug "${input.slug}" already in use`);
+      throw slugTaken();
     }
     logger.error(
       { err, orgId: ctx.orgId },

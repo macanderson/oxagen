@@ -1,47 +1,107 @@
-import { withTenantDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
+import { eq, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 
 /**
- * Idempotent. Returns an existing stripe_customer_id taken from ONE of the
- * org's subscription rows, or creates a new provider customer with
- * metadata.org_id and returns its id. Caller may persist the id on a
- * subscription row at the moment a subscription is created.
+ * The org's provider customer id, created once (ADR-055 §5,
+ * apps/app/ARCHITECTURE.md §3.9).
  *
- * NOTE: the lookup below has no ORDER BY, so when an org has more than one
- * subscription row Postgres may return any of them. That is only safe while
- * every row for an org carries the SAME stripe_customer_id — which holds today
- * because a provider customer outlives its subscriptions and is reused — but it
- * is an unenforced assumption, not a guarantee.
+ * `org_billing_settings.stripe_customer_id` is the authoritative id. It is
+ * read first; when it is unset the id is taken from one of the org's
+ * subscription rows, then from the provider's metadata search, and finally
+ * a new customer is created — and whichever answered, the column is written
+ * with `INSERT … ON CONFLICT (org_id) DO UPDATE`, keeping an id a concurrent
+ * caller wrote first. The column exists because the metadata search is
+ * eventually consistent: two quick purchases by a subscription-less org
+ * would each create a customer without it.
+ *
+ * `opts.system` routes the reads and the write through `withSystemDb` for
+ * callers with no tenant scope — the close job and the platform-operator
+ * handler — the switch `getOrgBillingSettings` carries. Request paths leave
+ * it unset so RLS stays load-bearing.
+ *
+ * The subscription lookup has no ORDER BY, so an org with several
+ * subscription rows may answer with any of them. That is safe while every
+ * row for an org carries the same customer id, which holds because a
+ * provider customer outlives its subscriptions and is reused, but it is an
+ * unenforced assumption.
  */
-export async function ensureStripeCustomer(orgId: string): Promise<string> {
-  const { tenant, existing } = await withTenantDb(async (tx) => {
-    const t = await tx.query.organizations.findFirst({
-      where: eq(schema.organizations.id, orgId),
-      columns: { id: true, name: true, slug: true },
-    });
-    const e = await tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.orgId, orgId),
-      columns: { stripeCustomerId: true },
-    });
-    return { tenant: t, existing: e };
-  });
+export async function ensureStripeCustomer(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<string> {
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const { tenant, settingsCustomerId, subscriptionCustomerId } = await runner(
+    async (tx) => {
+      const [t, settings, sub] = await Promise.all([
+        tx.query.organizations.findFirst({
+          where: eq(schema.organizations.id, orgId),
+          columns: { id: true, name: true, slug: true },
+        }),
+        tx.query.orgBillingSettings.findFirst({
+          where: eq(schema.orgBillingSettings.orgId, orgId),
+          columns: { stripeCustomerId: true },
+        }),
+        tx.query.subscriptions.findFirst({
+          where: eq(schema.subscriptions.orgId, orgId),
+          columns: { stripeCustomerId: true },
+        }),
+      ]);
+      return {
+        tenant: t,
+        settingsCustomerId: settings?.stripeCustomerId ?? null,
+        subscriptionCustomerId: sub?.stripeCustomerId ?? null,
+      };
+    },
+  );
 
   if (!tenant) throw new Error(`tenant ${orgId} not found`);
+  if (settingsCustomerId !== null) return settingsCustomerId;
 
-  // Reuse the customer id off a subscription row, even a cancelled one —
-  // provider customers persist beyond subscription lifecycles.
-  if (existing?.stripeCustomerId) return existing.stripeCustomerId;
+  const customerId =
+    subscriptionCustomerId ?? (await resolveOrCreateCustomer(tenant));
 
+  // The write keeps a value a concurrent caller stored first, so two racing
+  // creations converge on one id for the org.
+  const [written] = await runner((tx) =>
+    tx
+      .insert(schema.orgBillingSettings)
+      .values({ orgId, stripeCustomerId: customerId })
+      .onConflictDoUpdate({
+        target: schema.orgBillingSettings.orgId,
+        set: {
+          stripeCustomerId: sql`coalesce(${schema.orgBillingSettings.stripeCustomerId}, excluded.stripe_customer_id)`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        stripeCustomerId: schema.orgBillingSettings.stripeCustomerId,
+      }),
+  );
+  const stored = written?.stripeCustomerId ?? customerId;
+  if (stored !== customerId) {
+    logger.info(
+      { orgId, customerId: stored, superseded: customerId },
+      "billing: a concurrent caller stored the org's customer id first",
+    );
+  }
+  return stored;
+}
+
+async function resolveOrCreateCustomer(tenant: {
+  id: string;
+  name: string;
+  slug: string;
+}): Promise<string> {
   const provider = billingProvider();
 
   // Provider customer search is eventually-consistent; the metadata lookup is
   // still cheaper than always creating duplicates when our DB row is missing.
-  const found = await provider.findCustomerByOrgId(orgId);
+  const found = await provider.findCustomerByOrgId(tenant.id);
   if (found) {
     logger.debug(
-      { orgId, customerId: found.id },
+      { orgId: tenant.id, customerId: found.id },
       "billing: found existing customer via metadata search",
     );
     return found.id;
@@ -49,8 +109,11 @@ export async function ensureStripeCustomer(orgId: string): Promise<string> {
 
   const customerId = await provider.createCustomer({
     name: tenant.name,
-    metadata: { org_id: orgId, tenant_slug: tenant.slug },
+    metadata: { org_id: tenant.id, tenant_slug: tenant.slug },
   });
-  logger.info({ orgId, customerId }, "billing: created new customer");
+  logger.info(
+    { orgId: tenant.id, customerId },
+    "billing: created new customer",
+  );
   return customerId;
 }

@@ -97,6 +97,8 @@ const ACTIONS = new Set([
   "exec",
   "deploy",
   "resume",
+  "suspend", // pairs with "resume": suspend_agent (MC spec App. E, ADR-057)
+  "retire", // retire_agent: an identity is retired, never deleted (ADR-057)
   "pause",
   "trigger",
   "dispatch",

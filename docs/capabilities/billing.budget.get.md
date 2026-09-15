@@ -3,7 +3,7 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org + workspace (Owner, Admin, Billing, Member)
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp, agent, cli
 **Risk level:** low
 **Capability name:** `get_spend_budget`
 
@@ -37,9 +37,9 @@ None (`{}`). Reads the caller's active org + workspace scope.
 | `enabled` | `boolean` | Whether the ceiling is enforced. |
 | `period` | `"monthly" \| "rolling"` | `monthly` = calendar month to date (UTC); `rolling` = trailing `windowDays`. |
 | `windowDays` | `number \| null` | Trailing window length for `rolling`; `null` for `monthly`. |
-| `limitUsd` | `number \| null` | The hard ceiling in USD. |
-| `spentUsd` | `number` | Period-to-date spend in USD (fresh ClickHouse read). |
-| `projectedUsd` | `number` | Linear projection of spend to the period end (monthly); equals `spentUsd` for `rolling`. |
+| `limit` | `Money \| null` | The hard ceiling: `{ micros, currency }`, integer micro-units in a decimal string with an ISO 4217 currency (ADR-057 decision 2, INV-09). Null when no ceiling is configured. |
+| `spent` | `Money` | Period-to-date spend (fresh ClickHouse read of `cost_usd_micros`). |
+| `projected` | `Money` | Linear projection of spend to the period end (monthly); equals `spent` for `rolling`. |
 | `ratio` | `number` | `spent ÷ limit`. |
 | `state` | `"ok" \| "threshold_50" \| "threshold_80" \| "threshold_95" \| "exceeded"` | Position relative to the ceiling. |
 | `reachedThreshold` | `number` | Highest ladder rung reached (0/50/80/95/100). |
@@ -51,4 +51,8 @@ Org: Owner, Admin, Billing, Member. Workspace: Owner, Admin, Member.
 
 ## Side effects
 
-None — read only. Spend is aggregated from ClickHouse `token_usage`; a degraded telemetry store yields `spentUsd = 0` rather than an error.
+None — read only. Spend is aggregated from ClickHouse `token_usage`; a degraded telemetry store yields `spent.micros = "0"` rather than an error.
+
+## Wire shape
+
+Money is never a float on the wire (ADR-057 decision 2): the store keeps `limit_micros bigint` and ClickHouse keeps `cost_usd_micros`, and each crosses as its integer string. The previous `limitUsd` / `spentUsd` / `projectedUsd` floats were replaced in the zero-customer window; API, MCP and CLI consumers read `limit`, `spent` and `projected`.

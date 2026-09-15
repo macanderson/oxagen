@@ -49,9 +49,9 @@ function isOrgRole(role: string): role is OrgRole {
  * that fails it (favicon.ico, robots.txt falling through to [org]) was never a
  * slug, so it 404s without a database round trip.
  */
-export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export function isValidSlug(value: string): boolean {
+function isValidSlug(value: string): boolean {
   return value.length <= 128 && SLUG_PATTERN.test(value);
 }
 

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CatalogError, DuplicateNamespaceError } from "./catalogs";
+
 import { loadCatalogs } from "./load-catalogs";
 
 let dir: string;
@@ -49,13 +49,17 @@ describe("loadCatalogs", () => {
     write("en.json", { states: {} });
     write("fleet.json", { states: {} });
 
-    expect(() => loadCatalogs(dir)).toThrow(DuplicateNamespaceError);
+    expect(() => loadCatalogs(dir)).toThrow(
+      expect.objectContaining({ code: "i18n_duplicate_namespace" }),
+    );
   });
 
   it("refuses a directory without the shared catalog", () => {
     write("fleet.json", { fleet: {} });
 
-    expect(() => loadCatalogs(dir)).toThrow(CatalogError);
+    expect(() => loadCatalogs(dir)).toThrow(
+      expect.objectContaining({ code: "i18n_catalog_invalid" }),
+    );
   });
 
   it("names the catalog that is not valid JSON", () => {

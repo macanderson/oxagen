@@ -1,20 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  AFTER_SIGNUP,
-  VerifyPanel,
-  firstParam,
-  readNext,
-} from "@/features/auth";
-import {
-  AuthColumn,
-  AuthFooter,
-  AuthHeading,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { AFTER_SIGNUP, VerifyPanel } from "@/features/auth";
+import { firstParam, readNext } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("verify") };
+}
 
 export default function VerifyPage(props: PageProps<"/verify">) {
   return (
@@ -37,18 +34,23 @@ async function Verify({
   const email = EMAIL_SHAPE.test(raw) ? raw : null;
   const expired = firstParam(params.error) !== undefined;
   const next = readNext(params, AFTER_SIGNUP);
-  const t = await getTranslations("auth");
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("verify.eyebrow")}
-        title={t("verify.title")}
-        lead={email ? t("verify.lead", { email }) : t("verify.leadNoEmail")}
+      <PageHeader
+        eyebrow={t("verify.eyebrow")}
+        title={pages("verify")}
+        description={
+          email ? t("verify.lead", { email }) : t("verify.leadNoEmail")
+        }
       />
       <VerifyPanel email={email} expired={expired} next={next} />
       <AuthFooter>
         {t("verify.wrongAddress")}{" "}
-        <Link href={"/signup"} className={linkText}>
+        <Link href="/signup" className={linkText}>
           {t("verify.startOver")}
         </Link>
       </AuthFooter>

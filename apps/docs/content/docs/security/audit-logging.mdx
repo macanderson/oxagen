@@ -3,7 +3,7 @@ title: Audit logging
 description: How Oxagen records every security event, IAM decision, and capability invocation across two independent audit stores.
 ---
 
-Oxagen writes an immutable audit record for every action that matters: every sign-in, every IAM decision, every capability invocation, every billing change, every org management action. The records are distributed across two independent stores optimized for different query patterns — and neither store can be silently tampered with.
+Oxagen writes an immutable audit record for every action that matters: every sign-in, every IAM decision, every capability invocation, every billing change, every org management action. The records are distributed across two independent stores optimized for different query patterns, and neither store can be silently tampered with.
 
 ## Two independent audit stores
 
@@ -21,14 +21,14 @@ Relational, queryable, indexed for point lookups and compliance reporting.
 Append-only, `ReplacingMergeTree`, high-volume analytics with chain-hash tamper evidence.
 
 - **Retention:** 7-year TTL column.
-- **Tamper evidence:** Each row includes a `chain_hash` field: SHA-256(`previous_chain_hash | event_id | capability`). This creates a verifiable hash chain — any deletion or insertion in the middle of the chain is detectable by recomputing it from any anchor point. Note: concurrent writes from multiple processes may read the same predecessor `chain_hash` (a known race documented in `emit-audit.ts`), so verification is advisory rather than cryptographically strict.
+- **Tamper evidence:** Each row includes a `chain_hash` field: SHA-256(`previous_chain_hash | event_id | capability`). This creates a verifiable hash chain: any deletion or insertion in the middle of the chain is detectable by recomputing it from any anchor point. Note: concurrent writes from multiple processes may read the same predecessor `chain_hash` (a known race documented in `emit-audit.ts`), so verification is advisory rather than cryptographically strict.
 - **Use cases:** High-volume analytics queries, SIEM export, tamper verification, trend analysis over audit event volumes.
 
-The two stores are written by independent code paths. For each `invoke()` call: the Postgres write uses the kernel's `emitSecurityEvent()` (pluggable emitter); the ClickHouse write uses `emitAudit()` called inside `checkIAM()`. They are independent fire-and-forget calls — not all event types reach both stores. Auth and billing events go only to Postgres; ClickHouse receives only IAM capability invocations. Write failures in either path do not cause the capability invocation to fail.
+The two stores are written by independent code paths. For each `invoke()` call: the Postgres write uses the kernel's `emitSecurityEvent()` (pluggable emitter); the ClickHouse write uses `emitAudit()` called inside `checkIAM()`. They are independent fire-and-forget calls: not all event types reach both stores. Auth and billing events go only to Postgres; ClickHouse receives only IAM capability invocations. Write failures in either path do not cause the capability invocation to fail.
 
 ## Event taxonomy
 
-40 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Both the Postgres CHECK constraint and the ClickHouse schema derive from this file — schema drift fails CI.
+40 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Both the Postgres CHECK constraint and the ClickHouse schema derive from this file: schema drift fails CI.
 
 ### Auth lifecycle
 
@@ -120,11 +120,11 @@ The two stores are written by independent code paths. For each `invoke()` call: 
 | `privacy.erasure_requested` | Personal data erasure requested (Art. 17) |
 | `privacy.org_erasure_requested` | Org-level erasure requested |
 
-Adding a new event kind requires a single edit to the event taxonomy source file. The CI test verifies that the Postgres CHECK constraint and ClickHouse schema match this source file — schema drift fails CI.
+Adding a new event kind requires a single edit to the event taxonomy source file. The CI test verifies that the Postgres CHECK constraint and ClickHouse schema match this source file: schema drift fails CI.
 
 ## The completeness guarantee
 
-Every `invoke()` call — regardless of surface (app, API, MCP) — produces either a `capability.invoke_allowed` or `capability.invoke_denied` event. There is no path through the capability boundary that does not emit. This is the SOC 2 completeness argument: every action is audited, with no opt-out and no alternate code path.
+Every `invoke()` call, regardless of surface (app, API, MCP), produces either a `capability.invoke_allowed` or `capability.invoke_denied` event. There is no path through the capability boundary that does not emit. This is the SOC 2 completeness argument: every action is audited, with no opt-out and no alternate code path.
 
 ## Accessing audit logs
 
@@ -205,4 +205,4 @@ The two stores have different schemas. A capability invocation produces a row in
 }
 ```
 
-The `trace_jsonb` field is present on every `capability.invoke_denied` ClickHouse row. It captures the resolver step log — enabling deterministic "why was this denied?" investigations without approximating from logs. Note: auth and billing events are written only to Postgres; they do not produce a ClickHouse `audit_events` row.
+The `trace_jsonb` field is present on every `capability.invoke_denied` ClickHouse row. It captures the resolver step log: enabling deterministic "why was this denied?" investigations without approximating from logs. Note: auth and billing events are written only to Postgres; they do not produce a ClickHouse `audit_events` row.

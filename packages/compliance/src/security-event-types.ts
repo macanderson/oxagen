@@ -64,10 +64,22 @@ export const SECURITY_EVENT_TYPES = [
   // Org lifecycle
   "organization.created",
   "workspace.created",
+  // Archiving a workspace freezes it: it leaves the lists and its slug stays
+  // taken (issue #2964). Emitted by the archive_workspace handler
+  // (packages/handlers/src/workspace.archive.ts).
+  "workspace.archived",
   // Admin / org management
   "org.member_invited",
   "org.member_removed",
   "org.role_changed",
+  // Role definitions (ADR-063). Creating a role, replacing its grants and
+  // deleting it change what every holder may ask for (SOC2 CC6.1). Emitted by
+  // the create_role, set_role_grants and delete_role handlers
+  // (packages/handlers/src/iam.role.{create,grants.set,delete}.ts);
+  // `org.role_changed` above stays the membership event.
+  "iam.role_created",
+  "iam.role_grants_set",
+  "iam.role_deleted",
   // Plugin governance (org-level marketplace administration)
   "plugin.installed",
   "plugin.uninstalled",
@@ -112,6 +124,18 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
+  // Agent identity (MC spec §6.2, ADR-057, #2956). An agent identity is a
+  // principal with a long-lived credential and roles; registering one adds a
+  // machine actor to the organisation, suspending or resuming one changes
+  // whether every run token it holds is honoured at the next call, and
+  // retiring one ends it for good (never deleted: its runs keep their
+  // identity). Each is a logical-access change (SOC2 CC6.1/CC6.3) emitted by
+  // packages/handlers/src/agent.{register,suspend,retire}.ts; the credential
+  // itself is covered by api_key.created / api_key.revoked.
+  "agent.registered",
+  "agent.suspended",
+  "agent.resumed",
+  "agent.retired",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by

@@ -1,12 +1,15 @@
 /**
  * An in-memory executor for the GAU bucket and settlement writers, for unit
  * tests. It runs the statements gau-bucket.ts and gau-settlements.ts issue
- * — the upsert, the re-checked claim UPDATE, the settlement INSERT — from
- * their arguments: the upsert's arbiter must be `(org_id, period_start)` and
- * its SET clause is interpreted, so an overwrite where the writer means an
- * add, or a wrong arbiter, fails the tests that ride on the statement. Every
- * statement is recorded, so a test can assert what was written and that the
- * executor it passed in is the one the function used.
+ * — the upsert, the re-checked claim UPDATE, the settlement INSERT, the
+ * Checkout grant's session-keyed insert and its payment-method mirror
+ * upsert — from their arguments: the bucket upsert's arbiter must be
+ * `(org_id, period_start)`, the settlement insert's must be the session id
+ * with the partial index's predicate restated, and every SET clause is
+ * interpreted, so an overwrite where the writer means an add, or a wrong
+ * arbiter, fails the tests that ride on the statement. Every statement is
+ * recorded, so a test can assert what was written and that the executor it
+ * passed in is the one the function used.
  *
  * Conditions are the plain objects the test's `drizzle-orm` mock builds
  * (`test-utils/gau-conditions.ts`); a column is matched by identity against
@@ -31,22 +34,24 @@ export interface StatementLog {
 export interface FakeGauStore {
   buckets: Row[];
   settlements: Row[];
+  paymentMethods: Row[];
   log: StatementLog[];
 }
 
 export function makeFakeGauStore(): FakeGauStore {
-  return { buckets: [], settlements: [], log: [] };
+  return { buckets: [], settlements: [], paymentMethods: [], log: [] };
 }
 
-const bucketKeys = new Map<unknown, string>(
-  Object.entries(getTableColumns(schema.gauBuckets)).map(([k, c]) => [c, k]),
-);
-const settlementKeys = new Map<unknown, string>(
-  Object.entries(getTableColumns(schema.gauSettlements)).map(([k, c]) => [
-    c,
-    k,
-  ]),
-);
+type TableName = "buckets" | "settlements" | "paymentMethods";
+
+function columnKeys(table: Parameters<typeof getTableColumns>[0]) {
+  return new Map<unknown, string>(
+    Object.entries(getTableColumns(table)).map(([k, c]) => [c, k]),
+  );
+}
+const bucketKeys = columnKeys(schema.gauBuckets);
+const settlementKeys = columnKeys(schema.gauSettlements);
+const paymentMethodKeys = columnKeys(schema.paymentMethods);
 /** `used_gau` → `usedGau`, for the `excluded.<column>` reference a SET carries. */
 const bucketKeyByName = new Map<string, string>(
   Object.entries(getTableColumns(schema.gauBuckets)).map(([k, c]) => [
@@ -55,9 +60,10 @@ const bucketKeyByName = new Map<string, string>(
   ]),
 );
 
-function tableName(table: unknown): "buckets" | "settlements" {
+function tableName(table: unknown): TableName {
   if (table === schema.gauBuckets) return "buckets";
   if (table === schema.gauSettlements) return "settlements";
+  if (table === schema.paymentMethods) return "paymentMethods";
   throw new Error("fake tx: unexpected table");
 }
 
@@ -138,11 +144,37 @@ function evalSet(
 }
 
 /**
+ * Whether an ON CONFLICT arbiter on a partial unique index restates the
+ * index's predicate: the settlement insert must say `WHERE
+ * stripe_checkout_session_id IS NOT NULL`, or Postgres finds no matching
+ * index and the statement errors at runtime.
+ */
+function restatesNotNull(where: unknown, col: unknown): boolean {
+  if (!isSql(where)) return false;
+  let text = "";
+  let sawColumn = false;
+  for (const chunk of where.queryChunks) {
+    if (is(chunk, StringChunk)) text += chunk.value.join("");
+    else if (chunk === col) sawColumn = true;
+  }
+  return sawColumn && /\bIS NOT NULL\b/i.test(text);
+}
+
+/** A write drizzle lets the caller await directly or chain `.returning()` on. */
+function thenable<T>(run: () => T) {
+  return {
+    returning: () => Promise.resolve(run()),
+    then: <R>(onFulfilled: (v: T) => R) =>
+      Promise.resolve(run()).then(onFulfilled),
+  };
+}
+
+/**
  * The executor, typed as the `Tx` the writers take. A test seeds rows by
- * pushing onto `store.buckets` / `store.settlements`; `store.log` is the
- * statement log. Reads and writes resolve in one microtask each, so a
- * `Promise.all` of concurrent writers interleaves the way row locks would
- * serialise them.
+ * pushing onto `store.buckets` / `store.settlements` / `store.paymentMethods`;
+ * `store.log` is the statement log. Reads and writes resolve in one microtask
+ * each, so a `Promise.all` of concurrent writers interleaves the way row
+ * locks would serialise them.
  */
 export function makeFakeGauTx(store: FakeGauStore): Tx {
   return fakeGauExecutor(store) as unknown as Tx;
@@ -150,11 +182,31 @@ export function makeFakeGauTx(store: FakeGauStore): Tx {
 
 /** The untyped executor, for a test that composes it with another table. */
 export function fakeGauExecutor(store: FakeGauStore) {
-  const tables = { buckets: store.buckets, settlements: store.settlements };
-  const keysFor = (t: "buckets" | "settlements") =>
-    t === "buckets" ? bucketKeys : settlementKeys;
+  const tables: Record<TableName, Row[]> = {
+    buckets: store.buckets,
+    settlements: store.settlements,
+    paymentMethods: store.paymentMethods,
+  };
+  const keysFor = (t: TableName) =>
+    t === "buckets"
+      ? bucketKeys
+      : t === "settlements"
+        ? settlementKeys
+        : paymentMethodKeys;
 
   return {
+    query: {
+      paymentMethods: {
+        findFirst: (args: { where: Cond }) => {
+          store.log.push({ op: "select", table: "paymentMethods" });
+          const hit = store.paymentMethods.find((r) =>
+            matches(r, args.where, paymentMethodKeys),
+          );
+          return Promise.resolve(hit ? { ...hit } : undefined);
+        },
+      },
+    },
+
     select: () => ({
       from: (table: unknown) => {
         const t = tableName(table);
@@ -182,7 +234,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
     insert: (table: unknown) => ({
       values: (v: Row) => {
         const t = tableName(table);
-        const insertPlain = () => {
+        const insertRow = (): Row => {
           const row: Row = {
             id: crypto.randomUUID(),
             createdAt: new Date(),
@@ -191,12 +243,78 @@ export function fakeGauExecutor(store: FakeGauStore) {
           };
           tables[t].push(row);
           store.log.push({ op: "insert", table: t, values: v });
-          return Promise.resolve([row]);
+          return row;
         };
         return {
-          returning: insertPlain,
-          onConflictDoUpdate: (conflict: { target: unknown; set: Row }) => ({
-            returning: () => {
+          returning: () => Promise.resolve([insertRow()]),
+          onConflictDoNothing: (conflict: { target: unknown; where?: SQL }) =>
+            thenable(() => {
+              if (t !== "settlements") {
+                throw new Error("fake tx: do-nothing insert table");
+              }
+              if (
+                conflict.target !==
+                schema.gauSettlements.stripeCheckoutSessionId
+              ) {
+                throw new Error(
+                  "fake tx: settlement arbiter is not stripe_checkout_session_id",
+                );
+              }
+              if (!restatesNotNull(conflict.where, conflict.target)) {
+                throw new Error(
+                  "fake tx: settlement arbiter does not restate the partial index predicate",
+                );
+              }
+              const duplicate = store.settlements.some(
+                (r) =>
+                  r.stripeCheckoutSessionId !== null &&
+                  r.stripeCheckoutSessionId === v.stripeCheckoutSessionId,
+              );
+              if (duplicate) {
+                store.log.push({ op: "insert", table: t, values: v });
+                return [];
+              }
+              return [insertRow()];
+            }),
+          onConflictDoUpdate: (conflict: { target: unknown; set: Row }) =>
+            thenable(() => {
+              if (t === "paymentMethods") {
+                if (
+                  conflict.target !==
+                  schema.paymentMethods.stripePaymentMethodId
+                ) {
+                  throw new Error(
+                    "fake tx: payment method arbiter is not stripe_payment_method_id",
+                  );
+                }
+                store.log.push({
+                  op: "upsert",
+                  table: t,
+                  values: v,
+                  set: conflict.set,
+                });
+                const existing = store.paymentMethods.find(
+                  (r) => r.stripePaymentMethodId === v.stripePaymentMethodId,
+                );
+                if (existing) {
+                  const next: Row = {};
+                  for (const [k, val] of Object.entries(conflict.set)) {
+                    next[k] = evalSet(existing, val, paymentMethodKeys, v);
+                  }
+                  Object.assign(existing, next);
+                  return [{ ...existing }];
+                }
+                const row: Row = {
+                  id: crypto.randomUUID(),
+                  deletedAt: null,
+                  deletedByUserId: null,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                  ...v,
+                };
+                store.paymentMethods.push(row);
+                return [{ ...row }];
+              }
               if (t !== "buckets") throw new Error("fake tx: upsert table");
               const target = Array.isArray(conflict.target)
                 ? conflict.target
@@ -230,7 +348,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
                   next[k] = evalSet(existing, val, bucketKeys, v);
                 }
                 Object.assign(existing, next);
-                return Promise.resolve([{ ...existing }]);
+                return [{ ...existing }];
               }
               const row: Row = {
                 id: crypto.randomUUID(),
@@ -244,17 +362,16 @@ export function fakeGauExecutor(store: FakeGauStore) {
                 ...v,
               };
               store.buckets.push(row);
-              return Promise.resolve([{ ...row }]);
-            },
-          }),
+              return [{ ...row }];
+            }),
         };
       },
     }),
 
     update: (table: unknown) => ({
       set: (patch: Row) => ({
-        where: (cond: Cond) => ({
-          returning: (cols?: Record<string, unknown>) => {
+        where: (cond: Cond) => {
+          const run = (cols?: Record<string, unknown>) => {
             const t = tableName(table);
             const keys = keysFor(t);
             store.log.push({ op: "update", table: t, set: patch });
@@ -266,7 +383,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
               }
               Object.assign(row, next);
             }
-            const projected = hit.map((row) => {
+            return hit.map((row) => {
               if (!cols) return { ...row };
               const out: Row = {};
               for (const [alias, col] of Object.entries(cols)) {
@@ -274,9 +391,14 @@ export function fakeGauExecutor(store: FakeGauStore) {
               }
               return out;
             });
-            return Promise.resolve(projected);
-          },
-        }),
+          };
+          return {
+            returning: (cols?: Record<string, unknown>) =>
+              Promise.resolve(run(cols)),
+            then: <R>(onFulfilled: (v: Row[]) => R) =>
+              Promise.resolve(run()).then(onFulfilled),
+          };
+        },
       }),
     }),
   };

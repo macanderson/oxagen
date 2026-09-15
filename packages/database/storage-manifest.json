@@ -56,6 +56,17 @@
       "writes": []
     },
     {
+      "domain": "workspace",
+      "name": "archive_workspace",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -149,6 +160,15 @@
     },
     {
       "domain": "agent",
+      "name": "commit_agent_definition",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "commit_memory_import",
       "reads": [],
       "surfaces": [
@@ -229,6 +249,17 @@
     {
       "domain": "org",
       "name": "create_org",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "create_role",
       "reads": [],
       "surfaces": [
         "agent",
@@ -381,6 +412,17 @@
       "name": "delete_model_credential",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "delete_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -597,6 +639,17 @@
     },
     {
       "domain": "agent",
+      "name": "get_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "get_agent_def",
       "reads": [],
       "surfaces": [
@@ -612,6 +665,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "get_agent_toolbelt",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1274,6 +1337,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_agents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "api_key",
       "name": "list_api_keys",
       "reads": [],
@@ -1408,6 +1481,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1852,6 +1935,17 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "purchase_gau_bucket",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "purge_conversations",
       "reads": [],
@@ -1927,6 +2021,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "register_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -2017,6 +2121,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "retire_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "reveal_secret",
       "reads": [],
@@ -2073,6 +2186,15 @@
     {
       "domain": "tacho",
       "name": "revoke_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "rotate_agent_credential",
       "reads": [],
       "surfaces": [
         "api"
@@ -2279,6 +2401,17 @@
       "writes": []
     },
     {
+      "domain": "iam",
+      "name": "set_role_grants",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "set_routing_policy",
       "reads": [],
@@ -2392,6 +2525,15 @@
     {
       "domain": "run",
       "name": "summarize_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suspend_agent",
       "reads": [],
       "surfaces": [
         "api"
@@ -2732,7 +2874,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b9fa56784b90dac0e623ca1071e71d17c4ce6b1f09db7ccd484b778dc8fa71ea",
+  "contentHash": "34e7ec5dfea15f764d22c7e14979e06fb1b24dacbed61f81a6892c46e30915c8",
   "domains": [
     {
       "name": "agent",
@@ -6416,6 +6558,42 @@
           "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "definition_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "definition_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -6551,6 +6729,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -18276,6 +18460,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "archived_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "archived_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "workspace",

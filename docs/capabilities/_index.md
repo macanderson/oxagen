@@ -9,17 +9,19 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**247 capabilities across 38 domains.**
+**256 capabilities across 38 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (49)
+## Agent (57)
 
 - [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
+- [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
+- [agent.definition.commit](agent.definition.commit.md) — Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written
 - [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
 - [agent.definition.delete](agent.definition.delete.md) — Soft-delete an agent definition and its delegated IAM principal together, in one lifecycle
 - [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
@@ -34,6 +36,8 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.environment.unbind](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
+- [agent.get](agent.get.md) — Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached
+- [agent.list](agent.list.md) — List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record
 - [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
@@ -59,10 +63,14 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.memory_promotion.dismiss](agent.memory_promotion.dismiss.md) — Dismiss a memory from the promotion-candidate queue (or restore it) so the next candidate fills the slot, without archiving the memory
 - [agent.memory_promotion.list](agent.memory_promotion.list.md) — Return the top OBSERVATION memories ripe for promotion to RULE/FACT, ranked by citation pressure
 - [agent.memory_promotion.rationales](agent.memory_promotion.rationales.md) — Draft short, context-grounded rationales for a promotion/demotion via a low-cost model, with a deterministic fallback built from citation signals
+- [agent.register](agent.register.md) — Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once; the definition is committed to the repository separately
+- [agent.retire](agent.retire.md) — Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment; runs keep their identity, nothing is deleted
 - [agent.role.assign](agent.role.assign.md) — Assign an IAM role to an agent's delegated principal; system agent roles at every tier, custom roles enterprise-only, rejected when the role's grants exceed the assigner's own effective grants (delegation ceiling)
 - [agent.role.get](agent.role.get.md) — Get one IAM role's status relative to an agent: held or not, assignment provenance, and the role's capability grant list
 - [agent.role.list](agent.role.list.md) — List the IAM roles attached to an agent's delegated principal with assignment provenance
 - [agent.role.revoke](agent.role.revoke.md) — Revoke an IAM role from an agent's delegated principal — soft-deletes the assignment (audit trail preserved); idempotent
+- [agent.suspend](agent.suspend.md) — Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything
+- [agent.toolbelt.get](agent.toolbelt.get.md) — Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives, and what the agent cannot see
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
@@ -86,7 +94,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
 
-## Billing (14)
+## Billing (15)
 
 - [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
 - [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
@@ -97,6 +105,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
 - [billing.gau_bucket.get](billing.gau_bucket.get.md) — The organization's governed action unit bucket for the current month: billing mode, period, units included, purchased, carried forward, used and remaining, plus invoice thresholds or auto top-up state
+- [billing.gau_bucket.purchase](billing.gau_bucket.purchase.md) — Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks
 - [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
 - [billing.org_terms.set](billing.org_terms.set.md) — Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut. On no surface; run through `pnpm billing:terms`
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
@@ -178,7 +187,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 ## Iam (1)
 
-- [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
+- [iam.role.create](iam.role.create.md) — `create_role`: a custom role from the permission catalogue; one allow grant per capability, within the granter's ceiling (ADR-063)
+- [iam.role.delete](iam.role.delete.md) — `delete_role`: remove a custom role nobody holds
+- [iam.role.grants.set](iam.role.grants.set.md) — `set_role_grants`: replace a custom role's grants with a permission set
+- [iam.role.list](iam.role.list.md) — List the org's IAM roles with grants, catalogue permissions, origin and holder counts, the catalogue and whether roles are enforced for the org
 
 ## Integration (7)
 
@@ -333,7 +345,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Tacho (10)
+## Tacho (11)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
 - [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
@@ -343,6 +355,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
 - [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
 - [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
+- [tacho.incident.list](tacho.incident.list.md) — List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents
 - [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model
 - [tacho.session.list](tacho.session.list.md) — List Tacho sessions in this workspace, newest first
 
@@ -367,7 +380,8 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
-- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
+- [workspace.archive](workspace.archive.md) — `archive_workspace`: freeze a workspace; it leaves the lists, its slug stays taken, its records stay readable
+- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant; org Owner or Admin, refused for a taken slug
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
 - [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members

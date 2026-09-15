@@ -10,7 +10,9 @@
  *
  * Both lists are read from the registry by name, so a contract renamed or
  * unregistered fails here rather than silently leaving the list. The INV-27
- * list grows with WL-28 (`purchase_gau_bucket`).
+ * list is complete for the billing page: WL-27, WL-28, WL-29 and WL-30 have
+ * all landed (`get_gau_bucket`, `purchase_gau_bucket`, `list_invoices`,
+ * `set_auto_topup`).
  */
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
@@ -21,6 +23,7 @@ const BILLING_PAGE_CONTRACTS = [
   "get_subscription",
   "get_contract_rate",
   "get_gau_bucket",
+  "purchase_gau_bucket",
   "list_invoices",
   "set_auto_topup",
 ] as const;
@@ -46,6 +49,15 @@ const CONSOLE_CONTRACTS = [
   "remove_org_member",
   "accept_member_invite",
   "decline_member_invite",
+  // The #2964 lane: the roles read and the role and workspace settings
+  // writes the Organization page binds (ADR-052 exclusion 2).
+  "list_iam_roles",
+  "create_role",
+  "set_role_grants",
+  "delete_role",
+  "create_workspace",
+  "update_workspace_settings",
+  "archive_workspace",
 ] as const;
 
 /** The one rev1 governed action. */

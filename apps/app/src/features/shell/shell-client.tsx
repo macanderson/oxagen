@@ -1,7 +1,9 @@
 "use client";
 // The client shell: every interactive piece of the chrome under one state
 // provider. It renders grid items (rail, top bar) plus fixed and portalled
-// overlays, so the layout places it beside the page without a wrapper.
+// overlays, so the layout places it beside the page without a wrapper, and it
+// labels the page's list tables for the phone's card layout.
+import { useCardTables } from "./card-tables";
 import { CommandMenu } from "./command-menu";
 import { NavDrawer, ShellMobileNav } from "./mobile-nav";
 import type { ShellData } from "./shell-data";
@@ -10,6 +12,7 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
 export function ShellClient({ data }: { data: ShellData }) {
+  useCardTables();
   return (
     <ShellStateProvider>
       <Sidebar data={data} />
