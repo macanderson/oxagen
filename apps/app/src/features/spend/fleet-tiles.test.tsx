@@ -43,6 +43,14 @@ const source: DataSource = {
     contractRate: refuse,
     invoices: refuse,
   },
+  runs: { list: refuse },
+  approvals: { pending: refuse },
+  agents: {
+    list: refuse,
+    get: refuse,
+    toolbelt: refuse,
+    incidents: refuse,
+  },
   spend: {
     byGroup: refuse,
     fleet,
