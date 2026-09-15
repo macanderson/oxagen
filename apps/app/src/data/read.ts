@@ -37,7 +37,13 @@ export const readError = (code: string, status: number): ReadError => ({
 // without access is denied on. The kernel seam (§3.2) answers a refusal with
 // the row of the page that made the read.
 
-export type PageKey = "fleet" | "run" | "organization" | "billing" | "shell";
+export type PageKey =
+  | "fleet"
+  | "run"
+  | "organization"
+  | "billing"
+  | "spend"
+  | "shell";
 
 type PageFailure = {
   error: { code: string; status: number };
@@ -62,6 +68,12 @@ export const PAGE_FAILURES = {
   billing: {
     error: { code: "stripe_unreachable", status: 502 },
     permission: "org.billing",
+  },
+  // The cost rollup is rebuilt from frames; while a rebuild holds the read,
+  // the page says so rather than printing a stale or partial figure.
+  spend: {
+    error: { code: "rollup_rebuild_in_progress", status: 504 },
+    permission: "spend.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

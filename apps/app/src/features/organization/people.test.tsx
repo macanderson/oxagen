@@ -53,6 +53,13 @@ async function renderPeople(
       contractRate: vi.fn(),
       invoices: vi.fn(),
     },
+    spend: {
+      byGroup: vi.fn(),
+      fleet: vi.fn(),
+      drill: vi.fn(),
+      waste: vi.fn(),
+      budgets: vi.fn(),
+    },
     org: { members },
   };
   const view = render(

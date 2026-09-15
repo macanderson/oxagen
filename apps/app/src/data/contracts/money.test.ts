@@ -1,7 +1,15 @@
 // The micros seam: canonical micros strings and products at magnitudes a float
-// cannot hold, with every non-integer input refused.
+// cannot hold, with every non-integer input refused; a cost names its basis as
+// a required key that may be null; a typed amount becomes micros by digit
+// shifting.
 import { describe, expect, it } from "vitest";
-import { Cost, Money, moneyFromMicros, mulMicros } from "./money";
+import {
+  Cost,
+  Money,
+  microsFromDecimal,
+  moneyFromMicros,
+  mulMicros,
+} from "./money";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
 
@@ -84,4 +92,44 @@ describe("Money and Cost", () => {
     );
     expect(Cost.safeParse(usd("1")).success).toBe(false);
   });
+});
+
+describe("Cost", () => {
+  it("carries the basis the rollup recorded, or null", () => {
+    expect(
+      Cost.parse({ micros: "1", currency: "USD", basis: "estimated" }).basis,
+    ).toBe("estimated");
+    expect(
+      Cost.parse({ micros: "1", currency: "USD", basis: null }).basis,
+    ).toBe(null);
+  });
+
+  it("refuses a cost with no basis key and a basis no store records (negative)", () => {
+    expect(Cost.safeParse({ micros: "1", currency: "USD" }).success).toBe(
+      false,
+    );
+    expect(
+      Cost.safeParse({ micros: "1", currency: "USD", basis: "measured" })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("microsFromDecimal", () => {
+  it.each([
+    ["500", "500000000"],
+    ["0.25", "250000"],
+    [" 12.000001 ", "12000001"],
+    ["0", "0"],
+    ["007.5", "7500000"],
+  ])("reads %j as %s micros", (text, micros) => {
+    expect(microsFromDecimal(text)).toBe(micros);
+  });
+
+  it.each(["", "-5", "1,250", "1.0000001", "1e3", ".5", "5.", "1234567890123"])(
+    "refuses %j (negative)",
+    (text) => {
+      expect(microsFromDecimal(text)).toBeNull();
+    },
+  );
 });

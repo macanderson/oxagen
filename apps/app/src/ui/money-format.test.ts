@@ -1,7 +1,13 @@
 // Money, counts and clock readings as text: exact micros at any magnitude,
-// half-even cents, trimmed exact precision, and a refusal for a display string.
+// half-even cents, trimmed exact precision, a refusal for a display string, and
+// ratios as percentages.
 import { describe, expect, it } from "vitest";
-import { formatClock, formatCount, formatMoney } from "./money-format";
+import {
+  formatClock,
+  formatCount,
+  formatMoney,
+  formatRatio,
+} from "./money-format";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
 const cents = { locale: "en-US", precision: "cents" } as const;
@@ -61,6 +67,14 @@ describe("formatCount", () => {
     expect(formatCount(0, "en-US")).toBe("0");
     expect(formatCount(58450, "en-US")).toBe("58,450");
     expect(formatCount(58450, "de-DE")).toBe("58.450");
+  });
+});
+
+describe("formatRatio", () => {
+  it("prints a 0..1 ratio as a percentage with at most one decimal", () => {
+    expect(formatRatio(0.4567, "en-US")).toBe("45.7%");
+    expect(formatRatio(0.81, "en-US")).toBe("81%");
+    expect(formatRatio(0, "en-US")).toBe("0%");
   });
 });
 
