@@ -1,8 +1,9 @@
 // agent.suspend.ts — suspend or resume an agent identity (MC spec §6.2,
 // #2956). Role gate: org Owner or Admin (INV-29). The principal's status is
-// the one write; a retired agent is refused with `conflict`, and a
+// the one write; a retired agent, or one whose principal row is gone, is
+// refused with `conflict`, and a
 // suspend of a suspended agent (or a resume of an active one) answers the
-// current state without a write.
+// current state and the principal's recorded write instant, without a write.
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole } from "@oxagen/iam/org-role";
@@ -33,7 +34,7 @@ export const agentSuspendHandler: CapabilityHandler<
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
     assertNotRetired(agent);
-    if (!agent.principalId) {
+    if (!agent.principalId || agent.principalUpdatedAt === null) {
       throw new HandlerError({
         code: "conflict",
         reason: "agent_principal_missing",
@@ -41,7 +42,7 @@ export const agentSuspendHandler: CapabilityHandler<
       });
     }
     if (agent.principalStatus === target) {
-      return { agent, changed: false };
+      return { agent, changed: false, changedAt: agent.principalUpdatedAt };
     }
     await tx
       .update(schema.principals)
@@ -54,7 +55,7 @@ export const agentSuspendHandler: CapabilityHandler<
           : {}),
       })
       .where(eq(schema.principals.id, agent.principalId));
-    return { agent, changed: true };
+    return { agent, changed: true, changedAt: now };
   });
 
   if (result.changed) {
@@ -77,6 +78,6 @@ export const agentSuspendHandler: CapabilityHandler<
   return {
     agentId: result.agent.publicId,
     status: target,
-    changedAt: now.toISOString(),
+    changedAt: result.changedAt.toISOString(),
   };
 };

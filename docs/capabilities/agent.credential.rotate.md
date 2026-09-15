@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; a credential write)
 

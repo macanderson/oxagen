@@ -34,6 +34,8 @@ export interface AgentIdentityRow {
   principalId: string | null;
   principalPublicId: string | null;
   principalStatus: string | null;
+  /** The principal's last write; a suspend or resume is one of them. */
+  principalUpdatedAt: Date | null;
   operatorPublicId: string | null;
 }
 
@@ -50,6 +52,7 @@ const identityColumns = {
   principalId: schema.agents.principalId,
   principalPublicId: schema.principals.publicId,
   principalStatus: schema.principals.status,
+  principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
 } as const;
 

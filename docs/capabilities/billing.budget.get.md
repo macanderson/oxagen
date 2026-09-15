@@ -3,7 +3,7 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org + workspace (Owner, Admin, Billing, Member)
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp, agent, cli
 **Risk level:** low
 **Capability name:** `get_spend_budget`
 

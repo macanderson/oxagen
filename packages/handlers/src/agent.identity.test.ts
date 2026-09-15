@@ -351,6 +351,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         agentSuspendHandler({ agentId: "release-bot", suspended: true }, ctx()),
       );
       expect(again.status).toBe("suspended");
+      expect(again.changedAt).toBe(suspended.changedAt);
       expect(eventTypes()).toEqual([]);
 
       const resumed = await inScope(owner, () =>
@@ -420,14 +421,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
         tx
           .select({
             hostId: schema.tachoControlCommands.hostId,
+            targetKind: schema.tachoControlCommands.targetKind,
+            targetId: schema.tachoControlCommands.targetId,
             command: schema.tachoControlCommands.command,
             payload: schema.tachoControlCommands.payload,
+            reason: schema.tachoControlCommands.reason,
           })
           .from(schema.tachoControlCommands)
           .where(eq(schema.tachoControlCommands.orgId, owner.orgId)),
       );
       expect(commands).toEqual([
-        { hostId: host.id, command: "revoke", payload: { reason: "done" } },
+        {
+          hostId: host.id,
+          targetKind: "host",
+          targetId: host.publicId,
+          command: "revoke",
+          payload: { reason: "done" },
+          reason: "done",
+        },
       ]);
 
       const read = await inScope(owner, () =>

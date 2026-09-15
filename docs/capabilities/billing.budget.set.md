@@ -3,7 +3,7 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org + workspace (Owner, Admin, Billing)
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp, agent, cli
 **Risk level:** medium
 **Capability name:** `set_spend_budget`
 
