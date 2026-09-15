@@ -627,12 +627,17 @@ export async function decideMandate(
       }
     }
 
-    // A person's approval of this same call: proceed on the held reservation.
+    // The same call, parked earlier and still waiting for a person: refuse
+    // again with the same row, holding the same reservation — a retry while
+    // pending draws no more authority. Approved and not yet retried: proceed
+    // on the held reservation and mark the approval used.
     const digest = inputDigest(args.input);
-    const [approved] = await tx
+    const [parked] = await tx
       .select({
         id: schema.approvalRequests.id,
+        publicId: schema.approvalRequests.publicId,
         toolCallId: schema.approvalRequests.toolCallId,
+        resolution: schema.approvalRequests.resolution,
       })
       .from(schema.approvalRequests)
       .where(
@@ -640,24 +645,27 @@ export async function decideMandate(
           eq(schema.approvalRequests.workspaceId, args.workspaceId),
           eq(schema.approvalRequests.mandateId, mandate.id),
           eq(schema.approvalRequests.inputDigest, digest),
-          eq(schema.approvalRequests.resolution, "approved"),
           isNull(schema.approvalRequests.tokenUsedAt),
           gt(schema.approvalRequests.expiresAt, at),
+          sql`${schema.approvalRequests.resolution} IS DISTINCT FROM 'denied'`,
         ),
       )
       .orderBy(asc(schema.approvalRequests.createdAt))
       .limit(1);
-    if (approved?.toolCallId) {
+    if (parked?.toolCallId && parked.resolution === "approved") {
       await tx
         .update(schema.approvalRequests)
         .set({ tokenUsedAt: at })
-        .where(eq(schema.approvalRequests.id, approved.id));
+        .where(eq(schema.approvalRequests.id, parked.id));
       return {
         kind: "proceed",
         mandate,
-        toolCallId: approved.toolCallId,
+        toolCallId: parked.toolCallId,
         effectIdPath: tool.effectIdPath,
       };
+    }
+    if (parked?.toolCallId && parked.resolution === null) {
+      return { kind: "pending", approvalPublicId: parked.publicId, mandate };
     }
 
     const toolCallId = randomUUID();

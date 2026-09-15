@@ -1444,6 +1444,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger
@@ -1679,6 +1682,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
