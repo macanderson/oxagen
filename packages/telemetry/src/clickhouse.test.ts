@@ -960,7 +960,7 @@ describe("sumTokenUsageByExecutionStep", () => {
     expect(result.has("step-1")).toBe(false);
   });
 
-  it("propagates a ClickHouse query failure — callers are responsible for degrading (mirrors getSpendBudgetStatuses)", async () => {
+  it("propagates a ClickHouse query failure — callers are responsible for degrading", async () => {
     queryMock.mockRejectedValue(new Error("clickhouse unavailable"));
 
     await expect(

@@ -177,6 +177,13 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       contractRate: refuse,
       invoices: refuse,
     },
+    spend: {
+      byGroup: refuse,
+      fleet: refuse,
+      drill: refuse,
+      waste: refuse,
+      budgets: refuse,
+    },
     org: { members: refuse },
     steering: {
       records: (...args) => {

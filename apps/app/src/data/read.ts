@@ -42,6 +42,7 @@ export type PageKey =
   | "run"
   | "organization"
   | "billing"
+  | "spend"
   | "steering"
   | "shell";
 
@@ -68,6 +69,12 @@ export const PAGE_FAILURES = {
   billing: {
     error: { code: "stripe_unreachable", status: 502 },
     permission: "org.billing",
+  },
+  // The cost rollup is rebuilt from frames; while a rebuild holds the read,
+  // the page says so rather than printing a stale or partial figure.
+  spend: {
+    error: { code: "rollup_rebuild_in_progress", status: 504 },
+    permission: "spend.read",
   },
   // The published records and the proposals are one record index; a member
   // without the workspace's steering read is denied on it.

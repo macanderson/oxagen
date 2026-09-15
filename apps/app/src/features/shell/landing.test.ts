@@ -39,6 +39,13 @@ const source = {
     contractRate: vi.fn(),
     invoices: vi.fn(),
   },
+  spend: {
+    byGroup: vi.fn(),
+    fleet: vi.fn(),
+    drill: vi.fn(),
+    waste: vi.fn(),
+    budgets: vi.fn(),
+  },
   org: { members: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
