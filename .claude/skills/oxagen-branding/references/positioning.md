@@ -59,7 +59,7 @@ Proof points, stated so they survive a rebuttal:
 **Decision, 2026-09-15 (Mac):** the dod does not ship yet, so the dod lines are
 held until it does. Until then the lead is the bill. The first three lines below
 come from the shipped house ads in `oxagenai/oxagen-brand`. The fourth is the
-access line and the fifth is the fleet line, both added 2026-09-15 (ADR-055). These are the only lead
+access line and the fifth is the fleet line, both added 2026-09-15 (ADR-066). These are the only lead
 lines for the site, ads, and outreach today. When the dod lands, the dod lines
 move back to the top of this table; nothing else changes.
 

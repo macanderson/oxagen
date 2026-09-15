@@ -4,7 +4,7 @@
 
 ## Mission
 
-Oxagen is the platform that governs and operates the autonomous agents an enterprise runs. It has two names and owns both (ADR-055): the **agent control plane**, what it is to the enterprise, and **agent fleet management**, what an operator does with it all day, spend management included. Every agent operates under a **mandate** — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
+Oxagen is the platform that governs and operates the autonomous agents an enterprise runs. It has two names and owns both (ADR-066): the **agent control plane**, what it is to the enterprise, and **agent fleet management**, what an operator does with it all day, spend management included. Every agent operates under a **mandate** — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
 
 - **Access** (security sets it): the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, the actions it is permitted.
 - **Budget & rules** (FinOps sets it): what it may spend, under which commercial terms, and the business rules it must obey.

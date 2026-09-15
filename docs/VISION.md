@@ -75,7 +75,7 @@ single wedge where a platform of Oxagen's exact shape can credibly be #1:
 
 **The control plane for every agent an enterprise runs — whoever built it.**
 
-That wedge has two names, and Oxagen owns both (ADR-055). **The agent control
+That wedge has two names, and Oxagen owns both (ADR-066). **The agent control
 plane** is what Oxagen is to the enterprise: where the mandate is set and enforced.
 **Agent fleet management** is what an operator does with it: see every agent the
 organization runs as one fleet, under which mandate, what each has asked for, spent
@@ -145,7 +145,7 @@ enforce or record it:
 - **The fleet (operators):** one population view of every agent the organization
   runs — mandate, open requests, spend against budget, last run — and the actions an
   operator takes on it (answer a routed request, fund, hold, stop), each a governed,
-  metered action. Spend lives on the fleet page beside the agent (ADR-055).
+  metered action. Spend lives on the fleet page beside the agent (ADR-066).
 - **The request, not the key (security):** an agent holds an identity and a mandate,
   never a standing credential; it asks at the moment of use and a decision rule
   answers allow, deny or route to a person (`packages/rules`, the approval contracts).

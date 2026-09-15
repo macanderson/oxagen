@@ -30,6 +30,8 @@ import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
   generateApiKey,
+  noOperatorMessage,
+  resolveOperatorUserId,
 } from "./lib/api-key-authz";
 import { TACHO_HOST_SCOPE_PURPOSE } from "./lib/tacho-enrollment";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
@@ -89,11 +91,14 @@ export function deviceKeyFingerprint(devicePublicKey: string): string {
 export const tachoEnrollmentCreateHandler: CapabilityHandler<
   typeof tachoEnrollmentCreate
 > = async (input, ctx) => {
-  if (!ctx.userId) throw denied("Unauthorized: no authenticated user");
   if (!ctx.orgId) throw denied("Forbidden: orgId is required");
   if (!ctx.workspaceId) throw denied("Forbidden: workspaceId is required");
+  // A session, or the `oxagen login` key the tacho CLI carries; never a
+  // machine-bound key, so an enrolled host cannot mint another enrollment.
+  const operatorUserId = await resolveOperatorUserId(ctx);
+  if (!operatorUserId) throw denied(noOperatorMessage(ctx));
 
-  const actorRole = await resolveActorRole(ctx.orgId, ctx.userId);
+  const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
   if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
     logger.warn(
       { orgId: ctx.orgId, actorRole },
@@ -174,8 +179,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
             host_enrollment_id: hostEnrollmentId,
           },
           expiresAt,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdByUserId: operatorUserId,
+          updatedByUserId: operatorUserId,
         })
         .returning({
           id: schema.apiKeys.id,
@@ -235,8 +240,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
           expiresAt,
           managed: input.managed,
           mode: "observe",
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdByUserId: operatorUserId,
+          updatedByUserId: operatorUserId,
         })
         .returning();
       if (!inserted) {
@@ -263,7 +268,7 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
 
   emitSecurityEvent({
     eventType: "api_key.created",
-    actorUserId: ctx.userId,
+    actorUserId: operatorUserId,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     capability: "create_tacho_enrollment",
