@@ -3,8 +3,8 @@
  * that prove it (Mission Control spec §12.8 "Where to optimize"; ADR-060).
  * Each cause is a pattern read off the cost rollup, never a guess: today the
  * one cause the rollup can cost exactly is a cache written and never read.
- * The findings job that costs the other patterns (retry storms, tool-list
- * bloat, unproductive tails) is the findings lane; its causes join this list.
+ * A pattern with a counterfactual saving over the runs it cites is a finding
+ * (`list_findings`, ADR-062), not a cause here.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";

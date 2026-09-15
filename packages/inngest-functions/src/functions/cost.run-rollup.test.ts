@@ -18,7 +18,10 @@ vi.mock("../create-function", () => ({ createFunction: mocks.createFunction }));
 
 type Handler = (ctx: {
   event: { data: unknown };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
+  step: {
+    run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+    sendEvent: (label: string, event: unknown) => Promise<void>;
+  };
 }) => Promise<unknown>;
 let handler: Handler | null = null;
 let config: { concurrency?: { key: string } } | null = null;
@@ -32,12 +35,17 @@ mocks.createFunction.mockImplementation(
 
 await import("./cost.run-rollup");
 
-const step = { run: (_: string, fn: () => Promise<unknown>) => fn() };
+const sendEvent = vi.fn(async () => {});
+const step = {
+  run: (_: string, fn: () => Promise<unknown>) => fn(),
+  sendEvent,
+};
 
 describe("cost.run-rollup", () => {
   beforeEach(() => {
     mocks.rebuildRunTotals.mockReset();
     mocks.rebuildDailyTotals.mockReset().mockResolvedValue([]);
+    sendEvent.mockClear();
   });
 
   it("serialises on the run id", () => {
@@ -63,6 +71,10 @@ describe("cost.run-rollup", () => {
       day: "2026-09-14",
     });
     expect(out).toEqual({ runId: "tse_abc", rolledUp: true });
+    expect(sendEvent).toHaveBeenCalledWith("request-findings", {
+      name: "cost/findings.requested",
+      data: { orgId: "org-1", workspaceId: "ws-1" },
+    });
   });
 
   it("drops a run no store has without touching the daily groups", async () => {
@@ -72,6 +84,7 @@ describe("cost.run-rollup", () => {
       step,
     });
     expect(mocks.rebuildDailyTotals).not.toHaveBeenCalled();
+    expect(sendEvent).not.toHaveBeenCalled();
     expect(out).toEqual({ runId: "tse_missing", rolledUp: false });
   });
 

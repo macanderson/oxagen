@@ -9,7 +9,8 @@ import { logger } from "../logger";
  * Spend page's month reads the run within minutes of its seal (Mission
  * Control spec §12.3; ADR-060 §3). The seal writers emit the event: the tacho
  * ingest handler on an `agent_stop`. A run no store has is dropped without a
- * retry; a degraded frame store throws, and Inngest retries.
+ * retry; a degraded frame store throws, and Inngest retries. Once the rows
+ * land it requests a findings pass over the run's workspace (ADR-062 §4).
  *
  * Concurrency is per run: two seals of one run in flight would race the same
  * row, and the last write wins either way.
@@ -49,6 +50,10 @@ export const [costRunRollup] = createFunction(
         day: run.day,
       }),
     );
+    await step.sendEvent("request-findings", {
+      name: "cost/findings.requested",
+      data: { orgId: run.orgId, workspaceId: run.workspaceId },
+    });
     logger.info(
       { runId, costMicros: run.costMicros, costBasis: run.costBasis },
       "cost.run-rollup complete",
