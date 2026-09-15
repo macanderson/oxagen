@@ -2140,6 +2140,16 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "set_auto_topup",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "connection",
       "name": "set_connection_mappings",
       "reads": [],
@@ -2189,6 +2199,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "set_org_billing_terms",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -2658,7 +2675,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1f82612de3b44aaf582d5de61d4a63969a3822411bca0ccc99a8bf873dd44868",
+  "contentHash": "c08189dbab0ebb0a78722b353ab84ad7d73deacda30fffaaf52d56a9a0f6c333",
   "domains": [
     {
       "name": "agent",
