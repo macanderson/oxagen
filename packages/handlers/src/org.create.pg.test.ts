@@ -5,12 +5,17 @@
 // `test` job migrates Postgres with Atlas before `turbo run build test:unit`
 // and carries DATABASE_URL in turbo's globalEnv; a local run without one is
 // skipped, not red. Every row it writes is removed in afterAll.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq, inArray, sql } from "drizzle-orm";
 import { organizationCreateHandler } from "./org.create";
+
+// The bootstrap test makes ~15 sequential round trips to Postgres plus one per
+// billing table; under `test:coverage` on a shared CI runner that ran past the
+// 5s default. Match schema.setup.test.ts's per-file budget.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -108,9 +113,6 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     await closeDatabase();
   });
 
-  // The bootstrap transaction plus one count per billing.* table runs against
-  // a shared Postgres while CI's coverage job runs three packages at once;
-  // vitest's 5 s default timed out at 5011 ms in run 35018833462.
   it("bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row", async () => {
     const before = await withSystemDb((tx) =>
       tx
@@ -272,7 +274,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       remainingCents: 500n,
       expiresAt: null,
     });
-  }, 30_000);
+  });
 
   it("refuses a second organization on the same slug", async () => {
     await expect(

@@ -1,0 +1,65 @@
+// Which Spend view a request asks for (#2962): a tab and, on the operator,
+// agent and tool tabs, one key's drill, both from the query string. A tab is a
+// query rather than a route (ARCHITECTURE.md §1.2: this lane adds no route),
+// and a value the page does not know opens the first tab with no drill rather
+// than an error page.
+import { type DayRange, SpendDrillKind } from "@/data/contracts/spend";
+import { firstParam } from "@/shared/safe-path";
+
+/** The tabs in the mockup's order; Findings joins with its lane (#2963). */
+export const SPEND_TABS = [
+  "operator",
+  "agent",
+  "tool",
+  "waste",
+  "budgets",
+] as const;
+export type SpendTab = (typeof SPEND_TABS)[number];
+
+export type SpendView =
+  | { tab: SpendTab; drill: null }
+  | { tab: SpendDrillKind; drill: string };
+
+/** The workspace a link on the page points into. */
+export type SpendAt = { org: string; ws: string };
+
+/** An operator key is a principal public id; get_spend_drill refuses any other. */
+const PRINCIPAL = /^prn_[0-9a-z]+$/;
+const KEY_MAX = 256;
+
+function isTab(value: string | undefined): value is SpendTab {
+  return SPEND_TABS.some((tab) => tab === value);
+}
+
+export function parseSpendView(
+  params: Readonly<Record<string, string | string[] | undefined>>,
+): SpendView {
+  const raw = firstParam(params.tab);
+  const tab = isTab(raw) ? raw : "operator";
+  const drill = firstParam(params.drill);
+  // A drill opens only on a tab the request named: a tab that fell back to the
+  // first one does not carry the drill with it.
+  const kind = SpendDrillKind.safeParse(raw);
+  if (
+    !kind.success ||
+    drill === undefined ||
+    drill.length === 0 ||
+    drill.length > KEY_MAX ||
+    (kind.data === "operator" && !PRINCIPAL.test(drill))
+  ) {
+    return { tab, drill: null };
+  }
+  return { tab: kind.data, drill };
+}
+
+/** The UTC calendar month up to and including `today`, the clock's today by default. */
+export function monthToDate(today: Date = new Date()): DayRange {
+  const to = today.toISOString().slice(0, 10);
+  return { from: `${to.slice(0, 8)}01`, to };
+}
+
+/** The one UTC day `today`, the clock's today by default. */
+export function dayOf(today: Date = new Date()): DayRange {
+  const day = today.toISOString().slice(0, 10);
+  return { from: day, to: day };
+}

@@ -359,11 +359,12 @@ export interface SpendBudgetStatus {
 /**
  * Live status for every configured ceiling in the active scope — the app
  * Budgets panel's data. Reads spend FRESH (bypasses the gate's short-TTL cache)
- * so the panel is accurate, not up-to-15s stale. A spend-read failure is
- * swallowed per budget — that ceiling reports spentMicros = 0 and state 'ok' so
- * the panel still renders it. A CONFIG-load failure is NOT swallowed and
- * propagates to the caller: unlike the enforcement gate there is nothing safe to
- * fail open to, and rendering an empty panel would read as "no budgets set".
+ * so the panel is accurate, not up-to-15s stale. A spend-read failure and a
+ * CONFIG-load failure both propagate to the caller. Unlike the enforcement gate
+ * there is nothing safe to fail open to: a ceiling whose spend was not read has
+ * no position, and answering spentMicros = 0 would report it `ok` however far
+ * past its limit it is (#3064), just as an empty list would read as "no budgets
+ * set".
  *
  * Loads DISABLED ceilings too (listSpendBudgets, not the enforcement path's
  * enabled-only getScopeBudgets) — the panel is the only surface that can re-enable
@@ -382,23 +383,12 @@ export async function getSpendBudgetStatuses(
   const statuses: SpendBudgetStatus[] = [];
   for (const budget of budgets) {
     const window = spendBudgetWindow(budget.period, budget.windowDays, now);
-    let spentMicros = 0n;
-    try {
-      spentMicros = await readSpend({
-        orgId: budget.orgId,
-        workspaceId: budget.workspaceId,
-        periodStart: window.start,
-        periodEnd: window.end,
-      });
-    } catch (err) {
-      logger.error(
-        {
-          err: err instanceof Error ? err.message : String(err),
-          budgetId: budget.id,
-        },
-        "billing: getSpendBudgetStatuses — spend read failed, reporting 0",
-      );
-    }
+    const spentMicros = await readSpend({
+      orgId: budget.orgId,
+      workspaceId: budget.workspaceId,
+      periodStart: window.start,
+      periodEnd: window.end,
+    });
     const verdict = evaluateSpendBudget({
       spentMicros,
       limitMicros: budget.limitMicros,
