@@ -25,8 +25,13 @@ import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
 import { SwRegister } from "@/components/pwa/sw-register";
+import { getMetadataBase } from "@/lib/app-url";
 
 export const metadata: Metadata = {
+  // Relative openGraph/twitter image URLs resolve against this. Without it Next
+  // falls back to http://localhost:3000, which is what production advertised
+  // in og:image until 2026-09-15.
+  metadataBase: getMetadataBase(),
   title: "Oxagen",
   description: "Enterprise agent ontologies as a service",
   // No explicit `manifest` string here — apps/app/src/app/manifest.ts (Next's
