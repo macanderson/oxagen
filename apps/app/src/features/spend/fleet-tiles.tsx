@@ -25,7 +25,9 @@ export async function FleetSpendTiles({
 }: FleetSpendTilesProps) {
   const period = dayOf(today);
   const read = await source.spend.fleet(ctx, period);
-  return read.ok ? <FleetSpendStrip spend={read.value} period={period} /> : null;
+  return read.ok ? (
+    <FleetSpendStrip spend={read.value} period={period} />
+  ) : null;
 }
 
 function FleetSpendStrip({
@@ -39,10 +41,16 @@ function FleetSpendStrip({
   return (
     <section aria-label={t("fleet.label")} data-testid="fleet-spend">
       <TileStrip>
-        <Tile term={t("fleet.spendToday")} note={t("fleet.spendTodayNote", { from: period.from })}>
+        <Tile
+          term={t("fleet.spendToday")}
+          note={t("fleet.spendTodayNote", { from: period.from })}
+        >
           <CostFigure cost={spend.spend} />
         </Tile>
-        <Tile term={t("fleet.cacheHitRate")} note={t("fleet.cacheHitRateNote")}>
+        <Tile
+          term={t("fleet.cacheHitRate")}
+          note={t("fleet.cacheHitRateNote")}
+        >
           <RatioFigure ratio={spend.cacheHitRate} />
         </Tile>
       </TileStrip>
