@@ -9,6 +9,7 @@ import type {
   GitHubPrComments,
   GitHubPrFile,
   GitHubPullRequest,
+  GitHubRepoInfo,
 } from "./types";
 
 /**
@@ -40,9 +41,12 @@ interface GHUser {
 }
 
 interface GHRepo {
+  id: number;
   full_name: string;
   html_url: string;
   default_branch: string;
+  owner: { login: string };
+  name: string;
 }
 
 interface GHFileContent {
@@ -306,12 +310,17 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   async function getRepoInfo(args: {
     owner: string;
     repo: string;
-  }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }> {
+  }): Promise<GitHubRepoInfo> {
     const data = await request<GHRepo>(
       "GET",
       `/repos/${seg(args.owner)}/${seg(args.repo)}`,
     );
     return {
+      // GitHub's numeric repository id survives renames and transfers; it is
+      // what a repository binding pins (ingestion.repository_bindings).
+      id: String(data.id),
+      owner: data.owner.login,
+      name: data.name,
       fullName: data.full_name,
       htmlUrl: data.html_url,
       defaultBranch: data.default_branch,

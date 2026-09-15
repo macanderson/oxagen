@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**270 capabilities across 38 domains.**
+**280 capabilities across 41 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -185,6 +185,13 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
 
+## Finding (4)
+
+- [finding.dismiss](finding.dismiss.md) — Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal
+- [finding.evidence.get](finding.evidence.get.md) — Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving
+- [finding.fix.record](finding.fix.record.md) — Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it
+- [finding.list](finding.list.md) — List this workspace's costed findings ranked by the money at stake, each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend and that saving annualised
+
 ## Graph (6)
 
 - [graph.node.get](graph.node.get.md) — Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`
@@ -219,6 +226,12 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [notification.list](notification.list.md) — List in-app notifications for the calling user, with unread filtering and pagination
 - [notification.mark](notification.mark.md) — Mark a notification as read and/or archived for the calling user
+
+## Onboarding (3)
+
+- [onboarding.advance](onboarding.advance.md) — Move the onboarding gate between the wrap and run steps; the run step completes only on the first frame, so unlocked is never a target
+- [onboarding.first_frame.get](onboarding.first_frame.get.md) — For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs
+- [onboarding.state.get](onboarding.state.get.md) — Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound
 
 ## Ontology (2)
 
@@ -287,6 +300,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 
+## Repository (1)
+
+- [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
+
 ## Router (4)
 
 - [router.decision.preview](router.decision.preview.md) — Dry-run the market router for a prompt: task class, observed outcomes, and the full decision (chosen model + candidate audit trail); changes nothing
@@ -354,7 +371,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Tacho (11)
+## Tacho (13)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
 - [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
@@ -362,7 +379,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [tacho.command.list](tacho.command.list.md) — `list_commands`: the delivery report for one run, newest first, with the status, the requested and achieved delivery mode, and the frame an applied command landed on
 - [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
 - [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
+- [tacho.enrollment_token.create](tacho.enrollment_token.create.md) — Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host; shown once, expires unused after its TTL
 - [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
+- [tacho.host.enroll](tacho.host.enroll.md) — Enrol this machine as a registered agent's host by presenting a single-use enrollment token: mint its scoped API key, signed enrollment and initial policy bundle
 - [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
 - [tacho.incident.list](tacho.incident.list.md) — List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents
 - [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model

@@ -15,7 +15,17 @@ export const OrgRole = z.enum([
 export type OrgRole = z.infer<typeof OrgRole>;
 
 /**
- * A prefixed public id (`inv_…`, `arun_…`, `usr_…`), the only id a view model
+ * A prefixed public id (`inv_…`, `arun_…`, `apr_…`, `usr_…`), the only id a view model
  * carries (INV-11): a raw database uuid never reaches the page.
  */
 export const PublicId = z.string().regex(/^[a-z]+_[A-Za-z0-9]+$/);
+
+/**
+ * A role as the membership and invitation tables store it. The CHECK
+ * constraints compare `lower(role)`, so rows exist in both casings; the view
+ * model carries the spec's lowercase enum and refuses any other value.
+ */
+export const StoredOrgRole = z
+  .string()
+  .transform((stored) => stored.trim().toLowerCase())
+  .pipe(OrgRole);

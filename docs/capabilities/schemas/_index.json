@@ -1,5 +1,5 @@
 {
-  "generatedCount": 277,
+  "generatedCount": 287,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -44,6 +44,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "advance_onboarding",
+      "domain": "onboarding",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -124,6 +134,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "bind_main_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -265,6 +285,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_enrollment_token",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -576,6 +607,17 @@
       "consumes": []
     },
     {
+      "name": "dismiss_finding",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
       "surfaces": [
@@ -614,6 +656,17 @@
       "surfaces": [
         "api",
         "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "enroll_host",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
         "cli"
       ],
       "component": null,
@@ -934,6 +987,28 @@
       "consumes": []
     },
     {
+      "name": "get_finding_evidence",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_first_frame",
+      "domain": "onboarding",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_gau_bucket",
       "domain": "billing",
       "surfaces": [
@@ -1061,6 +1136,17 @@
       "domain": "graph",
       "surfaces": [
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_onboarding_state",
+      "domain": "onboarding",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1660,6 +1746,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_findings",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2317,6 +2414,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_finding_fix",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

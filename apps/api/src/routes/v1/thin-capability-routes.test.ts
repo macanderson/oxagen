@@ -25,6 +25,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../../lib/context", () => ({
   capabilityContext: mocks.capabilityContext,
+  extractClientIp: () => null,
+}));
+// Routes that carry their own limiter (tacho.host.enroll) are tested as
+// adapters here; the limiter has its own suite.
+vi.mock("../../middleware/distributed-rate-limit", () => ({
+  distributedRateLimiter:
+    () => async (_c: unknown, next: () => Promise<void>) =>
+      next(),
 }));
 
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
@@ -86,6 +94,12 @@ import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
 import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
+import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
+import { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
+import { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
+import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
+import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
+import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
@@ -94,6 +108,10 @@ import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
 import { agentCredentialRotateRoute } from "./agent.credential.rotate";
@@ -156,6 +174,10 @@ import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
 import { spendWasteListRoute } from "./spend.waste";
+import { findingDismissRoute } from "./finding.dismiss";
+import { findingEvidenceGetRoute } from "./finding.evidence.get";
+import { findingFixRecordRoute } from "./finding.fix.record";
+import { findingListRoute } from "./finding.list";
 import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
 import { tachoCommandListRoute } from "./tacho.command.list";
 import { iamRoleCreateRoute } from "./iam.role.create";
@@ -163,6 +185,12 @@ import { iamRoleGrantsSetRoute } from "./iam.role.grants.set";
 import { iamRoleDeleteRoute } from "./iam.role.delete";
 import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
+import { onboardingAdvanceRoute } from "./onboarding.advance";
+import { onboardingFirstFrameGetRoute } from "./onboarding.first_frame.get";
+import { onboardingStateGetRoute } from "./onboarding.state.get";
+import { repositoryMainBindRoute } from "./repository.main.bind";
+import { tachoEnrollmentTokenCreateRoute } from "./tacho.enrollment_token.create";
+import { tachoHostEnrollRoute } from "./tacho.host.enroll";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
 
 const CTX = {
@@ -883,6 +911,86 @@ const ROUTES: ThinRoute[] = [
     status: 201,
   },
   {
+    file: "onboarding.state.get",
+    route: onboardingStateGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: onboardingStateGet.name,
+    body: {},
+    invalidBody: { step: "run" },
+    status: 200,
+  },
+  {
+    file: "onboarding.advance",
+    route: onboardingAdvanceRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: onboardingAdvance.name,
+    body: { to: "run" },
+    invalidBody: { to: "organization" },
+    status: 200,
+  },
+  {
+    file: "onboarding.first_frame.get",
+    route: onboardingFirstFrameGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: onboardingFirstFrameGet.name,
+    body: { agentId: "agt_0123456789" },
+    expectedInput: { agentId: "agt_0123456789", waitMs: 0 },
+    invalidBody: { agentId: "not-an-agent" },
+    status: 200,
+  },
+  {
+    file: "repository.main.bind",
+    route: repositoryMainBindRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryMainBind.name,
+    body: { owner: "acme", name: "widgets" },
+    invalidBody: { owner: "acme", name: "wid gets" },
+    status: 201,
+  },
+  {
+    file: "tacho.enrollment_token.create",
+    route: tachoEnrollmentTokenCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoEnrollmentTokenCreate.name,
+    body: { agentId: "agt_0123456789" },
+    expectedInput: { agentId: "agt_0123456789", ttlMinutes: 30 },
+    invalidBody: { agentId: "agt_0123456789", ttlMinutes: 600 },
+    status: 201,
+  },
+  {
+    file: "tacho.host.enroll",
+    route: tachoHostEnrollRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoHostEnroll.name,
+    body: {
+      token: "oxe_1time_0123456789abcdefghjkmnpqrs",
+      hostname: "mbp.local",
+      osUser: "dev",
+      platform: "darwin",
+      devicePublicKey: `ed25519:${"A".repeat(44)}`,
+      harnesses: ["claude-code"],
+    },
+    expectedInput: {
+      token: "oxe_1time_0123456789abcdefghjkmnpqrs",
+      hostname: "mbp.local",
+      osUser: "dev",
+      platform: "darwin",
+      devicePublicKey: `ed25519:${"A".repeat(44)}`,
+      harnesses: ["claude-code"],
+      managed: false,
+      validityDays: 180,
+    },
+    invalidBody: {
+      token: "not-a-token",
+      hostname: "mbp.local",
+      osUser: "dev",
+      platform: "darwin",
+      devicePublicKey: `ed25519:${"A".repeat(44)}`,
+      harnesses: ["claude-code"],
+    },
+    status: 201,
+  },
+  {
     file: "iam.role.grants.set",
     route: iamRoleGrantsSetRoute as unknown as Hono<never>,
     method: "POST",
@@ -973,6 +1081,43 @@ const ROUTES: ThinRoute[] = [
     capability: spendWasteList.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-02-30", to: "2026-03-01" } },
+    status: 200,
+  },
+  {
+    file: "finding.list",
+    route: findingListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingList.name,
+    body: {},
+    expectedInput: { status: "open" },
+    invalidBody: { status: "stale" },
+    status: 200,
+  },
+  {
+    file: "finding.evidence.get",
+    route: findingEvidenceGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingEvidenceGet.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
+    status: 200,
+  },
+  {
+    file: "finding.fix.record",
+    route: findingFixRecordRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingFixRecord.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
+    status: 200,
+  },
+  {
+    file: "finding.dismiss",
+    route: findingDismissRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingDismiss.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
     status: 200,
   },
   {

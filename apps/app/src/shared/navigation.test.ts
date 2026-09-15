@@ -10,17 +10,23 @@ const nav = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => nav);
 
+const { parseCheckoutUrl } = await import("./checkout-url");
 const { parseLoopbackUri } = await import("./loopback-uri");
 const { routes } = await import("./safe-path");
 const {
   permanentRedirectTo,
   redirectTo,
+  redirectToCheckout,
   redirectToLoopback,
   responseRedirect,
 } = await import("./navigation");
 
 const loopback = parseLoopbackUri("http://127.0.0.1:53682/callback");
 if (loopback === null) throw new Error("fixture: loopback URI refused");
+const checkout = parseCheckoutUrl(
+  "https://checkout.stripe.com/c/pay/cs_test_a1#fidkdWxOYHwnPyd1blpxYHZxWjA0",
+);
+if (checkout === null) throw new Error("fixture: checkout URL refused");
 
 beforeEach(() => {
   nav.redirect.mockClear();
@@ -37,6 +43,14 @@ describe("redirectTo", () => {
   it("308s with permanentRedirectTo", () => {
     expect(() => permanentRedirectTo(routes.fleet("acme", "core"))).toThrow(
       "NEXT_REDIRECT 308 /acme/core",
+    );
+  });
+});
+
+describe("redirectToCheckout", () => {
+  it("sends the browser to the Checkout page as parsed", () => {
+    expect(() => redirectToCheckout(checkout)).toThrow(
+      "NEXT_REDIRECT https://checkout.stripe.com/c/pay/cs_test_a1#fidkdWxOYHwnPyd1blpxYHZxWjA0",
     );
   });
 });

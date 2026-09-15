@@ -1,20 +1,40 @@
 // The typed list of reads a page may make (ARCHITECTURE.md §3.3). Every method
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
-// that bind them: the Fleet, Run and Organization ports in WL-34 to WL-37, the
-// Billing port in WL-38.
-import type { OrgCtx, PretenantCtx } from "@/server/viewer";
+// that bind them: the Fleet ports in WL-34, the Run and Organization ports in
+// WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
+// lane adds its page's port (#2956: agents).
+import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
+import type {
+  AgentDetail,
+  AgentPage,
+  IncidentPage,
+  Toolbelt,
+} from "./contracts/agents";
+import type { ApprovalItem } from "./contracts/approvals";
 import type {
   ContractRate,
   GauBucket,
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
+import type { MemberList } from "./contracts/org";
+import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
   ShellContext,
   WorkspaceChoice,
 } from "./contracts/shell";
+import type {
+  DayRange,
+  FleetSpend,
+  SpendBudgets,
+  SpendDrill,
+  SpendDrillKind,
+  SpendGroupKind,
+  SpendReport,
+  SpendWaste,
+} from "./contracts/spend";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -51,4 +71,62 @@ export interface DataSource {
       q: { cursor: string | null },
     ): Promise<Read<InvoicePage>>;
   };
+  /** list_runs, one cursor page, newest first; caller: features/fleet/fleet.tsx. */
+  runs: {
+    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
+  };
+  /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
+  approvals: {
+    pending(
+      ctx: WsCtx,
+      q: { runId: string | null },
+    ): Promise<Read<ApprovalItem[]>>;
+  };
+  /**
+   * The Agents pages (#2956), each read by the agent's public id or slug:
+   * list_agents, one cursor page of the workspace's identities, caller
+   * features/agents/agents.tsx; get_agent, the identity with its credentials,
+   * roles, hosts and cached definition, callers features/agents/agent.tsx and
+   * agent-source.tsx; get_agent_toolbelt, the computed belt, and
+   * list_incidents narrowed to the agent, one cursor page, caller
+   * features/agents/agent.tsx.
+   */
+  agents: {
+    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<AgentPage>>;
+    get(ctx: WsCtx, agent: string): Promise<Read<AgentDetail>>;
+    toolbelt(ctx: WsCtx, agent: string): Promise<Read<Toolbelt>>;
+    incidents(
+      ctx: WsCtx,
+      agent: string,
+      q: { cursor: string | null },
+    ): Promise<Read<IncidentPage>>;
+  };
+  /**
+   * The cost rollup (#2962), every read noBillingGate; callers:
+   * features/spend/spend.tsx and features/spend/fleet-tiles.tsx. `byGroup`
+   * answers the period total with the groups, so the page's summary strip
+   * reads the same call as its table.
+   */
+  spend: {
+    /** get_spend */
+    byGroup(
+      ctx: WsCtx,
+      groupBy: SpendGroupKind,
+      period: DayRange,
+    ): Promise<Read<SpendReport>>;
+    /** get_spend at the model level over one day: Fleet's Spend today and Cache hit rate tiles */
+    fleet(ctx: WsCtx, period: DayRange): Promise<Read<FleetSpend>>;
+    /** get_spend_drill over its default trailing window */
+    drill(
+      ctx: WsCtx,
+      kind: SpendDrillKind,
+      key: string,
+    ): Promise<Read<SpendDrill>>;
+    /** list_waste */
+    waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
+    /** get_spend_budget */
+    budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+  };
+  /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
+  org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
 }

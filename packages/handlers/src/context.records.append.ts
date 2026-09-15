@@ -2,12 +2,13 @@
 //
 // append_record (ADR-061; MC spec §9): content-addressed by the record_hash
 // Stella computes, idempotent per workspace, and refusing a directive — that
-// reaches the workspace only through a Context PR. A signed-in caller holds
-// one of the contract's roles (§3.2, INV-29); a call with no user is an API
-// key, which the kernel authorizes.
+// reaches the workspace only through a Context PR. The acting user — the
+// signed-in user, or the creator of the API key (resolveActingUserId) — holds
+// one of the contract's roles (§3.2, INV-29). The row's author stays the
+// signed-in user, null for a key.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AppendKind } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { recordHash } from "@oxagen/run-evidence";
 import { createProposal } from "./context.proposal.shared";
@@ -17,12 +18,11 @@ export function createAppendRecordHandler(
   deps: Pick<SteeringDeps, "store">,
 ): CapabilityHandler<typeof contextRecordsAppend> {
   return async (input, ctx) => {
-    if (ctx.userId) {
-      await assertOrgRole(ctx, {
-        org: ["Owner", "Admin"],
-        workspace: ["Owner", "Member"],
-      });
-    }
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    );
     if (input.kind === "directive") {
       throw new HandlerError({
         code: "conflict",

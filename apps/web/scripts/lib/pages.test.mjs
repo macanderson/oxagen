@@ -11,9 +11,9 @@ import {
 const page = `<!doctype html>
 <html><head>
 <meta charset="utf-8">
-<title>Stella &amp; friends | Oxagen</title>
+<title>Mission Control &amp; friends | Oxagen</title>
 <meta name="description" content="Agents you can &quot;check&quot;.">
-<meta property="og:title" content="Stella">
+<meta property="og:title" content="Mission Control">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
@@ -22,7 +22,7 @@ const page = `<!doctype html>
 describe("pageMeta", () => {
   it("reads the title and description, decoding entities", () => {
     expect(pageMeta(page)).toEqual({
-      title: "Stella & friends | Oxagen",
+      title: "Mission Control & friends | Oxagen",
       description: 'Agents you can "check".',
     });
     expect(pageMeta("<html></html>")).toEqual({ title: "", description: "" });
@@ -32,9 +32,9 @@ describe("pageMeta", () => {
 
 describe("cardTitle", () => {
   it("drops the site name off the end, in any of its separators", () => {
-    expect(cardTitle("Stella | Oxagen")).toBe("Stella");
-    expect(cardTitle("Stella — Oxagen")).toBe("Stella");
-    expect(cardTitle("Stella · Oxagen ")).toBe("Stella");
+    expect(cardTitle("Mission Control | Oxagen")).toBe("Mission Control");
+    expect(cardTitle("Mission Control — Oxagen")).toBe("Mission Control");
+    expect(cardTitle("Mission Control · Oxagen ")).toBe("Mission Control");
     expect(cardTitle("Oxagen — The control plane")).toBe(
       "Oxagen — The control plane",
     );
@@ -45,24 +45,24 @@ describe("cardTitle", () => {
 describe("pageKey and pageKind", () => {
   it("names a card after its page's path", () => {
     expect(pageKey("index.html")).toBe("index");
-    expect(pageKey("products/stella/index.html")).toBe("products-stella");
-    expect(pageKey("overview-video.html")).toBe("overview-video");
+    expect(pageKey("products/oxagen/index.html")).toBe("products-oxagen");
+    expect(pageKey("field-manual.html")).toBe("field-manual");
     expect(pageKey("a\\b\\index.html")).toBe("a-b");
   });
 
   it("uses the page's section as the eyebrow", () => {
     expect(pageKind("index.html")).toBe("Oxagen");
-    expect(pageKind("products/stella/index.html")).toBe("Products");
-    expect(pageKind("overview-video.html")).toBe("Overview Video");
+    expect(pageKind("products/oxagen/index.html")).toBe("Products");
+    expect(pageKind("field-manual.html")).toBe("Field Manual");
   });
 });
 
 describe("withOgImage", () => {
   const card = {
-    url: "https://oxagen.sh/og/products-stella-dark.png",
+    url: "https://oxagen.sh/og/products-oxagen-dark.png",
     width: 1200,
     height: 630,
-    alt: 'Stella & "friends"',
+    alt: 'Mission Control & "friends"',
   };
 
   it("replaces the declared image tags with the card and its size and alt", () => {
@@ -71,9 +71,11 @@ describe("withOgImage", () => {
     expect(out.match(/property="og:image"/g)).toHaveLength(1);
     expect(out.match(/name="twitter:image"/g)).toHaveLength(1);
     expect(out).toContain(
-      '</title>\n<meta property="og:image" content="https://oxagen.sh/og/products-stella-dark.png">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n<meta property="og:image:alt" content="Stella &amp; &quot;friends&quot;">\n<meta name="twitter:image" content="https://oxagen.sh/og/products-stella-dark.png">',
+      '</title>\n<meta property="og:image" content="https://oxagen.sh/og/products-oxagen-dark.png">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n<meta property="og:image:alt" content="Mission Control &amp; &quot;friends&quot;">\n<meta name="twitter:image" content="https://oxagen.sh/og/products-oxagen-dark.png">',
     );
-    expect(out).toContain('<meta property="og:title" content="Stella">');
+    expect(out).toContain(
+      '<meta property="og:title" content="Mission Control">',
+    );
   });
 
   it("adds the tags to a page that declared none, and is idempotent", () => {

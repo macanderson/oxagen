@@ -1,7 +1,8 @@
 // audit-exempt: a dismissed proposal steered nothing and publishes nothing; the kernel capability.invoke_* audit records who dismissed it.
 //
 // dismiss_proposal (ADR-061): Owner/Admin (or the workspace Owner) rejects a
-// proposal with a reason. A proposal that started a Context PR has the PR
+// proposal with a reason; the acting user is the signed-in user or the
+// creator of the API key (resolveActingUserId). A proposal that started a Context PR has the PR
 // closed and its branch deleted first, so the next proposal on the lineage
 // opens a fresh branch and PR; that includes a proposal whose open failed
 // after GitHub opened the PR, whose PR is found on its branch and named in
@@ -13,7 +14,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { bodyNamesProposal } from "./context.steering.view";
 
@@ -29,7 +30,11 @@ export function createDismissProposalHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextProposalDismiss> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"], workspace: ["Owner"] });
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner"] },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const row = await deps.store.findProposal(scope, input.proposalId);
     if (!row) {
@@ -79,7 +84,7 @@ export function createDismissProposalHandler(
           status: "rejected",
           dismissedAt: deps.now(),
           dismissedReason: input.reason,
-          updatedById: ctx.userId ?? null,
+          updatedById: actingUserId,
         },
         DISMISSABLE,
       );

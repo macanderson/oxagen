@@ -10,14 +10,17 @@ import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
+import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
- * the IAM roles and grants, and the first workspace with everything a
- * workspace needs, in one system transaction. Nothing billing-shaped is
- * written (ADR-055 §3.9 item 14): the org's assistant balance starts at zero,
- * and the billing settings row appears on the first write that needs it.
+ * the IAM roles and grants, the first workspace with everything a workspace
+ * needs, and the onboarding gate opened on that workspace (#2967: the
+ * organization exists, so the gate is at `wrap` with its 14-day provisional
+ * window), in one system transaction. Nothing billing-shaped is written
+ * (ADR-055 §3.9 item 14): the org's assistant balance starts at zero, and the
+ * billing settings row appears on the first write that needs it.
  */
 export const organizationCreateHandler: CapabilityHandler<
   typeof organizationCreate
@@ -123,6 +126,12 @@ export const organizationCreateHandler: CapabilityHandler<
         userId,
         name: input.workspace.name,
         slug: input.workspace.slug,
+      });
+
+      await openOnboardingGate(tx, {
+        orgId: org.id,
+        workspaceId: workspace.id,
+        now: org.createdAt,
       });
 
       return { org, workspace };

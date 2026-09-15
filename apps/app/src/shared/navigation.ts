@@ -1,10 +1,12 @@
 // The only module that performs a redirect (ARCHITECTURE.md §3.8, INV-13).
 // Every target is a branded value: a SafePath from sanitizeNext or a route
-// builder, or a LoopbackUri from parseLoopbackUri. The lint rule in
-// eslint.config.mjs refuses redirect, permanentRedirect, NextResponse.redirect
-// and Response.redirect everywhere else under src/.
+// builder, a LoopbackUri from parseLoopbackUri, or an ExternalCheckoutUrl from
+// parseCheckoutUrl. The lint rule in eslint.config.mjs refuses redirect,
+// permanentRedirect, NextResponse.redirect and Response.redirect everywhere
+// else under src/.
 import { permanentRedirect, redirect } from "next/navigation";
 import { NextResponse } from "next/server";
+import type { ExternalCheckoutUrl } from "./checkout-url";
 import type { LoopbackUri } from "./loopback-uri";
 import type { SafePath } from "./safe-path";
 
@@ -28,6 +30,11 @@ export function redirectToLoopback(
   for (const [key, value] of Object.entries(query))
     url.searchParams.set(key, value);
   redirect(url.href);
+}
+
+/** Sends the browser to the Stripe Checkout page a purchase opened. */
+export function redirectToCheckout(url: ExternalCheckoutUrl): never {
+  redirect(url);
 }
 
 /** A 307 from a route handler or the proxy; a 308 for a route that moved for good (the proxy's Appendix F table). */

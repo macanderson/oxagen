@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { isHandlerError } from "@oxagen/oxagen";
+import { schema } from "@oxagen/database";
 
 const mocks = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
   setSpendBudget: vi.fn(),
   getSpendBudget: vi.fn(),
   invalidateSpendBudgetScope: vi.fn(),
@@ -15,6 +18,11 @@ vi.mock("@oxagen/billing", () => ({
   getSpendBudgetStatuses: mocks.getSpendBudgetStatuses,
 }));
 
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return { ...real, withTenantDb: mocks.withTenantDb };
+});
+
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mocks.emitSecurityEvent,
   emitSecurityEventAsync: vi.fn(),
@@ -22,6 +30,41 @@ vi.mock("@oxagen/database/security", () => ({
 
 import { billingBudgetSetHandler } from "./billing.budget.set";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+
+/**
+ * The role gate runs for real against a tx double that answers the principal
+ * and role-assignment tables: `org` names the org-wide role, `workspace` the
+ * role on the context's workspace (INV-29, a tier-free org).
+ */
+function stubRoles(roles: { org?: string; workspace?: string }) {
+  // Each lookup opens its own withTenantDb, so the count spans the calls.
+  let assignmentReads = 0;
+  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+    const rowsFor = (table: unknown): unknown[] => {
+      if (table === schema.principals) return [{ id: "prn_1" }];
+      if (table === schema.principalRoleAssignments) {
+        // resolveActorOrgRole reads the org leg first, the workspace leg after.
+        const role = assignmentReads++ === 0 ? roles.org : roles.workspace;
+        return role ? [{ roleName: role }] : [];
+      }
+      throw new Error("unexpected table");
+    };
+    return Promise.resolve(
+      fn({
+        select: () => ({
+          from: (table: unknown) => {
+            const chain = {
+              innerJoin: () => chain,
+              where: () => chain,
+              limit: () => Promise.resolve(rowsFor(table)),
+            };
+            return chain;
+          },
+        }),
+      }),
+    );
+  });
+}
 
 function statusFor(scope: "org" | "workspace") {
   return {
@@ -55,6 +98,7 @@ function statusFor(scope: "org" | "workspace") {
 
 describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
+    stubRoles({ org: "Owner" });
     mocks.setSpendBudget.mockReset();
     mocks.getSpendBudget.mockReset().mockResolvedValue(null);
     mocks.invalidateSpendBudgetScope.mockReset();
@@ -172,5 +216,82 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
         CTX,
       ),
     ).rejects.toThrow("not found on read-back");
+  });
+});
+
+describe("set_spend_budget — the role gate (INV-29)", () => {
+  const orgCeiling = {
+    scope: "org" as const,
+    enabled: true,
+    period: "monthly" as const,
+    limit: { micros: "500000000", currency: "USD" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getSpendBudget.mockResolvedValue(null);
+    mocks.setSpendBudget.mockResolvedValue({});
+  });
+
+  it.each(["Owner", "Admin", "Billing"])(
+    "lets an org %s set the org ceiling",
+    async (role) => {
+      stubRoles({ org: role });
+      mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("org")]);
+      const out = await billingBudgetSetHandler(orgCeiling, CTX);
+      expect(out.scope).toBe("org");
+      expect(mocks.setSpendBudget).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(["Member", "Viewer", "Compliance"])(
+    "refuses an org %s with forbidden and writes nothing (negative)",
+    async (role) => {
+      stubRoles({ org: role });
+      const err = await billingBudgetSetHandler(orgCeiling, CTX).catch(
+        (e: unknown) => e,
+      );
+      expect(isHandlerError(err)).toBe(true);
+      expect((err as { code: string }).code).toBe("forbidden");
+      expect(mocks.setSpendBudget).not.toHaveBeenCalled();
+      expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lets a workspace Admin set that workspace's ceiling and refuses the org ceiling (negative)", async () => {
+    stubRoles({ org: "Member", workspace: "Admin" });
+    mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("workspace")]);
+    const out = await billingBudgetSetHandler(
+      { ...orgCeiling, scope: "workspace" },
+      CTX,
+    );
+    expect(out.scope).toBe("workspace");
+
+    vi.clearAllMocks();
+    stubRoles({ org: "Member", workspace: "Admin" });
+    const err = await billingBudgetSetHandler(orgCeiling, CTX).catch(
+      (e: unknown) => e,
+    );
+    expect((err as { code: string }).code).toBe("forbidden");
+    expect(mocks.setSpendBudget).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call with no signed-in user and no API key (negative)", async () => {
+    stubRoles({ org: "Owner" });
+    const err = await billingBudgetSetHandler(orgCeiling, {
+      ...CTX,
+      userId: null,
+    }).catch((e: unknown) => e);
+    expect((err as { code: string }).code).toBe("forbidden");
+    expect(mocks.setSpendBudget).not.toHaveBeenCalled();
+  });
+
+  it("fails the call when the read-back's spend read fails, after the write (negative, #3064)", async () => {
+    stubRoles({ org: "Owner" });
+    mocks.getSpendBudgetStatuses.mockRejectedValue(new Error("counter down"));
+    await expect(billingBudgetSetHandler(orgCeiling, CTX)).rejects.toThrow(
+      "counter down",
+    );
+    expect(mocks.setSpendBudget).toHaveBeenCalledOnce();
   });
 });

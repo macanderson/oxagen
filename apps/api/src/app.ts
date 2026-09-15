@@ -226,6 +226,12 @@ import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
 import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
+import { tachoHostEnrollRoute } from "./routes/v1/tacho.host.enroll";
+import { tachoEnrollmentTokenCreateRoute } from "./routes/v1/tacho.enrollment_token.create";
+import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
+import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
+import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
+import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
@@ -250,6 +256,10 @@ import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { findingListRoute } from "./routes/v1/finding.list";
+import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
+import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
+import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
@@ -324,6 +334,40 @@ app.use(
   }),
 );
 
+// A machine with a single-use enrollment token has no credential to
+// authenticate with yet (#2967): the token in the body is the boundary. The
+// route carries its own pre-auth ceilings (per token, per client IP). It is
+// mounted before the auth-gated /v1 group, which would answer it 401, and
+// before the /v1/tacho/* ceilings below, whose credential bucket it would
+// otherwise share with every caller that sends no Authorization header.
+app.route("/v1/tacho/enroll", tachoHostEnrollRoute);
+
+// Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
+// org and workspace, so the machine routes sit on a static path outside the
+// slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
+// for shared NATs and a per-credential bucket for one abused key, registered
+// before the auth-gated /v1 group so an exhausted bucket never reaches
+// API-key resolution.
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-ip",
+    max: 6_000,
+    bucketKey: trustedVercelIpBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-credential",
+    max: 120,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -343,6 +387,8 @@ userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 // Per-turn dollar budget (user-scoped default).
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
+// The onboarding gate before an organization exists (#2967): `organization`.
+userScoped.route("/onboarding/state", onboardingStateGetRoute);
 app.route("/v1", userScoped);
 
 // Post-auth ceiling for enrolled Stella evidence ingress, in requests/minute.
@@ -369,30 +415,6 @@ stellaTelemetryScoped.use(
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
 app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
-// Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
-// org and workspace, so the machine routes sit on a static path outside the
-// slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
-// for shared NATs and a per-credential bucket for one abused key.
-app.use(
-  "/v1/tacho/*",
-  distributedRateLimiter({
-    keyPrefix: "tacho-preauth-ip",
-    max: 6_000,
-    bucketKey: trustedVercelIpBucketKey,
-    methods: "all",
-    failClosedOnStoreError: true,
-  }),
-);
-app.use(
-  "/v1/tacho/*",
-  distributedRateLimiter({
-    keyPrefix: "tacho-preauth-credential",
-    max: 120,
-    bucketKey: authorizationFingerprintBucketKey,
-    methods: "all",
-    failClosedOnStoreError: true,
-  }),
-);
 // Post-auth ceiling for an enrolled Tacho host, in requests/minute. A constant
 // for the same reason as STELLA_TELEMETRY_PER_MIN above: ADR-043 retired
 // RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to borrow, and a
@@ -443,6 +465,11 @@ orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
 // fleet. Session auth with the org role checked in the handlers.
 orgScoped.route("/tacho/enrollments", tachoEnrollmentCreateRoute);
 orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
+// The one-time enrollment token and the onboarding gate (#2967).
+orgScoped.route("/tacho/enrollment-tokens", tachoEnrollmentTokenCreateRoute);
+orgScoped.route("/onboarding/advance", onboardingAdvanceRoute);
+orgScoped.route("/onboarding/first-frame", onboardingFirstFrameGetRoute);
+orgScoped.route("/repository/main", repositoryMainBindRoute);
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
@@ -466,6 +493,10 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+orgScoped.route("/spend/findings", findingListRoute);
+orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
+orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
+orgScoped.route("/spend/findings/dismiss", findingDismissRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
@@ -745,6 +776,8 @@ orgScoped.route("/audit/log/query", auditLogQueryRoute);
 const orgOnlyScoped = new Hono<AppEnv>();
 orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
 orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
+// The onboarding gate for an organization (#2967): its gate row.
+orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

@@ -253,7 +253,7 @@ function staticSurface(root, brand) {
   emit(`${root}/favicon.ico`, ico(icoParts));
   emit(`${root}/apple-touch-icon.png`, raster(tileDark, 180));
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
-  for (const b of ["oxagen", "stella"]) {
+  for (const b of [brand]) {
     emit(
       `${root}/assets/brand/${b}-wordmark.svg`,
       readFileSync(svg(`${b}-wordmark-adaptive.svg`)),
@@ -291,7 +291,6 @@ function tokens() {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
 }
-
 
 /**
  * The marks, as data, for the React components in @oxagen/ui.
@@ -338,7 +337,9 @@ function marks() {
     stella: { wordmark: wordmark("stella"), icon: icon("stella") },
   };
 
-  const gold = JSON.parse(readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8")).gold.hex;
+  const gold = JSON.parse(
+    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
+  ).gold.hex;
 
   emit(
     "packages/ui/src/components/brand-marks.generated.ts",
@@ -419,7 +420,9 @@ try {
 } catch {
   const where = `clone macanderson/oxagen-house-brand beside this repo, or set OXAGEN_HOUSE_BRAND.`;
   if (CHECK) {
-    console.log(`brand: SKIPPED — no house kit at ${BRAND}, so no asset was verified. ${where}`);
+    console.log(
+      `brand: SKIPPED — no house kit at ${BRAND}, so no asset was verified. ${where}`,
+    );
     process.exit(0);
   }
   console.error(`brand kit not found at ${BRAND}\n${where}`);

@@ -1,7 +1,9 @@
 // Money on the wire (ARCHITECTURE.md §3.9, INV-09): integer micro-units as a
-// decimal string with an ISO 4217 currency. This module is the one place
-// arithmetic on micros happens, with BigInt, so no figure passes through a
-// float. Formatting is src/ui/money-format.ts.
+// decimal string with an ISO 4217 currency, and a metered cost carries the
+// basis that says who observed it as a required key that may be null. This
+// module is the one place arithmetic on micros happens, with BigInt or digit
+// shifting on the string, so no figure passes through a float. Formatting is
+// src/ui/money-format.ts.
 import { z } from "zod";
 
 const MICROS = /^-?\d+$/;
@@ -11,6 +13,18 @@ export const Money = z.object({
   currency: z.string().length(3),
 });
 export type Money = z.infer<typeof Money>;
+
+/** Who observed a metered figure (spec §12.3, `cost.run_totals.cost_basis`). */
+const CostBasis = z.enum([
+  "gateway_observed",
+  "client_attested",
+  "mixed",
+  "estimated",
+]);
+
+/** A metered cost: money plus who observed it, `null` when nobody recorded that. */
+export const Cost = Money.extend({ basis: CostBasis.nullable() });
+export type Cost = z.infer<typeof Cost>;
 
 /** A micros value that is not an integer string ("2,450.00", "1e6", ""). */
 class InvalidMicrosError extends Error {
@@ -50,4 +64,17 @@ export function mulMicros(value: Money, quantity: number): Money {
     micros: (toBigInt(value.micros) * BigInt(quantity)).toString(),
     currency: value.currency,
   };
+}
+
+/**
+ * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
+ * micros, or null for anything else: a sign, a grouping separator, more than
+ * six fractional digits, or more than twelve whole digits. The conversion is
+ * digit shifting on the string, so no float carries the amount.
+ */
+export function microsFromDecimal(text: string): string | null {
+  const match = /^(\d{1,12})(?:\.(\d{1,6}))?$/.exec(text.trim());
+  if (match === null) return null;
+  const [, whole = "", fraction = ""] = match;
+  return `${whole}${fraction.padEnd(6, "0")}`.replace(/^0+(?=\d)/, "");
 }

@@ -2,12 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
 
-// The role gate reads iam.principal_role_assignments; the tests decide it.
-const gate = vi.hoisted(() => ({ refuse: false }));
+// The role gate reads iam.principal_role_assignments and the key's creator
+// from auth.api_keys; the tests decide both.
+const gate = vi.hoisted(() => ({
+  refuse: false,
+  keyCreator: "u_key_creator" as string | null,
+  actors: [] as (string | null)[],
+}));
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
-  assertOrgRole: async () => {
+  resolveActingUserId: async (c: {
+    userId: string | null;
+    apiKeyId: string | null;
+  }) => c.userId ?? (c.apiKeyId ? gate.keyCreator : null),
+  assertOrgRole: async (actor: { userId: string | null }) => {
+    gate.actors.push(actor.userId);
+    if (!actor.userId) {
+      throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+    }
     if (gate.refuse) {
       throw new HandlerError({
         code: "forbidden",
@@ -32,10 +45,12 @@ const input = (over: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   gate.refuse = false;
+  gate.keyCreator = "u_key_creator";
+  gate.actors = [];
 });
 
 describe("append_record", () => {
-  it("is refused for a signed-in role the gate excludes and writes nothing; a call with no user is left to the kernel", async () => {
+  it("is refused for a role the gate excludes, signed in or by API key, and writes nothing", async () => {
     const h = harness();
     const handler = createAppendRecordHandler(h);
     gate.refuse = true;
@@ -43,12 +58,34 @@ describe("append_record", () => {
       code: "forbidden",
       reason: "org_role_required",
     });
+    await expect(
+      handler(input(), ctx({ userId: null, apiKeyId: "key_1" })),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(gate.actors).toEqual([AUTHOR, "u_key_creator"]);
     expect(h.store.appends).toHaveLength(0);
+  });
+
+  it("gates an API-key call as the key's creator, keeps the row unauthored, and refuses a key with no creator", async () => {
+    const h = harness();
+    const handler = createAppendRecordHandler(h);
     const out = await handler(
       input(),
       ctx({ userId: null, apiKeyId: "key_1" }),
     );
+    expect(gate.actors).toEqual(["u_key_creator"]);
     expect(out.appended).toBe(true);
+    expect(h.store.appends[0]?.createdById).toBeNull();
+
+    gate.keyCreator = null;
+    await expect(
+      handler(
+        input({ statement: "It stopped flaking in September." }),
+        ctx({ userId: null, apiKeyId: "key_2" }),
+      ),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
     expect(h.store.appends).toHaveLength(1);
   });
 

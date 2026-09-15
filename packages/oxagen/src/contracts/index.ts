@@ -57,6 +57,12 @@ import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
+import { tachoEnrollmentTokenCreate } from "./tacho.enrollment_token.create";
+import { tachoHostEnroll } from "./tacho.host.enroll";
+import { onboardingStateGet } from "./onboarding.state.get";
+import { onboardingAdvance } from "./onboarding.advance";
+import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
+import { repositoryMainBind } from "./repository.main.bind";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { spendGet } from "./spend.get";
@@ -64,6 +70,10 @@ import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
+import { findingList } from "./finding.list";
+import { findingEvidenceGet } from "./finding.evidence.get";
+import { findingFixRecord } from "./finding.fix.record";
+import { findingDismiss } from "./finding.dismiss";
 import { runGet } from "./run.get";
 import { runFrameBodyGet } from "./run.frame_body.get";
 import { runTranscriptGet } from "./run.transcript.get";
@@ -357,6 +367,14 @@ export type {
 } from "./context.steering.shared";
 export { contextPrSchema } from "./context.pr.open";
 export type { ContextPr } from "./context.pr.open";
+// Finding vocabulary (ADR-062): a finding, its evidence and the decision
+// input. The shared file is not a capability, so it is exported here to
+// satisfy the check-contracts file-coverage guard.
+export {
+  findingEvidenceSchema,
+  findingSchema,
+} from "./finding.shared";
+export type { Finding, FindingEvidence } from "./finding.shared";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
@@ -539,6 +557,12 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoEnrollmentTokenCreate,
+  tachoHostEnroll,
+  onboardingStateGet,
+  onboardingAdvance,
+  onboardingFirstFrameGet,
+  repositoryMainBind,
   runList,
   runGet,
   runFrameBodyGet,
@@ -553,6 +577,10 @@ export {
   spendWasteList,
   spendStatementExport,
   costPriceEntryList,
+  findingList,
+  findingEvidenceGet,
+  findingFixRecord,
+  findingDismiss,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
@@ -827,6 +855,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoEnrollmentTokenCreate,
+  tachoHostEnroll,
+  onboardingStateGet,
+  onboardingAdvance,
+  onboardingFirstFrameGet,
+  repositoryMainBind,
   runList,
   runGet,
   runFrameBodyGet,
@@ -841,6 +875,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendWasteList,
   spendStatementExport,
   costPriceEntryList,
+  findingList,
+  findingEvidenceGet,
+  findingFixRecord,
+  findingDismiss,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
