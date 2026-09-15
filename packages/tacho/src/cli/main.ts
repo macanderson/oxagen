@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
 import { defaultCliDeps, isNativeBuild } from "./deps";
+import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
 import { reassign } from "./reassign";
@@ -42,13 +43,17 @@ export function buildTachoProgram(): Command {
     )
     .option("--validity-days <n>", "Enrollment validity", (v) => Number(v))
     .option("--force", "Enroll again even if already enrolled")
+    // No commander default: `enroll()` hooks claude-code on a fresh
+    // enrollment by itself, and on an enrolled host an absent flag must mean
+    // "keep the current list", not "add claude-code" (a Codex-only host
+    // running a bare `tacho enroll` would otherwise gain Claude Code hooks).
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code, codex, or claude-code,codex",
-      "claude-code",
+      "Harnesses to hook: claude-code (default on a fresh enrollment), codex, or claude-code,codex",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(async (opts: Record<string, unknown>) => {
+      const harness = opts["harness"] as string | undefined;
       const result = await enroll(
         {
           token: opts["token"] as string | undefined,
@@ -61,7 +66,9 @@ export function buildTachoProgram(): Command {
           printManaged: opts["printManaged"] as boolean | undefined,
           validityDays: opts["validityDays"] as number | undefined,
           force: opts["force"] as boolean | undefined,
-          harnesses: parseHarnesses(opts["harness"] as string | undefined),
+          ...(harness !== undefined
+            ? { harnesses: parseHarnesses(harness) }
+            : {}),
         },
         deps,
       );
@@ -170,11 +177,33 @@ export function buildTachoProgram(): Command {
 
   program
     .command("verify")
-    .description("Run one headless Claude Code turn and confirm it was chained")
-    .action(async () => {
-      const result = await verify({}, deps);
-      deps.out(result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`);
+    .description(
+      "Run one headless turn (Claude Code by default, --harness codex) and confirm it was chained",
+    )
+    .option("--harness <name>", "claude-code | codex", "claude-code")
+    .option("--json", "Machine-readable result")
+    .action(async (opts: { harness?: string; json?: boolean }) => {
+      const [harness] = parseHarnesses(opts.harness);
+      const result = await verify(
+        harness !== undefined ? { harness } : {},
+        deps,
+      );
+      if (opts.json === true) deps.out(JSON.stringify(result));
+      else
+        deps.out(
+          result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`,
+        );
       if (!result.ok) process.exitCode = 1;
+    });
+
+  program
+    .command("detect")
+    .description(
+      "Which harnesses this machine has (claude, codex) and which are enrolled",
+    )
+    .option("--json", "Machine-readable output")
+    .action((opts: { json?: boolean }) => {
+      detect({ ...(opts.json !== undefined ? { json: opts.json } : {}) }, deps);
     });
 
   program

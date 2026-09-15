@@ -6,13 +6,11 @@
  * token, so the control plane sees one continuous host identity and the
  * hook entries only change their enrollment id.
  */
-import { stripCodexHooks } from "../host/codex-writer";
 import { readHostFile } from "../host/host-file";
-import { stripTachoSettings } from "../host/settings-writer";
 import type { TachoHarness } from "../wire";
 import type { CliDeps, CredentialOptions } from "./deps";
 import { enroll } from "./enroll";
-import { revokeOnControlPlane } from "./unenroll";
+import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface ReassignOptions extends CredentialOptions {
   /** Keep the current harness list (default) or replace it. */
@@ -43,6 +41,15 @@ export async function reassign(
   // `--harness` alone re-enrolls in place, which is how a harness is removed
   // (`enroll` never drops one).
   const workspace = options.workspace ?? host.workspace_slug;
+  // The current workspace slug names nothing in another org (or a workspace
+  // nobody chose, when the slug happens to exist there): an org change
+  // always names its workspace.
+  if (options.org !== undefined && options.workspace === undefined) {
+    deps.err(
+      `--org ${options.org} needs --workspace <slug>: ${host.workspace_slug} is a workspace of ${host.org_slug}, not a choice in ${options.org}`,
+    );
+    return { ok: false, warnings };
+  }
   if (options.workspace === undefined && options.harnesses === undefined) {
     deps.err(
       "reassign needs --workspace <slug> (and --org <slug> to change org) or --harness <list>",
@@ -78,43 +85,32 @@ export async function reassign(
     enrollmentId: host.host_enrollment_id,
   };
 
+  // The control plane is always asked, a marked host.json included: the
+  // mark means the last revoke did not go through, and the handler answers
+  // idempotently when it did. The revoke targets the host's own org and
+  // workspace; only the token comes from the caller.
   deps.out(
-    `[1/3] Revoking ${host.host_enrollment_id} in ${from.org}/${from.workspace}`,
+    host.revoked_at === null
+      ? `[1/3] Revoking ${host.host_enrollment_id} in ${from.org}/${from.workspace}`
+      : `[1/3] Finishing the revoke of ${host.host_enrollment_id} in ${from.org}/${from.workspace}, pending since ${host.revoked_at}`,
   );
-  if (host.revoked_at === null) {
-    const revoked = await revokeOnControlPlane(
-      host,
-      {
-        ...(options.token !== undefined ? { token: options.token } : {}),
-        reason: options.reason ?? `tacho reassign to ${org}/${workspace}`,
-      },
-      deps,
-      warnings,
-    );
-    deps.out(
-      revoked
-        ? "      revoked"
-        : "      not revoked server-side; an operator can finish it from the fleet page",
-    );
-  } else {
-    deps.out(`      already revoked at ${host.revoked_at}`);
-  }
+  const revoked = await revokeAndMark(
+    host,
+    {
+      ...(options.token !== undefined ? { token: options.token } : {}),
+      reason: options.reason ?? `tacho reassign to ${org}/${workspace}`,
+    },
+    deps,
+    warnings,
+  );
+  deps.out(
+    revoked
+      ? "      revoked"
+      : "      not revoked server-side; the next reassign or unenroll asks again, or an operator can finish it from the fleet page",
+  );
 
   deps.out("[2/3] Removing the old enrollment's hooks");
-  const stripped = stripTachoSettings(
-    deps.readSettings(),
-    host.host_enrollment_id,
-    host.displaced_env,
-  );
-  if (stripped.changed) deps.writeSettings(stripped.settings);
-  const codexCurrent = deps.readCodexHooks();
-  if (codexCurrent !== undefined) {
-    const codexStripped = stripCodexHooks(
-      codexCurrent,
-      host.host_enrollment_id,
-    );
-    if (codexStripped.changed) deps.writeCodexHooks(codexStripped.settings);
-  }
+  stripEnrollmentHooks(host, deps);
 
   deps.out(`[3/3] Enrolling in ${org}/${workspace}`);
   const result = await enroll(
@@ -133,8 +129,13 @@ export async function reassign(
   );
   warnings.push(...result.warnings);
   if (!result.ok || result.host === undefined) {
+    // host.json now carries the old enrollment marked retired: `tacho
+    // status` says so, and `enroll` takes the fresh path rather than
+    // re-applying the revoked enrollment's hooks. `--force` is named so the
+    // recovery is the same command whatever state host.json is in.
+    const apiUrl = options.apiUrl ?? host.api_url;
     deps.err(
-      `Reassign failed after revoking the old enrollment; this host is now unenrolled. Run \`tacho enroll --org ${org} --workspace ${workspace}\` once the cause is fixed.`,
+      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl}\` once the cause is fixed.`,
     );
     return { ok: false, from, warnings };
   }

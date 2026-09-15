@@ -463,6 +463,28 @@ describe("POST /connections/:id/resync", () => {
     expect(mocks.eventSend).not.toHaveBeenCalled();
   });
 
+  it.each(["slack", "linear", "custom-webhook"])(
+    "answers 409 and sends no event for a %s connection, whose resync has no sync path",
+    async (connectorId) => {
+      txReturning([
+        {
+          id: "uuid-3",
+          orgId: "test-org",
+          workspaceId: "test-ws",
+          connectorId,
+          status: "connected",
+          deliveryConfig: { channel: "C123" },
+        },
+      ]);
+      const res = await post(`${BASE}/con_ABC/resync`, {});
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: string; connectorId: string };
+      expect(body.connectorId).toBe(connectorId);
+      expect(body.error).toMatch(/not supported/);
+      expect(mocks.eventSend).not.toHaveBeenCalled();
+    },
+  );
+
   it("falls back to empty owner/repo and main branch when deliveryConfig is null", async () => {
     txReturning([
       {

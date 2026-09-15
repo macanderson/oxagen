@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-The control plane that teaches, governs, explains, and learns from every AI agent an enterprise runs.
+The control plane for every AI agent an enterprise runs. Every agent operates under a mandate — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
@@ -24,11 +24,12 @@ The control plane that teaches, governs, explains, and learns from every AI agen
 
 ## What It Does
 
-Oxagen combines three concerns that agent frameworks, observability tools, and RAG stacks each handle separately:
+Oxagen does not run agents — Stella and any other agent do the work. Oxagen is where the company sets the terms under which that work may happen, and where it goes to find out what happened. Three teams each write one clause of an agent's **mandate**, and the platform enforces the whole thing on every run:
 
-1. **Governance** — every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are schema-enforced and metered.
-2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context.
-3. **Explain and meter** — every run is saved as one trace (who asked, what it read, what it changed, what proved it, what it cost), and a ClickHouse→Stripe loop prices the platform by use, per governed action.
+1. **Access** — security sets the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, and the actions it is permitted. Every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI; there is no ungoverned tool surface.
+2. **Budget & rules** — FinOps sets what it may spend, under which commercial terms, and the business rules it must obey. Every governed action is metered from ClickHouse through to Stripe.
+3. **Equipment** — engineering sets the knowledge it is handed (a Neo4j graph plus ontology, grounding answers in cited, time-aware context), the skills and tools it may use, and the steering it runs under.
+4. **Record** — the platform keeps one trace per run: who asked, what it read, what it changed, what proved it, what it cost.
 
 The platform is vendor-neutral: bring your own model keys and your own Neo4j endpoint.
 
@@ -365,9 +366,11 @@ variable.
 `NEXT_PUBLIC_APP_URL`/`API_URL`/`DOCS_URL` come from the registry's own
 per-environment static values, not Parameter Store. Of the client values #1182
 originally flagged, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the one still read
-by shipping code (`apps/app/src/app/[orgSlug]/billing/subscription/subscription-body.tsx`)
-with no value in Parameter Store yet — pasting the real `pk_live_…` key there
-is the one action left, and it needs a credential this repository does not
+by shipping code (`apps/app/src/app/[orgSlug]/billing/subscription/subscription-body.tsx`);
+Parameter Store now carries the shared Stripe sandbox's `pk_test_…` key for it,
+as it does for every environment until the production cutover
+(`docs/ops/stripe-sandbox-mode.md`). Swapping in a `pk_live_…` key is the
+maintainer's cutover step and needs a credential this repository does not
 hold. `NEXT_PUBLIC_POSTHOG_KEY`/`_HOST` have no reader anywhere in the tree (no
 PostHog client is wired up yet), so setting them would only bake two unused
 strings into the bundle; the Google Maps pair was never wired to a consumer
@@ -396,12 +399,14 @@ Four things reach production only when a human dispatches them. None runs on a
 push, and each was made a workflow of its own rather than a step inside a job
 gated on something else — a step buried in a job whose gating is about
 something adjacent is how the Stripe sync became unreachable for months without
-anybody noticing (#1371).
+anybody noticing (#1371). The fifth row is the read-only check that notices
+when a committed store migration has not been applied.
 
 | Workflow | What it does | Safe default |
 | --- | --- | --- |
-| `db-migrate.yml` | Applies committed Atlas migrations to production Postgres | `apply=false` prints the pending list and changes nothing |
-| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations | `apply=false` prints the pending list |
+| `db-migrate.yml` | Validates the committed Atlas migrations; for `target: production` it stops at its reachability guard, because Aurora admits 5432 from the app node only. The path that applies to production Postgres is `infra/tools/run-db-migrations.sh packages/database --apply`, run from a laptop with AWS credentials — it executes on the app node over SSM | `apply=false` (and the script without `--apply`) prints the pending list and changes nothing |
+| `store-migrate.yml` | Applies ClickHouse and Neo4j migrations over an SSM tunnel through the app node | `apply=false` prints the pending list |
+| `store-migrate-drift.yml` | Scheduled daily (also dispatchable): reads production ClickHouse and Neo4j over the same tunnel and compares them with the committed schema; opens or closes a `store-drift` issue | read-only by construction — it never applies |
 | `stripe-sync.yml` | Reconciles Stripe products and prices with `packages/billing/src/pricing.ts` | `apply=false` is a dry run that writes nothing |
 | `infra.yml` | Plans and applies OpenTofu — this one *does* apply on a push to `main` | plans on every pull request |
 

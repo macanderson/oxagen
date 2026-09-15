@@ -3,9 +3,9 @@
  * vision-gate.mjs — LLM drift gate: judges a PR diff against docs/VISION.md.
  *
  * Answers one question per PR: does this change advance, stay neutral to, or
- * drift from the north-star positioning ("the metered, governed, graph-grounded
- * control plane an enterprise uses to teach, govern, explain and learn")? The verdict is
- * advisory — it posts a sticky PR comment + step summary and never fails the
+ * drift from the north-star positioning ("the control plane for every agent an
+ * enterprise runs: a mandate set by the accountable teams, enforced on every
+ * run")? The verdict is advisory — it posts a sticky PR comment + step summary and never fails the
  * build unless VISION_GATE_STRICT=1.
  *
  * Usage:  pnpm check:vision                 (reads AI_GATEWAY_API_KEY)
@@ -57,8 +57,11 @@ export function buildPrompt(vision, pr, stat, patch) {
     "document below is your ONLY rubric — do not apply outside strategy",
     "opinions. Classify the change as exactly one of:",
     "",
-    '- "advances": materially strengthens the wedge (metering→billing,',
-    "  contract governance, graph grounding, vendor neutrality, fleet lineage).",
+    '- "advances": materially strengthens the control plane — lets an',
+    "  accountable team set a clause of an agent's mandate (access, budget &",
+    "  rules, equipment) or lets the platform enforce or record it (metering→",
+    "  billing, contract governance, graph grounding, vendor neutrality, fleet",
+    "  lineage, run evidence).",
     '- "neutral": routine engineering — bug fixes, refactors, tests, CI,',
     "  tooling, docs, performance, maintenance. Most PRs are neutral. Never",
     "  flag maintenance as drift.",
@@ -66,7 +69,9 @@ export function buildPrompt(vision, pr, stat, patch) {
     "  connector breadth / standalone evals / framework mindshare), or",
     "  violates wedge principles (unmetered or contract-bypassing capability,",
     "  ungrounded citation-free agent output where grounding applies,",
-    "  vendor/cloud hard-coupling, lineage-free fan-out).",
+    "  vendor/cloud hard-coupling, lineage-free fan-out, or an agent runtime /",
+    "  executor as a product surface — Oxagen governs agents, it does not run",
+    "  them).",
     "",
     "Respond with ONLY a JSON object, no prose, no code fences:",
     "{",
@@ -166,7 +171,7 @@ export function renderComment(v, model) {
   lines.push(
     "",
     "---",
-    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the teach/govern/explain/learn north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
+    `<sub>Advisory verdict from \`${model}\` judging this diff against [docs/VISION.md](../blob/main/docs/VISION.md) — the agent control plane north star. A drift verdict never blocks merge; it asks for a stated justification or a redirect. Confidence: ${v.confidence.toFixed(2)}.</sub>`,
   );
   return lines.join("\n");
 }
