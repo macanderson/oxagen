@@ -7,7 +7,7 @@
 // key, which the kernel authorizes.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AppendKind } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { recordHash } from "@oxagen/run-evidence";
 import { createProposal } from "./context.proposal.shared";
@@ -18,10 +18,11 @@ export function createAppendRecordHandler(
 ): CapabilityHandler<typeof contextRecordsAppend> {
   return async (input, ctx) => {
     if (ctx.userId) {
-      await assertOrgRole(ctx, {
-        org: ["Owner", "Admin"],
-        workspace: ["Owner", "Member"],
-      });
+      const actingUserId = await resolveActingUserId(ctx);
+      await assertOrgRole(
+        { ...ctx, userId: actingUserId },
+        { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+      );
     }
     if (input.kind === "directive") {
       throw new HandlerError({

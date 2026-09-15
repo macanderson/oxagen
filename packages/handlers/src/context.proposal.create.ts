@@ -6,7 +6,7 @@
 // API key, which the kernel authorizes.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { createProposal } from "./context.proposal.shared";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 
@@ -15,10 +15,11 @@ export function createProposeRecordHandler(
 ): CapabilityHandler<typeof contextProposalCreate> {
   return async (input, ctx) => {
     if (ctx.userId) {
-      await assertOrgRole(ctx, {
-        org: ["Owner", "Admin"],
-        workspace: ["Owner", "Member"],
-      });
+      const actingUserId = await resolveActingUserId(ctx);
+      await assertOrgRole(
+        { ...ctx, userId: actingUserId },
+        { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+      );
     }
     const row = await createProposal(deps.store, ctx, {
       lineageId: input.record.lineageId,
