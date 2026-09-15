@@ -627,6 +627,45 @@ describe("merge_context_pr", () => {
     );
   });
 
+  it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held!: () => void;
+    const parked = new Promise<void>((resolve) => (held = resolve));
+    let first = true;
+    store.publishMerge = async (input) => {
+      if (first) {
+        first = false;
+        held();
+        await gate;
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    const r1 = merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    await parked;
+    // GitHub holds the merge; the second call reads it as merged and resumes.
+    const r2 = merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    release();
+    const settled = await Promise.allSettled([r1, r2]);
+    const statuses = settled.map((s) => s.status);
+    expect(statuses.filter((s) => s === "fulfilled")).toHaveLength(1);
+    const lost = settled.find((s) => s.status === "rejected");
+    expect(lost?.reason).toMatchObject({
+      code: "conflict",
+      reason: "already_merged",
+    });
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.ledger).toHaveLength(1);
+    expect(h.store.versions).toHaveLength(1);
+    expect(h.store.proposals[0]!.status).toBe("merged");
+    expect(h.events).toHaveLength(1);
+  });
+
   it("publishes nothing when GitHub refuses the merge", async () => {
     const h = harness();
     const id = await opened(h);

@@ -5,6 +5,7 @@
 // the tenant scope the kernel entered. The tests run the handlers against the
 // in-memory store in context.steering.test-support.ts.
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen";
 import type { CheckResult } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   and,
@@ -193,9 +194,20 @@ export interface SteeringStore {
   /**
    * The publication, in one transaction: upsert the registry record and its
    * new version, append the promotion event to the hash-chained ledger, and
-   * move the proposal to `merged`.
+   * move the proposal from `checks_passed` to `merged`. A proposal no longer
+   * at `checks_passed` (a concurrent call published it) rolls the whole
+   * transaction back with `already_merged`.
    */
   publishMerge(input: PublishMergeInput): Promise<PublishMergeResult>;
+}
+
+/** The publication found the proposal past `checks_passed`. */
+export function alreadyMerged(proposalPublicId: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "already_merged",
+    message: `${proposalPublicId} was published by another call`,
+  });
 }
 
 const asChecks = (v: unknown): CheckResult[] =>
@@ -727,7 +739,10 @@ export const postgresSteeringStore: SteeringStore = {
       if (!promotion)
         throw new Error("[context.steering] promotion insert returned no row");
 
-      await tx
+      // The transition is the transaction's guard: two calls that both read
+      // `checks_passed` and both reached here publish once, the second one
+      // rolling back its record, version and ledger row.
+      const [transitioned] = await tx
         .update(schema.contextProposals)
         .set({
           status: "merged",
@@ -739,7 +754,14 @@ export const postgresSteeringStore: SteeringStore = {
           updatedByUserId: input.mergedByUserId ?? undefined,
           updatedAt: input.mergedAt,
         })
-        .where(eq(schema.contextProposals.id, proposal.id));
+        .where(
+          and(
+            eq(schema.contextProposals.id, proposal.id),
+            eq(schema.contextProposals.status, "checks_passed"),
+          ),
+        )
+        .returning({ id: schema.contextProposals.id });
+      if (!transitioned) throw alreadyMerged(proposal.publicId);
 
       return {
         recordId,

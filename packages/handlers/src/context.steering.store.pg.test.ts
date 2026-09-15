@@ -95,11 +95,11 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       }),
     );
 
-  it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a second merge is version 2 and chain seq 2", async () => {
+  it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
     const proposal = await propose();
     const opened = await inScope(() =>
       store.updateProposal(proposal.id, {
-        status: "pr_open",
+        status: "checks_passed",
         repository: "a-intel/platform",
         baseRef: "main",
         branch: `context/${lineage}`,
@@ -163,10 +163,32 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     });
     expect(await inScope(() => store.ledgerLength(scope))).toBe(1);
 
+    // The proposal is past checks_passed: the transition finds no row and
+    // the transaction's record, version and ledger writes roll back.
+    await expect(
+      inScope(() =>
+        store.publishMerge({
+          scope,
+          proposal: opened,
+          body: 'schema = "context-record/v0.1"\n# again\n',
+          checksum: "d".repeat(64),
+          commitSha: "7d2e91a",
+          path: opened.path!,
+          mergedAt: new Date(),
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
+    expect(await inScope(() => store.ledgerLength(scope))).toBe(1);
+    expect(
+      (await inScope(() => store.findRecord(scope, lineage)))!.versions,
+    ).toHaveLength(1);
+
     const second = await propose({ statement: "Cache the first read." });
     const secondOpened = await inScope(() =>
       store.updateProposal(second.id, {
-        status: "pr_open",
+        status: "checks_passed",
         repository: "a-intel/platform",
         baseRef: "main",
         branch: `context/${lineage}`,

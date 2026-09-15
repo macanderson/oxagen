@@ -12,11 +12,12 @@ import type {
   SteeringGitHub,
   SteeringRepository,
 } from "./context.steering.github";
-import type {
-  AppendRow,
-  ProposalRow,
-  PublishedRecordRow,
-  SteeringStore,
+import {
+  alreadyMerged,
+  type AppendRow,
+  type ProposalRow,
+  type PublishedRecordRow,
+  type SteeringStore,
 } from "./context.steering.store";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 
@@ -281,7 +282,7 @@ export class MemoryStore implements SteeringStore {
   }
   async publishMerge(input: Parameters<SteeringStore["publishMerge"]>[0]) {
     const { scope, proposal } = input;
-    let record = this.records.find(
+    const existing = this.records.find(
       (r) =>
         r.workspaceId === scope.workspaceId && r.slug === proposal.lineageId,
     );
@@ -300,29 +301,25 @@ export class MemoryStore implements SteeringStore {
       activatedAt: input.mergedAt,
       updatedAt: input.mergedAt,
     };
-    if (!record) {
-      record = {
-        id: uuid(),
-        publicId: nextId("ctr"),
-        createdAt: input.mergedAt,
-        createdByUserId: input.mergedByUserId,
-        updatedByUserId: input.mergedByUserId,
-        deletedAt: null,
-        deletedByUserId: null,
-        orgId: scope.orgId,
-        workspaceId: scope.workspaceId,
-        slug: proposal.lineageId,
-        activeVersionId: null,
-        version: null,
-        checksum: null,
-        ...classification,
-      };
-      this.records.push(record);
-    }
+    const record: PublishedRecordRow = existing ?? {
+      id: uuid(),
+      publicId: nextId("ctr"),
+      createdAt: input.mergedAt,
+      createdByUserId: input.mergedByUserId,
+      updatedByUserId: input.mergedByUserId,
+      deletedAt: null,
+      deletedByUserId: null,
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      slug: proposal.lineageId,
+      activeVersionId: null,
+      version: null,
+      checksum: null,
+      ...classification,
+    };
     const latest = this.versions
-      .filter((v) => v.recordId === record!.id)
+      .filter((v) => v.recordId === record.id)
       .sort((a, b) => b.version - a.version)[0];
-    if (latest) latest.isLatest = false;
     const version = {
       id: uuid(),
       publicId: nextId("crv"),
@@ -333,15 +330,9 @@ export class MemoryStore implements SteeringStore {
       publishedAt: input.mergedAt,
       body: input.body,
     };
-    this.versions.push(version);
-    Object.assign(record, classification, {
-      activeVersionId: version.id,
-      version: version.version,
-      checksum: version.checksum,
-    });
     const ledgerBefore = await this.ledgerLength(scope);
     const head = this.ledger
-      .filter((l) => l.recordId === record!.id)
+      .filter((l) => l.recordId === record.id)
       .sort((a, b) => b.seq - a.seq)[0];
     const seqNo = (head?.seq ?? 0) + 1;
     const prev = head?.chainDigest ?? null;
@@ -366,10 +357,24 @@ export class MemoryStore implements SteeringStore {
       policyVersion: input.policyVersion,
       approverUserId: input.mergedByUserId,
     };
+    // The Postgres store's transaction commits only when the proposal is
+    // still at `checks_passed`; nothing above is written before this point.
+    if (
+      this.proposals.find((p) => p.id === proposal.id)?.status !==
+      "checks_passed"
+    )
+      throw alreadyMerged(proposal.publicId);
+    if (!existing) this.records.push(record);
+    if (latest) latest.isLatest = false;
+    this.versions.push(version);
+    Object.assign(record, classification, {
+      activeVersionId: version.id,
+      version: version.version,
+      checksum: version.checksum,
+    });
     this.ledger.push(promotion);
     await this.updateProposal(proposal.id, { status: "merged" });
-    const row = this.proposals.find((p) => p.id === proposal.id)!;
-    Object.assign(row, {
+    Object.assign(this.proposals.find((p) => p.id === proposal.id)!, {
       mergedCommit: input.commitSha,
       mergedAt: input.mergedAt,
       mergedByUserId: input.mergedByUserId,
