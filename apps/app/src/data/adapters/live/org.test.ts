@@ -147,6 +147,7 @@ const listed: WorkspaceListOutput = {
       namespace: "core",
       name: "Core Platform",
       role: "owner",
+      archivedAt: null,
     },
   ],
 };

@@ -139,10 +139,14 @@ const role = (
   name,
   description: null,
   scopeKind: "workspace",
+  kind: "agent",
   isSystemDefault: true,
   version: "1",
   memberCount: 1,
   grants,
+  permissions: [],
+  createdAt: "2026-03-01T09:00:00.000Z",
+  createdBy: null,
 });
 
 describe("toAgentStatus", () => {

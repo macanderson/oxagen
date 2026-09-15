@@ -94,6 +94,8 @@ const workspaceRow: typeof schema.workspaces.$inferSelect = {
   settings: {},
   defaultTextTier: null,
   defaultTextModel: null,
+  archivedAt: null,
+  archivedByUserId: null,
 };
 
 const workspaceUserRow: typeof schema.workspaceUsers.$inferSelect = {

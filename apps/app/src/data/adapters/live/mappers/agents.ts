@@ -551,10 +551,14 @@ const PROBE_ROLE: RecordedRole = {
   name: "Agent Operator",
   description: null,
   scopeKind: "workspace",
+  kind: "agent",
   isSystemDefault: true,
   version: "1",
   memberCount: 1,
   grants: [],
+  permissions: [],
+  createdAt: PROBE_AT.toISOString(),
+  createdBy: null,
 };
 
 const PROBE_INCIDENT: IncidentRow = {
