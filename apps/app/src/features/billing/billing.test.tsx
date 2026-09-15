@@ -353,6 +353,21 @@ describe("Auto top-up", () => {
       );
     },
   );
+
+  // The block size reaches the control from the rate read and from nothing
+  // else (R3-I6). These two pin that derivation; the control's own test takes
+  // the size as a prop and cannot see where the page got it.
+  it("prints the GAUs one top-up buys, from the rate block's block size", async () => {
+    await renderBilling({ bucket: readOk(prepaidBucket({}, { blocks: 3 })) });
+    expect(
+      section("Auto top-up").querySelector("[data-per-topup]"),
+    ).toHaveTextContent(/^= 30,000 GAU per top-up$/);
+  });
+
+  it("leaves the per-top-up count out when the rate could not be read (negative)", async () => {
+    await renderBilling({ rate: DOWN });
+    expect(section("Auto top-up").querySelector("[data-per-topup]")).toBeNull();
+  });
 });
 
 describe("Invoices", () => {
