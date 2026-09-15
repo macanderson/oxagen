@@ -35,6 +35,7 @@ import { TACHO_HOST_SCOPE_PURPOSE } from "./lib/tacho-enrollment";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
 import {
   readDenyGeneration,
+  readWorkspaceRetention,
   requireBundleSigner,
   signBundle,
   unsignedBundle,
@@ -130,8 +131,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
   const { rawKey, keyPrefix, keyHash } = generateApiKey();
   const fingerprint = deviceKeyFingerprint(input.devicePublicKey);
 
-  const { host, apiKeyPublicId, agentKey, denyGeneration } = await withTenantDb(
-    async (tx) => {
+  const { host, apiKeyPublicId, agentKey, denyGeneration, retention } =
+    await withTenantDb(async (tx) => {
       const org = await tx.query.organizations.findFirst({
         where: eq(schema.organizations.id, ctx.orgId),
         columns: { namespace: true },
@@ -242,23 +243,22 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       if (!inserted) {
         throw new Error("Internal error: failed to create the Tacho host");
       }
-      const denyGeneration = await readDenyGeneration(
-        tx as never,
-        ctx.orgId,
-        ctx.workspaceId,
-      );
+      const [denyGeneration, retention] = await Promise.all([
+        readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
+        readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+      ]);
       return {
         host: inserted as TachoHostRow,
         apiKeyPublicId: key.publicId,
         agentKey: agentKeyCandidate,
         denyGeneration,
+        retention,
       };
-    },
-  );
+    });
 
   const bundle = signBundle(
     signer,
-    unsignedBundle(host, denyGeneration, issuedAt),
+    unsignedBundle(host, denyGeneration, retention, issuedAt),
   );
 
   emitSecurityEvent({

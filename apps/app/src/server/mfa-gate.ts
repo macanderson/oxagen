@@ -6,18 +6,16 @@
 // window (mfa_grace_hours from the policy's last write) has passed. Enrolled
 // users and non-privileged roles are always allowed. No I/O here, so
 // requireViewer gathers the inputs and this stays trivially testable.
+import { routes } from "@/shared/safe-path";
 
 /** Roles the hard gate applies to (lowercase). */
-export const MFA_PRIVILEGED_ROLES: ReadonlySet<string> = new Set([
-  "owner",
-  "admin",
-]);
+const MFA_PRIVILEGED_ROLES: ReadonlySet<string> = new Set(["owner", "admin"]);
 
 /**
  * Where an unenrolled privileged member is sent. It lives outside `[org]`, so
  * the redirect cannot loop back through requireViewer.
  */
-export const MFA_ENROLL_PATH = "/two-factor?enroll=required";
+export const MFA_ENROLL_PATH = routes.mfaEnroll();
 
 export type MfaPolicy = {
   mfaRequired: boolean;

@@ -1,0 +1,71 @@
+# agent.list
+
+**Capability:** `list_agents`
+**Domain:** agent
+**Mode:** sync
+**Scope:** org + workspace (the tenant scope the caller enters)
+**Surfaces:** api, mcp
+**Mutates:** no
+**Billing gate:** skipped (`noBillingGate: true`; a console read is never a governed action, ADR-052 exclusion 2)
+
+## Intent
+
+The identities table of the Agents page (MC spec §6.2, App. E; #2956): one row per agent registered in the workspace, ordered by slug and cursor-paged, plus the stat tiles over the whole workspace. The identity half comes from Postgres — the `agent.agents` row, its delegated `iam.principals` row (`principalId`), the person it acts for (`operatorId`, the principal's `parent_user_id`) and the harness recorded at registration — and the enrollment facts that make it revocable: active long-lived credentials (`auth.api_keys` with scope purpose `agent_credential_v1`) and live `tacho.hosts` under its agent key.
+
+Every figure is counted from a store that exists or is `null` with the reason on the contract field. No rollup table is migrated, so the 30-day figures are counted from the run stores directly: `runs30d` from `agent.agent_runs` and root `tacho.sessions`; `spend30d` from the priced wrapped sessions as the harness reported them (`basis: "client_attested"`), `null` when no session in the window carries a priced basis. `tier`, `beltSize`, `proven30d`, `mandates` and `totals.holdingMandate` are `null`: no store records a model tier on the identity, the belt is computed per agent by `get_agent_toolbelt`, and no verification or mandate store exists. Nothing prints a zero it did not count (ARCHITECTURE.md §3.4).
+
+`status` is derived on the read: `retired` when the agent row is archived (`retire_agent`), `suspended` when its principal is suspended (`suspend_agent`), `enrolled` when it holds an active credential or a live host, `unenrolled` otherwise.
+
+## Input
+
+| Field | Type | Notes |
+|---|---|---|
+| `limit` | `number` | 1 to 100; default 50. |
+| `cursor` | `string?` | The `nextCursor` of the previous page. A cursor this capability did not mint starts over at the first page. |
+
+## Output
+
+| Field | Type | Notes |
+|---|---|---|
+| `items[].id` | `string` | `agt_…`. |
+| `items[].slug` | `string` | The definition file name and the last segment of the agent key. |
+| `items[].name` | `string` | |
+| `items[].agentKey` | `string \| null` | `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. |
+| `items[].harness` | `"stella" \| "claude-code" \| "claude-agent-sdk" \| "custom"` | |
+| `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
+| `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
+| `items[].status` | `"unenrolled" \| "enrolled" \| "suspended" \| "retired"` | Derived as above. |
+| `items[].tier` | `null` | Not recorded on the identity. |
+| `items[].beltSize` | `null` | Computed per agent by `get_agent_toolbelt`. |
+| `items[].runs30d` | `number` | Ledger runs plus root wrapped sessions started in the last 30 days. |
+| `items[].spend30d` | `Cost \| null` | `{ micros, currency, basis: "client_attested" }` or null when no priced session is in the window. |
+| `items[].proven30d` | `null` | No verification store. |
+| `items[].mandates` | `null` | No mandate store. |
+| `items[].incidents` | `number` | Open `tacho.incidents` rows on the agent's hosts. |
+| `items[].credentials` | `number` | Active long-lived credentials. |
+| `items[].hosts` | `number` | Live (active or paused) hosts under the agent key. |
+| `items[].registeredAt` | `string` | ISO-8601. |
+| `nextCursor` | `string \| null` | |
+| `totals.identities` | `number` | Live agents in the workspace. |
+| `totals.enrolled` | `number` | Of those, `enrolled`. |
+| `totals.holdingMandate` | `null` | No mandate store. |
+| `totals.tamperIncidents` | `number` | Open incidents of a tamper kind (`hooks_removed`, `config_change`, `chain_break`, `checkpoint_lapse`, `token_replay`, `spoofed_event`) on the workspace's hosts. |
+
+## Roles
+
+Org Owner, Admin, Member; workspace Owner, Member. The kernel's IAM check allows every capability for a non-enterprise org (ARCHITECTURE.md §1.5).
+
+## Side effects
+
+None. Read-only; audit-exempt.
+
+## Surfaces
+
+- `POST /api/v1/{org}/{ws}/agents`
+- MCP tool `list_agents`
+
+## Errors
+
+| code | meaning |
+|---|---|
+| `authz_denied` | No authenticated principal, or no org or workspace scope. |

@@ -179,8 +179,14 @@ jobs:
       - name: knip production mode (apps/app)
         run: pnpm --filter @oxagen/app exec knip --production --strict
 
+      # INV-12 (apps/app/ARCHITECTURE.md §4): src/i18n/messages.d.ts types every
+      # t() key from messages/*.json; a catalog changed without regenerating it
+      # fails here.
+      - name: Message catalog types are current (apps/app)
+        run: pnpm --filter @oxagen/app check:messages
+
       - name: Manifest, contracts, env invariants
-        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders
+        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders && pnpm docs:architecture:check
 
       # Unconditional, and that is the whole point. The affected-package gate
       # (`turbo … --filter=…[origin/main]`) selects a package only when it or one

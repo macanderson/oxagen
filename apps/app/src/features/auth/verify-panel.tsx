@@ -6,7 +6,11 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { resendVerification } from "./actions";
-import { ResendVerificationSchema, fieldErrors } from "./schemas";
+import {
+  type AuthErrorKey,
+  ResendVerificationSchema,
+  fieldErrors,
+} from "./schemas";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { panel } from "@/ui/control-styles";
@@ -22,7 +26,7 @@ export function VerifyPanel({
   next: string;
 }) {
   const t = useTranslations("auth");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthErrorKey | null>(null);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
 

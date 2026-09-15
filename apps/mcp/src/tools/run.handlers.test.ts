@@ -1,0 +1,157 @@
+// run.handlers.test.ts — handler invocation tests for the run recorder tools
+// (#2952, ADR-058): get_run_frame_body, get_run_transcript, bisect_runs.
+// fork_run, export_run and summarize_run check an org role in the handler and
+// an MCP context carries no user, so they have no MCP tool.
+//
+// Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
+// each default-export handler runs without a live runtime. Each tool asserts:
+// the schema exposes the contract's input fields and the metadata names the
+// contract with the annotations its mutability warrants; buildContext then
+// invoke are called once with the contract name, the args and
+// { surface: "mcp" }; the handler answers the parsed output; an output the
+// contract refuses is refused here; an invoke error propagates.
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  buildContext: vi.fn(),
+  headers: vi.fn(),
+}));
+
+vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
+vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
+vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
+
+import runFrameBodyGetTool, {
+  schema as frameBodySchema,
+  metadata as frameBodyMetadata,
+} from "./run.frame_body.get";
+import runTranscriptGetTool, {
+  schema as transcriptSchema,
+  metadata as transcriptMetadata,
+} from "./run.transcript.get";
+import runBisectTool, {
+  schema as bisectSchema,
+  metadata as bisectMetadata,
+} from "./run.bisect";
+
+const fakeCtx = {
+  orgId: "org_test",
+  workspaceId: "ws_test",
+  userId: null,
+  apiKeyId: "key_test",
+  requestId: "req_test",
+  surface: "mcp" as const,
+  messageId: null,
+  clientIp: null,
+};
+
+const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
+const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
+const DIGEST = `sha256:${"a".repeat(64)}`;
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.buildContext.mockResolvedValue(fakeCtx);
+  mocks.headers.mockReturnValue({ authorization: "Bearer test_key" });
+});
+
+interface ToolCase {
+  name: string;
+  /** Parameters are contravariant: every tool's typed handler is assignable here. */
+  handler: (args: never) => Promise<unknown>;
+  schema: Record<string, unknown>;
+  metadata: { name: string; annotations?: Record<string, unknown> };
+  fields: string[];
+  readOnly: boolean;
+  args: Record<string, unknown>;
+  validOutput: Record<string, unknown>;
+  /** An output the contract's schema refuses. */
+  invalidOutput: Record<string, unknown>;
+}
+
+const CASES: ToolCase[] = [
+  {
+    name: "get_run_frame_body",
+    handler: runFrameBodyGetTool,
+    schema: frameBodySchema,
+    metadata: frameBodyMetadata,
+    fields: ["runId", "seq"],
+    readOnly: true,
+    args: { runId: LEDGER_ID, seq: "7" },
+    validOutput: {
+      contentType: "text/plain",
+      bytes: "aGVsbG8=",
+      digest: DIGEST,
+      redactions: [],
+    },
+    invalidOutput: {
+      contentType: "text/plain",
+      bytes: "aGVsbG8=",
+      digest: "not-a-digest",
+      redactions: [],
+    },
+  },
+  {
+    name: "get_run_transcript",
+    handler: runTranscriptGetTool,
+    schema: transcriptSchema,
+    metadata: transcriptMetadata,
+    fields: ["runId", "zoom"],
+    readOnly: true,
+    args: { runId: TACHO_ID, zoom: "turns" },
+    validOutput: { zoom: "turns", entries: [], complete: true },
+    invalidOutput: { zoom: "frames", entries: [], complete: true },
+  },
+  {
+    name: "bisect_runs",
+    handler: runBisectTool,
+    schema: bisectSchema,
+    metadata: bisectMetadata,
+    fields: ["runA", "runB"],
+    readOnly: true,
+    args: { runA: LEDGER_ID, runB: TACHO_ID },
+    validOutput: {
+      divergentSeq: "4",
+      keyA: "tool_call:read_file",
+      keyB: "tool_call:write_file",
+      aligned: 3,
+    },
+    invalidOutput: { divergentSeq: 4, keyA: null, keyB: null, aligned: 3 },
+  },
+];
+
+for (const tool of CASES) {
+  describe(`${tool.name} tool`, () => {
+    it("exports the contract's input fields and metadata naming the contract", () => {
+      expect(Object.keys(tool.schema).sort()).toEqual([...tool.fields].sort());
+      expect(tool.metadata.name).toBe(tool.name);
+      expect(tool.metadata.annotations?.readOnlyHint).toBe(tool.readOnly);
+      expect(tool.metadata.annotations?.destructiveHint).toBe(false);
+    });
+
+    it(`calls buildContext then invoke with '${tool.name}', the args and surface 'mcp'`, async () => {
+      mocks.invoke.mockResolvedValue(tool.validOutput);
+      const result = await tool.handler(tool.args as never);
+      expect(mocks.buildContext).toHaveBeenCalledOnce();
+      expect(mocks.invoke).toHaveBeenCalledOnce();
+      expect(mocks.invoke).toHaveBeenCalledWith(tool.name, tool.args, fakeCtx, {
+        surface: "mcp",
+      });
+      expect(result).toEqual(tool.validOutput);
+    });
+
+    it("refuses an output the contract refuses (negative)", async () => {
+      mocks.invoke.mockResolvedValue(tool.invalidOutput);
+      await expect(tool.handler(tool.args as never)).rejects.toThrow();
+    });
+
+    it("propagates invoke errors", async () => {
+      mocks.invoke.mockRejectedValue(new Error("invoke failed"));
+      await expect(tool.handler(tool.args as never)).rejects.toThrow(
+        "invoke failed",
+      );
+    });
+  });
+}

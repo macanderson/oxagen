@@ -14,17 +14,18 @@
       "fleet": "Fleet",
       "agents": "Agent IAM",
       "tools": "Tools",
-      "ontology": "Ontology",
       "steering": "Steering",
       "spend": "Spend",
       "organization": "Organization",
       "billing": "Billing",
-      "audit": "Audit",
       "apiKeys": "API keys"
     },
     "switcher": {
-      "org": "Organization",
-      "ws": "Workspace"
+      "org": "Switch organization",
+      "ws": "Switch workspace",
+      "current": "current",
+      "denied": "You do not have permission to list these.",
+      "unavailable": "This list could not be loaded. Reload the page to try again."
     },
     "topbar": {
       "label": "Top bar",
@@ -45,12 +46,20 @@
       "footer": {
         "move": "move",
         "open": "open",
+        "escape": "esc",
         "close": "close"
       }
     },
     "mobileNav": {
-      "label": "Mobile",
-      "more": "More"
+      "label": "Primary",
+      "slots": {
+        "fleet": "Fleet",
+        "agents": "Agents",
+        "tools": "Tools",
+        "spend": "Spend"
+      },
+      "more": "More",
+      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}"
     },
     "drawer": {
       "title": "Navigation",

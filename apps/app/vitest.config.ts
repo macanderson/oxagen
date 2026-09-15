@@ -39,15 +39,8 @@ export default defineConfig({
         // Compiled by tsc, never executed (INV-24).
         "src/**/*.type-test.ts",
         "src/test/**",
-        // Route files are exercised by the Playwright suite against a running
-        // server, not in isolation.
-        "src/app/**/page.tsx",
-        "src/app/**/layout.tsx",
-        "src/app/**/loading.tsx",
-        "src/app/**/error.tsx",
-        "src/app/**/global-error.tsx",
-        "src/app/**/not-found.tsx",
-        "src/app/**/route.ts",
+        // Typed values for tests only (INV-22); never in the production graph.
+        "src/**/*.builders.ts",
       ],
       // Ratchet: raise to floor(measured - 2.5) as tests land, never lower, cap 90.
       thresholds: {

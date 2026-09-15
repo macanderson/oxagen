@@ -3,6 +3,9 @@
     "brand": {
       "name": "Oxagen",
       "home": "Oxagen home"
+    },
+    "dialog": {
+      "close": "Close"
     }
   }
 }

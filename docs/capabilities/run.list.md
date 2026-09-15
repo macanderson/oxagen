@@ -44,6 +44,9 @@ Each row:
 | `taskRef` | string or null | the goal a ledger run was admitted for |
 | `startedAt` | string | RFC 3339 |
 | `sealedAt` | string or null | null while live |
+| `replayGrade` | `inspect` \| `view` \| `fork` \| `retry` or null | the grade the seal recorded (spec §8.4), null while live, on a seal the recorder never graded, or on a broken row; never computed on read, and a caller renders the recorded word and nothing stronger |
+| `name` | string or null | the generated name (`summarize_run`), null until written |
+| `summary` | `{ text, generatedAt, model }` or null | the generated summary with the model that wrote it and the instant; labelled generated wherever it renders |
 
 ## Honesty
 

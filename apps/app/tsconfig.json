@@ -23,7 +23,8 @@
     "src/**/*.tsx",
     ".next/types/**/*.ts",
     "*.ts",
-    "e2e/**/*.ts"
+    "e2e/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", "src/test/arch/probes"]
 }

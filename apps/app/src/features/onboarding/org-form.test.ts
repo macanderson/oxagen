@@ -3,19 +3,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import onboardingMessages from "../../../messages/onboarding.json";
 import { RESERVED_ORG_SLUGS } from "@oxagen/oxagen/contracts/org.create";
-import { OrganizationForm, suggestNamespace, toSlug } from "./org-form";
+import { OrganizationForm, toSlug } from "./org-form";
 
-describe("toSlug and suggestNamespace", () => {
+describe("toSlug", () => {
   it("derives an address from a name", () => {
     expect(toSlug("Acme Robotics")).toBe("acme-robotics");
     expect(toSlug("  Ünïcode & Co.  ")).toBe("unicode-co");
     expect(toSlug(`${"a".repeat(39)} b`)).toBe("a".repeat(39));
-  });
-
-  it("suggests a namespace of at most six characters", () => {
-    expect(suggestNamespace("acme-robotics")).toBe("acme");
-    expect(suggestNamespace("core-platform")).toBe("core");
-    expect(suggestNamespace("internationalization")).toBe("intern");
   });
 });
 
@@ -48,7 +42,6 @@ describe("OrganizationForm", () => {
   const valid = {
     name: "Acme Robotics",
     slug: "acme",
-    namespace: "acme",
     workspaceName: "core-platform",
     workspaceSlug: "core-platform",
   };
@@ -58,9 +51,6 @@ describe("OrganizationForm", () => {
   });
 
   it.each([
-    [{ namespace: "a" }, "namespace", "namespaceInvalid"],
-    [{ namespace: "toolong7" }, "namespace", "namespaceInvalid"],
-    [{ namespace: "ac-me" }, "namespace", "namespaceInvalid"],
     [{ slug: "Acme Robotics" }, "slug", "slugInvalid"],
     [{ slug: "new-organization" }, "slug", "slugReserved"],
     [{ slug: "login" }, "slug", "slugReserved"],
@@ -75,20 +65,19 @@ describe("OrganizationForm", () => {
     expect(r.error?.issues.find((i) => i.path[0] === field)?.message).toBe(key);
   });
 
-  it("every form error key has catalog copy, and the catalog carries no other", () => {
+  it("every form error key and both alerts have catalog copy, and the catalog carries no other", () => {
     const keys = [
       "orgNameRequired",
       "orgNameTooLong",
       "slugInvalid",
       "slugReserved",
-      "namespaceInvalid",
       "workspaceNameRequired",
       "workspaceNameTooLong",
       "workspaceSlugInvalid",
       "workspaceSlugReserved",
       "slugTaken",
-      "namespaceTaken",
       "failed",
+      "denied",
     ];
     expect(Object.keys(onboardingMessages.onboarding.errors).sort()).toEqual(
       [...keys].sort(),

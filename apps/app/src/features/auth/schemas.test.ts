@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import authMessages from "../../../messages/auth.json";
 import {
   ForgotPasswordSchema,
@@ -154,5 +155,16 @@ describe("error keys", () => {
     ];
     for (const key of keys)
       expect(authMessages.auth.errors).toHaveProperty(key);
+  });
+
+  it("drops an issue whose message is not a catalog key (negative)", () => {
+    const result = z
+      .object({ email: z.string(), name: z.string() })
+      .safeParse({ email: 1, name: 2 });
+    expect(errorsOf(result)).toEqual({});
+    const keyed = z
+      .object({ email: z.string({ error: "emailInvalid" }) })
+      .safeParse({ email: 1 });
+    expect(errorsOf(keyed)).toEqual({ email: "emailInvalid" });
   });
 });

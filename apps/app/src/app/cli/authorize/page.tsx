@@ -1,23 +1,25 @@
-import { redirect } from "next/navigation";
-
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { dataSource } from "@/data/source";
 import {
   CliConsentForm,
-  authorizeParamErrors,
   authorizeReturnPath,
-  getAuthUser,
-  loadCliScopes,
+  checkAuthorizeParams,
+  loadConsentChoices,
   readAuthorizeParams,
-  withNext,
 } from "@/features/auth";
-import {
-  AuthColumn,
-  AuthHeading,
-  AuthShell,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { requireUser } from "@/server/viewer";
+import { redirectTo } from "@/shared/navigation";
+import { routes } from "@/shared/safe-path";
+import { AuthColumn, AuthShell, AuthSkeleton } from "@/ui/auth-shell";
 import { OutcomePanel } from "@/ui/form-feedback";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("cliAuthorize") };
+}
 
 // The authorize leg of the CLI's loopback OAuth + PKCE login (RFC 8252). A bad
 // redirect_uri is never followed, not even to report an error: it renders here.
@@ -37,12 +39,15 @@ async function CliAuthorize({
   searchParams: PageProps<"/cli/authorize">["searchParams"];
 }) {
   const params = readAuthorizeParams(await searchParams);
-  const t = await getTranslations("auth.cli");
-  const errors = authorizeParamErrors(params);
-  if (errors.length > 0) {
+  const [t, pages] = await Promise.all([
+    getTranslations("auth.cli"),
+    getTranslations("pages"),
+  ]);
+  const checked = checkAuthorizeParams(params);
+  if (!checked.ok) {
     return (
       <AuthColumn>
-        <AuthHeading kicker={t("title")} title={t("invalidTitle")} />
+        <PageHeader title={pages("cliAuthorize")} />
         <OutcomePanel
           tone="deny"
           testId="cli-invalid"
@@ -50,7 +55,7 @@ async function CliAuthorize({
         >
           <p>{t("invalidBody")}</p>
           <ul className="mt-2 list-inside list-disc text-left">
-            {errors.map((e) => (
+            {checked.errors.map((e) => (
               <li key={e}>{t(`invalid.${e}`)}</li>
             ))}
           </ul>
@@ -59,23 +64,34 @@ async function CliAuthorize({
     );
   }
 
-  const user = await getAuthUser();
-  if (!user) redirect(withNext("/login", authorizeReturnPath(params)));
-  const orgs = await loadCliScopes(user.id);
+  const returnPath = authorizeReturnPath(params);
+  const ctx = await requireUser(returnPath);
+  const choices = await loadConsentChoices(ctx, dataSource());
+  if (!choices.ok) {
+    return (
+      <AuthColumn>
+        <PageHeader title={pages("cliAuthorize")} />
+        <OutcomePanel
+          tone="deny"
+          testId="cli-unavailable"
+          title={t("errors.failed")}
+        />
+      </AuthColumn>
+    );
+  }
   // A brand-new account (`oxagen auth login --signup`, the desktop installer's
   // "Create an account", or a social sign-up that landed here) has nothing to
   // authorize yet: create the organization and its first workspace, then come
   // back to this consent page with the PKCE parameters intact.
-  if (orgs.length === 0)
-    redirect(withNext("/new-organization", authorizeReturnPath(params)));
+  if (choices.value.length === 0)
+    redirectTo(routes.newOrganization(returnPath));
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("title")}
-        title={t("title")}
-        lead={t("lead", { label: params.label })}
+      <PageHeader
+        title={pages("cliAuthorize")}
+        description={t("lead", { label: params.label })}
       />
-      <CliConsentForm params={params} orgs={orgs} />
+      <CliConsentForm params={params} orgs={choices.value} />
     </AuthColumn>
   );
 }

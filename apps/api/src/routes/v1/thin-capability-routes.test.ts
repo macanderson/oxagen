@@ -27,11 +27,15 @@ vi.mock("../../lib/context", () => ({
   capabilityContext: mocks.capabilityContext,
 }));
 
+import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
+import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
 import { agentDefinitionDelete } from "@oxagen/oxagen/contracts/agent.definition.delete";
 import { agentDefinitionRevise } from "@oxagen/oxagen/contracts/agent.definition.revise";
 import { agentDefinitionSuggest } from "@oxagen/oxagen/contracts/agent.definition.suggest";
 import { agentDefinitionSummarize } from "@oxagen/oxagen/contracts/agent.definition.summarize";
 import { agentEnvironmentBind } from "@oxagen/oxagen/contracts/agent.environment.bind";
+import { agentGet } from "@oxagen/oxagen/contracts/agent.get";
+import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { agentEnvironmentUnbind } from "@oxagen/oxagen/contracts/agent.environment.unbind";
 import { agentMcpResolve } from "@oxagen/oxagen/contracts/agent.mcp.resolve";
 import { agentMemoryDelete } from "@oxagen/oxagen/contracts/agent.memory.delete";
@@ -47,13 +51,18 @@ import { agentMemoryImportParse } from "@oxagen/oxagen/contracts/agent.memory_im
 import { agentMemoryPromotionDismiss } from "@oxagen/oxagen/contracts/agent.memory_promotion.dismiss";
 import { agentMemoryPromotionCandidates } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.memory_promotion.rationales";
+import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
+import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
+import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
+import { agentToolbeltGet } from "@oxagen/oxagen/contracts/agent.toolbelt.get";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import { billingAutoTopupSet } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
+import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
@@ -73,7 +82,12 @@ import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
+import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
+import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
+import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
+import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
+import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
@@ -82,11 +96,15 @@ import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.e
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
+import { agentCredentialRotateRoute } from "./agent.credential.rotate";
+import { agentDefinitionCommitRoute } from "./agent.definition.commit";
 import { agentDefinitionDeleteRoute } from "./agent.definition.delete";
 import { agentDefinitionReviseRoute } from "./agent.definition.revise";
 import { agentDefinitionSuggestRoute } from "./agent.definition.suggest";
 import { agentDefinitionSummarizeRoute } from "./agent.definition.summarize";
 import { agentEnvironmentBindRoute } from "./agent.environment.bind";
+import { agentGetRoute } from "./agent.get";
+import { agentListRoute } from "./agent.list";
 import { agentEnvironmentUnbindRoute } from "./agent.environment.unbind";
 import { agentMcpResolveRoute } from "./agent.mcp.resolve";
 import { agentMemoryDeleteRoute } from "./agent.memory.delete";
@@ -102,13 +120,18 @@ import { agentMemoryImportParseRoute } from "./agent.memory_import.parse";
 import { agentMemoryPromotionDismissRoute } from "./agent.memory_promotion.dismiss";
 import { agentMemoryPromotionCandidatesRoute } from "./agent.memory_promotion.list";
 import { agentMemoryPromotionRationalesRoute } from "./agent.memory_promotion.rationales";
+import { agentRegisterRoute } from "./agent.register";
+import { agentRetireRoute } from "./agent.retire";
 import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
+import { agentSuspendRoute } from "./agent.suspend";
+import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingAutoTopupSetRoute } from "./billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
+import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
@@ -135,6 +158,11 @@ import { spendStatementExportRoute } from "./spend.statement.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
 import { tachoCommandListRoute } from "./tacho.command.list";
+import { iamRoleCreateRoute } from "./iam.role.create";
+import { iamRoleGrantsSetRoute } from "./iam.role.grants.set";
+import { iamRoleDeleteRoute } from "./iam.role.delete";
+import { workspaceArchiveRoute } from "./workspace.archive";
+import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
 
 const CTX = {
@@ -286,6 +314,108 @@ const ROUTES: ThinRoute[] = [
     capability: contextPrMerge.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
+  {
+    file: "agent.list",
+    route: agentListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentList.name,
+    body: { limit: 10 },
+    invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
+    file: "agent.get",
+    route: agentGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentGet.name,
+    body: { agentId: "release-bot" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "agent.register",
+    route: agentRegisterRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentRegister.name,
+    body: { slug: "release-bot", name: "Release bot", harness: "stella" },
+    expectedInput: {
+      slug: "release-bot",
+      name: "Release bot",
+      harness: "stella",
+      validityDays: 180,
+    },
+    // The slug regex refuses an upper-case slug.
+    invalidBody: {
+      slug: "Release-Bot",
+      name: "Release bot",
+      harness: "stella",
+    },
+    status: 200,
+  },
+  {
+    file: "agent.credential.rotate",
+    route: agentCredentialRotateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentCredentialRotate.name,
+    body: { agentId: "agt_1", validityDays: 30 },
+    invalidBody: { agentId: "agt_1", validityDays: 400 },
+    status: 200,
+  },
+  {
+    file: "agent.suspend",
+    route: agentSuspendRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentSuspend.name,
+    body: { agentId: "agt_1" },
+    expectedInput: { agentId: "agt_1", suspended: true },
+    invalidBody: { agentId: "agt_1", suspended: "yes" },
+    status: 200,
+  },
+  {
+    file: "agent.retire",
+    route: agentRetireRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentRetire.name,
+    body: { agentId: "agt_1", reason: "decommissioned" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "agent.definition.commit",
+    route: agentDefinitionCommitRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentDefinitionCommit.name,
+    body: {
+      agentId: "agt_1",
+      branch: "agents/release-bot",
+      source: 'schema = "agent-definition/v0.1"\nslug = "release-bot"\n',
+    },
+    // `..` is not a git branch name.
+    invalidBody: {
+      agentId: "agt_1",
+      branch: "agents/../main",
+      source: 'schema = "agent-definition/v0.1"\n',
+    },
+    status: 200,
+  },
+  {
+    file: "agent.toolbelt.get",
+    route: agentToolbeltGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentToolbeltGet.name,
+    body: { agentId: "agt_1", mode: "searchable" },
+    invalidBody: { agentId: "agt_1", mode: "compact" },
+    status: 200,
+  },
+  {
+    file: "tacho.incident.list",
+    route: tachoIncidentListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoIncidentList.name,
+    body: { open: true, limit: 20 },
+    invalidBody: { open: "yes" },
     status: 200,
   },
   {
@@ -551,6 +681,23 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "billing.gau_bucket.purchase",
+    route: billingGauBucketPurchaseRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingGauBucketPurchase.name,
+    body: {
+      quantityGau: 10_000,
+      successPath: "/acme/billing?checkout=success",
+      cancelPath: "/acme/billing?checkout=cancel",
+    },
+    invalidBody: {
+      quantityGau: 10_000,
+      successPath: "https://evil.example/",
+      cancelPath: "/acme/billing",
+    },
+    status: 200,
+  },
+  {
     file: "billing.invoice.list",
     route: billingInvoiceListRoute as unknown as Hono<never>,
     method: "POST",
@@ -578,14 +725,14 @@ const ROUTES: ThinRoute[] = [
       enabled: true,
       period: "rolling",
       windowDays: 30,
-      limitUsd: 250,
+      limit: { micros: "250000000", currency: "USD" },
     },
     // The refinement rejects a rolling budget with no window.
     invalidBody: {
       scope: "workspace",
       enabled: true,
       period: "rolling",
-      limitUsd: 250,
+      limit: { micros: "250000000", currency: "USD" },
     },
     status: 200,
   },
@@ -710,6 +857,56 @@ const ROUTES: ThinRoute[] = [
     body: { runId: "tse_a1b2c3" },
     expectedInput: { runId: "tse_a1b2c3", limit: 50 },
     invalidBody: { runId: "not-a-run-id" },
+    status: 200,
+  },
+  {
+    file: "iam.role.create",
+    route: iamRoleCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleCreate.name,
+    body: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      permissions: ["run.read"],
+    },
+    expectedInput: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      description: null,
+      permissions: ["run.read"],
+    },
+    invalidBody: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      permissions: ["org.*"],
+    },
+    status: 201,
+  },
+  {
+    file: "iam.role.grants.set",
+    route: iamRoleGrantsSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleGrantsSet.name,
+    body: { roleId: "rol_1", permissions: ["run.read"] },
+    invalidBody: { roleId: "rol_1", permissions: [] },
+    status: 200,
+  },
+  {
+    file: "iam.role.delete",
+    route: iamRoleDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleDelete.name,
+    body: { roleId: "rol_1" },
+    invalidBody: { roleId: "Owner" },
+    status: 200,
+  },
+  {
+    file: "workspace.archive",
+    route: workspaceArchiveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workspaceArchive.name,
+    body: { workspaceId: "wrk_1" },
+    invalidBody: { workspaceId: "core" },
     status: 200,
   },
   {

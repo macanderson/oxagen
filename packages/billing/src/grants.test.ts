@@ -202,8 +202,10 @@ function makeSession(
     id: "cs_test_001",
     mode: "payment",
     paymentStatus: "paid",
+    customerId: "cus_test_001",
     metadata: { org_id: "org-abc" },
     subscriptionId: null,
+    invoiceId: null,
     ...overrides,
   };
 }

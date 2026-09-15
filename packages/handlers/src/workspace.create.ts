@@ -1,22 +1,37 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+// `create_workspace`: a workspace in the caller's org.
+//
+//   1. Role gate — assertOrgRole: org Owner or Admin, or the Owner of the
+//      workspace the call is scoped to (the contract's defaultRoles; INV-29),
+//      for the signed-in user or the creator of the API key
+//      (resolveActingUserId). The gate refuses a call with no acting user,
+//      so the bootstrap below always has a creator.
+//   2. The slug is unique in the org: the pre-check and the unique index's
+//      23505 both read as `conflict` / `slug_taken`.
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 
+const slugTaken = (slug: string) =>
+  new HandlerError({
+    code: "conflict",
+    reason: "slug_taken",
+    message: `A workspace with the slug ${slug} already exists in this organization`,
+  });
+
 export const workspaceCreateHandler: CapabilityHandler<
   typeof workspaceCreate
 > = async (input, ctx) => {
-  if (!ctx.userId) {
-    logger.warn(
-      { orgId: ctx.orgId },
-      "workspace.create: rejected — no authenticated user",
-    );
-    throw new Error("workspace.create requires an authenticated user");
-  }
-  const userId = ctx.userId;
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+  const userId = actingUserId as string;
 
   const tenant = await withTenantDb((tx) =>
     tx.query.organizations.findFirst({
@@ -26,11 +41,11 @@ export const workspaceCreateHandler: CapabilityHandler<
   );
   if (!tenant) {
     logger.warn({ orgId: ctx.orgId }, "workspace.create: tenant not found");
-    throw new Error("tenant not found");
+    throw new HandlerError({ code: "not_found", reason: "org_not_found" });
   }
 
-  // (org_id, slug) uniqueness pre-checked for friendly errors. The
-  // composite unique index still enforces it as a hard constraint.
+  // (org_id, slug) uniqueness pre-checked for a typed refusal. The composite
+  // unique index still enforces it as a hard constraint.
   const existing = await withTenantDb((tx) =>
     tx.query.workspaces.findFirst({
       where: and(
@@ -45,7 +60,7 @@ export const workspaceCreateHandler: CapabilityHandler<
       { orgId: ctx.orgId, slug: input.slug },
       "workspace.create: slug already in use (pre-check)",
     );
-    throw new Error(`slug "${input.slug}" already in use for this tenant`);
+    throw slugTaken(input.slug);
   }
 
   try {
@@ -100,7 +115,7 @@ export const workspaceCreateHandler: CapabilityHandler<
         { orgId: ctx.orgId, slug: input.slug },
         "workspace.create: slug conflict (race)",
       );
-      throw new Error(`slug "${input.slug}" already in use for this tenant`);
+      throw slugTaken(input.slug);
     }
     logger.error(
       { err, orgId: ctx.orgId },

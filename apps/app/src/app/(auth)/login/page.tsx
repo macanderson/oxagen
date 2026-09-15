@@ -1,21 +1,17 @@
-import Link from "next/link";
-
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import {
-  LoginForm,
-  OAuthButtons,
-  sanitizeNext,
-  nextParam,
-  withNext,
-} from "@/features/auth";
-import {
-  AuthColumn,
-  AuthFooter,
-  AuthHeading,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { LoginForm, OAuthButtons } from "@/features/auth";
+import { readNext, routes } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("login") };
+}
 
 export default function LoginPage(props: PageProps<"/login">) {
   return (
@@ -32,14 +28,17 @@ async function Login({
 }) {
   const params = await searchParams;
   // Only a same-origin relative path survives; anything else lands on "/".
-  const next = sanitizeNext(nextParam(params));
-  const t = await getTranslations("auth");
+  const next = readNext(params);
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("login.eyebrow")}
-        title={t("login.title")}
-        lead={t("login.lead")}
+      <PageHeader
+        eyebrow={t("login.eyebrow")}
+        title={pages("login")}
+        description={t("login.lead")}
       />
       <div className="flex flex-col gap-4">
         <OAuthButtons callbackURL={next} />
@@ -47,9 +46,9 @@ async function Login({
       </div>
       <AuthFooter>
         {t("login.newHere")}{" "}
-        <Link href={withNext("/signup", next)} className={linkText}>
+        <SafeLink to={routes.signup(next)} className={linkText}>
           {t("login.createAccount")}
-        </Link>
+        </SafeLink>
       </AuthFooter>
       <AuthFooter>{t("login.haveInvite")}</AuthFooter>
     </AuthColumn>

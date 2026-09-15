@@ -1,0 +1,188 @@
+{
+  "name": "list_incidents",
+  "domain": "tacho",
+  "description": "List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "open": {
+        "type": "boolean"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "unobserved_session",
+                "hooks_removed",
+                "config_change",
+                "telemetry_gap",
+                "chain_break",
+                "checkpoint_lapse",
+                "token_replay",
+                "policy_violation",
+                "spoofed_event",
+                "daemon_down",
+                "otel_missing",
+                "unknown_model_cost"
+              ]
+            },
+            "severity": {
+              "anyOf": [
+                {
+                  "const": 1
+                },
+                {
+                  "const": 3
+                },
+                {
+                  "const": 10
+                }
+              ]
+            },
+            "detectedAt": {
+              "type": "string"
+            },
+            "detectedBy": {
+              "type": "string",
+              "enum": [
+                "collector",
+                "control_plane",
+                "human"
+              ]
+            },
+            "hostEnrollmentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessionId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "evidence": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "resolvedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "resolutionNote": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "severity",
+            "detectedAt",
+            "detectedBy",
+            "hostEnrollmentId",
+            "sessionId",
+            "agentKey",
+            "evidence",
+            "resolvedAt",
+            "resolutionNote"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "items",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

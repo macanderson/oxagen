@@ -51,7 +51,18 @@ describe("POST workspace/list", () => {
     });
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_workspaces",
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
+      fakeCtx,
+      { surface: "api" },
+    );
+  });
+
+  it("forwards includeArchived when the caller asks for archived workspaces", async () => {
+    const res = await post({ orgSlug: "acme", includeArchived: true });
+    expect(res.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "list_workspaces",
+      { orgSlug: "acme", includeArchived: true },
       fakeCtx,
       { surface: "api" },
     );

@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -11,7 +11,8 @@ import { logger } from "./logger";
  * no active tenant scope yet), and the WHERE clause is keyed to the caller's own
  * userId, so it can only ever return the caller's own memberships. Deleted orgs
  * are filtered out; suspended ones remain visible so the user understands why
- * they can't act.
+ * they can't act. Rows come in the order the user joined, so the first is the
+ * membership the app's `/` landing opens.
  *
  * Auth: supports both session auth (ctx.userId set) and API-key auth
  * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
@@ -81,7 +82,8 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (
           eq(schema.orgUsers.userId, resolvedUserId),
           ne(schema.organizations.status, "deleted"),
         ),
-      ),
+      )
+      .orderBy(asc(schema.orgUsers.joinedAt), asc(schema.organizations.slug)),
   );
   return {
     organizations: rows.map((r) => ({

@@ -14,13 +14,16 @@
 //      b. Soft-delete all principal_role_assignments for the target's principal
 //         in this org (set deletedAt = now).
 //      c. Mark the target's principal status = 'deleted'.
+//      d. Delete the org_users membership row.
+//      e. Soft-delete the target's CLI session keys in this org.
 //   6. Emit org.member_removed security event (fire-and-forget).
 
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, eq, isNull, count } from "drizzle-orm";
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
+import { and, eq, isNull, count, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 // System org role names that carry Owner privileges.
@@ -279,6 +282,27 @@ export const orgMemberRemoveHandler: CapabilityHandler<
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
           eq(schema.orgUsers.userId, input.targetUserId),
+        ),
+      );
+
+    // (e) Revoke the CLI session keys the target minted in this org. A CLI
+    // session key authenticates as its creator, so it must not outlive the
+    // membership (resolveApiKey also refuses one whose creator left).
+    const revokedAt = new Date();
+    await tx
+      .update(schema.apiKeys)
+      .set({
+        deletedAt: revokedAt,
+        deletedByUserId: actorId,
+        updatedAt: revokedAt,
+        updatedByUserId: actorId,
+      })
+      .where(
+        and(
+          eq(schema.apiKeys.orgId, ctx.orgId),
+          eq(schema.apiKeys.createdByUserId, input.targetUserId),
+          sql`${schema.apiKeys.scope}->>'purpose' = ${CLI_SESSION_SCOPE_PURPOSE}`,
+          isNull(schema.apiKeys.deletedAt),
         ),
       );
   });

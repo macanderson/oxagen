@@ -153,6 +153,59 @@
                   "type": "null"
                 }
               ]
+            },
+            "replayGrade": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "inspect",
+                    "view",
+                    "fork",
+                    "retry"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "generatedAt",
+                    "model"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -167,7 +220,10 @@
             "cost",
             "taskRef",
             "startedAt",
-            "sealedAt"
+            "sealedAt",
+            "replayGrade",
+            "name",
+            "summary"
           ],
           "additionalProperties": false
         }

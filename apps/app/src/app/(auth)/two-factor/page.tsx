@@ -1,14 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { TwoFactorForm, nextParam, sanitizeNext } from "@/features/auth";
-import {
-  AuthColumn,
-  AuthFooter,
-  AuthHeading,
-  AuthSkeleton,
-} from "@/ui/auth-shell";
+import { TwoFactorForm } from "@/features/auth";
+import { readNext } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("twoFactor") };
+}
 
 // Public: after the password step the person holds only Better Auth's short-lived
 // two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS).
@@ -26,14 +29,14 @@ async function TwoFactor({
   searchParams: PageProps<"/two-factor">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(nextParam(params));
-  const t = await getTranslations("auth");
+  const next = readNext(params);
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
     <AuthColumn>
-      <AuthHeading
-        kicker={t("twoFactor.eyebrow")}
-        title={t("twoFactor.title")}
-      />
+      <PageHeader eyebrow={t("twoFactor.eyebrow")} title={pages("twoFactor")} />
       <TwoFactorForm next={next} />
       <AuthFooter>
         <Link href="/login" className={linkText}>

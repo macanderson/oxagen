@@ -81,6 +81,7 @@ vi.mock("@/lib/routes", () => ({
 }));
 
 import { getSpendBudgetsAction, setSpendBudgetAction } from "./actions";
+import { moneyFromUsd } from "./spend-budget-format";
 import type { SpendBudgetStatus } from "./spend-budget-format";
 
 const SESSION = { user: { id: "user-1" } };
@@ -102,9 +103,9 @@ function orgBudget(
     enabled: true,
     period: "monthly",
     windowDays: null,
-    limitUsd: 1000,
-    spentUsd: 250,
-    projectedUsd: 500,
+    limit: moneyFromUsd(1000),
+    spent: moneyFromUsd(250),
+    projected: moneyFromUsd(500),
     ratio: 0.25,
     state: "ok",
     reachedThreshold: 0,
@@ -121,8 +122,8 @@ function workspaceBudget(
     ...orgBudget(),
     scope: "workspace",
     publicId: "bdg_ws1",
-    limitUsd: 100,
-    spentUsd: 96,
+    limit: moneyFromUsd(100),
+    spent: moneyFromUsd(96),
     ratio: 0.96,
     state: "threshold_95",
     reachedThreshold: 95,
@@ -160,7 +161,7 @@ describe("unauthenticated — no session", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 100,
+      limit: moneyFromUsd(100),
     });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -187,7 +188,7 @@ describe("Member — can read, cannot write", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: moneyFromUsd(1000),
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -227,7 +228,7 @@ describe("non-billing-manager — assertBillingManager denies", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: moneyFromUsd(1000),
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("permission");
@@ -248,7 +249,7 @@ describe("billing manager — can read and write", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 1000,
+      limit: moneyFromUsd(1000),
     });
     expect(result.ok).toBe(true);
   });
@@ -314,8 +315,8 @@ describe("getSpendBudgetsAction — invoke throws", () => {
 describe("setSpendBudgetAction — happy path", () => {
   it("returns {ok:true, budget} and revalidates the spend-budgets path", async () => {
     const updated = workspaceBudget({
-      limitUsd: 200,
-      spentUsd: 96,
+      limit: moneyFromUsd(200),
+      spent: moneyFromUsd(96),
       ratio: 0.48,
       state: "ok",
     });
@@ -325,14 +326,19 @@ describe("setSpendBudgetAction — happy path", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 200,
+      limit: moneyFromUsd(200),
     });
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.budget).toEqual(updated);
     expect(mockInvoke).toHaveBeenCalledWith(
       "set_spend_budget",
-      { scope: "workspace", enabled: true, period: "monthly", limitUsd: 200 },
+      {
+        scope: "workspace",
+        enabled: true,
+        period: "monthly",
+        limit: moneyFromUsd(200),
+      },
       expect.objectContaining({
         orgId: "org-1",
         workspaceId: "ws-1",
@@ -355,7 +361,7 @@ describe("setSpendBudgetAction — happy path", () => {
       enabled: true,
       period: "rolling",
       windowDays: 14,
-      limitUsd: 1000,
+      limit: moneyFromUsd(1000),
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -365,7 +371,7 @@ describe("setSpendBudgetAction — happy path", () => {
         enabled: true,
         period: "rolling",
         windowDays: 14,
-        limitUsd: 1000,
+        limit: moneyFromUsd(1000),
       },
       expect.anything(),
       { surface: "agent" },
@@ -379,7 +385,7 @@ describe("setSpendBudgetAction — happy path", () => {
       scope: "workspace",
       enabled: true,
       period: "monthly",
-      limitUsd: 100,
+      limit: moneyFromUsd(100),
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -402,7 +408,7 @@ describe("setSpendBudgetAction — invoke throws", () => {
       enabled: true,
       period: "rolling",
       windowDays: null,
-      limitUsd: 1000,
+      limit: moneyFromUsd(1000),
     });
 
     expect(result.ok).toBe(false);

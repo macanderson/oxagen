@@ -12,10 +12,10 @@ The CLI needs one credential: an **Oxagen platform token** (an API key, `oxk_liv
 Creating one takes a minute:
 
 1. Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**.
-2. Enter your name, email, and a password — or use **Google** / **GitHub** social sign-in. Email verification is not required in the current release; you are signed in immediately.
+2. Enter your name, email, and a password, or use **Google** / **GitHub** social sign-in. Email verification is not required in the current release; you are signed in immediately.
 3. On the **New organization** screen, enter an organization name (a URL-safe slug is generated; you can edit it) and click **Create organization**. This also creates a default workspace, and you become the **Owner** of both.
 
-You land at `/{org}/{workspace}/ask`. Note your **org slug** and **workspace slug** from the URL — the CLI needs them.
+You land at `/{org}/{workspace}/ask`. Note your **org slug** and **workspace slug** from the URL: the CLI needs them.
 
 For a full tour of the app, see [Getting started](/docs/getting-started).
 
@@ -24,8 +24,8 @@ For a full tour of the app, see [Getting started](/docs/getting-started).
 The CLI authenticates to the platform with an API key (`oxk_live_…`), not your password:
 
 1. In the app, go to **Organization → Developer → Tokens**.
-2. Click **Create API key**, give it a name, and select the scopes it needs (at minimum, the capabilities you'll call — graph read, memory, budgets, environments, secrets).
-3. **Copy the key now** — it is shown only once.
+2. Click **Create API key**, give it a name, and select the scopes it needs (at minimum, the capabilities you'll call: graph read, memory, budgets, environments, secrets).
+3. **Copy the key now**: it is shown only once.
 
 API keys carry org and workspace scope and are passed as a Bearer token by the CLI.
 
@@ -43,7 +43,7 @@ After logging in, an interactive picker lets you choose your org and workspace. 
 oxagen login --org your-org-slug --workspace your-workspace-slug
 ```
 
-**For CI / headless environments**, pass the token directly — no browser, no interactive prompts:
+**For CI / headless environments**, pass the token directly: no browser, no interactive prompts:
 
 ```bash
 oxagen login --token oxk_live_… --org your-org-slug --workspace your-workspace-slug
@@ -82,7 +82,7 @@ To target a self-hosted or staging API, set `OXAGEN_API_URL`; it defaults to `ht
 | `~/.config/oxagen/config.json` | Platform `token`, `org`, `workspace`, and `api-url`. Written by `oxagen login`. |
 | `<project>/.oxagen/workspace.json` | The project's org + workspace binding, written by `oxagen init`. Contains no secrets and is safe to commit. |
 
-The config file contains a secret. It lives under your home directory with your user permissions — keep it off shared machines and out of version control.
+The config file contains a secret. It lives under your home directory with your user permissions: keep it off shared machines and out of version control.
 
 ## Next step
 

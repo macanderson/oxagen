@@ -102,6 +102,27 @@ export function periodFor(
   return { start: addMonths(anchor, k), end: addMonths(anchor, k + 1) };
 }
 
+// ── The block ───────────────────────────────────────────────────────────────
+
+/**
+ * The price of one block in minor units of the terms' currency:
+ * `rate_per_gau_micros × block_size_gau ÷ 10,000`. The CHECK on both terms
+ * tables (`(rate_per_gau_micros * block_size_gau) % 10000 = 0`) makes the
+ * division exact, so a Checkout line needs no rounding; terms that violate
+ * it did not come from those tables and are refused rather than rounded.
+ */
+export function blockPriceCents(
+  terms: Pick<GauTerms, "ratePerGauMicros" | "blockSizeGau">,
+): number {
+  const micros = terms.ratePerGauMicros * BigInt(terms.blockSizeGau);
+  if (micros % 10_000n !== 0n) {
+    throw new Error(
+      `billing: block price is not a whole number of cents (${micros} micros)`,
+    );
+  }
+  return Number(micros / 10_000n);
+}
+
 // ── The bucket ──────────────────────────────────────────────────────────────
 
 export type GauBucketRow = typeof schema.gauBuckets.$inferSelect;

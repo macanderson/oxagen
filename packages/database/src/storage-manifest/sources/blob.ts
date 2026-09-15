@@ -82,6 +82,33 @@ export const BLOB_ASSETS: readonly BlobAssetSpec[] = [
       "Public profile/logo images; the blob URL is stored on the owning " +
       "entity's avatar_url column (no generated_assets row).",
   },
+  {
+    kind: "evidence_body",
+    kinds: ["evidence_body"],
+    referencedBy: [
+      "postgres:agent.agent_run_events",
+      "postgres:tacho.sessions",
+    ],
+    access: "private",
+    description:
+      "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, " +
+      "envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<key id>/<sha256>; " +
+      "agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the " +
+      "reference (ADR-058).",
+  },
+  {
+    kind: "evidence_segment",
+    kinds: ["evidence_segment", "evidence_export"],
+    referencedBy: [
+      "postgres:agent.agent_run_attempt_seals",
+      "postgres:evidence.run_exports",
+    ],
+    access: "private",
+    description:
+      "Per-seal archive segments (frame envelopes as zstd NDJSON, written " +
+      "once at seal) and export bundles; the seal's archive_segment_ref and " +
+      "run_exports.bundle_ref hold the reference (ADR-058).",
+  },
 ];
 
 /**

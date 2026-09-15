@@ -15,6 +15,15 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
+import { agentList } from "./agent.list";
+import { agentGet } from "./agent.get";
+import { agentRegister } from "./agent.register";
+import { agentCredentialRotate } from "./agent.credential.rotate";
+import { agentSuspend } from "./agent.suspend";
+import { agentRetire } from "./agent.retire";
+import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentToolbeltGet } from "./agent.toolbelt.get";
+import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -56,6 +65,12 @@ import { spendWasteList } from "./spend.waste";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { runGet } from "./run.get";
+import { runFrameBodyGet } from "./run.frame_body.get";
+import { runTranscriptGet } from "./run.transcript.get";
+import { runExport } from "./run.export";
+import { runBisect } from "./run.bisect";
+import { runFork } from "./run.fork";
+import { runSummarize } from "./run.summarize";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -90,6 +105,7 @@ import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
+import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
 import { billingInvoiceList } from "./billing.invoice.list";
 import { billingOrgTermsSet } from "./billing.org_terms.set";
 import { billingSubscriptionRead } from "./billing.subscription.read";
@@ -114,6 +130,7 @@ import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
 import { workspaceList } from "./workspace.list";
+import { workspaceArchive } from "./workspace.archive";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
@@ -150,6 +167,9 @@ import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
 import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
+import { iamRoleCreate } from "./iam.role.create";
+import { iamRoleGrantsSet } from "./iam.role.grants.set";
+import { iamRoleDelete } from "./iam.role.delete";
 import { conversationChat } from "./conversation.chat";
 import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
@@ -453,6 +473,15 @@ export {
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -512,6 +541,12 @@ export {
   tachoSessionGet,
   runList,
   runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
   runCostGet,
   spendGet,
   spendDrill,
@@ -526,6 +561,7 @@ export {
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingOrgTermsSet,
   billingSubscriptionRead,
@@ -550,6 +586,7 @@ export {
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -586,6 +623,9 @@ export {
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
   listMembers,
   workspaceInviteSend,
@@ -724,6 +764,15 @@ export const contracts: readonly CapabilityDeclaration[] = [
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -780,6 +829,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoSessionGet,
   runList,
   runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
   runCostGet,
   spendGet,
   spendDrill,
@@ -794,6 +849,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
+  billingGauBucketPurchase,
   billingInvoiceList,
   billingOrgTermsSet,
   billingSubscriptionRead,
@@ -818,6 +874,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -854,6 +911,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
   listMembers,
   workspaceInviteSend,

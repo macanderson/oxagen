@@ -20,16 +20,23 @@
 //
 // A member who lacks a permission is not an exception here: the kernel refuses
 // the read or write and the page renders `denied`.
+//
+// readInvitation is the one read here that needs no session: /invite/[token]
+// renders for a signed-out visitor, and the token is the capability (#3049).
 import "server-only";
 import { headers } from "next/headers";
-import { notFound, permanentRedirect, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
+import { permanentRedirectTo, redirectTo } from "@/shared/navigation";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
 import { type InvitationRecord, systemLookups } from "./tenancy-lookups";
 import { canonicalPath, resolveViewerWith } from "./viewer-resolution";
 import { MINT } from "./viewer-mint";
+
+export type { InvitationRecord } from "./tenancy-lookups";
 
 /** The stored set: packages/database/src/schema/org.ts:96 and :170 CHECK lower(role) IN (…). */
 export type OrgRole =
@@ -200,22 +207,21 @@ const requireCtx = cache(
           ? OrgCtx.mint(MINT, result.org)
           : WsCtx.mint(MINT, { ...result.org, ...result.ws });
       case "unauthenticated":
-        return redirect("/login");
+        return redirectTo(routes.login());
       case "not_found":
         return notFound();
       case "mfa_enroll":
-        return redirect(MFA_ENROLL_PATH);
+        return redirectTo(MFA_ENROLL_PATH);
       case "redirect": {
         const url = await requestUrl();
-        return permanentRedirect(
-          canonicalPath({
-            pathname: url?.pathname ?? "",
-            search: url?.search ?? "",
-            base: "/",
-            from: { org: orgSlug, ws: wsSlug ?? null },
-            to: { org: result.org, ws: result.ws },
-          }),
-        );
+        const canonical = canonicalPath({
+          pathname: url?.pathname ?? "",
+          search: url?.search ?? "",
+          base: "/",
+          from: { org: orgSlug, ws: wsSlug ?? null },
+          to: { org: result.org, ws: result.ws },
+        });
+        return permanentRedirectTo(sanitizeNext(canonical, routes.root()));
       }
     }
   },
@@ -227,12 +233,33 @@ export function requireViewer(org: string, ws?: string): Promise<OrgCtx> {
   return requireCtx(org, ws);
 }
 
-/** Signed in, no organization yet; a signed-out request goes to /login. */
-export const requireUser = cache(async (): Promise<PretenantCtx> => {
-  const session = await getSession();
-  if (!session) return redirect("/login");
-  return PretenantCtx.mint(MINT, { userId: session.user.id });
-});
+/** Signed in, no organization yet; a signed-out request goes to /login, and on to `next` once signed in. */
+export const requireUser = cache(
+  async (next?: SafePath): Promise<PretenantCtx> => {
+    const session = await getSession();
+    if (!session) return redirectTo(routes.login(next));
+    return PretenantCtx.mint(MINT, { userId: session.user.id });
+  },
+);
+
+/** `invitations.public_id` as the invitation email carries it; anything else is not a token. */
+const INVITATION_TOKEN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The invitation behind a public token, for /invite/[token]. No session is read
+ * and nothing is minted: the token is the capability (§3.7), and the page shows
+ * only what the invitation email already disclosed. A malformed token is null
+ * before any lookup; an unknown token, or one whose organization is gone, is
+ * null. The record comes back whatever its status and expiry, because the page
+ * decides what a closed or expired invitation shows
+ * (`features/auth/invitation.ts`).
+ */
+export async function readInvitation(
+  token: string,
+): Promise<InvitationRecord | null> {
+  if (!INVITATION_TOKEN.test(token)) return null;
+  return systemLookups.invitationByToken(token);
+}
 
 /**
  * The signed-in person an invitation is addressed to, for the accept and
@@ -245,8 +272,8 @@ export const requireInvitee = cache(
     token: string,
   ): Promise<{ ctx: InviteeCtx; invitation: InvitationRecord }> => {
     const session = await getSession();
-    if (!session) return redirect("/login");
-    const invitation = await systemLookups.invitationByToken(token);
+    if (!session) return redirectTo(routes.login());
+    const invitation = await readInvitation(token);
     if (
       !invitation ||
       invitation.email.trim().toLowerCase() !==

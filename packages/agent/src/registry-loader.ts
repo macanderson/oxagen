@@ -44,7 +44,8 @@ export interface RegistryCapability {
   defaultEffect?: "allow" | "deny" | "require_approval";
   /** Zod schema or equivalent — typed as unknown to avoid coupling. */
   input?: unknown;
-  surfaces?: readonly ("api" | "mcp" | "agent")[];
+  /** Mirrors `CapabilitySurface` (packages/oxagen/src/types.ts). */
+  surfaces?: readonly ("api" | "mcp" | "agent" | "cli")[];
 }
 
 export interface OxagenRegistry {

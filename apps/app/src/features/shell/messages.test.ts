@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import en from "../../../messages/en.json";
 import shell from "../../../messages/shell.json";
 import { catalogStems, mergeCatalogs } from "@/i18n/catalogs";
-import { ORG_NAV, WORKSPACE_NAV } from "./nav";
+import { ORG_NAV, THUMB_SLOTS, WORKSPACE_NAV } from "./nav";
 
 const messages = shell.shell;
 
@@ -28,6 +28,14 @@ describe("messages/shell.json", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"])
       expect(messages.nav).toHaveProperty(key);
     expect(messages.nav.agents).toBe("Agent IAM");
+    expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
+  });
+
+  it("carries no Ontology or Audit label (negative)", () => {
+    expect(Object.keys(messages.nav).sort()).toEqual(
+      [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"].sort(),
+    );
+    expect(JSON.stringify(shell)).not.toMatch(/ontology|audit/i);
   });
 
   it("carries no catalog for the chrome rev1 does not render", () => {

@@ -3,7 +3,9 @@
 // which Better Auth also checks against its trusted origins.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
+import { liveSignInSocial } from "../auth-client";
 
 type Provider = "google" | "github";
 
@@ -33,15 +35,14 @@ function ProviderMark({ provider }: { provider: Provider }) {
   );
 }
 
-export function OAuthButtons({ callbackURL }: { callbackURL: string }) {
+export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
   const t = useTranslations("auth.sso");
   const [pending, setPending] = useState<Provider | null>(null);
 
   async function start(provider: Provider) {
     setPending(provider);
     try {
-      const { authClient } = await import("@oxagen/auth/client");
-      await authClient.signIn.social({ provider, callbackURL });
+      await liveSignInSocial({ provider, callbackURL });
     } finally {
       setPending(null);
     }

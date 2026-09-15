@@ -1,93 +1,141 @@
 "use client";
-// <MobileNav>: the phone navigation seam (feedback 3, plan §6 Q3). One-thumb
-// mobile navigation still needs a design; this is the plain first version, a
-// bottom bar with the four most-used pages and "More" for the full sidebar in a
-// drawer. The design drops in behind the same props.
+// The phone shell's navigation (ARCHITECTURE.md §1.2; mockup `mobileNav` and
+// its More sheet): a fixed five-slot thumb bar — Fleet, Agents, Tools, Spend,
+// More — with a count only where something waits on a person, the More sheet
+// carrying the rest of the sidebar, and the drawer the top bar's menu button
+// opens over a scrim. The Agents, Tools and Spend slots point at NotRecorded
+// pages for the whole of rev1 and are kept deliberately: the bar is the phone's
+// only navigation, and a four-slot bar would change again at every lane.
 import { Dialog } from "@base-ui/react/dialog";
 import { Ellipsis, X } from "lucide-react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
-import type { NavItem, NavKey, NavSection } from "./nav";
-import { isNavItemCurrent } from "./nav";
+import { useState } from "react";
+import {
+  isMoreCurrent,
+  isNavItemCurrent,
+  MORE_SHEET,
+  type NavItem,
+  THUMB_SLOTS,
+} from "./nav";
 import { NAV_ICONS } from "./nav-icons";
-import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
+import { SafeLink } from "@/ui/navigation";
+import { SheetDialog } from "@/ui/sheet-dialog";
 
-/** The pages the bar carries directly, in order; the rest are one tap away under "More". */
-export const MOBILE_PRIMARY: readonly NavKey[] = [
-  "fleet",
-  "agents",
-  "tools",
-  "spend",
-];
+const slotClass =
+  "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10.5px] font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
 
-export function mobileItems(sections: readonly NavSection[]): NavItem[] {
-  const all = sections.flatMap((s) => s.items);
-  const primary = MOBILE_PRIMARY.flatMap((key) =>
-    all.filter((i) => i.key === key),
-  );
-  // An organization with no workspace has no workspace items: fall back to the organization pages.
-  return primary.length > 0 ? primary : all.slice(0, MOBILE_PRIMARY.length);
-}
-
-export type MobileNavProps = {
-  items: readonly NavItem[];
-  pathname: string;
-  onMore: () => void;
-};
-
-/** The seam: a plain bottom bar. Replace the body, keep the props. */
-export function MobileNav({ items, pathname, onMore }: MobileNavProps) {
+/** The thumb bar and its More sheet, over the sidebar's items for the current URL. */
+export function ShellMobileNav({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
+  const { sections, pathname } = useSidebarSections(data);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const items = new Map<string, NavItem>(
+    sections.flatMap((s) => s.items).map((item) => [item.key, item]),
+  );
+  // Without a workspace the workspace slots have nowhere to point.
+  const slots = THUMB_SLOTS.flatMap((key) => {
+    const item = items.get(key);
+    return item === undefined ? [] : [{ key, href: item.href }];
+  });
+  const more = MORE_SHEET.flatMap((key) => {
+    const item = items.get(key);
+    return item === undefined ? [] : [item];
+  });
+  const close = () => {
+    setMoreOpen(false);
+  };
   return (
-    <nav
-      aria-label={t("mobileNav.label")}
-      data-testid="mobile-nav"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-app-topbar-border bg-app-topbar-bg pb-[env(safe-area-inset-bottom)] text-app-topbar-fg md:hidden"
-    >
-      <ul className="grid grid-cols-5">
-        {items.map((item) => {
-          const Icon = NAV_ICONS[item.key];
-          const current = isNavItemCurrent(item.key, pathname);
+    <>
+      <nav
+        aria-label={t("mobileNav.label")}
+        data-testid="mobile-nav"
+        data-thumb-bar=""
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-0.5 border-t border-app-topbar-border bg-app-topbar-bg px-1 pt-1.5 text-app-link-fg md:hidden"
+      >
+        {slots.map(({ key, href }) => {
+          const Icon = NAV_ICONS[key];
+          const current = isNavItemCurrent(key, pathname);
+          const waiting = key === "fleet" ? data.fleetWaiting : null;
           return (
-            <li key={item.key}>
-              <Link
-                href={item.href}
-                aria-current={current ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
-                  current
-                    ? "font-semibold text-app-topbar-fg"
-                    : "text-app-link-fg"
-                }`}
-              >
-                <Icon
-                  aria-hidden="true"
-                  className={`size-5 ${current ? "text-primary" : ""}`}
-                />
-                <span className="max-w-full truncate">
-                  {t(`nav.${item.key}`)}
+            <SafeLink
+              key={key}
+              to={href}
+              data-slot={key}
+              data-touch-target=""
+              aria-current={current ? "page" : undefined}
+              className={slotClass}
+            >
+              <Icon aria-hidden="true" className="size-5" />
+              <span>{t(`mobileNav.slots.${key}`)}</span>
+              {waiting !== null && waiting > 0 ? (
+                <span
+                  data-count={waiting}
+                  className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-border bg-app-panel-bg px-1 text-center font-mono text-[10px] text-foreground"
+                >
+                  <span aria-hidden="true">{waiting}</span>
+                  <span className="sr-only">
+                    {/* The name reads "Fleet, 3 approvals waiting". */}
+                    {t("mobileNav.waiting", { count: waiting })}
+                  </span>
                 </span>
-              </Link>
-            </li>
+              ) : null}
+            </SafeLink>
           );
         })}
-        <li>
-          <button
-            type="button"
-            onClick={onMore}
-            className="flex min-h-14 w-full flex-col items-center justify-center gap-1 px-1 text-[11px] text-app-link-fg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-          >
-            <Ellipsis aria-hidden="true" className="size-5" />
-            {t("mobileNav.more")}
-          </button>
-        </li>
-      </ul>
-    </nav>
+        <button
+          type="button"
+          data-slot="more"
+          data-touch-target=""
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          aria-current={isMoreCurrent(pathname) ? "page" : undefined}
+          onClick={() => {
+            setMoreOpen(true);
+          }}
+          className={`${slotClass} col-start-5`}
+        >
+          <Ellipsis aria-hidden="true" className="size-5" />
+          <span>{t("mobileNav.more")}</span>
+        </button>
+      </nav>
+      <SheetDialog
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        title={t("mobileNav.more")}
+        testId="more-sheet"
+      >
+        <ul className="grid grid-cols-2 gap-2">
+          {more.map((item) => {
+            const Icon = NAV_ICONS[item.key];
+            return (
+              <li key={item.key}>
+                <SafeLink
+                  to={item.href}
+                  data-touch-target=""
+                  aria-current={
+                    isNavItemCurrent(item.key, pathname) ? "page" : undefined
+                  }
+                  onClick={close}
+                  className="flex min-h-14 items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-sm font-semibold text-card-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <span className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
+                    <Icon aria-hidden="true" className="size-4" />
+                  </span>
+                  {t(`nav.${item.key}`)}
+                </SafeLink>
+              </li>
+            );
+          })}
+        </ul>
+      </SheetDialog>
+    </>
   );
 }
 
-/** The phone drawer: the whole sidebar, opened from the top bar's menu button or "More". */
+/** The phone drawer: the whole sidebar over a scrim, opened from the top bar's menu button. */
 export function NavDrawer({ data }: { data: ShellData }) {
   const t = useTranslations("shell.drawer");
   const { drawerOpen, setDrawerOpen } = useShellState();
@@ -97,16 +145,20 @@ export function NavDrawer({ data }: { data: ShellData }) {
   return (
     <Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim md:hidden" />
+        <Dialog.Backdrop
+          data-scrim=""
+          className="fixed inset-0 z-50 bg-overlay-scrim md:hidden"
+        />
         <Dialog.Popup
           data-testid="nav-drawer"
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg text-sidebar-fg shadow-2xl md:hidden"
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-2xl md:hidden"
         >
           <div className="flex items-center px-3 pt-3">
             <Dialog.Title className="sr-only">{t("title")}</Dialog.Title>
             <Dialog.Close
               aria-label={t("close")}
-              className="ml-auto rounded-sm p-1 text-sidebar-nav-label-fg hover:text-sidebar-fg focus-visible:outline-2 focus-visible:outline-ring"
+              data-touch-target=""
+              className="ml-auto grid place-items-center rounded-sm p-1 text-sidebar-nav-label-fg hover:text-sidebar-fg focus-visible:outline-2 focus-visible:outline-ring"
             >
               <X aria-hidden="true" className="size-4" />
             </Dialog.Close>
@@ -116,20 +168,5 @@ export function NavDrawer({ data }: { data: ShellData }) {
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
-  );
-}
-
-/** <MobileNav> wired to the shell: items from the sidebar model, "More" opens the drawer. */
-export function ShellMobileNav({ data }: { data: ShellData }) {
-  const { sections, pathname } = useSidebarSections(data);
-  const { setDrawerOpen } = useShellState();
-  return (
-    <MobileNav
-      items={mobileItems(sections)}
-      pathname={pathname}
-      onMore={() => {
-        setDrawerOpen(true);
-      }}
-    />
   );
 }

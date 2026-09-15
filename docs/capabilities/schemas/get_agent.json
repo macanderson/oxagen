@@ -1,0 +1,429 @@
+{
+  "name": "get_agent",
+  "domain": "agent",
+  "description": "Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "identity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "harness": {
+            "type": "string",
+            "enum": [
+              "stella",
+              "claude-code",
+              "claude-agent-sdk",
+              "custom"
+            ]
+          },
+          "principalId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatorId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unenrolled",
+              "enrolled",
+              "suspended",
+              "retired"
+            ]
+          },
+          "registeredAt": {
+            "type": "string"
+          },
+          "firstFrameAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "agentKey",
+          "harness",
+          "principalId",
+          "operatorId",
+          "status",
+          "registeredAt",
+          "firstFrameAt"
+        ],
+        "additionalProperties": false
+      },
+      "credentials": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "prefix": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "revokedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "prefix",
+            "createdAt",
+            "expiresAt",
+            "lastUsedAt",
+            "revokedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "roles": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scopeKind": {
+              "type": "string",
+              "enum": [
+                "org",
+                "workspace"
+              ]
+            },
+            "isSystemDefault": {
+              "type": "boolean"
+            },
+            "assignedAt": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "scopeKind",
+            "isSystemDefault",
+            "assignedAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "hosts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "hostEnrollmentId": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string",
+              "enum": [
+                "darwin",
+                "linux",
+                "win32"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "paused",
+                "suspended",
+                "revoked"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "observe",
+                "enforce"
+              ]
+            },
+            "harnesses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deviceKeyFingerprint": {
+              "type": "string"
+            },
+            "collectorVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hooksOk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bundleVersionServed": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastSeenAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "revokedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "hostEnrollmentId",
+            "hostname",
+            "platform",
+            "status",
+            "mode",
+            "harnesses",
+            "deviceKeyFingerprint",
+            "collectorVersion",
+            "hooksOk",
+            "bundleVersionServed",
+            "lastSeenAt",
+            "expiresAt",
+            "revokedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "definition": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "digest": {
+                "type": "string"
+              },
+              "commitSha": {
+                "type": "string",
+                "minLength": 1
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pullRequestUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "source": {
+                "type": "string"
+              },
+              "committedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "path",
+              "digest",
+              "commitSha",
+              "branch",
+              "pullRequestUrl",
+              "source",
+              "committedAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "identity",
+      "credentials",
+      "roles",
+      "hosts",
+      "definition"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -4,7 +4,6 @@
 // <MobileNav>, driven the way an operator drives them, and the chrome rev1
 // does not render (ARCHITECTURE.md §1.2) asserted absent.
 import {
-  act,
   cleanup,
   render,
   screen,
@@ -14,6 +13,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { MouseEvent, ReactNode } from "react";
+
 import {
   afterEach,
   beforeAll,
@@ -23,9 +23,11 @@ import {
   it,
   vi,
 } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
-import { MobileNav } from "./mobile-nav";
+import uiMessages from "../../../messages/ui.json";
+
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
@@ -42,7 +44,6 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("next/link", () => ({
   default: ({
-    href,
     children,
     onClick,
     ...rest
@@ -52,7 +53,6 @@ vi.mock("next/link", () => ({
     onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
   }) => (
     <a
-      href={href}
       {...rest}
       onClick={(e) => {
         e.preventDefault(); // jsdom cannot navigate documents
@@ -90,8 +90,13 @@ beforeEach(() => {
   nav.push.mockReset();
 });
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it, portals included.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
   document.cookie = "theme=; Max-Age=0; Path=/";
   delete document.documentElement.dataset.theme;
 });
@@ -101,7 +106,7 @@ function renderShell(data: ShellData) {
     <NextIntlClientProvider
       locale="en"
       timeZone="UTC"
-      messages={{ ...en, ...shellMessages }}
+      messages={{ ...en, ...shellMessages, ...uiMessages }}
     >
       <ShellClient data={data} />
       <main id="main" />
@@ -132,22 +137,24 @@ describe("the shell on /{org}/{ws}", () => {
 });
 
 describe("sidebar", () => {
-  it("renders the baseline sections with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's seven links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
     const links = within(main).getAllByRole("link");
-    expect(links.map((l) => l.getAttribute("href"))).toEqual([
-      "/acme/core-platform",
-      "/acme/core-platform/agents",
-      "/acme/core-platform/tools",
-      "/acme/core-platform/ontology",
-      "/acme/core-platform/steering",
-      "/acme/core-platform/spend",
-      "/acme",
-      "/acme/billing",
-      "/acme/audit",
+    expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+      ["Fleet", "/acme/core-platform"],
+      ["Agent IAM", "/acme/core-platform/agents"],
+      ["Tools", "/acme/core-platform/tools"],
+      ["Steering", "/acme/core-platform/steering"],
+      ["Spend", "/acme/core-platform/spend"],
+      ["Organization", "/acme"],
+      ["Billing", "/acme/billing"],
     ]);
+    for (const link of links)
+      expect(link.getAttribute("href")).not.toMatch(
+        /^\/acme\/(core-platform\/ontology|audit)(\/|$)/,
+      );
     expect(
       within(main).getByRole("link", { name: "Agent IAM" }),
     ).toBeInTheDocument();
@@ -157,34 +164,38 @@ describe("sidebar", () => {
     );
   });
 
-  it("carries only the organization section on an organization page: no workspace is known without a list", () => {
+  it("on an organization page points the workspace links at the first workspace shell.context lists", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
+    expect(within(main).getAllByRole("link")).toHaveLength(7);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(within(main).queryByRole("link", { name: "Tools" })).toBeNull();
-    expect(screen.queryByTestId("workspace-switcher")).toBeNull();
+    expect(within(main).getByRole("link", { name: "Tools" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/tools",
+    );
+    expect(screen.getByTestId("workspace-switcher")).toHaveTextContent(
+      "Core platform",
+    );
   });
-});
 
-describe("organization and workspace tiles", () => {
-  it("show the current organization from the viewer and the current workspace from the URL, with nothing to switch to (negative)", async () => {
-    const user = userEvent.setup();
-    renderShell(shellData());
-    const org = screen.getByRole("group", { name: "Organization" });
-    expect(org).toHaveTextContent("Acme Robotics");
-    expect(org).toHaveTextContent("acme");
-    const ws = screen.getByRole("group", { name: "Workspace" });
-    expect(ws).toHaveTextContent("core-platform");
-    expect(within(org).queryByRole("button")).toBeNull();
-    expect(within(ws).queryByRole("button")).toBeNull();
-    await user.click(org);
-    await user.click(ws);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByRole("searchbox")).toBeNull();
+  it("carries only the organization section on an organization page when shell.context failed (negative)", () => {
+    nav.pathname = "/acme/billing";
+    renderShell(
+      shellData({
+        context: { ok: false, reason: "error", code: "down", status: 503 },
+      }),
+    );
+    const main = screen.getByRole("navigation", { name: "Main" });
+    expect(
+      within(main)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Organization", "Billing"]);
+    expect(screen.queryByTestId("workspace-switcher")).toBeNull();
   });
 });
 
@@ -196,6 +207,9 @@ describe("top bar", () => {
     expect(
       within(crumbs).getByRole("link", { name: "Acme Robotics" }),
     ).toHaveAttribute("href", "/acme");
+    expect(
+      within(crumbs).getByRole("link", { name: "Core platform" }),
+    ).toHaveAttribute("href", "/acme/core-platform");
     expect(within(crumbs).getByRole("link", { name: "Fleet" })).toHaveAttribute(
       "href",
       "/acme/core-platform",
@@ -222,13 +236,11 @@ describe("command menu", () => {
       "Fleet",
       "Agent IAM",
       "Tools",
-      "Ontology",
       "Steering",
       "Spend",
       "Organization",
       "API keys",
       "Billing",
-      "Audit",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");
@@ -242,6 +254,22 @@ describe("command menu", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("command-menu")).toBeNull();
     });
+  });
+
+  it("opens with Ctrl+K as well, and not for K with Shift or Alt, ⌘ with another key, or K alone (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    for (const chord of [
+      "{Control>}{Shift>}k{/Shift}{/Control}",
+      "{Control>}{Alt>}k{/Alt}{/Control}",
+      "{Meta>}j{/Meta}",
+      "k",
+    ]) {
+      await user.keyboard(chord);
+      expect(screen.queryByTestId("command-menu")).toBeNull();
+    }
+    await user.keyboard("{Control>}K{/Control}");
+    expect(await screen.findByTestId("command-menu")).toBeInTheDocument();
   });
 
   it("opens from the search button, says when nothing matches, and opens a clicked route", async () => {
@@ -291,56 +319,5 @@ describe("user menu", () => {
     expect(
       screen.getByRole("button", { name: "User menu for dana@acme.example" }),
     ).toHaveTextContent("D");
-  });
-});
-
-describe("phone navigation", () => {
-  it("offers the bottom bar and opens the drawer from More and from the menu button", async () => {
-    const user = userEvent.setup();
-    renderShell(shellData());
-    const bar = screen.getByTestId("mobile-nav");
-    expect(
-      within(bar)
-        .getAllByRole("link")
-        .map((l) => l.textContent),
-    ).toEqual(["Fleet", "Agent IAM", "Tools", "Spend"]);
-    await user.click(within(bar).getByRole("button", { name: "More" }));
-    const drawer = await screen.findByTestId("nav-drawer");
-    await user.click(within(drawer).getByRole("link", { name: "Ontology" }));
-    await waitFor(() => {
-      expect(screen.queryByTestId("nav-drawer")).toBeNull();
-    });
-    await user.click(screen.getByRole("button", { name: "Open navigation" }));
-    const again = await screen.findByTestId("nav-drawer");
-    await user.click(
-      within(again).getByRole("button", { name: "Close navigation" }),
-    );
-    await waitFor(() => {
-      expect(screen.queryByTestId("nav-drawer")).toBeNull();
-    });
-  });
-
-  it("falls back to organization pages when there is no workspace", () => {
-    const onMore = vi.fn();
-    render(
-      <NextIntlClientProvider
-        locale="en"
-        messages={{ ...en, ...shellMessages }}
-      >
-        <MobileNav
-          items={[{ key: "billing", href: "/acme/billing" }]}
-          pathname="/acme/billing"
-          onMore={onMore}
-        />
-      </NextIntlClientProvider>,
-    );
-    expect(screen.getByRole("link", { name: "Billing" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    act(() => {
-      screen.getByRole("button", { name: "More" }).click();
-    });
-    expect(onMore).toHaveBeenCalled();
   });
 });

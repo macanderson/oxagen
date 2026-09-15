@@ -2,7 +2,8 @@
 // consumed by import-graph.test.ts. Paths are posix and relative to `src/`
 // without extension; a directory import ends in `/index` (parse.ts).
 //
-// Three readings this file settles, each recorded in the WL-01 PR:
+// Readings this file settles, each recorded in the PR that made it (WL-01
+// unless named):
 // - The named rows of the platform allowlist add to the base row ("everything
 //   else under src/"): kernel.ts reports to telemetry (§3.2 steps 0 and 6), so
 //   the base row's `captureError` must reach it.
@@ -90,7 +91,7 @@ const ALLOWED: Record<
     if (isFeatureBarrel(target)) return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
-    if (target === "server/viewer") return true;
+    if (target === "server/viewer" || target === "server/session") return true;
     // `kernelWrite`, only from a "use server" module; its types from anywhere.
     if (target === "server/kernel") {
       return (
@@ -125,7 +126,7 @@ const ALLOWED: Record<
     target === "data/read" ||
     under(target, "shared") ||
     under(target, "server"),
-  shared: () => false,
+  shared: (_from, target) => under(target, "shared"),
   proxy: (_from, target) => under(target, "shared"),
   i18n: (_from, target) => under(target, "i18n"),
 };
@@ -210,6 +211,7 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
     "@oxagen/agent/register",
   ],
   "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
+  "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
   "src/server/tenancy-lookups.ts": ["@oxagen/database", "drizzle-orm"],
   "instrumentation.ts": [
     "@oxagen/oxagen/kernel",
@@ -219,6 +221,23 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
     "@oxagen/rules",
     "@oxagen/database/data-plane",
   ],
+};
+
+/**
+ * Bindings a row admits from a specifier its module list does not name whole
+ * (#3048). `instrumentation.ts` is the process bootstrap: it wires the tracer,
+ * the RLS connection guard and the security event emitter, as
+ * `apps/api/src/bootstrap.ts` and `apps/mcp/src/middleware.ts` do. Any other
+ * binding from these specifiers, a namespace or a side-effect import is refused.
+ */
+const PLATFORM_NAMED_ROWS: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  "instrumentation.ts": {
+    "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
+    "@oxagen/database/security": ["makeSecurityEventInserter"],
+    "@oxagen/database": ["assertRlsConnectionSafe"],
+  },
 };
 
 /** The base row, "everything else under src/": contract declarations, and one telemetry export. */
@@ -234,6 +253,8 @@ export function platformAllows(appFile: string, edge: ImportEdge): boolean {
   if ([...row, ...BASE_SPECIFIERS].some((p) => matches(p, specifier))) {
     return true;
   }
-  const names = BASE_NAMED[specifier];
-  return names !== undefined && onlyNames(edge, names);
+  return onlyNames(edge, [
+    ...(BASE_NAMED[specifier] ?? []),
+    ...(PLATFORM_NAMED_ROWS[appFile]?.[specifier] ?? []),
+  ]);
 }

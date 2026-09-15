@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import {
   readDenyGeneration,
+  readWorkspaceRetention,
   requireBundleSigner,
   resolveEnrolledHost,
   signBundle,
@@ -28,12 +29,11 @@ export const tachoBundleGetHandler: CapabilityHandler<
       tx as never,
       input.host_enrollment_id,
     );
-    const denyGeneration = await readDenyGeneration(
-      tx as never,
-      ctx.orgId,
-      ctx.workspaceId,
-    );
-    const unsigned = unsignedBundle(host, denyGeneration, now);
+    const [denyGeneration, retention] = await Promise.all([
+      readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
+      readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+    ]);
+    const unsigned = unsignedBundle(host, denyGeneration, retention, now);
     await tx
       .update(schema.tachoHosts)
       .set({

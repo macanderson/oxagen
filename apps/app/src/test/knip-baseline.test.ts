@@ -3,7 +3,7 @@
 // export) and knip.preprocessor.ts wired in exactly as apps/app/knip.json wires
 // it, so the exit code and the printed report are knip's own.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,13 @@ afterEach(() => {
 });
 
 describe("knip baseline", () => {
+  it("apps/app's baseline is empty: every export is reachable and every dependency imported (INV-16)", () => {
+    const baseline: unknown = JSON.parse(
+      readFileSync(path.join(appDir, BASELINE_FILE), "utf8"),
+    );
+    expect(baseline).toEqual([]);
+  });
+
   it("passes when every finding is in the baseline", () => {
     const run = knipRun([UNUSED_FILE, UNUSED_EXPORT]);
     expect(run.status).toBe(0);

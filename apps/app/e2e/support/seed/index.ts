@@ -42,6 +42,7 @@ import {
   parseRunSpecV2,
   TERMINAL_EVENT_TYPE,
 } from "@oxagen/run-ledger";
+import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
@@ -119,7 +120,7 @@ function cookieFromSetCookie(headers: Headers): string {
 /**
  * A pre-tenant kernel context for the signed-in owner (create_org is
  * scoped: false). No `opts.surface` is claimed on any invoke, the rule the
- * app's own seam follows (src/server/invoke.ts): create_org is not exposed on
+ * app's own seam follows (src/server/kernel.ts): create_org is not exposed on
  * an "app" surface, and the surface check is for the API and MCP adapters.
  */
 function pretenantCtx(userId: string): CapabilityContext {
@@ -423,7 +424,12 @@ async function seedRun(scope: Scope, userId: string): Promise<string> {
     tool_policy: { allowlist: [], risk_ceiling: "low" },
   });
 
-  const store = createPostgresRunStore();
+  // The seal writes the attempt's archive segment before the row that names
+  // it, so a sealing store needs an archive; `createPostgresRunStore()` with
+  // none refuses. `ledgerStore()` in @oxagen/inngest-functions is the same
+  // wiring for the durable jobs. The read paths (the live adapter, run.fork,
+  // run-read) construct without one because they never seal.
+  const store = createPostgresRunStore({ archive: evidenceStore() });
   const run = await store.createRun({
     ...scope,
     surface: "external",

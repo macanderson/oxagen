@@ -1,23 +1,18 @@
 // Read one invitation by its public token for /invite/[token], through the
-// system lookups seam (src/server/tenancy-lookups.ts): the visitor holds no
-// membership in the invitation's org yet, so the token is the capability and
-// the page shows only what the invitation email already disclosed. The token's
-// shape is checked here, before any read.
+// viewer seam's anonymous read (src/server/viewer.ts `readInvitation`, #3049):
+// the visitor holds no membership in the invitation's org yet, so the token is
+// the capability and the page shows only what the invitation email already
+// disclosed. The token's shape is checked there, before any read. The mapping to
+// the view model stays here: src/server may not import @/data/contracts (§2).
 import "server-only";
 import { InvitationView, toOrgRole } from "@/data/contracts/invitations";
 import { type Read, readError, readOk } from "@/data/read";
-import { type InvitationRecord, systemLookups } from "@/server/tenancy-lookups";
+import { type InvitationRecord, readInvitation } from "@/server/viewer";
 
-const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-
-export const INVITATION_NOT_FOUND = "invitation_not_found";
-
-export function isInvitationToken(token: string): boolean {
-  return TOKEN_PATTERN.test(token);
-}
+const INVITATION_NOT_FOUND = "invitation_not_found";
 
 /** The stored row as the page's view model; a row outside the enums is unreadable, never guessed at. */
-export function toInvitationView(
+function toInvitationView(
   token: string,
   record: InvitationRecord,
 ): Read<InvitationView> {
@@ -39,8 +34,7 @@ export function toInvitationView(
 export async function loadInvitation(
   token: string,
 ): Promise<Read<InvitationView>> {
-  if (!isInvitationToken(token)) return readError(INVITATION_NOT_FOUND, 404);
-  const record = await systemLookups.invitationByToken(token);
+  const record = await readInvitation(token);
   if (!record) return readError(INVITATION_NOT_FOUND, 404);
   return toInvitationView(token, record);
 }

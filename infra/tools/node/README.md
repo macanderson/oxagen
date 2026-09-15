@@ -114,6 +114,72 @@ The token lives twice because the engine's container reads its own prefix
 `stella-serve` refuses to start without a token, and the surfaces report
 "the assistant engine is unavailable" while theirs is missing or wrong.
 
+## The internal docs site
+
+`internal-docs` serves the internal Oxagen docs (specs, pricing, plans; a
+Fumadocs static export built in `macanderson/tmp-oxagen-mockups`) at
+`https://internal.oxagen.sh`, behind a password. It must not be publicly
+readable, and the password is the only control: the hostname is on the ALB
+certificate, so it is published in Certificate Transparency logs.
+
+The artifact is a `caddy:2` container on loopback port **3003** holding the
+export under `site/` and its own server config,
+`infra/tools/internal-docs/Caddyfile`. The front door proxies the hostname to
+it with no auth of its own (`tools/caddy/Caddyfile.alb`). The password check
+lives in the site's container because there the bcrypt hash arrives from
+Parameter Store through `config_prefix` and is never in git or rendered into a
+file on the node.
+
+Parameters, created once by an operator:
+
+| Parameter | Value |
+| --- | --- |
+| `/oxagen/internal/INTERNAL_DOCS_PASSWORD` | SecureString, the plaintext password, for people. Not under `/oxagen/production`: app, api and mcp load that prefix recursively into their environment. |
+| `/oxagen/production/internal-docs/INTERNAL_DOCS_PASSWORD_HASH` | SecureString, the bcrypt hash of the same password (`caddy hash-password`). The site reads it as `config_prefix`. The recursive load also hands it to app, api and mcp; a bcrypt hash is not the password. |
+
+The user name is `oxagen`. Create both without printing either:
+
+```bash
+A='env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN aws --region us-east-1'
+umask 077; d=$(mktemp -d)
+openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 40 > "$d/pw"
+# The password reaches caddy on stdin, not as --plaintext, where any process on
+# the machine could read it from the command line. docker needs -i to pass
+# stdin through. With stdin not a terminal, caddy hash-password reads one line
+# and strips its newline (only the terminal prompt asks twice). The file holds
+# no newline, so echo adds one; without it caddy fails with "Error: EOF".
+{ cat "$d/pw"; echo; } | docker run --rm -i caddy:2 caddy hash-password | tr -d '\n' > "$d/hash"
+for pair in "INTERNAL_DOCS_PASSWORD:/oxagen/internal/INTERNAL_DOCS_PASSWORD:pw" \
+            "INTERNAL_DOCS_PASSWORD_HASH:/oxagen/production/internal-docs/INTERNAL_DOCS_PASSWORD_HASH:hash"; do
+  IFS=: read -r _ name file <<<"$pair"
+  jq -n --arg n "$name" --rawfile v "$d/$file" '{Name:$n,Type:"SecureString",Value:$v,Overwrite:true}' > "$d/in.json"
+  $A ssm put-parameter --cli-input-json "file://$d/in.json" >/dev/null
+done
+rm -rf "$d"
+```
+
+Rotating the password is the same commands plus a redeploy, which restarts the
+container with the new hash.
+
+Deploy, from a machine with the built export:
+
+```bash
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  infra/tools/deploy-internal-docs.sh ~/Documents/Oxagen/Mockups/site/out
+```
+
+It stages the export, uploads `_deploy/internal-docs-standalone.tgz`, sends
+`oxagen-deploy-service service=internal-docs`, and then checks from outside:
+401 without credentials, 200 with the password, and `app.oxagen.sh/login` and
+`api.oxagen.sh/health` still 200. Release swap and rollback are
+`deploy-service.sh`'s. No CI role may publish this artifact yet; until one is
+added to `stacks-new/ci-deploy/roles.tf`, it ships by hand.
+
+To take the site down: `docker rm -f oxagen-internal-docs` on the node, delete
+`_deploy/internal-docs-standalone.tgz` so a node replacement does not restore
+it, remove the `@internal` block from `Caddyfile.alb` and run
+`tools/install-node-scripts.sh`, and remove the hostname from `main.tf`.
+
 ## Adding a service
 
 1. Have its repository publish `<service>-standalone.tgz` with a manifest.

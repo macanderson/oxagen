@@ -30,6 +30,7 @@ import {
   type RunListOutput,
 } from "@oxagen/oxagen/contracts/run.list";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import { isReplayGrade } from "@oxagen/tacho";
 import {
   and,
   desc,
@@ -89,7 +90,7 @@ export function invalidCursor(capability: string): CapabilityError {
 // ---- Queries -------------------------------------------------------------------------
 
 /** What a query needs from a transaction: the select builder. */
-export type QueryDb = Pick<Tx, "select">;
+export type QueryDb = Pick<Tx, "select" | "selectDistinctOn">;
 
 const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
@@ -133,6 +134,10 @@ const ledgerColumns = {
     status: runs.status,
     createdAt: runs.createdAt,
     startedAt: runs.startedAt,
+    name: runs.name,
+    summary: runs.summary,
+    summaryGeneratedAt: runs.summaryGeneratedAt,
+    summaryModel: runs.summaryModel,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -246,8 +251,15 @@ export function ledgerRollupQuery(
     .groupBy(events.runId);
 }
 
-/** The latest attempt seal per run. */
-export function ledgerSealQuery(
+/**
+ * The rollup of a run's compacted attempts (spec §13.3; ADR-058): attempts
+ * whose hot frames compaction removed keep their counts on the seal. Summed
+ * per run over the seals with no rows left in the event log, so a run that is
+ * half compacted counts every frame exactly once when this is added to
+ * `ledgerRollupQuery`. `opaqueTurns` is true when any such seal could not
+ * count turns (an encrypted model call hid its turn index).
+ */
+export function ledgerCompactedRollupQuery(
   db: QueryDb,
   scope: RunScope,
   runIds: readonly string[],
@@ -255,7 +267,74 @@ export function ledgerSealQuery(
   return db
     .select({
       runId: seals.runId,
-      sealedAt: sql<Date>`max(${seals.sealedAt})`.mapWith(seals.sealedAt),
+      frames: sql<number>`coalesce(sum(${seals.eventCount}), 0)::int`.mapWith(
+        Number,
+      ),
+      modelCalls:
+        sql<number>`coalesce(sum(${seals.modelCalls}), 0)::int`.mapWith(Number),
+      toolCalls: sql<number>`coalesce(sum(${seals.toolCalls}), 0)::int`.mapWith(
+        Number,
+      ),
+      turns: sql<number>`coalesce(sum(${seals.turns}), 0)::int`.mapWith(Number),
+      opaqueTurns: sql<boolean>`bool_or(${seals.turns} is null)`,
+    })
+    .from(seals)
+    .where(
+      and(
+        eq(seals.orgId, scope.orgId),
+        eq(seals.workspaceId, scope.workspaceId),
+        inArray(seals.runId, [...runIds]),
+        sql`${seals.archiveSegmentRef} is not null`,
+        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId})`,
+      ),
+    )
+    .groupBy(seals.runId);
+}
+
+/** The event-log rollup plus the compacted seals' rollup, per run. */
+export function addCompactedRollup(
+  hot: LedgerEventRollup | undefined,
+  compacted:
+    | {
+        frames: number;
+        modelCalls: number;
+        toolCalls: number;
+        turns: number;
+        opaqueTurns: boolean;
+      }
+    | undefined,
+): LedgerEventRollup | undefined {
+  if (!compacted) return hot;
+  const base = hot ?? EMPTY_ROLLUP;
+  return {
+    frames: base.frames + compacted.frames,
+    modelCalls: base.modelCalls + compacted.modelCalls,
+    toolCalls: base.toolCalls + compacted.toolCalls,
+    turnIndexes: base.turnIndexes + compacted.turns,
+    opaqueModelCalls: base.opaqueModelCalls + (compacted.opaqueTurns ? 1 : 0),
+  };
+}
+
+/**
+ * The latest attempt seal per run: when it sealed, the grade it recorded and
+ * the gaps the grade was computed from (ADR-058). One row per run.
+ */
+export function ledgerSealQuery(
+  db: QueryDb,
+  scope: RunScope,
+  runIds: readonly string[],
+) {
+  return db
+    .selectDistinctOn([seals.runId], {
+      runId: seals.runId,
+      attemptId: seals.attemptId,
+      sealedAt: seals.sealedAt,
+      replayGrade: seals.replayGrade,
+      completenessGaps: seals.completenessGaps,
+      finalRunSeq: sql<string | null>`${seals.finalRunSeq}::text`,
+      eventCount: seals.eventCount,
+      merkleRoot: seals.merkleRoot,
+      archiveSegmentRef: seals.archiveSegmentRef,
     })
     .from(seals)
     .where(
@@ -265,12 +344,13 @@ export function ledgerSealQuery(
         inArray(seals.runId, [...runIds]),
       ),
     )
-    .groupBy(seals.runId);
+    .orderBy(seals.runId, desc(seals.sealedAt));
 }
 
 const tachoColumns = {
   session: {
     publicId: sessions.publicId,
+    sessionUuid: sessions.sessionUuid,
     agentKey: sessions.agentKey,
     outcome: sessions.outcome,
     numTurns: sessions.numTurns,
@@ -279,6 +359,13 @@ const tachoColumns = {
     seqCount: sessions.seqCount,
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
+    replayGrade: sessions.replayGrade,
+    completenessGaps: sessions.completenessGaps,
+    enforcementTier: sessions.enforcementTier,
+    name: sessions.name,
+    summary: sessions.summary,
+    summaryGeneratedAt: sessions.summaryGeneratedAt,
+    summaryModel: sessions.summaryModel,
   },
   operatorPublicId: schema.principals.publicId,
 };
@@ -331,7 +418,15 @@ export function tachoSessionQuery(
 
 // ---- Records and mapping -------------------------------------------------------------
 
-export type LedgerRunCore = {
+/** The generated summary columns a run row carries (`summarize_run`, G14). */
+type GeneratedSummaryColumns = {
+  name: string | null;
+  summary: string | null;
+  summaryGeneratedAt: Date | null;
+  summaryModel: string | null;
+};
+
+type LedgerRunCore = GeneratedSummaryColumns & {
   runId: string;
   publicId: string;
   /** `agent_runs.status` (CHECK: pending, running, completed, failed, cancelled). */
@@ -374,10 +469,24 @@ export const EMPTY_ROLLUP: LedgerEventRollup = {
   opaqueModelCalls: 0,
 };
 
+/** The latest seal of a run, as `ledgerSealQuery` reads it. */
+export type LedgerSeal = {
+  runId: string;
+  attemptId: string;
+  sealedAt: Date;
+  /** Null on a seal written before the recorder graded. */
+  replayGrade: string | null;
+  completenessGaps: unknown;
+  finalRunSeq: string | null;
+  eventCount: number;
+  merkleRoot: string | null;
+  archiveSegmentRef: string | null;
+};
+
 export type LedgerRunRecord = LedgerRunRow & {
   rollup: LedgerEventRollup;
   /** The latest attempt seal; null while the run is open or none was recorded. */
-  sealedAt: Date | null;
+  seal: LedgerSeal | null;
 };
 
 /** What a `cost.run_totals` row says about a run's spend. */
@@ -387,8 +496,9 @@ export type RunCost = {
   costBasis: NonNullable<RunItem["cost"]>["basis"];
 };
 
-export type TachoSessionColumns = {
+export type TachoSessionColumns = GeneratedSummaryColumns & {
   publicId: string;
+  sessionUuid: string;
   agentKey: string;
   outcome: string;
   numTurns: number;
@@ -397,6 +507,10 @@ export type TachoSessionColumns = {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
+  /** Written by the seal at `agent_stop`; null while the session is open. */
+  replayGrade: string | null;
+  completenessGaps: unknown;
+  enforcementTier: string;
 };
 
 export type TachoSessionRow = {
@@ -441,6 +555,48 @@ export function ledgerRunStatus(status: string): RunItem["status"] {
 }
 
 /**
+ * The recorded grade, or null: a seal the recorder never graded, an open run,
+ * or a word outside the ladder (a broken row reads as ungraded, never as a
+ * stronger word). Nothing computes a grade on read.
+ */
+function recordedGrade(grade: string | null): RunItem["replayGrade"] {
+  return isReplayGrade(grade) ? grade : null;
+}
+
+/** The gaps column as a string list; anything else is no gaps. */
+export function recordedGaps(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
+}
+
+/** The generated summary, present only when all three columns were set together. */
+function generatedSummary(
+  columns: GeneratedSummaryColumns,
+): RunItem["summary"] {
+  if (
+    columns.summary === null ||
+    columns.summaryGeneratedAt === null ||
+    columns.summaryModel === null
+  )
+    return null;
+  return {
+    text: columns.summary,
+    generatedAt: columns.summaryGeneratedAt.toISOString(),
+    model: columns.summaryModel,
+  };
+}
+
+/** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
+export function microsString(micros: number): string {
+  if (!Number.isSafeInteger(micros))
+    throw new RangeError(
+      `cost micros must be a safe integer: ${String(micros)}`,
+    );
+  return String(micros);
+}
+
+/**
  * The run's cost as its rollup row records it. No row yet — the run is open,
  * or the rollup has not covered its seal — means no cost, never zero.
  */
@@ -476,7 +632,13 @@ export function toLedgerRunItem(
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
-      status === "live" ? null : (record.sealedAt?.toISOString() ?? null),
+      status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
+    replayGrade:
+      status === "live"
+        ? null
+        : recordedGrade(record.seal?.replayGrade ?? null),
+    name: run.name,
+    summary: generatedSummary(run),
   };
 }
 
@@ -513,6 +675,9 @@ export function toTachoRunItem(
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
+    replayGrade: recordedGrade(session.replayGrade),
+    name: session.name,
+    summary: generatedSummary(session),
   };
 }
 
@@ -566,7 +731,7 @@ export type RunQueries = {
   ledgerSeals: (
     scope: RunScope,
     runIds: readonly string[],
-  ) => Promise<Map<string, Date>>;
+  ) => Promise<Map<string, LedgerSeal>>;
   tachoPage: (scope: RunScope, q: PageQuery) => Promise<TachoSessionRow[]>;
   tachoSession: (
     scope: RunScope,
@@ -631,15 +796,25 @@ export const postgresRunQueries: RunQueries = {
   },
   ledgerRollups: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();
-    const rows = await withTenantDb((tx) =>
-      ledgerRollupQuery(tx, scope, runIds),
-    );
-    return new Map(rows.map(({ runId, ...rollup }) => [runId, rollup]));
+    const [rows, compacted] = await withTenantDb(async (tx) => [
+      await ledgerRollupQuery(tx, scope, runIds),
+      await ledgerCompactedRollupQuery(tx, scope, runIds),
+    ]);
+    const hot = new Map(rows.map(({ runId, ...rollup }) => [runId, rollup]));
+    const out = new Map<string, LedgerEventRollup>();
+    for (const runId of runIds) {
+      const rollup = addCompactedRollup(
+        hot.get(runId),
+        compacted.find((c) => c.runId === runId),
+      );
+      if (rollup) out.set(runId, rollup);
+    }
+    return out;
   },
   ledgerSeals: async (scope, runIds) => {
     if (runIds.length === 0) return new Map();
     const rows = await withTenantDb((tx) => ledgerSealQuery(tx, scope, runIds));
-    return new Map(rows.map((r) => [r.runId, r.sealedAt]));
+    return new Map(rows.map((r) => [r.runId, r]));
   },
   tachoPage: (scope, q) => withTenantDb((tx) => tachoPageQuery(tx, scope, q)),
   tachoSession: async (scope, publicId) => {
@@ -663,7 +838,7 @@ export async function ledgerEnrichment(
   return (row: LedgerRunRow): LedgerRunRecord => ({
     ...row,
     rollup: rollups.get(row.run.runId) ?? EMPTY_ROLLUP,
-    sealedAt: sealed.get(row.run.runId) ?? null,
+    seal: sealed.get(row.run.runId) ?? null,
   });
 }
 

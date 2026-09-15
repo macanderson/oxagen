@@ -120,6 +120,13 @@ export const roles = iamSchema.table(
   },
   (t) => ({
     orgNameIdx: index("roles_org_name_idx").on(t.orgId, t.name),
+    // One role of each name per scope kind in an org (#2158). The seeded set
+    // carries an org "Owner" and a workspace "Owner", so the name is unique
+    // per (org, scope_kind), never per org alone; `lower()` because the
+    // membership CHECKs compare role names case-insensitively. Migration
+    // 20260915140000 creates the index (an expression index is not
+    // expressible in Drizzle DDL); `create_role` reads its 23505 as
+    // `conflict`.
     scopeKindCheck: check(
       "roles_scope_kind_check",
       sql`${t.scopeKind} IN ('org', 'workspace')`,
