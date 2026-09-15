@@ -119,7 +119,7 @@ function cookieFromSetCookie(headers: Headers): string {
 /**
  * A pre-tenant kernel context for the signed-in owner (create_org is
  * scoped: false). No `opts.surface` is claimed on any invoke, the rule the
- * app's own seam follows (src/server/invoke.ts): create_org is not exposed on
+ * app's own seam follows (src/server/kernel.ts): create_org is not exposed on
  * an "app" surface, and the surface check is for the API and MCP adapters.
  */
 function pretenantCtx(userId: string): CapabilityContext {

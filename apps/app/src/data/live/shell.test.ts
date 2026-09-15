@@ -1,0 +1,114 @@
+// The shell port: two kernel reads for the layout's organization context,
+// mapped into the shell's view model, with either read's refusal passed
+// through and an unmappable record reported once.
+import { orgList } from "@oxagen/oxagen/contracts/org.list";
+import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { kernelRead, captureError } = vi.hoisted(() => ({
+  kernelRead: vi.fn(),
+  captureError: vi.fn(),
+}));
+vi.mock("@/server/kernel", () => ({ kernelRead }));
+vi.mock("@oxagen/telemetry", () => ({ captureError }));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { readError, readOk } = await import("@/data/read");
+const { shell } = await import("./shell");
+
+const ctx = unsafeMint(OrgCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "member",
+});
+
+const organization = {
+  id: "7a000000-0000-4000-8000-0000000000a1",
+  publicId: "org_acme",
+  slug: "acme",
+  namespace: "acme",
+  name: "Acme Robotics",
+};
+
+function scripted(orgs: unknown, workspaces: unknown) {
+  kernelRead.mockImplementation((_ctx: unknown, call: { contract: unknown }) =>
+    Promise.resolve(call.contract === orgList ? orgs : workspaces),
+  );
+}
+
+const orgsRead = readOk({
+  organizations: [{ ...organization, role: "member", avatarUrl: null }],
+});
+const workspacesRead = readOk({
+  organization,
+  workspaces: [
+    {
+      id: "7b000000-0000-4000-8000-000000000001",
+      publicId: "ws_core",
+      slug: "core",
+      namespace: "core",
+      name: "Core platform",
+      role: "member",
+    },
+  ],
+});
+
+beforeEach(() => {
+  kernelRead.mockReset();
+  captureError.mockReset();
+});
+
+describe("shell.context", () => {
+  it("reads list_orgs and the context organization's list_workspaces through the kernel seam", async () => {
+    scripted(orgsRead, workspacesRead);
+    expect(await shell.context(ctx)).toEqual(
+      readOk({
+        orgs: [{ slug: "acme", name: "Acme Robotics" }],
+        workspaces: [{ slug: "core", name: "Core platform" }],
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: orgList,
+      input: {},
+      page: "shell",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: workspaceList,
+      input: { orgSlug: "acme" },
+      page: "shell",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a refused organizations read through (negative)", async () => {
+    const denied = { ok: false, reason: "denied", permission: "org.read" };
+    scripted(denied, workspacesRead);
+    expect(await shell.context(ctx)).toEqual(denied);
+  });
+
+  it("passes a failed workspaces read through (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    scripted(orgsRead, down);
+    expect(await shell.context(ctx)).toEqual(down);
+  });
+
+  it("answers record_unmappable and reports once for a record the view model refuses (negative)", async () => {
+    scripted(
+      readOk({
+        organizations: [
+          { ...organization, slug: "", role: "member", avatarUrl: null },
+        ],
+      }),
+      workspacesRead,
+    );
+    expect(await shell.context(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});

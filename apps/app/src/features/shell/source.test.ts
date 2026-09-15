@@ -1,6 +1,7 @@
-// shellSource: the organization and the person the layout's context admits.
-// This file proves the shell renders the context's organization and the
-// session's person, and refuses to render without a session.
+// shellSource: the organization and the person the layout's context admits,
+// and the shell.context read for that context. This file proves the shell
+// receives the context's organization, the session's person and the port's
+// read, and refuses to render without a session.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthUser = vi.fn();
@@ -11,6 +12,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
+const { readError, readOk } = await import("@/data/read");
 const { shellSource } = await import("./source");
 
 const ctx = unsafeMint(OrgCtx, {
@@ -21,7 +23,16 @@ const ctx = unsafeMint(OrgCtx, {
   orgRole: "owner",
 });
 
+const context = vi.fn();
+const source = { shell: { context } };
+const listed = readOk({
+  orgs: [{ slug: "acme", name: "Acme Robotics" }],
+  workspaces: [{ slug: "core-platform", name: "Core platform" }],
+});
+
 beforeEach(() => {
+  context.mockReset();
+  context.mockResolvedValue(listed);
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue({
     id: "usr_marcusbell",
@@ -31,11 +42,19 @@ beforeEach(() => {
 });
 
 describe("shellSource", () => {
-  it("hands the context's organization and the signed-in person to the shell", async () => {
-    expect(await shellSource(ctx)).toEqual({
+  it("hands the context's organization, the signed-in person and the shell.context read to the shell", async () => {
+    expect(await shellSource(ctx, source)).toEqual({
       org: { slug: "acme", name: "Acme Robotics" },
       viewer: { name: "Marcus Bell", email: "marcus.bell@acme.example" },
+      context: listed,
     });
+    expect(context).toHaveBeenCalledWith(ctx);
+  });
+
+  it("passes a failed shell.context read through, and the shell still renders (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    context.mockResolvedValue(down);
+    expect((await shellSource(ctx, source)).context).toEqual(down);
   });
 
   it("keeps a person with no recorded name as null, never an invented one", async () => {
@@ -44,7 +63,7 @@ describe("shellSource", () => {
       email: "marcus.bell@acme.example",
       name: "",
     });
-    expect((await shellSource(ctx)).viewer).toEqual({
+    expect((await shellSource(ctx, source)).viewer).toEqual({
       name: null,
       email: "marcus.bell@acme.example",
     });
@@ -52,6 +71,8 @@ describe("shellSource", () => {
 
   it("refuses to render without a session (negative)", async () => {
     getAuthUser.mockResolvedValue(null);
-    await expect(shellSource(ctx)).rejects.toThrow("shell_without_session");
+    await expect(shellSource(ctx, source)).rejects.toThrow(
+      "shell_without_session",
+    );
   });
 });
