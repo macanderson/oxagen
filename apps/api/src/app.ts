@@ -27,6 +27,7 @@ import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.r
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
+import { billingGauBucketPurchaseRoute } from "./routes/v1/billing.gau_bucket.purchase";
 import { billingActionRateCardRoute } from "./routes/v1/billing.action_rate_card";
 import { billingActionEstimateRoute } from "./routes/v1/billing.action_estimate";
 import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_retention";
@@ -442,6 +443,7 @@ orgScoped.route(
   billingSubscriptionUpgradeStartRoute,
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
+orgScoped.route("/billing/gau-bucket/purchase", billingGauBucketPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 // Governed-action meter (ADR-052, docs/specs/governed-action-metering.md):
 // the rate card, the run->action estimator, and evidence-retention posture.

@@ -1203,6 +1203,24 @@
       }
     },
     {
+      "name": "purchase_gau_bucket",
+      "file": "billing.gau_bucket.purchase.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_invoices",
       "file": "billing.invoice.list.ts",
       "domain": "billing",

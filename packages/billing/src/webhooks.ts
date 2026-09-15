@@ -1,6 +1,6 @@
 // tenancy: system bypass via withSystemDb (webhook arrives with a Stripe event id, no org
 // scope yet; stripe_events/stripe_event_processing are global audit tables; upsertPaymentMethod
-// resolves orgId from a subscription lookup before writing).
+// resolves orgId from the org's billing settings or a subscription lookup before writing).
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
@@ -10,6 +10,7 @@ import {
   grantPlanCreditsForInvoicePaid,
   grantCreditPackForCheckout,
 } from "./grants";
+import { grantGauPurchaseForCheckout } from "./gau-settlements";
 import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
 import { sendPaymentReceipt } from "./receipts";
 import {
@@ -202,9 +203,15 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       return;
     }
     case "checkout.session.completed": {
-      // One-time credit-pack purchases deposit their credits here. Subscription
-      // checkouts (mode=subscription) deliver credits via invoice.paid instead.
+      // A governed-action block purchase (ADR-055 §6) grants its units here,
+      // keyed on the session id. One-time credit-pack purchases deposit their
+      // credits here too. Subscription checkouts (mode=subscription) deliver
+      // credits via invoice.paid instead.
       if (!event.checkoutSession) return;
+      if (event.checkoutSession.metadata.oxagen_kind === "gau_purchase") {
+        await grantGauPurchaseForCheckout(event.checkoutSession);
+        return;
+      }
       await grantCreditPackForCheckout(event.checkoutSession);
       return;
     }
@@ -251,13 +258,21 @@ async function upsertPaymentMethod(
     // tenancy: system bypass via withSystemDb (org resolved from Stripe customer id before
     // a tenant scope exists; payment_method events precede subscription scope).
     //
-    // Org resolution: locate any subscription tied to this customer to get
-    // the org id. New customers may not have a subscription yet; in that
-    // case skip — the subsequent subscription.created event will backfill.
-    const sub = await tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.stripeCustomerId, pm.customerId!),
+    // Org resolution: the org whose billing settings carry this customer
+    // (written by ensureStripeCustomer, so a subscription-less Free org's
+    // card events mirror too), then any subscription tied to it. A customer
+    // known to neither is skipped — the subsequent subscription.created
+    // event will backfill.
+    const settings = await tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.stripeCustomerId, pm.customerId!),
       columns: { orgId: true },
     });
+    const sub =
+      settings ??
+      (await tx.query.subscriptions.findFirst({
+        where: eq(schema.subscriptions.stripeCustomerId, pm.customerId!),
+        columns: { orgId: true },
+      }));
     if (!sub) return;
 
     if (kind === "detached") {
