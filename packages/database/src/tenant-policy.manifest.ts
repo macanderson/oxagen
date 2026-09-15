@@ -206,6 +206,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ADR-053: the organisation's model-vendor key. Org-only, read through
   // withTenantDb — nothing resolves through it, so RLS is the filter here.
   { table: "org.model_credentials", policyClass: "org_only" },
+  // The onboarding gate (#2967): one row per organization, org_id is the
+  // primary key and there is no workspace_id (the gate's workspace is a plain
+  // column) → org_only. Read and written through withTenantDb by the gate
+  // handlers; create_org writes the first row through withSystemDb.
+  { table: "org.onboarding_state", policyClass: "org_only" },
 
   // ── plugin.* (workspace-scoped) ────────────────────────────────────────────
   { table: "plugin.installed_plugins", policyClass: "standard" },
@@ -285,4 +290,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tacho.control_commands", policyClass: "standard" },
   { table: "tacho.incidents", policyClass: "standard" },
   { table: "tacho.checkpoints", policyClass: "standard" },
+  // Single-use enrollment tokens (#2967): orgScopeMixin, consumed by
+  // enroll_host inside the token's own tenant scope.
+  { table: "tacho.enrollment_tokens", policyClass: "standard" },
 ];

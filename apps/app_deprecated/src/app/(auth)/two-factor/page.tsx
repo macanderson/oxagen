@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { OxagenWordmark } from "@/components/ui/brand";
 import { TwoFactorForm } from "./two-factor-form";
 import { safeReturnTo } from "@/lib/return-to";
@@ -12,7 +13,7 @@ export default async function TwoFactorPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+}): Promise<JSX.Element> {
   const returnTo = safeReturnTo((await searchParams)["returnTo"]);
   return (
     <div className="w-full max-w-sm space-y-6">
