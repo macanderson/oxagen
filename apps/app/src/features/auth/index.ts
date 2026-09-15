@@ -20,8 +20,7 @@ export { AFTER_SIGNUP } from "./routes";
 export {
   DEFAULT_NEXT,
   firstParam,
-  nextParam,
-  sanitizeNext,
+  readNext,
   withNext,
 } from "./safe-next";
 export { getAuthUser } from "./session";

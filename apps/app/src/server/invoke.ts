@@ -1,4 +1,5 @@
-// invokeTool: every write in the app goes through here (plan §0.4, §4.6).
+// invokeTool: the invitation writes go through here until WL-11 replaces this
+// module with src/server/kernel.ts (plan §0.4, §4.6).
 //
 // One agent tool contract drives API, MCP, CLI and UI (spec §14.1), so a page
 // write is a kernel `invoke()` of the same contract, never a hand-rolled query.
@@ -16,7 +17,14 @@ import "server-only";
 import { type CapabilityContext, getCapability, invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { ContractOutputMismatch, ToolNotRegistered } from "./errors";
-import type { Viewer } from "./viewer-resolution";
+import type { InviteeCtx } from "./viewer";
+
+/**
+ * The workspace id an organization-level invoke runs under. Organization-scoped
+ * tables (`org_only` under RLS) ignore the workspace GUC; the sentinel keeps
+ * `runInTenantScope`'s UUID assertion satisfied without naming a real workspace.
+ */
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 type SafeParseResult<T> =
   | { success: true; data: T }
@@ -55,23 +63,23 @@ function parseOutput<O>(contract: ToolContract<unknown, O>, raw: unknown): O {
 }
 
 export async function invokeTool<I, O>(
-  viewer: Viewer,
+  viewer: InviteeCtx,
   contract: ToolContract<I, O>,
   input: NoInfer<I>,
 ): Promise<O> {
   await registerHandlers();
   if (!getCapability(contract.name)) throw new ToolNotRegistered(contract.name);
 
+  const scope = { orgId: viewer.orgId, workspaceId: ORG_ONLY_WS };
   const ctx: CapabilityContext = {
-    orgId: viewer.scope.orgId,
-    workspaceId: viewer.scope.workspaceId,
+    ...scope,
     userId: viewer.userId,
     apiKeyId: null,
     requestId: crypto.randomUUID(),
     surface: "app",
     messageId: null,
   };
-  const raw = await runInTenantScope(viewer.scope, () =>
+  const raw = await runInTenantScope(scope, () =>
     invoke(contract.name, input, ctx),
   );
   return parseOutput(contract, raw);

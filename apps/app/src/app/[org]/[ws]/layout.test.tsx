@@ -13,7 +13,7 @@ const { NotFound, requireViewer } = vi.hoisted(() => ({
     return Promise.reject(new NotFound("NEXT_NOT_FOUND"));
   }),
 }));
-vi.mock("@/server/scope", () => ({ requireViewer }));
+vi.mock("@/server/viewer", () => ({ requireViewer }));
 
 import WorkspaceLayout from "./layout";
 

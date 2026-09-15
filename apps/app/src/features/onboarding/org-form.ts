@@ -33,18 +33,20 @@ export function suggestNamespace(slug: string): string {
   return compact.replace(/[^a-z0-9]/g, "").slice(0, 6);
 }
 
-export type OrgFormErrorKey =
-  | "orgNameRequired"
-  | "orgNameTooLong"
-  | "slugInvalid"
-  | "slugReserved"
-  | "namespaceInvalid"
-  | "workspaceNameRequired"
-  | "workspaceNameTooLong"
-  | "workspaceSlugInvalid"
-  | "workspaceSlugReserved"
-  | "slugTaken"
-  | "namespaceTaken";
+const ORG_FORM_ERROR_KEYS = [
+  "orgNameRequired",
+  "orgNameTooLong",
+  "slugInvalid",
+  "slugReserved",
+  "namespaceInvalid",
+  "workspaceNameRequired",
+  "workspaceNameTooLong",
+  "workspaceSlugInvalid",
+  "workspaceSlugReserved",
+  "slugTaken",
+  "namespaceTaken",
+] as const;
+export type OrgFormErrorKey = (typeof ORG_FORM_ERROR_KEYS)[number];
 
 const slug = (key: OrgFormErrorKey) =>
   z
@@ -82,3 +84,16 @@ export const OrganizationForm = z.object({
 export type OrganizationFormInput = z.input<typeof OrganizationForm>;
 export type OrganizationFormValue = z.output<typeof OrganizationForm>;
 export type OrganizationField = keyof OrganizationFormInput;
+
+/** Each field's first error from a failed parse, as a catalog key; an issue outside both sets is dropped. */
+export function organizationFieldErrors(
+  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+): Partial<Record<OrganizationField, OrgFormErrorKey>> {
+  const fields: Partial<Record<OrganizationField, OrgFormErrorKey>> = {};
+  for (const { path, message } of issues) {
+    const field = OrganizationForm.keyof().options.find((f) => f === path[0]);
+    const key = ORG_FORM_ERROR_KEYS.find((k) => k === message);
+    if (field !== undefined && key !== undefined) fields[field] ??= key;
+  }
+  return fields;
+}
