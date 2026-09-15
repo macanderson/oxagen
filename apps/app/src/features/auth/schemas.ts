@@ -93,15 +93,12 @@ export type ResetPasswordInput = z.input<typeof ResetPasswordSchema>;
 /** Field → first error key, for rendering one message under each field. */
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
 
-export function fieldErrors<K extends string>(
-  error: z.ZodError,
-): FieldErrors<K> {
-  const out: FieldErrors<K> = {};
+export function fieldErrors(error: z.ZodError): FieldErrors {
+  const out: FieldErrors = {};
   for (const issue of error.issues) {
     const field = issue.path[0];
     if (typeof field !== "string") continue;
-    const key = field as K;
-    out[key] ??= issue.message;
+    out[field] ??= issue.message;
   }
   return out;
 }

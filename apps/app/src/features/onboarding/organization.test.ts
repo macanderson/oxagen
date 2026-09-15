@@ -10,6 +10,12 @@ vi.mock("../auth/session", () => ({ getAuthUser }));
 // --- the live write's collaborators -------------------------------------------------
 const inserted: Array<{ table: string; values: Record<string, unknown> }> = [];
 let failInsert: Error | null = null;
+/** A unique-constraint violation as Postgres reports it through drizzle. */
+class UniqueViolation extends Error {
+  constructor(readonly constraint: string) {
+    super("unique");
+  }
+}
 const schema = {
   organizations: "organizations",
   orgUsers: "orgUsers",
@@ -25,18 +31,21 @@ const tx = {
         ? Promise.reject(failure)
         : Promise.resolve(undefined);
       settled.catch(() => undefined);
-      return Object.assign(settled, {
+      return {
+        then: settled.then.bind(settled),
         returning: () =>
           failure
             ? Promise.reject(failure)
             : Promise.resolve([{ ...values, id: `${table}-id` }]),
-      });
+      };
     },
   }),
 };
 const isUniqueViolation = vi.fn(
   (err: unknown, constraint?: string) =>
-    (err as { constraint?: string }).constraint === constraint,
+    (typeof err === "object" && err !== null && "constraint" in err
+      ? err.constraint
+      : undefined) === constraint,
 );
 vi.mock("@oxagen/database", () => ({
   schema,
@@ -153,16 +162,12 @@ describe("createOrganizationAction", () => {
   });
 
   it("maps a taken address, a taken namespace, a contract refusal and a failure", async () => {
-    failInsert = Object.assign(new Error("unique"), {
-      constraint: "organizations_slug_idx",
-    });
+    failInsert = new UniqueViolation("organizations_slug_idx");
     expect(await createOrganizationAction(form)).toEqual({
       ok: false,
       fields: { slug: "slugTaken" },
     });
-    failInsert = Object.assign(new Error("unique"), {
-      constraint: "organizations_namespace_idx",
-    });
+    failInsert = new UniqueViolation("organizations_namespace_idx");
     expect(await createOrganizationAction(form)).toEqual({
       ok: false,
       fields: { namespace: "namespaceTaken" },

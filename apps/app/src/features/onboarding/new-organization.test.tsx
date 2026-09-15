@@ -32,10 +32,9 @@ function elements(node: ReactNode): AnyElement[] {
       for (const c of n) visit(c);
       return;
     }
-    if (!isValidElement(n)) return;
-    const el = n as AnyElement;
-    out.push(el);
-    for (const value of Object.values(el.props)) visit(value);
+    if (!isValidElement<Record<string, unknown>>(n)) return;
+    out.push(n);
+    for (const value of Object.values(n.props)) visit(value);
   };
   visit(node);
   return out;

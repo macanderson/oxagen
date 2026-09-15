@@ -22,17 +22,11 @@ export function describeQuery(options: Options | undefined): {
   const out: { where?: string; orderBy?: string } = {};
   if (typeof options?.where === "function")
     out.where = String(
-      (options.where as (c: unknown, o: unknown) => unknown)(
-        columns,
-        operators,
-      ),
+      Reflect.apply(options.where, undefined, [columns, operators]),
     );
   if (typeof options?.orderBy === "function")
     out.orderBy = String(
-      (options.orderBy as (c: unknown, o: unknown) => unknown)(
-        columns,
-        operators,
-      ),
+      Reflect.apply(options.orderBy, undefined, [columns, operators]),
     );
   return out;
 }

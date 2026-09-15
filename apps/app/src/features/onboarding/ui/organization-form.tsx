@@ -15,6 +15,7 @@ import {
   OrganizationForm as Schema,
   type OrganizationField,
   type OrgFormErrorKey,
+  organizationFieldErrors,
   suggestNamespace,
   toSlug,
 } from "../org-form";
@@ -67,12 +68,7 @@ export function OrganizationForm({
     setFailed(false);
     const parsed = Schema.safeParse(values);
     if (!parsed.success) {
-      const next: Partial<Record<OrganizationField, OrgFormErrorKey>> = {};
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0] as OrganizationField;
-        next[field] ??= issue.message as OrgFormErrorKey;
-      }
-      setErrors(next);
+      setErrors(organizationFieldErrors(parsed.error.issues));
       return;
     }
     setErrors({});

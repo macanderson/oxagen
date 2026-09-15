@@ -3,7 +3,6 @@ import { readError } from "@/data/read";
 import type { MfaPolicy } from "./mfa-gate";
 import type { AppSession } from "./session";
 import type { SystemLookups } from "./tenancy-lookups";
-import { ORG_ONLY_WS } from "./tenant-scope";
 import {
   canonicalPath,
   isValidSlug,
@@ -62,30 +61,47 @@ const resolve = (l: SystemLookups, o: string, w?: string, s = session) =>
   resolveViewerWith({ session: s, lookups: l, now }, o, w);
 
 describe("resolveViewerWith: allowed", () => {
-  it("returns the workspace viewer with its tenant scope", async () => {
+  it("returns the member's organization and workspace fields", async () => {
     await expect(resolve(lookups(), "acme", "core-platform")).resolves.toEqual({
       kind: "ok",
-      viewer: {
+      org: {
         userId: "u1",
-        user: session.user,
+        orgId: org.id,
+        orgSlug: "acme",
+        orgName: "Acme Robotics",
         orgRole: "member",
-        scope: { orgId: org.id, workspaceId: ws.id },
-        org: { id: org.id, slug: "acme", name: "Acme Robotics" },
-        ws: { id: ws.id, slug: "core-platform", name: "Core platform" },
+      },
+      ws: {
+        workspaceId: ws.id,
+        wsSlug: "core-platform",
+        wsName: "Core platform",
       },
     });
   });
 
-  it("returns an organization viewer under the org-only sentinel, without a workspace lookup", async () => {
+  it("returns organization fields and no workspace, without a workspace lookup", async () => {
     const l = lookups();
     const result = await resolve(l, "acme");
     expect(result).toMatchObject({
       kind: "ok",
-      viewer: { ws: null, scope: { orgId: org.id, workspaceId: ORG_ONLY_WS } },
+      org: { orgId: org.id },
+      ws: null,
     });
     expect(l.workspaceBySlug).not.toHaveBeenCalled();
     expect(l.isWorkspaceMember).not.toHaveBeenCalled();
   });
+
+  // The stored set: packages/database/src/schema/org.ts:96 and :170.
+  it.each(["owner", "admin", "member", "billing", "compliance", "viewer"])(
+    "resolves a member whose stored role is %s with that role",
+    async (role) => {
+      const l = lookups({ orgRole: () => Promise.resolve(role) });
+      await expect(resolve(l, "acme")).resolves.toMatchObject({
+        kind: "ok",
+        org: { orgRole: role },
+      });
+    },
+  );
 });
 
 describe("resolveViewerWith: refused", () => {
@@ -126,6 +142,15 @@ describe("resolveViewerWith: refused", () => {
     );
     expect(result).toEqual({ kind: "not_found" });
   });
+
+  it.each(["invitee", "superuser", ""])(
+    "404s a member whose stored role %j is outside the stored set, failing closed",
+    async (role) => {
+      const l = lookups({ orgRole: () => Promise.resolve(role) });
+      await expect(resolve(l, "acme")).resolves.toEqual({ kind: "not_found" });
+      expect(l.mfaPolicy).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not disclose a rename to a non-member: 404, not a redirect", async () => {
     const l = lookups({

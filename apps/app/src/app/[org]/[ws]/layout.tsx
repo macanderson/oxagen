@@ -1,5 +1,5 @@
 import { type ReactNode, Suspense } from "react";
-import { requireViewer } from "@/server/scope";
+import { requireViewer } from "@/server/viewer";
 
 // The workspace layer of the shell. The chrome lives in the organization
 // layout, which persists across workspace switches; this layer resolves the
