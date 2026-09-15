@@ -121,6 +121,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Derived spend rollups, rebuilt from frames; org_id + workspace_id NOT NULL.
   { table: "cost.run_totals", policyClass: "standard" },
   { table: "cost.daily_totals", policyClass: "standard" },
+  // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
+  { table: "cost.findings", policyClass: "standard" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
@@ -273,7 +275,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "evidence.run_exports", policyClass: "standard" },
 
   // ── tools.* — mandates and their append-only ledger (ADR-059,
-  //   20260915200000_mandates_and_ledger.sql). Both carry orgScopeMixin.
+  //   20260915202000_mandates_and_ledger.sql). Both carry orgScopeMixin.
   { table: "tools.mandates", policyClass: "standard" },
   { table: "tools.mandate_ledger", policyClass: "standard" },
 

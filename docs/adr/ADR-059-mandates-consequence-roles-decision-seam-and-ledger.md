@@ -13,7 +13,7 @@
   `packages/oxagen/src/contracts/mandate.{grant,request,list,get,revoke,limits.update}.ts`,
   `packages/rules/src/mandates.ts`, `packages/rules/src/gate.ts`,
   `packages/database/src/schema/tools.ts`,
-  `packages/database/atlas/migrations/20260915200000_mandates_and_ledger.sql`.
+  `packages/database/atlas/migrations/20260915202000_mandates_and_ledger.sql`.
 
 ## Context
 

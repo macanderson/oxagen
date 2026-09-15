@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**276 capabilities across 39 domains.**
+**280 capabilities across 40 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -184,6 +184,13 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.list](environment.list.md) — List the environments configured in the active workspace
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
+
+## Finding (4)
+
+- [finding.dismiss](finding.dismiss.md) — Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal
+- [finding.evidence.get](finding.evidence.get.md) — Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving
+- [finding.fix.record](finding.fix.record.md) — Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it
+- [finding.list](finding.list.md) — List this workspace's costed findings ranked by the money at stake, each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend and that saving annualised
 
 ## Graph (6)
 

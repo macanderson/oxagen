@@ -16,7 +16,11 @@ vi.mock("./clickhouse", async (importOriginal) => {
   return { ...actual, clickhouse: () => ({ query: queryMock }) };
 });
 
-import { readModelCallFrames, readTachoToolCallFrames } from "./cost-frames";
+import {
+  readModelCallFrames,
+  readTachoToolCallFrames,
+  readTachoToolCallObservations,
+} from "./cost-frames";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
@@ -173,5 +177,90 @@ describe("readTachoToolCallFrames", () => {
     expect(query).toContain("source = 'hook'");
     expect(query_params).toEqual({ orgId: ORG, rootSessionUuid: RUN });
     expect(frames).toEqual([{ name: "Bash" }, { name: null }]);
+  });
+});
+
+describe("readTachoToolCallObservations", () => {
+  const WS = "00000000-0000-4000-8000-000000000002";
+
+  it("reads a workspace's hook tool calls newest first over the window and joins the span's result tokens", async () => {
+    answer([
+      {
+        root_session_uuid: RUN,
+        at: "2026-09-14T10:00:02.000Z",
+        seq: "7",
+        tool: "Bash",
+        input_digest: "sha256:in",
+        output_digest: "sha256:out",
+        is_mutating: true,
+        result_tokens: 4100,
+      },
+      {
+        root_session_uuid: RUN,
+        at: "2026-09-14T10:00:01.000Z",
+        seq: "6",
+        tool: "Read",
+        input_digest: "sha256:in2",
+        output_digest: "",
+        is_mutating: null,
+        result_tokens: null,
+      },
+    ]);
+    const rows = await readTachoToolCallObservations({
+      orgId: ORG,
+      workspaceId: WS,
+      from: new Date("2026-08-15T00:00:00.000Z"),
+      to: new Date("2026-09-14T12:00:00.000Z"),
+      limit: 200_000,
+    });
+
+    const { query, query_params } = lastQuery();
+    expect(query_params).toEqual({
+      orgId: ORG,
+      workspaceId: WS,
+      from: "2026-08-15 00:00:00.000",
+      to: "2026-09-14 12:00:00.000",
+      limit: 200_000,
+    });
+    expect(query).toContain("source = 'hook'");
+    expect(query).toContain("source = 'otel_span'");
+    expect(query).toContain("workspace_id = {workspaceId:UUID}");
+    expect(query).toContain("ORDER BY ts DESC, seq DESC");
+    expect(query).toContain("ON r.tool_use_id = h.tool_use_id");
+    expect(rows).toEqual([
+      {
+        rootSessionUuid: RUN,
+        at: "2026-09-14T10:00:02.000Z",
+        seq: 7,
+        tool: "Bash",
+        inputDigest: "sha256:in",
+        outputDigest: "sha256:out",
+        isMutating: true,
+        resultTokens: 4100,
+      },
+      {
+        rootSessionUuid: RUN,
+        at: "2026-09-14T10:00:01.000Z",
+        seq: 6,
+        tool: "Read",
+        inputDigest: "sha256:in2",
+        outputDigest: "",
+        isMutating: null,
+        resultTokens: null,
+      },
+    ]);
+  });
+
+  it("lets a degraded store throw", async () => {
+    queryMock.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      readTachoToolCallObservations({
+        orgId: ORG,
+        workspaceId: WS,
+        from: new Date(0),
+        to: new Date(1),
+        limit: 1,
+      }),
+    ).rejects.toThrow();
   });
 });
