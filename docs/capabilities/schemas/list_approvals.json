@@ -83,6 +83,16 @@
             "expiresAt": {
               "type": "string"
             },
+            "mandateId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "chain": {
               "type": "object",
               "properties": {
@@ -121,6 +131,7 @@
             "requester",
             "createdAt",
             "expiresAt",
+            "mandateId",
             "chain"
           ],
           "additionalProperties": false
