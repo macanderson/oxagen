@@ -201,6 +201,22 @@ are the YAML.**
   beyond `pnpm install`.
 - The body is Markdown with GFM (tables, footnotes) and two components:
   `<Callout kind="note|warn" title="…">` and `<Figure src alt caption />`.
+- **Figures are drawn, not stored.** Eight more components render a figure
+  as plain HTML on the house tokens (`scripts/lib/figures.mjs`, styled by the
+  figures block in `assets/blog.css`), so a post needs no image file and the
+  browser gets no script: `<Bars>` (magnitudes), `<Dumbbell>` (two values per
+  row, such as before and after), `<Curve>` (one to three lines), `<Flow>`
+  (numbered steps, with an optional `loop`), `<Ladder>` (a rising order of
+  tiers), `<Timeline>` (validity intervals and an "as of" marker), `<Schema>`
+  (typed relations between classes) and `<Generations>` (stacks of real and
+  generated data). Each takes `title` and `caption`; the JSDoc on each
+  component lists the rest. Marks are ink tones only, never gold, and a
+  second series differs by stroke rather than hue. A figure that plots
+  numbers also emits a visually hidden table of them. Plot only numbers the
+  post states and cites, name the source in the caption, and label a
+  schematic figure "Illustrative." Keep JSX props free of `>` (no arrow
+  functions): the reading-time counter strips tags with `<[^>]+>`. Two or
+  three figures a post is the house measure.
   Citations are GFM footnotes (`claim.[^3]` … `[^3]: Authors (Year). *Title*.
   Venue. https://…`), which the build renders as the **References** section;
   a post with no footnotes fails the build, because these are research posts.

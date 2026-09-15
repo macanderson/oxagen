@@ -21,6 +21,17 @@ The research behind that sentence is real, it is about four years deep, and it i
 
 Here is the lineage, method by method, with the signal that drives each one and the thing that ends it.
 
+<Flow
+  title="Every self-improvement method is this loop"
+  steps={[
+    { label: "Generate", detail: "The model produces candidate outputs" },
+    { label: "Decide", detail: "An answer key, a reward model, or a judge", emph: true },
+    { label: "Train", detail: "Fine-tune on the survivors" },
+  ]}
+  loop="run it again"
+  caption="The methods below differ almost entirely in what fills step 2. That choice sets what the loop can learn and where it quietly stops."
+/>
+
 ## The loop that started it: keep what checks out
 
 STaR, published in 2022, is the clean version of the idea.[^1] A model is prompted with a handful of worked examples and asked to produce a chain of reasoning for a question. If the final answer is right, the reasoning is kept. If it is wrong, the model is shown the correct answer and asked to produce a rationale that reaches it, a step the authors call rationalization. Fine-tune on everything that survived, then run the whole thing again.
@@ -68,6 +79,18 @@ Read the evaluation carefully before reading the result as unbounded. AlpacaEval
 Quiet-STaR, from 2024, asks what happens if the reasoning step is not a separate prompt but a habit at every token.[^8] The model generates short internal rationales in parallel at each position, and the training signal is whether a rationale improved the prediction of the text that follows. Rationales that help get reinforced. Rationales that do not are discarded.
 
 The reported gains are zero-shot and come without task-specific fine-tuning: GSM8K from 5.9% to 10.9%, and CommonsenseQA from 36.3% to 47.2%.
+
+<Dumbbell
+  title="Quiet-STaR, zero-shot"
+  unit="%"
+  fromLabel="Before"
+  toLabel="After Quiet-STaR"
+  rows={[
+    { label: "GSM8K", from: 5.9, to: 10.9 },
+    { label: "CommonsenseQA", from: 36.3, to: 47.2 },
+  ]}
+  caption="Source: Zelikman et al. (2024). No task-specific fine-tuning; the only training signal is whether a thought improved prediction of the text that follows."
+/>
 
 The verifier here is the corpus itself. That is elegant, because ordinary text is unlimited and needs no labeling, and it is also the limit. Predicting the next token better is a proxy for thinking better, not the same thing. A thought that makes the following sentence more predictable may be a good inference, or it may be a good guess about the author's habits.
 
