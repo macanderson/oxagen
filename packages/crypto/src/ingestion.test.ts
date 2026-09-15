@@ -96,6 +96,25 @@ describe("createIngestionCryptoAdapter", () => {
     );
   });
 
+  it.each(["KMS", " kms", "kms ", "aws", "Env"])(
+    "throws on the unrecognized provider %j instead of silently using the env key",
+    (provider) => {
+      withEnv(
+        {
+          INGESTION_CRYPTO_PROVIDER: provider,
+          INGESTION_ENCRYPTION_KEY: validBase64Key,
+          AWS_KMS_INGESTION_KEY_ARN:
+            "arn:aws:kms:us-east-2:123456789012:key/abc",
+        },
+        () => {
+          expect(() => createIngestionCryptoAdapter()).toThrow(
+            /INGESTION_CRYPTO_PROVIDER=.* is not a known provider/,
+          );
+        },
+      );
+    },
+  );
+
   it("throws when provider=kms and AWS_KMS_INGESTION_KEY_ARN is missing", () => {
     withEnv(
       {
