@@ -16,8 +16,11 @@ is the active workspace, or the one `workspaceId` names in the organization
 workspace settings edit through the capability kernel so the same fields are
 reachable from the agent, MCP, and CLI with consistent audit.
 
-Org Owners and Admins, and the Owner or Admin of the workspace the call is
-scoped to, are checked in the handler (`assertOrgRole`, INV-29). `noBillingGate`:
+The handler checks roles (`assertOrgRole`, INV-29). Org Owners and Admins edit
+any workspace of the organization. The Owner or Admin of the workspace the call
+is scoped to edits that workspace only: a call that sets `workspaceId` requires
+an org Owner or Admin and is refused with `forbidden` / `org_role_required`
+otherwise. `noBillingGate`:
 a settings write, never a governed action (ADR-052 exclusion 2).
 
 ## Input

@@ -11,7 +11,7 @@ export const workspaceSettingsWrite = registerCapability({
   name: "update_workspace_settings",
   domain: "workspace",
   description:
-    "Update a workspace's general settings (partial): name, slug, and description. The active workspace unless workspaceId names another one in the organization. Org Owners and Admins, and the workspace's Owner or Admin, are checked in the handler.",
+    "Update a workspace's general settings (partial): name, slug, and description. The active workspace unless workspaceId names another one in the organization. The handler checks roles: org Owners and Admins edit any workspace of the organization; the Owner or Admin of the workspace the call is scoped to edits that workspace only, without workspaceId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const mocks = vi.hoisted(() => {
   const where = vi.fn().mockResolvedValue(undefined);
@@ -17,23 +19,34 @@ const mocks = vi.hoisted(() => {
     update,
     insert,
     insertValues,
-    /** The actor's principal and org role, as assertOrgRole reads them. */
+    /** The actor's principal, org role and workspace role, as assertOrgRole reads them. */
     tenant: {
       principalId: "prn_1" as string | null,
       roleName: "Owner" as string | null,
+      workspaceRoleName: null as string | null,
     },
   };
 });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  // The role gate's two reads are answered by table; the handler's own reads
-  // go through query.workspaces.findFirst.
-  const rowsFor = (table: unknown): unknown[] => {
+  const dialect = new PgDialect();
+  // The role gate's reads are answered by table and by the scope the WHERE
+  // pins: an org-wide assignment has `workspace_id is null`, a workspace
+  // assignment carries the id. The handler's own reads go through
+  // query.workspaces.findFirst.
+  const rowsFor = (table: unknown, where: SQL | null): unknown[] => {
     if (table === real.schema.principals)
       return mocks.tenant.principalId ? [{ id: mocks.tenant.principalId }] : [];
-    if (table === real.schema.principalRoleAssignments)
-      return mocks.tenant.roleName ? [{ roleName: mocks.tenant.roleName }] : [];
+    if (table === real.schema.principalRoleAssignments) {
+      const pinsWorkspace =
+        where !== null &&
+        /"workspace_id" = \$/.test(dialect.sqlToQuery(where).sql);
+      const name = pinsWorkspace
+        ? mocks.tenant.workspaceRoleName
+        : mocks.tenant.roleName;
+      return name ? [{ roleName: name }] : [];
+    }
     throw new Error("unexpected table");
   };
   return {
@@ -45,10 +58,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         insert: mocks.insert,
         select: () => ({
           from: (table: unknown) => {
+            let lastWhere: SQL | null = null;
             const chain = {
               innerJoin: () => chain,
-              where: () => chain,
-              limit: () => Promise.resolve(rowsFor(table)),
+              where: (cond: SQL) => {
+                lastWhere = cond;
+                return chain;
+              },
+              limit: () => Promise.resolve(rowsFor(table, lastWhere)),
             };
             return chain;
           },
@@ -87,6 +104,7 @@ describe("workspace.settings.write handler", () => {
     mocks.insertValues.mockResolvedValue(undefined);
     mocks.tenant.principalId = "prn_1";
     mocks.tenant.roleName = "Owner";
+    mocks.tenant.workspaceRoleName = null;
   });
 
   // ── Role gate (INV-29) ───────────────────────────────────────────────────
@@ -102,6 +120,39 @@ describe("workspace.settings.write handler", () => {
     },
   );
 
+  it.each(["Owner", "Admin"])(
+    "lets a workspace %s with no org role edit the workspace the call is scoped to",
+    async (workspaceRoleName) => {
+      mocks.tenant.roleName = "Member";
+      mocks.tenant.workspaceRoleName = workspaceRoleName;
+      mocks.findFirst
+        .mockResolvedValueOnce(EXISTING)
+        .mockResolvedValueOnce({ ...EXISTING, name: "Renamed" });
+      const out = await workspaceSettingsWriteHandler({ name: "Renamed" }, CTX);
+      expect(out.name).toBe("Renamed");
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["Owner", "Admin"])(
+    "refuses a workspace %s with no org role who names another workspace, and reads and updates nothing (negative)",
+    async (workspaceRoleName) => {
+      mocks.tenant.roleName = "Member";
+      mocks.tenant.workspaceRoleName = workspaceRoleName;
+      await expect(
+        refusal(
+          workspaceSettingsWriteHandler(
+            { workspaceId: "wrk_other", slug: "x", name: "Taken over" },
+            CTX,
+          ),
+        ),
+      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.insert).not.toHaveBeenCalled();
+    },
+  );
+
   it("refuses a context with no user (negative)", async () => {
     await expect(
       refusal(
@@ -112,7 +163,8 @@ describe("workspace.settings.write handler", () => {
 
   // ── Target workspace ─────────────────────────────────────────────────────
 
-  it("updates the workspace workspaceId names, by public id in the org, and captures its slug history under that id", async () => {
+  it("updates the workspace workspaceId names for an org Admin, by public id in the org, and captures its slug history under that id", async () => {
+    mocks.tenant.roleName = "Admin";
     mocks.findFirst
       .mockResolvedValueOnce({ ...EXISTING, id: "ws-other-uuid" })
       .mockResolvedValueOnce({ ...EXISTING, slug: "renamed" });

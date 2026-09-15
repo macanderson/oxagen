@@ -21,20 +21,24 @@ const workspaceNotFound = () =>
 // are all real columns, each set independently — so a concurrent
 // prompt.settings.write can no longer clobber description (audit §1.7).
 //
-//   1. Role gate — assertOrgRole: org Owner or Admin, or Owner or Admin of the
-//      workspace the call is scoped to (the contract's defaultRoles; INV-29).
-//      From an org scope the workspace leg has no workspace to read, so an
-//      org Owner or Admin edits any workspace of the org and nobody else does.
+//   1. Role gate — assertOrgRole (INV-29). With no `workspaceId` the target is
+//      the scoped workspace: org Owner or Admin, or that workspace's Owner or
+//      Admin (the contract's defaultRoles). With a `workspaceId` the gate
+//      accepts org Owner or Admin only, because `assertOrgRole` reads the
+//      workspace role on `ctx.workspaceId` and a workspace role must not
+//      reach another workspace of the org.
 //   2. The target is resolved by public id in the org (`not_found`), the
 //      slug rename is captured and the unique index's 23505 reads as
 //      `conflict` / `slug_taken`.
 export const workspaceSettingsWriteHandler: CapabilityHandler<
   typeof workspaceSettingsWrite
 > = async (input, ctx) => {
-  await assertOrgRole(ctx, {
-    org: ["Owner", "Admin"],
-    workspace: ["Owner", "Admin"],
-  });
+  await assertOrgRole(
+    ctx,
+    input.workspaceId === undefined
+      ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
+      : { org: ["Owner", "Admin"] },
+  );
 
   const row = await withTenantDb(async (tx) => {
     const target = await tx.query.workspaces.findFirst({
