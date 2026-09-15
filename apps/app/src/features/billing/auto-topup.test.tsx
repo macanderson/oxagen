@@ -186,7 +186,7 @@ describe("Auto top-up", () => {
     expect(setAutoTopup).not.toHaveBeenCalled();
   });
 
-  it("is on with one block for an organization with no saved card, which its next purchase saves", async () => {
+  it("is on with one block for an organization with no saved card, which its next purchase saves", () => {
     const { region, toggle, stepper } = renderControl({
       bucket: readOk(freeNoCardBucket()),
       blockSizeGau: 5000,
