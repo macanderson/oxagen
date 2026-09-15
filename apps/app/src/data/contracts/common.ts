@@ -13,3 +13,9 @@ export const OrgRole = z.enum([
   "viewer",
 ]);
 export type OrgRole = z.infer<typeof OrgRole>;
+
+/**
+ * A prefixed public id (`inv_…`, `arun_…`, `usr_…`), the only id a view model
+ * carries (INV-11): a raw database uuid never reaches the page.
+ */
+export const PublicId = z.string().regex(/^[a-z]+_[A-Za-z0-9]+$/);

@@ -34,6 +34,7 @@ import {
   stripeClient,
   SUBSCRIPTION_PLANS,
   CREDIT_PACKS,
+  FREE_PLAN_SLUG,
   PROVIDER_RATE_CARD,
   type DerivedProduct,
 } from "@oxagen/billing";
@@ -488,11 +489,15 @@ async function upsertPlans(
 
   // Reconcile deletions. upsertPlans only ever *adds* the canonical plans, so
   // without this step any row that drops out of the source of truth — a legacy
-  // pre-`-v2` slug, the seeded `free` tier, an e2e-test plan — lingers with
+  // pre-`-v2` slug, an e2e-test plan — lingers with
   // is_public = true and surfaces in the billing UI as a duplicate/unrelated
   // plan. Tombstone (is_public = false) rather than DELETE: subscriptions FK
   // billing.plans, and the row is still needed to name historical plans.
-  const canonicalSlugs = SUBSCRIPTION_PLANS.map((p) => p.slug);
+  // Free is written by seedPlatform, not by this script, and stays public.
+  const canonicalSlugs = [
+    FREE_PLAN_SLUG,
+    ...SUBSCRIPTION_PLANS.map((p) => p.slug),
+  ];
   if (apply) {
     const hidden = await d
       .update(schema.plans)

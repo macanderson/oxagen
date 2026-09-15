@@ -28,6 +28,12 @@ const workspaces = vi.fn();
 const source = {
   pretenant: { orgs, workspaces },
   shell: { context: vi.fn() },
+  billing: {
+    plan: vi.fn(),
+    bucket: vi.fn(),
+    contractRate: vi.fn(),
+    invoices: vi.fn(),
+  },
 };
 
 beforeEach(() => {
