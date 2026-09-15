@@ -25,9 +25,11 @@ function isTier(value: unknown): value is PlanTier {
 export interface OrgActionEntitlement {
   tier: PlanTier;
   /**
-   * `billing.plans.included_actions_annual` for the organisation's entitled
-   * subscription, or null when no subscription row answered. Null means "fall
-   * back to the tier default" — never "unlimited"; `resolveActionAllowance`
+   * The organisation's entitled plan row as an annual figure:
+   * `included_gau_per_month × 12` (ADR-055 §2 made the published allowance
+   * monthly and WL-27 dropped `included_actions_annual` with the annual
+   * counter). Null when no subscription row answered, which means "fall back
+   * to the tier default" — never "unlimited"; `resolveActionAllowance`
    * enforces that distinction.
    */
   includedActionsAnnual: number | null;
@@ -59,7 +61,7 @@ export async function resolveOrgActionEntitlement(
     const s = await tx
       .select({
         tier: schema.plans.tier,
-        includedActionsAnnual: schema.plans.includedActionsAnnual,
+        includedGauPerMonth: schema.plans.includedGauPerMonth,
       })
       .from(schema.subscriptions)
       .innerJoin(schema.plans, eq(schema.subscriptions.planId, schema.plans.id))
@@ -84,10 +86,7 @@ export async function resolveOrgActionEntitlement(
   if (row && isTier(row.tier)) {
     return {
       tier: row.tier,
-      includedActionsAnnual:
-        row.includedActionsAnnual === null
-          ? null
-          : Number(row.includedActionsAnnual),
+      includedActionsAnnual: Number(row.includedGauPerMonth) * 12,
     };
   }
 
