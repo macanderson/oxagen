@@ -29,16 +29,27 @@ export type SpendWasteDeps = {
 
 const CITED_RUNS = 10;
 
-/** The cache-write cost of a run that read nothing back, or null when the pattern is absent. */
+/**
+ * The cache-write cost of a run that read nothing back, or null when the
+ * pattern is absent or the rollup put no money on it: an `estimated` run
+ * carries one reported figure with no split by class, and a book that prices
+ * cache writes at nothing wasted nothing.
+ */
 export function cacheWriteNeverRead(
   run: RunTotalsRecord,
 ): { micros: bigint; basis: CostBasis } | null {
   const wrote = run.tokens.cache_write_5m + run.tokens.cache_write_1h;
-  if (wrote === 0 || run.tokens.cache_read > 0 || run.costBasis === null)
+  if (
+    wrote === 0 ||
+    run.tokens.cache_read > 0 ||
+    run.costBasis === null ||
+    run.costBasis === "estimated"
+  )
     return null;
   let micros = 0n;
   for (const m of run.breakdown.models)
     micros += m.costByClass.cache_write_5m + m.costByClass.cache_write_1h;
+  if (micros === 0n) return null;
   return { micros, basis: run.costBasis };
 }
 

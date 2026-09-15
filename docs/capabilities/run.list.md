@@ -40,11 +40,11 @@ Each row:
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps` | integer | model calls plus tool calls |
 | `frames` | integer | recorded events (ledger) or hash-chained events (tacho) |
-| `cost` | object or null | `{ micros, currency, basis }`; `basis` is `gateway_observed` (ClickHouse `token_usage` summed for the run) or `client_attested` (the harness's own total) |
+| `cost` | object or null | `{ micros, currency, basis }` from the run's `cost.run_totals` row (ADR-058); `basis` is `gateway_observed`, `client_attested`, `mixed` or `estimated`; null until the rollup has priced the run's frames after its seal |
 | `taskRef` | string or null | the goal a ledger run was admitted for |
 | `startedAt` | string | RFC 3339 |
 | `sealedAt` | string or null | null while live |
 
 ## Honesty
 
-A null is what a caller renders as "not recorded". `tacho.sessions.total_cost_micros` is `NOT NULL DEFAULT 0` with a nullable `cost_basis`; a session with no basis, a basis the harness calls `unknown`, or a model the collector could not price answers `cost: null`, never `0`. A ledger run with no `token_usage` row answers `cost: null`. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.
+A null is what a caller renders as "not recorded". Cost comes from the run's `cost.run_totals` row, which the rollup job rebuilds from the run's frames after its seal; a run with no row yet, or a row whose frames priced nothing, answers `cost: null`, never `0`, and nothing here reads ClickHouse or the tacho session's own `total_cost_micros`. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.

@@ -11,7 +11,7 @@ import {
 } from "@oxagen/oxagen/contracts/spend.statement.export";
 import type { SpendGroupKind } from "@oxagen/oxagen/contracts/spend.shared";
 import { microsToCentsHalfEven, type DailyTotalsRecord } from "@oxagen/billing";
-import { compareRows, groupRows } from "./spend.get";
+import { groupRows } from "./spend.get";
 import { readDailyTotals, type SpendScope, utcDay } from "./spend.shared";
 
 export type SpendStatementDeps = {
@@ -54,7 +54,7 @@ export function createSpendStatementHandler(
     for (const level of LEVELS) {
       const rows = groupRows(
         await deps.readDailyTotals(scope, { from, to, groupKind: level }),
-      ).sort(compareRows);
+      );
       for (const row of rows) {
         const micros = row.cost === null ? null : BigInt(row.cost.micros);
         lines.push(

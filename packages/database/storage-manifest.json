@@ -548,6 +548,17 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "export_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "fetch_tacho_commands",
       "reads": [],
@@ -961,8 +972,30 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_run_cost",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "get_schema_registry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_spend",
       "reads": [],
       "surfaces": [
         "api",
@@ -977,6 +1010,17 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_spend_drill",
+      "reads": [],
+      "surfaces": [
         "api",
         "cli",
         "mcp"
@@ -1459,6 +1503,17 @@
       "writes": []
     },
     {
+      "domain": "cost",
+      "name": "list_price_entries",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "list_routing_stats",
       "reads": [],
@@ -1538,6 +1593,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "list_waste",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2567,7 +2633,7 @@
       "writes": []
     }
   ],
-  "contentHash": "00aabe30076a3d4d8b3ce4dd745ab17e0387618fb0506c1b06527c8338a426a7",
+  "contentHash": "308a364bbfd776bfeb798933d4c66b4b66a77e4b736d6f79b2960594dbadeacb",
   "domains": [
     {
       "name": "agent",

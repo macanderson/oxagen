@@ -1,5 +1,5 @@
 {
-  "generatedCount": 228,
+  "generatedCount": 243,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -81,6 +81,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "authorize_cli",
+      "domain": "auth",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -592,10 +600,33 @@
       "consumes": []
     },
     {
+      "name": "export_statement",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "fetch_tacho_commands",
       "domain": "tacho",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_action_usage",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -735,6 +766,18 @@
     {
       "name": "get_environment",
       "domain": "environment",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_evidence_retention",
+      "domain": "billing",
       "surfaces": [
         "api",
         "mcp",
@@ -952,6 +995,18 @@
       "consumes": []
     },
     {
+      "name": "get_rate_card",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_reconcile_status",
       "domain": "schema",
       "surfaces": [
@@ -1000,12 +1055,45 @@
       "consumes": []
     },
     {
+      "name": "get_run",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_cost",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_schema_registry",
       "domain": "schema",
       "surfaces": [
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1019,6 +1107,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_spend_drill",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1234,6 +1333,28 @@
       "consumes": []
     },
     {
+      "name": "list_api_keys",
+      "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_approvals",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_branches",
       "domain": "repo",
       "surfaces": [
@@ -1393,6 +1514,17 @@
       "consumes": []
     },
     {
+      "name": "list_members",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_memories",
       "domain": "agent",
       "surfaces": [
@@ -1515,12 +1647,34 @@
       "consumes": []
     },
     {
+      "name": "list_price_entries",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_runs",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1596,8 +1750,8 @@
       "consumes": []
     },
     {
-      "name": "list_workspace_members",
-      "domain": "workspace",
+      "name": "list_waste",
+      "domain": "spend",
       "surfaces": [
         "api",
         "mcp"
@@ -1685,6 +1839,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "preview_action_cost",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

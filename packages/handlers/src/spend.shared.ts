@@ -129,14 +129,20 @@ export function runFigure(run: RunTotalsRecord): FigureSource {
     currency: run.currency,
     calls: run.steps,
     runs: 1,
+    // A verdict makes the proven figure exist; only a priced, flipped run
+    // adds to it. The same for a human's acceptance (spec §12.8).
     provenMicros:
       run.verdict === null
         ? null
-        : run.verdict === "flipped"
-          ? (run.costMicros ?? 0n)
+        : run.verdict === "flipped" && run.costMicros !== null
+          ? run.costMicros
           : 0n,
     acceptedMicros:
-      run.accepted === null ? null : run.accepted ? (run.costMicros ?? 0n) : 0n,
+      run.accepted === null
+        ? null
+        : run.accepted && run.costMicros !== null
+          ? run.costMicros
+          : 0n,
     productiveRatio: run.productiveRatio,
   };
 }

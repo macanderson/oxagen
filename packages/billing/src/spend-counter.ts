@@ -48,7 +48,7 @@ export async function recordSpend(args: {
   await withSystemDb((tx) =>
     tx.execute(sql`
       INSERT INTO ${schema.spendCounters} (org_id, workspace_id, day, spent_micros)
-      VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${args.micros})
+      VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${args.micros.toString()}::bigint)
       ON CONFLICT (org_id, coalesce(workspace_id, '${sql.raw(NIL_UUID)}'::uuid), day)
       DO UPDATE SET
         spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,

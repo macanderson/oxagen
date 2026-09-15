@@ -21,7 +21,7 @@
 --      (org, workspace, day) so the spend-budget gate and the budget panel
 --      sum Postgres, never ClickHouse (#2820).
 --
--- RLS for the four tenant tables is in 20260914223100_rls_cost_tables.sql
+-- RLS for the four tenant tables is in 20260915020100_rls_cost_tables.sql
 -- (generated from the tenant policy manifest). billing.spend_budgets keeps
 -- its limit_micros column: the budget contracts move to micros on the wire
 -- (ADR-057 §2) with no schema change.

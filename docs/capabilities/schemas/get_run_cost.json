@@ -1,0 +1,328 @@
+{
+  "name": "get_run_cost",
+  "domain": "run",
+  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "rollup": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "cost": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "basis": {
+                        "type": "string",
+                        "enum": [
+                          "gateway_observed",
+                          "client_attested",
+                          "mixed",
+                          "estimated"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency",
+                      "basis"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tokens": {
+                "type": "object",
+                "properties": {
+                  "input_uncached": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_read": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_write_5m": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cache_write_1h": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "output": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reasoning": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "input_uncached",
+                  "cache_read",
+                  "cache_write_5m",
+                  "cache_write_1h",
+                  "output",
+                  "reasoning"
+                ],
+                "additionalProperties": false
+              },
+              "cacheHitRate": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "turns": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "steps": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "modelCalls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toolCalls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "retries": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "productiveRatio": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "byModel": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calls": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cost": {
+                      "type": "object",
+                      "properties": {
+                        "micros": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": [
+                            "gateway_observed",
+                            "client_attested",
+                            "mixed",
+                            "estimated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "micros",
+                        "currency",
+                        "basis"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "input_uncached": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cache_read": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cache_write_5m": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cache_write_1h": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "output": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "reasoning": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "input_uncached",
+                        "cache_read",
+                        "cache_write_5m",
+                        "cache_write_1h",
+                        "output",
+                        "reasoning"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "provider",
+                    "calls",
+                    "cost",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "byTool": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "calls": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "calls"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "priceEntryIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rolledUpAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "cost",
+              "tokens",
+              "cacheHitRate",
+              "turns",
+              "steps",
+              "modelCalls",
+              "toolCalls",
+              "retries",
+              "productiveRatio",
+              "byModel",
+              "byTool",
+              "priceEntryIds",
+              "rolledUpAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "runId",
+      "rollup"
+    ],
+    "additionalProperties": false
+  }
+}

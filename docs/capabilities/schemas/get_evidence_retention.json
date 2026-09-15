@@ -1,0 +1,85 @@
+{
+  "name": "get_evidence_retention",
+  "domain": "billing",
+  "description": "Evidence-retention posture and its price (ADR-052 §4.3): the included window, the organisation's effective retention window from its pinned retention policy, whether it has opted into paying for retention beyond the included months, the per-GB-month rate, and retention credits charged so far. Extended retention never accrues without an explicit opt-in.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "includedMonths": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "effectiveRetentionDays": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "extendedRetentionEnabled": {
+        "type": "boolean"
+      },
+      "usdPerGbMonth": {
+        "type": "number",
+        "minimum": 0
+      },
+      "storedGbBeyondIncluded": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "storedGbMeasured": {
+        "type": "boolean"
+      },
+      "creditsChargedThisPeriod": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "includedMonths",
+      "effectiveRetentionDays",
+      "extendedRetentionEnabled",
+      "usdPerGbMonth",
+      "storedGbBeyondIncluded",
+      "storedGbMeasured",
+      "creditsChargedThisPeriod"
+    ],
+    "additionalProperties": false
+  }
+}

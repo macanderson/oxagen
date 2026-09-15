@@ -23,7 +23,7 @@
  */
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import {
   IMAGE_RATE_CARD,
   PROVIDER_RATE_CARD,
@@ -34,6 +34,8 @@ import {
 } from "./pricing";
 
 export type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
+
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** One resolved price: what the rollup multiplies a frame's units by. */
 export interface PriceEntry {
@@ -279,10 +281,10 @@ export async function listPriceEntries(args: {
       .from(schema.priceEntries)
       .where(
         and(
-          sql`${schema.priceEntries.effectiveFrom} <= ${args.at}`,
+          lte(schema.priceEntries.effectiveFrom, args.at),
           or(
             isNull(schema.priceEntries.effectiveTo),
-            sql`${schema.priceEntries.effectiveTo} > ${args.at}`,
+            gt(schema.priceEntries.effectiveTo, args.at),
           ),
         ),
       )
@@ -351,6 +353,15 @@ export async function syncPriceBook(args: {
       }
       if (
         current &&
+        current.effectiveFrom.getTime() > seed.effectiveFrom.getTime()
+      )
+        // Backdating under an open row would leave two rows open for one
+        // key; a correction is always a later row.
+        throw new RangeError(
+          `price for ${key(seed)} is already effective from ${current.effectiveFrom.toISOString()}; a sync must not start earlier`,
+        );
+      if (
+        current &&
         current.effectiveFrom.getTime() < seed.effectiveFrom.getTime()
       ) {
         await tx
@@ -358,15 +369,24 @@ export async function syncPriceBook(args: {
           .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })
           .where(eq(schema.priceEntries.id, current.id));
       }
+      // Raw params reach the driver untyped: a JS array renders as a value
+      // list, so the text[] is spelled as an array constructor
+      // (`array[]::text[]` when empty), and the bigint and the instant travel
+      // as strings under an explicit cast.
+      const aliases = sql.join(
+        seed.modelAliases.map((a) => sql`${a}`),
+        sql`, `,
+      );
       await tx.execute(sql`
         INSERT INTO ${schema.priceEntries}
           (org_id, provider, model, model_aliases, region, token_class, unit,
            currency, micros_per_million, effective_from, effective_to, source)
         VALUES
-          (NULL, ${seed.provider}, ${seed.model}, ${[...seed.modelAliases]}::text[],
+          (NULL, ${seed.provider}, ${seed.model}, array[${aliases}]::text[],
            ${seed.region}, ${seed.tokenClass}, ${seed.unit}, ${seed.currency},
-           ${seed.microsPerMillion}, ${seed.effectiveFrom}, NULL, 'list')
-        ON CONFLICT (coalesce(org_id, '00000000-0000-0000-0000-000000000000'::uuid),
+           ${seed.microsPerMillion.toString()}::bigint,
+           ${seed.effectiveFrom.toISOString()}::timestamptz, NULL, 'list')
+        ON CONFLICT (coalesce(org_id, '${sql.raw(NIL_UUID)}'::uuid),
                      provider, model, token_class, coalesce(region, ''), effective_from)
         DO UPDATE SET
           micros_per_million = EXCLUDED.micros_per_million,
