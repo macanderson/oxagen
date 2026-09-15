@@ -2,7 +2,7 @@
 // yet their own component. House tokens only (packages/ui globals.css component
 // tokens), so a reskin in the kit reaches every screen that uses them.
 
-export const buttonBase =
+const buttonBase =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground aria-disabled:cursor-not-allowed";
@@ -10,8 +10,6 @@ export const buttonBase =
 export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg`;
 
 export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
-
-export const buttonDanger = `${buttonBase} border border-destructive bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground`;
 
 export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";

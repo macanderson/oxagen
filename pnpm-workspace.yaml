@@ -51,7 +51,7 @@ ignoredBuiltDependencies:
   - "@swc/core"
 
 allowBuilds:
-  # @parcel/watcher (pulled in by Storybook 10 in apps/app) ships prebuilt
+  # @parcel/watcher (pulled in by next-intl in apps/app) ships prebuilt
   # binaries as optional deps; its node-gyp fallback script is not needed.
   "@parcel/watcher": false
   "@swc/core": true
