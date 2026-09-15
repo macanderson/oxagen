@@ -1,0 +1,171 @@
+"use client";
+// The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes.
+// Arrow keys move, Enter opens, Esc closes. On a phone it rises from the bottom
+// edge as a sheet (src/ui/phone.css).
+import { Dialog } from "@base-ui/react/dialog";
+import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useId, useMemo, useRef, useState } from "react";
+import {
+  buildCommands,
+  type Command,
+  filterCommands,
+  moveHighlight,
+} from "./commands";
+import type { ShellData } from "./shell-data";
+import { useShellState } from "./shell-state";
+import { useSidebarSections } from "./sidebar";
+import { useNavigate } from "@/ui/navigation";
+import { SheetHandle } from "@/ui/sheet-dialog";
+
+export function CommandMenu({ data }: { data: ShellData }) {
+  const { commandOpen, setCommandOpen } = useShellState();
+  return (
+    <Dialog.Root open={commandOpen} onOpenChange={setCommandOpen}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim" />
+        {/* Always rendered inside the portal: Base UI unmounts the portal once the
+            popup has closed, which resets the query. Unmounting the popup itself
+            on close leaves the backdrop stuck in its ending style, over the page. */}
+        <CommandPalette
+          data={data}
+          onClose={() => {
+            setCommandOpen(false);
+          }}
+        />
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function CommandPalette({
+  data,
+  onClose,
+}: {
+  data: ShellData;
+  onClose: () => void;
+}) {
+  const t = useTranslations("shell");
+  const navigate = useNavigate();
+  const { ws } = useSidebarSections(data);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const optionId = (c: Command) =>
+    `${listId}-${c.id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+
+  const commands = useMemo(
+    () =>
+      buildCommands(
+        { org: data.org.slug, ws },
+        { nav: (key) => t(`nav.${key}`) },
+      ),
+    [data.org.slug, ws, t],
+  );
+  const ordered = filterCommands(commands, query);
+  const active = ordered[highlight] ?? null;
+
+  const open = (c: Command) => {
+    onClose();
+    navigate.push(c.href);
+  };
+
+  return (
+    <Dialog.Popup
+      data-testid="command-menu"
+      data-sheet=""
+      initialFocus={inputRef}
+      className="fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl"
+    >
+      <SheetHandle />
+      <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
+      <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
+        <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          role="combobox"
+          aria-expanded={ordered.length > 0}
+          aria-controls={ordered.length > 0 ? listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={active === null ? undefined : optionId(active)}
+          aria-label={t("commands.input")}
+          placeholder={t("commands.input")}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHighlight(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              setHighlight((i) =>
+                moveHighlight(
+                  i,
+                  e.key === "ArrowDown" ? 1 : -1,
+                  ordered.length,
+                ),
+              );
+            } else if (e.key === "Enter" && active !== null) {
+              e.preventDefault();
+              open(active);
+            }
+          }}
+          className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        />
+      </div>
+      {ordered.length === 0 ? (
+        <p
+          role="status"
+          className="px-3 py-6 text-center text-sm text-muted-foreground"
+        >
+          {t("commands.empty", { query })}
+        </p>
+      ) : (
+        <div
+          id={listId}
+          role="listbox"
+          aria-label={t("commands.title")}
+          className="min-h-0 flex-1 overflow-y-auto p-2"
+        >
+          {ordered.map((c, i) => {
+            const selected = active?.id === c.id;
+            return (
+              <div
+                key={c.id}
+                id={optionId(c)}
+                role="option"
+                aria-selected={selected}
+                data-command={c.id}
+                tabIndex={-1}
+                onMouseMove={() => {
+                  if (i !== highlight) setHighlight(i);
+                }}
+                onClick={() => {
+                  open(c);
+                }}
+                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                  selected ? "bg-accent text-accent-foreground" : ""
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+        <span>
+          <kbd className="font-mono">↑↓</kbd> {t("commands.footer.move")}
+        </span>
+        <span>
+          <kbd className="font-mono">↩</kbd> {t("commands.footer.open")}
+        </span>
+        <span>
+          <kbd className="font-mono">{t("commands.footer.escape")}</kbd>{" "}
+          {t("commands.footer.close")}
+        </span>
+      </div>
+    </Dialog.Popup>
+  );
+}

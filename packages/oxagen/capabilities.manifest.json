@@ -1,6 +1,23 @@
 {
   "capabilities": [
     {
+      "name": "list_approvals",
+      "file": "agent.approval.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "resolve_approval",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -20,6 +37,21 @@
       }
     },
     {
+      "name": "rotate_agent_credential",
+      "file": "agent.credential.rotate.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "debug_execution",
       "file": "agent.debug.trace.ts",
       "domain": "agent",
@@ -33,6 +65,21 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "commit_agent_definition",
+      "file": "agent.definition.commit.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }
@@ -315,6 +362,41 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_agent",
+      "file": "agent.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_agents",
+      "file": "agent.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -790,6 +872,37 @@
       }
     },
     {
+      "name": "register_agent",
+      "file": "agent.register.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "retire_agent",
+      "file": "agent.retire.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "assign_agent_role",
       "file": "agent.role.assign.ts",
       "domain": "agent",
@@ -862,6 +975,21 @@
       }
     },
     {
+      "name": "suspend_agent",
+      "file": "agent.suspend.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_agent_tools",
       "file": "agent.tool.list.ts",
       "domain": "agent",
@@ -877,6 +1005,23 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_agent_toolbelt",
+      "file": "agent.toolbelt.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -915,6 +1060,22 @@
         "mcp": true,
         "unit": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_api_keys",
+      "file": "api.key.list.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
       }
     },
     {
@@ -993,6 +1154,18 @@
       }
     },
     {
+      "name": "authorize_cli",
+      "file": "auth.cli.authorize.ts",
+      "domain": "auth",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "preview_action_cost",
       "file": "billing.action_estimate.ts",
       "domain": "billing",
@@ -1007,8 +1180,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -1026,27 +1198,24 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
-      "name": "get_action_usage",
-      "file": "billing.action_usage.ts",
+      "name": "set_auto_topup",
+      "file": "billing.auto_topup.set.ts",
       "domain": "billing",
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -1090,6 +1259,24 @@
       }
     },
     {
+      "name": "get_contract_rate",
+      "file": "billing.contract_rate.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -1123,8 +1310,71 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
+      }
+    },
+    {
+      "name": "get_gau_bucket",
+      "file": "billing.gau_bucket.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "purchase_gau_bucket",
+      "file": "billing.gau_bucket.purchase.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_invoices",
+      "file": "billing.invoice.list.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_org_billing_terms",
+      "file": "billing.org_terms.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1509,6 +1759,103 @@
       }
     },
     {
+      "name": "get_context_pr",
+      "file": "context.pr.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "merge_context_pr",
+      "file": "context.pr.merge.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "open_context_pr",
+      "file": "context.pr.open.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "propose_record",
+      "file": "context.proposal.create.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "dismiss_proposal",
+      "file": "context.proposal.dismiss.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_proposals",
+      "file": "context.proposal.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_context_records",
       "file": "context.record.list.ts",
       "domain": "context",
@@ -1554,6 +1901,60 @@
         "api": true,
         "docs": true,
         "unit": true
+      }
+    },
+    {
+      "name": "append_record",
+      "file": "context.records.append.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_record",
+      "file": "context.records.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_records",
+      "file": "context.records.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1720,6 +2121,23 @@
         "mcp": true,
         "unit": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_price_entries",
+      "file": "cost.price_entry.list.ts",
+      "domain": "cost",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1932,6 +2350,60 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "create_role",
+      "file": "iam.role.create.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "delete_role",
+      "file": "iam.role.delete.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_role_grants",
+      "file": "iam.role.grants.set.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2245,7 +2717,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -3118,6 +3590,153 @@
       }
     },
     {
+      "name": "bisect_runs",
+      "file": "run.bisect.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_cost",
+      "file": "run.cost.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "export_run",
+      "file": "run.export.ts",
+      "domain": "run",
+      "mode": "async",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "fork_run",
+      "file": "run.fork.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_frame_body",
+      "file": "run.frame_body.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run",
+      "file": "run.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_runs",
+      "file": "run.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "summarize_run",
+      "file": "run.summarize.ts",
+      "domain": "run",
+      "mode": "async",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_transcript",
+      "file": "run.transcript.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "run_schema_chat",
       "file": "schema.chat.ts",
       "domain": "schema",
@@ -3669,6 +4288,74 @@
       }
     },
     {
+      "name": "get_spend_drill",
+      "file": "spend.drill.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_spend",
+      "file": "spend.get.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "export_statement",
+      "file": "spend.statement.export.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_waste",
+      "file": "spend.waste.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_install_instructions",
       "file": "system.install.instructions.ts",
       "domain": "system",
@@ -3702,9 +4389,26 @@
       }
     },
     {
-      "name": "dispatch_tacho_command",
+      "name": "dispatch_command",
       "file": "tacho.command.dispatch.ts",
-      "domain": "tacho",
+      "domain": "control",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "fetch_commands",
+      "file": "tacho.command.fetch.ts",
+      "domain": "control",
       "mode": "sync",
       "surfaces": [
         "api"
@@ -3717,16 +4421,18 @@
       }
     },
     {
-      "name": "fetch_tacho_commands",
-      "file": "tacho.command.fetch.ts",
-      "domain": "tacho",
+      "name": "list_commands",
+      "file": "tacho.command.list.ts",
+      "domain": "control",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -3787,6 +4493,23 @@
       "layers": {
         "schema": true,
         "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_incidents",
+      "file": "tacho.incident.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true
       }
@@ -3975,6 +4698,24 @@
       }
     },
     {
+      "name": "archive_workspace",
+      "file": "workspace.archive.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_budget_policy",
       "file": "workspace.budget_policy.read.ts",
       "domain": "workspace",
@@ -4027,7 +4768,6 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": false,
         "docs": true
       }
     },
@@ -4062,14 +4802,14 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
     {
-      "name": "list_workspace_members",
+      "name": "list_members",
       "file": "workspace.member.list.ts",
-      "domain": "workspace",
+      "domain": "org",
       "mode": "sync",
       "surfaces": [
         "api",

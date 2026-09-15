@@ -1,7 +1,8 @@
 /**
- * MCP plugin-type contributor: yields raw tools for every enabled + healthy
- * workspace-installed MCP server whose installed_plugins row is enabled and not
- * soft-deleted. The decrypted per-workspace credential is injected into connectMcp.
+ * MCP plugin-type contributor: yields raw tools for every server
+ * selectMaterializableMcpServers returns (../mcp-servers.ts, the selection
+ * get_agent_toolbelt reports from). The decrypted per-workspace credential is
+ * injected into connectMcp.
  *
  * For OAuth listings (authKind === "oauth"), a DbOAuthClientProvider is built so
  * the transport auto-refreshes via the provider's tokens()/saveTokens() interface.
@@ -17,10 +18,9 @@
  * explicit admin action of disabling + re-enabling the server (which
  * re-captures snapshots), or re-registering it.
  */
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { schema, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import {
   getWorkspaceSecret,
   DbOAuthClientProvider,
@@ -38,6 +38,7 @@ import {
   type PluginContributeOptions,
 } from "../plugin-type";
 import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
+import { selectMaterializableMcpServers } from "../mcp-servers";
 import {
   captureToolSnapshots,
   diffDescriptorsAgainstPins,
@@ -72,58 +73,14 @@ async function contributeMcpTools(
 ): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
-  // Enabled + healthy installs joined to the installed_plugins row (workspace-scoped).
-  // Also selects authKind from the installed plugin so we can branch on OAuth vs static.
   const workspaceId = ctx.workspaceId;
-  const servers = await withTenantDb(async (tx) => {
-    // Base conditions — always applied.
-    const baseConds = [
-      eq(schema.mcpServers.orgId, ctx.orgId),
-      eq(schema.mcpServers.workspaceId, workspaceId),
-      eq(schema.mcpServers.enabled, true),
-      // Soft-deleted servers stop registering tools but keep their
-      // descriptor snapshots for replay.
-      isNull(schema.mcpServers.deletedAt),
-      // Accept "healthy" (probed OK, e.g. after OAuth) AND "unknown" (just enabled
-      // via the toggle/secret path — only the OAuth callback ever sets "healthy", so
-      // requiring "healthy" silently hid every secret-auth server from the agent).
-      // The live connectMcp() + listTools() below is the real health gate: a server
-      // that can't connect is skipped gracefully. Genuinely "unhealthy" servers are
-      // still excluded.
-      // or(eq,eq) rather than inArray: `inArray` is reserved for the per-turn
-      // serverAllowlist filter below, and using it here too would make that filter
-      // ambiguous to assert against.
-      or(
-        eq(schema.mcpServers.healthStatus, "healthy"),
-        eq(schema.mcpServers.healthStatus, "unknown"),
-      ),
-      eq(schema.pluginInstalledPlugins.enabled, true),
-      isNull(schema.pluginInstalledPlugins.deletedAt),
-    ] as const;
-    // Per-turn server allowlist: when the user has toggled specific servers
-    // active in the chat composer, only load those servers' tools.
-    const allowlistCond =
-      options?.serverAllowlist && options.serverAllowlist.size > 0
-        ? inArray(schema.mcpServers.publicId, [...options.serverAllowlist])
-        : undefined;
-    return tx
-      .select({
-        id: schema.mcpServers.id,
-        publicId: schema.mcpServers.publicId,
-        name: schema.mcpServers.name,
-        endpointUrl: schema.mcpServers.endpointUrl,
-        authStrategy: schema.mcpServers.authStrategy,
-        authConfig: schema.mcpServers.authConfig,
-        orgListingId: schema.mcpServers.orgListingId,
-        authKind: schema.pluginInstalledPlugins.authKind,
-      })
-      .from(schema.mcpServers)
-      .innerJoin(
-        schema.pluginInstalledPlugins,
-        eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
-      )
-      .where(and(...baseConds, allowlistCond));
-  });
+  const servers = await withTenantDb((tx) =>
+    selectMaterializableMcpServers(tx, {
+      orgId: ctx.orgId,
+      workspaceId,
+      serverAllowlist: options?.serverAllowlist,
+    }),
+  );
 
   const out: ContributedRawTool[] = [];
   for (const server of servers) {

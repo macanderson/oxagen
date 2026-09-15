@@ -1,0 +1,82 @@
+{
+  "name": "bisect_runs",
+  "domain": "run",
+  "description": "Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runA": {
+        "type": "string"
+      },
+      "runB": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runA",
+      "runB"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "divergentSeq": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "keyA": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "keyB": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "aligned": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "divergentSeq",
+      "keyA",
+      "keyB",
+      "aligned"
+    ],
+    "additionalProperties": false
+  }
+}

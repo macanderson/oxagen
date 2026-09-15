@@ -52,6 +52,7 @@ describe("tachoEventsIngest", () => {
         accepted: 1,
         event_ids: [sealedGenesis().event_id_idem],
         chain_breaks: [],
+        body_rejections: [],
         control: {
           host_status: "active",
           deny_generation: { org: 1, workspace: 1 },
@@ -77,6 +78,7 @@ describe("tachoEventsIngest", () => {
         accepted: 2,
         event_ids: [sealedGenesis().event_id_idem],
         chain_breaks: [],
+        body_rejections: [],
         control: {
           host_status: "active",
           deny_generation: { org: 1, workspace: 1 },
@@ -93,5 +95,65 @@ describe("tachoEventsIngest", () => {
     expect(tachoEventsIngest.sensitivity).toBe("high");
     expect(tachoEventsIngest.defaultEffect).toBe("deny");
     expect(tachoEventsIngest.noBillingGate).toBe(true);
+  });
+});
+
+describe("frame bodies in a batch", () => {
+  it("accepts a body naming an event in the batch and refuses a malformed one", () => {
+    const genesis = sealedGenesis();
+    const withBody = {
+      ...validBatch(),
+      bodies: [
+        {
+          event_id_idem: genesis.event_id_idem,
+          content_type: "application/json",
+          bytes_base64: Buffer.from('{"prompt":"x"}').toString("base64"),
+        },
+      ],
+    };
+    expect(tachoEventsIngest.input.safeParse(withBody).success).toBe(true);
+    expect(
+      tachoEventsIngest.input.safeParse({
+        ...withBody,
+        bodies: [{ ...withBody.bodies[0], bytes_base64: "not base64!" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      tachoEventsIngest.input.safeParse({
+        ...withBody,
+        bodies: [{ ...withBody.bodies[0], event_id_idem: "evt_1" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("reports rejected bodies with a closed reason set", () => {
+    const genesis = sealedGenesis();
+    const base = {
+      accepted: 1,
+      event_ids: [genesis.event_id_idem],
+      chain_breaks: [],
+      control: {
+        host_status: "active",
+        deny_generation: { org: 1, workspace: 1 },
+        bundle_etag: "etag",
+        commands: [],
+      },
+    };
+    expect(
+      tachoEventsIngest.output.safeParse({
+        ...base,
+        body_rejections: [
+          { event_id_idem: genesis.event_id_idem, reason: "digest_mismatch" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      tachoEventsIngest.output.safeParse({
+        ...base,
+        body_rejections: [
+          { event_id_idem: genesis.event_id_idem, reason: "too_big" },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

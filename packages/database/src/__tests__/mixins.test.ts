@@ -17,7 +17,13 @@
 //   generator at `.config.defaultFn`, not as a callable `.publicId.$defaultFn()`.
 
 import { describe, expect, it } from "vitest";
-import { idMixin, allowedExecutionStatuses } from "../schema/_mixins";
+import {
+  allowedExecutionStatuses,
+  hexIdMixin,
+  idMixin,
+} from "../schema/_mixins";
+import { retentionPolicyVersions } from "../schema/run-evidence-foundation";
+import { repositoryBindings } from "../schema/ingestion";
 import { getChecks, type DrizzleCheck } from "./_test-helpers";
 
 /**
@@ -50,6 +56,48 @@ function flattenCheckSqlDeep(check: DrizzleCheck): string {
   }
   return walkChunks(check.value.queryChunks ?? []);
 }
+
+// ---------------------------------------------------------------------------
+// hexIdMixin: the public ids RunSpecV2 pins are <prefix>_<16..32 lowercase hex>
+// ---------------------------------------------------------------------------
+
+/** The registered public-id generator of a table or mixin result. */
+function publicIdGenerator(columns: {
+  publicId: unknown;
+}): (() => string) | undefined {
+  return (columns.publicId as { config: { defaultFn?: () => string } }).config
+    .defaultFn;
+}
+
+describe("hexIdMixin — publicId config.defaultFn", () => {
+  const defaultFn = publicIdGenerator(hexIdMixin("rpv"));
+
+  it("generates <prefix>_<22 lowercase hex>", () => {
+    expect(defaultFn).toBeTypeOf("function");
+    expect(defaultFn!()).toMatch(/^rpv_[0-9a-f]{22}$/);
+  });
+
+  it("two calls produce different values", () => {
+    expect(defaultFn!()).not.toBe(defaultFn!());
+  });
+
+  it("never yields a letter outside hex across many draws", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(defaultFn!().slice("rpv_".length)).not.toMatch(/[g-z]/);
+    }
+  });
+
+  it("retention_policy_versions and repository_bindings mint ids RunSpecV2 admits", () => {
+    // `retentionPolicyPublicIdSchema` and `repositoryBindingPublicIdSchema`
+    // (packages/run-ledger run-spec-v2.ts) require <prefix>_<16..32 hex>; a
+    // Crockford-base32 id from idMixin fails them, so a row minted with the
+    // column default could never be pinned by a run.
+    const rpv = publicIdGenerator(retentionPolicyVersions as never);
+    const rpb = publicIdGenerator(repositoryBindings as never);
+    expect(rpv!()).toMatch(/^rpv_[0-9a-f]{16,32}$/);
+    expect(rpb!()).toMatch(/^rpb_[0-9a-f]{16,32}$/);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 1 & 2 & 3: idMixin public id generation

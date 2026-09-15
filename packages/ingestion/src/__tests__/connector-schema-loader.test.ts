@@ -22,6 +22,20 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+// The partner-fetch tests use cdn.example.com, and the SSRF guard resolves every
+// DNS name before fetching. A real lookup is fast where DNS answers ENOTFOUND at
+// once, but a CI resolver can sit on it for seconds: the retry tests then pass
+// vitest's 5 s timeout and their still-running retries consume the next test's
+// mocked fetch ("fetch failed"). Resolve the test host to a public address here
+// so no test in this file touches the network. IP literals and the
+// localhost-style names the SSRF tests use never reach lookup.
+vi.mock("node:dns/promises", () => {
+  const PUBLIC = { address: "93.184.216.34", family: 4 };
+  const lookup = async (_host: string, options?: { all?: boolean }) =>
+    options?.all ? [PUBLIC] : PUBLIC;
+  return { lookup, default: { lookup } };
+});
+
 import {
   BUILT_IN_PLUGIN_IDS,
   loadBuiltInSchema,

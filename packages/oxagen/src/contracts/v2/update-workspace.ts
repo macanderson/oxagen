@@ -96,7 +96,13 @@ export const updateWorkspace = defineTool({
   mutates: true,
 
   input: z.object({
-    // ---- identity (update_workspace_settings, carried by reference) --------
+    // ---- target and identity (update_workspace_settings, carried by reference)
+    /**
+     * Which workspace of the org to update; omitted, the one the call is
+     * scoped to. The Organization › Workspaces section edits from an org
+     * scope, so the target travels by public id.
+     */
+    workspaceId: workspaceSettingsWrite.input.shape.workspaceId,
     name: workspaceSettingsWrite.input.shape.name,
     slug: workspaceSettingsWrite.input.shape.slug,
     description: workspaceSettingsWrite.input.shape.description,

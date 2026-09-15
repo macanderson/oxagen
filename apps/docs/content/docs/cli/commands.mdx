@@ -97,6 +97,16 @@ Resolves an org and workspace (picker, or reused from an existing link) and writ
 
 `init` is idempotent: re-running against an already-linked project reuses the existing link.
 
+## oxagen agent: the agent identity
+
+```bash
+oxagen agent register --slug <slug> --name <name> --harness <stella|claude-code|claude-agent-sdk|custom> [--description <text>] [--validity-days <n>] [--json]
+oxagen agent status <agent> [--json]
+oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
+```
+
+`register` mints the identity (`register_agent`): the agent row, its delegated principal, the default agent role and one long-lived credential, printed once and never recoverable. The definition is a file, `.oxagen/agents/<slug>.toml`, committed to the workspace repository through `commit_agent_definition`. `status` reads `get_agent`: the identity, its credentials (prefix and dates, never the secret), the roles on its principal, the hosts enrolled under its key and the definition of record the last commit cached. `unenroll` revokes the agent's live host enrollments through `revoke_tacho_enrollment`, or one host with `--host`. `register` and `unenroll` are org Owner/Admin writes: the key `oxagen login` minted authenticates as the user who approved the login, and the handler checks that user's org role. The credential `register` prints is locked to its purpose and is not accepted as a bearer by the API or the MCP server; it is the credential the run-token exchange of the spec consumes.
+
 ## oxagen agent env: bind agents to environments
 
 ```bash

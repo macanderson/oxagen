@@ -19,6 +19,7 @@ const EXPECTED_PG_SCHEMAS = [
   "billing",
   "chat",
   "content",
+  "cost",
   "environments",
   "evidence",
   "iam",

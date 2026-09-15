@@ -49,6 +49,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .apiKeyCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_api_keys",
+    async () =>
+      (await import("./api.key.list")).apiKeyListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "revoke_api_key",
     async () =>
       (await import("./api.key.revoke"))
@@ -59,6 +64,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./api.key.rotate"))
         .apiKeyRotateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "authorize_cli",
+    async () =>
+      (await import("./auth.cli.authorize"))
+        .authCliAuthorizeHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "upload_asset",
@@ -79,6 +90,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "archive_workspace",
+    async () =>
+      (await import("./workspace.archive"))
+        .workspaceArchiveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_orgs",
     async () =>
       (await import("./org.list")).orgListHandler as CapabilityHandlerFn,
@@ -90,10 +107,38 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_invoices",
+    async () =>
+      (await import("./billing.invoice.list"))
+        .billingInvoiceListHandler as CapabilityHandlerFn,
+  );
+  // ADR-055 §5 — the two billing-terms writes: the customer's auto top-up, and
+  // the platform operator's commercial terms. set_org_billing_terms is on no
+  // surface; the kernel's platformOnly check is what lets it be registered here
+  // without being reachable from one (INV-31).
+  registerHandler(
+    "set_auto_topup",
+    async () =>
+      (await import("./billing.auto_topup.set"))
+        .billingAutoTopupSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_org_billing_terms",
+    async () =>
+      (await import("./billing.org_terms.set"))
+        .billingOrgTermsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_subscription",
     async () =>
       (await import("./billing.subscription.read"))
         .billingSubscriptionReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_contract_rate",
+    async () =>
+      (await import("./billing.contract_rate.get"))
+        .billingContractRateGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_usage_breakdown",
@@ -113,20 +158,27 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.credits.purchase"))
         .billingCreditsPurchaseHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "purchase_gau_bucket",
+    async () =>
+      (await import("./billing.gau_bucket.purchase"))
+        .billingGauBucketPurchaseHandler as CapabilityHandlerFn,
+  );
   // ADR-052 — the governed-action meter's own read surfaces: the published
-  // price, this organisation's position against it, the run→action calculator,
-  // and the retention posture.
+  // price, the run→action calculator, and the retention posture.
   registerHandler(
     "get_rate_card",
     async () =>
       (await import("./billing.action_rate_card"))
         .billingActionRateCardHandler as CapabilityHandlerFn,
   );
+  // ADR-055 — this organisation's position against its own contracted terms:
+  // the month's governed action unit bucket, its mode and its top-up state.
   registerHandler(
-    "get_action_usage",
+    "get_gau_bucket",
     async () =>
-      (await import("./billing.action_usage"))
-        .billingActionUsageHandler as CapabilityHandlerFn,
+      (await import("./billing.gau_bucket.get"))
+        .billingGauBucketGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "preview_action_cost",
@@ -467,10 +519,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "list_workspace_members",
+    "list_members",
     async () =>
       (await import("./workspace.member.list"))
-        .workspaceMemberListHandler as CapabilityHandlerFn,
+        .listMembersHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_budget_policy",
@@ -525,6 +577,61 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.record.promote"))
         .contextRecordPromoteHandler as CapabilityHandlerFn,
+  );
+  // Steering: records → proposals → Context PR (ADR-061).
+  registerHandler(
+    "list_records",
+    async () =>
+      (await import("./context.records.list"))
+        .listRecordsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_record",
+    async () =>
+      (await import("./context.records.get"))
+        .getRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "append_record",
+    async () =>
+      (await import("./context.records.append"))
+        .appendRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "propose_record",
+    async () =>
+      (await import("./context.proposal.create"))
+        .proposeRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_proposals",
+    async () =>
+      (await import("./context.proposal.list"))
+        .listProposalsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_proposal",
+    async () =>
+      (await import("./context.proposal.dismiss"))
+        .dismissProposalHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "open_context_pr",
+    async () =>
+      (await import("./context.pr.open"))
+        .openContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_context_pr",
+    async () =>
+      (await import("./context.pr.get"))
+        .getContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "merge_context_pr",
+    async () =>
+      (await import("./context.pr.merge"))
+        .mergeContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "record_execution",
@@ -797,16 +904,144 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoBundleGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "dispatch_tacho_command",
+    "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
         .tachoCommandDispatchHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "fetch_tacho_commands",
+    "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))
         .tachoCommandFetchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_commands",
+    async () =>
+      (await import("./tacho.command.list"))
+        .tachoCommandListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_runs",
+    async () =>
+      (await import("./run.list")).runListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run",
+    async () =>
+      (await import("./run.get")).runGetHandler as CapabilityHandlerFn,
+  );
+  // Agent identity and the definition of record (MC spec §6.2, ADR-057,
+  // #2956). The two identity reads live in packages/agent; these are the
+  // credential-minting and revoking writes beside api.key.* and tacho.*, the
+  // definition commit through @oxagen/github, the belt read over the runtime's
+  // own decision, and the incident list.
+  registerHandler(
+    "register_agent",
+    async () =>
+      (await import("./agent.register"))
+        .agentRegisterHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "rotate_agent_credential",
+    async () =>
+      (await import("./agent.credential.rotate"))
+        .agentCredentialRotateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "suspend_agent",
+    async () =>
+      (await import("./agent.suspend"))
+        .agentSuspendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "retire_agent",
+    async () =>
+      (await import("./agent.retire"))
+        .agentRetireHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "commit_agent_definition",
+    async () =>
+      (await import("./agent.definition.commit"))
+        .agentDefinitionCommitHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_agent_toolbelt",
+    async () =>
+      (await import("./agent.toolbelt.get"))
+        .agentToolbeltGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_incidents",
+    async () =>
+      (await import("./tacho.incident.list"))
+        .tachoIncidentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run_frame_body",
+    async () =>
+      (await import("./run.frame_body.get"))
+        .runFrameBodyGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run_transcript",
+    async () =>
+      (await import("./run.transcript.get"))
+        .runTranscriptGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "bisect_runs",
+    async () =>
+      (await import("./run.bisect")).runBisectHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "fork_run",
+    async () =>
+      (await import("./run.fork")).runForkHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "export_run",
+    async () =>
+      (await import("./run.export")).runExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "summarize_run",
+    async () =>
+      (await import("./run.summarize"))
+        .runSummarizeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_run_cost",
+    async () =>
+      (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend",
+    async () =>
+      (await import("./spend.get")).spendGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend_drill",
+    async () =>
+      (await import("./spend.drill")).spendDrillHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_waste",
+    async () =>
+      (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "export_statement",
+    async () =>
+      (await import("./spend.statement.export"))
+        .spendStatementHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_price_entries",
+    async () =>
+      (await import("./cost.price_entry.list"))
+        .priceEntryListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_tacho_hosts",
@@ -843,6 +1078,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./iam.role.list"))
         .iamRoleListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_role",
+    async () =>
+      (await import("./iam.role.create"))
+        .iamRoleCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_role_grants",
+    async () =>
+      (await import("./iam.role.grants.set"))
+        .iamRoleGrantsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_role",
+    async () =>
+      (await import("./iam.role.delete"))
+        .iamRoleDeleteHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_auth_alerts",

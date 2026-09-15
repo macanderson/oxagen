@@ -1,4 +1,7 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
+import { billingGauClose } from "./functions/billing.gau-close";
+import { costRunRollup } from "./functions/cost.run-rollup";
+import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -27,6 +30,12 @@ import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
+import {
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+} from "./functions/evidence.run-export";
+import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
+import { runSummarize } from "./functions/run.summarize";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -35,6 +44,9 @@ import { observabilityCaptureFailure } from "./functions/observability.capture-f
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   billingDunningSweep,
+  billingGauClose,
+  costRunRollup,
+  costDailyRollup,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,
@@ -57,4 +69,8 @@ export const functions: any[] = [
   schemaReconcile,
   memoryDecayPass,
   observabilityCaptureFailure,
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+  evidenceFrameCompaction,
+  runSummarize,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

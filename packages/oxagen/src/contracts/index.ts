@@ -10,8 +10,20 @@
 
 import type { CapabilityDeclaration } from "../types";
 import { apiKeyCreate } from "./api.key.create";
+import { apiKeyList } from "./api.key.list";
 import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
+import { authCliAuthorize } from "./auth.cli.authorize";
+import { agentApprovalList } from "./agent.approval.list";
+import { agentList } from "./agent.list";
+import { agentGet } from "./agent.get";
+import { agentRegister } from "./agent.register";
+import { agentCredentialRotate } from "./agent.credential.rotate";
+import { agentSuspend } from "./agent.suspend";
+import { agentRetire } from "./agent.retire";
+import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentToolbeltGet } from "./agent.toolbelt.get";
+import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
@@ -41,9 +53,24 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { tachoCommandFetch } from "./tacho.command.fetch";
+import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
+import { runList } from "./run.list";
+import { runCostGet } from "./run.cost";
+import { spendGet } from "./spend.get";
+import { spendDrill } from "./spend.drill";
+import { spendWasteList } from "./spend.waste";
+import { spendStatementExport } from "./spend.statement.export";
+import { costPriceEntryList } from "./cost.price_entry.list";
+import { runGet } from "./run.get";
+import { runFrameBodyGet } from "./run.frame_body.get";
+import { runTranscriptGet } from "./run.transcript.get";
+import { runExport } from "./run.export";
+import { runBisect } from "./run.bisect";
+import { runFork } from "./run.fork";
+import { runSummarize } from "./run.summarize";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -73,9 +100,14 @@ import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationa
 import { agentToolList } from "./agent.tool.list";
 import { billingActionEstimate } from "./billing.action_estimate";
 import { billingActionRateCard } from "./billing.action_rate_card";
-import { billingActionUsage } from "./billing.action_usage";
+import { billingAutoTopupSet } from "./billing.auto_topup.set";
+import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
+import { billingGauBucketGet } from "./billing.gau_bucket.get";
+import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
+import { billingInvoiceList } from "./billing.invoice.list";
+import { billingOrgTermsSet } from "./billing.org_terms.set";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -98,6 +130,7 @@ import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
 import { workspaceList } from "./workspace.list";
+import { workspaceArchive } from "./workspace.archive";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
@@ -134,14 +167,26 @@ import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
 import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
+import { iamRoleCreate } from "./iam.role.create";
+import { iamRoleGrantsSet } from "./iam.role.grants.set";
+import { iamRoleDelete } from "./iam.role.delete";
 import { conversationChat } from "./conversation.chat";
-import { workspaceMemberList } from "./workspace.member.list";
+import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
+import { contextRecordsList } from "./context.records.list";
+import { contextRecordsGet } from "./context.records.get";
+import { contextRecordsAppend } from "./context.records.append";
+import { contextProposalCreate } from "./context.proposal.create";
+import { contextProposalList } from "./context.proposal.list";
+import { contextProposalDismiss } from "./context.proposal.dismiss";
+import { contextPrOpen } from "./context.pr.open";
+import { contextPrGet } from "./context.pr.get";
+import { contextPrMerge } from "./context.pr.merge";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -263,6 +308,55 @@ export type {
   FieldError as SharedFieldError,
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
+// Spend vocabulary (ADR-060): money in micros with a basis, day ranges, token
+// classes. The shared file is not a capability, so it is exported here to
+// satisfy the check-contracts file-coverage guard.
+export {
+  costBasisSchema,
+  costSchema,
+  moneySchema,
+  spendFigureSchema,
+  tokenCountsSchema,
+} from "./spend.shared";
+export type {
+  Cost,
+  CostBasis,
+  SpendGroupKind,
+  TokenCounts,
+} from "./spend.shared";
+// Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
+// capability, so exported here to satisfy the file-coverage guard.
+export {
+  recordKindSchema,
+  recordForceSchema,
+  constraintEffectSchema,
+  publishedSharingScopeSchema,
+  appendKindSchema,
+  proposalStatusSchema,
+  governanceModeSchema,
+  checkNameSchema,
+  CHECK_NAMES,
+  checkResultSchema,
+  proposedRecordSchema,
+  proposalSupportSchema,
+  proposalViewSchema,
+  publishedRecordSchema,
+} from "./context.steering.shared";
+export type {
+  RecordKind,
+  RecordForce,
+  ConstraintEffect,
+  PublishedSharingScope,
+  AppendKind,
+  ProposalStatus,
+  GovernanceMode,
+  CheckName,
+  CheckResult,
+  ProposalView,
+  PublishedRecordView,
+} from "./context.steering.shared";
+export { contextPrSchema } from "./context.pr.open";
+export type { ContextPr } from "./context.pr.open";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
@@ -374,8 +468,20 @@ export type {
 
 export {
   apiKeyCreate,
+  apiKeyList,
   apiKeyRevoke,
+  authCliAuthorize,
   assetUpload,
+  agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -429,15 +535,35 @@ export {
   tachoBundleGet,
   tachoCommandDispatch,
   tachoCommandFetch,
+  tachoCommandList,
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  runList,
+  runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
-  billingActionUsage,
+  billingAutoTopupSet,
+  billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
+  billingGauBucketGet,
+  billingGauBucketPurchase,
+  billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -460,6 +586,7 @@ export {
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -496,14 +623,26 @@ export {
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
-  workspaceMemberList,
+  listMembers,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordsList,
+  contextRecordsGet,
+  contextRecordsAppend,
+  contextProposalCreate,
+  contextProposalList,
+  contextProposalDismiss,
+  contextPrOpen,
+  contextPrGet,
+  contextPrMerge,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -620,8 +759,20 @@ export {
 // what the compiler will serialize into a declaration file.
 export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyCreate,
+  apiKeyList,
   apiKeyRevoke,
+  authCliAuthorize,
   assetUpload,
+  agentApprovalList,
+  agentList,
+  agentGet,
+  agentRegister,
+  agentCredentialRotate,
+  agentSuspend,
+  agentRetire,
+  agentDefinitionCommit,
+  agentToolbeltGet,
+  tachoIncidentList,
   agentApprovalResolve,
   agentDefinitionCreate,
   agentDefinitionDelete,
@@ -672,15 +823,35 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoBundleGet,
   tachoCommandDispatch,
   tachoCommandFetch,
+  tachoCommandList,
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  runList,
+  runGet,
+  runFrameBodyGet,
+  runTranscriptGet,
+  runExport,
+  runBisect,
+  runFork,
+  runSummarize,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
-  billingActionUsage,
+  billingAutoTopupSet,
+  billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
+  billingGauBucketGet,
+  billingGauBucketPurchase,
+  billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -703,6 +874,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -739,14 +911,26 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
-  workspaceMemberList,
+  listMembers,
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordsList,
+  contextRecordsGet,
+  contextRecordsAppend,
+  contextProposalCreate,
+  contextProposalList,
+  contextProposalDismiss,
+  contextPrOpen,
+  contextPrGet,
+  contextPrMerge,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,

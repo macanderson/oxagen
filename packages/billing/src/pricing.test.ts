@@ -251,3 +251,27 @@ describe("derivePricing", () => {
     );
   });
 });
+
+describe("published GAU terms (ADR-055 §2)", () => {
+  // The mirror of plans_gau_terms_check: stripe-sync writes these figures to
+  // billing.plans, and a row that fails the CHECK would fail the whole sync.
+  it("every paid plan prices a block to whole cents", () => {
+    for (const plan of SUBSCRIPTION_PLANS) {
+      const { ratePerGauMicros, blockSizeGau, includedGauPerMonth, currency } =
+        plan.gauTerms;
+      expect(ratePerGauMicros).toBeGreaterThanOrEqual(0n);
+      expect(blockSizeGau).toBeGreaterThan(0);
+      expect(includedGauPerMonth).toBeGreaterThanOrEqual(0);
+      expect(currency).toBe("usd");
+      expect((ratePerGauMicros * BigInt(blockSizeGau)) % 10_000n).toBe(0n);
+    }
+  });
+
+  it("the monthly allowance grows with the tier", () => {
+    const byTier = Object.fromEntries(
+      SUBSCRIPTION_PLANS.map((p) => [p.tier, p.gauTerms.includedGauPerMonth]),
+    );
+    expect(byTier["build"]).toBeLessThan(byTier["scale"]!);
+    expect(byTier["enterprise"]).toBeGreaterThanOrEqual(byTier["scale"]!);
+  });
+});

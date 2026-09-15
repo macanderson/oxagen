@@ -73,6 +73,12 @@ export const listWorkspaces = defineTool({
      * generated help still explains what the slug selects.
      */
     orgSlug: workspaceList.input.shape.orgSlug.optional(),
+    /**
+     * Carried from `list_workspaces`: archived workspaces (`archive_workspace`)
+     * leave the pickers unless asked for; the Organization › Workspaces
+     * section asks. Meaningful only with `orgSlug`.
+     */
+    includeArchived: workspaceList.input.shape.includeArchived,
   }),
 
   output: z.object({

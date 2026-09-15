@@ -1,0 +1,380 @@
+// The Postgres steering store against a real migrated database (ADR-061):
+// the publication transaction, the idempotent append, the one-open-PR-per-
+// lineage index, and the tenant policies on the two new tables. Runs wherever
+// DATABASE_URL points at a migrated database — CI's `test` job migrates
+// Postgres with Atlas before `turbo run build test:unit` and carries
+// DATABASE_URL in turbo's globalEnv; a local run without one is skipped, not
+// red. Every row it writes is removed in afterAll.
+import { afterAll, describe, expect, it } from "vitest";
+import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { inArray, sql } from "drizzle-orm";
+import {
+  postgresSteeringStore as store,
+  type ProposalRow,
+} from "./context.steering.store";
+
+const enabled = Boolean(process.env.DATABASE_URL);
+
+describe.skipIf(!enabled)("steering store against Postgres", () => {
+  const orgId = crypto.randomUUID();
+  const workspaceId = crypto.randomUUID();
+  const otherWorkspace = crypto.randomUUID();
+  const scope = { orgId, workspaceId };
+  const userId = crypto.randomUUID();
+  const tag = workspaceId.slice(0, 8);
+  const lineage = `ctx.g2961.${tag}`;
+  const inScope = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
+
+  afterAll(async () => {
+    await withSystemDb(async (tx) => {
+      const records = await tx
+        .select({ id: schema.contextRecords.id })
+        .from(schema.contextRecords)
+        .where(
+          inArray(schema.contextRecords.workspaceId, [
+            workspaceId,
+            otherWorkspace,
+          ]),
+        );
+      const ids = records.map((r) => r.id);
+      if (ids.length > 0) {
+        await tx
+          .delete(schema.contextPromotions)
+          .where(inArray(schema.contextPromotions.recordId, ids));
+        await tx
+          .update(schema.contextRecords)
+          .set({ activeVersionId: null })
+          .where(inArray(schema.contextRecords.id, ids));
+        await tx
+          .delete(schema.contextRecordVersions)
+          .where(inArray(schema.contextRecordVersions.recordId, ids));
+        await tx
+          .delete(schema.contextRecords)
+          .where(inArray(schema.contextRecords.id, ids));
+      }
+      await tx
+        .delete(schema.contextAppends)
+        .where(
+          inArray(schema.contextAppends.workspaceId, [
+            workspaceId,
+            otherWorkspace,
+          ]),
+        );
+      await tx
+        .delete(schema.contextProposals)
+        .where(
+          inArray(schema.contextProposals.workspaceId, [
+            workspaceId,
+            otherWorkspace,
+          ]),
+        );
+    });
+    await closeDatabase();
+  });
+
+  const propose = (over: Partial<ProposalRow> = {}) =>
+    inScope(() =>
+      store.insertProposal({
+        orgId,
+        workspaceId,
+        lineageId: lineage,
+        kind: "rule",
+        force: "should",
+        constraintEffect: null,
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md more than once in a run.",
+        rationale: "682 duplicate tool calls across 212 runs.",
+        source: `user:${userId}`,
+        supportRuns: ["run_1"],
+        supportAgents: [],
+        supportingRecordIds: [],
+        evidenceLinks: [],
+        createdByUserId: userId,
+        ...over,
+      }),
+    );
+
+  it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
+    const proposal = await propose();
+    const opened = await inScope(() =>
+      store.updateProposal(
+        proposal.id,
+        {
+          status: "checks_passed",
+          repository: "a-intel/platform",
+          baseRef: "main",
+          branch: `context/${lineage}`,
+          path: `.oxagen/rules/${lineage}.toml`,
+          prNumber: 519,
+          prUrl: "https://github.com/a-intel/platform/pull/519",
+          headSha: "abc1234",
+          stampedRecordId: "rec_x",
+          recordHash: `sha256:${"a".repeat(64)}`,
+        },
+        ["proposed"],
+      ),
+    );
+    const mergedAt = new Date("2026-09-15T09:16:40.000Z");
+    const first = await inScope(() =>
+      store.publishMerge({
+        scope,
+        proposal: opened,
+        body: 'schema = "context-record/v0.1"\n',
+        checksum: "b".repeat(64),
+        commitSha: "7d2e91a",
+        path: opened.path!,
+        mergedAt,
+        mergedByUserId: userId,
+        policyVersion: "governance:team",
+      }),
+    );
+    expect(first.version).toBe(1);
+    expect(first.promotion.seq).toBe(1);
+    expect(first.ledgerBefore).toBe(0);
+
+    const found = await inScope(() => store.findRecord(scope, lineage));
+    expect(found?.record).toMatchObject({
+      slug: lineage,
+      status: "active",
+      kind: "rule",
+      force: "should",
+      sharingScope: "workspace",
+      commitSha: "7d2e91a",
+      path: opened.path,
+      version: 1,
+      checksum: "b".repeat(64),
+    });
+    expect(found?.record.publishedAt?.toISOString()).toBe(
+      mergedAt.toISOString(),
+    );
+    expect(found?.publishedBy).toEqual({
+      proposalPublicId: proposal.publicId,
+      prUrl: opened.prUrl,
+    });
+    const merged = await inScope(() =>
+      store.findProposal(scope, proposal.publicId),
+    );
+    expect(merged).toMatchObject({
+      status: "merged",
+      mergedCommit: "7d2e91a",
+      publishedRecordId: first.recordId,
+      promotionEventId: first.promotion.id,
+    });
+    expect(await inScope(() => store.mergedRefs(merged!))).toEqual({
+      promotionEventPublicId: first.promotion.publicId,
+      recordPublicId: first.recordPublicId,
+    });
+    expect(await inScope(() => store.ledgerLength(scope))).toBe(1);
+
+    // The proposal is past checks_passed: the transition finds no row and
+    // the transaction's record, version and ledger writes roll back.
+    await expect(
+      inScope(() =>
+        store.publishMerge({
+          scope,
+          proposal: opened,
+          body: 'schema = "context-record/v0.1"\n# again\n',
+          checksum: "d".repeat(64),
+          commitSha: "7d2e91a",
+          path: opened.path!,
+          mergedAt: new Date(),
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
+    // A guarded write finds the proposal merged and leaves it as it is.
+    await expect(
+      inScope(() =>
+        store.updateProposal(proposal.id, { status: "rejected" }, [
+          "proposed",
+          "checks_passed",
+        ]),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "proposal_merged" });
+    expect(await inScope(() => store.ledgerLength(scope))).toBe(1);
+    expect(
+      (await inScope(() => store.findRecord(scope, lineage)))!.versions,
+    ).toHaveLength(1);
+
+    const second = await propose({ statement: "Cache the first read." });
+    const secondOpened = await inScope(() =>
+      store.updateProposal(
+        second.id,
+        {
+          status: "checks_passed",
+          repository: "a-intel/platform",
+          baseRef: "main",
+          branch: `context/${lineage}`,
+          path: `.oxagen/rules/${lineage}.toml`,
+          prNumber: 520,
+          prUrl: "https://github.com/a-intel/platform/pull/520",
+          headSha: "def5678",
+          stampedRecordId: "rec_y",
+          recordHash: `sha256:${"e".repeat(64)}`,
+        },
+        ["proposed"],
+      ),
+    );
+    const again = await inScope(() =>
+      store.publishMerge({
+        scope,
+        proposal: secondOpened,
+        body: 'schema = "context-record/v0.1"\n# v2\n',
+        checksum: "c".repeat(64),
+        commitSha: "8e3f0ab",
+        path: opened.path!,
+        mergedAt: new Date(),
+        mergedByUserId: userId,
+        policyVersion: "governance:team",
+      }),
+    );
+    expect(again.recordId).toBe(first.recordId);
+    expect(again.version).toBe(2);
+    expect(again.promotion.seq).toBe(2);
+    expect(again.ledgerBefore).toBe(1);
+    const versions = (await inScope(() => store.findRecord(scope, lineage)))!
+      .versions;
+    expect(versions.map((v) => [v.version, v.isLatest])).toEqual([
+      [2, true],
+      [1, false],
+    ]);
+  });
+
+  it("keeps one open PR per lineage through the partial unique index", async () => {
+    const a = await propose({ lineageId: `${lineage}.dup` });
+    const b = await propose({ lineageId: `${lineage}.dup` });
+    await inScope(() =>
+      store.updateProposal(a.id, { status: "pr_open" }, ["proposed"]),
+    );
+    await expect(
+      inScope(() =>
+        store.updateProposal(b.id, { status: "checks_running" }, ["proposed"]),
+      ),
+    ).rejects.toThrow();
+    expect(
+      await inScope(() =>
+        store.findOpenPrOnLineage(scope, `${lineage}.dup`, b.id),
+      ),
+    ).toMatchObject({ id: a.id });
+  });
+
+  it("refuses a write tied to a head the proposal has moved past with head_moved, and applies one tied to its head", async () => {
+    const p = await propose({ lineageId: `${lineage}.head` });
+    await inScope(() =>
+      store.updateProposal(
+        p.id,
+        { status: "checks_running", headSha: "head2" },
+        ["proposed"],
+      ),
+    );
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { headSha: "head1" },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+    expect(
+      (await inScope(() => store.findProposal(scope, p.publicId)))?.status,
+    ).toBe("checks_running");
+    expect(
+      await inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_failed" },
+          ["checks_running"],
+          { headSha: "head2" },
+        ),
+      ),
+    ).toMatchObject({ status: "checks_failed", headSha: "head2" });
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { headSha: "head2" },
+        ),
+      ),
+    ).rejects.toMatchObject({ reason: "proposal_checks_failed" });
+  });
+
+  it("appends once per content hash and reads the first back on a repeat", async () => {
+    const values = {
+      orgId,
+      workspaceId,
+      kind: "observation",
+      lineageId: `${lineage}.obs`,
+      statement: "The checkout suite flaked on Safari through August.",
+      sharingScope: "workspace",
+      recordHash: `sha256:${"d".repeat(64)}`,
+      sourceRefs: ["frame:run_1/12"],
+      evidenceLinks: [],
+      proposalId: null,
+      createdByUserId: userId,
+    };
+    const first = await inScope(() => store.insertAppend(values));
+    expect(first.appended).toBe(true);
+    const again = await inScope(() => store.insertAppend(values));
+    expect(again).toEqual({ row: first.row, appended: false });
+    expect(
+      await inScope(() => store.findAppendByHash(scope, values.recordHash)),
+    ).toEqual(first.row);
+    expect(
+      await inScope(() => store.findAppend(scope, first.row.publicId)),
+    ).toEqual(first.row);
+  });
+
+  it("SELECT under another workspace's tenant scope sees none of these rows", async () => {
+    const other = { orgId, workspaceId: otherWorkspace };
+    const seen = await runInTenantScope(other, async () => ({
+      proposals: await store.listProposals(other, {}, { limit: 50, offset: 0 }),
+      records: await store.listRecords(other, {}, { limit: 50, offset: 0 }),
+      append: await store.findAppendByHash(other, `sha256:${"d".repeat(64)}`),
+      ledger: await store.ledgerLength(other),
+    }));
+    expect(seen.proposals.total).toBe(0);
+    expect(seen.records.total).toBe(0);
+    expect(seen.append).toBeNull();
+    expect(seen.ledger).toBe(0);
+    const mine = await inScope(() =>
+      store.listProposals(scope, {}, { limit: 50, offset: 0 }),
+    );
+    expect(mine.total).toBeGreaterThan(0);
+
+    // The policy itself, not the query's WHERE, is what filters: an unfiltered
+    // read of each new table as the application role (a superuser bypasses
+    // RLS) under the other workspace's GUCs answers no row of this workspace,
+    // and under this workspace's GUCs answers every one of them.
+    const unfiltered = (workspace: string) =>
+      withSystemDb(async (tx) => {
+        await tx.execute(
+          sql`select set_config('app.rls_bypass', 'off', true), set_config('app.current_org_id', ${orgId}, true), set_config('app.current_workspace_id', ${workspace}, true)`,
+        );
+        await tx.execute(sql`set local role oxagen_app`);
+        const proposals = await tx.execute(
+          sql`select id from agent.context_proposals`,
+        );
+        const appends = await tx.execute(
+          sql`select id from agent.context_appends`,
+        );
+        return {
+          proposals: [...proposals].map((r) => (r as { id: string }).id),
+          appends: [...appends].map((r) => (r as { id: string }).id),
+        };
+      });
+    const theirs = await unfiltered(otherWorkspace);
+    expect(theirs.proposals).toEqual([]);
+    expect(theirs.appends).toEqual([]);
+    const ours = await unfiltered(workspaceId);
+    expect(new Set(ours.proposals)).toEqual(
+      new Set(mine.rows.map((p) => p.id)),
+    );
+    expect(ours.appends).toHaveLength(1);
+  });
+});

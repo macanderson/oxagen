@@ -1,0 +1,178 @@
+{
+  "name": "get_rate_card",
+  "domain": "billing",
+  "description": "The published rate card for governed actions (ADR-052): volume bands per 1,000 actions, per-tier included allowances, the evidence-retention price beyond the included window, and confirmation that model tokens are reported at zero charge. Static — the same answer for every organisation on a tier.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "unit": {
+        "const": "governed_action"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "bands": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "minAnnualActions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxAnnualActions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "usdPer1000": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "id",
+            "minAnnualActions",
+            "maxAnnualActions",
+            "usdPer1000"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "tiers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tier": {
+              "type": "string",
+              "enum": [
+                "free",
+                "build",
+                "scale",
+                "enterprise"
+              ]
+            },
+            "includedActionsAnnual": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "retentionMonths": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "tier",
+            "includedActionsAnnual",
+            "retentionMonths"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "retention": {
+        "type": "object",
+        "properties": {
+          "includedMonths": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "usdPerGbMonth": {
+            "type": "number",
+            "minimum": 0
+          },
+          "optIn": {
+            "const": true
+          }
+        },
+        "required": [
+          "includedMonths",
+          "usdPerGbMonth",
+          "optIn"
+        ],
+        "additionalProperties": false
+      },
+      "modelTokens": {
+        "type": "object",
+        "properties": {
+          "usdPerToken": {
+            "const": 0
+          },
+          "explanation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "usdPerToken",
+          "explanation"
+        ],
+        "additionalProperties": false
+      },
+      "yourTier": {
+        "type": "string",
+        "enum": [
+          "free",
+          "build",
+          "scale",
+          "enterprise"
+        ]
+      },
+      "yourIncludedActionsAnnual": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "unit",
+      "summary",
+      "bands",
+      "tiers",
+      "retention",
+      "modelTokens",
+      "yourTier",
+      "yourIncludedActionsAnnual"
+    ],
+    "additionalProperties": false
+  }
+}

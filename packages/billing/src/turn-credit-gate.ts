@@ -5,15 +5,16 @@
  *
  * WHY this exists — closing the free-ride:
  *
- * `assertCanStartTurn(orgId)` is the platform's single admission gate. It is
- * already wired into EVERY `contract.invoke()` (via bootstrapBillingRuntime →
- * setBillingAdmissionGate in the kernel), so every scoped, metered TOOL call an
- * agent makes is refused for a suspended or zero-balance org. But the chat
- * route's top-level model turn reaches `streamAgentReply` as a
- * direct `@oxagen/ai` streaming call, NOT a `contract.invoke()` — so a turn that
- * makes no tool call (a pure Q&A response) skipped the balance check entirely
- * and a zero-balance org got a full model call for free. This gate closes that
- * window by running the SAME `assertCanStartTurn` before the model turn begins.
+ * The chat route's top-level model turn reaches `streamAgentReply` as a
+ * direct `@oxagen/ai` streaming call, NOT a `contract.invoke()`, so a turn
+ * that makes no tool call (a pure Q&A response) would spend the platform key's
+ * tokens with no gate in front of it. This gate runs `assertCanStartTurn`
+ * — the ADR-053 credit-balance gate for platform-funded assistant tokens —
+ * before the model turn begins. It is the credit gate's only surviving
+ * caller: the kernel's admission gate for governed actions is
+ * `assertGauAvailable` (gau-bucket.ts, ADR-055), installed by
+ * bootstrapBillingRuntime → setBillingAdmissionGate, and it reads the
+ * organisation's month bucket rather than a credit balance.
  *
  * WHY it is safe (never a false lockout):
  *   - It blocks ONLY on the two AFFIRMATIVE billing outcomes:
@@ -21,9 +22,11 @@
  *         AFTER any auto-reload attempt (assertCanStartTurn calls maybeAutoReload
  *         first, so an org that would top up is NOT blocked).
  *       · BillingSuspendedError — thrown only when dunningState === 'suspended'.
- *     Both are affirmative "this org must not spend" states. Every org is created
- *     with a non-expiring $5 Free signup grant (grantFreeCredits), so a zero
- *     effective balance means *depleted*, never *billing-absent*.
+ *     Both are affirmative "this org must not spend" states. An org created by
+ *     the deprecated onboarding action holds a non-expiring $5 signup grant
+ *     (grantFreeCredits); one created through `create_org` starts at zero
+ *     (ADR-055 §3.9 item 14). Either way a zero effective balance means
+ *     *nothing left to spend*, never *billing-absent*.
  *   - It is byte-consistent with the invoke() gate that already governs the same
  *     route: it can never refuse a turn the tool-call gate would have admitted,
  *     and it introduces no new lockout class.

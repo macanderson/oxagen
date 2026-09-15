@@ -85,7 +85,8 @@ export const deleteConnection = defineTool({
       why: "same collapse into connectionId; Appendix E also drops the plugin marketplace family",
     },
     {
-      field: "configured / provider / status / keyHint / lastVerifiedAt / rotatedAt",
+      field:
+        "configured / provider / status / keyHint / lastVerifiedAt / rotatedAt",
       from: "delete_model_credential",
       why: "the whole redacted credential view: Appendix E folds reads into the objects they belong to, and the post-revoke state of a connection is what `list_connections` answers. A revoke returns the fact of the revoke",
     },

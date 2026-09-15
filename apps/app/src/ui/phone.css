@@ -1,0 +1,94 @@
+/*
+ * The phone shell (ARCHITECTURE.md §1.2; Mockups origin/main mc.html, "mobile:
+ * the thumb bar, the More sheet, bottom-sheet dialogs, card tables"). Below the
+ * md breakpoint everything an operator does is reachable from the bottom third
+ * of the screen. Each rule keys on a data attribute the shell or src/ui sets,
+ * and src/test/phone.ts applies these rules to the component tests at 400 px.
+ * The rules are unlayered, so they win over the utility classes the same
+ * elements carry for a wide screen.
+ */
+@media (width < 48rem) {
+  /* Touch targets are 44px or larger. */
+  [data-touch-target] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Inputs are 16px, so iOS never zooms the page on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* The fixed thumb bar clears the home indicator. */
+  [data-thumb-bar] {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+
+  /* Dialogs rise from the bottom edge as sheets. */
+  [data-sheet] {
+    inset: auto 0 0 0;
+    translate: none;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    border-radius: 18px 18px 0 0;
+    border-bottom-width: 0;
+    padding-bottom: calc(0px + env(safe-area-inset-bottom));
+  }
+
+  /* The footer's action spans the sheet, under the thumb. */
+  [data-sheet-footer] {
+    flex-direction: row-reverse;
+    flex-wrap: wrap;
+  }
+
+  [data-sheet-footer] > * {
+    flex: 1 1 45%;
+  }
+
+  /* A list table becomes a stack of cards, each cell labelled by its column. */
+  table[data-cards] {
+    display: block;
+  }
+
+  table[data-cards] thead {
+    display: none;
+  }
+
+  table[data-cards] tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  table[data-cards] tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 12px;
+  }
+
+  table[data-cards] td {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 34px;
+    padding: 7px 0;
+    white-space: normal;
+  }
+
+  table[data-cards] td[data-label]::before {
+    content: attr(data-label);
+    margin-right: auto;
+    max-width: 38%;
+    color: var(--muted-foreground);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}

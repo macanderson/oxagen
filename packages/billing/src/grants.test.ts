@@ -190,6 +190,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     subscriptionId: "sub_test_001",
     orgId: "org-abc",
     billingReason: "subscription_create",
+    gauSettlementId: null,
     lineItems: [],
     ...overrides,
   };
@@ -202,8 +203,10 @@ function makeSession(
     id: "cs_test_001",
     mode: "payment",
     paymentStatus: "paid",
+    customerId: "cus_test_001",
     metadata: { org_id: "org-abc" },
     subscriptionId: null,
+    invoiceId: null,
     ...overrides,
   };
 }
@@ -383,6 +386,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
       makeInvoice({
         subscriptionId: null,
         billingReason: "subscription_create",
+        gauSettlementId: null,
       }),
     );
 

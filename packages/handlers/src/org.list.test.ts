@@ -58,6 +58,29 @@ beforeEach(() => {
 // ── tests ──────────────────────────────────────────────────────────────────────
 
 describe("orgListHandler", () => {
+  it("lists memberships in the order the user joined, so the first is the one they joined first", async () => {
+    const { schema } = await import("@oxagen/database");
+    const { asc } = await import("drizzle-orm");
+    const orderBy = vi.fn().mockResolvedValue(ORG_ROWS);
+    const tx = {
+      select: () => ({
+        from: () => ({ innerJoin: () => ({ where: () => ({ orderBy }) }) }),
+      }),
+    };
+    mocks.withSystemDb.mockImplementationOnce((fn: (t: typeof tx) => unknown) =>
+      fn(tx),
+    );
+    const result = await orgListHandler(
+      {},
+      makeCTX({ userId: "usr_session", apiKeyId: null }),
+    );
+    expect(result.organizations.map((o) => o.slug)).toEqual(["acme"]);
+    expect(orderBy).toHaveBeenCalledWith(
+      asc(schema.orgUsers.joinedAt),
+      asc(schema.organizations.slug),
+    );
+  });
+
   // ── session auth ────────────────────────────────────────────────────────────
 
   it("returns org memberships for a session-auth caller (ctx.userId set)", async () => {

@@ -769,7 +769,39 @@ export interface SubscriptionPlanDef {
   weight: number;
   /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
   features: PlanFeatures;
+  /**
+   * ADR-055 §2: the tier's published governed-action terms, written to
+   * billing.plans by `pnpm billing:stripe-sync` and resolved live by
+   * resolveContractTerms for an org with no negotiated agreement.
+   * `(ratePerGauMicros * blockSizeGau) % 10000 === 0` so a block prices to
+   * whole cents (the plans_gau_terms_check CHECK).
+   */
+  gauTerms: GauTerms;
 }
+
+/** ADR-055 §2: the four figures that price governed action units for a tier. */
+export interface GauTerms {
+  /** ISO 4217, lower case, as billing.plans.currency stores it. */
+  currency: string;
+  /** Micro-dollars per GAU (1 cent = 10,000 micros). */
+  ratePerGauMicros: bigint;
+  /** GAUs per purchased block. */
+  blockSizeGau: number;
+  /** GAUs included in every month of a subscription. */
+  includedGauPerMonth: number;
+}
+
+/**
+ * The published rate, block size and currency are the same on every tier
+ * (v1 GAU pricing approved 2026-09-14, metering spec §4.2 / ADR-055: $5 per
+ * 1,000 GAU, 5,000-GAU blocks at $25.00, USD); tiers differ in the monthly
+ * allowance.
+ */
+const PUBLISHED_GAU_RATE = {
+  currency: "usd",
+  ratePerGauMicros: 5_000n,
+  blockSizeGau: 5_000,
+} as const;
 
 export interface CreditPackDef {
   /** Version-2 identifier (carries the `-v2` suffix). */
@@ -794,9 +826,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     slug: "build-v2",
     displayName: "Build",
     tier: "build",
-    includedCredits: 2_400, // $24 face value, sold for $20 → 16.7% discount
-    monthlyCents: 2_000,
-    annualCents: 20_000, // 2 months free
+    // v1 GAU pricing (2026-09-14): $199 / mo. Credits stay at 1.2 cr/¢ so the
+    // blended-margin solve is unchanged; the GAU terms (50,000 GAU / mo at
+    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    includedCredits: 23_880, // $238.80 face value, sold for $199 → 16.7% discount
+    monthlyCents: 19_900,
+    annualCents: 199_000, // 2 months free
     seats: 5,
     weight: 0.35,
     features: {
@@ -806,14 +841,18 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Email support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 50_000 },
   },
   {
     slug: "scale-v2",
     displayName: "Scale",
     tier: "scale",
-    includedCredits: 13_200, // $132 face value, sold for $99 → 25% discount
-    monthlyCents: 9_900,
-    annualCents: 99_000, // 2 months free
+    // v1 GAU pricing (2026-09-14): $999 / mo. Credits stay at 1.33 cr/¢ so the
+    // blended-margin solve is unchanged; the GAU terms (300,000 GAU / mo at
+    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    includedCredits: 133_200, // $1,332 face value, sold for $999 → 25% discount
+    monthlyCents: 99_900,
+    annualCents: 999_000, // 2 months free
     seats: 25,
     weight: 0.2,
     features: {
@@ -823,6 +862,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Priority support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
   {
     // Priced self-serve plan (Enterprise customers may also engage at rate card
@@ -849,6 +889,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Immutable audit log",
       ],
     },
+    // Enterprise terms are negotiated (a billing.contract_terms row); the
+    // published row carries the Scale figures until one exists.
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
 ];
 

@@ -171,6 +171,20 @@ jobs:
           # Three concurrent tasks bounds peak RSS while keeping the cores busy.
           pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
+      # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
+      # is reachable from a production entry and every dependency is imported.
+      # knip.json wires knip.preprocessor.ts, which applies the shrink-only
+      # apps/app/knip-baseline.json: a finding outside the baseline and a
+      # baseline entry knip no longer reports both fail this step.
+      - name: knip production mode (apps/app)
+        run: pnpm --filter @oxagen/app exec knip --production --strict
+
+      # INV-12 (apps/app/ARCHITECTURE.md §4): src/i18n/messages.d.ts types every
+      # t() key from messages/*.json; a catalog changed without regenerating it
+      # fails here.
+      - name: Message catalog types are current (apps/app)
+        run: pnpm --filter @oxagen/app check:messages
+
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders && pnpm docs:architecture:check
 
@@ -307,16 +321,22 @@ jobs:
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: Build and unit tests
+      - name: Build
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
           # --concurrency=3: same fix as the `checks` job's lint/typecheck step —
-          # turbo's default (10) runs that many build/test tasks in parallel,
+          # turbo's default (10) runs that many build tasks in parallel,
           # several of which set their own large NODE_OPTIONS
           # --max-old-space-size, exceeding this runner's available RAM (shared
           # with the Postgres/ClickHouse/Neo4j service containers) and causing
           # either a kernel OOM-kill or severe memory-pressure slowdown.
-          pnpm turbo run build test:unit --concurrency=3 $TURBO_FILTER
+          #
+          # Build only: the Coverage step below runs every package's suite
+          # under test:coverage, so a test:unit pass here ran it twice.
+          # tools/scripts/check-coverage-gates.mjs (under check:contracts in
+          # the checks job) refuses a package with a test:unit script and no
+          # test:coverage script, which is what keeps that sentence true.
+          pnpm turbo run build --concurrency=3 $TURBO_FILTER
 
       - name: Coverage thresholds
         run: |
@@ -340,58 +360,13 @@ jobs:
     # correct signal that this is not a real production runtime.
     env:
       VERCEL_ENV: preview
-      # No Vercel Blob token exists in CI, so file uploads use the hermetic
-      # filesystem storage driver (@oxagen/storage fs-driver). Without this the
-      # attachment upload route 500s and chat-attachments.spec.ts fails. The root
-      # is an absolute container path so the app (next start) and API (tsx)
-      # webServers — which have different cwds — resolve the SAME directory.
+      # No Vercel Blob token exists in CI, so the storage driver is the
+      # hermetic filesystem one (@oxagen/storage fs-driver).
       STORAGE_DRIVER: fs
       STORAGE_FS_ROOT: /tmp/oxagen-storage
-      # apps/api/src/index.ts binds to HOST ?? HOSTNAME ?? 127.0.0.1, and Docker
-      # sets HOSTNAME to the container id. This job happens to bind 127.0.0.1
-      # today — the variable does not reach the process here, while it does in
-      # nightly.yml's identically-configured job, which timed out for exactly
-      # that reason (#1206). The address Playwright polls should not depend on
-      # which variables happen to survive into the process.
-      HOST: 127.0.0.1
-      # The connect-source wizard's Mappings step calls a language model for
-      # real (suggest_connection_mappings), so the e2e job needs a language
-      # credential. It held none, and the step rendered "Couldn't generate
-      # mapping suggestions — Unauthenticated. Configure AI_GATEWAY_API_KEY",
-      # which is the one genuine failure left in knowledge-connect-wizard.
-      #
-      # CI opts out of the AI Gateway. The gateway credential belongs to the
-      # Vercel account being decommissioned and is refused: #1297 wired
-      # AI_GATEWAY_API_KEY in and the next run still failed
-      # knowledge-connect-wizard with "Unauthenticated", while the job log
-      # showed `AI_GATEWAY_API_KEY: ***` — a non-empty value that arrived and
-      # was rejected, not a missing one (#1295).
-      #
-      # These two are set TOGETHER and never from an unset variable.
-      # OXAGEN_MODEL_PROVIDER is `z.enum(["gateway","openrouter"])` and
-      # OPENROUTER_API_KEY is `z.string().min(1)`, `env:` cannot omit a key
-      # conditionally, and normalizeEnv passes "" through rather than dropping
-      # it — so a blank either side makes `.default("gateway")` never fire and
-      # requireEnv throw on EVERY language call.
-      #
-      # The tier defaults (anthropic/claude-haiku-4.5, -sonnet-5, -fable-5)
-      # resolve on OpenRouter under the same ids the gateway uses, so no
-      # OXAGEN_LLM_* override is needed for the ids to resolve. models.ts does
-      # not rewrite ids between providers, so that is checked, not assumed.
-      AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
-      OXAGEN_MODEL_PROVIDER: openrouter
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # No model-provider credential: the three specs (login, pay, page-load)
+      # call no model, and `next start` boots without one (WL-46).
     timeout-minutes: 45
-    strategy:
-      # One shard's failure must not cancel the other three. The shards are
-      # independent slices of one suite, and cancelling them turns "here are
-      # the specs that fail" into "one spec fails and three shards are
-      # unknown" — which is how a run that had the answer to #1188's remaining
-      # list reported only a quarter of it. `deploy-node` sets this already,
-      # for the same reason.
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:16-alpine
@@ -492,7 +467,38 @@ jobs:
           # compilation). Two concurrent tasks leaves enough headroom for
           # apps/app's own build to run without contending against another
           # large build at the same time.
-          pnpm turbo run build --concurrency=2 $TURBO_FILTER
+          #
+          # --filter=!@oxagen/app-deprecated: the deprecated app is not under
+          # e2e (its test:e2e script is gone) and nothing here serves it, yet
+          # its `next build` reserves the same 5GB heap as apps/app. Building
+          # both on this runner is the OOM above twice over. Its build stays
+          # gated in exactly one place, the `test` job's `turbo run build`.
+          # Turbo subtracts an exclusion from the include set, and with an
+          # empty TURBO_FILTER (push to main) it starts from every package.
+          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
+
+      # The Build step is filtered, so on a pull request that leaves
+      # @oxagen/app outside the affected set (apps/api-only, tools-only,
+      # docs-only) it produces no apps/app/.next, and `turbo run test:e2e`
+      # below runs nothing. The sentinel scan and the e2e seed serve that
+      # suite alone, so they run on the same condition. `next build` writes
+      # .next/BUILD_ID once the bundle has compiled, turbo restores it with
+      # the rest of `.next/**` on a cache hit, and a failed build has already
+      # ended the job at the step above, so the file's presence here means
+      # apps/app was in the affected set. Push to main and nightly build
+      # apps/app every time; there the scan keeps failing on a missing build
+      # (scan-build-sentinels.mjs exits 2).
+      - name: Record whether apps/app was built
+        run: echo "APP_BUILT=$([ -f apps/app/.next/BUILD_ID ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+
+      # INV-22: the production bundle carries no seed or demo data. A Node walk
+      # over .next/server and .next/static of the build the step above produced
+      # — the same .next the webServer serves — for the seeded owner's domain
+      # and the demo-seed name; a hit fails the job and names the file.
+      - name: Scan the build for sentinels
+        if: env.APP_BUILT == '1'
+        working-directory: apps/app
+        run: node scripts/scan-build-sentinels.mjs
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
@@ -503,16 +509,27 @@ jobs:
       - name: Install Playwright browser (fast-path)
         run: pnpm --filter @oxagen/app exec playwright install chromium
 
-      - name: E2E tests (shard)
+      # The e2e seed (ARCHITECTURE.md §5): the owner, the organization with
+      # its workspace and one ledger run, through package APIs, with a
+      # credential sign-in self-check. A seed failure fails the job here,
+      # before Playwright starts. Run directly (not through turbo) so the
+      # job's env reaches it whole.
+      - name: Seed e2e
+        if: env.APP_BUILT == '1'
+        run: pnpm --filter @oxagen/app seed:e2e
+
+      # One shard: the suite is three tests (INV-20), and the login project
+      # writes the storage state the other two depend on.
+      - name: E2E tests
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run test:e2e $TURBO_FILTER -- --shard=${{ matrix.shard }}/4
+          pnpm turbo run test:e2e $TURBO_FILTER
 
       - name: Upload Playwright traces (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces-shard-${{ matrix.shard }}
+          name: playwright-traces
           path: apps/app/test-results/
           retention-days: 7
           if-no-files-found: ignore

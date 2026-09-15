@@ -72,3 +72,14 @@ export type {
   AgentRunAuthzContext,
   ResolveAgentRunAuthzContextArgs,
 } from "./agent-run-context";
+
+// The delegation ceiling: a granter cannot hand out more than they hold. One
+// implementation for assign_agent_role and the role editor (ADR-063).
+export {
+  findDelegationCeilingViolations,
+  postgresDelegationCeilingReads,
+} from "./delegation-ceiling";
+export type {
+  ConferredGrant,
+  DelegationCeilingReads,
+} from "./delegation-ceiling";

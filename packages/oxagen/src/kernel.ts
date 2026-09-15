@@ -9,6 +9,8 @@ import type {
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces } from "./types";
+import { isKernelIssuedPlatformOperator } from "./platform-operator";
+import { isHandlerError, type HandlerErrorCode } from "./handler-error";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
@@ -41,8 +43,8 @@ let _billingGate: BillingAdmissionGateFn | null = null;
 
 /**
  * Register the billing admission gate. Call once at service bootstrap.
- * The gate must throw `BillingSuspendedError` or `InsufficientCreditsError`
- * (from @oxagen/billing) to refuse a turn.
+ * The gate must throw `BillingSuspendedError` or `GauExhaustedError` (from
+ * @oxagen/billing) to refuse a governed action.
  */
 export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
   _billingGate = gate;
@@ -603,6 +605,17 @@ export class CapabilityError extends Error {
 
 export type KernelSecurityOutcome = "allow" | "deny" | "error";
 
+/**
+ * Every code a failed invoke can name: the kernel's own CapabilityErrorCode,
+ * the two duck-typed denials from packages the kernel does not import, and a
+ * handler's typed refusal (HandlerError).
+ */
+export type KernelFailureCode =
+  | CapabilityErrorCode
+  | "no_tenant_scope"
+  | "budget_exceeded"
+  | HandlerErrorCode;
+
 export interface KernelSecurityEvent {
   capability: string;
   outcome: KernelSecurityOutcome;
@@ -619,10 +632,12 @@ export interface KernelSecurityEvent {
   requestId: string;
   /**
    * The CapabilityErrorCode that caused a deny/error, if any. Includes
-   * "no_tenant_scope" for the fail-closed tenant-scope denial and
-   * "budget_exceeded" for the hard spend-ceiling denial.
+   * "no_tenant_scope" for the fail-closed tenant-scope denial,
+   * "budget_exceeded" for the hard spend-ceiling denial, and a HandlerError
+   * code when the handler refused ("forbidden" is a deny; "not_found" and
+   * "conflict" are errors that name their cause).
    */
-  errorCode: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded" | null;
+  errorCode: KernelFailureCode | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -698,7 +713,7 @@ export interface KernelTraceEvent {
   /** The validated output — present only when status === "ok". */
   output?: unknown;
   /** Failure code when status === "error". */
-  errorCode?: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded";
+  errorCode?: KernelFailureCode;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -914,7 +929,9 @@ async function _invokeCoreInner(
   //                           CheckedContext, only from a decision row the IAM
   //                           runtime actually inserted;
   //   deployedAgentInvocation minted only by createDeployedAgentInvocationContext
-  //                           and tracked in the kernel's own registry.
+  //                           and tracked in the kernel's own registry;
+  //   platformOperator        minted only by createPlatformOperatorContext and
+  //                           tracked in platform-operator.ts's registry.
   //
   // Reject the invocation rather than silently stripping the field. Stripping
   // would let the probe succeed and leave no trace; a hard deny plus a security
@@ -926,7 +943,10 @@ async function _invokeCoreInner(
       : ctx.deployedAgentInvocation !== undefined &&
           !isKernelIssuedDeployedAgentInvocation(ctx.deployedAgentInvocation)
         ? "deployedAgentInvocation"
-        : null;
+        : ctx.platformOperator !== undefined &&
+            !isKernelIssuedPlatformOperator(ctx.platformOperator)
+          ? "platformOperator"
+          : null;
   if (forgedBinding !== null) {
     emitSecurityEvent({
       capability: canonical,
@@ -944,6 +964,31 @@ async function _invokeCoreInner(
       "authz_denied",
       `Caller-supplied "${forgedBinding}" on the capability context for "${name}" — ` +
         "that binding is platform-created and can never be an input; failing closed.",
+    );
+  }
+
+  // ── platformOnly (SECURITY, apps/app/ARCHITECTURE.md §3.9 item 12, INV-31) ─
+  //
+  // Refused BEFORE the IAM check, because the IAM check is not a boundary here:
+  // it allows every capability for a non-enterprise organisation, so a
+  // `platformOnly` contract's `defaultRoles: {}` would decide nothing. The
+  // binding above is already proven kernel-issued when it is present at all.
+  if (cap.platformOnly === true && ctx.platformOperator === undefined) {
+    emitSecurityEvent({
+      capability: canonical,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "authz_denied",
+      durationMs: Date.now() - startMs,
+    });
+    throw new CapabilityError(
+      name,
+      "authz_denied",
+      `Capability "${name}" is platform-operator only and the context carries no platform-operator binding`,
     );
   }
 
@@ -1439,16 +1484,25 @@ async function _invokeCoreInner(
             err.code === "budget_exceeded"
           ? ("budget_exceeded" as const)
           : null;
+    // A handler's typed refusal (HandlerError). "forbidden" is a role or scope
+    // decision the handler made, so it joins the audit chain as a deny;
+    // "not_found" and "conflict" stay errors but carry their code so the
+    // trace names the cause.
+    const handlerCode = isHandlerError(err) ? err.code : null;
+    const isDeny =
+      (isCapErr && err.code === "no_handler") ||
+      duckCode !== null ||
+      handlerCode === "forbidden";
+    const failureCode = isCapErr ? err.code : (duckCode ?? handlerCode);
     emitSecurityEvent({
       capability: canonical,
-      outcome:
-        (isCapErr && err.code === "no_handler") || duckCode ? "deny" : "error",
+      outcome: isDeny ? "deny" : "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: isCapErr ? err.code : duckCode,
+      errorCode: failureCode,
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
@@ -1461,7 +1515,7 @@ async function _invokeCoreInner(
       requestId: ctx.requestId,
       messageId: ctx.messageId,
       input: inputResult.data,
-      errorCode: isCapErr ? err.code : (duckCode ?? undefined),
+      errorCode: failureCode ?? undefined,
       durationMs: Date.now() - startMs,
     });
     throw err;

@@ -3,7 +3,7 @@
 **Domain:** api_key
 **Mode:** sync
 **Scope:** tenant (org)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Risk level:** high
 
 ## Intent

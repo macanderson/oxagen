@@ -19,12 +19,16 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
+import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
+import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
+import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
+import { billingGauBucketPurchaseRoute } from "./routes/v1/billing.gau_bucket.purchase";
 import { billingActionRateCardRoute } from "./routes/v1/billing.action_rate_card";
-import { billingActionUsageRoute } from "./routes/v1/billing.action_usage";
 import { billingActionEstimateRoute } from "./routes/v1/billing.action_estimate";
 import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_retention";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
@@ -57,6 +61,7 @@ import { agentMemoryCiteRoute } from "./routes/v1/agent.memory.cite";
 import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory_evidence.attach";
 import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory_citation.list";
 import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation.stats";
+import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
@@ -143,10 +148,15 @@ import { pluginSettingsGetAuthAlertsRoute } from "./routes/v1/plugin.settings.ge
 import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.list";
 import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
 import { iamRoleListRoute } from "./routes/v1/iam.role.list";
+import { iamRoleCreateRoute } from "./routes/v1/iam.role.create";
+import { iamRoleGrantsSetRoute } from "./routes/v1/iam.role.grants.set";
+import { iamRoleDeleteRoute } from "./routes/v1/iam.role.delete";
+import { workspaceArchiveRoute } from "./routes/v1/workspace.archive";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
+import { apiKeyListRoute } from "./routes/v1/api.key.list";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { apiKeyRotateRoute } from "./routes/v1/api.key.rotate";
-import { workspaceMemberListRoute } from "./routes/v1/workspace.member.list";
+import { listMembersRoute } from "./routes/v1/workspace.member.list";
 import { workspaceInviteSendRoute } from "./routes/v1/workspace.invite.send";
 import { conversationChatRoute } from "./routes/v1/conversation.chat";
 import { toolDeclarationPublishRoute } from "./routes/v1/tool.declaration.publish";
@@ -154,6 +164,15 @@ import { toolDeclarationListRoute } from "./routes/v1/tool.declaration.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
 import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
+import { contextRecordsListRoute } from "./routes/v1/context.records.list";
+import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
+import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
+import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
+import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
+import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
+import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
+import { contextPrGetRoute } from "./routes/v1/context.pr.get";
+import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
 import { agentDefinitionDeleteRoute } from "./routes/v1/agent.definition.delete";
 import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
@@ -203,12 +222,36 @@ import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest"
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
+import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
 import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
+import { runListRoute } from "./routes/v1/run.list";
+import { runGetRoute } from "./routes/v1/run.get";
+import { runFrameBodyGetRoute } from "./routes/v1/run.frame_body.get";
+import { runTranscriptGetRoute } from "./routes/v1/run.transcript.get";
+import { runBisectRoute } from "./routes/v1/run.bisect";
+import { runForkRoute } from "./routes/v1/run.fork";
+import { runExportRoute } from "./routes/v1/run.export";
+import { runSummarizeRoute } from "./routes/v1/run.summarize";
+import { agentListRoute } from "./routes/v1/agent.list";
+import { agentGetRoute } from "./routes/v1/agent.get";
+import { agentRegisterRoute } from "./routes/v1/agent.register";
+import { agentCredentialRotateRoute } from "./routes/v1/agent.credential.rotate";
+import { agentSuspendRoute } from "./routes/v1/agent.suspend";
+import { agentRetireRoute } from "./routes/v1/agent.retire";
+import { agentDefinitionCommitRoute } from "./routes/v1/agent.definition.commit";
+import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
+import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
+import { spendGetRoute } from "./routes/v1/spend.get";
+import { spendDrillRoute } from "./routes/v1/spend.drill";
+import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { runCostGetRoute } from "./routes/v1/run.cost";
+import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
   Variables: {
@@ -391,6 +434,7 @@ orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 // through untouched.
 orgScoped.use("/chat/*", chatRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
+orgScoped.route("/workspaces/archive", workspaceArchiveRoute);
 // Minting an enrollment is an operator action, so it sits behind the session
 // auth this router applies — not beside the ingest route, whose API-key gate
 // an already-enrolled machine could otherwise use to mint more enrollments.
@@ -399,27 +443,50 @@ orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
 // fleet. Session auth with the org role checked in the handlers.
 orgScoped.route("/tacho/enrollments", tachoEnrollmentCreateRoute);
 orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
-orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
+// Run controls (dispatch_command, list_commands): addressed to runs, agents
+// and the workspace rather than to a host, so they sit beside /runs.
+orgScoped.route("/commands", tachoCommandDispatchRoute);
+orgScoped.route("/commands/list", tachoCommandListRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
+// Runs across both stores (the evidence ledger and tacho sessions): the
+// Fleet list and the Run header with its frame page.
+orgScoped.route("/runs", runListRoute);
+orgScoped.route("/runs/get", runGetRoute);
+orgScoped.route("/runs/frame-body", runFrameBodyGetRoute);
+orgScoped.route("/runs/transcript", runTranscriptGetRoute);
+orgScoped.route("/runs/bisect", runBisectRoute);
+orgScoped.route("/runs/fork", runForkRoute);
+orgScoped.route("/runs/export", runExportRoute);
+orgScoped.route("/runs/summarize", runSummarizeRoute);
+// Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
+// run's cost and the price book. All noBillingGate reads of Postgres rollups.
+orgScoped.route("/spend", spendGetRoute);
+orgScoped.route("/spend/drill", spendDrillRoute);
+orgScoped.route("/spend/waste", spendWasteListRoute);
+orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
+orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
+orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
+orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",
   billingSubscriptionUpgradeStartRoute,
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
+orgScoped.route("/billing/gau-bucket/purchase", billingGauBucketPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 // Governed-action meter (ADR-052, docs/specs/governed-action-metering.md):
-// the rate card, this org's usage against it, the run->action estimator, and
-// evidence-retention posture. All four are noBillingGate reads.
+// the rate card, the run->action estimator, and evidence-retention posture.
+// All three are noBillingGate reads. This org's position against its own
+// terms is /billing/gau-bucket (ADR-055).
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
-orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
-orgScoped.route(
-  "/billing/evidence/retention",
-  billingEvidenceRetentionRoute,
-);
+orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
@@ -479,6 +546,7 @@ orgScoped.route(
 orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
 orgScoped.route("/agent/memory/citations/stats", agentMemoryCitationStatsRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
+orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
@@ -515,6 +583,20 @@ orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
+// Agent identity (MC spec §6.2, #2956): the identities table, one identity
+// with its credentials, roles, hosts and definition of record, the identity
+// writes (register, rotate, suspend, retire), the definition commit and the
+// computed belt. Session auth; the org role is checked in each write handler.
+orgScoped.route("/agents/get", agentGetRoute);
+orgScoped.route("/agents/register", agentRegisterRoute);
+orgScoped.route("/agents/credential/rotate", agentCredentialRotateRoute);
+orgScoped.route("/agents/suspend", agentSuspendRoute);
+orgScoped.route("/agents/retire", agentRetireRoute);
+orgScoped.route("/agents/definition/commit", agentDefinitionCommitRoute);
+orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
+orgScoped.route("/agents", agentListRoute);
+// Tamper and integrity incidents on the workspace's hosts.
+orgScoped.route("/tacho/incidents", tachoIncidentListRoute);
 // Verified-Outcome Market Router governance + inspection.
 orgScoped.route("/router/policy/set", routerPolicySetRoute);
 orgScoped.route("/router/policy", routerPolicyGetRoute);
@@ -606,10 +688,16 @@ orgScoped.route("/capability/registry/list", capabilityRegistryListRoute);
 orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
 // IAM roles read (read-only; writes remain provisioning-script-only).
 orgScoped.route("/iam/roles/list", iamRoleListRoute);
+// The role editor (ADR-063): create, replace grants, delete.
+orgScoped.route("/iam/roles", iamRoleCreateRoute);
+orgScoped.route("/iam/roles/grants", iamRoleGrantsSetRoute);
+orgScoped.route("/iam/roles/delete", iamRoleDeleteRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
+// GET on the same path lists the keys in scope (separate thin adapter per capability).
+orgScoped.route("/api-keys", apiKeyListRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
-orgScoped.route("/workspace/member/list", workspaceMemberListRoute);
+orgScoped.route("/workspace/member/list", listMembersRoute);
 orgScoped.route("/workspace/invite/send", workspaceInviteSendRoute);
 orgScoped.route("/conversation/chat", conversationChatRoute);
 orgScoped.route("/tool/declaration/publish", toolDeclarationPublishRoute);
@@ -617,6 +705,16 @@ orgScoped.route("/tool/declaration/list", toolDeclarationListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);
 orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
+// Steering (ADR-061): published records, proposals, the Context PR.
+orgScoped.route("/context/records", contextRecordsListRoute);
+orgScoped.route("/context/records/get", contextRecordsGetRoute);
+orgScoped.route("/context/records/append", contextRecordsAppendRoute);
+orgScoped.route("/context/proposals", contextProposalListRoute);
+orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
+orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);
+orgScoped.route("/context/prs/open", contextPrOpenRoute);
+orgScoped.route("/context/prs/get", contextPrGetRoute);
+orgScoped.route("/context/prs/merge", contextPrMergeRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

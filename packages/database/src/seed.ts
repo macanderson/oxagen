@@ -39,6 +39,13 @@ const PLAN_SEEDS = [
     annualCents: null,
     includedCreditCents: 0,
     includedSeats: 1,
+    // ADR-055 §2: the Free tier's published GAU terms (v1 pricing approved
+    // 2026-09-14, metering spec §4.2). 5,000 micros per GAU × 5,000 GAU per
+    // block = $25.00 a block, whole cents, as plans_gau_terms_check requires.
+    currency: "usd",
+    ratePerGauMicros: 5_000n,
+    blockSizeGau: 5_000,
+    includedGauPerMonth: 5_000,
     // Display-only bullets in the PlanFeatures `{ list }` shape the billing UI
     // reads (see @oxagen/billing). Free is filtered out of the upgrade grid by
     // the source-of-truth slug allowlist, so these are not normally rendered.
@@ -66,7 +73,18 @@ export async function seedPlatform(): Promise<void> {
       await tx
         .insert(plans)
         .values(plan)
-        .onConflictDoNothing({ target: plans.slug });
+        // The published GAU terms follow this file on every run; a row seeded
+        // under earlier figures would otherwise keep billing at them.
+        .onConflictDoUpdate({
+          target: plans.slug,
+          set: {
+            currency: plan.currency,
+            ratePerGauMicros: plan.ratePerGauMicros,
+            blockSizeGau: plan.blockSizeGau,
+            includedGauPerMonth: plan.includedGauPerMonth,
+            updatedAt: new Date(),
+          },
+        });
     }
   });
 }

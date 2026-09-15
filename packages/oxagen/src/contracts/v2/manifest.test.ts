@@ -80,14 +80,18 @@ describe("v2 contract manifest", () => {
       // is a decision, and it belongs in the spec, not in a quiet edit here.
       for (const source of row.absorbs) {
         if (!src.includes(`"${source}"`)) {
-          offenders.push(`${file}: does not name absorbed contract "${source}"`);
+          offenders.push(
+            `${file}: does not name absorbed contract "${source}"`,
+          );
         }
       }
 
       // `drops: []` is a claim that nothing was dropped, and is allowed.
       // Omitting the field entirely is not — it hides the question.
       if (!/\bdrops:\s*\[/.test(src)) {
-        offenders.push(`${file}: missing \`drops\` — declare [] if nothing was dropped`);
+        offenders.push(
+          `${file}: missing \`drops\` — declare [] if nothing was dropped`,
+        );
       }
     }
 

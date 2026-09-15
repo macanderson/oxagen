@@ -38,6 +38,26 @@ export const CLI_AUTH_CODE_TTL_MS = 5 * 60 * 1000;
 export const CLI_AUTH_PKCE_METHOD = "S256" as const;
 
 /**
+ * The scope purpose of the key the token exchange mints. `resolveApiKey`
+ * authenticates a key carrying it as the user who approved the authorize
+ * flow (`CliAuthCodeData.userId`, recorded as the key's creator), so a
+ * handler's role gate sees the person behind the terminal. The purpose is
+ * server-owned: the token route is its one writer, and the key-management
+ * capabilities refuse to mint or rotate it, the same boundary the Tacho host
+ * and agent credential purposes keep.
+ */
+export const CLI_SESSION_SCOPE_PURPOSE = "cli_session_v1" as const;
+
+export function requestsReservedCliSessionPurpose(scope: unknown): boolean {
+  return (
+    typeof scope === "object" &&
+    scope !== null &&
+    "purpose" in scope &&
+    scope.purpose === CLI_SESSION_SCOPE_PURPOSE
+  );
+}
+
+/**
  * The scope + PKCE binding carried by an authorization code. Established under
  * the user's authenticated session at authorize time; redeemed (without a
  * session) at exchange time.

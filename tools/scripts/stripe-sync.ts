@@ -34,6 +34,7 @@ import {
   stripeClient,
   SUBSCRIPTION_PLANS,
   CREDIT_PACKS,
+  FREE_PLAN_SLUG,
   PROVIDER_RATE_CARD,
   type DerivedProduct,
 } from "@oxagen/billing";
@@ -438,6 +439,12 @@ async function upsertPlans(
       // 1 credit = 1 cent → included credit count == included credit cents.
       includedCreditCents: plan.includedCredits,
       includedSeats: plan.seats,
+      // ADR-055 §2: the tier's published GAU terms, read live by
+      // resolveContractTerms for an org with no negotiated agreement.
+      currency: plan.gauTerms.currency,
+      ratePerGauMicros: plan.gauTerms.ratePerGauMicros,
+      blockSizeGau: plan.gauTerms.blockSizeGau,
+      includedGauPerMonth: plan.gauTerms.includedGauPerMonth,
       features: plan.features,
       isPublic: true,
     };
@@ -462,6 +469,10 @@ async function upsertPlans(
           annualCents: row.annualCents,
           includedCreditCents: row.includedCreditCents,
           includedSeats: row.includedSeats,
+          currency: row.currency,
+          ratePerGauMicros: row.ratePerGauMicros,
+          blockSizeGau: row.blockSizeGau,
+          includedGauPerMonth: row.includedGauPerMonth,
           features: row.features,
           updatedAt: new Date(),
         },
@@ -478,11 +489,15 @@ async function upsertPlans(
 
   // Reconcile deletions. upsertPlans only ever *adds* the canonical plans, so
   // without this step any row that drops out of the source of truth — a legacy
-  // pre-`-v2` slug, the seeded `free` tier, an e2e-test plan — lingers with
+  // pre-`-v2` slug, an e2e-test plan — lingers with
   // is_public = true and surfaces in the billing UI as a duplicate/unrelated
   // plan. Tombstone (is_public = false) rather than DELETE: subscriptions FK
   // billing.plans, and the row is still needed to name historical plans.
-  const canonicalSlugs = SUBSCRIPTION_PLANS.map((p) => p.slug);
+  // Free is written by seedPlatform, not by this script, and stays public.
+  const canonicalSlugs = [
+    FREE_PLAN_SLUG,
+    ...SUBSCRIPTION_PLANS.map((p) => p.slug),
+  ];
   if (apply) {
     const hidden = await d
       .update(schema.plans)

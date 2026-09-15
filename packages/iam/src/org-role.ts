@@ -1,0 +1,245 @@
+// org-role.ts — the role gate a handler runs itself.
+//
+// The kernel's IAM check allows every capability for a non-enterprise
+// organisation (check-iam.ts, the `tier_gate` step), so a contract's
+// `defaultRoles` is documentation for Free, Build and Scale orgs. A handler
+// whose contract restricts roles calls `assertOrgRole` and refuses with
+// `HandlerError { code: "forbidden" }` when the actor holds none of the named
+// org roles, and none of the named workspace roles when the handler names
+// those too (apps/app/ARCHITECTURE.md §3.2, INV-29). The class lives in
+// @oxagen/oxagen so the API middleware maps it to 403 and the app's kernel
+// seam to `denied` without either depending on this package.
+//
+// This module lives in @oxagen/iam rather than @oxagen/handlers so that
+// packages/agent, which depends on @oxagen/iam and not on @oxagen/handlers,
+// can run the same check. `packages/handlers/src/lib/api-key-authz.ts`
+// re-exports `resolveActorOrgRole` for its existing callers.
+
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
+
+/** Which assignments a role lookup reads: org-wide, or one workspace's. */
+type RoleScope =
+  | { readonly kind: "org" }
+  | { readonly kind: "workspace"; readonly workspaceId: string };
+
+async function findActivePrincipalId(
+  tx: Tx,
+  orgId: string,
+  userId: string,
+): Promise<string | null> {
+  const [principalRow] = await tx
+    .select({ id: schema.principals.id })
+    .from(schema.principals)
+    .where(
+      and(
+        eq(schema.principals.orgId, orgId),
+        eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.kind, "human"),
+        eq(schema.principals.status, "active"),
+      ),
+    )
+    .limit(1);
+  return principalRow?.id ?? null;
+}
+
+/**
+ * ONE unexpired role name assigned to `principalId` in `scope`, or null. An
+ * org-wide assignment has `workspace_id IS NULL` and an org-scoped role; a
+ * workspace assignment carries the workspace id and a workspace-scoped role.
+ */
+async function findAssignedRole(
+  tx: Tx,
+  principalId: string,
+  orgId: string,
+  scope: RoleScope,
+): Promise<string | null> {
+  const [praRow] = await tx
+    .select({ roleName: schema.roles.name })
+    .from(schema.principalRoleAssignments)
+    .innerJoin(
+      schema.roles,
+      eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+    )
+    .where(
+      and(
+        eq(schema.principalRoleAssignments.principalId, principalId),
+        eq(schema.principalRoleAssignments.orgId, orgId),
+        eq(schema.roles.scopeKind, scope.kind),
+        scope.kind === "org"
+          ? isNull(schema.principalRoleAssignments.workspaceId)
+          : eq(schema.principalRoleAssignments.workspaceId, scope.workspaceId),
+        isNull(schema.principalRoleAssignments.deletedAt),
+        or(
+          isNull(schema.principalRoleAssignments.expiresAt),
+          gt(schema.principalRoleAssignments.expiresAt, new Date()),
+        ),
+      ),
+    )
+    .limit(1);
+  return praRow?.roleName ?? null;
+}
+
+/**
+ * Resolve ONE of the acting user's org-scoped role names, or null when they
+ * have no active principal / unexpired org-role assignment in this org.
+ *
+ * A principal may hold several org-wide roles at once — `iam.principal_role_
+ * assignments` is unique on (principal, role, org), not on (principal, org) —
+ * and this query takes the first row Postgres returns with no ORDER BY, so
+ * WHICH role comes back is not deterministic. Every caller only asks "is it in
+ * {Owner, Admin}?", so a user holding both Admin and Member can be denied
+ * depending on plan/row order. Fixing that means asking "does ANY assigned role
+ * qualify?" instead of resolving a single name, which changes what this helper
+ * promises to its callers — tracked separately, not patched here.
+ *
+ * Time-bounded (JIT) assignments are honored the same way the kernel resolver
+ * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
+ * assignment whose `expires_at` is in the past no longer grants its role.
+ *
+ * Runs inside the caller's tenant scope (`withTenantDb`): the kernel enters it
+ * before a scoped handler runs.
+ */
+export async function resolveActorOrgRole(
+  orgId: string,
+  userId: string,
+): Promise<string | null> {
+  return withTenantDb(async (tx) => {
+    const principalId = await findActivePrincipalId(tx, orgId, userId);
+    if (principalId === null) return null;
+    return findAssignedRole(tx, principalId, orgId, { kind: "org" });
+  });
+}
+
+/**
+ * The same lookup for the user's role in one workspace of the org: the first
+ * unexpired workspace-scoped assignment on that workspace, or null. Carries
+ * the non-determinism `resolveActorOrgRole` documents.
+ */
+export async function resolveActorWorkspaceRole(
+  orgId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<string | null> {
+  return withTenantDb(async (tx) => {
+    const principalId = await findActivePrincipalId(tx, orgId, userId);
+    if (principalId === null) return null;
+    return findAssignedRole(tx, principalId, orgId, {
+      kind: "workspace",
+      workspaceId,
+    });
+  });
+}
+
+/** The credential fields of a `CapabilityContext` the acting user is read from. */
+export interface ActingCredential {
+  readonly orgId: string;
+  readonly userId: string | null;
+  readonly apiKeyId: string | null;
+}
+
+/**
+ * The user a call acts as: the signed-in user, or, for an API-key call (the
+ * only credential MCP accepts), the key's creator
+ * (`auth.api_keys.created_by_user_id`), the mapping the kernel's enterprise
+ * IAM path makes (fetch-authz.ts) and `assign_agent_role` makes for its
+ * ceiling. A deleted key, a key of another org, a key with no recorded
+ * creator, or no credential at all resolves to null, which `assertOrgRole`
+ * refuses as `no_principal`. Every handler that runs `assertOrgRole` passes
+ * this user to it and records it as the actor, so a key acts with its
+ * creator's current org role and no more (apps/app/ARCHITECTURE.md §9,
+ * 2026-09-15; packages/handlers/src/role-check.test.ts enforces the call).
+ *
+ * Runs inside the caller's tenant scope: `api_keys` carries the org and
+ * workspace RLS policy, and a key's context names the key's own workspace.
+ */
+export async function resolveActingUserId(
+  ctx: ActingCredential,
+): Promise<string | null> {
+  if (ctx.userId) return ctx.userId;
+  const apiKeyId = ctx.apiKeyId;
+  if (!apiKeyId) return null;
+  return withTenantDb(async (tx) => {
+    const [keyRow] = await tx
+      .select({ createdByUserId: schema.apiKeys.createdByUserId })
+      .from(schema.apiKeys)
+      .where(
+        and(
+          eq(schema.apiKeys.id, apiKeyId),
+          eq(schema.apiKeys.orgId, ctx.orgId),
+          isNull(schema.apiKeys.deletedAt),
+        ),
+      )
+      .limit(1);
+    return keyRow?.createdByUserId ?? null;
+  });
+}
+
+/** The fields of a `CapabilityContext` the role gate reads. */
+export interface OrgRoleActor {
+  readonly orgId: string;
+  /** The workspace the call is scoped to; read only when `workspace` roles are required. */
+  readonly workspaceId?: string;
+  readonly userId: string | null;
+}
+
+/** The roles a handler accepts, by IAM role name (`iam.roles.name`). */
+export interface OrgRoleRequirement {
+  /** Org-wide roles that satisfy the gate. */
+  readonly org: readonly string[];
+  /** Roles on `ctx.workspaceId` that satisfy it as well; absent for org-only gates. */
+  readonly workspace?: readonly string[];
+}
+
+/**
+ * Refuse unless the signed-in user holds one of `required.org` in `ctx.orgId`,
+ * or — when the handler names `required.workspace` — one of those roles on
+ * `ctx.workspaceId`.
+ *
+ * Roles are assigned to human principals (`iam.principals.parent_user_id`
+ * with `kind = 'human'`), so the gate resolves `ctx.userId` and nothing else.
+ * A context with no user is refused with reason `no_principal` before any
+ * query. The gate makes no key-to-creator mapping itself: every handler
+ * resolves the acting user with `resolveActingUserId` and passes it as
+ * `userId`. Reason `org_role_required` covers a user with no active
+ * principal, no qualifying role, or a role outside both sets. The workspace
+ * leg runs only after the org leg failed, and only when the context names a
+ * workspace. Returns the role name that satisfied the check so a handler can
+ * record it.
+ */
+export async function assertOrgRole(
+  ctx: OrgRoleActor,
+  required: OrgRoleRequirement,
+): Promise<string> {
+  if (!ctx.userId) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "no_principal",
+      message: "No signed-in user on the request",
+    });
+  }
+  const orgRole = await resolveActorOrgRole(ctx.orgId, ctx.userId);
+  if (orgRole !== null && required.org.includes(orgRole)) return orgRole;
+
+  if (required.workspace && ctx.workspaceId) {
+    const wsRole = await resolveActorWorkspaceRole(
+      ctx.orgId,
+      ctx.workspaceId,
+      ctx.userId,
+    );
+    if (wsRole !== null && required.workspace.includes(wsRole)) return wsRole;
+  }
+
+  const accepted = [
+    `org roles ${required.org.join(", ")}`,
+    ...(required.workspace
+      ? [`workspace roles ${required.workspace.join(", ")}`]
+      : []),
+  ].join(" or ");
+  throw new HandlerError({
+    code: "forbidden",
+    reason: "org_role_required",
+    message: `Requires one of the ${accepted}`,
+  });
+}

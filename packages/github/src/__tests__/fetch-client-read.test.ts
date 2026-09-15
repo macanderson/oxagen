@@ -82,6 +82,7 @@ describe("getPullRequest", () => {
       baseRef: "main",
       headRef: "feature/hello",
       headSha: "abc123",
+      mergeCommitSha: null,
       additions: 40,
       deletions: 2,
       changedFiles: 3,
@@ -352,6 +353,56 @@ describe("listPullRequestFiles", () => {
     expect(files[1]?.patch).toBeNull();
     expect(files[2]?.previousPath).toBe("a.ts");
     expect(files[2]?.status).toBe("renamed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listPullRequests
+// ---------------------------------------------------------------------------
+
+describe("listPullRequests", () => {
+  it("queries GET /pulls by head and state and maps number and url", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse([
+          { number: 42, html_url: "https://github.com/acme/repo/pull/42" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const pulls = await client.listPullRequests({
+      owner: "acme",
+      repo: "repo",
+      head: "acme:agents/reviewer",
+      state: "open",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.github.com/repos/acme/repo/pulls?head=acme%3Aagents%2Freviewer&state=open&per_page=100",
+    );
+    expect(init.method).toBe("GET");
+    expect(pulls).toEqual([
+      { number: 42, htmlUrl: "https://github.com/acme/repo/pull/42" },
+    ]);
+  });
+
+  it("returns an empty array when no pull request has that head", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const pulls = await client.listPullRequests({
+      owner: "acme",
+      repo: "repo",
+      head: "acme:agents/reviewer",
+      state: "open",
+    });
+
+    expect(pulls).toEqual([]);
   });
 });
 

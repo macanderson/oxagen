@@ -1,0 +1,46 @@
+{
+  "app": {
+    "name": "Oxagen",
+    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
+  },
+  "pages": {
+    "login": "Log in",
+    "signup": "Govern the agents you already run.",
+    "verify": "Check your email",
+    "twoFactor": "Two-factor authentication",
+    "forgotPassword": "Reset your password",
+    "resetPassword": "Set a new password",
+    "invitation": "Join {org} on Oxagen",
+    "invitationNotFound": "This invitation link does not work",
+    "newOrganization": "Name your organization",
+    "cliAuthorize": "Authorize the Oxagen CLI",
+    "fleet": "Fleet",
+    "run": "Run",
+    "agents": "Agents",
+    "tools": "Tools",
+    "steering": "Steering",
+    "spend": "Spend",
+    "people": "Organization",
+    "apiKeys": "API keys",
+    "billing": "Billing"
+  },
+  "unrecorded": {
+    "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",
+    "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",
+    "steering": "Steering records and proposals are not recorded here yet.",
+    "spend": "Spend by operator and agent, and costed findings, are not recorded here yet.",
+    "run": {
+      "frames_wrapped": "Frames of a wrapped run are not recorded yet."
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This address does not match a page you can open.",
+    "home": "Go to Mission Control"
+  },
+  "globalError": {
+    "title": "Something went wrong",
+    "body": "Mission Control hit an unexpected error. Reload the page to try again.",
+    "retry": "Try again"
+  }
+}

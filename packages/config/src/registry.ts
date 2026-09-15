@@ -771,19 +771,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  OXAGEN_ACTION_METER_MODE: {
-    group: "Billing",
-    description:
-      "ADR-052 governed-action meter mode: 'shadow' records actions against the " +
-      "annual counter and raises no debit; anything else (the default) charges. " +
-      "Set to shadow only for a staged rollout — the platform bills nothing at " +
-      "all while it is on.",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_USAGE_DISCOUNT_PERCENT: {
     group: "Billing",
     description:
@@ -886,9 +873,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Inngest",
     description:
       "Ed25519 private key (PKCS#8 PEM, newlines as \\n) this deployment signs Tacho policy " +
-      "bundles with (get_tacho_bundle). The matching public key travels to each host at " +
-      "enrollment so tacho-hook verifies a cached bundle offline and fails closed on one it " +
-      "cannot verify. Unset means enrollment and bundle capabilities refuse.",
+      "bundles with (get_tacho_bundle) and attests run exports with (export_run, ADR-058). " +
+      "The matching public key travels to each host at enrollment so tacho-hook verifies a " +
+      "cached bundle offline and fails closed on one it cannot verify, and into every export " +
+      "bundle so its verifier runs offline. Unset means enrollment, bundle and export refuse.",
     secret: true,
     clientExposed: false,
     services: [],
@@ -1365,9 +1353,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   PLAYWRIGHT_BASE_URL: {
     group: "Testing / e2e",
     description:
-      "Base URL Playwright drives in apps/app e2e (apps/app/playwright.config.ts). LOCAL: unset → " +
-      "defaults to http://localhost:3000. CI: the booted next server URL. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      "Base URL of the deprecated Playwright suite (apps/app_deprecated/playwright.config.ts, " +
+      "deleted with that app in WL-50). The rev1 harness (apps/app/playwright.config.ts) reads " +
+      "NEXT_PUBLIC_APP_URL and does not read this. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],
@@ -1377,9 +1366,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   E2E_TEST: {
     group: "Testing / e2e",
     description:
-      'Set "true" in the vitest test lanes (declared in turbo.json test:unit/test:coverage env) ' +
-      "so app code can branch to test-only behavior. Not for dev/preview/prod. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      'The exact string "true" on the e2e webServer (apps/app/playwright.config.ts) and the e2e ' +
+      "seed (apps/app seed:e2e): packages/auth relaxes email verification, secure cookies and " +
+      "rate limiting on that value, off-Vercel only (local-env.ts). Declared in turbo.json " +
+      "test:e2e env. Not for dev/preview/prod. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  STRIPE_E2E: {
+    group: "Testing / e2e",
+    description:
+      'Whether the e2e job resolved a Stripe test key: "1" when STRIPE_TEST_SECRET_KEY was mapped ' +
+      'into STRIPE_SECRET_KEY, "0" on a fork pull request without one (pay.spec.ts skips). Set by ' +
+      "the e2e webServer env (apps/app/playwright.config.ts) and the CI job (WL-48). NOTE: read " +
+      "via raw process.env — not in baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],

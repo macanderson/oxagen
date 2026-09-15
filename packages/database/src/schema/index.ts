@@ -23,6 +23,7 @@ export * from "./environments";
 export * from "./ai";
 export * from "./ratelimit";
 export * from "./tacho";
+export * from "./cost";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

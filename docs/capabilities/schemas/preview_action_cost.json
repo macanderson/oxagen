@@ -1,0 +1,168 @@
+{
+  "name": "preview_action_cost",
+  "domain": "billing",
+  "description": "Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion (spec §3.4) and volume bands (§4.1). Shows the actions-per-run ratio it used, and the tier allowance it applied. Pure arithmetic — no organisation data is read.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runsPerYear": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000,
+        "description": "Projected agent runs per year"
+      },
+      "runClass": {
+        "type": "string",
+        "enum": [
+          "qa_lookup",
+          "standard_task",
+          "multi_step",
+          "long_running"
+        ],
+        "default": "standard_task"
+      },
+      "actionsPerRun": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10000
+      },
+      "tier": {
+        "type": "string",
+        "enum": [
+          "free",
+          "build",
+          "scale",
+          "enterprise"
+        ]
+      }
+    },
+    "required": [
+      "runsPerYear"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assumptions": {
+        "type": "object",
+        "properties": {
+          "runsPerYear": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "actionsPerRun": {
+            "type": "number",
+            "minimum": 0
+          },
+          "actionsPerRunSource": {
+            "type": "string",
+            "enum": [
+              "run_class",
+              "caller_supplied"
+            ]
+          },
+          "runClass": {
+            "type": "string",
+            "enum": [
+              "qa_lookup",
+              "standard_task",
+              "multi_step",
+              "long_running"
+            ]
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "free",
+              "build",
+              "scale",
+              "enterprise"
+            ]
+          }
+        },
+        "required": [
+          "runsPerYear",
+          "actionsPerRun",
+          "actionsPerRunSource",
+          "runClass",
+          "tier"
+        ],
+        "additionalProperties": false
+      },
+      "actionsPerYear": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "includedActionsAnnual": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "overageActions": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "band": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "usdPer1000": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "usdPer1000"
+        ],
+        "additionalProperties": false
+      },
+      "overageUsd": {
+        "type": "number",
+        "minimum": 0
+      },
+      "excludes": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assumptions",
+      "actionsPerYear",
+      "includedActionsAnnual",
+      "overageActions",
+      "band",
+      "overageUsd",
+      "excludes"
+    ],
+    "additionalProperties": false
+  }
+}

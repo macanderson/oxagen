@@ -8,6 +8,7 @@ import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
 } from "./lib/api-key-authz";
+import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
 import { logger } from "./logger";
 
 function denied(message: string): CapabilityError {
@@ -28,7 +29,8 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
 > = async (input, ctx) => {
   if (!ctx.userId) throw denied("Unauthorized: no authenticated user");
   if (!ctx.orgId) throw denied("Forbidden: orgId is required");
-  const actorRole = await resolveActorRole(ctx.orgId, ctx.userId);
+  const userId = ctx.userId;
+  const actorRole = await resolveActorRole(ctx.orgId, userId);
   if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
     throw denied(
       "Forbidden: only org Owners and Admins can revoke Tacho hosts",
@@ -49,36 +51,12 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
     if (host.status === "revoked" && host.revokedAt) {
       return { revokedAt: host.revokedAt, already: true };
     }
-    await tx
-      .update(schema.tachoHosts)
-      .set({
-        status: "revoked",
-        revokedAt: now,
-        revokeReason: input.reason ?? null,
-        updatedAt: now,
-        updatedByUserId: ctx.userId,
-      })
-      .where(eq(schema.tachoHosts.id, host.id));
-    await tx
-      .update(schema.apiKeys)
-      .set({
-        deletedAt: now,
-        deletedByUserId: ctx.userId,
-        updatedAt: now,
-        updatedByUserId: ctx.userId,
-      })
-      .where(eq(schema.apiKeys.id, host.apiKeyId));
-    await tx.insert(schema.tachoControlCommands).values({
+    await revokeHostEnrollment(tx, host, {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      hostId: host.id,
-      command: "revoke",
-      payload: { reason: input.reason ?? "revoked by operator" },
-      issuedByUserId: ctx.userId,
-      issuedAt: now,
-      expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-      createdByUserId: ctx.userId,
-      updatedByUserId: ctx.userId,
+      userId,
+      reason: input.reason ?? null,
+      now,
     });
     return { revokedAt: now, already: false };
   });

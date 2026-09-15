@@ -57,6 +57,28 @@ export const tachoEventsIngest = registerCapability({
             .strict(),
         )
         .max(MAX_BATCH),
+      /**
+       * Bodies the control plane did not retain: the event was recorded
+       * without one and the session carries a `body_missing` gap. Reasons:
+       * `unknown_event`, `digest_mismatch`, `credential_detected`,
+       * `retention_digest_only`, `no_content_digest`.
+       */
+      body_rejections: z
+        .array(
+          z
+            .object({
+              event_id_idem: z.string().regex(/^evt_[0-9a-f]{64}$/),
+              reason: z.enum([
+                "unknown_event",
+                "digest_mismatch",
+                "credential_detected",
+                "retention_digest_only",
+                "no_content_digest",
+              ]),
+            })
+            .strict(),
+        )
+        .max(MAX_BATCH),
       control: controlEnvelopeSchema,
     })
     .strict()

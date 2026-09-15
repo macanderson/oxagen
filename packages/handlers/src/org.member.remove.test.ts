@@ -7,17 +7,17 @@
  *   - @oxagen/telemetry         → recordSecurityEvent (fire-and-forget, tracked)
  *   - drizzle-orm               → and, eq, isNull, count
  *
- * Scenarios:
- *   1. No authenticated principal → throws Unauthorized
- *   2. No orgId → throws Forbidden
- *   3. Actor has no principal or insufficient role → throws Forbidden
- *   4. Target not in org → throws Not found (IDOR guard)
- *   5. Target is last org owner → blocked
+ * Scenarios (every refusal is a HandlerError asserted by code, never message):
+ *   1. No authenticated principal → forbidden
+ *   2. No orgId → forbidden
+ *   3. Actor has no principal or insufficient role → forbidden
+ *   4. Target not in org → not_found (IDOR guard)
+ *   5. Target is last org owner → conflict
  *   6. Happy path → removes membership, emits audit event, returns removed:true
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityContext } from "@oxagen/oxagen";
 
 // ── @oxagen/database/security mock ───────────────────────────────────────────
 // The handler emits through the consolidated registry helper emitSecurityEvent
@@ -61,6 +61,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { orgMemberRemoveHandler } = await import("./org.member.remove");
+const { schema } = await import("@oxagen/database");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,20 @@ function makeCtx(
   } as CapabilityContext;
 }
 
+/** Awaits a rejection and asserts it is a HandlerError with this code and reason. */
+async function expectHandlerError(
+  run: Promise<unknown>,
+  code: HandlerError["code"],
+  reason: string,
+): Promise<void> {
+  const err = await run.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(err).toBeInstanceOf(HandlerError);
+  expect(err).toMatchObject({ code, reason });
+}
+
 /** Chain builder for select().from().where().limit() returning a resolved array. */
 function selectChain(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
@@ -95,32 +110,38 @@ describe("orgMemberRemoveHandler", () => {
     vi.clearAllMocks();
   });
 
-  it("no authenticated principal → throws Unauthorized", async () => {
+  it("no authenticated principal → forbidden", async () => {
     const ctx = makeCtx({ userId: null, apiKeyId: null });
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx),
-    ).rejects.toThrow("Unauthorized");
+      "forbidden",
+      "unauthenticated",
+    );
   });
 
-  it("no orgId → throws Forbidden", async () => {
+  it("no orgId → forbidden", async () => {
     const ctx = makeCtx({ orgId: null as unknown as string });
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx),
-    ).rejects.toThrow("Forbidden");
+      "forbidden",
+      "org_scope_required",
+    );
   });
 
-  it("actor has no principal (not IAM-provisioned) → throws Forbidden", async () => {
+  it("actor has no principal (not IAM-provisioned) → forbidden", async () => {
     // select chain for resolveActorPrincipalAndRole — principal not found
     const sc = selectChain([]);
     mockTx.select = sc.select;
 
     const ctx = makeCtx();
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx),
-    ).rejects.toThrow("Forbidden");
+      "forbidden",
+      "insufficient_role",
+    );
   });
 
-  it("actor has Member role (not Owner/Admin) → throws Forbidden", async () => {
+  it("actor has Member role (not Owner/Admin) → forbidden", async () => {
     // Call 1: principal found for actor
     // Call 2: PRA → Member role
     let callCount = 0;
@@ -142,12 +163,14 @@ describe("orgMemberRemoveHandler", () => {
     });
 
     const ctx = makeCtx();
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx),
-    ).rejects.toThrow("Forbidden");
+      "forbidden",
+      "insufficient_role",
+    );
   });
 
-  it("target not a member of the org → throws Not found (IDOR guard)", async () => {
+  it("target not a member of the org → not_found (IDOR guard)", async () => {
     let callCount = 0;
     mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
@@ -165,12 +188,14 @@ describe("orgMemberRemoveHandler", () => {
     });
 
     const ctx = makeCtx();
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "other-org-user" }, ctx),
-    ).rejects.toThrow("Not found");
+      "not_found",
+      "target_not_member",
+    );
   });
 
-  it("target is the last owner → throws with lockout message", async () => {
+  it("target is the last owner → conflict, nothing deleted", async () => {
     let callCount = 0;
     mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
@@ -192,10 +217,18 @@ describe("orgMemberRemoveHandler", () => {
       return build([]);
     });
 
+    mockTx.delete = vi.fn();
+    mockTx.update = vi.fn();
+
     const ctx = makeCtx();
-    await expect(
+    await expectHandlerError(
       orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx),
-    ).rejects.toThrow("Cannot remove the last org owner");
+      "conflict",
+      "last_owner",
+    );
+    expect(mockTx.delete).not.toHaveBeenCalled();
+    expect(mockTx.update).not.toHaveBeenCalled();
+    expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("happy path → removes member, emits audit event, returns removed:true", async () => {
@@ -250,5 +283,14 @@ describe("orgMemberRemoveHandler", () => {
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");
     expect(event.capability).toBe("remove_org_member");
+
+    // The target's CLI session keys are soft-deleted with the membership.
+    expect(mockTx.update).toHaveBeenCalledWith(schema.apiKeys);
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deletedAt: expect.any(Date),
+        deletedByUserId: "actor-user-id",
+      }),
+    );
   });
 });

@@ -15,7 +15,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/iam", () => ({
+// The audit sink is stubbed; the delegation ceiling runs for real over the
+// fake transaction below (its reads are the same select chains).
+vi.mock("@oxagen/iam", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/iam")>()),
   emitAudit: mocks.emitAudit,
 }));
 

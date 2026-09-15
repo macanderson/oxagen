@@ -1,0 +1,32 @@
+{
+  "onboarding": {
+    "errors": {
+      "orgNameRequired": "Enter the organization's name.",
+      "orgNameTooLong": "Use at most 120 characters.",
+      "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "slugReserved": "That address is used by an Oxagen page. Pick another.",
+      "workspaceNameRequired": "Enter a name for the first workspace.",
+      "workspaceNameTooLong": "Use at most 80 characters.",
+      "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
+      "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
+      "slugTaken": "That address belongs to another organization. Pick a different one.",
+      "failed": "The organization could not be created. Nothing was saved; try again.",
+      "denied": "This account may not create an organization."
+    },
+    "organization": {
+      "eyebrow": "Create your organization",
+      "title": "Name your organization",
+      "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
+      "name": "Organization name",
+      "slug": "Address",
+      "slugHint": "Mission Control lives at /{slug}. You can change the address later.",
+      "workspaceTitle": "First workspace",
+      "workspaceName": "Workspace name",
+      "workspaceSlug": "Workspace address",
+      "workspaceHint": "A workspace is a governance partition: one main repo, one ontology, one steering set, its own agents, tool grants and budgets.",
+      "creates": "Creates the organization {name} and its first workspace.",
+      "submit": "Create organization",
+      "pending": "Creating…"
+    }
+  }
+}

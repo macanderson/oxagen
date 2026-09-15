@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const counter = vi.hoisted(() => ({ sumSpendCounter: vi.fn() }));
+vi.mock("./spend-counter", () => ({
+  sumSpendCounter: counter.sumSpendCounter,
+}));
+
 import {
   assertWithinSpendBudget,
   clearSpendBudgetCaches,
@@ -280,5 +286,42 @@ describe("getSpendBudgetStatuses", () => {
     });
     expect(statuses[0]!.spentMicros).toBe(0n);
     expect(statuses[0]!.state).toBe("ok");
+  });
+});
+
+describe("the spend read is the recorders' counter (ADR-060 §5)", () => {
+  // Neither path names ClickHouse: the gate and the panel sum the Postgres
+  // counter over the ceiling's window, so a stalled analytics store can
+  // neither zero a ceiling nor deny a call (#2820).
+  it("the gate sums the counter over the ceiling's window when no reader is injected", async () => {
+    counter.sumSpendCounter.mockResolvedValue(11_000_000n);
+    const d = deps({
+      loadBudgets: vi.fn(async () => [budgetRow()]),
+      now: () => new Date("2026-07-21T12:00:00Z").getTime(),
+    });
+    delete d.readSpend;
+    await expect(assertWithinSpendBudget(args, d)).rejects.toBeInstanceOf(
+      BudgetExceededError,
+    );
+    expect(counter.sumSpendCounter).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: null,
+      periodStart: new Date("2026-07-01T00:00:00Z"),
+      periodEnd: new Date("2026-07-21T12:00:00Z"),
+    });
+  });
+
+  it("the statuses panel reads the same counter", async () => {
+    counter.sumSpendCounter.mockResolvedValue(2_500_000n);
+    const statuses = await getSpendBudgetStatuses({
+      loadBudgets: async () => [
+        budgetRow({ scope: "workspace", workspaceId: "ws-1" }),
+      ],
+      now: () => new Date("2026-07-16T00:00:00Z").getTime(),
+    });
+    expect(statuses[0]!.spentMicros).toBe(2_500_000n);
+    expect(counter.sumSpendCounter).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
+    );
   });
 });

@@ -44,6 +44,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_records", policyClass: "standard" },
   { table: "agent.context_record_versions", policyClass: "standard" },
   { table: "agent.context_promotions", policyClass: "standard" },
+  // Steering proposals and the Context PR state machine, and the records
+  // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
+  { table: "agent.context_proposals", policyClass: "standard" },
+  { table: "agent.context_appends", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
@@ -93,13 +97,30 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // ADR-052 governed-action counter. org_id NOT NULL, no workspace_id — the
-  // allowance and the volume band are both annual and org-wide, so a workspace
-  // column would imply a per-workspace allowance that does not exist.
-  { table: "billing.governed_action_counters", policyClass: "org_only" },
+  // ADR-055 GAU model (20260914165423_gau_buckets_and_contract_terms.sql).
+  // All three carry org_id NOT NULL and no workspace_id: terms, the month
+  // bucket and the settlement ledger are org-wide. The recorder reads and
+  // writes them through withTenantDb; the webhook branches and the close job
+  // through withSystemDb.
+  { table: "billing.contract_terms", policyClass: "org_only" },
+  { table: "billing.gau_buckets", policyClass: "org_only" },
+  { table: "billing.gau_settlements", policyClass: "org_only" },
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
+  // The recorders' running spend counter (ADR-060 §5): org_id NOT NULL,
+  // workspace_id NULL for a frame outside a workspace → workspace_nullable.
+  // Written and summed through withSystemDb with explicit org/workspace
+  // predicates, because an org-level ceiling covers every workspace.
+  { table: "billing.spend_counters", policyClass: "workspace_nullable" },
+
+  // ── cost.* (ADR-060) ────────────────────────────────────────────────────
+  // The price book: org_id NULL rows are the platform list prices every
+  // tenant reads; an org's negotiated rows are its own → org_or_global.
+  { table: "cost.price_entries", policyClass: "org_or_global" },
+  // Derived spend rollups, rebuilt from frames; org_id + workspace_id NOT NULL.
+  { table: "cost.run_totals", policyClass: "standard" },
+  { table: "cost.daily_totals", policyClass: "standard" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
@@ -248,6 +269,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   manifest/blob ledger lands in the evidence-ledger PR. org_id +
   //   workspace_id both NOT NULL → standard tenant_isolation.
   { table: "evidence.retention_policy_versions", policyClass: "standard" },
+  // The export job `export_run` queues (ADR-058): org_id + workspace_id NOT NULL.
+  { table: "evidence.run_exports", policyClass: "standard" },
 
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
   //   not run (docs/specs/tacho/data-model.md section 3). All eight carry

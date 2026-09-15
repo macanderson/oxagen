@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, agent
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent
@@ -16,7 +16,7 @@ approved tool call or skips it and apologises.
 
 | Field        | Type                       | Notes                                       |
 | ------------ | -------------------------- | ------------------------------------------- |
-| `approvalId` | `string`                   | Approval id from the SSE approval card.     |
+| `approvalId` | `string`                   | The public id (`apr_…`) or the row uuid (#2906); anything else is refused at the edge. |
 | `decision`   | `"approved" \| "denied"`   | Required.                                   |
 | `note`       | `string?`                  | Optional human note for the audit row.      |
 
@@ -24,8 +24,8 @@ approved tool call or skips it and apologises.
 
 | Field        | Type                                       | Notes                              |
 | ------------ | ------------------------------------------ | ---------------------------------- |
-| `approvalId` | `string`                                   | Echoes the input id.               |
-| `resolution` | `"approved" \| "denied" \| "expired"`      | Resolved state, with `expired` for stale approvals. |
+| `approvalId` | `string`                                   | Echoes the input id, in the form it was sent. |
+| `resolution` | `"approved" \| "denied"`                    | The decision that was written.     |
 
 ## Side effects
 
@@ -35,10 +35,11 @@ approved tool call or skips it and apologises.
 
 ## Errors
 
-| code                | meaning                                          |
-| ------------------- | ------------------------------------------------ |
-| `unknown_approval`  | The `approvalId` does not exist in this workspace. |
-| `already_resolved`  | The approval is no longer pending.               |
+| code        | reason              | meaning                                                                                       |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| `forbidden` | `no_principal`      | No signed-in user and no API key with a live creator (403).                                   |
+| `forbidden` | `org_role_required` | The acting user (the signed-in user, or the API key's creator) is not an org Owner or Admin, nor a workspace Owner or Member (403). |
+| `conflict`  | `approval_expired`  | No pending row matched: unknown id, expired, already resolved, or another workspace (409). The call is not a governed action and is never billed. |
 
 ## SPEC references
 

@@ -13,7 +13,11 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { consumeCliAuthCode, verifyPkceS256 } from "@oxagen/auth/cli-auth";
+import {
+  CLI_SESSION_SCOPE_PURPOSE,
+  consumeCliAuthCode,
+  verifyPkceS256,
+} from "@oxagen/auth/cli-auth";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { generateApiKey } from "@oxagen/handlers";
@@ -69,6 +73,8 @@ authCliTokenRoute.post("/token", async (c) => {
 
   // ── Mint API key ──────────────────────────────────────────────────────────
   // Scope is derived from the approved code — no trust in caller-supplied ids.
+  // The purpose marks the key as a CLI session: `resolveApiKey` authenticates
+  // it as `data.userId`, the user who approved the flow.
   const { rawKey, keyPrefix, keyHash } = generateApiKey();
 
   await withSystemDb(async (tx) => {
@@ -78,7 +84,7 @@ authCliTokenRoute.post("/token", async (c) => {
       keyPrefix,
       keyHash,
       name: data.label,
-      scope: {},
+      scope: { purpose: CLI_SESSION_SCOPE_PURPOSE },
       createdByUserId: data.userId,
       updatedByUserId: data.userId,
     });

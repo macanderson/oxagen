@@ -173,12 +173,20 @@ describe("v2 carry is exhaustive", () => {
           continue;
         }
         const srcMod = await import(`../${file.replace(/\.ts$/, "")}`);
-        const src = Object.values(srcMod).find(
-          (v): v is ContractDecl =>
-            typeof v === "object" &&
-            v !== null &&
-            (v as { name?: unknown }).name === sourceName,
-        );
+        const declNamed = (name: string) =>
+          Object.values(srcMod).find(
+            (v): v is ContractDecl =>
+              typeof v === "object" &&
+              v !== null &&
+              (v as { name?: unknown }).name === name,
+          );
+        const src = declNamed(sourceName);
+        // A source file that no longer registers the absorbed name but does
+        // register this tool's own name has carried the absorption in place:
+        // the v1 contract was rewritten under its Appendix E name (apps/app
+        // rev1, phase D) and the v2 descriptor composes from it. There is no
+        // v1 input left to diff against.
+        if (!src && sourceName !== row.name && declNamed(row.name)) continue;
         if (!src) {
           unreadable.push(
             `${row.name}: could not find "${sourceName}" in ${file}`,

@@ -9,7 +9,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent, TachoRuntime } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { TachoHarness } from "../wire";
+import type { TachoDeliveryMode, TachoHarness } from "../wire";
 
 /**
  * The recorder context for a session's harness. The daemon's context is
@@ -35,11 +35,28 @@ export function contextForHarness(
   };
 }
 
+/**
+ * Prompt content an operator queued for the next boundary: a `message`, or a
+ * `steer` with the mode the control plane resolved (spec section 7.3; both
+ * modes are recorded on the frame that carries it). `expiresAt` is the row's
+ * deadline; the boundary that would inject the item checks it first, so an
+ * item the control plane reads as `expired` is never injected.
+ */
+export interface QueuedPrompt {
+  id: string;
+  text: string;
+  command: "message" | "steer";
+  requestedMode: TachoDeliveryMode | null;
+  deliveryMode: TachoDeliveryMode | null;
+  degradedReason: string | null;
+  expiresAt: string | null;
+}
+
 export interface SessionControl {
   paused: string | null;
   cancelled: string | null;
-  /** Operator messages to inject at the next boundary. */
-  messages: Array<{ id: string; text: string }>;
+  /** Operator prompt content to inject at the next boundary. */
+  messages: QueuedPrompt[];
 }
 
 export interface SessionFacts {
@@ -67,7 +84,9 @@ export interface SessionRecord extends SessionFacts {
 export interface PersistedSession extends SessionFacts {
   harnessSessionId: string;
   recorder: RecorderState;
-  control: SessionControl;
+  control: Omit<SessionControl, "messages"> & {
+    messages: Array<Pick<QueuedPrompt, "id" | "text"> & Partial<QueuedPrompt>>;
+  };
   startedAt: string;
   lastSeenAt: string;
   sealed: boolean;
@@ -245,7 +264,20 @@ export class SessionRegistry {
           scope: this.options.scope,
           restore: persisted.recorder,
         }),
-        control: persisted.control,
+        control: {
+          paused: persisted.control.paused,
+          cancelled: persisted.control.cancelled,
+          // A state file written before steer carried `{ id, text }` only:
+          // a queued message with no mode and no deadline recorded.
+          messages: persisted.control.messages.map((m) => ({
+            command: "message",
+            requestedMode: null,
+            deliveryMode: null,
+            degradedReason: null,
+            expiresAt: null,
+            ...m,
+          })),
+        },
         startedAt: persisted.startedAt,
         lastSeenAt: persisted.lastSeenAt,
         sealed: persisted.sealed,
