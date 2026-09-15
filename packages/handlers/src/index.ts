@@ -10,6 +10,7 @@ export type {
   ProvisionMemberPrincipalArgs,
 } from "./iam-provision";
 export { workspaceCreateHandler } from "./workspace.create";
+export { billingContractRateGetHandler } from "./billing.contract_rate.get";
 export { billingSubscriptionReadHandler } from "./billing.subscription.read";
 export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription_upgrade.start";
 export { chatMessageSendHandler } from "./chat.message.send";
