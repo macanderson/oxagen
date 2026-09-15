@@ -1,0 +1,181 @@
+{
+  "name": "append_record",
+  "domain": "context",
+  "description": "Append one context record to the workspace — an observation, memory, knowledge claim, evidence, context-use record or record proposal — content-addressed by record_hash. A directive is refused: it reaches the workspace only through a Context PR.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "observation",
+              "memory",
+              "knowledge",
+              "evidence",
+              "record_proposal",
+              "context_use",
+              "context_use_feedback"
+            ]
+          },
+          {
+            "const": "directive"
+          }
+        ]
+      },
+      "lineageId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "The idea this record belongs to"
+      },
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "sharingScope": {
+        "type": "string",
+        "enum": [
+          "user",
+          "repository",
+          "workspace",
+          "organization"
+        ],
+        "default": "workspace"
+      },
+      "sourceRefs": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "default": []
+      },
+      "evidenceLinks": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "default": []
+      },
+      "proposal": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "constraint",
+              "procedure",
+              "fact",
+              "memory",
+              "preference"
+            ]
+          },
+          "force": {
+            "type": "string",
+            "enum": [
+              "must",
+              "should",
+              "may",
+              "info"
+            ]
+          },
+          "constraintEffect": {
+            "type": "string",
+            "enum": [
+              "require",
+              "forbid"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "kind",
+          "force",
+          "rationale"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "kind",
+      "lineageId",
+      "statement"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recordId": {
+        "type": "string"
+      },
+      "recordHash": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "observation",
+          "memory",
+          "knowledge",
+          "evidence",
+          "record_proposal",
+          "context_use",
+          "context_use_feedback"
+        ]
+      },
+      "appended": {
+        "type": "boolean"
+      },
+      "proposalId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "recordId",
+      "recordHash",
+      "kind",
+      "appended",
+      "proposalId"
+    ],
+    "additionalProperties": false
+  }
+}

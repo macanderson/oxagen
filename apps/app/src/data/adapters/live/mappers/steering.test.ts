@@ -81,6 +81,16 @@ const recordRow: typeof schema.contextRecords.$inferSelect = {
   activeVersionId: "0192d4a8-7c1e-7a00-8000-0000000c7b01",
   activatedByUserId: null,
   activatedAt: new Date("2026-09-04T10:00:00Z"),
+  // Written by merge_context_pr (ADR-061); null on a record this adapter
+  // reads from publish_context_record.
+  kind: null,
+  force: null,
+  constraintEffect: null,
+  sharingScope: "workspace",
+  statement: null,
+  commitSha: null,
+  path: null,
+  publishedAt: null,
 };
 
 const versionRow: typeof schema.contextRecordVersions.$inferSelect = {

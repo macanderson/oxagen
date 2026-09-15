@@ -134,13 +134,14 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 95 as of billing.contract_terms, billing.gau_buckets and
+    // 97 as of agent.context_proposals and agent.context_appends (ADR-061,
+    // #2961). Was 95 as of billing.contract_terms, billing.gau_buckets and
     // billing.gau_settlements (ADR-055, WL-24). Was 92 as of
     // billing.governed_action_counters (ADR-052). An earlier note read "97 as
     // of org.model_credentials" while the assertion said 91, so it had already
     // drifted from the number it was describing — a count nobody can check
     // against its own comment is a pin with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(95);
+    expect(POLICY_MANIFEST.length).toBe(97);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
