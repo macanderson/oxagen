@@ -8,7 +8,7 @@
 **Risk level:** low (no approval)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
-**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler for a signed-in caller (`assertOrgRole`, INV-29); an API-key call carries no user and is authorized by the kernel
+**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler (`assertOrgRole`, INV-29) for the acting user: the signed-in user, or the creator of the API key (`resolveActingUserId`); a key with no creator is refused `no_principal` (2026-09-15, maintainer decision). The append's author stays the signed-in user, null for a key
 
 ## Intent
 

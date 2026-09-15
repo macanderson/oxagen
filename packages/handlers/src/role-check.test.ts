@@ -2,13 +2,16 @@
 // with a role restriction is enforced by its handler, because the kernel's
 // IAM check allows every capability for a non-enterprise organization.
 //
-// The array below names the contracts whose handlers carry the gate. For each
-// one the test reads `register.ts` for the module the handler loads from,
+// The arrays below name the contracts whose handlers carry the gate. For each
+// one the test finds the module the handler loads from — `register.ts` for
+// packages/handlers, the `LOADERS` map in `index.ts` for packages/agent —
 // parses that module with the TypeScript compiler API and asserts the
-// exported handler's body contains a call expression to `assertOrgRole`.
-// Every entry must also be a registered contract, so a renamed capability
-// fails here rather than silently dropping out of the gate. The array grows
-// with each lane that adds a role-checked handler.
+// exported handler contains a call expression to `assertOrgRole`: in its
+// initializer, in the same-file factory its initializer calls, or in its body
+// when it is a function declaration. Every entry must also be a registered
+// contract, so a renamed capability fails here rather than silently dropping
+// out of the gate. The arrays grow with each lane that adds a role-checked
+// handler.
 //
 // The second rule covers every `assertOrgRole` call under packages/*/src: an
 // API key acts as its creator, bounded by the creator's current org role
@@ -29,10 +32,21 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "append_record",
+  "propose_record",
+  "dismiss_proposal",
+  "open_context_pr",
+] as const;
+
+const AGENT_ROLE_CHECKED_CONTRACTS = [
+  "resolve_approval",
+  "assign_agent_role",
+  "revoke_agent_role",
 ] as const;
 
 const SRC = join(__dirname);
 const PACKAGES = join(SRC, "..", "..");
+const AGENT_HANDLERS = join(PACKAGES, "agent", "src", "handlers");
 
 /** The `./module` and export name `register.ts` binds a capability to. */
 function handlerBinding(
@@ -61,6 +75,63 @@ function handlerBinding(
   return found;
 }
 
+/** The `./module` packages/agent's `LOADERS` entry for a capability imports. */
+function agentHandlerModule(
+  indexSource: ts.SourceFile,
+  capability: string,
+): string {
+  let module: string | undefined;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
+      node.name.text === capability
+    ) {
+      module = /import\("(\.\/[^"]+)"\)/.exec(
+        node.initializer.getText(indexSource),
+      )?.[1];
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(indexSource);
+  if (!module) {
+    throw new Error(`packages/agent LOADERS binds no handler for ${capability}`);
+  }
+  return module;
+}
+
+const isExported = (node: ts.Node): boolean =>
+  ts.canHaveModifiers(node) &&
+  (ts.getModifiers(node) ?? []).some(
+    (m) => m.kind === ts.SyntaxKind.ExportKeyword,
+  );
+
+/**
+ * The module's one exported `*Handler` — the fallback `resolveHandler` in
+ * packages/agent/src/handlers/index.ts resolves a snake_case capability by.
+ */
+function soleHandlerExport(source: ts.SourceFile): string {
+  const names: string[] = [];
+  for (const statement of source.statements) {
+    if (!isExported(statement)) continue;
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      names.push(statement.name.text);
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const decl of statement.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name)) names.push(decl.name.text);
+      }
+    }
+  }
+  const handlers = names.filter((n) => n.endsWith("Handler"));
+  if (handlers.length !== 1) {
+    throw new Error(
+      `${source.fileName} exports ${handlers.length} *Handler names`,
+    );
+  }
+  return handlers[0]!;
+}
+
 function parseSource(file: string, text: string): ts.SourceFile {
   return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 }
@@ -74,7 +145,12 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   ts.isIdentifier(node.expression) &&
   node.expression.text === name;
 
-/** Whether the exported handler's initializer contains a call to `assertOrgRole`. */
+/**
+ * Whether the exported handler contains a call to `assertOrgRole`: in its
+ * initializer (`export const h = async (…) => …`), in the body of the
+ * same-file factory its initializer calls (`export const h = createH(deps)`),
+ * or in its body when it is a function declaration.
+ */
 function handlerCallsAssertOrgRole(
   source: ts.SourceFile,
   exportName: string,
@@ -84,15 +160,34 @@ function handlerCallsAssertOrgRole(
     if (isCallTo(node, "assertOrgRole")) calls = true;
     ts.forEachChild(node, scan);
   };
+  const functionNamed = (name: string) =>
+    source.statements.find(
+      (s): s is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(s) && s.name?.text === name,
+    );
   for (const statement of source.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === exportName
+    ) {
+      scan(statement);
+    }
     if (!ts.isVariableStatement(statement)) continue;
     for (const decl of statement.declarationList.declarations) {
       if (
-        ts.isIdentifier(decl.name) &&
-        decl.name.text === exportName &&
-        decl.initializer
+        !ts.isIdentifier(decl.name) ||
+        decl.name.text !== exportName ||
+        !decl.initializer
       )
-        scan(decl.initializer);
+        continue;
+      scan(decl.initializer);
+      if (
+        ts.isCallExpression(decl.initializer) &&
+        ts.isIdentifier(decl.initializer.expression)
+      ) {
+        const factory = functionNamed(decl.initializer.expression.text);
+        if (factory) scan(factory);
+      }
     }
   }
   return calls;
@@ -216,6 +311,36 @@ describe("INV-29: role-restricted contracts are gated in their handler", () => {
   });
 });
 
+describe("INV-29: role-restricted packages/agent contracts are gated in their handler", () => {
+  const index = parse(join(AGENT_HANDLERS, "index.ts"));
+  const handlerSource = (name: string) =>
+    parse(join(AGENT_HANDLERS, `${agentHandlerModule(index, name)}.ts`));
+
+  it.each(AGENT_ROLE_CHECKED_CONTRACTS)(
+    "%s is a registered contract",
+    (name) => {
+      expect(getCapability(name)?.name).toBe(name);
+    },
+  );
+
+  it.each(AGENT_ROLE_CHECKED_CONTRACTS)(
+    "%s's handler body calls assertOrgRole",
+    (name) => {
+      const source = handlerSource(name);
+      expect(
+        handlerCallsAssertOrgRole(source, soleHandlerExport(source)),
+      ).toBe(true);
+    },
+  );
+
+  it("the scan itself sees no gate in an agent handler that has none", () => {
+    const source = handlerSource("list_agent_roles");
+    expect(handlerCallsAssertOrgRole(source, soleHandlerExport(source))).toBe(
+      false,
+    );
+  });
+});
+
 describe("INV-29: every role gate acts as the resolved user", () => {
   const callers = gateCallers();
 
@@ -224,8 +349,12 @@ describe("INV-29: every role gate acts as the resolved user", () => {
     expect(names).toEqual(
       expect.arrayContaining([
         "agent/src/handlers/agent.approval.resolve.ts",
+        "agent/src/handlers/agent.role.assign.ts",
+        "agent/src/handlers/agent.role.revoke.ts",
         "handlers/src/billing.gau_bucket.purchase.ts",
         "handlers/src/billing.invoice.list.ts",
+        "handlers/src/context.pr.open.ts",
+        "handlers/src/context.records.append.ts",
         "handlers/src/tacho.command.dispatch.ts",
         "handlers/src/workspace.archive.ts",
       ]),
@@ -247,6 +376,15 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         parseSource(
           "probe.ts",
           `export const handler = async (_input, ctx) => {\n${body}\n};`,
+        ),
+      );
+
+    /** The factory shape the steering handlers use. */
+    const factoryProbe = (body: string) =>
+      gatesWithoutActingUser(
+        parseSource(
+          "probe.ts",
+          `export function createHandler(deps) {\n  return async (_input, ctx) => {\n${body}\n  };\n}\nexport const handler = createHandler({});`,
         ),
       );
 
@@ -276,9 +414,28 @@ describe("INV-29: every role gate acts as the resolved user", () => {
       ).toEqual([]);
     });
 
+    it("passes a factory's handler that resolves the user and passes it", () => {
+      expect(
+        factoryProbe(
+          `const actingUserId = await resolveActingUserId(ctx);
+           await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });`,
+        ),
+      ).toEqual([]);
+    });
+
     it("fails a gate passed ctx itself", () => {
       expect(
         probe(`await assertOrgRole(ctx, { org: ["Owner"] });`),
+      ).toHaveLength(1);
+    });
+
+    it("fails a factory's handler that passes ctx inside a signed-in check", () => {
+      expect(
+        factoryProbe(
+          `if (ctx.userId) {
+             await assertOrgRole(ctx, { org: ["Owner"], workspace: ["Member"] });
+           }`,
+        ),
       ).toHaveLength(1);
     });
 
@@ -306,6 +463,25 @@ describe("INV-29: every role gate acts as the resolved user", () => {
            await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });`,
         ),
       ).toHaveLength(1);
+    });
+  });
+
+  describe("the handler-body scan", () => {
+    it("follows an exported handler into the same-file factory it calls", () => {
+      const source = parseSource(
+        "probe.ts",
+        `export function createHandler(deps) {\n  return async (_input, ctx) => {\n    await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n  };\n}\nexport const handler = createHandler({});`,
+      );
+      expect(handlerCallsAssertOrgRole(source, "handler")).toBe(true);
+    });
+
+    it("reads an exported function declaration's body", () => {
+      const source = parseSource(
+        "probe.ts",
+        `export async function handler(_input, ctx) {\n  await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n}`,
+      );
+      expect(handlerCallsAssertOrgRole(source, "handler")).toBe(true);
+      expect(soleHandlerExport(source)).toBe("handler");
     });
   });
 });

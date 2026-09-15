@@ -5,11 +5,11 @@
 **Mode:** sync
 **Scope:** tenant + workspace
 **Surfaces:** api
-**Why api only:** The handler's role gate needs a signed-in user; an API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
+**Why api only:** Proposals are dismissed from Mission Control, so the MCP surface is not declared. Adding the MCP tool is a lane of its own.
 **Risk level:** medium
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
-**Roles:** org Owner or Admin, or the workspace Owner — checked by the handler (`assertOrgRole`, INV-29)
+**Roles:** org Owner or Admin, or the workspace Owner — checked by the handler (`assertOrgRole`, INV-29) for the acting user: the signed-in user, or the creator of the API key (`resolveActingUserId`; a key with no creator is refused `no_principal`), who is recorded as the proposal's updater (2026-09-15, maintainer decision)
 
 ## Intent
 

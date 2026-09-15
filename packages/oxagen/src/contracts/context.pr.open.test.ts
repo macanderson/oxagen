@@ -49,7 +49,7 @@ describe("open_context_pr contract", () => {
     });
   });
 
-  it("is reachable only where a signed-in user exists: the handler's role gate refuses an API key", () => {
+  it("declares the api surface only: the PR is opened from Mission Control", () => {
     expect(contextPrOpen.surfaces).toEqual(["api"]);
     expect(contextPrOpen.layers).not.toContain("mcp");
     expect(contextPrOpen.layers).not.toContain("cli");
