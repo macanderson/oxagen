@@ -3,12 +3,16 @@
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
  */
-export type Harness = "claude-code" | "codex";
+export type Harness = "claude-code" | "codex" | "stella";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  stella: "Stella",
 };
+
+/** Every harness the app knows how to wrap, in display order. */
+export const HARNESSES: Harness[] = ["claude-code", "codex", "stella"];
 
 export interface HostTarget {
   org_slug: string;
@@ -197,6 +201,43 @@ export function defaultRegistration(
   detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
 ): Harness[] {
   return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
+/** What `DesktopState.cli_install` reports about the launch-time PATH link. */
+export interface CliInstallReport {
+  state: "linked" | "already" | "skipped" | "opted_out" | "failed" | "pending";
+  dir: string;
+  files: string[];
+  skipped: string[];
+  profile: string | null;
+  note: string;
+}
+
+/** The Command line panel's one line on what the launch-time auto-link did. */
+export function describeCliInstall(
+  install: CliInstallReport | null | undefined,
+): string | null {
+  if (!install) return null;
+  const files = install.files.length > 0 ? install.files.join(", ") : "nothing";
+  const profile = install.profile ? ` Updated ${install.profile}.` : "";
+  const skipped =
+    install.skipped.length > 0 ? ` Skipped ${install.skipped.join(", ")}.` : "";
+  switch (install.state) {
+    case "linked":
+      return `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`;
+    case "already":
+      return `${files} already on PATH in ${install.dir}.${skipped}`;
+    case "skipped":
+      return `Skipped linking on launch: ${install.note}`;
+    case "opted_out":
+      return `Not linked: you opted out. ${install.note}`;
+    case "failed":
+      return `Could not link into ${install.dir}: ${install.note}`;
+    case "pending":
+      return "Linking on launch…";
+    default:
+      return install.note;
+  }
 }
 
 /** The one gold action on screen: the next step, never a destructive one. */

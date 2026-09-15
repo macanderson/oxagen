@@ -266,12 +266,16 @@ if (status?.enrolled) {
     status.codexHooks
       ? `codex hooks ${status.codexHooks.complete ? "complete" : `${status.codexHooks.missing?.length} missing`}`
       : null,
+    status.stellaHooks
+      ? `stella hooks ${status.stellaHooks.complete ? "complete" : `${status.stellaHooks.missing?.length} missing`}`
+      : null,
   ].filter(Boolean);
   record(
     "tacho status",
     Boolean(status.service?.running) &&
       (status.hooks?.complete ?? true) &&
-      (status.codexHooks?.complete ?? true),
+      (status.codexHooks?.complete ?? true) &&
+      (status.stellaHooks?.complete ?? true),
     `${status.host?.agent_key} → ${status.host?.org_slug}/${status.host?.workspace_slug}; service ${status.service?.kind} ${status.service?.running ? "running" : "NOT running"}; ${hooks.join("; ")}`,
   );
 } else {

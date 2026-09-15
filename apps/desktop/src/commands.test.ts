@@ -3,6 +3,9 @@ import {
   ago,
   defaultRegistration,
   deregisterArgs,
+  describeCliInstall,
+  HARNESS_LABEL,
+  HARNESSES,
   missionControlUrl,
   wizardStep,
   enrollArgs,
@@ -263,5 +266,69 @@ describe("wizard and de-register", () => {
     expect(missionControlUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
       "https://app.oxagen.sh/a%20b/c%2Fd/runs",
     );
+  });
+
+  it("lists every harness the app knows how to wrap, labeled", () => {
+    expect(HARNESSES).toEqual(["claude-code", "codex", "stella"]);
+    for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
+    expect(HARNESS_LABEL.stella).toBe("Stella");
+  });
+});
+
+describe("describeCliInstall", () => {
+  it("has nothing to say when the build predates the field", () => {
+    expect(describeCliInstall(null)).toBeNull();
+    expect(describeCliInstall(undefined)).toBeNull();
+  });
+
+  it("describes what the launch-time link did, per state", () => {
+    const base = {
+      dir: "/Users/a/.local/bin",
+      files: ["oxagen", "tacho"],
+      skipped: [],
+      profile: null,
+      note: "",
+    };
+    expect(
+      describeCliInstall({ ...base, state: "linked", profile: "~/.zshrc" }),
+    ).toBe(
+      "Linked oxagen, tacho into /Users/a/.local/bin on launch. Updated ~/.zshrc.",
+    );
+    expect(
+      describeCliInstall({
+        ...base,
+        state: "linked",
+        skipped: ["stella (already a symlink to another install)"],
+      }),
+    ).toBe(
+      "Linked oxagen, tacho into /Users/a/.local/bin on launch. Skipped stella (already a symlink to another install).",
+    );
+    expect(describeCliInstall({ ...base, state: "already" })).toBe(
+      "oxagen, tacho already on PATH in /Users/a/.local/bin.",
+    );
+    expect(
+      describeCliInstall({ ...base, state: "skipped", note: "no writable bin dir" }),
+    ).toBe("Skipped linking on launch: no writable bin dir");
+    expect(
+      describeCliInstall({ ...base, state: "opted_out", note: "OXAGEN_NO_PATH_LINK set" }),
+    ).toBe("Not linked: you opted out. OXAGEN_NO_PATH_LINK set");
+    expect(
+      describeCliInstall({ ...base, state: "failed", note: "permission denied" }),
+    ).toBe("Could not link into /Users/a/.local/bin: permission denied");
+    expect(describeCliInstall({ ...base, state: "pending" })).toBe(
+      "Linking on launch…",
+    );
+    expect(
+      describeCliInstall({ ...base, files: [], state: "already" }),
+    ).toBe("nothing already on PATH in /Users/a/.local/bin.");
+    // An unrecognized state (a newer CLI, an older app) falls back to its note.
+    expect(
+      describeCliInstall({
+        ...base,
+        // @ts-expect-error exercising the unrecognized-state fallback
+        state: "future-state",
+        note: "see the log",
+      }),
+    ).toBe("see the log");
   });
 });

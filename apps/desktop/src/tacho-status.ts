@@ -14,6 +14,7 @@ export interface TachoStatus {
   enrolled: boolean;
   hooks?: TachoHookPresence;
   codexHooks?: TachoHookPresence;
+  stellaHooks?: TachoHookPresence;
   service?: { kind: string; installed: boolean; running: boolean };
   wal?: { sessions: number; unshipped: number };
 }
@@ -56,6 +57,8 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   if (hooks !== undefined) status.hooks = hooks;
   const codexHooks = presence(parsed["codexHooks"]);
   if (codexHooks !== undefined) status.codexHooks = codexHooks;
+  const stellaHooks = presence(parsed["stellaHooks"]);
+  if (stellaHooks !== undefined) status.stellaHooks = stellaHooks;
   const service = parsed["service"];
   if (
     isRecord(service) &&

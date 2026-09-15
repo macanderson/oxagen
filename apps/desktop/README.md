@@ -16,9 +16,39 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | This machine | `host.json`, daemon `/status`, `tacho status --json` | `tacho enroll --harness …`, `tacho unenroll [--purge]` |
 | Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `tacho reassign --org … --workspace …`; `oxagen tacho reassign … --default` when the CLI default should follow |
 | Wrappers | `host.harnesses`, hook presence per harness | `tacho reassign --harness …` |
-| Command line | PATH | symlinks (macOS/Linux) or `.cmd` shims + user PATH (Windows) |
+| Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
 | Masthead | the release feed, on demand | `tauri-plugin-updater`: check, download + verify, install, relaunch |
+
+### What installing does
+
+The two CLIs ship inside the app bundle (`externalBin`). On every launch the
+app links them onto PATH itself — there is nothing to click for a fresh
+install to work from a terminal. `cli_install::ensure_cli_installed`
+(`src-tauri/src/cli_install.rs`) runs once per launch, off the main thread:
+
+- **Never clobbers what it didn't write.** A missing link is created; a
+  symlink (or, on Windows, a `.cmd` shim) that already points at an Oxagen
+  location — an older app path, an AppImage/App Translocation copy, or the
+  durable `<data-local>/oxagen/bin` copy — is replaced; anything else (a
+  Homebrew `oxagen`, a hand-written shim, a plain file) is left alone and
+  reported back, never overwritten.
+- **Puts the directory on PATH for new terminals too**, not just this
+  process: on macOS/Linux it adds a marker-delimited block (`# >>> oxagen
+  >>> … # <<< oxagen <<<`) to the one profile file your login shell reads —
+  `~/.zprofile` for zsh, `~/.bash_profile` (macOS) / `~/.bashrc` (Linux) for
+  bash, `~/.config/fish/conf.d/oxagen.fish` (fish, whole-file, since that
+  file is ours alone) — skipped with a manual note for any other shell. A
+  Linux `.deb`/`.rpm` install that already put `externalBin` on PATH (e.g.
+  `/usr/bin`) is detected and left as-is. Windows keeps the existing
+  `.cmd` shim + user-PATH step.
+- **Can be turned off.** "Remove links" removes what it made, strips the
+  profile block(s), and writes `autoLinkCli: false` to
+  `~/.config/oxagen/desktop.json` so the next launch leaves PATH alone;
+  "Link into PATH" turns it back on. `desktop_state`'s `cli_install` field
+  reports the outcome (`state`: `linked` / `already` / `skipped` /
+  `opted_out` / `failed` / `pending`, plus `dir`, `files`, `skipped`,
+  `profile`, `note`) so the UI never has to guess what happened.
 
 ## Build
 
@@ -100,8 +130,11 @@ src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
                 (tacho-status.ts, pure), the argv mapping the panels hand to
                 the CLIs (commands.ts, tested), the updater flow (updater.ts,
                 tested)
-src-tauri/      Rust shell: state reads, the two user-scoped API calls, PATH
-                install, tray; capabilities/default.json scopes the sidecars
-                and the updater; tauri.unsigned.conf.json is the no-key overlay
+src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
+                cli_install.rs (PATH install: automatic on launch, and the
+                "Link into PATH" / "Remove links" commands, with unit-tested
+                decision functions); capabilities/default.json scopes the
+                sidecars and the updater; tauri.unsigned.conf.json is the
+                no-key overlay
 scripts/        sidecars.mjs (stage binaries), icons.mjs
 ```

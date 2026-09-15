@@ -6,6 +6,9 @@
 //! files. The commands here are the reads the UI polls, the two control-plane
 //! calls the pickers need, and the PATH install that a sidecar cannot do for
 //! itself.
+mod cli_install;
+
+use cli_install::{CliInstallState, CliInstallView};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::fs;
@@ -19,7 +22,7 @@ use tauri::{
 
 /// `~/.config/oxagen` on every platform, matching `oxagenConfigPath` in
 /// packages/tacho and `CONFIG_DIR` in apps/cli.
-fn oxagen_dir() -> PathBuf {
+pub(crate) fn oxagen_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
@@ -32,7 +35,7 @@ fn tacho_root() -> PathBuf {
         .unwrap_or_else(|| oxagen_dir().join("tacho"))
 }
 
-fn read_json(path: &Path) -> Option<Value> {
+pub(crate) fn read_json(path: &Path) -> Option<Value> {
     let text = fs::read_to_string(path).ok()?;
     serde_json::from_str(&text).ok()
 }
@@ -139,97 +142,6 @@ fn daemon_status(host: &Value) -> Option<Value> {
         .ok()
 }
 
-fn exe(name: &str) -> String {
-    if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_string()
-    }
-}
-
-/// Where Tauri put the sidecars: next to the app executable.
-fn sidecar_dir() -> Option<PathBuf> {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-}
-
-/// Whether a directory exists only for this launch: an AppImage's squashfs
-/// mount (`/tmp/.mount_*`, or the `APPIMAGE` variable the runtime sets), a
-/// mounted disk image (`/Volumes/*`), or App Translocation (a quarantined
-/// app opened where it was downloaded). `tacho enroll` bakes the sidecar's
-/// directory into the hook commands and the service unit, and PATH links
-/// point into it, so nothing durable may reference such a directory.
-fn is_transient_dir(dir: &Path, appimage_env: bool) -> bool {
-    let text = dir.to_string_lossy().replace('\\', "/");
-    text.starts_with("/tmp/.mount_")
-        || text.contains("/AppTranslocation/")
-        || text.starts_with("/Volumes/")
-        || appimage_env
-}
-
-fn sidecar_dir_is_transient() -> bool {
-    sidecar_dir()
-        .map(|dir| is_transient_dir(&dir, std::env::var_os("APPIMAGE").is_some()))
-        .unwrap_or(false)
-}
-
-/// A per-user directory the app copies the sidecars into when it runs from
-/// a transient one: `~/Library/Application Support/oxagen/bin` on macOS,
-/// `~/.local/share/oxagen/bin` on Linux. Windows installs are never
-/// transient (the shims embed the Program Files path).
-fn durable_bin_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("oxagen")
-        .join("bin")
-}
-
-fn has_both_sidecars(dir: &Path) -> bool {
-    ["oxagen", "tacho"].iter().all(|name| dir.join(exe(name)).is_file())
-}
-
-/// The directory `tacho` should derive its hook and daemon commands from:
-/// the sidecar directory when it lasts, else the durable copy when one
-/// exists, else nothing (enrolling is refused by tacho itself until
-/// `install_cli` makes the copy or the app is moved).
-fn bin_dir() -> Option<PathBuf> {
-    let sidecars = sidecar_dir()?;
-    if !sidecar_dir_is_transient() {
-        return Some(sidecars);
-    }
-    let durable = durable_bin_dir();
-    has_both_sidecars(&durable).then_some(durable)
-}
-
-/// Point every sidecar the app spawns at the durable copy (they inherit the
-/// app's environment): with `TACHO_BIN_DIR` set, `tacho` writes that path
-/// into hooks and the service unit instead of its own transient one.
-fn export_bin_dir() {
-    if sidecar_dir_is_transient() {
-        if let Some(dir) = bin_dir() {
-            std::env::set_var("TACHO_BIN_DIR", dir);
-        }
-    }
-}
-
-fn on_path(name: &str) -> Option<String> {
-    let path = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path) {
-        let candidate = dir.join(exe(name));
-        if candidate.is_file() {
-            return Some(candidate.display().to_string());
-        }
-        if cfg!(windows) {
-            let cmd = dir.join(format!("{name}.cmd"));
-            if cmd.is_file() {
-                return Some(cmd.display().to_string());
-            }
-        }
-    }
-    None
-}
-
 #[derive(Serialize)]
 struct DesktopState {
     platform: &'static str,
@@ -251,10 +163,13 @@ struct DesktopState {
     oxagen_on_path: Option<String>,
     tacho_on_path: Option<String>,
     cli_install_dir: String,
+    /// The outcome of the automatic (or most recent manual) PATH install;
+    /// see `cli_install::CliInstallView`.
+    cli_install: CliInstallView,
 }
 
 #[tauri::command]
-fn desktop_state(app: tauri::AppHandle) -> DesktopState {
+fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallState>) -> DesktopState {
     let (config, _) = cli_config();
     let root = tacho_root();
     let host_path = root.join("host.json");
@@ -269,12 +184,13 @@ fn desktop_state(app: tauri::AppHandle) -> DesktopState {
         host_path: host_path.display().to_string(),
         daemon,
         log_path: root.join("tachod.log").display().to_string(),
-        sidecar_dir: sidecar_dir().map(|p| p.display().to_string()),
-        sidecar_transient: sidecar_dir_is_transient(),
-        bin_dir: bin_dir().map(|p| p.display().to_string()),
-        oxagen_on_path: on_path("oxagen"),
-        tacho_on_path: on_path("tacho"),
-        cli_install_dir: cli_install_dir().display().to_string(),
+        sidecar_dir: cli_install::sidecar_dir().map(|p| p.display().to_string()),
+        sidecar_transient: cli_install::sidecar_dir_is_transient(),
+        bin_dir: cli_install::bin_dir().map(|p| p.display().to_string()),
+        oxagen_on_path: cli_install::on_path("oxagen"),
+        tacho_on_path: cli_install::on_path("tacho"),
+        cli_install_dir: cli_install::cli_install_dir().display().to_string(),
+        cli_install: install_state.0.lock().unwrap().clone(),
     }
 }
 
@@ -317,164 +233,6 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
     }
 }
 
-/// Where the PATH links go: a directory the user owns on every platform.
-fn cli_install_dir() -> PathBuf {
-    if cfg!(windows) {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Oxagen")
-            .join("bin")
-    } else {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".local")
-            .join("bin")
-    }
-}
-
-#[derive(Serialize)]
-struct InstallResult {
-    dir: String,
-    files: Vec<String>,
-    on_path: bool,
-    note: String,
-}
-
-/// Copy the two sidecars out of a transient directory into `durable_bin_dir`
-/// so links, hooks and the service unit have a path that outlives this
-/// launch. Returns the directory the links should target.
-#[cfg(not(windows))]
-fn keep_sidecars(sidecars: &Path) -> Result<PathBuf, String> {
-    use std::os::unix::fs::PermissionsExt;
-    let durable = durable_bin_dir();
-    fs::create_dir_all(&durable)
-        .map_err(|e| format!("cannot create {}: {e}", durable.display()))?;
-    for name in ["oxagen", "tacho"] {
-        let from = sidecars.join(exe(name));
-        let to = durable.join(exe(name));
-        // Copy beside, then rename: a running daemon keeps its old inode
-        // and the link never points at a half-written file.
-        let staging = durable.join(format!(".{}.tmp", exe(name)));
-        fs::copy(&from, &staging)
-            .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))?;
-        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
-            .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))?;
-        fs::rename(&staging, &to)
-            .map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))?;
-    }
-    Ok(durable)
-}
-
-/// Put `oxagen` and `tacho` on PATH: symlinks to the sidecars on macOS and
-/// Linux, `.cmd` shims plus a user-PATH entry on Windows. Never elevates.
-/// When the app runs from a directory that is gone after this launch, the
-/// sidecars are first copied to a durable one and the links point there.
-#[tauri::command]
-fn install_cli() -> Result<InstallResult, String> {
-    let bundled = sidecar_dir().ok_or("cannot locate the bundled binaries")?;
-    for name in ["oxagen", "tacho"] {
-        let target = bundled.join(exe(name));
-        if !target.is_file() {
-            return Err(format!("bundled {} is missing at {}", name, target.display()));
-        }
-    }
-    #[cfg(not(windows))]
-    let sidecars = if sidecar_dir_is_transient() {
-        let kept = keep_sidecars(&bundled)?;
-        export_bin_dir();
-        kept
-    } else {
-        bundled
-    };
-    #[cfg(windows)]
-    let sidecars = bundled;
-    let dir = cli_install_dir();
-    fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let mut files = Vec::new();
-    for name in ["oxagen", "tacho"] {
-        let target = sidecars.join(exe(name));
-        #[cfg(windows)]
-        {
-            let shim = dir.join(format!("{name}.cmd"));
-            fs::write(&shim, format!("@\"{}\" %*\r\n", target.display()))
-                .map_err(|e| format!("cannot write {}: {e}", shim.display()))?;
-            files.push(shim.display().to_string());
-        }
-        #[cfg(not(windows))]
-        {
-            let link = dir.join(name);
-            let _ = fs::remove_file(&link);
-            std::os::unix::fs::symlink(&target, &link)
-                .map_err(|e| format!("cannot link {}: {e}", link.display()))?;
-            files.push(link.display().to_string());
-        }
-    }
-    let dir_text = dir.display().to_string();
-    let already = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).any(|d| d == dir))
-        .unwrap_or(false);
-    let note = if cfg!(windows) {
-        if !already {
-            add_to_user_path_windows(&dir_text)?;
-        }
-        "Added to your user PATH; open a new terminal.".to_string()
-    } else if already {
-        "Already on your PATH.".to_string()
-    } else {
-        format!("Add `export PATH=\"{dir_text}:$PATH\"` to your shell profile.")
-    };
-    Ok(InstallResult {
-        dir: dir_text,
-        files,
-        on_path: already || cfg!(windows),
-        note,
-    })
-}
-
-/// The PowerShell that appends a directory to the user PATH. The directory
-/// travels out-of-band in `$env:OXAGEN_BIN`, never spliced into the script:
-/// `%LOCALAPPDATA%` carries the user name, and `O'Brien` is a legal one
-/// whose apostrophe would end a single-quoted literal and fail the parse.
-#[allow(dead_code)]
-const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if(($p -split ';') -notcontains $d){ [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $d), 'User') }";
-
-#[cfg(windows)]
-fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
-    // setx truncates at 1024 characters; the .NET API does not.
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ADD_TO_USER_PATH_PS])
-        .env("OXAGEN_BIN", dir)
-        .status()
-        .map_err(|e| e.to_string())?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("powershell exited {status}"))
-    }
-}
-
-#[cfg(not(windows))]
-#[allow(dead_code)]
-fn add_to_user_path_windows(_dir: &str) -> Result<(), String> {
-    Ok(())
-}
-
-/// Remove the PATH links `install_cli` made. The sidecars stay with the app.
-#[tauri::command]
-fn uninstall_cli() -> Result<Vec<String>, String> {
-    let dir = cli_install_dir();
-    let mut removed = Vec::new();
-    for name in ["oxagen", "tacho"] {
-        for candidate in [dir.join(name), dir.join(format!("{name}.cmd"))] {
-            if candidate.symlink_metadata().is_ok() {
-                fs::remove_file(&candidate).map_err(|e| e.to_string())?;
-                removed.push(candidate.display().to_string());
-            }
-        }
-    }
-    Ok(removed)
-}
-
 /// Delete `~/.config/oxagen` (session, telemetry prefs, and whatever Tacho
 /// left after `unenroll --purge`). The UI only offers this after unenroll.
 #[tauri::command]
@@ -499,15 +257,17 @@ fn log_tail(lines: usize) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Before any sidecar is spawned: a durable copy from an earlier
-    // "Link into PATH" is what tacho must write into hooks when the app
-    // runs from an AppImage or a mounted .dmg.
-    export_bin_dir();
+    // Before any sidecar is spawned: a durable copy from an earlier launch
+    // is what tacho must write into hooks when the app runs from an
+    // AppImage or a mounted .dmg. `ensure_cli_installed` (below, off the
+    // main thread) refreshes this once it has made this launch's copy.
+    cli_install::export_bin_dir();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(CliInstallState::default())
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open Oxagen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Oxagen", true, None::<&str>)?;
@@ -531,13 +291,26 @@ pub fn run() {
                 tray = tray.icon(icon.clone());
             }
             tray.build(app)?;
+
+            // Auto-install on every launch, off the main thread so the
+            // window is never blocked (the login-shell PATH probe alone can
+            // take up to 5s). `install_cli` / `uninstall_cli` update the
+            // same managed state afterward if the user acts manually.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let outcome = cli_install::ensure_cli_installed();
+                if let Some(state) = handle.try_state::<CliInstallState>() {
+                    *state.0.lock().unwrap() = outcome;
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             desktop_state,
             api_post,
-            install_cli,
-            uninstall_cli,
+            cli_install::install_cli,
+            cli_install::uninstall_cli,
             remove_local_data,
             log_tail
         ])
@@ -562,29 +335,5 @@ mod tests {
         assert!(!is_user_route("/v1/user/organizations#f"));
         assert!(!is_user_route("/v1/user/"));
         assert!(!is_user_route("/v1/acme/core/tacho/enrollments"));
-    }
-
-    #[test]
-    fn transient_directories_are_the_per_launch_ones() {
-        let t = |p: &str| is_transient_dir(Path::new(p), false);
-        assert!(t("/tmp/.mount_OxagenAb12Cd/usr/bin"));
-        assert!(t("/Volumes/Oxagen/Oxagen.app/Contents/MacOS"));
-        assert!(t(
-            "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS"
-        ));
-        assert!(is_transient_dir(Path::new("/usr/lib/oxagen"), true));
-        assert!(!t("/Applications/Oxagen.app/Contents/MacOS"));
-        assert!(!t("/usr/lib/oxagen"));
-        assert!(!t("C:\\Program Files\\Oxagen"));
-        assert!(!t("/home/dev/.local/share/oxagen/bin"));
-    }
-
-    #[test]
-    fn the_path_script_reads_the_directory_from_the_environment() {
-        // No user-derived text is spliced into the script, so a directory
-        // with an apostrophe cannot end a literal.
-        assert!(ADD_TO_USER_PATH_PS.contains("$env:OXAGEN_BIN"));
-        assert!(!ADD_TO_USER_PATH_PS.contains("{dir}"));
-        assert!(!ADD_TO_USER_PATH_PS.contains("{}"));
     }
 }
