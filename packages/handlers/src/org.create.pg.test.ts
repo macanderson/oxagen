@@ -108,6 +108,9 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     await closeDatabase();
   });
 
+  // The bootstrap transaction plus one count per billing.* table runs against
+  // a shared Postgres while CI's coverage job runs three packages at once;
+  // vitest's 5 s default timed out at 5011 ms in run 35018833462.
   it("bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row", async () => {
     const before = await withSystemDb((tx) =>
       tx
@@ -269,7 +272,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       remainingCents: 500n,
       expiresAt: null,
     });
-  });
+  }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(
