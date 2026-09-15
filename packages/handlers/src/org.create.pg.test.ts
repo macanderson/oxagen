@@ -99,6 +99,10 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     await closeDatabase();
   });
 
+  // create_org runs the whole IAM and workspace bootstrap in one system
+  // transaction; under coverage, with the other pg files bootstrapping
+  // organizations over the same shared IAM rows, it outlasts vitest's 5s
+  // default.
   it("bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row", async () => {
     const before = await withSystemDb((tx) =>
       tx
@@ -237,7 +241,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       );
       expect([...rows][0]?.n, `billing.${name}`).toBe(0);
     }
-  });
+  }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(

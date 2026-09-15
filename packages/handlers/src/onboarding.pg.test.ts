@@ -208,6 +208,10 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     await closeDatabase();
   });
 
+  // create_org runs the whole IAM and workspace bootstrap in one system
+  // transaction; under coverage, with the other pg files bootstrapping
+  // organizations over the same shared IAM rows, it outlasts vitest's 5s
+  // default.
   it("create_org opens the gate at wrap on the first workspace with a 14-day provisional window", async () => {
     const out = await organizationCreateHandler(
       organizationCreate.input.parse({
@@ -301,7 +305,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         workspaceId,
       });
     });
-  });
+  }, 30_000);
 
   it("advance_onboarding moves wrap → run for the owner, refuses a Member and a stranger, and refuses to skip the run step", async () => {
     await expect(
