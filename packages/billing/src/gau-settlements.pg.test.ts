@@ -45,7 +45,8 @@ describe.skipIf(!enabled)("GAU settlement claims against Postgres", () => {
         id,
         name: `WL31 ${slug}`,
         slug,
-        namespace: slug,
+        // organizations_namespace_check: ^[a-z0-9]{2,6}$, globally unique.
+        namespace: crypto.randomUUID().replace(/-/g, "").slice(0, 6),
         planType: "free",
         status: "active",
       }),
