@@ -33,25 +33,20 @@ export {
   type DecisionGateArgs,
   type DecisionRulesGateFn,
   type DecisionRulesGateOptions,
-  type MandateCheck,
   type RuleSetLoader,
 } from "./gate";
+// The mandate ledger as the handlers, the approval hop and the expiry job
+// use it; the decision-time check reaches the kernel through bootstrap.
 export {
-  checkMandate,
-  decideMandate,
-  inputDigest,
+  expireApproval,
   lockMandate,
-  MANDATE_APPROVAL_TTL_MS,
   parseMandateRow,
   readAuthority,
   release,
   releaseParked,
-  reserve,
-  settle,
-  type MandateDenyReason,
   type MandateRecord,
 } from "./mandates";
-export { periodKey, toolMatches } from "./mandates/measures";
+export { toolMatches } from "./mandates/measures";
 export {
   bootstrapDecisionRulesRuntime,
   clearDecisionRulesCache,

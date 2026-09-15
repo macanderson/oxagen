@@ -103,7 +103,10 @@ on the mandate row:
 4. the same call (same input digest) already parked and unresolved → refused
    again as pending with that row's id, drawing no more authority; the same
    call approved and not yet retried → proceeds on the held reservation and
-   marks the row used (`token_used_at`; an approval is single-use);
+   marks the row used (`token_used_at`; an approval is single-use); a row
+   for the call whose `expires_at` has passed is voided first — its
+   reservation released, the row resolved `expired` — so the retry draws
+   afresh and the period holds no more than the open call;
 5. a measure over `per_call` or over the period's remaining authority →
    deny, reason `over_limit`; the mandate stays as it was;
 6. the tool carries a tag in `always_human_for`, or a measure exceeds
@@ -147,17 +150,22 @@ role). A row is one movement for one measure of one mandate in one period
 (`period_key`: `YYYY-MM-DD`, `YYYY-Www` or `YYYY-MM` in UTC by the limit's
 `period`). `reserve` lowers remaining by the value, `release` raises it,
 `settle` leaves it unchanged and converts the reservation to a settlement.
-`balance_after` is the remaining authority after the row; a period with no
-rows starts at `per_period`; a measure limited per call only has no period
-authority and its rows carry `0`. Rows are stamped `clock_timestamp()` at
-insert, under the lock, so the latest row is well ordered across
-transactions (`now()` is each transaction's start time and would misorder
-a transaction that waited on the lock). Every read reports authority by
-measure name in alphabetical order. Remaining authority is read from the ledger's
-last `balance_after`, never computed elsewhere (INV-10). Every write runs
-in one transaction that first takes `SELECT … FOR UPDATE` on the mandate
-row, so concurrent calls serialise and two cannot both fit under one
-remaining limit. The unique index `(mandate_id, tool_call_id, measure,
+Remaining authority for a measure in a period is the limit's current
+`per_period` less what the period has drawn — its open reservations plus
+its settlements — floored at zero, computed under the lock from the
+period's rows; `balance_after` records that figure after each row. A
+period with no rows starts at `per_period`; a measure limited per call
+only has no period authority and its rows carry `0`. So a `per_period`
+changed by `update_mandate_limits` inside a period binds the next
+reservation and what `get_mandate` reports, and a limit with `per_call`
+alone never runs out. Rows are stamped `clock_timestamp()` at insert,
+under the lock, so the latest row is well ordered across transactions
+(`now()` is each transaction's start time and would misorder a transaction
+that waited on the lock). Every read reports authority by measure name in
+alphabetical order, from the same formula the gate reserves against. Every
+write runs in one transaction that first takes `SELECT … FOR UPDATE` on
+the mandate row, so concurrent calls serialise and two cannot both fit
+under one remaining limit. The unique index `(mandate_id, tool_call_id, measure,
 kind)` is the database backstop, as `(bucket_id, kind, seq)` is for GAU
 settlements (INV-30). The issue's `(mandate_id, tool_call_id, kind)` is
 widened by `measure` because one call reserves one row per limited measure.
@@ -189,7 +197,12 @@ refusal is about the tenant's registry, the same class as `last_owner`.
 `valid_to` to `expired` under the row lock in the mandate's own tenant
 scope, releases reservations held by parked calls, resolves their approval
 rows `expired`, and emits `mandate.expired`. `revoke_mandate` does the same
-for one mandate on demand. Grant, revoke and a
+for one mandate on demand. The same job then voids every approval a mandate
+parked whose `expires_at` lapsed before the agent retried — unresolved, or
+approved and never used — releasing what the call holds and resolving the
+row `expired` under the mandate's lock, so a reservation is held only while
+a call can still proceed on it; the decision check does the same for a
+lapsed row it meets on a retry. Grant, revoke and a
 limits change emit `mandate.granted`, `mandate.revoked` and
 `mandate.limits_changed`; a refusal by the gate emits `mandate.exception`.
 

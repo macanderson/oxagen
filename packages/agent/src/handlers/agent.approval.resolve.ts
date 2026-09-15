@@ -124,7 +124,7 @@ async function settleMandateReservation(
         value,
         unitOrCurrency,
       }));
-    if (decision === "denied") await release(tx, { mandateId, toolCallId });
+    if (decision === "denied") await release(tx, { mandate, toolCallId });
     return {
       mandateId: mandate.publicId,
       reserved,

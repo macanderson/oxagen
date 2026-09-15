@@ -16,6 +16,11 @@ fields are reachable from the agent, MCP, and CLI with consistent IAM,
 metering, and audit.
 
 Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).
+`consequenceRoles` is the org Owner's alone: the handler refuses it with
+`HandlerError { code: "forbidden", reason: "org_role_required" }` for any
+other caller, since the map decides who may grant a mandate over money and
+the other consequences; the kernel's IAM check allows every capability for a
+non-enterprise org (INV-29).
 
 ## Input
 
@@ -47,4 +52,6 @@ ClickHouse observes the invocation via the kernel; the change is audit-logged.
 - Requires a workspace context.
 - Denied for non-admin members (IAM `defaultEffect: deny`; org/workspace Owner
   or Admin required).
+- `forbidden` / `org_role_required`: `consequenceRoles` from a caller who is
+  not an org Owner; nothing is written.
 - Rejects an invalid or duplicate slug.

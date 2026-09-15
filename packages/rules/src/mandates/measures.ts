@@ -178,12 +178,12 @@ export function exceeds(a: string, b: string): boolean {
   return BigInt(a) > BigInt(b);
 }
 
-export function addValues(a: string, b: string): string {
-  return (BigInt(a) + BigInt(b)).toString();
-}
-
-/** `a - b`, floored at zero: a balance never goes negative by a release. */
-export function subtractValues(a: string, b: string): string {
-  const r = BigInt(a) - BigInt(b);
+/**
+ * `perPeriod − drawn`, floored at zero: what a period still allows once
+ * `drawn` (its open reservations plus its settlements) is taken out. The
+ * floor covers a ceiling lowered below what the period already drew.
+ */
+export function remainingAfter(perPeriod: string, drawn: bigint): string {
+  const r = BigInt(perPeriod) - drawn;
   return (r < 0n ? 0n : r).toString();
 }

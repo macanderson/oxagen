@@ -1,8 +1,9 @@
 // update_mandate_limits — Change limits on an active mandate (ADR-059): the
 // limits, targets, the mandate's own approval rule and the validity end.
-// The ledger keeps its rows; the next reservation reads the new perPeriod
-// as its ceiling against the period's last balance. A limit over a measure a
-// matched tool does not declare is refused as grant_mandate refuses it.
+// The ledger keeps its rows; the next reservation and every read take the
+// new perPeriod as the ceiling over what the period has already drawn. A
+// limit over a measure a matched tool does not declare is refused as
+// grant_mandate refuses it.
 // Roles: the consequence roles of every tag (INV-29).
 
 import type { CapabilityHandler } from "@oxagen/oxagen";

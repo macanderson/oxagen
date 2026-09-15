@@ -444,7 +444,7 @@ describe("resolve_approval — the mandate hop", () => {
       MANDATE_ID,
     );
     expect(mocks.release).toHaveBeenCalledWith(expect.anything(), {
-      mandateId: MANDATE_ID,
+      mandate: expect.objectContaining({ id: MANDATE_ID }),
       toolCallId: TOOL_CALL_ID,
     });
     expect(out.mandate).toEqual({

@@ -41,7 +41,7 @@ export const mandateRevokeHandler: CapabilityHandler<
         message: `Mandate ${input.mandateId} is already ${locked?.status ?? "gone"}`,
       });
     }
-    const released = await releaseParked(tx, locked.id);
+    const released = await releaseParked(tx, locked);
     await tx
       .update(schema.approvalRequests)
       .set({ resolution: "expired", resolvedAt: new Date() })

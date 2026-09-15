@@ -2,6 +2,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import { assertOrgRole } from "@oxagen/iam/org-role";
 import { eq } from "drizzle-orm";
 import { mapWorkspaceSettingsRow } from "./workspace.settings.read";
 import { logger } from "./logger";
@@ -25,6 +26,14 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
       "workspace.settings.write: rejected — no workspace context",
     );
     throw new Error("workspace.settings.write requires a workspace context");
+  }
+
+  // The consequence-role map decides who may grant a mandate over money and
+  // the other consequences (ADR-059 decision 1), so writing it is the org
+  // Owner's alone. The kernel's IAM check allows every capability for a
+  // non-enterprise org; the handler holds the gate (INV-29).
+  if (input.consequenceRoles !== undefined) {
+    await assertOrgRole(ctx, { org: ["Owner"] });
   }
 
   const row = await withTenantDb(async (tx) => {

@@ -12,6 +12,11 @@
  *   - settle converts the reservation, records external_effect_id and leaves
  *     remaining unchanged; release gives the value back; both are idempotent
  *   - a new period starts from per_period again (period_key rollover)
+ *   - a measure limited per call only never runs out of period authority:
+ *     every reserve in one period is ok and its rows carry balance 0
+ *   - a per_period changed inside a period binds the next reservation and
+ *     what readAuthority reports: lowered under what is drawn → the next
+ *     reserve is over_limit and remaining reads 0; raised → the room opens
  *   - the check: no covering mandate → no_mandate; a target outside the allow
  *     list → target_denied; a measure the version does not declare →
  *     measure_unreadable; a value over human_above parks the call with a
@@ -21,6 +26,10 @@
  *     closure settles with the effect id read from the output
  *   - a capability that is no declared tool, or a tool with no consequence
  *     tag, yields no opinion and writes nothing
+ *   - an approval past its window: expireApproval releases what the call
+ *     holds and resolves the row expired, once; a retry of the same input
+ *     after the window voids the lapsed row and parks afresh on one
+ *     reservation, so the period holds no more than the open call
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -35,7 +44,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const {
       checkMandate,
       decideMandate,
+      expireApproval,
       lockMandate,
+      MANDATE_APPROVAL_TTL_MS,
       parseMandateRow,
       readAuthority,
       release,
@@ -340,12 +351,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         withTenantDb(async (tx) => {
           await lockMandate(tx, id);
           const n = await settle(tx, {
-            mandateId: id,
+            mandate,
             toolCallId: settledCall,
             externalEffectId: "pi_3Q",
           });
           const again = await settle(tx, {
-            mandateId: id,
+            mandate,
             toolCallId: settledCall,
             externalEffectId: "pi_3Q",
           });
@@ -356,12 +367,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const released = await inScope(() =>
         withTenantDb(async (tx) => {
           await lockMandate(tx, id);
-          const n = await release(tx, {
-            mandateId: id,
-            toolCallId: releasedCall,
-          });
+          const n = await release(tx, { mandate, toolCallId: releasedCall });
           const again = await release(tx, {
-            mandateId: id,
+            mandate,
             toolCallId: releasedCall,
           });
           return { n, again };
@@ -422,6 +430,119 @@ describe.skipIf(!process.env.DATABASE_URL)(
         "2026-09",
         "2026-10",
       ]);
+    });
+
+    it("a measure limited per call only never runs out of period authority", async () => {
+      const agent = randomUUID();
+      const id = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            period: "daily",
+            currencyOrUnit: "USD",
+          },
+        },
+      });
+      const mandate = await loadMandate(id);
+      for (let i = 0; i < 3; i++) {
+        const r = await inScope(() =>
+          withTenantDb(async (tx) => {
+            await lockMandate(tx, id);
+            return reserve(tx, {
+              mandate,
+              toolCallId: randomUUID(),
+              values: { amount: "1000000" },
+              at: NOW,
+            });
+          }),
+        );
+        expect(r).toEqual({ ok: true });
+      }
+      const rows = await ledgerOf(id);
+      expect(rows.map((r) => r.balanceAfter)).toEqual(["0", "0", "0"]);
+      const released = await inScope(() =>
+        withTenantDb(async (tx) => {
+          await lockMandate(tx, id);
+          return release(tx, { mandate, toolCallId: rows[0]!.toolCallId });
+        }),
+      );
+      expect(released).toBe(1);
+      expect((await ledgerOf(id)).at(-1)!.balanceAfter).toBe("0");
+      const [authority] = await inScope(() =>
+        withTenantDb((tx) => readAuthority(tx, mandate, NOW)),
+      );
+      expect(authority).toMatchObject({
+        perPeriod: null,
+        remaining: null,
+        reserved: "2000000",
+      });
+    });
+
+    it("a per_period changed inside a period binds the next reservation and the reported remaining", async () => {
+      const agent = randomUUID();
+      const id = await insertMandate(agent);
+      const limit = (perPeriod: string) => ({
+        amount: {
+          perCall: "250000000",
+          perPeriod,
+          period: "monthly" as const,
+          currencyOrUnit: "USD",
+        },
+      });
+      const reserveUnder = (
+        mandate: Awaited<ReturnType<typeof loadMandate>>,
+        value: string,
+      ) =>
+        inScope(() =>
+          withTenantDb(async (tx) => {
+            await lockMandate(tx, id);
+            return reserve(tx, {
+              mandate,
+              toolCallId: randomUUID(),
+              values: { amount: value },
+              at: NOW,
+            });
+          }),
+        );
+      const setPerPeriod = async (perPeriod: string) => {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.mandates)
+            .set({ limits: limit(perPeriod) })
+            .where(eq(schema.mandates.id, id)),
+        );
+        return loadMandate(id);
+      };
+      // 1000 of 2000 drawn.
+      const original = await loadMandate(id);
+      for (let i = 0; i < 4; i++) {
+        expect((await reserveUnder(original, "250000000")).ok).toBe(true);
+      }
+      // Lowered under what is drawn: nothing more fits and remaining reads 0.
+      const lowered = await setPerPeriod("500000000");
+      expect(await reserveUnder(lowered, "1")).toMatchObject({
+        ok: false,
+        reason: "over_limit",
+        detail: "1 exceeds remaining 0 USD this monthly period",
+      });
+      let [authority] = await inScope(() =>
+        withTenantDb((tx) => readAuthority(tx, lowered, NOW)),
+      );
+      expect(authority).toMatchObject({
+        remaining: "0",
+        reserved: "1000000000",
+      });
+      // Raised: the next reservation reads the new ceiling.
+      const raised = await setPerPeriod("5000000000");
+      expect(await reserveUnder(raised, "250000000")).toEqual({ ok: true });
+      [authority] = await inScope(() =>
+        withTenantDb((tx) => readAuthority(tx, raised, NOW)),
+      );
+      expect(authority).toMatchObject({
+        remaining: "3750000000",
+        reserved: "1250000000",
+      });
+      expect((await ledgerOf(id)).at(-1)!.balanceAfter).toBe("3750000000");
     });
 
     // ── the check ──────────────────────────────────────────────────────────────
@@ -589,11 +710,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
       });
       await decide(checkArgs(agent, { amount: { value: "30.00" } }));
+      const mandate = await loadMandate(id);
       const n = await inScope(() =>
         withTenantDb(async (tx) => {
           await lockMandate(tx, id);
-          const first = await releaseParked(tx, id);
-          const second = await releaseParked(tx, id);
+          const first = await releaseParked(tx, mandate);
+          const second = await releaseParked(tx, mandate);
           return { first, second };
         }),
       );
@@ -601,6 +723,96 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const rows = await ledgerOf(id);
       expect(rows.map((r) => r.kind)).toEqual(["reserve", "release"]);
       expect(rows[1]!.balanceAfter).toBe("2000000000");
+    });
+
+    it("an approval past its window gives back what it holds, once; a retry after the window parks afresh on one reservation", async () => {
+      const agent = randomUUID();
+      const id = await insertMandate(agent, {
+        approvalRules: {
+          humanAbove: { amount: "1" },
+          alwaysHumanFor: [],
+          approvers: [],
+        },
+      });
+      const mandate = await loadMandate(id);
+      const input = { amount: { value: "30.00" } };
+      const parked = await decide(checkArgs(agent, input));
+      expect(parked.kind).toBe("pending");
+      const [approval] = await withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.approvalRequests)
+          .where(eq(schema.approvalRequests.mandateId, id)),
+      );
+      expect(approval!.expiresAt.getTime()).toBe(
+        NOW.getTime() + MANDATE_APPROVAL_TTL_MS,
+      );
+      const AFTER = new Date(NOW.getTime() + MANDATE_APPROVAL_TTL_MS + 1);
+
+      // The sweep's unit of work.
+      const n = await inScope(() =>
+        withTenantDb(async (tx) => {
+          await lockMandate(tx, id);
+          const first = await expireApproval(tx, mandate, approval!, AFTER);
+          const second = await expireApproval(tx, mandate, approval!, AFTER);
+          return { first, second };
+        }),
+      );
+      expect(n).toEqual({ first: 1, second: 0 });
+      const [voided] = await withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.approvalRequests)
+          .where(eq(schema.approvalRequests.id, approval!.id)),
+      );
+      expect(voided).toMatchObject({
+        resolution: "expired",
+        resolvedAt: AFTER,
+      });
+      let rows = await ledgerOf(id);
+      expect(rows.map((r) => r.kind)).toEqual(["reserve", "release"]);
+      let [authority] = await inScope(() =>
+        withTenantDb((tx) => readAuthority(tx, mandate, AFTER)),
+      );
+      expect(authority).toMatchObject({
+        remaining: "2000000000",
+        reserved: "0",
+      });
+
+      // Parked again, then retried after the window with no sweep between:
+      // the lapsed row is voided on the way and the retry holds one reservation.
+      const again = await decide(checkArgs(agent, input));
+      expect(again.kind).toBe("pending");
+      const late = await decide(checkArgs(agent, input, { now: () => AFTER }));
+      expect(late.kind).toBe("pending");
+      if (again.kind !== "pending" || late.kind !== "pending") return;
+      expect(late.approvalPublicId).not.toBe(again.approvalPublicId);
+      rows = await ledgerOf(id);
+      expect(rows.map((r) => r.kind)).toEqual([
+        "reserve",
+        "release",
+        "reserve",
+        "release",
+        "reserve",
+      ]);
+      [authority] = await inScope(() =>
+        withTenantDb((tx) => readAuthority(tx, mandate, AFTER)),
+      );
+      expect(authority).toMatchObject({
+        remaining: "1970000000",
+        reserved: "30000000",
+      });
+      const resolutions = await withSystemDb((tx) =>
+        tx
+          .select({ resolution: schema.approvalRequests.resolution })
+          .from(schema.approvalRequests)
+          .where(eq(schema.approvalRequests.mandateId, id)),
+      );
+      expect(resolutions.map((r) => r.resolution).sort()).toEqual([
+        "expired",
+        "expired",
+        null,
+      ]);
     });
 
     it("enforces the unique movement index as the database backstop", async () => {

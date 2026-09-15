@@ -247,7 +247,7 @@ export const mandateGrantInputSchema = z
   .strict()
   .refine(validityOrdered, "validTo is after validFrom");
 
-/** Remaining authority by measure, from the ledger's last balance_after (INV-10). */
+/** Remaining authority by measure: perPeriod less what the period drew, from the ledger. */
 export const mandateAuthoritySchema = z
   .object({
     measure: measureNameSchema,
@@ -260,7 +260,7 @@ export const mandateAuthoritySchema = z
     settled: measureValueSchema,
     /** Held by reservations not yet settled or released. */
     reserved: measureValueSchema,
-    /** The last balance_after this period, or perPeriod when no row exists; null without a perPeriod. */
+    /** perPeriod less reserved and settled this period, floored at zero; null without a perPeriod. */
     remaining: measureValueSchema.nullable(),
   })
   .strict();

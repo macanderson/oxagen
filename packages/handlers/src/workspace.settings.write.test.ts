@@ -13,6 +13,15 @@ const mocks = vi.hoisted(() => {
   return { findFirst: vi.fn(), where, set, update, insert, insertValues };
 });
 
+// The role gate is a double: it records the roles the handler asks for and
+// refuses unless the test marks the caller an org Owner.
+const roleGate = vi.hoisted(() => ({
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: roleGate.assertOrgRole,
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -26,6 +35,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { workspaceSettingsWriteHandler } from "./workspace.settings.write";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -41,6 +51,10 @@ describe("workspace.settings.write handler", () => {
     mocks.insert.mockClear();
     mocks.insertValues.mockReset();
     mocks.insertValues.mockResolvedValue(undefined);
+    roleGate.assertOrgRole.mockReset();
+    roleGate.assertOrgRole.mockRejectedValue(
+      new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+    );
   });
 
   it("updates the name and description columns independently", async () => {
@@ -82,7 +96,37 @@ describe("workspace.settings.write handler", () => {
     expect(out.avatarUrl).toBe(avatar);
   });
 
-  it("replaces the consequence-role overrides as a whole and returns the effective map", async () => {
+  it("refuses the consequence-role overrides from anyone but an org Owner, writing nothing", async () => {
+    await expect(
+      workspaceSettingsWriteHandler(
+        { name: "Research Lab", consequenceRoles: { moves_money: ["Admin"] } },
+        CTX,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "forbidden" &&
+        e.reason === "org_role_required",
+    );
+    expect(roleGate.assertOrgRole).toHaveBeenCalledWith(CTX, {
+      org: ["Owner"],
+    });
+    expect(mocks.findFirst).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("writes the other fields without asking for a role", async () => {
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      ...EXISTING,
+      name: "Research Lab",
+    });
+    await workspaceSettingsWriteHandler({ name: "Research Lab" }, CTX);
+    expect(roleGate.assertOrgRole).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces the consequence-role overrides as a whole for an org Owner and returns the effective map", async () => {
+    roleGate.assertOrgRole.mockResolvedValueOnce("Owner");
     mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
       name: "Research",
       slug: "research",

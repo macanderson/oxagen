@@ -11,8 +11,10 @@
 
 Change limits on an active mandate: the limits, the targets, the mandate's
 own approval rule and the validity end. Omitted fields are unchanged. The
-ledger keeps its rows; the next reservation reads the new `perPeriod` as
-its ceiling against the period's last balance. A limit or target over a
+ledger keeps its rows; the next reservation and every read take the new
+`perPeriod` as the ceiling over what the period has already drawn, so a
+ceiling lowered under what is drawn reads as `0` remaining until the period
+rolls. A limit or target over a
 measure a matched tool does not declare is refused as `grant_mandate`
 refuses it.
 

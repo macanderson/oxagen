@@ -25,7 +25,9 @@
  *             records the reason and emits mandate.revoked; a second revoke
  *             → mandate_ended; a draft is declined the same way
  *   limits  — validTo before validFrom → validity_inverted; a change over an
- *             undeclared measure is refused; a change records and emits
+ *             undeclared measure is refused; a change records and emits, and
+ *             a per_period changed inside the period reports remaining
+ *             against what the period already drew
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -81,14 +83,9 @@ vi.mock("@oxagen/database/security", () => ({
 describe.skipIf(!process.env.DATABASE_URL)(
   "mandate handlers against Postgres",
   async () => {
-    const { schema, withSystemDb, withTenantDb } = await import(
-      "@oxagen/database"
-    );
+    const { schema, withSystemDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
     const { eq, inArray } = await import("drizzle-orm");
-    const { lockMandate, reserve, parseMandateRow } = await import(
-      "@oxagen/rules"
-    );
     const { SPEC_MANDATE_BODY } = await import(
       "@oxagen/oxagen/mandates/schemas.sample"
     );
@@ -279,6 +276,57 @@ describe.skipIf(!process.env.DATABASE_URL)(
     beforeEach(() => {
       doubles.events.length = 0;
     });
+
+    /**
+     * One reservation of `amount` micros and one call, as the gate writes
+     * them: a reserve row per limited measure filed under the current
+     * period, balance_after the remaining after the row. Returns the row id
+     * of the mandate.
+     */
+    async function seedReservation(
+      mandatePublicId: string,
+      amount: string,
+      toolCallId: string,
+    ): Promise<string> {
+      const at = new Date();
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, mandatePublicId)),
+      );
+      const monthly = `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`;
+      const daily = `${monthly}-${String(at.getUTCDate()).padStart(2, "0")}`;
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values([
+          {
+            orgId,
+            workspaceId,
+            mandateId: row!.id,
+            toolCallId,
+            kind: "reserve",
+            measure: "amount",
+            value: amount,
+            unitOrCurrency: "USD",
+            periodKey: monthly,
+            balanceAfter: (2000000000n - BigInt(amount)).toString(),
+          },
+          {
+            orgId,
+            workspaceId,
+            mandateId: row!.id,
+            toolCallId,
+            kind: "reserve",
+            measure: "calls",
+            value: "1",
+            unitOrCurrency: "calls",
+            periodKey: daily,
+            balanceAfter: "49",
+          },
+        ]),
+      );
+      return row!.id;
+    }
 
     const countMandates = () =>
       withSystemDb(
@@ -504,23 +552,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("get: the operator of another agent is refused; the office reads the ledger newest first; an unknown id is not found", async () => {
       const m = await grant(billingUserId, body());
-      // One reservation, written the way the gate writes it.
-      await inScope(() =>
-        withTenantDb(async (tx) => {
-          const [row] = await tx
-            .select()
-            .from(schema.mandates)
-            .where(eq(schema.mandates.publicId, m.id));
-          const record = parseMandateRow(row!);
-          await lockMandate(tx, record.id);
-          await reserve(tx, {
-            mandate: record,
-            toolCallId: randomUUID(),
-            values: { amount: "150000000", calls: "1" },
-            at: new Date(),
-          });
-        }),
-      );
+      await seedReservation(m.id, "150000000", randomUUID());
       await expect(
         inScope(() =>
           mandateGetHandler(
@@ -575,33 +607,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("revoke: releases what parked calls hold, expires the parked approval, records the reason and emits; a second revoke is a conflict", async () => {
       const m = await grant(billingUserId, body());
       const toolCallId = randomUUID();
-      const mandateRowId = await inScope(() =>
-        withTenantDb(async (tx) => {
-          const [row] = await tx
-            .select()
-            .from(schema.mandates)
-            .where(eq(schema.mandates.publicId, m.id));
-          const record = parseMandateRow(row!);
-          await lockMandate(tx, record.id);
-          await reserve(tx, {
-            mandate: record,
-            toolCallId,
-            values: { amount: "200000000", calls: "1" },
-            at: new Date(),
-          });
-          await tx.insert(schema.approvalRequests).values({
-            orgId,
-            workspaceId,
-            toolCallId,
-            capabilityName: "stripe__create_payment",
-            inputPreview: {},
-            riskLevel: "high",
-            mandateId: record.id,
-            ruleIds: [`mandate:${m.id}:human_above:amount`],
-            inputDigest: "0".repeat(64),
-            expiresAt: new Date(Date.now() + 60_000),
-          });
-          return record.id;
+      const mandateRowId = await seedReservation(m.id, "200000000", toolCallId);
+      await withSystemDb((tx) =>
+        tx.insert(schema.approvalRequests).values({
+          orgId,
+          workspaceId,
+          toolCallId,
+          capabilityName: "stripe__create_payment",
+          inputPreview: {},
+          riskLevel: "high",
+          mandateId: mandateRowId,
+          ruleIds: [`mandate:${m.id}:human_above:amount`],
+          inputDigest: "0".repeat(64),
+          expiresAt: new Date(Date.now() + 60_000),
         }),
       );
       doubles.events.length = 0;
@@ -668,8 +686,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.status).toBe("revoked");
     });
 
-    it("limits: validity cannot invert, an undeclared measure is refused, and a change records and emits", async () => {
+    it("limits: validity cannot invert, an undeclared measure is refused, and a change records, emits and binds the period already drawn on", async () => {
       const m = await grant(billingUserId, body());
+      await seedReservation(m.id, "150000000", randomUUID());
       doubles.events.length = 0;
       await expect(
         inScope(() =>
@@ -702,6 +721,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("org_role_required"));
       expect(doubles.events).toEqual([]);
 
+      // The same monthly period the 150 was drawn in: the new ceiling
+      // applies to it, so remaining is 500 − 150.
       const out = await inScope(() =>
         mandateLimitsUpdateHandler(
           {
@@ -710,7 +731,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               amount: {
                 perCall: "100000000",
                 perPeriod: "500000000",
-                period: "weekly",
+                period: "monthly",
                 currencyOrUnit: "USD",
               },
             },
@@ -723,7 +744,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         amount: {
           perCall: "100000000",
           perPeriod: "500000000",
-          period: "weekly",
+          period: "monthly",
           currencyOrUnit: "USD",
         },
       });
@@ -731,8 +752,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.authority).toEqual([
         expect.objectContaining({
           measure: "amount",
-          period: "weekly",
-          remaining: "500000000",
+          period: "monthly",
+          remaining: "350000000",
+          reserved: "150000000",
         }),
       ]);
       expect(doubles.events).toEqual([

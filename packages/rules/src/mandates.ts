@@ -6,8 +6,10 @@
  * authority, one row per measure. Every write here runs inside one
  * transaction that first takes `SELECT … FOR UPDATE` on the mandate row, so
  * concurrent calls serialise and two cannot both fit under one remaining
- * limit. `balance_after` is the remaining authority after the row and is
- * what every read reports (INV-10). The unique index
+ * limit. Remaining authority is the limit's `perPeriod` less the period's
+ * open reservations and settlements, computed under the lock from the
+ * ledger's rows; `balance_after` records that figure after each row, and
+ * every read reports the same formula. The unique index
  * `(mandate_id, tool_call_id, measure, kind)` is the database backstop.
  *
  * `checkMandate` is what the decision gate runs for an agent principal:
@@ -34,27 +36,16 @@ import {
   type MandateTargets,
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  isNull,
-  lte,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
 import {
-  addValues,
   exceeds,
   isCallsMeasure,
   periodKey,
   readCallsMeasure,
   readMeasure,
   readPath,
-  subtractValues,
+  remainingAfter,
   targetAllowed,
   toolMatches,
 } from "./mandates/measures";
@@ -125,15 +116,24 @@ export async function lockMandate(
   return row ? parseMandateRow(row) : null;
 }
 
-/** The last balance_after of a measure in a period, or null when no row exists. */
-async function lastBalance(
+/**
+ * What a period has drawn for one measure, from the ledger: its open
+ * reservations, its settlements, and `drawn`, their sum, which the limit's
+ * `perPeriod` is measured against. Computed under the lock from the rows,
+ * so a `perPeriod` changed inside a period applies to the next reservation
+ * and to what get_mandate reports.
+ */
+async function periodSums(
   tx: Tx,
   mandateId: string,
   measure: string,
   period: string,
-): Promise<string | null> {
+): Promise<{ reserved: bigint; settled: bigint; drawn: bigint }> {
   const [row] = await tx
-    .select({ balanceAfter: l.balanceAfter })
+    .select({
+      reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+      settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+    })
     .from(l)
     .where(
       and(
@@ -141,10 +141,10 @@ async function lastBalance(
         eq(l.measure, measure),
         eq(l.periodKey, period),
       ),
-    )
-    .orderBy(desc(l.createdAt), desc(l.id))
-    .limit(1);
-  return row?.balanceAfter ?? null;
+    );
+  const reserved = BigInt(row?.reserved ?? "0");
+  const settled = BigInt(row?.settled ?? "0");
+  return { reserved, settled, drawn: reserved + settled };
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
@@ -160,20 +160,7 @@ export async function readAuthority(
   );
   for (const [measure, limit] of limits) {
     const key = periodKey(limit.period, at);
-    const [sums] = await tx
-      .select({
-        reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
-        settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
-      })
-      .from(l)
-      .where(
-        and(
-          eq(l.mandateId, mandate.id),
-          eq(l.measure, measure),
-          eq(l.periodKey, key),
-        ),
-      );
-    const balance = await lastBalance(tx, mandate.id, measure, key);
+    const sums = await periodSums(tx, mandate.id, measure, key);
     out.push({
       measure,
       currencyOrUnit: limit.currencyOrUnit,
@@ -181,10 +168,12 @@ export async function readAuthority(
       periodKey: key,
       perCall: limit.perCall ?? null,
       perPeriod: limit.perPeriod ?? null,
-      settled: sums?.settled ?? "0",
-      reserved: sums?.reserved ?? "0",
+      settled: sums.settled.toString(),
+      reserved: sums.reserved.toString(),
       remaining:
-        limit.perPeriod === undefined ? null : (balance ?? limit.perPeriod),
+        limit.perPeriod === undefined
+          ? null
+          : remainingAfter(limit.perPeriod, sums.drawn),
     });
   }
   return out;
@@ -205,8 +194,9 @@ export type ReserveResult =
 /**
  * Reserve authority for one call under the lock the caller holds. Per-call
  * limits are checked against the value, per-period limits against the
- * period's last `balance_after`; a refusal writes nothing and the mandate
- * stays as it was.
+ * period's remaining authority; a refusal writes nothing and the mandate
+ * stays as it was. A measure limited per call only has no period authority
+ * and its rows carry `0`.
  */
 export async function reserve(
   tx: Tx,
@@ -230,12 +220,10 @@ export async function reserve(
       };
     }
     const key = periodKey(limit.period, at);
-    const remaining =
-      (await lastBalance(tx, mandate.id, measure, key)) ??
-      limit.perPeriod ??
-      null;
-    let balanceAfter = remaining ?? "0";
-    if (remaining !== null) {
+    let balanceAfter = "0";
+    if (limit.perPeriod !== undefined) {
+      const sums = await periodSums(tx, mandate.id, measure, key);
+      const remaining = remainingAfter(limit.perPeriod, sums.drawn);
       if (exceeds(value, remaining)) {
         return {
           ok: false,
@@ -244,7 +232,10 @@ export async function reserve(
           detail: `${value} exceeds remaining ${remaining} ${limit.currencyOrUnit} this ${limit.period} period`,
         };
       }
-      balanceAfter = subtractValues(remaining, value);
+      balanceAfter = remainingAfter(
+        limit.perPeriod,
+        sums.drawn + BigInt(value),
+      );
     }
     rows.push({
       orgId: mandate.orgId,
@@ -280,91 +271,127 @@ async function openReservations(tx: Tx, mandateId: string, toolCallId: string) {
 }
 
 /**
+ * Close a call's open reservations with one row each of `kind`, under the
+ * lock the caller holds: `settle` leaves remaining unchanged, `release`
+ * raises it by the reserved value. Idempotent: a call already closed
+ * writes nothing.
+ */
+async function closeReservations(
+  tx: Tx,
+  mandate: MandateRecord,
+  toolCallId: string,
+  kind: "settle" | "release",
+  externalEffectId: string | null,
+): Promise<number> {
+  const open = await openReservations(tx, mandate.id, toolCallId);
+  for (const r of open) {
+    const perPeriod = mandate.limits[r.measure]?.perPeriod;
+    const sums = await periodSums(tx, mandate.id, r.measure, r.periodKey);
+    const balanceAfter =
+      perPeriod === undefined
+        ? "0"
+        : remainingAfter(
+            perPeriod,
+            sums.drawn - (kind === "release" ? BigInt(r.value) : 0n),
+          );
+    await tx.insert(l).values({
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      mandateId: r.mandateId,
+      toolCallId: r.toolCallId,
+      kind,
+      measure: r.measure,
+      value: r.value,
+      unitOrCurrency: r.unitOrCurrency,
+      externalEffectId,
+      periodKey: r.periodKey,
+      balanceAfter,
+      createdAt: sql`clock_timestamp()`,
+    });
+  }
+  return open.length;
+}
+
+/**
  * Convert a call's reservations to settlements. Remaining authority is
  * unchanged; the settle row carries the external effect id the tool
- * returned. Idempotent: a call already settled or released writes nothing.
+ * returned.
  */
-export async function settle(
+export function settle(
   tx: Tx,
   args: {
-    mandateId: string;
+    mandate: MandateRecord;
     toolCallId: string;
     externalEffectId: string | null;
   },
 ): Promise<number> {
-  const open = await openReservations(tx, args.mandateId, args.toolCallId);
-  for (const r of open) {
-    const balance = await lastBalance(tx, r.mandateId, r.measure, r.periodKey);
-    await tx.insert(l).values({
-      orgId: r.orgId,
-      workspaceId: r.workspaceId,
-      mandateId: r.mandateId,
-      toolCallId: r.toolCallId,
-      kind: "settle",
-      measure: r.measure,
-      value: r.value,
-      unitOrCurrency: r.unitOrCurrency,
-      externalEffectId: args.externalEffectId,
-      periodKey: r.periodKey,
-      balanceAfter: balance ?? r.balanceAfter,
-      createdAt: sql`clock_timestamp()`,
-    });
-  }
-  return open.length;
+  return closeReservations(
+    tx,
+    args.mandate,
+    args.toolCallId,
+    "settle",
+    args.externalEffectId,
+  );
 }
 
-/**
- * Give a call's reservations back: remaining authority rises by each
- * reserved value. Idempotent the same way `settle` is.
- */
-export async function release(
+/** Give a call's reservations back: remaining authority rises by each reserved value. */
+export function release(
   tx: Tx,
-  args: { mandateId: string; toolCallId: string },
+  args: { mandate: MandateRecord; toolCallId: string },
 ): Promise<number> {
-  const open = await openReservations(tx, args.mandateId, args.toolCallId);
-  for (const r of open) {
-    const balance = await lastBalance(tx, r.mandateId, r.measure, r.periodKey);
-    await tx.insert(l).values({
-      orgId: r.orgId,
-      workspaceId: r.workspaceId,
-      mandateId: r.mandateId,
-      toolCallId: r.toolCallId,
-      kind: "release",
-      measure: r.measure,
-      value: r.value,
-      unitOrCurrency: r.unitOrCurrency,
-      periodKey: r.periodKey,
-      balanceAfter: addValues(balance ?? r.balanceAfter, r.value),
-      createdAt: sql`clock_timestamp()`,
-    });
-  }
-  return open.length;
+  return closeReservations(tx, args.mandate, args.toolCallId, "release", null);
 }
 
 /**
  * Release every reservation a mandate holds for calls parked on an
- * unresolved approval, in the caller's transaction under the caller's lock.
- * Used by revoke_mandate (in-flight calls that have not dispatched end) and
- * by the expiry job.
+ * approval not yet used, in the caller's transaction under the caller's
+ * lock. Used by revoke_mandate (in-flight calls that have not dispatched
+ * end) and by the expiry job when the mandate itself ends.
  */
 export async function releaseParked(
   tx: Tx,
-  mandateId: string,
+  mandate: MandateRecord,
 ): Promise<number> {
   const parked = await tx
     .select({ toolCallId: schema.approvalRequests.toolCallId })
     .from(schema.approvalRequests)
     .where(
       and(
-        eq(schema.approvalRequests.mandateId, mandateId),
+        eq(schema.approvalRequests.mandateId, mandate.id),
         isNull(schema.approvalRequests.tokenUsedAt),
       ),
     );
   let released = 0;
   for (const p of parked) {
     if (p.toolCallId)
-      released += await release(tx, { mandateId, toolCallId: p.toolCallId });
+      released += await release(tx, { mandate, toolCallId: p.toolCallId });
   }
+  return released;
+}
+
+/**
+ * Void one approval whose window lapsed before the agent retried —
+ * unresolved, or approved and never used: give back what its call holds
+ * and resolve the row `expired`, under the caller's lock. The hourly job
+ * sweeps these; the decision check does the same when a retry meets one.
+ */
+export async function expireApproval(
+  tx: Tx,
+  mandate: MandateRecord,
+  approval: { id: string; toolCallId: string | null },
+  at: Date,
+): Promise<number> {
+  const released = approval.toolCallId
+    ? await release(tx, { mandate, toolCallId: approval.toolCallId })
+    : 0;
+  await tx
+    .update(schema.approvalRequests)
+    .set({
+      resolution: "expired",
+      // A person's resolution time stands; an unresolved row resolves now.
+      resolvedAt: sql`coalesce(${schema.approvalRequests.resolvedAt}, ${at.toISOString()}::timestamptz)`,
+    })
+    .where(eq(schema.approvalRequests.id, approval.id));
   return released;
 }
 
@@ -634,14 +661,17 @@ export async function decideMandate(
     // The same call, parked earlier and still waiting for a person: refuse
     // again with the same row, holding the same reservation — a retry while
     // pending draws no more authority. Approved and not yet retried: proceed
-    // on the held reservation and mark the approval used.
+    // on the held reservation and mark the approval used. A row whose
+    // window lapsed is voided first, so the retry reserves afresh and the
+    // lapsed reservation is not held on top of it.
     const digest = inputDigest(args.input);
-    const [parked] = await tx
+    const candidates = await tx
       .select({
         id: schema.approvalRequests.id,
         publicId: schema.approvalRequests.publicId,
         toolCallId: schema.approvalRequests.toolCallId,
         resolution: schema.approvalRequests.resolution,
+        expiresAt: schema.approvalRequests.expiresAt,
       })
       .from(schema.approvalRequests)
       .where(
@@ -650,12 +680,15 @@ export async function decideMandate(
           eq(schema.approvalRequests.mandateId, mandate.id),
           eq(schema.approvalRequests.inputDigest, digest),
           isNull(schema.approvalRequests.tokenUsedAt),
-          gt(schema.approvalRequests.expiresAt, at),
           sql`${schema.approvalRequests.resolution} IS DISTINCT FROM 'denied'`,
+          sql`${schema.approvalRequests.resolution} IS DISTINCT FROM 'expired'`,
         ),
       )
-      .orderBy(asc(schema.approvalRequests.createdAt))
-      .limit(1);
+      .orderBy(asc(schema.approvalRequests.createdAt));
+    for (const lapsed of candidates.filter((c) => c.expiresAt <= at)) {
+      await expireApproval(tx, mandate, lapsed, at);
+    }
+    const parked = candidates.find((c) => c.expiresAt > at);
     if (parked?.toolCallId && parked.resolution === "approved") {
       await tx
         .update(schema.approvalRequests)
@@ -765,9 +798,11 @@ export async function checkMandate(
               ? String(raw)
               : null;
           await withTenantDb(async (tx) => {
-            await lockMandate(tx, mandate.id);
+            // The limits may have changed since the decision; the row under
+            // the lock carries the ceiling the balance is written against.
+            const current = (await lockMandate(tx, mandate.id)) ?? mandate;
             await settle(tx, {
-              mandateId: mandate.id,
+              mandate: current,
               toolCallId,
               externalEffectId,
             });
@@ -775,8 +810,8 @@ export async function checkMandate(
         },
         release: async () => {
           await withTenantDb(async (tx) => {
-            await lockMandate(tx, mandate.id);
-            await release(tx, { mandateId: mandate.id, toolCallId });
+            const current = (await lockMandate(tx, mandate.id)) ?? mandate;
+            await release(tx, { mandate: current, toolCallId });
           });
         },
       };

@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  addValues,
   amountToMicros,
   exceeds,
   periodKey,
   readMeasure,
   readPath,
-  subtractValues,
+  remainingAfter,
   targetAllowed,
   toolMatches,
 } from "./measures";
@@ -154,9 +153,10 @@ describe("integer-string arithmetic", () => {
   it("compares and moves balances without a float", () => {
     expect(exceeds("250000001", "250000000")).toBe(true);
     expect(exceeds("250000000", "250000000")).toBe(false);
-    expect(addValues("1750000000", "250000000")).toBe("2000000000");
-    expect(subtractValues("2000000000", "250000000")).toBe("1750000000");
-    expect(subtractValues("1", "2")).toBe("0");
+    expect(remainingAfter("2000000000", 250000000n)).toBe("1750000000");
+    expect(remainingAfter("2000000000", 0n)).toBe("2000000000");
+    // A ceiling lowered under what the period already drew reads as zero.
+    expect(remainingAfter("500000000", 1000000000n)).toBe("0");
     expect(exceeds("100000000000000000001", "100000000000000000000")).toBe(
       true,
     );

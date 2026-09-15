@@ -33,8 +33,8 @@ otherwise), `targets` (measure → `{ allow, deny }` globs over a text measure),
 `tools` (globs over `slug@version` or `slug`), `approval` (`{ humanAbove,
 alwaysHumanFor, approvers }`), `purpose`, `validFrom`, `validTo`. Every read
 returns the row plus `authority`: per limited measure the period key, the
-settled and reserved values this period and `remaining`, the ledger's last
-`balance_after` (INV-10).
+settled and reserved values this period and `remaining`: `perPeriod` less
+those two, floored at zero, the figure the gate reserves against.
 
 ## Readers
 
