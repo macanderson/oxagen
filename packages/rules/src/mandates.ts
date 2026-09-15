@@ -20,7 +20,10 @@
 import { randomUUID, createHash } from "node:crypto";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { HandlerError } from "@oxagen/oxagen";
+// The subpath, not the package root: the root barrel side-effect-imports
+// every contract, and this module sits on the import graph of every
+// service that boots the rules gate.
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
   CapabilityError,
   type DecisionSettlement,
