@@ -354,3 +354,20 @@ export const enrollmentResponseSchema = z
   .strict();
 
 export type EnrollmentResponse = z.output<typeof enrollmentResponseSchema>;
+
+/**
+ * What `enroll_host` answers a machine that presented a one-time enrollment
+ * token: the enrollment document plus the tenant the token named, which the
+ * host did not know before the call.
+ */
+export const tokenEnrollmentResponseSchema = enrollmentResponseSchema
+  .extend({
+    agentId: z.string().min(1),
+    orgSlug: z.string().min(1),
+    workspaceSlug: z.string().min(1),
+  })
+  .strict();
+
+export type TokenEnrollmentResponse = z.output<
+  typeof tokenEnrollmentResponseSchema
+>;

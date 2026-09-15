@@ -1,0 +1,72 @@
+{
+  "name": "create_enrollment_token",
+  "domain": "tacho",
+  "description": "Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host. Shown once; expires unused after its TTL.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "ttlMinutes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60,
+        "default": 30
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "tokenId": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "agentKey": {
+        "type": "string",
+        "minLength": 1
+      },
+      "enrollCommand": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "tokenId",
+      "token",
+      "expiresAt",
+      "agentId",
+      "agentKey",
+      "enrollCommand"
+    ],
+    "additionalProperties": false
+  }
+}
