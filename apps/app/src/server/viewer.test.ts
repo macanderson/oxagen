@@ -51,6 +51,7 @@ vi.mock("./viewer-resolution", async (importOriginal) => ({
   resolveViewerWith: resolveMock,
 }));
 
+import { routes } from "@/shared/safe-path";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { systemLookups } from "./tenancy-lookups";
 import {
@@ -281,6 +282,15 @@ describe("requireUser", () => {
   it("redirects a signed-out request to login (negative)", async () => {
     await expect(requireUser()).rejects.toThrow("NEXT_REDIRECT");
     expect(nav.redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("carries the destination through login for a signed-out request (negative)", async () => {
+    await expect(
+      requireUser(routes.cliAuthorize({ state: "st_1" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(nav.redirect).toHaveBeenCalledWith(
+      "/login?next=%2Fcli%2Fauthorize%3Fstate%3Dst_1",
+    );
   });
 });
 

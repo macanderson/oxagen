@@ -4,7 +4,7 @@ const handler = vi.fn(() =>
   Promise.resolve(new Response(null, { status: 403 })),
 );
 const emitSecurityEvent = vi.fn();
-vi.mock("@oxagen/auth/server", () => ({ auth: { handler } }));
+vi.mock("./auth", () => ({ auth: { handler } }));
 vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent }));
 import {
   NO_ORG_SENTINEL,

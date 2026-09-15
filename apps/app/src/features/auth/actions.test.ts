@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = {
+const session = {
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
   sendVerificationEmail: vi.fn(),
 };
-vi.mock("@oxagen/auth/server", () => ({ auth: { api } }));
+vi.mock("@/server/session", () => session);
 const warn = vi.fn();
 vi.mock("@oxagen/handlers/logger", () => ({ logger: { warn } }));
 
@@ -13,22 +13,23 @@ const actions = await import("./actions");
 
 beforeEach(() => {
   warn.mockReset();
-  for (const fn of Object.values(api)) fn.mockReset();
+  for (const fn of Object.values(session)) fn.mockReset();
 });
 
 describe("requestPasswordReset", () => {
   it("asks Better Auth for a reset link to /reset-password", async () => {
-    api.requestPasswordReset.mockResolvedValue({ status: true });
+    session.requestPasswordReset.mockResolvedValue(undefined);
     await expect(
       actions.requestPasswordReset({ email: "m@acme.example" }),
     ).resolves.toEqual({ ok: true, to: "/forgot-password" });
-    expect(api.requestPasswordReset).toHaveBeenCalledWith({
-      body: { email: "m@acme.example", redirectTo: "/reset-password" },
+    expect(session.requestPasswordReset).toHaveBeenCalledWith({
+      email: "m@acme.example",
+      redirectTo: "/reset-password",
     });
   });
 
   it("answers ok even when sending fails, and logs it without the address", async () => {
-    api.requestPasswordReset.mockRejectedValue(new Error("smtp down"));
+    session.requestPasswordReset.mockRejectedValue(new Error("smtp down"));
     await expect(
       actions.requestPasswordReset({ email: "m@acme.example" }),
     ).resolves.toEqual({ ok: true, to: "/forgot-password" });
@@ -41,7 +42,7 @@ describe("requestPasswordReset", () => {
       ok: false,
       fields: { email: "emailInvalid" },
     });
-    expect(api.requestPasswordReset).not.toHaveBeenCalled();
+    expect(session.requestPasswordReset).not.toHaveBeenCalled();
   });
 });
 
@@ -53,18 +54,19 @@ describe("resetPassword", () => {
   };
 
   it("sets the password through Better Auth", async () => {
-    api.resetPassword.mockResolvedValue({ status: true });
+    session.resetPassword.mockResolvedValue(undefined);
     await expect(actions.resetPassword(good)).resolves.toEqual({
       ok: true,
       to: "/login",
     });
-    expect(api.resetPassword).toHaveBeenCalledWith({
-      body: { token: "rst_live", newPassword: "Rq7!mesa-lattice" },
+    expect(session.resetPassword).toHaveBeenCalledWith({
+      token: "rst_live",
+      newPassword: "Rq7!mesa-lattice",
     });
   });
 
   it("maps a spent token to linkExpired without logging, and anything else to its outcome with a log", async () => {
-    api.resetPassword.mockRejectedValueOnce({
+    session.resetPassword.mockRejectedValueOnce({
       body: { code: "INVALID_TOKEN" },
     });
     await expect(actions.resetPassword(good)).resolves.toEqual({
@@ -72,12 +74,12 @@ describe("resetPassword", () => {
       outcome: "linkExpired",
     });
     expect(warn).not.toHaveBeenCalled();
-    api.resetPassword.mockRejectedValueOnce({ status: 503 });
+    session.resetPassword.mockRejectedValueOnce({ status: 503 });
     await expect(actions.resetPassword(good)).resolves.toEqual({
       ok: false,
       outcome: "unavailable",
     });
-    api.resetPassword.mockRejectedValueOnce(new Error("mystery"));
+    session.resetPassword.mockRejectedValueOnce(new Error("mystery"));
     await expect(actions.resetPassword(good)).resolves.toEqual({
       ok: false,
       outcome: "linkExpired",
@@ -97,13 +99,13 @@ describe("resetPassword", () => {
       ok: false,
       fields: { confirmPassword: "passwordsDiffer" },
     });
-    expect(api.resetPassword).not.toHaveBeenCalled();
+    expect(session.resetPassword).not.toHaveBeenCalled();
   });
 });
 
 describe("resendVerification", () => {
   it("sends a verification email that returns to a sanitised destination", async () => {
-    api.sendVerificationEmail.mockResolvedValue({ status: true });
+    session.sendVerificationEmail.mockResolvedValue(undefined);
     await expect(
       actions.resendVerification({
         email: "m@acme.example",
@@ -113,13 +115,22 @@ describe("resendVerification", () => {
       ok: true,
       to: "/verify",
     });
-    expect(api.sendVerificationEmail).toHaveBeenCalledWith({
-      body: { email: "m@acme.example", callbackURL: "/new-organization" },
+    expect(session.sendVerificationEmail).toHaveBeenCalledWith({
+      email: "m@acme.example",
+      callbackURL: "/new-organization",
+    });
+    await actions.resendVerification({
+      email: "m@acme.example",
+      next: "/acme/core",
+    });
+    expect(session.sendVerificationEmail).toHaveBeenLastCalledWith({
+      email: "m@acme.example",
+      callbackURL: "/acme/core",
     });
   });
 
   it("answers ok when sending fails, and validates (negative)", async () => {
-    api.sendVerificationEmail.mockRejectedValue(new Error("smtp"));
+    session.sendVerificationEmail.mockRejectedValue(new Error("smtp"));
     expect(
       await actions.resendVerification({ email: "m@acme.example" }),
     ).toEqual({ ok: true, to: "/verify" });
@@ -128,6 +139,6 @@ describe("resendVerification", () => {
       ok: false,
       fields: { email: "emailRequired" },
     });
-    expect(api.sendVerificationEmail).toHaveBeenCalledOnce();
+    expect(session.sendVerificationEmail).toHaveBeenCalledOnce();
   });
 });

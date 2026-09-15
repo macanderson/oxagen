@@ -1,5 +1,9 @@
-// Browser-side Better Auth calls, behind one seam so forms stay testable and so
-// the Better Auth client (and its env reader) loads only when a live call runs.
+// Browser-side Better Auth calls (ARCHITECTURE.md §3.8), behind one seam so
+// forms stay testable and so the Better Auth client (and its env reader) loads
+// only when a live call runs. It is the one browser module that imports
+// @oxagen/auth/client; the server half is src/server/session.ts. A destination
+// Better Auth navigates to (the social sign-in `callbackURL`) is a SafePath.
+import type { SafePath } from "@/shared/safe-path";
 import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
 
 export type ClientAuthResult =
@@ -12,7 +16,7 @@ type BetterAuthReply = {
 };
 
 /** Where a sign-in that stopped for a second factor resumes. Read by the two-factor form. */
-export const PENDING_NEXT_KEY = "oxagen.auth.next";
+const PENDING_NEXT_KEY = "oxagen.auth.next";
 
 async function client() {
   const { authClient } = await import("@oxagen/auth/client");
@@ -73,7 +77,15 @@ export async function liveVerifyTwoFactor(input: {
   return fail(reply) ?? { ok: true };
 }
 
-export function rememberPendingNext(next: string): void {
+/** Social sign-in: Better Auth sends the browser to the provider, then back to `callbackURL`. */
+export async function liveSignInSocial(input: {
+  provider: "google" | "github";
+  callbackURL: SafePath;
+}): Promise<void> {
+  await (await client()).signIn.social(input);
+}
+
+export function rememberPendingNext(next: SafePath): void {
   try {
     sessionStorage.setItem(PENDING_NEXT_KEY, next);
   } catch {
@@ -81,6 +93,7 @@ export function rememberPendingNext(next: string): void {
   }
 }
 
+/** The stored destination, unsanitised: storage is page-writable, so the reader runs it through sanitizeNext. */
 export function takePendingNext(): string | null {
   try {
     const value = sessionStorage.getItem(PENDING_NEXT_KEY);

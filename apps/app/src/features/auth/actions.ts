@@ -5,10 +5,15 @@
 // Auth client, which owns the session cookie. The server actions here cover the
 // two password-reset legs and verification resend (all anti-enumeration: the
 // reply never reveals whether an account exists); every input is re-validated
-// here.
+// here. The Better Auth calls go through the session seam.
+import {
+  requestPasswordReset as sendResetLink,
+  resetPassword as setNewPassword,
+  sendVerificationEmail,
+} from "@/server/session";
+import { routes, sanitizeNext } from "@/shared/safe-path";
 import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
 import { AFTER_SIGNUP } from "./routes";
-import { sanitizeNext } from "./safe-next";
 import {
   type FieldErrors,
   ForgotPasswordSchema,
@@ -27,10 +32,9 @@ export async function requestPasswordReset(input: {
   const parsed = ForgotPasswordSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fields: fieldErrors(parsed.error) };
   try {
-    const { auth } = await import("@oxagen/auth/server");
-    // A relative redirect: Better Auth appends ?token= and checks it against its trusted origins.
-    await auth.api.requestPasswordReset({
-      body: { email: parsed.data.email, redirectTo: "/reset-password" },
+    await sendResetLink({
+      email: parsed.data.email,
+      redirectTo: routes.resetPassword(),
     });
   } catch (err) {
     // Anti-enumeration: the reply stays ok. A send outage must still be visible server-side.
@@ -56,9 +60,9 @@ export async function resetPassword(input: {
       : { ok: false, fields };
   }
   try {
-    const { auth } = await import("@oxagen/auth/server");
-    await auth.api.resetPassword({
-      body: { token: parsed.data.token, newPassword: parsed.data.newPassword },
+    await setNewPassword({
+      token: parsed.data.token,
+      newPassword: parsed.data.newPassword,
     });
     return { ok: true, to: "/login" };
   } catch (err) {
@@ -82,12 +86,9 @@ export async function resendVerification(input: {
   const parsed = ResendVerificationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fields: fieldErrors(parsed.error) };
   try {
-    const { auth } = await import("@oxagen/auth/server");
-    await auth.api.sendVerificationEmail({
-      body: {
-        email: parsed.data.email,
-        callbackURL: sanitizeNext(input.next, AFTER_SIGNUP),
-      },
+    await sendVerificationEmail({
+      email: parsed.data.email,
+      callbackURL: sanitizeNext(input.next ?? null, AFTER_SIGNUP),
     });
   } catch (err) {
     const { logger } = await import("@oxagen/handlers/logger");

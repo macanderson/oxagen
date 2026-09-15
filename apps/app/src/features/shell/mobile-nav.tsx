@@ -5,7 +5,6 @@
 // drawer. The design drops in behind the same props.
 import { Dialog } from "@base-ui/react/dialog";
 import { Ellipsis, X } from "lucide-react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { NavItem, NavKey, NavSection } from "./nav";
 import { isNavItemCurrent } from "./nav";
@@ -13,6 +12,7 @@ import { NAV_ICONS } from "./nav-icons";
 import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { SafeLink } from "@/ui/navigation";
 
 /** The pages the bar carries directly, in order; the rest are one tap away under "More". */
 export const MOBILE_PRIMARY: readonly NavKey[] = [
@@ -52,8 +52,8 @@ export function MobileNav({ items, pathname, onMore }: MobileNavProps) {
           const current = isNavItemCurrent(item.key, pathname);
           return (
             <li key={item.key}>
-              <Link
-                href={item.href}
+              <SafeLink
+                to={item.href}
                 aria-current={current ? "page" : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
                   current
@@ -68,7 +68,7 @@ export function MobileNav({ items, pathname, onMore }: MobileNavProps) {
                 <span className="max-w-full truncate">
                   {t(`nav.${item.key}`)}
                 </span>
-              </Link>
+              </SafeLink>
             </li>
           );
         })}

@@ -1,6 +1,6 @@
-// The shell's view model (ARCHITECTURE.md §3.3): the organizations the viewer
-// belongs to and the workspaces of the current organization the viewer is a
-// member of, for the organization and workspace switchers.
+// Organization and workspace choices (ARCHITECTURE.md §3.3): the organizations
+// the viewer belongs to and the workspaces of one organization the viewer is a
+// member of, for the shell's switchers and the CLI consent picker.
 import { z } from "zod";
 
 export const OrgChoice = z.object({
@@ -8,10 +8,13 @@ export const OrgChoice = z.object({
   name: z.string(),
 });
 
+export type OrgChoice = z.infer<typeof OrgChoice>;
+
 export const WorkspaceChoice = z.object({
   slug: z.string().min(1),
   name: z.string(),
 });
+export type WorkspaceChoice = z.infer<typeof WorkspaceChoice>;
 
 export const ShellContext = z.object({
   orgs: z.array(OrgChoice),

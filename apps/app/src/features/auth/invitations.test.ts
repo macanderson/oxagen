@@ -7,11 +7,10 @@ vi.mock("@/server/tenancy-lookups", () => ({
   systemLookups: { invitationByToken },
 }));
 
+// The actions and requireInvitee read the same person through the session seam.
 const getAuthUser = vi.fn();
-vi.mock("./session", () => ({ getAuthUser }));
-// requireInvitee reads the same person through the server session seam.
 const getSession = vi.fn();
-vi.mock("@/server/session", () => ({ getSession }));
+vi.mock("@/server/session", () => ({ getAuthUser, getSession }));
 const kernelWrite = vi.fn();
 vi.mock("@/server/kernel", () => ({ kernelWrite }));
 vi.mock("@oxagen/oxagen/contracts/org.member_invite.accept", () => ({

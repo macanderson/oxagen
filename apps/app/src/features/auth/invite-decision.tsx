@@ -1,7 +1,6 @@
 "use client";
 // Accept or decline, for the invited account (mockup `obInvite` @ mc-baseline-w1).
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
@@ -10,6 +9,7 @@ import {
   declineInvitation,
 } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
+import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { LoaderCircle } from "lucide-react";
 
@@ -23,7 +23,7 @@ export function InviteDecision({
   orgName: string;
 }) {
   const t = useTranslations("auth.invite");
-  const router = useRouter();
+  const navigate = useNavigate();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [declined, setDeclined] = useState(false);
@@ -45,8 +45,7 @@ export function InviteDecision({
         setDeclined(true);
         return;
       }
-      router.replace(result.to);
-      router.refresh();
+      navigate.replace(result.to);
     } catch {
       setFailure("failed");
     } finally {

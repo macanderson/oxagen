@@ -48,18 +48,18 @@ describe("proxy", () => {
   it("redirects a gated path to /login and remembers where the user was going", () => {
     const res = proxy(request("/acme/core-platform/tools?tab=registry"));
     expect(res.status).toBe(307);
-    const location = new URL(res.headers.get("location") ?? "");
-    expect(location.pathname).toBe("/login");
-    expect(location.searchParams.get("next")).toBe(
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.pathname).toBe("/login");
+    expect(target.searchParams.get("next")).toBe(
       "/acme/core-platform/tools?tab=registry",
     );
   });
 
   it("sends a signed-out organization-creation visit to /login and back", () => {
     const res = proxy(request("/new-organization"));
-    const location = new URL(res.headers.get("location") ?? "");
-    expect(location.pathname).toBe("/login");
-    expect(location.searchParams.get("next")).toBe("/new-organization");
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.pathname).toBe("/login");
+    expect(target.searchParams.get("next")).toBe("/new-organization");
   });
 
   it("does not add next= for the root path", () => {

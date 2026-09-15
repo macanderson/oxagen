@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { TwoFactorForm, readNext } from "@/features/auth";
+import { TwoFactorForm } from "@/features/auth";
+import { readNext } from "@/shared/safe-path";
 import {
   AuthColumn,
   AuthFooter,

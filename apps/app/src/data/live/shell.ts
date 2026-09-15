@@ -9,7 +9,7 @@ import { ShellContext } from "@/data/contracts/shell";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toOrgChoices, toWorkspaceChoices } from "./mappers/shell";
+import { toOrgChoices, toWorkspaceChoices } from "./mappers/pretenant";
 
 export const shell: DataSource["shell"] = {
   async context(ctx) {
