@@ -4,9 +4,6 @@
     "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
   },
   "routes": {
-    "home": {
-      "title": "Mission Control"
-    },
     "organization": {
       "title": "Organization"
     },

@@ -102,6 +102,18 @@ describe("port callers", () => {
     expect(portCallerViolations(readSource(PORTS_FILE), callers)).toEqual([]);
   });
 
+  it("the pretenant port's callers are exactly the / landing and the CLI consent page (§3.3)", () => {
+    const callers = callerFiles(listFiles("src")).filter((file) =>
+      [...callsIn(readSource(file))].some((call) =>
+        call.startsWith("pretenant."),
+      ),
+    );
+    expect(callers.sort()).toEqual([
+      "src/features/auth/cli-consent.ts",
+      "src/features/shell/landing.ts",
+    ]);
+  });
+
   it("a port method with no caller fails; called methods pass", () => {
     expect(
       portCallerViolations(readSource(`${PROBES}/ports.ts`), [

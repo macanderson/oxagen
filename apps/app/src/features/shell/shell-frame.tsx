@@ -53,7 +53,10 @@ export async function ShellFrame({
       <Suspense fallback={<ChromeSkeleton loading={t("loading")} />}>
         {chrome}
       </Suspense>
-      <div className="min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0">
+      <div
+        data-shell-page=""
+        className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
+      >
         {children}
       </div>
     </div>

@@ -7,9 +7,6 @@ type Messages = {
     description: string;
   };
   routes: {
-    home: {
-      title: string;
-    };
     organization: {
       title: string;
     };
@@ -293,17 +290,18 @@ type Messages = {
       fleet: string;
       agents: string;
       tools: string;
-      ontology: string;
       steering: string;
       spend: string;
       organization: string;
       billing: string;
-      audit: string;
       apiKeys: string;
     };
     switcher: {
       org: string;
       ws: string;
+      current: string;
+      denied: string;
+      unavailable: string;
     };
     topbar: {
       label: string;
@@ -330,7 +328,14 @@ type Messages = {
     };
     mobileNav: {
       label: string;
+      slots: {
+        fleet: string;
+        agents: string;
+        tools: string;
+        spend: string;
+      };
       more: string;
+      waiting: string;
     };
     drawer: {
       title: string;
@@ -341,6 +346,9 @@ type Messages = {
     brand: {
       name: string;
       home: string;
+    };
+    dialog: {
+      close: string;
     };
   };
 };
