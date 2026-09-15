@@ -30,7 +30,6 @@ export default defineConfig([
     "coverage/**",
     "playwright-report/**",
     "test-results/**",
-    "storybook-static/**",
     "next-env.d.ts",
     // Architecture probes must violate a rule each; src/test/arch judges them.
     "src/test/arch/probes/**",

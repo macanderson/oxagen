@@ -86,6 +86,12 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "USER",
   "SHELL",
   "BASH_SOURCE",
+  // Windows' equivalents, set by the OS for every process: the home
+  // directory and the two application-data roots tacho's harness lookup
+  // checks for `claude` / `codex` (packages/tacho/src/cli/deps.ts).
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
   // libpq's own variables: psql and atlas read them directly, so a value here
   // configures those tools rather than any Oxagen service.
   "PGHOST",
@@ -120,6 +126,11 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "TACHO_BUNDLED",
   "TACHO_BIN_DIR",
   "TACHO_HOME",
+  // Set by the AppImage runtime on every process the image starts; tacho
+  // reads it to know its exec path is a per-launch mount and refuse to bake
+  // that path into hooks (packages/tacho/src/cli/deps.ts). Never an
+  // operator's variable.
+  "APPIMAGE",
   // Claude Code sets these in the session and hook processes it spawns; the
   // tacho collector and the session-summary script read what it left. They are
   // that tool's contract, not anything an operator configures here.

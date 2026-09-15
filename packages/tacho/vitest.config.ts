@@ -28,12 +28,16 @@ export default defineConfig({
         "dist-standalone/**",
       ],
       // Ratchet only: never lowered, capped at 90, with headroom below the
-      // measured figure so environment noise cannot fail CI.
+      // measured figure so environment noise cannot fail CI. Measured
+      // 2026-09-14 after the Codex writer, reassign, Windows service and
+      // loopback-hook tests: 95.0% lines/statements, 85.3% branches, 95.4%
+      // functions; lines, statements and functions sit at the cap, branches
+      // at floor(85.3 - 2.5).
       thresholds: {
-        lines: 85,
-        branches: 80,
-        functions: 85,
-        statements: 85,
+        lines: 90,
+        branches: 82,
+        functions: 90,
+        statements: 90,
       },
     },
   },

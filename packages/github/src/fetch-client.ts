@@ -11,6 +11,26 @@ import type {
   GitHubPullRequest,
 } from "./types";
 
+/**
+ * A non-2xx answer from the GitHub API. The status is a field, so callers
+ * that treat one status specially (a 404 as "absent") branch on it rather
+ * than on the message text, where an installation id or a rate-limit count
+ * can contain the same digits.
+ */
+export class GitHubApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(`GitHub API error ${status}: ${message}`);
+    this.name = "GitHubApiError";
+    this.status = status;
+  }
+}
+
+function isNotFound(err: unknown): boolean {
+  return err instanceof GitHubApiError && err.status === 404;
+}
+
 // ---------------------------------------------------------------------------
 // GitHub API response shapes — internal use only
 // ---------------------------------------------------------------------------
@@ -265,7 +285,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       } catch {
         // fallback to statusText
       }
-      throw new Error(`GitHub API error ${res.status}: ${message}`);
+      throw new GitHubApiError(res.status, message);
     }
 
     // A DELETE answers 204 with no body.
@@ -343,8 +363,11 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         `${contentsPath}${refQuery}`,
       );
       existingSha = existing.sha;
-    } catch {
-      // 404 → file does not exist; any other error swallowed (create path handles it)
+    } catch (err) {
+      // Only a 404 means "create". A 401, 403 or 500 here would otherwise be
+      // read as "absent", and the PUT without a sha would then fail with an
+      // unrelated 422 (or overwrite nothing) while the real cause is hidden.
+      if (!isNotFound(err)) throw err;
     }
 
     const base64Content = Buffer.from(args.content, "utf8").toString("base64");
@@ -487,7 +510,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         "utf8",
       );
     } catch (err) {
-      if (err instanceof Error && err.message.includes("404")) return null;
+      if (isNotFound(err)) return null;
       throw err;
     }
   }
@@ -510,9 +533,47 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       "GET",
       `${repoPath}/git/trees/${seg(treeSha)}?recursive=1`,
     );
-    return treeData.tree
-      .filter((item) => item.type === "blob")
-      .map((item) => item.path);
+    if (!treeData.truncated) {
+      return treeData.tree
+        .filter((item) => item.type === "blob")
+        .map((item) => item.path);
+    }
+    // GitHub cuts a recursive tree at ~100,000 entries / 7 MB and flags it
+    // `truncated` rather than failing. A partial list returned as complete
+    // would tell an agent that files it cannot see do not exist, so walk the
+    // tree one directory at a time instead: each non-recursive request lists
+    // one directory, which no repository comes close to truncating.
+    return walkTree(repoPath, treeSha);
+  }
+
+  async function walkTree(
+    repoPath: string,
+    rootSha: string,
+  ): Promise<string[]> {
+    const paths: string[] = [];
+    const pending: Array<{ sha: string; prefix: string }> = [
+      { sha: rootSha, prefix: "" },
+    ];
+    while (pending.length > 0) {
+      const dir = pending.pop() as { sha: string; prefix: string };
+      const data = await request<GHTreeResponse>(
+        "GET",
+        `${repoPath}/git/trees/${seg(dir.sha)}`,
+      );
+      if (data.truncated) {
+        throw new Error(
+          `GitHub truncated the listing of a single directory (${dir.prefix || "/"}) ` +
+            `in ${repoPath}; the file tree cannot be listed completely.`,
+        );
+      }
+      for (const item of data.tree) {
+        const path = `${dir.prefix}${item.path}`;
+        if (item.type === "blob") paths.push(path);
+        else if (item.type === "tree")
+          pending.push({ sha: item.sha, prefix: `${path}/` });
+      }
+    }
+    return paths;
   }
 
   async function getPullRequest(args: {

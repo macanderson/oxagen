@@ -31,15 +31,18 @@ export default defineConfig({
         // Ratchet state after the ADR-043 runtime excision (actual: 86.6%
         // lines/statements, 89.3% branches, 94.8% functions). Branches moved
         // 80 -> 86 and functions 85 -> 90 (the cap) on the new numbers, each
-        // keeping the required >=2.5% headroom below actual. Lines/statements
-        // stay at 84: floor(86.6 - 2.5) is 84, so the bar is already where the
-        // ratchet allows. `program.ts` (the command tree) sits near 75% and is
-        // what holds the line pool down — raising it is tracked as issue 2587.
+        // keeping the required >=2.5% headroom below actual. `program.ts`
+        // (the command tree) sits near 75% and is what holds the line pool
+        // down — raising it is tracked as issue 2587.
+        //
+        // 2026-09-14, after the `oxagen tacho` reassign / --harness tests
+        // (actual: 87.6% lines/statements, 89.2% branches, 94.8% functions):
+        // lines/statements 84 -> 85, floor(87.6 - 2.5); the others stay.
         "src/**/*.{ts,tsx}": {
-          lines: 84,
+          lines: 85,
           branches: 86,
           functions: 90,
-          statements: 84,
+          statements: 85,
         },
       },
     },

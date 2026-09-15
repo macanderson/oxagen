@@ -10,7 +10,7 @@ const grade = (t) => (t.resolved.length === 0 ? "NEW" : t.unresolved.length ? "M
 
 const groups = [...new Set(tools.map((t) => t.group))];
 
-let md = `# Mission Control — tool traceability matrix
+let md = `# Oxagen Mission Control: tool traceability matrix
 
 Generated from Appendix E of \`2026-09-11-oxagen-mission-control-spec.md\` joined against
 the \`registerCapability()\` declarations in \`packages/oxagen/src/contracts/\`.
@@ -31,12 +31,12 @@ for (const g of groups) {
   md += `\n## ${g} (${rows.length})\n\n`;
   md += `| Tool | Grade | Inherits schema from | Risk | Effect |\n|---|---|---|---|---|\n`;
   for (const t of rows) {
-    const from = t.resolved.length ? t.resolved.map((r) => `\`${r}\``).join(", ") : "—";
-    md += `| \`${t.name}\` | ${grade(t)} | ${from} | ${t.inherit?.riskLevel ?? "—"} | ${t.inherit?.defaultEffect ?? "—"} |\n`;
+    const from = t.resolved.length ? t.resolved.map((r) => `\`${r}\``).join(", ") : "none";
+    md += `| \`${t.name}\` | ${grade(t)} | ${from} | ${t.inherit?.riskLevel ?? "none"} | ${t.inherit?.defaultEffect ?? "none"} |\n`;
   }
 }
 
-md += `\n---\n\n## Deletion candidates — contracts no target tool absorbs (${orphans.length})\n\n`;
+md += `\n---\n\n## Deletion candidates: contracts no target tool absorbs (${orphans.length})\n\n`;
 md += `| Contract | File | Domain |\n|---|---|---|\n`;
 for (const o of orphans.sort((a, b) => (a.domain || "").localeCompare(b.domain || ""))) {
   md += `| \`${o.name}\` | \`${o.file}\` | ${esc(o.domain)} |\n`;

@@ -10,7 +10,7 @@ export type {
   GitHubPrFile,
   GitHubBranch,
 } from "./types";
-export { createGitHubClient } from "./fetch-client";
+export { createGitHubClient, GitHubApiError } from "./fetch-client";
 export type {
   AppInstallationTokenArgs,
   InstallationTokenResult,
