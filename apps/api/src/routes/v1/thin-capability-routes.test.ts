@@ -108,6 +108,10 @@ import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
 import { agentCredentialRotateRoute } from "./agent.credential.rotate";
@@ -170,6 +174,10 @@ import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
 import { spendWasteListRoute } from "./spend.waste";
+import { findingDismissRoute } from "./finding.dismiss";
+import { findingEvidenceGetRoute } from "./finding.evidence.get";
+import { findingFixRecordRoute } from "./finding.fix.record";
+import { findingListRoute } from "./finding.list";
 import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
 import { tachoCommandListRoute } from "./tacho.command.list";
 import { iamRoleCreateRoute } from "./iam.role.create";
@@ -1073,6 +1081,43 @@ const ROUTES: ThinRoute[] = [
     capability: spendWasteList.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-02-30", to: "2026-03-01" } },
+    status: 200,
+  },
+  {
+    file: "finding.list",
+    route: findingListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingList.name,
+    body: {},
+    expectedInput: { status: "open" },
+    invalidBody: { status: "stale" },
+    status: 200,
+  },
+  {
+    file: "finding.evidence.get",
+    route: findingEvidenceGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingEvidenceGet.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
+    status: 200,
+  },
+  {
+    file: "finding.fix.record",
+    route: findingFixRecordRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingFixRecord.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
+    status: 200,
+  },
+  {
+    file: "finding.dismiss",
+    route: findingDismissRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: findingDismiss.name,
+    body: { findingId: "fnd_0123456789abcdefghjkmn" },
+    invalidBody: { findingId: "0192d4a8-7c1e-7a00-8000-000000000001" },
     status: 200,
   },
   {

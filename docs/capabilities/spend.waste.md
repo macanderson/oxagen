@@ -37,4 +37,4 @@ Spend the frames show bought nothing, by cause, with the runs that prove it (Mis
 |---|---|---|
 | `cache_write_never_read` | the run wrote prompt-cache tokens (`cache_write_5m` or `cache_write_1h` above zero) and read none back (`cache_read` at zero) | the run's cache-write cost by class from the rollup's per-model split |
 
-A run whose basis is `estimated` carries one reported figure with no split by class, so it is not cited under any cause; a book that prices cache writes at nothing wasted nothing, and that run is not cited either. The findings lane's patterns (retry storms, tool-list bloat, unproductive tails) join this list when that lane costs them.
+A run whose basis is `estimated` carries one reported figure with no split by class, so it is not cited under any cause; a book that prices cache writes at nothing wasted nothing, and that run is not cited either. A pattern priced against a counterfactual over the runs it cites is a finding, listed by [`list_findings`](finding.list.md) with its evidence and fix (ADR-062); wasted spend counts what bought nothing, a finding what the alternative would have saved.

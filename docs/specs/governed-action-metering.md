@@ -291,6 +291,24 @@ customer; nothing on the page or the invoice comes from the §4.1 band.
   keep going in the same month; from then on it is a prepaid org on Free's
   published terms.
 
+### 4.7 Two meters (maintainer, 2026-09-15)
+
+Oxagen charges on two meters, and they share no balance.
+
+| Meter | Unit | Price | Funded by | Charged on |
+|---|---|---|---|---|
+| Governed actions | governed action unit (GAU) | list $5 per 1,000 (5,000 micros per GAU); 5,000-GAU blocks at $25; volume bands $5 / $4 / $3 / $2 per 1,000 (§4.1) | the month's included GAUs (Free 5,000; Build $199 a month, 50,000; Scale $999 a month, 300,000; Enterprise negotiated on `billing.contract_terms`), then blocks bought or auto top-up, or invoice billing (§4.2) | `resolve_approval`, the billable governed action (`apps/app/ARCHITECTURE.md` §1.5); membership writes and every `noBillingGate` read are free |
+| In-app AI usage | usage credit, 1 credit = $0.01 | the provider cost of each of the in-app agent's model calls times the meter markup (`resolveMeterMarkup`, `packages/billing/src/pricing.ts`) | the $5 signup grant `create_org` writes, then credit packs bought through `purchase_credits` | the credit gate on the in-app agent's platform-paid turns (`packages/billing/src/turn-credit-gate.ts`, ADR-053 §3) |
+
+Every feature is on every tier; the tiers differ in platform price, included
+GAUs and evidence retention (§4.2). Tokens are not passed through at cost: the
+in-app agent's platform-paid calls carry the markup, and the model spend of a
+customer's own agents stays reported at $0.00 (§4.4). Proven spend is a report
+figure on neither meter. Credits never buy GAUs, and a GAU block never adds
+credits. The billing page shows both meters: the GAU bucket with the
+contracted rate, and the usage credit balance with a top-up
+(`apps/app/ARCHITECTURE.md` §1.4).
+
 ---
 
 ## 5. What changes in code

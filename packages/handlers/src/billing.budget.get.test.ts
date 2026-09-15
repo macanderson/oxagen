@@ -43,7 +43,17 @@ function status(overrides: Record<string, unknown> = {}) {
 }
 
 describe("billingBudgetGetHandler (@oxagen/handlers)", () => {
-  beforeEach(() => mocks.getSpendBudgetStatuses.mockReset());
+  // A block body: a function returned from beforeEach runs as its teardown.
+  beforeEach(() => {
+    mocks.getSpendBudgetStatuses.mockReset();
+  });
+
+  it("fails the call when the spend read fails, answering no spent figure (negative, #3064)", async () => {
+    mocks.getSpendBudgetStatuses.mockRejectedValue(new Error("counter down"));
+    await expect(billingBudgetGetHandler({}, CTX)).rejects.toThrow(
+      "counter down",
+    );
+  });
 
   it("returns an empty budgets array when nothing is configured", async () => {
     mocks.getSpendBudgetStatuses.mockResolvedValue([]);

@@ -5,12 +5,17 @@
 // `test` job migrates Postgres with Atlas before `turbo run build test:unit`
 // and carries DATABASE_URL in turbo's globalEnv; a local run without one is
 // skipped, not red. Every row it writes is removed in afterAll.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq, inArray, sql } from "drizzle-orm";
 import { organizationCreateHandler } from "./org.create";
+
+// The bootstrap test makes ~15 sequential round trips to Postgres plus one per
+// billing table; under `test:coverage` on a shared CI runner that ran past the
+// 5s default. Match schema.setup.test.ts's per-file budget.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -241,6 +246,9 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
       );
       expect([...rows][0]?.n, `billing.${name}`).toBe(0);
     }
+    // The IAM bootstrap seeds role_grants one insert per capability role
+    // (iam-provision.ts step d): 3.8 s on a loaded CI runner at app-rebuild
+    // 340420f10 and past the 5 s default on the next two runs.
   }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
