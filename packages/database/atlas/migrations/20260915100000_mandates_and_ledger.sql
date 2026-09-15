@@ -11,7 +11,8 @@
 --      oxagen_app grants: the ledger takes SELECT and INSERT only.
 --   2. agent.approval_requests gains the four-hop chain columns the mandate
 --      gate writes when a call parks for a person: mandate_id, rule_ids,
---      input_digest, token_used_at (ADR-059 decision 4).
+--      input_digest, token_used_at (ADR-059 decision 4); message_id becomes
+--      nullable, since a call parked by the gate has no chat message.
 --   3. agent.tool_versions gains the safety classification the gate reads:
 --      consequence_tags, measures, effect_id_path (ADR-059 decision 6).
 --   4. workspace.workspaces gains consequence_roles, the tag → role overrides
@@ -144,6 +145,7 @@ $$;
 
 -- ── 2. The four-hop chain on approval requests ──────────────────────────────
 ALTER TABLE "agent"."approval_requests"
+  ALTER COLUMN "message_id" DROP NOT NULL,
   ADD COLUMN "mandate_id" uuid NULL,
   ADD COLUMN "rule_ids" text[] NOT NULL DEFAULT '{}'::text[],
   ADD COLUMN "input_digest" text NULL,
@@ -153,6 +155,8 @@ CREATE INDEX "approval_requests_mandate_digest_idx"
   ON "agent"."approval_requests" ("workspace_id", "mandate_id", "input_digest")
   WHERE mandate_id IS NOT NULL;
 
+COMMENT ON COLUMN "agent"."approval_requests"."message_id" IS
+  'The chat turn that parked the call; null on a row the mandate gate wrote.';
 COMMENT ON COLUMN "agent"."approval_requests"."mandate_id" IS
   'The mandate the parked call drew on (tools.mandates, app-enforced); null on the chat approval gate''s rows.';
 COMMENT ON COLUMN "agent"."approval_requests"."rule_ids" IS

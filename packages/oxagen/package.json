@@ -21,7 +21,8 @@
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
     "./plugins": "./src/plugins/index.ts",
-    "./tacho/schemas": "./src/tacho/schemas.ts"
+    "./tacho/schemas": "./src/tacho/schemas.ts",
+    "./mandates/schemas": "./src/mandates/schemas.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -135,7 +135,9 @@ export const approvalRequests = agentSchema.table(
     ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id"),
     toolCallId: uuid("tool_call_id"),
-    messageId: uuid("message_id").notNull(),
+    // The chat turn that parked the call; null on a row the mandate gate
+    // writes, where the call arrived through the kernel with no message.
+    messageId: uuid("message_id"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),

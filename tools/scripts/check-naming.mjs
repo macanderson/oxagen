@@ -121,6 +121,9 @@ const ACTIONS = new Set([
   "rotate",
   "revoke",
   "assign", // pairs with "revoke" for role assignment; matches iam.principal_role_assignments
+  // grant_mandate / request_mandate — MC spec App. E names both (ADR-059).
+  "grant",
+  "request",
 
   "reveal",
   "pin",

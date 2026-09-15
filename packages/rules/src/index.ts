@@ -33,8 +33,25 @@ export {
   type DecisionGateArgs,
   type DecisionRulesGateFn,
   type DecisionRulesGateOptions,
+  type MandateCheck,
   type RuleSetLoader,
 } from "./gate";
+export {
+  checkMandate,
+  decideMandate,
+  inputDigest,
+  lockMandate,
+  MANDATE_APPROVAL_TTL_MS,
+  parseMandateRow,
+  readAuthority,
+  release,
+  releaseParked,
+  reserve,
+  settle,
+  type MandateDenyReason,
+  type MandateRecord,
+} from "./mandates";
+export { periodKey, toolMatches } from "./mandates/measures";
 export {
   bootstrapDecisionRulesRuntime,
   clearDecisionRulesCache,

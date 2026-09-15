@@ -1654,6 +1654,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/mcp-config':
+        specifier: workspace:*
+        version: link:../mcp-config
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen

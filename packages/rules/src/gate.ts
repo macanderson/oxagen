@@ -9,6 +9,7 @@
  * substitutes for authorization — and BEFORE the handler, so a denied refund
  * never reaches the code that would have issued it.
  */
+import type { DecisionSettlement, ResolvedPrincipal } from "@oxagen/oxagen";
 import { evaluateRules, requiredFactKeys } from "./evaluate";
 import type { DecisionSubject, FactResolver, RuleSet, Verdict } from "./types";
 
@@ -42,8 +43,29 @@ export type RuleSetLoader = (ctx: {
   workspaceId: string | null;
 }) => Promise<RuleSet | null>;
 
+/**
+ * The mandate check the gate runs after the rules, for an agent principal
+ * only (ADR-059 decision 4). It throws to refuse or park the call and
+ * returns the settlement the kernel applies after the handler, or undefined
+ * when no declared tool with a consequence tag is involved. Unlike the rule
+ * set loader it never fails open: a mandate check that cannot run refuses
+ * the call, because a consequential call with no verdict is the thing the
+ * mandate exists to prevent.
+ */
+export type MandateCheck = (args: {
+  capability: string;
+  input: unknown;
+  orgId: string;
+  workspaceId: string;
+  agentPrincipalId: string;
+  userId: string | null;
+  requestId?: string;
+}) => Promise<DecisionSettlement | undefined>;
+
 export interface DecisionRulesGateOptions {
   loadRuleSet: RuleSetLoader;
+  /** Omitted ⇒ no mandate check; every agent call proceeds on the rules alone. */
+  checkMandate?: MandateCheck;
   /** Omitted ⇒ rules that declare `requires_facts` see an empty bag and their fact conditions do not match. */
   resolveFacts?: FactResolver;
   /**
@@ -65,65 +87,103 @@ export interface DecisionGateArgs {
     userId: string | null;
     surface?: string;
     agentId?: string;
+    requestId?: string;
   };
+  /** The IAM-resolved acting principal; the mandate check runs for `kind: "agent"`. */
+  principal?: ResolvedPrincipal | null;
 }
 
-export type DecisionRulesGateFn = (args: DecisionGateArgs) => Promise<void>;
+export type DecisionRulesGateFn = (
+  args: DecisionGateArgs,
+) => Promise<void | DecisionSettlement>;
 
 /** Build the gate the bootstrap registers with the kernel. */
 export function createDecisionRulesGate(
   options: DecisionRulesGateOptions,
 ): DecisionRulesGateFn {
-  return async ({ capability, input, ctx }) => {
-    let ruleSet: RuleSet | null;
-    try {
-      ruleSet = await options.loadRuleSet({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-      });
-    } catch (error) {
-      options.onError?.(error);
+  return async ({ capability, input, ctx, principal }) => {
+    await judgeRules(options, { capability, input, ctx });
+    // The mandate check binds an agent acting under delegated authority; a
+    // person under their own role needs no mandate (spec §6.9 part 3), and
+    // the check needs a workspace to read the tool registry from.
+    if (
+      options.checkMandate === undefined ||
+      principal === undefined ||
+      principal === null ||
+      principal.kind !== "agent" ||
+      ctx.workspaceId === null
+    ) {
       return;
     }
-    if (ruleSet === null || ruleSet.rules.length === 0) return;
-
-    let facts: Record<string, unknown> = {};
-    const keys = requiredFactKeys(ruleSet, capability);
-    if (keys.length > 0 && options.resolveFacts) {
-      try {
-        facts = await options.resolveFacts({
-          capability,
-          input,
-          keys,
-          ctx: {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            userId: ctx.userId,
-          },
-        });
-      } catch (error) {
-        // A dead fact source degrades those rules to no-match (their leaves
-        // read absent keys); it does not skip evaluation — capability- and
-        // input-shaped rules still bind.
-        options.onError?.(error);
-      }
-    }
-
-    const subject: DecisionSubject = {
+    return options.checkMandate({
       capability,
       input,
-      facts,
-      call: {
-        surface: ctx.surface,
-        agent_id: ctx.agentId,
-        user_id: ctx.userId ?? undefined,
-      },
-    };
-    const verdict = evaluateRules(ruleSet, subject);
-    if (verdict === null || verdict.effect === "allow") return;
-    if (verdict.effect === "require_approval") {
-      throw new DecisionRuleApprovalRequiredError(verdict);
-    }
-    throw new DecisionRuleDeniedError(verdict);
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      agentPrincipalId: principal.id,
+      userId: ctx.userId,
+      requestId: ctx.requestId,
+    });
   };
+}
+
+/** Evaluate the workspace's rule set; throws on a deny or a require_approval verdict. */
+async function judgeRules(
+  options: DecisionRulesGateOptions,
+  {
+    capability,
+    input,
+    ctx,
+  }: Pick<DecisionGateArgs, "capability" | "input" | "ctx">,
+): Promise<void> {
+  let ruleSet: RuleSet | null;
+  try {
+    ruleSet = await options.loadRuleSet({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (error) {
+    options.onError?.(error);
+    return;
+  }
+  if (ruleSet === null || ruleSet.rules.length === 0) return;
+
+  let facts: Record<string, unknown> = {};
+  const keys = requiredFactKeys(ruleSet, capability);
+  if (keys.length > 0 && options.resolveFacts) {
+    try {
+      facts = await options.resolveFacts({
+        capability,
+        input,
+        keys,
+        ctx: {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: ctx.userId,
+        },
+      });
+    } catch (error) {
+      // A dead fact source degrades those rules to no-match (their leaves
+      // read absent keys); it does not skip evaluation — capability- and
+      // input-shaped rules still bind.
+      options.onError?.(error);
+    }
+  }
+
+  const subject: DecisionSubject = {
+    capability,
+    input,
+    facts,
+    call: {
+      surface: ctx.surface,
+      agent_id: ctx.agentId,
+      user_id: ctx.userId ?? undefined,
+    },
+  };
+  const verdict = evaluateRules(ruleSet, subject);
+  if (verdict === null || verdict.effect === "allow") return;
+  if (verdict.effect === "require_approval") {
+    throw new DecisionRuleApprovalRequiredError(verdict);
+  }
+  throw new DecisionRuleDeniedError(verdict);
 }

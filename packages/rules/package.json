@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@oxagen/database": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pino": "9.14.0",

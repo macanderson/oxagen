@@ -1,0 +1,773 @@
+/**
+ * The mandate ledger writer and the decision-time check (MC spec §6.9 part
+ * 3, ADR-059 decisions 4 and 5).
+ *
+ * `tools.mandate_ledger` is append-only movements on a mandate's remaining
+ * authority, one row per measure. Every write here runs inside one
+ * transaction that first takes `SELECT … FOR UPDATE` on the mandate row, so
+ * concurrent calls serialise and two cannot both fit under one remaining
+ * limit. `balance_after` is the remaining authority after the row and is
+ * what every read reports (INV-10). The unique index
+ * `(mandate_id, tool_call_id, measure, kind)` is the database backstop.
+ *
+ * `checkMandate` is what the decision gate runs for an agent principal:
+ * it looks the capability up as a declared tool, reads the version's
+ * consequence tags and measures, finds the covering mandate, reserves, and
+ * either lets the call proceed, parks it for a person, or refuses it.
+ */
+import { randomUUID, createHash } from "node:crypto";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { emitSecurityEventAsync } from "@oxagen/database/security";
+import { HandlerError } from "@oxagen/oxagen";
+import {
+  CapabilityError,
+  type DecisionSettlement,
+} from "@oxagen/oxagen/kernel";
+import {
+  mandateApprovalSchema,
+  mandateLimitsSchema,
+  mandateTargetsSchema,
+  measureDeclarationsSchema,
+  type MandateApproval,
+  type MandateAuthority,
+  type MandateLimits,
+  type MandateTargets,
+  type MeasureDeclarations,
+} from "@oxagen/oxagen/mandates/schemas";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNull,
+  lte,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { logger } from "./logger";
+import {
+  addValues,
+  exceeds,
+  isCallsMeasure,
+  periodKey,
+  readCallsMeasure,
+  readMeasure,
+  readPath,
+  subtractValues,
+  targetAllowed,
+  toolMatches,
+} from "./mandates/measures";
+
+const m = schema.mandates;
+const l = schema.mandateLedger;
+
+/**
+ * How long a call parked by a mandate's approval rule waits for a person.
+ * The chat gate's five minutes fits a stream that is waiting; a mandate
+ * parks the call and refuses it, and the agent retries once a person has
+ * looked, so the window is a working day.
+ */
+export const MANDATE_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The reasons the gate refuses a call outright; each is a `mandate.exception`. */
+export type MandateDenyReason =
+  | "no_mandate"
+  | "measure_unreadable"
+  | "target_denied"
+  | "over_limit";
+
+/** A mandate row with its jsonb columns parsed. */
+export interface MandateRecord {
+  id: string;
+  publicId: string;
+  orgId: string;
+  workspaceId: string;
+  agentPrincipalId: string;
+  consequenceTags: string[];
+  limits: MandateLimits;
+  targets: MandateTargets;
+  tools: string[];
+  approval: MandateApproval;
+  status: string;
+  validFrom: Date;
+  validTo: Date;
+}
+
+export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    orgId: row.orgId,
+    workspaceId: row.workspaceId,
+    agentPrincipalId: row.agentPrincipalId,
+    consequenceTags: row.consequenceTags,
+    limits: mandateLimitsSchema.parse(row.limits),
+    targets: mandateTargetsSchema.parse(row.targets),
+    tools: row.tools,
+    approval: mandateApprovalSchema.parse(row.approvalRules),
+    status: row.status,
+    validFrom: row.validFrom,
+    validTo: row.validTo,
+  };
+}
+
+/** Take the row lock every ledger write serialises on. */
+export async function lockMandate(
+  tx: Tx,
+  mandateId: string,
+): Promise<MandateRecord | null> {
+  const [row] = await tx
+    .select()
+    .from(m)
+    .where(eq(m.id, mandateId))
+    .for("update");
+  return row ? parseMandateRow(row) : null;
+}
+
+/** The last balance_after of a measure in a period, or null when no row exists. */
+async function lastBalance(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: string,
+): Promise<string | null> {
+  const [row] = await tx
+    .select({ balanceAfter: l.balanceAfter })
+    .from(l)
+    .where(
+      and(
+        eq(l.mandateId, mandateId),
+        eq(l.measure, measure),
+        eq(l.periodKey, period),
+      ),
+    )
+    .orderBy(desc(l.createdAt), desc(l.id))
+    .limit(1);
+  return row?.balanceAfter ?? null;
+}
+
+/** Remaining authority by measure, as get_mandate and list_mandates report it. */
+export async function readAuthority(
+  tx: Tx,
+  mandate: MandateRecord,
+  at: Date = new Date(),
+): Promise<MandateAuthority[]> {
+  const out: MandateAuthority[] = [];
+  for (const [measure, limit] of Object.entries(mandate.limits)) {
+    const key = periodKey(limit.period, at);
+    const [sums] = await tx
+      .select({
+        reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+        settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+      })
+      .from(l)
+      .where(
+        and(
+          eq(l.mandateId, mandate.id),
+          eq(l.measure, measure),
+          eq(l.periodKey, key),
+        ),
+      );
+    const balance = await lastBalance(tx, mandate.id, measure, key);
+    out.push({
+      measure,
+      currencyOrUnit: limit.currencyOrUnit,
+      period: limit.period,
+      periodKey: key,
+      perCall: limit.perCall ?? null,
+      perPeriod: limit.perPeriod ?? null,
+      settled: sums?.settled ?? "0",
+      reserved: sums?.reserved ?? "0",
+      remaining:
+        limit.perPeriod === undefined ? null : (balance ?? limit.perPeriod),
+    });
+  }
+  return out;
+}
+
+export interface ReserveArgs {
+  mandate: MandateRecord;
+  toolCallId: string;
+  /** measure → value to reserve; every measure the mandate limits must be present. */
+  values: Record<string, string>;
+  at: Date;
+}
+
+export type ReserveResult =
+  | { ok: true }
+  | { ok: false; reason: "over_limit"; measure: string; detail: string };
+
+/**
+ * Reserve authority for one call under the lock the caller holds. Per-call
+ * limits are checked against the value, per-period limits against the
+ * period's last `balance_after`; a refusal writes nothing and the mandate
+ * stays as it was.
+ */
+export async function reserve(
+  tx: Tx,
+  args: ReserveArgs,
+): Promise<ReserveResult> {
+  const { mandate, toolCallId, values, at } = args;
+  const rows: (Omit<typeof l.$inferInsert, "createdAt"> & {
+    createdAt: SQL;
+  })[] = [];
+  for (const [measure, limit] of Object.entries(mandate.limits)) {
+    const value = values[measure];
+    if (value === undefined) {
+      throw new Error(`reserve: no value for measure "${measure}"`);
+    }
+    if (limit.perCall !== undefined && exceeds(value, limit.perCall)) {
+      return {
+        ok: false,
+        reason: "over_limit",
+        measure,
+        detail: `${value} exceeds per-call limit ${limit.perCall} ${limit.currencyOrUnit}`,
+      };
+    }
+    const key = periodKey(limit.period, at);
+    const remaining =
+      (await lastBalance(tx, mandate.id, measure, key)) ??
+      limit.perPeriod ??
+      null;
+    let balanceAfter = remaining ?? "0";
+    if (remaining !== null) {
+      if (exceeds(value, remaining)) {
+        return {
+          ok: false,
+          reason: "over_limit",
+          measure,
+          detail: `${value} exceeds remaining ${remaining} ${limit.currencyOrUnit} this ${limit.period} period`,
+        };
+      }
+      balanceAfter = subtractValues(remaining, value);
+    }
+    rows.push({
+      orgId: mandate.orgId,
+      workspaceId: mandate.workspaceId,
+      mandateId: mandate.id,
+      toolCallId,
+      kind: "reserve",
+      measure,
+      value,
+      unitOrCurrency: limit.currencyOrUnit,
+      periodKey: key,
+      balanceAfter,
+      // The insert time under the lock, so "last row" is well ordered across
+      // transactions; now() would be each transaction's start time.
+      createdAt: sql`clock_timestamp()`,
+    });
+  }
+  if (rows.length > 0) await tx.insert(l).values(rows);
+  return { ok: true };
+}
+
+/** The reserve rows of one call that no settle or release has closed yet. */
+async function openReservations(tx: Tx, mandateId: string, toolCallId: string) {
+  const rows = await tx
+    .select()
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.toolCallId, toolCallId)))
+    .orderBy(asc(l.createdAt));
+  const closed = new Set(
+    rows.filter((r) => r.kind !== "reserve").map((r) => r.measure),
+  );
+  return rows.filter((r) => r.kind === "reserve" && !closed.has(r.measure));
+}
+
+/**
+ * Convert a call's reservations to settlements. Remaining authority is
+ * unchanged; the settle row carries the external effect id the tool
+ * returned. Idempotent: a call already settled or released writes nothing.
+ */
+export async function settle(
+  tx: Tx,
+  args: {
+    mandateId: string;
+    toolCallId: string;
+    externalEffectId: string | null;
+  },
+): Promise<number> {
+  const open = await openReservations(tx, args.mandateId, args.toolCallId);
+  for (const r of open) {
+    const balance = await lastBalance(tx, r.mandateId, r.measure, r.periodKey);
+    await tx.insert(l).values({
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      mandateId: r.mandateId,
+      toolCallId: r.toolCallId,
+      kind: "settle",
+      measure: r.measure,
+      value: r.value,
+      unitOrCurrency: r.unitOrCurrency,
+      externalEffectId: args.externalEffectId,
+      periodKey: r.periodKey,
+      balanceAfter: balance ?? r.balanceAfter,
+      createdAt: sql`clock_timestamp()`,
+    });
+  }
+  return open.length;
+}
+
+/**
+ * Give a call's reservations back: remaining authority rises by each
+ * reserved value. Idempotent the same way `settle` is.
+ */
+export async function release(
+  tx: Tx,
+  args: { mandateId: string; toolCallId: string },
+): Promise<number> {
+  const open = await openReservations(tx, args.mandateId, args.toolCallId);
+  for (const r of open) {
+    const balance = await lastBalance(tx, r.mandateId, r.measure, r.periodKey);
+    await tx.insert(l).values({
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      mandateId: r.mandateId,
+      toolCallId: r.toolCallId,
+      kind: "release",
+      measure: r.measure,
+      value: r.value,
+      unitOrCurrency: r.unitOrCurrency,
+      periodKey: r.periodKey,
+      balanceAfter: addValues(balance ?? r.balanceAfter, r.value),
+      createdAt: sql`clock_timestamp()`,
+    });
+  }
+  return open.length;
+}
+
+/**
+ * Release every reservation a mandate holds for calls parked on an
+ * unresolved approval, in the caller's transaction under the caller's lock.
+ * Used by revoke_mandate (in-flight calls that have not dispatched end) and
+ * by the expiry job.
+ */
+export async function releaseParked(
+  tx: Tx,
+  mandateId: string,
+): Promise<number> {
+  const parked = await tx
+    .select({ toolCallId: schema.approvalRequests.toolCallId })
+    .from(schema.approvalRequests)
+    .where(
+      and(
+        eq(schema.approvalRequests.mandateId, mandateId),
+        isNull(schema.approvalRequests.tokenUsedAt),
+      ),
+    );
+  let released = 0;
+  for (const p of parked) {
+    if (p.toolCallId)
+      released += await release(tx, { mandateId, toolCallId: p.toolCallId });
+  }
+  return released;
+}
+
+// ── The decision-time check ───────────────────────────────────────────────
+
+/** The declared tool the capability resolves to, with its active version. */
+interface DeclaredTool {
+  slug: string;
+  version: number;
+  riskGrade: string;
+  consequenceTags: string[];
+  measures: MeasureDeclarations;
+  effectIdPath: string | null;
+}
+
+async function loadDeclaredTool(
+  tx: Tx,
+  workspaceId: string,
+  capability: string,
+): Promise<DeclaredTool | null> {
+  const [row] = await tx
+    .select({
+      slug: schema.tools.slug,
+      version: schema.toolVersions.versionNumber,
+      riskGrade: schema.toolVersions.riskGrade,
+      consequenceTags: schema.toolVersions.consequenceTags,
+      measures: schema.toolVersions.measures,
+      effectIdPath: schema.toolVersions.effectIdPath,
+    })
+    .from(schema.tools)
+    .innerJoin(
+      schema.toolVersions,
+      eq(schema.toolVersions.id, schema.tools.activeVersionId),
+    )
+    .where(
+      and(
+        eq(schema.tools.workspaceId, workspaceId),
+        eq(schema.tools.slug, capability),
+        eq(schema.tools.enabled, true),
+        isNull(schema.tools.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    slug: row.slug,
+    version: row.version,
+    riskGrade: row.riskGrade,
+    consequenceTags: row.consequenceTags,
+    measures: measureDeclarationsSchema.parse(row.measures),
+    effectIdPath: row.effectIdPath,
+  };
+}
+
+/** The oldest active mandate of the agent covering every tag and matching the tool. */
+async function findCoveringMandate(
+  tx: Tx,
+  args: {
+    workspaceId: string;
+    agentPrincipalId: string;
+    tool: DeclaredTool;
+    at: Date;
+  },
+): Promise<MandateRecord | null> {
+  const rows = await tx
+    .select()
+    .from(m)
+    .where(
+      and(
+        eq(m.workspaceId, args.workspaceId),
+        eq(m.agentPrincipalId, args.agentPrincipalId),
+        eq(m.status, "active"),
+        lte(m.validFrom, args.at),
+        gt(m.validTo, args.at),
+      ),
+    )
+    .orderBy(asc(m.createdAt));
+  for (const row of rows) {
+    const covers = args.tool.consequenceTags.every((t) =>
+      row.consequenceTags.includes(t),
+    );
+    if (covers && toolMatches(row.tools, args.tool.slug, args.tool.version)) {
+      return parseMandateRow(row);
+    }
+  }
+  return null;
+}
+
+/** sha256 over the call's input with keys sorted, the retry's identity. */
+export function inputDigest(input: unknown): string {
+  const sort = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(sort)
+      : v !== null && typeof v === "object"
+        ? Object.fromEntries(
+            Object.keys(v as object)
+              .sort()
+              .map((k) => [k, sort((v as Record<string, unknown>)[k])]),
+          )
+        : v;
+  return createHash("sha256")
+    .update(JSON.stringify(sort(input)) ?? "")
+    .digest("hex");
+}
+
+export interface MandateCheckArgs {
+  capability: string;
+  input: unknown;
+  orgId: string;
+  workspaceId: string;
+  agentPrincipalId: string;
+  userId: string | null;
+  requestId?: string;
+  now?: () => Date;
+}
+
+type CheckOutcome =
+  | { kind: "no_opinion" }
+  | {
+      kind: "deny";
+      reason: MandateDenyReason;
+      mandate: MandateRecord | null;
+      detail: string;
+    }
+  | { kind: "pending"; approvalPublicId: string; mandate: MandateRecord }
+  | {
+      kind: "proceed";
+      mandate: MandateRecord;
+      toolCallId: string;
+      effectIdPath: string | null;
+    };
+
+function emitException(
+  args: MandateCheckArgs,
+  reason: MandateDenyReason,
+  mandate: MandateRecord | null,
+  detail: string,
+): void {
+  logger.warn(
+    {
+      capability: args.capability,
+      mandateId: mandate?.publicId ?? null,
+      reason,
+      detail,
+    },
+    "mandate: call refused",
+  );
+  void emitSecurityEventAsync({
+    eventType: "mandate.exception",
+    actorUserId: args.userId,
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    capability: args.capability,
+    outcome: "deny",
+    ip: null,
+    userAgent: null,
+    requestId: args.requestId ?? null,
+  }).catch((err: unknown) =>
+    logger.error({ err }, "mandate: security event emission failed"),
+  );
+}
+
+/**
+ * Decide one agent call against the workspace's mandates. Runs the whole
+ * decision in one tenant transaction under the mandate row lock and returns
+ * the outcome; the gate turns it into a throw or a settlement.
+ */
+export async function decideMandate(
+  args: MandateCheckArgs,
+): Promise<CheckOutcome> {
+  const at = (args.now ?? (() => new Date()))();
+  return withTenantDb(async (tx): Promise<CheckOutcome> => {
+    const tool = await loadDeclaredTool(tx, args.workspaceId, args.capability);
+    if (tool === null || tool.consequenceTags.length === 0)
+      return { kind: "no_opinion" };
+
+    const found = await findCoveringMandate(tx, {
+      workspaceId: args.workspaceId,
+      agentPrincipalId: args.agentPrincipalId,
+      tool,
+      at,
+    });
+    if (found === null) {
+      return {
+        kind: "deny",
+        reason: "no_mandate",
+        mandate: null,
+        detail: `no active mandate covers ${tool.consequenceTags.join(", ")} for ${tool.slug}@${tool.version}`,
+      };
+    }
+
+    // Lock before reading balances; re-read the row so the decision sees the
+    // state the lock protects.
+    const mandate = await lockMandate(tx, found.id);
+    if (mandate === null || mandate.status !== "active") {
+      return {
+        kind: "deny",
+        reason: "no_mandate",
+        mandate: found,
+        detail: "the mandate ended",
+      };
+    }
+
+    // Measures: one value per limited measure, read from the call.
+    const values: Record<string, string> = {};
+    for (const measure of Object.keys(mandate.limits)) {
+      if (isCallsMeasure(measure)) {
+        values[measure] = readCallsMeasure().value;
+        continue;
+      }
+      const declaration = tool.measures[measure];
+      if (declaration === undefined || declaration.type === "text") {
+        return {
+          kind: "deny",
+          reason: "measure_unreadable",
+          mandate,
+          detail: `${tool.slug}@${tool.version} declares no measure "${measure}"`,
+        };
+      }
+      const read = readMeasure(args.input, declaration);
+      if (!read.ok || read.measure.kind !== "value") {
+        return {
+          kind: "deny",
+          reason: "measure_unreadable",
+          mandate,
+          detail: `measure "${measure}" at ${declaration.path}: ${read.ok ? "not a value" : read.reason}`,
+        };
+      }
+      values[measure] = read.measure.value;
+    }
+
+    // Targets: every measure the mandate names a target rule for.
+    for (const [measure, rule] of Object.entries(mandate.targets)) {
+      const declaration = tool.measures[measure];
+      if (declaration === undefined) {
+        return {
+          kind: "deny",
+          reason: "measure_unreadable",
+          mandate,
+          detail: `${tool.slug}@${tool.version} declares no measure "${measure}"`,
+        };
+      }
+      const read = readMeasure(args.input, declaration);
+      const target = !read.ok
+        ? null
+        : read.measure.kind === "target"
+          ? read.measure.target
+          : read.measure.value;
+      if (target === null) {
+        return {
+          kind: "deny",
+          reason: "measure_unreadable",
+          mandate,
+          detail: `target "${measure}" at ${declaration.path}: ${read.ok ? "unreadable" : read.reason}`,
+        };
+      }
+      if (!targetAllowed(target, rule)) {
+        return {
+          kind: "deny",
+          reason: "target_denied",
+          mandate,
+          detail: `${measure} "${target}" is outside the mandate's targets`,
+        };
+      }
+    }
+
+    // A person's approval of this same call: proceed on the held reservation.
+    const digest = inputDigest(args.input);
+    const [approved] = await tx
+      .select({
+        id: schema.approvalRequests.id,
+        toolCallId: schema.approvalRequests.toolCallId,
+      })
+      .from(schema.approvalRequests)
+      .where(
+        and(
+          eq(schema.approvalRequests.workspaceId, args.workspaceId),
+          eq(schema.approvalRequests.mandateId, mandate.id),
+          eq(schema.approvalRequests.inputDigest, digest),
+          eq(schema.approvalRequests.resolution, "approved"),
+          isNull(schema.approvalRequests.tokenUsedAt),
+          gt(schema.approvalRequests.expiresAt, at),
+        ),
+      )
+      .orderBy(asc(schema.approvalRequests.createdAt))
+      .limit(1);
+    if (approved?.toolCallId) {
+      await tx
+        .update(schema.approvalRequests)
+        .set({ tokenUsedAt: at })
+        .where(eq(schema.approvalRequests.id, approved.id));
+      return {
+        kind: "proceed",
+        mandate,
+        toolCallId: approved.toolCallId,
+        effectIdPath: tool.effectIdPath,
+      };
+    }
+
+    const toolCallId = randomUUID();
+    const reserved = await reserve(tx, { mandate, toolCallId, values, at });
+    if (!reserved.ok) {
+      return {
+        kind: "deny",
+        reason: "over_limit",
+        mandate,
+        detail: reserved.detail,
+      };
+    }
+
+    // The mandate's own approval rule.
+    const ruleIds: string[] = [];
+    for (const tag of mandate.approval.alwaysHumanFor) {
+      if (tool.consequenceTags.includes(tag)) {
+        ruleIds.push(`mandate:${mandate.publicId}:always_human_for:${tag}`);
+      }
+    }
+    for (const [measure, above] of Object.entries(
+      mandate.approval.humanAbove,
+    )) {
+      const value = values[measure];
+      if (value !== undefined && exceeds(value, above)) {
+        ruleIds.push(`mandate:${mandate.publicId}:human_above:${measure}`);
+      }
+    }
+    if (ruleIds.length > 0) {
+      const [row] = await tx
+        .insert(schema.approvalRequests)
+        .values({
+          orgId: args.orgId,
+          workspaceId: args.workspaceId,
+          toolCallId,
+          capabilityName: args.capability,
+          inputPreview: (args.input ?? {}) as object,
+          riskLevel: tool.riskGrade,
+          mandateId: mandate.id,
+          ruleIds,
+          inputDigest: digest,
+          expiresAt: new Date(at.getTime() + MANDATE_APPROVAL_TTL_MS),
+          createdByUserId: args.userId ?? undefined,
+        })
+        .returning({ publicId: schema.approvalRequests.publicId });
+      if (!row) throw new Error("mandate: approval insert returned no row");
+      return { kind: "pending", approvalPublicId: row.publicId, mandate };
+    }
+
+    return {
+      kind: "proceed",
+      mandate,
+      toolCallId,
+      effectIdPath: tool.effectIdPath,
+    };
+  });
+}
+
+/**
+ * The gate's entry: decide, then throw for a refusal or a parked call, or
+ * return the settlement the kernel applies after the handler. `undefined`
+ * means the mandates have no opinion on this call.
+ */
+export async function checkMandate(
+  args: MandateCheckArgs,
+): Promise<DecisionSettlement | undefined> {
+  const outcome = await decideMandate(args);
+  switch (outcome.kind) {
+    case "no_opinion":
+      return undefined;
+    case "deny":
+      emitException(args, outcome.reason, outcome.mandate, outcome.detail);
+      throw new HandlerError({
+        code: "forbidden",
+        reason: outcome.reason,
+        message: `Refused by mandate: ${outcome.detail}`,
+      });
+    case "pending":
+      throw new CapabilityError(
+        args.capability,
+        "pending_approval",
+        `The mandate ${outcome.mandate.publicId} requires a person to approve this call`,
+        outcome.approvalPublicId,
+      );
+    case "proceed": {
+      const { mandate, toolCallId, effectIdPath } = outcome;
+      return {
+        settle: async (output) => {
+          const raw =
+            effectIdPath === null ? undefined : readPath(output, effectIdPath);
+          const externalEffectId =
+            typeof raw === "string" || typeof raw === "number"
+              ? String(raw)
+              : null;
+          await withTenantDb(async (tx) => {
+            await lockMandate(tx, mandate.id);
+            await settle(tx, {
+              mandateId: mandate.id,
+              toolCallId,
+              externalEffectId,
+            });
+          });
+        },
+        release: async () => {
+          await withTenantDb(async (tx) => {
+            await lockMandate(tx, mandate.id);
+            await release(tx, { mandateId: mandate.id, toolCallId });
+          });
+        },
+      };
+    }
+  }
+}

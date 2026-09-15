@@ -2209,6 +2209,114 @@
       }
     },
     {
+      "name": "get_mandate",
+      "file": "mandate.get.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "grant_mandate",
+      "file": "mandate.grant.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "update_mandate_limits",
+      "file": "mandate.limits.update.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "list_mandates",
+      "file": "mandate.list.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "request_mandate",
+      "file": "mandate.request.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "revoke_mandate",
+      "file": "mandate.revoke.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "list_model_capabilities",
       "file": "model.capability.list.ts",
       "domain": "model",
