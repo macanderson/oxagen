@@ -41,6 +41,7 @@ const source = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 
 beforeEach(() => {
