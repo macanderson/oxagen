@@ -180,12 +180,16 @@ export async function getOrgBillingSettings(
  * The gate, the recorder and `get_gau_bucket` read through this, so none of
  * them creates a row; the row appears on the first write that needs it
  * (`set_auto_topup`, `set_org_billing_terms`, `ensureStripeCustomer`).
- * Runs inside the caller's tenant scope.
+ * Runs inside the caller's tenant scope; `opts.system` routes it through
+ * `withSystemDb` for the callers with none — the close job and the
+ * platform-operator handler — the switch `getOrgBillingSettings` carries.
  */
 export async function readOrgBillingSettings(
   orgId: string,
+  opts?: { system?: boolean },
 ): Promise<OrgGauBillingSettings> {
-  const row = await withTenantDb((tx) =>
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const row = await runner((tx) =>
     tx.query.orgBillingSettings.findFirst({
       where: eq(schema.orgBillingSettings.orgId, orgId),
       columns: {

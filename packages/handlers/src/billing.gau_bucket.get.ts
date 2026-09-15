@@ -46,6 +46,7 @@ import {
   readDefaultPaymentMethod,
   readOrgBillingSettings,
   resolveGauEntitlement,
+  uninvoicedGau,
   type DefaultPaymentMethod,
   type GauBucketView,
   type GauEntitlement,
@@ -161,26 +162,6 @@ export const postgresGauBucketQueries: GauBucketQueries = {
     return { at: row.at, status: row.status as SettledStatus };
   },
 };
-
-// ---- Mapping ---------------------------------------------------------------
-
-/**
- * Overage this month that no settlement has claimed yet:
- * `max(0, used − included − purchased − carried) − overage_invoiced`, floored
- * at zero. The subtraction is what `claimInterimInvoice` re-checks under the
- * row lock, so the page and the recorder agree on when the next interim
- * invoice is due (ADR-055 §6).
- */
-export function uninvoicedGau(bucket: GauBucketView): number {
-  const overage = Math.max(
-    0,
-    bucket.usedGau -
-      bucket.includedGau -
-      bucket.purchasedGau -
-      bucket.carriedGau,
-  );
-  return Math.max(0, overage - bucket.overageInvoicedGau);
-}
 
 // ---- The handler -----------------------------------------------------------
 

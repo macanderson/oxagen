@@ -28,13 +28,20 @@ import { withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { readOrgBillingSettings } from "./billing-settings";
 import { resolveGauEntitlement } from "./contract-terms";
+import { ensureStripeCustomer } from "./customers";
 import {
   ensureCurrentBucket,
   periodFor,
   remainingGau,
+  uninvoicedGau,
   type GauBucketRow,
 } from "./gau-bucket";
-import { claimAutoTopup, type GauSettlementRow } from "./gau-settlements";
+import {
+  claimAutoTopup,
+  claimInterimInvoice,
+  settleGauInvoice,
+  type GauSettlementRow,
+} from "./gau-settlements";
 import { readDefaultPaymentMethod } from "./payment-methods";
 import { logger } from "./logger";
 
@@ -221,8 +228,10 @@ export interface RecordActionResult {
   remainingGau: number;
   /** The organisation's billing mode at the time of the debit. */
   mode: "prepaid" | "invoice";
-  /** The auto top-up episode this action claimed, or null when none was. */
+  /** The auto top-up episode this action claimed, as claimed, or null when none was. */
   autoTopup: GauSettlementRow | null;
+  /** The interim invoice this action's threshold crossing claimed, as claimed, or null. */
+  interimInvoice: GauSettlementRow | null;
 }
 
 /**
@@ -236,11 +245,16 @@ export interface RecordActionResult {
  *      after it. The returned row is the input to c.
  *   c. Prepaid, at `remaining ≤ 0`, with auto top-up on and a saved default
  *      card: claim at most one auto top-up episode (`claimAutoTopup`, its own
- *      transaction, committed before any provider call). A Free organisation
- *      with no card claims nothing — the gate refuses its next action with
+ *      transaction, committed before any provider call), then run the
+ *      settlement sequence charging that card, for the customer on
+ *      `org_billing_settings.stripe_customer_id`. A Free organisation with no
+ *      card claims nothing — the gate refuses its next action with
  *      `reason: "free_no_payment_method"` until it saves one or the next month
- *      opens (ADR-055 §6). The settlement sequence that turns the claim into a
- *      Stripe invoice is WL-31.
+ *      opens (ADR-055 §6).
+ *   d. Invoice billing, with uninvoiced overage at `invoice_gau_max`: claim
+ *      exactly `invoice_gau_max` as an interim invoice (committed), then the
+ *      same sequence for the customer `ensureStripeCustomer` resolves,
+ *      collected from the org's default card or emailed when it has none.
  *
  * Runs inside the tenant scope the kernel re-entered for it. The kernel calls
  * it once per completed top-level governed invocation and catches anything it
@@ -277,6 +291,7 @@ export async function recordGovernedAction(
   const remaining = remainingGau(bucket);
 
   let autoTopup: GauSettlementRow | null = null;
+  let interimInvoice: GauSettlementRow | null = null;
   try {
     // c. Prepaid: at most one auto top-up episode at a time.
     if (mode === "prepaid" && remaining <= 0 && settings.autoTopupEnabled) {
@@ -285,6 +300,39 @@ export async function recordGovernedAction(
         autoTopup = await withTenantDb((tx) =>
           claimAutoTopup(tx, bucket, terms, settings.autoTopupBlocks),
         );
+        if (autoTopup !== null) {
+          const customerId = settings.stripeCustomerId;
+          await settleGauInvoice(autoTopup, {
+            run: withTenantDb,
+            customerId: async () => {
+              // A default card exists only after a Checkout or a SetupIntent,
+              // each of which wrote the column through ensureStripeCustomer.
+              if (customerId === null) {
+                throw new Error(
+                  "billing: org has a default card and no stripe_customer_id",
+                );
+              }
+              return customerId;
+            },
+            defaultPaymentMethodId: async () => card.stripePaymentMethodId,
+          });
+        }
+      }
+    }
+
+    // d. Invoice billing: one interim settlement per threshold crossing.
+    if (mode === "invoice" && uninvoicedGau(bucket) >= settings.invoiceGauMax) {
+      interimInvoice = await withTenantDb((tx) =>
+        claimInterimInvoice(tx, bucket, terms, settings.invoiceGauMax),
+      );
+      if (interimInvoice !== null) {
+        await settleGauInvoice(interimInvoice, {
+          run: withTenantDb,
+          customerId: () => ensureStripeCustomer(args.orgId),
+          defaultPaymentMethodId: async () =>
+            (await readDefaultPaymentMethod(args.orgId))
+              ?.stripePaymentMethodId ?? null,
+        });
       }
     }
   } catch (error) {
@@ -318,11 +366,12 @@ export async function recordGovernedAction(
       tier: terms.tier,
       termsSource: terms.source,
       autoTopupSettlementId: autoTopup?.id ?? null,
+      interimInvoiceSettlementId: interimInvoice?.id ?? null,
       runId: args.runId ?? null,
       durationMs: Date.now() - start,
     },
     "billing: governed action recorded",
   );
 
-  return { bucket, remainingGau: remaining, mode, autoTopup };
+  return { bucket, remainingGau: remaining, mode, autoTopup, interimInvoice };
 }

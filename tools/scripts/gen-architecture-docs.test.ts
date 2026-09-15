@@ -552,7 +552,7 @@ describe("build", () => {
   });
 
   it(
-    "builds the atlas from the real tree deterministically and the committed output is current",
+    "builds the atlas from the real tree deterministically",
     { timeout: 120_000 },
     async () => {
       const first = await build(ROOT);
@@ -568,18 +568,15 @@ describe("build", () => {
         first.model.apiRoutes.filter((r) => r.capability).length /
           first.model.apiRoutes.length,
       ).toBeGreaterThan(0.85);
-      expect(
-        readFileSync(
-          join(ROOT, "apps/docs/public/architecture/index.html"),
-          "utf8",
-        ),
-      ).toBe(first.html);
-      expect(
-        readFileSync(
-          join(ROOT, "apps/docs/public/architecture/architecture.json"),
-          "utf8",
-        ),
-      ).toBe(first.json);
     },
   );
+
+  it("the generated output is not tracked, so a moving main can never make it stale", () => {
+    const ignore = readFileSync(join(ROOT, ".gitignore"), "utf8");
+    expect(ignore).toContain("apps/docs/public/architecture/");
+    const docsPkg = JSON.parse(
+      readFileSync(join(ROOT, "apps/docs/package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    expect(docsPkg.scripts.prebuild).toContain("docs:architecture");
+  });
 });

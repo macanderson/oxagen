@@ -24,8 +24,8 @@ The **[Architecture Atlas](/architecture/index.html)** is the internal engineeri
 ## Regenerating
 
 ```bash
-pnpm docs:architecture           # rewrite apps/docs/public/architecture/
-pnpm docs:architecture --check   # fail when the committed output is stale (runs in the gate)
+pnpm docs:architecture           # write apps/docs/public/architecture/ (gitignored)
+pnpm docs:architecture --check   # refs resolve + deterministic output (runs in the gate)
 ```
 
-The generator lives in `tools/scripts/gen-architecture-docs.ts` with its collectors, SVG layout engine and curated flows under `tools/scripts/lib/archdocs/`. To add a mechanism diagram, add a flow to `flows.ts` with the source references it depends on; the build refuses to run when a cited file or symbol is gone.
+The output is not committed. The docs app runs the generator as its `prebuild` and `predev` step, so the published atlas always describes the tree it shipped with and no pull request has to regenerate it. The generator lives in `tools/scripts/gen-architecture-docs.ts` with its collectors, SVG layout engine and curated flows under `tools/scripts/lib/archdocs/`. To add a mechanism diagram, add a flow to `flows.ts` with the source references it depends on; the build refuses to run when a cited file or symbol is gone.

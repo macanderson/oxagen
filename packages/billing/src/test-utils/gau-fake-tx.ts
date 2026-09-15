@@ -13,13 +13,19 @@
  *
  * Conditions are the plain objects the test's `drizzle-orm` mock builds
  * (`test-utils/gau-conditions.ts`); a column is matched by identity against
- * the real schema, and the one SQL expression a WHERE carries —
- * `gauRemainingSql()` — is evaluated by its documented meaning.
+ * the real schema, and the two SQL expressions a WHERE carries —
+ * `gauRemainingSql()` and `gauUninvoicedSql()` — are evaluated by their
+ * documented meaning (the uninvoiced one unfloored, as the SQL is).
  */
 
-import { getTableColumns, is, StringChunk, type SQL } from "drizzle-orm";
+import { getTableColumns, is, Param, StringChunk, type SQL } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
-import { gauRemainingSql, remainingGau } from "../gau-bucket";
+import {
+  gauRemainingSql,
+  gauUninvoicedSql,
+  remainingGau,
+  uninvoicedGau,
+} from "../gau-bucket";
 import type { Cond } from "./gau-conditions";
 
 type Row = Record<string, unknown>;
@@ -71,14 +77,24 @@ function valueOf(row: Row, col: unknown, keys: Map<unknown, string>): unknown {
   if (col === gauRemainingSql()) {
     return remainingGau(row as unknown as Parameters<typeof remainingGau>[0]);
   }
+  if (col === gauUninvoicedSql()) {
+    const b = row as unknown as Parameters<typeof uninvoicedGau>[0];
+    return (
+      b.usedGau -
+      b.includedGau -
+      b.purchasedGau -
+      b.carriedGau -
+      b.overageInvoicedGau
+    );
+  }
   const key = keys.get(col);
   if (key === undefined) throw new Error("fake tx: unknown column");
   return row[key];
 }
 
 function cmp(a: unknown, b: unknown): number {
-  const x = a instanceof Date ? a.getTime() : (a as number);
-  const y = b instanceof Date ? b.getTime() : (b as number);
+  const x = a instanceof Date ? a.getTime() : (a as number | string);
+  const y = b instanceof Date ? b.getTime() : (b as number | string);
   return x < y ? -1 : x > y ? 1 : 0;
 }
 
@@ -90,10 +106,16 @@ function matches(row: Row, cond: Cond, keys: Map<unknown, string>): boolean {
       return valueOf(row, cond.col, keys) === null;
     case "eq":
       return cmp(valueOf(row, cond.col, keys), cond.val) === 0;
+    case "ne":
+      return cmp(valueOf(row, cond.col, keys), cond.val) !== 0;
     case "lt":
       return cmp(valueOf(row, cond.col, keys), cond.val) < 0;
     case "lte":
       return cmp(valueOf(row, cond.col, keys), cond.val) <= 0;
+    case "gt":
+      return cmp(valueOf(row, cond.col, keys), cond.val) > 0;
+    case "gte":
+      return cmp(valueOf(row, cond.col, keys), cond.val) >= 0;
   }
 }
 
@@ -103,7 +125,8 @@ function isSql(v: unknown): v is SQL {
 
 /**
  * Evaluates one SET value against a row. The writers use three shapes of SQL
- * — `now()`, `<column> + <integer>` and `<column> + excluded.<column>` — and
+ * — `now()`, `<column> + <integer>` (a literal or a bound parameter) and
+ * `<column> + excluded.<column>` — and
  * anything else throws, so a statement the fake does not model fails the
  * test rather than passing on a guess. A plain value is assigned as is.
  */
@@ -119,6 +142,12 @@ function evalSet(
   for (const chunk of val.queryChunks) {
     if (is(chunk, StringChunk)) {
       text += chunk.value.join("");
+      continue;
+    }
+    // A bound integer: drizzle keeps a template value as is, or as a Param.
+    const bound = is(chunk, Param) ? chunk.value : chunk;
+    if (typeof bound === "number" && Number.isInteger(bound)) {
+      text += String(bound);
       continue;
     }
     const key = keys.get(chunk);
@@ -216,10 +245,15 @@ export function fakeGauExecutor(store: FakeGauStore) {
             rows = rows.filter((r) => matches(r, cond, keysFor(t)));
             return chain;
           },
-          orderBy: (order: { _desc: unknown }) => {
-            const key = keysFor(t).get(order._desc);
+          orderBy: (order: { _desc?: unknown; _asc?: unknown }) => {
+            const descending = "_desc" in order;
+            const key = keysFor(t).get(descending ? order._desc : order._asc);
             if (key === undefined) throw new Error("fake tx: unknown column");
-            rows = rows.slice().sort((a, b) => cmp(b[key], a[key]));
+            rows = rows
+              .slice()
+              .sort((a, b) =>
+                descending ? cmp(b[key], a[key]) : cmp(a[key], b[key]),
+              );
             return chain;
           },
           limit: (n: number) => {
@@ -239,6 +273,14 @@ export function fakeGauExecutor(store: FakeGauStore) {
             id: crypto.randomUUID(),
             createdAt: new Date(),
             updatedAt: new Date(),
+            // The nullable settlement columns an insert leaves out are NULL.
+            ...(t === "settlements"
+              ? {
+                  stripeCheckoutSessionId: null,
+                  stripeInvoiceId: null,
+                  settledAt: null,
+                }
+              : {}),
             ...v,
           };
           tables[t].push(row);

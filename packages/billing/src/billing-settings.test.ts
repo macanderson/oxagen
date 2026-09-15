@@ -440,6 +440,22 @@ describe("readOrgBillingSettings", () => {
     vi.clearAllMocks();
   });
 
+  it("reads inside the caller's tenant scope by default", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    await readOrgBillingSettings("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("reads through withSystemDb with { system: true }, for the close job and the operator handler", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    const result = await readOrgBillingSettings("org-001", { system: true });
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(result.approvedForInvoiceBilling).toBe(false);
+  });
+
   it("returns the column defaults for an org with no row and issues NO insert", async () => {
     findFirstMock.mockResolvedValue(undefined);
 

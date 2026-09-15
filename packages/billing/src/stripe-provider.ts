@@ -21,6 +21,10 @@ import type {
   BillingCustomerCreateInput,
   BillingCustomerSearchResult,
   BillingDispute,
+  BillingDraftInvoiceOutcome,
+  BillingGauInvoiceInput,
+  BillingGauInvoicePayment,
+  BillingGauInvoiceRef,
   BillingInvoice,
   BillingInvoiceLineItem,
   BillingOffSessionChargeInput,
@@ -117,6 +121,52 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
     currency: c.currency,
     orgId: (c.metadata?.org_id as string | undefined) ?? null,
   };
+}
+
+/** Micro-dollars in one cent. */
+const MICROS_PER_CENT = 10_000n;
+
+/**
+ * A per-GAU rate in micros as Stripe's `unit_amount_decimal`, which is in
+ * cents: exact, at most four decimal places (6000 → "0.6", 12345 → "1.2345").
+ * Stripe rounds the line once; the app computes no invoice amount.
+ */
+function microsToCentsDecimal(micros: bigint): string {
+  const whole = micros / MICROS_PER_CENT;
+  const fraction = (micros % MICROS_PER_CENT)
+    .toString()
+    .padStart(4, "0")
+    .replace(/0+$/, "");
+  return fraction === "" ? whole.toString() : `${whole}.${fraction}`;
+}
+
+/** The fields of a Stripe API error the settlement path classifies on. */
+function stripeErrorFields(err: unknown): {
+  rawType?: string;
+  code?: string;
+  message?: string;
+} {
+  return typeof err === "object" && err !== null ? err : {};
+}
+
+/**
+ * Whether a failed `invoices.pay` leaves a finalized, unpaid invoice that
+ * Stripe goes on collecting: a declined card, a payment that needs the
+ * customer (SCA), or a customer with nothing to charge. Stripe gives the last
+ * no error code, so it is matched on its message.
+ */
+function isUncollectedPayment(err: unknown): boolean {
+  const { rawType, code, message } = stripeErrorFields(err);
+  if (rawType === "card_error") return true;
+  if (code === "invoice_payment_intent_requires_action") return true;
+  return (
+    rawType === "invalid_request_error" &&
+    /no attached payment source/i.test(message ?? "")
+  );
+}
+
+function isResourceMissing(err: unknown): boolean {
+  return stripeErrorFields(err).code === "resource_missing";
 }
 
 // ── Stripe client singleton ──────────────────────────────────────────────────
@@ -302,6 +352,8 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
     subscriptionId: subId,
     orgId,
     billingReason: invoice.billing_reason ?? null,
+    gauSettlementId:
+      (invoice.metadata?.gau_settlement_id as string | undefined) ?? null,
     lineItems,
   };
 }
@@ -607,6 +659,127 @@ export class StripeProvider implements BillingProvider {
       expand: ["lines.data.price"],
     });
     return stripeInvoiceToNeutral(invoice);
+  }
+
+  async createGauInvoice(
+    input: BillingGauInvoiceInput,
+  ): Promise<{ invoiceId: string }> {
+    const stripe = this.client();
+    const collection: Pick<
+      Stripe.InvoiceCreateParams,
+      "collection_method" | "default_payment_method" | "days_until_due"
+    > =
+      input.collection.method === "charge_automatically"
+        ? {
+            collection_method: "charge_automatically",
+            default_payment_method: input.collection.defaultPaymentMethodId,
+          }
+        : {
+            collection_method: "send_invoice",
+            days_until_due: input.collection.daysUntilDue,
+          };
+    // auto_advance false: the draft stays a draft until
+    // finalizeAndPayGauInvoice finalizes it, so a draft Oxagen abandons is
+    // never collected (https://docs.stripe.com/invoicing/integration/automatic-advancement-collection).
+    const invoice = await stripe.invoices.create(
+      {
+        customer: input.customerId,
+        auto_advance: false,
+        pending_invoice_items_behavior: "exclude",
+        metadata: {
+          org_id: input.orgId,
+          oxagen_kind: input.kind,
+          gau_settlement_id: input.settlementId,
+          gau_quantity: String(input.quantityGau),
+          rate_per_gau_micros: input.ratePerGauMicros.toString(),
+          currency: input.currency,
+        },
+        ...collection,
+      },
+      { idempotencyKey: `${input.settlementId}:invoice` },
+    );
+    await stripe.invoiceItems.create(
+      {
+        customer: input.customerId,
+        invoice: invoice.id,
+        quantity: input.quantityGau,
+        unit_amount_decimal: microsToCentsDecimal(input.ratePerGauMicros),
+        currency: input.currency,
+        description: input.description,
+      },
+      { idempotencyKey: `${input.settlementId}:item` },
+    );
+    return { invoiceId: invoice.id };
+  }
+
+  async finalizeAndPayGauInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<BillingGauInvoicePayment> {
+    const stripe = this.client();
+    let invoice = await stripe.invoices.retrieve(ref.invoiceId);
+    if (invoice.status === "draft") {
+      // auto_advance true from here: Stripe's collection and retry schedule
+      // apply to the invoice Oxagen finalized.
+      invoice = await stripe.invoices.finalizeInvoice(
+        ref.invoiceId,
+        { auto_advance: true },
+        { idempotencyKey: `${ref.settlementId}:finalize` },
+      );
+    }
+    if (
+      invoice.status === "open" &&
+      invoice.collection_method === "charge_automatically"
+    ) {
+      try {
+        invoice = await stripe.invoices.pay(
+          ref.invoiceId,
+          { off_session: true },
+          { idempotencyKey: `${ref.settlementId}:pay` },
+        );
+      } catch (err) {
+        if (!isUncollectedPayment(err)) throw err;
+      }
+    }
+    if (invoice.status !== "paid" && invoice.status !== "open") {
+      throw new Error(
+        `billing: settlement invoice ${ref.invoiceId} is ${invoice.status}, neither paid nor open`,
+      );
+    }
+    return {
+      status: invoice.status,
+      amountCents: invoice.amount_due,
+      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+    };
+  }
+
+  async deleteOrVoidDraftInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<{ outcome: BillingDraftInvoiceOutcome }> {
+    const stripe = this.client();
+    let invoice: Stripe.Invoice;
+    try {
+      invoice = await stripe.invoices.retrieve(ref.invoiceId);
+    } catch (err) {
+      if (isResourceMissing(err)) return { outcome: "absent" };
+      throw err;
+    }
+    if (invoice.status === "void") return { outcome: "absent" };
+    if (invoice.status === "paid") return { outcome: "paid" };
+    if (invoice.status === "draft") {
+      try {
+        await stripe.invoices.del(ref.invoiceId);
+      } catch (err) {
+        if (isResourceMissing(err)) return { outcome: "absent" };
+        throw err;
+      }
+      return { outcome: "deleted" };
+    }
+    await stripe.invoices.voidInvoice(
+      ref.invoiceId,
+      {},
+      { idempotencyKey: `${ref.settlementId}:void` },
+    );
+    return { outcome: "voided" };
   }
 
   // ── Checkout ─────────────────────────────────────────────────────────────────

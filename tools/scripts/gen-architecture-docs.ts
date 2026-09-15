@@ -8,7 +8,15 @@
  * ADRs, plus curated mechanism flows whose source references are verified.
  *
  *   pnpm docs:architecture           # write apps/docs/public/architecture/
- *   pnpm docs:architecture --check   # exit 1 when the committed output is stale
+ *   pnpm docs:architecture --check   # build in memory: refs resolve, output is
+ *                                    # byte-identical across two builds
+ *
+ * The output is NOT committed. `apps/docs` runs this as its `prebuild` and
+ * `predev`, so the docs site always carries the atlas of the tree it was built
+ * from, and no PR has to regenerate a megabyte of HTML to stay green. What CI
+ * guards instead (`--check`, in the gate) is the part that can rot silently:
+ * every curated flow's cited file and symbol must still exist, and the build
+ * must be deterministic.
  *
  * Outputs:
  *   apps/docs/public/architecture/index.html         the atlas
@@ -16,7 +24,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { argv, exit, stdout, stderr } from "node:process";
+import { argv, exit, stderr, stdout } from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { collectModel, type Model } from "./lib/archdocs/collect";
 import { verifyRefs } from "./lib/archdocs/flows";
@@ -71,6 +79,13 @@ export async function build(root: string): Promise<BuildResult> {
   return { html, json: canonicalJson(rest), model };
 }
 
+function summary(m: Model): string {
+  return (
+    `  ${m.packages.length} workspaces · ${m.manifest.tables.length} manifest tables · ${m.clickhouse.length} ClickHouse tables · ${m.capabilities.length} capabilities\n` +
+    `  ${m.apiRoutes.length} API routes · ${m.mcpTools.length} MCP tools · ${m.inngest.length} Inngest functions · ${m.env.length} env vars · ${m.workflows.length} workflows · ${m.adrs.length} ADRs\n`
+  );
+}
+
 export async function main(args: string[] = argv.slice(2)): Promise<number> {
   const check = args.includes("--check");
   const outIdx = args.indexOf("--out");
@@ -87,33 +102,26 @@ export async function main(args: string[] = argv.slice(2)): Promise<number> {
     );
     return 1;
   }
-  const files: [string, string][] = [
-    [join(outDir, "index.html"), result.html],
-    [join(outDir, "architecture.json"), result.json],
-  ];
   if (check) {
-    const stale = files
-      .filter(([p, content]) => readOrNull(p) !== content)
-      .map(([p]) => p);
-    if (stale.length) {
+    // A second build proves the page is a pure function of the tree: no
+    // clock, no randomness, no map-iteration-order accidents.
+    const again = await build(ROOT);
+    if (again.html !== result.html || again.json !== result.json) {
       stderr.write(
-        `docs:architecture --check — stale output:\n  ${stale.join("\n  ")}\nRun \`pnpm docs:architecture\` and commit the result.\n`,
+        "docs:architecture --check — two builds of the same tree differ; the generator is not deterministic.\n",
       );
       return 1;
     }
     stdout.write(
-      `docs:architecture --check — up to date (${result.model.capabilities.length} capabilities, ${result.model.manifest.tables.length} tables, ${result.model.apiRoutes.length} routes).\n`,
+      `docs:architecture --check — refs resolve, output deterministic.\n${summary(result.model)}`,
     );
     return 0;
   }
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-  for (const [p, content] of files) writeFileSync(p, content);
-  const m = result.model;
+  writeFileSync(join(outDir, "index.html"), result.html);
+  writeFileSync(join(outDir, "architecture.json"), result.json);
   stdout.write(
-    `docs:architecture — wrote ${outDir}\n` +
-      `  ${m.packages.length} workspaces · ${m.manifest.tables.length} manifest tables · ${m.clickhouse.length} ClickHouse tables · ${m.capabilities.length} capabilities\n` +
-      `  ${m.apiRoutes.length} API routes · ${m.mcpTools.length} MCP tools · ${m.inngest.length} Inngest functions · ${m.env.length} env vars · ${m.workflows.length} workflows · ${m.adrs.length} ADRs\n` +
-      `  ${(result.html.length / 1024).toFixed(0)} KiB HTML\n`,
+    `docs:architecture — wrote ${outDir}\n${summary(result.model)}  ${(result.html.length / 1024).toFixed(0)} KiB HTML\n`,
   );
   return 0;
 }
