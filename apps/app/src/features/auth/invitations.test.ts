@@ -9,6 +9,9 @@ vi.mock("@/server/tenancy-lookups", () => ({
 
 const getAuthUser = vi.fn();
 vi.mock("./session", () => ({ getAuthUser }));
+// requireInvitee reads the same person through the server session seam.
+const getSession = vi.fn();
+vi.mock("@/server/session", () => ({ getSession }));
 const invokeTool = vi.fn();
 vi.mock("@/server/invoke", () => ({ invokeTool }));
 const warn = vi.fn();
@@ -20,6 +23,7 @@ vi.mock("@oxagen/oxagen/contracts/org.member_invite.decline", () => ({
   orgMemberInviteDecline: { name: "decline_member_invite" },
 }));
 
+const { InviteeCtx } = await import("@/server/viewer");
 const { loadInvitation } = await import("./invitations");
 const { acceptInvitation, declineInvitation } = await import(
   "./invite-actions"
@@ -45,6 +49,7 @@ const priya = {
 beforeEach(() => {
   invitationByToken.mockReset();
   getAuthUser.mockReset();
+  getSession.mockResolvedValue({ user: priya });
   invokeTool.mockReset();
   warn.mockReset();
 });
@@ -147,26 +152,23 @@ describe("accept and decline", () => {
       to: "/acme",
     });
     expect(invokeTool).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
         userId: "u-priya",
-        scope: {
-          orgId: record.orgId,
-          workspaceId: "00000000-0000-0000-0000-000000000000",
-        },
-        org: { id: record.orgId, slug: "acme", name: "Acme Robotics" },
-        ws: null,
-      }),
+        orgId: record.orgId,
+        invitationId: record.invitationId,
+      },
       { name: "accept_member_invite" },
       { invitationPublicId: "invi_live" },
     );
+    expect(InviteeCtx.is(invokeTool.mock.calls[0]?.[0])).toBe(true);
     expect(await declineInvitation("invi_live")).toEqual({ ok: true, to: "/" });
     expect(invokeTool).toHaveBeenLastCalledWith(
       expect.objectContaining({ userId: "u-priya" }),
       { name: "decline_member_invite" },
       { invitationPublicId: "invi_live" },
     );
-    // One read per decision: the record carries the org id the write needs.
-    expect(invitationByToken).toHaveBeenCalledTimes(2);
+    // Two reads per decision: the page's decision, then requireInvitee's.
+    expect(invitationByToken).toHaveBeenCalledTimes(4);
   });
 
   it("a kernel failure is logged and reported, not thrown", async () => {

@@ -7,21 +7,45 @@ import {
 } from "./errors";
 
 /** A stand-in with the kernel CapabilityError's shape (name + capability + code). */
+class CapabilityErrorShape extends Error {
+  override name = "CapabilityError";
+  constructor(
+    readonly capability: string,
+    readonly code: string,
+  ) {
+    super(`${capability}: ${code}`);
+  }
+}
+
+class PendingApprovalShape extends CapabilityErrorShape {
+  constructor(
+    capability: string,
+    code: string,
+    readonly accessRequestId: string,
+  ) {
+    super(capability, code);
+  }
+}
+
+/** An error carrying a code and an HTTP status, as the billing gate throws. */
+class CodedError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 function capabilityError(
   capability: string,
   code: string,
   accessRequestId?: string,
 ): Error {
-  const err = new Error(`${capability}: ${code}`) as Error & {
-    capability: string;
-    code: string;
-    accessRequestId?: string;
-  };
-  err.name = "CapabilityError";
-  err.capability = capability;
-  err.code = code;
-  if (accessRequestId) err.accessRequestId = accessRequestId;
-  return err;
+  return accessRequestId
+    ? new PendingApprovalShape(capability, code, accessRequestId)
+    : new CapabilityErrorShape(capability, code);
 }
 
 describe("AppError subclasses", () => {
@@ -100,10 +124,7 @@ describe("toActionFailure", () => {
   });
 
   it("passes through a coded error with an HTTP status (the billing gate's 402)", () => {
-    const err = Object.assign(new Error("spend ceiling"), {
-      code: "spend_ceiling_exceeded",
-      status: 402,
-    });
+    const err = new CodedError("spend ceiling", "spend_ceiling_exceeded", 402);
     expect(toActionFailure(err)).toEqual({
       ok: false,
       code: "spend_ceiling_exceeded",
@@ -118,14 +139,13 @@ describe("toActionFailure", () => {
   });
 
   it("rethrows a coded error whose status is not an HTTP error status", () => {
-    const err = Object.assign(new Error("x"), { code: "c", status: 200 });
+    const err = new CodedError("x", "c", 200);
     expect(() => toActionFailure(err)).toThrow(err);
   });
 
   it("rethrows Next navigation interrupts and unknown failures", () => {
-    const redirect = Object.assign(new Error("NEXT_REDIRECT"), {
-      digest: "NEXT_REDIRECT;replace;/login;307;",
-    });
+    const redirect = new Error("NEXT_REDIRECT");
+    Reflect.set(redirect, "digest", "NEXT_REDIRECT;replace;/login;307;");
     expect(() => toActionFailure(redirect)).toThrow(redirect);
     const boom = new TypeError("boom");
     expect(() => toActionFailure(boom)).toThrow(boom);

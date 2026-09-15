@@ -6,7 +6,7 @@ import {
   AFTER_SIGNUP,
   VerifyPanel,
   firstParam,
-  sanitizeNext,
+  readNext,
 } from "@/features/auth";
 import {
   AuthColumn,
@@ -36,7 +36,7 @@ async function Verify({
   // Shown back to the person who typed it, never looked up: a malformed value is simply not echoed.
   const email = EMAIL_SHAPE.test(raw) ? raw : null;
   const expired = firstParam(params.error) !== undefined;
-  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const next = readNext(params, AFTER_SIGNUP);
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

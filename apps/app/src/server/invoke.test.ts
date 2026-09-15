@@ -1,9 +1,10 @@
 import type { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { getScope } from "@oxagen/tenancy";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ContractOutputMismatch, ToolNotRegistered } from "./errors";
-import type { Viewer } from "./viewer-resolution";
+import { InviteeCtx } from "./viewer";
+import { unsafeMint } from "./viewer.testing";
 
 const { invokeMock, getCapabilityMock, registry } = vi.hoisted(() => ({
   registry: { loaded: false },
@@ -49,24 +50,15 @@ const resolveApproval = {
   output: z.object({ id: z.string(), status: z.enum(["approved", "denied"]) }),
 };
 
-const viewer: Viewer = {
+const viewer = unsafeMint(InviteeCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  user: { id: "u1", email: "m@acme.example", name: null, image: null },
-  orgRole: "member",
-  scope: {
-    orgId: "6f1d2c3a-5b4e-4d10-8a01-00000000ac01",
-    workspaceId: "6f1d2c3a-5b4e-4d10-8a01-00000000c001",
-  },
-  org: {
-    id: "6f1d2c3a-5b4e-4d10-8a01-00000000ac01",
-    slug: "acme",
-    name: "Acme",
-  },
-  ws: {
-    id: "6f1d2c3a-5b4e-4d10-8a01-00000000c001",
-    slug: "core-platform",
-    name: "Core platform",
-  },
+  orgId: "6f1d2c3a-5b4e-4d10-8a01-00000000ac01",
+  invitationId: "0192f1c4-0000-7000-8000-0000000000aa",
+});
+/** An invitee holds no workspace: the invoke runs under the org-only sentinel. */
+const scope = {
+  orgId: viewer.orgId,
+  workspaceId: "00000000-0000-0000-0000-000000000000",
 };
 const input = { approvalId: "apr_1", decision: "approved" as const };
 
@@ -90,7 +82,7 @@ describe("invokeTool", () => {
     expect(invokeMock).toHaveBeenCalledOnce();
   });
 
-  it("invokes the kernel inside the viewer's tenant scope and returns the parsed output", async () => {
+  it("invokes the kernel inside the invitation's organization scope and returns the parsed output", async () => {
     let scopeSeen: unknown = null;
     invokeMock.mockImplementation(() => {
       scopeSeen = getScope();
@@ -99,14 +91,13 @@ describe("invokeTool", () => {
     const out = await invokeTool(viewer, resolveApproval, input);
     // Parsed, not cast: the unknown key is stripped by the contract schema.
     expect(out).toEqual({ id: "apr_1", status: "approved" });
-    expect(scopeSeen).toMatchObject(viewer.scope);
+    expect(scopeSeen).toMatchObject(scope);
     expect(invokeMock).toHaveBeenCalledOnce();
     const [name, sentInput, ctx, opts] = invokeMock.mock.calls[0] ?? [];
     expect(name).toBe("resolve_approval");
     expect(sentInput).toBe(input);
     expect(ctx).toMatchObject({
-      orgId: viewer.scope.orgId,
-      workspaceId: viewer.scope.workspaceId,
+      ...scope,
       userId: viewer.userId,
       apiKeyId: null,
       surface: "app",
@@ -122,9 +113,9 @@ describe("invokeTool", () => {
     const err = await invokeTool(viewer, resolveApproval, input).catch(
       (e: unknown) => e,
     );
-    expect(err).toBeInstanceOf(ContractOutputMismatch);
-    expect((err as ContractOutputMismatch).tool).toBe("resolve_approval");
-    expect((err as ContractOutputMismatch).issues.length).toBeGreaterThan(0);
+    assert(err instanceof ContractOutputMismatch);
+    expect(err.tool).toBe("resolve_approval");
+    expect(err.issues.length).toBeGreaterThan(0);
   });
 
   it("throws ContractOutputMismatch for a missing result", async () => {
@@ -143,10 +134,8 @@ describe("invokeTool", () => {
   });
 
   it("propagates a kernel error untouched", async () => {
-    const denied = Object.assign(new Error("denied"), {
-      name: "CapabilityError",
-      code: "authz_denied",
-    });
+    const denied = new Error("denied");
+    denied.name = "CapabilityError";
     invokeMock.mockRejectedValue(denied);
     await expect(invokeTool(viewer, resolveApproval, input)).rejects.toBe(
       denied,

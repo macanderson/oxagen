@@ -20,7 +20,11 @@ export function IntlProvider({ children }: { children: ReactNode }) {
 
 function lookup(path: string[]): string {
   let node: unknown = messages;
-  for (const part of path) node = (node as Record<string, unknown>)[part];
+  for (const part of path)
+    node =
+      typeof node === "object" && node !== null
+        ? Reflect.get(node, part)
+        : undefined;
   if (typeof node !== "string")
     throw new Error(`missing message ${path.join(".")}`);
   return node;
