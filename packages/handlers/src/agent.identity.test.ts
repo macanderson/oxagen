@@ -40,8 +40,10 @@ vi.mock("./logger", () => ({
 }));
 
 // When `mocks.gate.enabled`, withTenantDb answers the two selects the role
-// gate runs (principal, then role) and nothing else; a write reaching the
-// store would throw, which is the point of the negatives below.
+// gate runs (principal, then role), answers every other select with no row,
+// and throws on a write. A refusal past the gate is therefore one of two
+// known shapes: `not_found` from the identity read, or the store's own
+// error from the first insert; the positive below names which.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const gateTx = () => ({
@@ -59,6 +61,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
               : [];
         const chain = {
           innerJoin: () => chain,
+          leftJoin: () => chain,
           where: () => chain,
           limit: async () => rows,
         };
@@ -177,10 +180,15 @@ describe("agent identity writes: the role gate on a tier-free org", () => {
 
   it.each(WRITES)("%s lets an org Admin past the gate", async (_name, call) => {
     mocks.gate.roleName = "Admin";
-    // The gate passed: the next thing the handler does is write, and the
-    // double refuses writes, so the failure is the store's, not the gate's.
-    await expect(call()).rejects.toSatisfy(
-      (err: unknown) => !isHandlerError(err) || err.code !== "forbidden",
+    // The gate passed: register's next step is the agent insert, which the
+    // double refuses with its own error; the other three read the identity
+    // first and the double answers with no row, so they refuse `not_found`.
+    await expect(call()).rejects.toSatisfy((err: unknown) =>
+      _name === "register_agent"
+        ? err instanceof Error && /a write reached the store/.test(err.message)
+        : isHandlerError(err) &&
+          err.code === "not_found" &&
+          err.reason === "agent_not_found",
     );
   });
 });

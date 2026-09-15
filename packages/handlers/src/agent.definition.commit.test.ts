@@ -512,5 +512,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(free.branch).toBe("agents/free");
     });
+
+    it("two saves on one agent in the same instant both get a version row: the number is taken in the inserting transaction and a collision is retried", async () => {
+      const before = await withSystemDb((tx) =>
+        tx
+          .select({ version: schema.agentVersions.version })
+          .from(schema.agentVersions)
+          .where(eq(schema.agentVersions.agentId, agent.id)),
+      );
+      const [a, b] = await Promise.all(
+        ["agents/race-a", "agents/race-b"].map((branch) =>
+          commit(tenant, {
+            agentId: "release-bot",
+            repositoryId: bindingPublicId,
+            branch,
+            source: SOURCE("release-bot"),
+          }),
+        ),
+      );
+      expect(a!.version).not.toBe(b!.version);
+      const after = await withSystemDb((tx) =>
+        tx
+          .select({
+            version: schema.agentVersions.version,
+            commitSha: schema.agentVersions.commitSha,
+          })
+          .from(schema.agentVersions)
+          .where(eq(schema.agentVersions.agentId, agent.id)),
+      );
+      expect(after).toHaveLength(before.length + 2);
+      const max = Math.max(...before.map((r) => r.version));
+      expect([a!.version, b!.version].sort()).toEqual([max + 1, max + 2]);
+      expect(after.map((r) => r.commitSha)).toEqual(
+        expect.arrayContaining([a!.commitSha, b!.commitSha]),
+      );
+    });
   },
 );

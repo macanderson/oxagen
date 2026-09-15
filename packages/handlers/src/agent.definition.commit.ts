@@ -24,8 +24,16 @@
 //   6. A new unpublished `agent_versions` row caches the path, digest,
 //      source, commit, branch and pull request. The config column carries
 //      the latest version's config forward so the legacy definition reads
-//      keep parsing.
-import { schema, withTenantDb, type Tx } from "@oxagen/database";
+//      keep parsing. The version number is read in the transaction that
+//      inserts it, and a unique violation on (agent, version) is retried
+//      there: two saves on one agent in the same instant both get a row,
+//      and no commit is left in git without one.
+import {
+  isUniqueViolation,
+  schema,
+  withTenantDb,
+  type Tx,
+} from "@oxagen/database";
 import { resolveAgentIdentity } from "@oxagen/agent/handlers/_agent-identity";
 import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
 import { createGitHubClient } from "@oxagen/github";
@@ -233,6 +241,70 @@ async function assertToolsWithinCeiling(
   }
 }
 
+/** Tries after the first unique violation on (agent, version); each try re-reads the latest row. */
+const VERSION_INSERT_RETRIES = 2;
+
+/**
+ * Insert the version row that caches the commit. The latest version and its
+ * config are read in the inserting transaction; a concurrent save that takes
+ * the same number surfaces as a unique violation and the insert is tried
+ * again on the number it then reads.
+ */
+async function insertVersionRow(
+  row: {
+    agentId: string;
+    userId: string;
+    path: string;
+    digest: string;
+    source: string;
+    commitSha: string;
+    branch: string;
+    pullRequestUrl: string;
+  },
+  retriesLeft = VERSION_INSERT_RETRIES,
+): Promise<number> {
+  try {
+    return await withTenantDb(async (tx) => {
+      const [latest] = await tx
+        .select({
+          version: schema.agentVersions.version,
+          config: schema.agentVersions.config,
+        })
+        .from(schema.agentVersions)
+        .where(eq(schema.agentVersions.agentId, row.agentId))
+        .orderBy(desc(schema.agentVersions.version))
+        .limit(1);
+      const [inserted] = await tx
+        .insert(schema.agentVersions)
+        .values({
+          agentId: row.agentId,
+          version: (latest?.version ?? 0) + 1,
+          isPublished: false,
+          checksum: null,
+          config: latest?.config ?? {},
+          createdByUserId: row.userId,
+          definitionPath: row.path,
+          definitionDigest: row.digest,
+          definitionSource: row.source,
+          commitSha: row.commitSha,
+          branch: row.branch,
+          pullRequestUrl: row.pullRequestUrl,
+        })
+        .returning({ version: schema.agentVersions.version });
+      if (!inserted) throw new Error("agent_versions insert returned no row");
+      return inserted.version;
+    });
+  } catch (err) {
+    if (
+      retriesLeft > 0 &&
+      isUniqueViolation(err, "agent_versions_agent_version_uniq")
+    ) {
+      return insertVersionRow(row, retriesLeft - 1);
+    }
+    throw err;
+  }
+}
+
 export const agentDefinitionCommitHandler: CapabilityHandler<
   typeof agentDefinitionCommit
 > = async (input, ctx) => {
@@ -293,16 +365,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
         message: `"${input.branch}" is the repository's production branch; commit to another branch`,
       });
     }
-    const [latest] = await tx
-      .select({
-        version: schema.agentVersions.version,
-        config: schema.agentVersions.config,
-      })
-      .from(schema.agentVersions)
-      .where(eq(schema.agentVersions.agentId, agent.id))
-      .orderBy(desc(schema.agentVersions.version))
-      .limit(1);
-    return { agent, repository, latest };
+    return { agent, repository };
   });
 
   const { agent, repository } = prepared;
@@ -359,26 +422,15 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
     }));
 
-  const version = await withTenantDb(async (tx) => {
-    const [inserted] = await tx
-      .insert(schema.agentVersions)
-      .values({
-        agentId: agent.id,
-        version: (prepared.latest?.version ?? 0) + 1,
-        isPublished: false,
-        checksum: null,
-        config: prepared.latest?.config ?? {},
-        createdByUserId: userId,
-        definitionPath: path,
-        definitionDigest: digest,
-        definitionSource: input.source,
-        commitSha: commit.commitSha,
-        branch: input.branch,
-        pullRequestUrl: pr.htmlUrl,
-      })
-      .returning({ version: schema.agentVersions.version });
-    if (!inserted) throw new Error("agent_versions insert returned no row");
-    return inserted.version;
+  const version = await insertVersionRow({
+    agentId: agent.id,
+    userId,
+    path,
+    digest,
+    source: input.source,
+    commitSha: commit.commitSha,
+    branch: input.branch,
+    pullRequestUrl: pr.htmlUrl,
   });
 
   logger.info(
