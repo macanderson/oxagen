@@ -129,6 +129,9 @@ export function readStellaHooksFile(
 
 const ANY_ENROLLMENT = "tch_[a-z0-9]{22}";
 
+/** U+007F, spelled by code so no formatter turns it into an invisible byte. */
+const DEL = String.fromCharCode(0x7f);
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -162,7 +165,7 @@ function blockPattern(enrollmentId?: string): RegExp {
  * which JSON leaves alone.
  */
 export function tomlBasicString(value: string): string {
-  return JSON.stringify(value).replace(//g, "\\u007F");
+  return JSON.stringify(value).split(DEL).join("\\u007F");
 }
 
 /** The block Tacho appends for one enrollment, ending in a line break. */

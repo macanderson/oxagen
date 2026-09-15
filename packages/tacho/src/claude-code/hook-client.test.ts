@@ -9,6 +9,7 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import {
+  agentFromArgv,
   decideLocally,
   harnessFromArgv,
   postUnix,
@@ -293,5 +294,228 @@ describe("runTachoHook", () => {
         now,
       ).evaluation?.decision,
     ).toBe("allow");
+  });
+});
+
+const STELLA_PRE = JSON.stringify({
+  event: "PreToolUse",
+  cwd: "/repo",
+  tool: { name: "Bash", input: { command: "git push" }, read_only: false },
+});
+
+function enrolledPaths() {
+  const paths = scratchPaths();
+  const signer = bundleSigner();
+  writeHostFile(
+    paths.hostFile,
+    testHostFile(signer, signer.sign(unsignedBundle())),
+  );
+  return paths;
+}
+
+describe("runTachoHook for Stella and custom agents", () => {
+  it("reads --agent off argv, empty when the flag has no value", () => {
+    expect(agentFromArgv(["--agent", "reviewer"])).toBe("reviewer");
+    expect(agentFromArgv(["--enrollment", "e", "--agent"])).toBe("");
+    expect(agentFromArgv(["--harness", "stella"])).toBeUndefined();
+  });
+
+  it("translates a Stella payload for the daemon and the daemon's answer for Stella", async () => {
+    const paths = enrolledPaths();
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const base = {
+      paths,
+      env: { HOME: "/h" },
+      harness: "stella" as const,
+      harnessPid: () => 4242,
+      platform: "linux" as const,
+    };
+    const denied = await runTachoHook({
+      ...base,
+      stdin: STELLA_PRE,
+      post: async (options) => {
+        seen.push(options);
+        return {
+          status: 200,
+          body: '{"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"no push"}}',
+        };
+      },
+    });
+    expect(denied).toMatchObject({
+      path: "daemon",
+      exitCode: 0,
+      stdout: '{"action":"deny","reason":"no push"}\n',
+    });
+    const body = JSON.parse(seen[0]?.body ?? "{}") as {
+      payload: Record<string, unknown>;
+      env: Record<string, string>;
+      harness: string;
+    };
+    expect(body.harness).toBe("stella");
+    expect(body.payload).toMatchObject({
+      session_id: "stella-4242",
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git push" },
+    });
+    expect(body.payload["tool_use_id"]).toMatch(/^stella_/);
+    // HOME is not a harness variable; the Stella pid is added for the sweep.
+    expect(body.env).toEqual({ TACHO_HARNESS_PID: "4242" });
+    expect(seen[0]?.responseTimeoutMs).toBe(10_000);
+    // A body that is not JSON is no decision, never a malformed one (which
+    // Stella treats as a deny).
+    const junk = await runTachoHook({
+      ...base,
+      stdin: STELLA_PRE,
+      post: async () => ({ status: 200, body: "oops" }),
+    });
+    expect(junk.stdout).toBe("{}\n");
+    // SessionStart context reaches Stella as prompt text.
+    const started = await runTachoHook({
+      ...base,
+      stdin: JSON.stringify({ event: "SessionStart", cwd: "/repo" }),
+      post: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "SessionStart",
+            additionalContext: "Governed.",
+          },
+        }),
+      }),
+    });
+    expect(started.stdout).toBe("Governed.\n");
+    // Without an injected lookup the pid is found from this process's parent.
+    const found: string[] = [];
+    await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({ event: "Stop", cwd: "/" }),
+      harness: "stella",
+      post: async (options) => {
+        found.push(options.body);
+        return { status: 200, body: "{}" };
+      },
+    });
+    expect(
+      (JSON.parse(found[0] ?? "{}") as { payload: { session_id: string } })
+        .payload.session_id,
+    ).toMatch(/^stella-\d+$/);
+  });
+
+  it("decides locally in Stella's vocabulary and spools the translated payload when the daemon is down", async () => {
+    const paths = enrolledPaths();
+    const down = await runTachoHook({
+      paths,
+      env: {},
+      stdin: STELLA_PRE,
+      harness: "stella",
+      harnessPid: () => 99,
+      post: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    expect(down.path).toBe("local");
+    expect(JSON.parse(down.stdout)).toEqual({
+      action: "deny",
+      reason: "Denied by Oxagen policy rule Bash(git push*).",
+    });
+    const files = readdirSync(paths.spool);
+    expect(files).toHaveLength(1);
+    expect(
+      JSON.parse(readFileSync(join(paths.spool, files[0] as string), "utf8")),
+    ).toMatchObject({
+      harness: "stella",
+      payload: { session_id: "stella-99", hook_event_name: "PreToolUse" },
+      env: { TACHO_HARNESS_PID: "99" },
+    });
+  });
+
+  it("prints no JSON on an unenrolled Stella SessionStart and names Stella for a payload it cannot read", async () => {
+    const paths = scratchPaths();
+    expect(
+      await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({ event: "SessionStart", cwd: "/" }),
+        harness: "stella",
+        harnessPid: () => 5,
+      }),
+    ).toMatchObject({ path: "unenrolled", stdout: "" });
+    expect(
+      await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({ hello: "x" }),
+        harness: "stella",
+        harnessPid: () => 5,
+      }),
+    ).toMatchObject({
+      path: "invalid",
+      stdout: "{}\n",
+      stderr: "tacho-hook: payload is not a Stella hook\n",
+    });
+  });
+
+  it("labels a custom agent's hook, lets --agent win over --harness, and refuses a bad name", async () => {
+    const paths = enrolledPaths();
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const ok = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      agent: "reviewer",
+      harness: "stella",
+      post: async (options) => {
+        seen.push(options);
+        return {
+          status: 200,
+          body: '{"hookSpecificOutput":{"permissionDecision":"deny"}}',
+        };
+      },
+    });
+    expect(ok.path).toBe("daemon");
+    // A custom agent speaks Claude Code's shape: the answer is untranslated.
+    expect(JSON.parse(ok.stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    const body = JSON.parse(seen[0]?.body ?? "{}") as Record<string, unknown>;
+    expect(body).toMatchObject({
+      agent: "reviewer",
+      payload: { session_id: "s" },
+    });
+    expect(body).not.toHaveProperty("harness");
+    await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      agent: "reviewer",
+      post: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    const files = readdirSync(paths.spool);
+    const spooled = JSON.parse(
+      readFileSync(join(paths.spool, files[0] as string), "utf8"),
+    ) as Record<string, unknown>;
+    expect(spooled["agent"]).toBe("reviewer");
+    expect(spooled).not.toHaveProperty("harness");
+    for (const bad of ["", "Reviewer", "has space", "-lead", "x".repeat(65)]) {
+      const refused = await runTachoHook({
+        paths,
+        env: {},
+        stdin: PRE,
+        agent: bad,
+        post: async () => {
+          throw new Error("must not post");
+        },
+      });
+      expect(refused).toMatchObject({
+        path: "invalid",
+        stdout: "{}\n",
+        exitCode: 0,
+      });
+      expect(refused.stderr).toContain("invalid --agent name");
+    }
   });
 });
