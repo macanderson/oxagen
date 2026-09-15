@@ -7,6 +7,7 @@
 // ends in (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkillInventory } from "@/data/contracts/skills";
 import type { DataSource } from "@/data/ports";
@@ -85,7 +86,7 @@ const source: DataSource = {
   skills: { inventory: read },
 };
 
-function withIntl(element: React.ReactNode) {
+function withIntl(element: ReactNode) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
       {element}

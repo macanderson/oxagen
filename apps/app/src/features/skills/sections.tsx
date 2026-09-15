@@ -13,7 +13,7 @@ import { linkText, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 
 /** Where the section renders: the workspace and the page of the inventory it read. */
-export type SkillsAt = { org: string; ws: string; cursor: string | null };
+type SkillsAt = { org: string; ws: string; cursor: string | null };
 
 type Failed = Extract<Read<never>, { ok: false }>;
 
