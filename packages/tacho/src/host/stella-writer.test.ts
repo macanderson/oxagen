@@ -215,6 +215,36 @@ describe("stella writer", () => {
     }
   });
 
+  it("still refuses a conflict hidden behind a multi-line string, a comment, an array table or a child table", () => {
+    // Every text below is a stella.toml that Python's tomllib rejects once
+    // the managed block is appended (verified 2026-09-15), so a miss here
+    // writes a file Stella cannot parse and stops every Stella session.
+    const refused: Array<[string, string]> = [
+      // The scanner must leave multi-line mode when the string closes.
+      ['note = """\nhooks.PreToolUse = []\n"""\nhooks.Stop = []\n', "Stop"],
+      ["note = '''\nx\n'''\nhooks.Stop = []\n", "Stop"],
+      // A one-line triple-quoted string never opens multi-line mode.
+      ['note = """x"""\nhooks.Stop = []\n', "Stop"],
+      // A standard table after an array table is a static path again.
+      ["[[hooks.PreToolUse]]\nmatcher = 'x'\n[hooks]\nStop = []\n", "Stop"],
+      ["hooks.Stop = [] # trailing comment\n", "Stop"],
+      ["[hooks.Stop] # header comment\na = 1\n", "Stop"],
+      // A child table makes hooks.Stop a table an array cannot extend.
+      ['[hooks.Stop.hooks]\ntype = "command"\n', "Stop"],
+      ["[hooks.PreCompact.extra]\na = 1\n", "PreCompact"],
+    ];
+    for (const [text, event] of refused) {
+      expect(stellaTomlConflicts(text)).toEqual([event]);
+      const result = mergeStellaHooks(toml(text), CONFIG);
+      expect(result).toEqual({
+        ok: false,
+        error: `/h/.stella/stella.toml already defines hooks.${event} as a key or a [table], so the [[hooks.<Event>]] tables Tacho appends would be a duplicate key; move those hooks to [[hooks.<Event>]] array tables and enroll again`,
+      });
+    }
+    // Text that only mentions a hook key inside a string is not a definition.
+    expect(stellaTomlConflicts("note = 'hooks.Stop = []'\n")).toEqual([]);
+  });
+
   it("merges, strips and reads presence in the legacy settings.json", () => {
     const foreign = {
       model: "opus",

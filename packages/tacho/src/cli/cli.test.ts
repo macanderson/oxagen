@@ -9,6 +9,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
@@ -1671,6 +1672,51 @@ describe("stella", () => {
     expect(incomplete.stellaHooks?.complete).toBe(false);
     expect(refused.lines.join("\n")).toContain("Stella      INCOMPLETE");
     expect(refused.lines.join("\n")).toContain("missing: SessionStart");
+  });
+
+  it("unenroll without host.json strips every enrollment's Stella hooks from both files", async () => {
+    // host.json lost mid-way (a crash, a hand delete): the enrollment id is
+    // unknown, so every Tacho block and group goes, and nothing foreign.
+    const d = deps();
+    writeSensitiveFileAtomic(
+      d.paths.stellaSettingsJson,
+      JSON.stringify({ model: "opus" }),
+      0o644,
+    );
+    expect((await enroll({ ...WHERE, harnesses: ["stella"] }, d)).ok).toBe(
+      true,
+    );
+    const block = (enrollmentId: string) =>
+      renderStellaTomlBlock({
+        enrollmentId,
+        hookCommand: "x",
+        port: 1,
+        localToken: "t",
+      });
+    writeSensitiveFileAtomic(
+      d.paths.stellaToml,
+      `${USER_TOML}\n${block(TEST_ENROLLMENT)}\n${block(OTHER_ENROLLMENT)}`,
+      0o644,
+    );
+    rmSync(d.paths.hostFile);
+    const before = d.requests.length;
+    d.lines.length = 0;
+
+    await unenroll({}, d);
+
+    expect(readFileSync(d.paths.stellaToml, "utf8")).toBe(USER_TOML);
+    expect(
+      JSON.parse(readFileSync(d.paths.stellaSettingsJson, "utf8")),
+    ).toEqual({ model: "opus" });
+    expect(d.lines).toContain(`      removed from ${d.paths.stellaToml} too`);
+    expect(d.lines).toContain(
+      `      removed from ${d.paths.stellaSettingsJson} too`,
+    );
+    expect(d.lines).toContain(
+      "[3/4] No enrollment on this machine; nothing to revoke",
+    );
+    // No enrollment id means no revoke request.
+    expect(d.requests.length).toBe(before);
   });
 
   it("reassign moves Stella's hooks to the new enrollment", async () => {
