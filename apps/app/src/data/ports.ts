@@ -2,8 +2,8 @@
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
-// WL-35 to WL-37, the Billing port in WL-38; each gap lane adds its page's port
-// (#2956: agents).
+// WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
+// lane adds its page's port (#2956: agents).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -25,6 +25,16 @@ import type {
   ShellContext,
   WorkspaceChoice,
 } from "./contracts/shell";
+import type {
+  DayRange,
+  FleetSpend,
+  SpendBudgets,
+  SpendDrill,
+  SpendDrillKind,
+  SpendGroupKind,
+  SpendReport,
+  SpendWaste,
+} from "./contracts/spend";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -90,6 +100,32 @@ export interface DataSource {
       agent: string,
       q: { cursor: string | null },
     ): Promise<Read<IncidentPage>>;
+  };
+  /**
+   * The cost rollup (#2962), every read noBillingGate; callers:
+   * features/spend/spend.tsx and features/spend/fleet-tiles.tsx. `byGroup`
+   * answers the period total with the groups, so the page's summary strip
+   * reads the same call as its table.
+   */
+  spend: {
+    /** get_spend */
+    byGroup(
+      ctx: WsCtx,
+      groupBy: SpendGroupKind,
+      period: DayRange,
+    ): Promise<Read<SpendReport>>;
+    /** get_spend at the model level over one day: Fleet's Spend today and Cache hit rate tiles */
+    fleet(ctx: WsCtx, period: DayRange): Promise<Read<FleetSpend>>;
+    /** get_spend_drill over its default trailing window */
+    drill(
+      ctx: WsCtx,
+      kind: SpendDrillKind,
+      key: string,
+    ): Promise<Read<SpendDrill>>;
+    /** list_waste */
+    waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
+    /** get_spend_budget */
+    budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
   };
   /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
   org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };

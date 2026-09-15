@@ -43,6 +43,7 @@ export type PageKey =
   | "agents"
   | "organization"
   | "billing"
+  | "spend"
   | "shell";
 
 type PageFailure = {
@@ -72,6 +73,12 @@ export const PAGE_FAILURES = {
   billing: {
     error: { code: "stripe_unreachable", status: 502 },
     permission: "org.billing",
+  },
+  // The cost rollup is rebuilt from frames; while a rebuild holds the read,
+  // the page says so rather than printing a stale or partial figure.
+  spend: {
+    error: { code: "rollup_rebuild_in_progress", status: 504 },
+    permission: "spend.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

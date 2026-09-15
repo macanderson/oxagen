@@ -1,8 +1,9 @@
 // The one module that turns a number into text (INV-09): money through
 // <Money> (./money.tsx), counts through formatCount, clock durations through
-// formatClock. Micros never pass through a float: the integer string is split
-// into whole and fractional units as text and handed to Intl.NumberFormat as an
-// exact decimal string, which it formats without converting to a double.
+// formatClock, ratios through formatRatio. Micros never pass through a float:
+// the integer string is split into whole and fractional units as text and
+// handed to Intl.NumberFormat as an exact decimal string, which it formats
+// without converting to a double.
 import type { Money } from "@/data/contracts/money";
 
 /**
@@ -64,4 +65,12 @@ export function formatClock(seconds: number, locale: string): string {
     minimumIntegerDigits: 2,
   }).format(total % 60);
   return `${minutes}:${rest}`;
+}
+
+/** A 0..1 ratio (a productive ratio, a cache hit rate) as a percentage with at most one decimal. */
+export function formatRatio(ratio: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(ratio);
 }

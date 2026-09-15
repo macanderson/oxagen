@@ -95,6 +95,13 @@ export function fleetSource(reads: FleetReads) {
       contractRate: refuse,
       invoices: refuse,
     },
+    spend: {
+      byGroup: refuse,
+      fleet: refuse,
+      drill: refuse,
+      waste: refuse,
+      budgets: refuse,
+    },
     org: { members: refuse },
   };
   return { source, calls };
