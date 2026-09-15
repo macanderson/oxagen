@@ -1,5 +1,5 @@
 {
-  "generatedCount": 246,
+  "generatedCount": 248,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2352,6 +2352,17 @@
       "consumes": []
     },
     {
+      "name": "set_auto_topup",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_connection_mappings",
       "domain": "connection",
       "surfaces": [
@@ -2404,6 +2415,14 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_org_billing_terms",
+      "domain": "billing",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
