@@ -90,6 +90,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
 - [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
+- [billing.auto_topup.set](billing.auto_topup.set.md) — Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys. Owner/Admin only
 - [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
 - [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
 - [billing.contract_rate.get](billing.contract_rate.get.md) — The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's
@@ -97,6 +98,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
 - [billing.gau_bucket.get](billing.gau_bucket.get.md) — The organization's governed action unit bucket for the current month: billing mode, period, units included, purchased, carried forward, used and remaining, plus invoice thresholds or auto top-up state
 - [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
+- [billing.org_terms.set](billing.org_terms.set.md) — Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut. On no surface; run through `pnpm billing:terms`
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook
 - [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series

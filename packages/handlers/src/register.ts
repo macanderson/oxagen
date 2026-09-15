@@ -106,6 +106,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.invoice.list"))
         .billingInvoiceListHandler as CapabilityHandlerFn,
   );
+  // ADR-055 §5 — the two billing-terms writes: the customer's auto top-up, and
+  // the platform operator's commercial terms. set_org_billing_terms is on no
+  // surface; the kernel's platformOnly check is what lets it be registered here
+  // without being reachable from one (INV-31).
+  registerHandler(
+    "set_auto_topup",
+    async () =>
+      (await import("./billing.auto_topup.set"))
+        .billingAutoTopupSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_org_billing_terms",
+    async () =>
+      (await import("./billing.org_terms.set"))
+        .billingOrgTermsSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_subscription",
     async () =>

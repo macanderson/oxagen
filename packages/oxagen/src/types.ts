@@ -203,6 +203,18 @@ export interface CapabilityDeclaration<
    */
   noBillingGate?: boolean;
   /**
+   * When true, this capability is reachable only from a platform operator:
+   * the kernel refuses it before the IAM check unless the `CapabilityContext`
+   * carries a `platformOperator` binding minted by
+   * `createPlatformOperatorContext` (apps/app/ARCHITECTURE.md §3.9 item 12,
+   * INV-31). Pair it with `surfaces: []` so no surface can dispatch it either.
+   *
+   * Default false. The flag is a kernel-enforced authorization boundary, not
+   * documentation: `defaultRoles` cannot express "nobody in any organisation",
+   * because the IAM check allows every capability for a non-enterprise org.
+   */
+  platformOnly?: boolean;
+  /**
    * Sensitivity classification for this capability. Required — the IAM
    * resolver uses it for logging and the seed migration uses it for default
    * role-grant decisions.
@@ -450,6 +462,38 @@ export interface CapabilityContext {
    * keeps `edit_repo_file` agent-only (spec §"Launch changes", item 1).
    */
   deployedAgentInvocation?: DeployedAgentInvocationContext;
+  /**
+   * Present ONLY on an invocation made by a platform operator running an
+   * operator script — the one way to reach a `platformOnly` capability
+   * (apps/app/ARCHITECTURE.md §3.9 item 12, INV-31).
+   *
+   * `createPlatformOperatorContext` (platform-operator.ts) mints it and records
+   * the object in a module-private registry; a literal `true`, a spread copy
+   * or any other value the registry does not hold fails
+   * `isKernelIssuedPlatformOperator` and the kernel refuses the whole
+   * invocation as a forged binding. No surface context builder mints one.
+   */
+  platformOperator?: PlatformOperatorBinding;
+}
+
+/**
+ * A kernel-minted marker that this invocation comes from a platform operator
+ * rather than from any organisation's surface.
+ *
+ * It carries no principal: a platform operator acts on an organisation's
+ * commercial terms, not as a member of it, so there is nobody in the tenant to
+ * name. The request id is the correlation key the audit row is found by.
+ *
+ * The `__kernelIssued` brand is declared with a module-private unique symbol,
+ * so no code outside this module can name the key — the compile-time half of
+ * the guarantee. The runtime half is the registry in platform-operator.ts,
+ * because a cast can defeat any purely structural brand.
+ */
+export interface PlatformOperatorBinding {
+  readonly principalKind: "platform_operator";
+  /** Correlation key for the operator run that minted this binding. */
+  readonly requestId: string;
+  readonly [kernelIssuedBrand]: true;
 }
 
 /**

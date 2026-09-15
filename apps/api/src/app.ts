@@ -19,6 +19,7 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
@@ -433,6 +434,7 @@ orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(

@@ -85,11 +85,13 @@ import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationa
 import { agentToolList } from "./agent.tool.list";
 import { billingActionEstimate } from "./billing.action_estimate";
 import { billingActionRateCard } from "./billing.action_rate_card";
+import { billingAutoTopupSet } from "./billing.auto_topup.set";
 import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
 import { billingInvoiceList } from "./billing.invoice.list";
+import { billingOrgTermsSet } from "./billing.org_terms.set";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -477,11 +479,13 @@ export {
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
+  billingAutoTopupSet,
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
   billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -734,11 +738,13 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
+  billingAutoTopupSet,
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
   billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,

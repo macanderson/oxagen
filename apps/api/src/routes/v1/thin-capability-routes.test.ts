@@ -51,6 +51,7 @@ import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { billingAutoTopupSet } from "@oxagen/oxagen/contracts/billing.auto_topup.set";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
@@ -96,6 +97,7 @@ import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
+import { billingAutoTopupSetRoute } from "./billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
@@ -416,6 +418,15 @@ const ROUTES: ThinRoute[] = [
     capability: billingInvoiceList.name,
     body: { limit: 10 },
     invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
+    file: "billing.auto_topup.set",
+    route: billingAutoTopupSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: billingAutoTopupSet.name,
+    body: { enabled: true, blocks: 2 },
+    invalidBody: { enabled: true, blocks: 0 },
     status: 200,
   },
   {

@@ -1074,6 +1074,23 @@
       }
     },
     {
+      "name": "set_auto_topup",
+      "file": "billing.auto_topup.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_spend_budget",
       "file": "billing.budget.get.ts",
       "domain": "billing",
@@ -1198,6 +1215,18 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_org_billing_terms",
+      "file": "billing.org_terms.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
         "unit": true,
         "docs": true
       }
