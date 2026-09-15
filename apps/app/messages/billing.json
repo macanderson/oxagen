@@ -1,0 +1,117 @@
+{
+  "billing": {
+    "units": {
+      "gau": "{count} GAU"
+    },
+    "range": "{start} – {end}",
+    "checkout": {
+      "success": "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
+      "cancel": "Checkout was cancelled. Nothing was charged."
+    },
+    "plan": {
+      "title": "Plan",
+      "none": "No subscription",
+      "plan": "Plan",
+      "status": "Status",
+      "interval": "Billed",
+      "intervals": {
+        "month": "monthly",
+        "year": "yearly"
+      },
+      "period": "Current period"
+    },
+    "mode": {
+      "title": "Billing mode",
+      "prepaid": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it",
+      "prepaidNoCard": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it — add a payment method to keep governing past the allowance, or wait for the next month",
+      "invoice": "Invoice billing — usage is never capped; overage is invoiced at period end, or once {max} governed action units accrue",
+      "uninvoiced": "Uninvoiced this period",
+      "invoiced": "Invoiced this period",
+      "pastDue": "Payment past due: an interim or period-close invoice is open. Governing continues; pay it from Invoices."
+    },
+    "bucket": {
+      "title": "Governed action bucket",
+      "period": "Period",
+      "included": "Included",
+      "purchased": "Purchased",
+      "carried": "Carried forward",
+      "used": "Used",
+      "remaining": "Remaining",
+      "overdrawn": "overdrawn by {count} GAU",
+      "exhaustedNoCard": "<link>Add a payment method</link> to keep governing this month, or your allowance renews on {date}"
+    },
+    "autoTopup": {
+      "title": "Auto top-up",
+      "enabled": "Top up automatically when the bucket is empty",
+      "blocks": "Blocks per top-up",
+      "perTopup": "= {count} GAU per top-up",
+      "readOnly": "An owner or admin can change auto top-up.",
+      "savedCard": "charged to {brand} ····{last4}",
+      "savedCardUnlabelled": "charged to the saved payment method",
+      "noCard": "no saved payment method — your next purchase saves one, and auto top-up runs from then on",
+      "attempt": {
+        "none": "No auto top-up has run this month.",
+        "paid": "Last top-up {date}: paid",
+        "open": "Last top-up {date}: open, its invoice is under Invoices",
+        "failed": "Last top-up {date}: failed"
+      }
+    },
+    "rate": {
+      "title": "Your contracted rate",
+      "perGau": "Per governed action unit",
+      "perBlock": "Per block",
+      "blockSize": "Block size",
+      "currency": "Currency",
+      "included": "Included GAUs per month",
+      "effective": "Effective",
+      "openEnded": "from {start}",
+      "source": "Source",
+      "published": "Published {tier} rate",
+      "negotiated": "Negotiated agreement {ref}",
+      "negotiatedNoRef": "Negotiated agreement",
+      "tiers": {
+        "free": "Free",
+        "build": "Build",
+        "scale": "Scale",
+        "enterprise": "Enterprise"
+      }
+    },
+    "invoices": {
+      "title": "Invoices",
+      "empty": "No invoices yet.",
+      "columns": {
+        "number": "Number",
+        "kind": "Kind",
+        "status": "Status",
+        "period": "Period",
+        "amountDue": "Amount due",
+        "amountPaid": "Amount paid",
+        "invoice": "Invoice"
+      },
+      "unnumbered": "not assigned",
+      "view": "View on Stripe",
+      "unpublished": "not published",
+      "kinds": {
+        "subscription": "Subscription",
+        "gau_purchase": "Block purchase",
+        "gau_auto_topup": "Auto top-up",
+        "gau_interim": "Interim",
+        "gau_period_close": "Period close"
+      },
+      "statuses": {
+        "open": "open",
+        "paid": "paid",
+        "uncollectible": "uncollectible",
+        "void": "void"
+      },
+      "pager": "Invoice pages",
+      "older": "Older invoices",
+      "newest": "Newest invoices"
+    },
+    "failure": {
+      "denied": "You cannot see {section} for this organization. Your role does not include {permission}; an organization owner can grant it.",
+      "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
+      "error": "{section} could not be loaded: the billing service answered {code}. Nothing was charged."
+    }
+  }
+}

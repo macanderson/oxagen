@@ -9,8 +9,11 @@ const router = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
+const { parseHostedInvoiceUrl } = await import("@/shared/invoice-url");
 const { routes } = await import("@/shared/safe-path");
-const { SafeForm, SafeLink, useNavigate } = await import("./navigation");
+const { HostedInvoiceLink, SafeForm, SafeLink, useNavigate } = await import(
+  "./navigation"
+);
 
 afterEach(() => {
   cleanup();
@@ -52,5 +55,19 @@ describe("useNavigate", () => {
     result.current.replace(routes.people("acme"));
     expect(router.replace).toHaveBeenCalledWith("/acme");
     expect(router.refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe("HostedInvoiceLink", () => {
+  it("opens the invoice page in a new tab without an opener", () => {
+    const url = parseHostedInvoiceUrl(
+      "https://invoice.stripe.com/i/acct_1Nx/test_1",
+    );
+    if (url === null) throw new Error("fixture url refused");
+    render(<HostedInvoiceLink to={url}>invoice</HostedInvoiceLink>);
+    const link = screen.getByRole("link", { name: "invoice" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 });

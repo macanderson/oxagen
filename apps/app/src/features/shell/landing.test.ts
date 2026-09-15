@@ -30,7 +30,16 @@ const { Landing } = await import("./landing");
 const ctx = unsafeMint(PretenantCtx, { userId: "usr_marcusbell" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
-const source = { pretenant: { orgs, workspaces }, shell: { context: vi.fn() } };
+const source = {
+  pretenant: { orgs, workspaces },
+  shell: { context: vi.fn() },
+  billing: {
+    plan: vi.fn(),
+    bucket: vi.fn(),
+    contractRate: vi.fn(),
+    invoices: vi.fn(),
+  },
+};
 
 const acme = { slug: "acme", name: "Acme Robotics" };
 const globex = { slug: "globex", name: "Globex" };

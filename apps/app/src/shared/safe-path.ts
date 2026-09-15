@@ -89,6 +89,9 @@ export const routes = {
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
   fleet: (org: string, ws: string): SafePath => pathOf(org, ws),
+  /** Billing; `cursor` opens a later page of its invoices. */
+  billing: (org: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, "billing"), { cursor: q?.cursor }),
 };
 
 /**
