@@ -9,20 +9,41 @@ name: Desktop
 # or a dry run still produces installable (unsigned) bundles:
 #   macOS    APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #            APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID   (Developer ID + notarization)
-#   Windows  AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET (Trusted Signing)
-#            or WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD
+#            Exported to the build only inside the certificate-import step, which
+#            runs only when APPLE_CERTIFICATE is set: an empty
+#            APPLE_SIGNING_IDENTITY makes tauri run `codesign -s ""`, which fails
+#            with "no identity found" instead of skipping.
+#   Windows  not signed yet. tauri-bundler signs only through
+#            bundle.windows.certificateThumbprint or signCommand, neither of
+#            which is configured, and no signing tool is installed here;
+#            SmartScreen warns on every build until that is wired.
 #   Linux    unsigned
+#   Updater  TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD when
+#            the key has one): the minisign key whose public half sits in
+#            tauri.conf.json plugins.updater.pubkey. Present → every bundle
+#            gets a .sig and the release carries latest.json. Absent → the build
+#            passes --config tauri.unsigned.conf.json (createUpdaterArtifacts:
+#            false) so `tauri build` does not stop at "public key found but no
+#            private key", and no latest.json is published; installed apps then
+#            report "up to date".
+#
+# The updater feed: installed apps poll the `desktop-latest` release, not the
+# repository's `/releases/latest`, which is whichever release across the whole
+# repository was published from the newest commit — a platform `v*` release
+# published after a desktop one would take it over and the feed would 404.
+# When a `desktop-v*` release is published, the `feed` job below copies its
+# latest.json onto `desktop-latest`.
+#
+# Publishing is tag-gated: a `desktop-v*` tag creates a draft release; a
+# manual run builds and uploads the bundles as workflow artifacts only.
 
 on:
   push:
     tags:
       - "desktop-v*.*.*"
+  release:
+    types: [published]
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish a GitHub release (otherwise upload artifacts only)
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -30,20 +51,25 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.name }}
+    if: github.event_name != 'release'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
+          # `app` alongside `dmg`: the v2 updater archive (Oxagen.app.tar.gz +
+          # .sig) is only produced when the `app` target is requested; with
+          # `dmg` alone the bundler logs "no updater-enabled targets were
+          # built", signs nothing, and latest.json carries no darwin entry.
           - name: macOS (Apple silicon)
-            os: macos-14
+            os: macos-15
             triple: aarch64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - name: macOS (Intel)
-            os: macos-13
+            os: macos-15-intel
             triple: x86_64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - name: Linux (x86_64)
             os: ubuntu-22.04
             triple: x86_64-unknown-linux-gnu
@@ -78,11 +104,17 @@ jobs:
       - name: Build sidecars
         run: pnpm --filter @oxagen/desktop sidecars -- --triple ${{ matrix.triple }}
 
+      # The Apple variables reach the build step only from here, so a missing
+      # certificate leaves them unset (not empty) and tauri skips signing.
       - name: Import the Apple certificate
         if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p actions build.keychain
@@ -91,29 +123,72 @@ jobs:
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
           rm certificate.p12
+          for name in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="${!name}"
+            if [ -n "$value" ]; then
+              echo "::add-mask::$value"
+              echo "$name=$value" >> "$GITHUB_ENV"
+            fi
+          done
+
+      # Updater signing is all-or-nothing: with the key, sign and publish
+      # latest.json; without it, switch updater artifacts off for this build.
+      - name: Updater signing
+        id: updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "args=--config src-tauri/tauri.unsigned.conf.json" >> "$GITHUB_OUTPUT"
+            echo "::notice::TAURI_SIGNING_PRIVATE_KEY is not set; building without updater artifacts."
+          fi
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS: present → sign + notarize; absent → ad-hoc.
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows: Azure Trusted Signing when configured.
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          # Updater: present → .sig per bundle + latest.json; absent → see above.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
-          args: --target ${{ matrix.triple }} --bundles ${{ matrix.bundles }}
+          args: --target ${{ matrix.triple }} --bundles ${{ matrix.bundles }} ${{ steps.updater.outputs.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && format('Oxagen {0}', github.ref_name) || '' }}
           releaseBody: See docs/specs/oxagen-desktop/spec.html for what the app does and how to verify an install.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          includeUpdaterJson: ${{ steps.updater.outputs.signed == 'true' }}
+
+      # The bare CLI binaries next to the bundles, each with a .sha256, so the
+      # Homebrew formula and the Scoop manifest in tools/packaging can install
+      # tacho + oxagen without the app; on macOS the .dmg gets one too, for the
+      # cask's digests. tauri-action created the draft release above; gh finds
+      # a draft by its tag.
+      - name: Checksum the release assets
+        shell: bash
+        run: |
+          targets=(apps/desktop/src-tauri/binaries)
+          dmg="apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg"
+          if [ -d "$dmg" ]; then targets+=("$dmg"); fi
+          node tools/packaging/checksums.mjs "${targets[@]}"
+
+      - name: Attach the CLI binaries and checksums to the release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=(apps/desktop/src-tauri/binaries/*)
+          for sum in apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.sha256; do
+            if [ -f "$sum" ]; then assets+=("$sum"); fi
+          done
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
 
       - name: Upload bundles
         uses: actions/upload-artifact@v4
@@ -121,9 +196,42 @@ jobs:
           name: oxagen-desktop-${{ matrix.triple }}
           if-no-files-found: error
           path: |
+            apps/desktop/src-tauri/binaries/*
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.sha256
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/rpm/*.rpm
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/appimage/*.AppImage
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/msi/*.msi
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/**/*.sig
+
+  # The update feed. tauri.conf.json's updater endpoint is
+  # releases/download/desktop-latest/latest.json; this copies the just-
+  # published desktop release's latest.json there (its platform URLs point at
+  # the versioned release's assets, which stay put). A release built without
+  # the updater key carries no latest.json and leaves the feed as it was.
+  feed:
+    name: Point the update feed at this release
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'desktop-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Copy latest.json onto the desktop-latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tmp="$(mktemp -d)"
+          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$tmp"; then
+            echo "::notice::$TAG carries no latest.json (built without TAURI_SIGNING_PRIVATE_KEY); the update feed is unchanged."
+            exit 0
+          fi
+          if ! gh release view desktop-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create desktop-latest --repo "$GITHUB_REPOSITORY" \
+              --title "Oxagen desktop update feed" \
+              --notes "latest.json for the in-app updater; the app itself is on the desktop-v* releases. Rewritten by desktop.yml when one is published." \
+              --latest=false
+          fi
+          gh release upload desktop-latest "$tmp/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "::notice::desktop-latest now serves $TAG's latest.json."

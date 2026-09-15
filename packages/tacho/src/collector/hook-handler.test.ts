@@ -506,7 +506,7 @@ describe("handleHookEvent over the recorded session", () => {
       harness: string;
       runtime: string;
     };
-    expect(agent).toMatchObject({ harness: "codex", runtime: "custom" });
+    expect(agent).toMatchObject({ harness: "codex", runtime: "codex" });
     expect(registry.get("codex-1")?.harness).toBe("codex");
     expect(registry.get("codex-1")?.transcriptPath).toBeUndefined();
 

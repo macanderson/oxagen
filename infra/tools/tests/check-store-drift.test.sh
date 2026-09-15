@@ -291,6 +291,34 @@ expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/") == "http://h:8123/?reado
 expect_code 0 "$([[ $(ch_url_readonly "http://h:8123/?database=x") == "http://h:8123/?database=x&readonly=1" ]] && echo 0 || echo 1)" \
   "readonly: appended with & when there is one"
 
+# curl's config file has one credential option, `user`, whose value is
+# "user:password". A `password` line is not an option curl has: Ubuntu's curl
+# warned, prompted for the password on a non-tty, read nothing and sent the
+# user alone — AUTHENTICATION_FAILED, three scheduled runs red, and an issue
+# (#2987) that read as a rotated credential. macOS's curl refuses the file.
+# Both halves are held here: the rendered text, and what real curl does with it.
+CFG=$(ch_curl_config oxagen s3cret)
+[[ $CFG == 'user = "oxagen:s3cret"' ]] && pass || fail "curl config: expected user = \"oxagen:s3cret\", got: $CFG"
+case "$CFG" in
+  *password*) fail "curl config: curl has no 'password' option — the credential goes in 'user' as user:password" ;;
+  *) pass ;;
+esac
+CFG=$(ch_curl_config 'ox"a\gen' 'p"w\d')
+[[ $CFG == 'user = "ox\"a\\gen:p\"w\\d"' ]] && pass || fail "curl config: a quote or backslash in the credential must be escaped, got: $CFG"
+# Real curl, no server: the only acceptable outcome is a connection failure.
+# A config curl cannot read fails before connecting ("error encountered when
+# reading a file"), and a user with no password makes it prompt ("Enter host
+# password"); neither may appear.
+CURL_OUT=$(ch_curl_config oxagen s3cret | curl -sS --max-time 2 --config - http://127.0.0.1:9/ </dev/null 2>&1 || true)
+case "$CURL_OUT" in
+  *"Enter host password"*|*"error encountered when reading"*|*"Unknown option"*|*"Warning"*)
+    fail "curl config: real curl did not accept the rendered config: $CURL_OUT" ;;
+  *) pass ;;
+esac
+# The port is closed, so the credential was accepted and curl got as far as
+# the connection — anything short of that would have failed above.
+contains "$CURL_OUT" "Failed to connect" "curl config: real curl reached the connect stage with the credential in place"
+
 # --- the shipped script ----------------------------------------------------
 
 SCRIPT=$(cat "$TOOLS/check-store-drift.sh")
@@ -329,6 +357,40 @@ case "$SCRIPT" in
   *"UNION ALL SHOW"*) fail "script: SHOW cannot be a UNION branch in Cypher" ;;
   *) pass ;;
 esac
+
+# A SHOW answers for one database. The applier writes to NEO4J_DATABASE — the
+# ontology client's session() selects it, and store-migrate.yml reads it before
+# applying schema.cypher — so a check that omits -d asks the connection default
+# instead and reports "0 present" about a database nothing migrates.
+contains "$SCRIPT" '-d "${NEO4J_DATABASE:-neo4j}"' \
+  "script: reads the database the applier writes to, not the connection default"
+# The header documents the environment this script is handed, and a hand-run
+# caller reads it rather than the code. A variable the script reads but the
+# header omits is answered with the fallback, silently and plausibly — which is
+# the same false-answer shape the -d above exists to close.
+#
+# Read from the indented all-caps block alone, not from the whole header: prose
+# elsewhere naming a variable in passing would otherwise satisfy this, and the
+# first version of this assertion did exactly that — it passed with
+# NEO4J_DATABASE deleted from the list, because the paragraph under the list
+# mentions it.
+ENV_LIST=$(grep -E '^#   [A-Z0-9_]+( [A-Z0-9_]+)*$' "$TOOLS/check-store-drift.sh")
+for var in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+           NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
+  case " $ENV_LIST " in
+    *" $var "*|*" $var"$'\n'*) pass ;;
+    *) fail "script: the header's environment list omits $var, which the script reads" ;;
+  esac
+done
+# The workflow has to supply it, or the fallback above silently becomes the
+# answer on every run.
+DRIFT_WORKFLOW="$REPO/.github/workflows/store-migrate-drift.yml"
+if [[ -f $DRIFT_WORKFLOW ]]; then
+  contains "$(cat "$DRIFT_WORKFLOW")" "NEO4J_DATABASE" \
+    "workflow: reads NEO4J_DATABASE from Parameter Store like store-migrate.yml"
+else
+  fail "workflow: .github/workflows/store-migrate-drift.yml is gone"
+fi
 
 # Credentials belong out of the process table on a shared runner.
 case "$SCRIPT" in

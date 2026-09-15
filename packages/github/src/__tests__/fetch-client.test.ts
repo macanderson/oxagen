@@ -211,6 +211,31 @@ describe("putFile (file absent)", () => {
     expect(body).not.toHaveProperty("sha");
   });
 
+  it.each([401, 403, 500])(
+    "rethrows a %i from the existence check instead of treating it as absent",
+    async (status) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeResponse({ message: "installation 4041234 rejected" }, status),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      const client = createGitHubClient({ token: "tok" });
+
+      await expect(
+        client.putFile({
+          owner: "acme",
+          repo: "my-repo",
+          path: "README.md",
+          content: "hello world",
+          message: "add readme",
+        }),
+      ).rejects.toMatchObject({ name: "GitHubApiError", status });
+      // No PUT was attempted on top of a failure that was not a 404.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("base64-encodes the content string", async () => {
     const fetchMock = vi
       .fn()
@@ -805,6 +830,23 @@ describe("getFileContent", () => {
       client.getFileContent({ owner: "acme", repo: "r", path: "x.ts" }),
     ).rejects.toThrow("500");
   });
+
+  it.each([401, 403, 500])(
+    "rethrows a %i whose message happens to contain the digits 404",
+    async (status) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeResponse({ message: "installation 4041234 rejected" }, status),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      const client = createGitHubClient({ token: "tok" });
+
+      await expect(
+        client.getFileContent({ owner: "acme", repo: "r", path: "x.ts" }),
+      ).rejects.toMatchObject({ name: "GitHubApiError", status });
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -904,6 +946,84 @@ describe("getTree", () => {
     });
 
     expect(result).toEqual([]);
+  });
+
+  it("walks the tree one directory at a time when the recursive listing is truncated", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({
+          commit: { sha: "cs", commit: { tree: { sha: "root" } } },
+        }),
+      )
+      // The recursive answer is cut short: only one of three blobs is in it.
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [{ path: "README.md", type: "blob", sha: "b0" }],
+          truncated: true,
+        }),
+      )
+      // Non-recursive root.
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [
+            { path: "README.md", type: "blob", sha: "b0" },
+            { path: "src", type: "tree", sha: "t1" },
+          ],
+          truncated: false,
+        }),
+      )
+      // Non-recursive src/.
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [
+            { path: "index.ts", type: "blob", sha: "b1" },
+            { path: "lib", type: "tree", sha: "t2" },
+          ],
+          truncated: false,
+        }),
+      )
+      // Non-recursive src/lib/.
+      .mockResolvedValueOnce(
+        makeResponse({
+          tree: [{ path: "util.ts", type: "blob", sha: "b2" }],
+          truncated: false,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.getTree({ owner: "acme", repo: "r" });
+
+    expect(result.sort()).toEqual([
+      "README.md",
+      "src/index.ts",
+      "src/lib/util.ts",
+    ]);
+    const urls = fetchMock.mock.calls.map(([u]) => u as string);
+    expect(urls.slice(2)).toEqual([
+      "https://api.github.com/repos/acme/r/git/trees/root",
+      "https://api.github.com/repos/acme/r/git/trees/t1",
+      "https://api.github.com/repos/acme/r/git/trees/t2",
+    ]);
+  });
+
+  it("throws when even a single directory's listing is truncated", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({
+          commit: { sha: "cs", commit: { tree: { sha: "root" } } },
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse({ tree: [], truncated: true }))
+      .mockResolvedValueOnce(makeResponse({ tree: [], truncated: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await expect(client.getTree({ owner: "acme", repo: "r" })).rejects.toThrow(
+      /cannot be listed completely/,
+    );
   });
 });
 

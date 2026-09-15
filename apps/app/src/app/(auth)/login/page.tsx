@@ -5,8 +5,8 @@ import { Suspense } from "react";
 import {
   LoginForm,
   OAuthButtons,
-  firstParam,
   sanitizeNext,
+  nextParam,
   withNext,
 } from "@/features/auth";
 import {
@@ -32,7 +32,7 @@ async function Login({
 }) {
   const params = await searchParams;
   // Only a same-origin relative path survives; anything else lands on "/".
-  const next = sanitizeNext(firstParam(params.next));
+  const next = sanitizeNext(nextParam(params));
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

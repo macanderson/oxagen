@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen teaches your agents your business, governs what they may do, explains every run, and learns from each one. It is sold to the enterprise team that runs the agents and answers for them. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is the control plane for the agents an enterprise runs: every agent operates under a mandate — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 

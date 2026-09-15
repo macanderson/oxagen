@@ -146,14 +146,19 @@ jobs:
           set -euo pipefail
           # Written to the environment file rather than echoed: these are
           # SecureString values and a `set -x` here would print them.
+          # NEO4J_DATABASE is on this list for the same reason store-migrate.yml
+          # reads it: SHOW CONSTRAINTS and SHOW INDEXES answer for one database,
+          # and the applier writes to the one this parameter names. Omitting it
+          # pointed the check at the connection default and reported "0 present"
+          # about a database nothing migrates.
           for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
-                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
             value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
               --with-decryption --query Parameter.Value --output text)
             echo "::add-mask::$value"
             echo "$key=$value" >> "$GITHUB_ENV"
           done
-          echo "read 7 parameters"
+          echo "read 8 parameters"
 
       # The parameters name the stores as the node reaches them, over loopback.
       # This runner reaches them over a forwarded port on its own loopback, so

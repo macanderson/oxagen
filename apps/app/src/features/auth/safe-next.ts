@@ -69,6 +69,19 @@ export function firstParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * The destination a sign-in-flow page was asked for, before sanitising: `next`,
+ * or `returnTo` when `next` is absent. `returnTo` is the name the CLI's
+ * `oxagen auth login --signup` (apps/cli/src/auth/loopback-login.ts) and the
+ * deprecated app put on /signup and /login, so a new account made from the
+ * CLI or the desktop installer still comes back to the consent page.
+ */
+export function nextParam(
+  params: Record<string, string | string[] | undefined>,
+): string | undefined {
+  return firstParam(params.next) ?? firstParam(params.returnTo);
+}
+
 /** A sign-in-flow link that carries a sanitised destination forward, e.g. `/signup?next=%2Facme`. */
 export function withNext(path: string, next: string): string {
   if (next === DEFAULT_NEXT) return path;

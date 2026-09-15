@@ -5,11 +5,37 @@
  * on this machine; the control plane's copy is checked by `oxagen tacho`.
  */
 import { readHostFile } from "../host/host-file";
+import type { TachoHarness } from "../wire";
 import type { CliDeps } from "./deps";
 
 export interface VerifyOptions {
   prompt?: string;
   timeoutMs?: number;
+  /** Which harness to drive (default Claude Code). */
+  harness?: TachoHarness;
+}
+
+const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
+
+/**
+ * One headless turn per harness. Claude Code prints a JSON result carrying
+ * its session id; Codex CLI (`codex exec`) prints prose, so its session is
+ * matched as the daemon's newest non-internal chain instead.
+ */
+function headlessTurn(
+  harness: TachoHarness,
+  prompt: string,
+): { args: string[]; parsesSession: boolean } {
+  if (harness === "codex") {
+    return {
+      args: ["exec", "--skip-git-repo-check", prompt],
+      parsesSession: false,
+    };
+  }
+  return {
+    args: ["-p", prompt, "--max-turns", "1", "--output-format", "json"],
+    parsesSession: true,
+  };
 }
 
 export interface VerifyResult {
@@ -44,30 +70,30 @@ export async function verify(
       detail: `tachod is not answering on 127.0.0.1:${host.port}`,
     };
   }
-  const claude = deps.claude();
-  if (claude.path === undefined)
-    return { ok: false, detail: "`claude` is not on PATH" };
-  deps.out(`Running claude -p (max 1 turn) with hooks installed...`);
-  const run = deps.exec(claude.path, [
-    "-p",
-    options.prompt ?? "Reply with exactly the word OK and nothing else.",
-    "--max-turns",
-    "1",
-    "--output-format",
-    "json",
-  ]);
+  const harness = options.harness ?? "claude-code";
+  const facts = harness === "codex" ? deps.codex() : deps.claude();
+  const name = harness === "codex" ? "codex" : "claude";
+  if (facts.path === undefined)
+    return { ok: false, detail: `\`${name}\` is not on PATH` };
+  const turn = headlessTurn(harness, options.prompt ?? DEFAULT_PROMPT);
+  deps.out(
+    `Running ${name} ${turn.args[0]} (one headless turn) with hooks installed...`,
+  );
+  const run = deps.exec(facts.path, turn.args);
   if (run.status !== 0) {
     return {
       ok: false,
-      detail: `claude exited ${run.status ?? "signal"}: ${run.stderr.trim().slice(0, 300)}`,
+      detail: `${name} exited ${run.status ?? "signal"}: ${run.stderr.trim().slice(0, 300)}`,
     };
   }
   let sessionId: string | undefined;
-  try {
-    const parsed = JSON.parse(run.stdout) as { session_id?: string };
-    sessionId = parsed.session_id;
-  } catch {
-    // Fall through: the daemon's newest session is the best guess.
+  if (turn.parsesSession) {
+    try {
+      const parsed = JSON.parse(run.stdout) as { session_id?: string };
+      sessionId = parsed.session_id;
+    } catch {
+      // Fall through: the daemon's newest session is the best guess.
+    }
   }
   const deadline = deps.now() + (options.timeoutMs ?? 15_000);
   let found: DaemonSession | undefined;
