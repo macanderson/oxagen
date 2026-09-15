@@ -100,6 +100,19 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
+  // The recorders' running spend counter (ADR-060 §5): org_id NOT NULL,
+  // workspace_id NULL for a frame outside a workspace → workspace_nullable.
+  // Written and summed through withSystemDb with explicit org/workspace
+  // predicates, because an org-level ceiling covers every workspace.
+  { table: "billing.spend_counters", policyClass: "workspace_nullable" },
+
+  // ── cost.* (ADR-060) ────────────────────────────────────────────────────
+  // The price book: org_id NULL rows are the platform list prices every
+  // tenant reads; an org's negotiated rows are its own → org_or_global.
+  { table: "cost.price_entries", policyClass: "org_or_global" },
+  // Derived spend rollups, rebuilt from frames; org_id + workspace_id NOT NULL.
+  { table: "cost.run_totals", policyClass: "standard" },
+  { table: "cost.daily_totals", policyClass: "standard" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
