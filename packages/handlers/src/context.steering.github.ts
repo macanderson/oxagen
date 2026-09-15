@@ -42,11 +42,11 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     args: { title: string; head: string; base: string; body: string },
   ): Promise<{ number: number; htmlUrl: string }>;
-  /** The open PR from the branch `head` into `base`, or null. */
+  /** The open PR from the branch `head` into `base`, with its body, or null. */
   findOpenPullRequest(
     repo: SteeringRepository,
     args: { head: string; base: string },
-  ): Promise<{ number: number; htmlUrl: string } | null>;
+  ): Promise<{ number: number; htmlUrl: string; body: string } | null>;
   /** The branch the PR merges into, its head commit and, once GitHub merged it, the merge commit. */
   getPullRequest(
     repo: SteeringRepository,

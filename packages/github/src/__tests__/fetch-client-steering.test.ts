@@ -281,12 +281,25 @@ describe("compareCommits", () => {
 });
 
 describe("findOpenPullRequest", () => {
-  it("GETs the open pulls from owner:head into base and answers the first, or null when there is none", async () => {
+  it("GETs the open pulls from owner:head into base and answers the first with its body, or null when there is none", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         makeResponse([
-          { number: 519, html_url: "https://github.com/o/r/pull/519" },
+          {
+            number: 519,
+            html_url: "https://github.com/o/r/pull/519",
+            body: "Proposal `prp_1`",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        makeResponse([
+          {
+            number: 520,
+            html_url: "https://github.com/o/r/pull/520",
+            body: null,
+          },
         ]),
       )
       .mockResolvedValueOnce(makeResponse([]));
@@ -296,6 +309,12 @@ describe("findOpenPullRequest", () => {
     expect(await client.findOpenPullRequest(args)).toEqual({
       number: 519,
       htmlUrl: "https://github.com/o/r/pull/519",
+      body: "Proposal `prp_1`",
+    });
+    expect(await client.findOpenPullRequest(args)).toEqual({
+      number: 520,
+      htmlUrl: "https://github.com/o/r/pull/520",
+      body: "",
     });
     expect(await client.findOpenPullRequest(args)).toBeNull();
     const [url] = fetchMock.mock.calls[0] as [string];

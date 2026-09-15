@@ -80,6 +80,21 @@ describe("propose_record", () => {
       h.store.proposals.find((p) => p.publicId === labelled.proposalId)?.source,
     ).toBe("findings job · fnd_01K5RT6C");
   });
+
+  it("is refused for a signed-in role the gate excludes and writes no row; a call with no user is left to the kernel", async () => {
+    const h = harness();
+    gate.refuse = true;
+    await expect(
+      createProposeRecordHandler(h)(proposal(), ctx()),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+    expect(h.store.proposals).toHaveLength(0);
+    const out = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx({ userId: null, apiKeyId: "key_1" }),
+    );
+    expect(out.status).toBe("proposed");
+    expect(h.store.proposals).toHaveLength(1);
+  });
 });
 
 describe("list_proposals", () => {
@@ -192,12 +207,12 @@ describe("dismiss_proposal", () => {
     const store = h.store;
     const update = store.updateProposal.bind(store);
     let fail = true;
-    store.updateProposal = async (id, patch, from) => {
+    store.updateProposal = async (id, patch, from, guard) => {
       if (fail && patch.status === "pr_open") {
         fail = false;
         throw new Error("db blip");
       }
-      return update(id, patch, from);
+      return update(id, patch, from, guard);
     };
     await expect(open({ proposalId: first }, ctx())).rejects.toThrow("db blip");
     expect(h.github.pulls[0]).toMatchObject({ number: 519, state: "open" });

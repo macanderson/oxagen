@@ -147,6 +147,18 @@ export function contextPrView(
 const bullets = (items: readonly string[]) =>
   items.length > 0 ? items.map((i) => `- \`${i}\``).join("\n") : "- none";
 
+/** The line of `prBody` that names the proposal. */
+const proposalLine = (publicId: string) => `Proposal \`${publicId}\``;
+
+/**
+ * Whether a PR body names this proposal. Every proposal on a lineage shares
+ * the branch `context/<lineage>`, so an open PR found on it belongs to a
+ * proposal only when the body open_context_pr wrote for that proposal says so.
+ */
+export function bodyNamesProposal(body: string, publicId: string): boolean {
+  return body.includes(proposalLine(publicId));
+}
+
 /** The PR body (spec §10.3 step 1): rationale, supporting records, evidence, the checks. */
 export function prBody(row: ProposalRow): string {
   const effect = row.constraintEffect
@@ -182,7 +194,7 @@ export function prBody(row: ProposalRow): string {
     "",
     "Oxagen runs six checks on this pull request as check runs: schema, lineage uniqueness, record_hash recomputation, secret and PII scan, conflict against active records, constraint_effect ∈ {require, forbid}. Merge is the publication; Oxagen merges from Mission Control once every check passes and the reviewer the governance mode names approves.",
     "",
-    `Proposal \`${row.publicId}\` · raised by ${row.source}` +
+    `${proposalLine(row.publicId)} · raised by ${row.source}` +
       (row.stampedRecordId ? ` · record_id \`${row.stampedRecordId}\`` : "") +
       (row.recordHash ? ` · record_hash \`${row.recordHash}\`` : ""),
   ].join("\n");

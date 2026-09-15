@@ -178,7 +178,7 @@ describe("the GitHub seam", () => {
       .mockRejectedValueOnce(new Error("GitHub API error 404: Not Found"));
     const findOpenPullRequest = vi
       .fn()
-      .mockResolvedValueOnce({ number: 519, htmlUrl: "u" });
+      .mockResolvedValueOnce({ number: 519, htmlUrl: "u", body: "b" });
     const { gh } = seam(fakeClient({ compareCommits, findOpenPullRequest }));
     const repo = await gh.resolveRepository(SCOPE);
     expect(await gh.changedPaths(repo, "main", "head1")).toEqual([
@@ -197,7 +197,7 @@ describe("the GitHub seam", () => {
     });
     expect(
       await gh.findOpenPullRequest(repo, { head: "context/x", base: "main" }),
-    ).toEqual({ number: 519, htmlUrl: "u" });
+    ).toEqual({ number: 519, htmlUrl: "u", body: "b" });
     expect(findOpenPullRequest).toHaveBeenCalledWith({
       owner: "a-intel",
       repo: "platform",

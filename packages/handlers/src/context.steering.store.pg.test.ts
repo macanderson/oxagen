@@ -260,6 +260,50 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     ).toMatchObject({ id: a.id });
   });
 
+  it("refuses a write tied to a head the proposal has moved past with head_moved, and applies one tied to its head", async () => {
+    const p = await propose({ lineageId: `${lineage}.head` });
+    await inScope(() =>
+      store.updateProposal(
+        p.id,
+        { status: "checks_running", headSha: "head2" },
+        ["proposed"],
+      ),
+    );
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { headSha: "head1" },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+    expect(
+      (await inScope(() => store.findProposal(scope, p.publicId)))?.status,
+    ).toBe("checks_running");
+    expect(
+      await inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_failed" },
+          ["checks_running"],
+          { headSha: "head2" },
+        ),
+      ),
+    ).toMatchObject({ status: "checks_failed", headSha: "head2" });
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { headSha: "head2" },
+        ),
+      ),
+    ).rejects.toMatchObject({ reason: "proposal_checks_failed" });
+  });
+
   it("appends once per content hash and reads the first back on a repeat", async () => {
     const values = {
       orgId,

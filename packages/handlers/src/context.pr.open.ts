@@ -5,13 +5,16 @@
 // record file, the PR, then the six checks one at a time — each outcome is
 // written to the row before the next check starts, and mirrored to GitHub as
 // a check run. The row records the branch before GitHub is touched, so a call
-// that failed after GitHub opened the PR is retried onto that PR. On a row
+// that failed after GitHub opened the PR is retried onto that PR; a PR on the
+// branch is adopted only when its body names this proposal. On a row
 // whose PR is already open the checks run again on the same PR, against its
 // current head, while it still targets the production branch. The file that
 // is checked is the one read back from that head, never the text this process
 // built, together with every path the head changes; once every check passes
 // the row carries the identity stamped in that file: the merge gate pins the
-// merge to this head and the registry is written from the row.
+// merge to this head and the registry is written from the row. Every write
+// after the checks start is tied to the head they read, so a re-run that
+// recorded a newer head wins and this call's outcome is refused `head_moved`.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import {
@@ -47,7 +50,11 @@ import {
   parseGovernanceMode,
 } from "./context.steering.policy";
 import { proposalMoved, type ProposalRow } from "./context.steering.store";
-import { contextPrView, prBody } from "./context.steering.view";
+import {
+  bodyNamesProposal,
+  contextPrView,
+  prBody,
+} from "./context.steering.view";
 
 const OPEN_PR: readonly ProposalStatus[] = [
   "pr_open",
@@ -123,12 +130,12 @@ export function createOpenContextPrHandler(
     const branch = contextBranch(row.lineageId);
     if (!isOpen(row.status)) {
       // An open PR on the branch is this proposal's only when an earlier call
-      // for it recorded the branch and failed before recording the PR.
+      // for it opened the PR and failed before recording it: the body names it.
       const existing = await deps.github.findOpenPullRequest(repo, {
         head: branch,
         base: repo.defaultBranch,
       });
-      if (existing && row.branch !== branch) {
+      if (existing && !bodyNamesProposal(existing.body, row.publicId)) {
         throw new HandlerError({
           code: "conflict",
           reason: "lineage_pr_open",
@@ -144,7 +151,8 @@ export function createOpenContextPrHandler(
         force: row.force as RecordForce,
         sharingScope: row.sharingScope as PublishedSharingScope,
         statement: row.statement,
-        origin: ctx.userId ? "user" : "inferred",
+        // Who raised the proposal: a person, or an agent over an API key.
+        origin: row.createdByUserId ? "user" : "inferred",
         proposalPublicId: row.publicId,
         setId: setIdFor(repo),
       });
@@ -262,9 +270,12 @@ export function createOpenContextPrHandler(
       const checks = row!.checks.map((c) =>
         c.name === name ? { ...c, ...patch } : c,
       );
-      row = await deps.store.updateProposal(row!.id, { checks }, [
-        "checks_running",
-      ]);
+      row = await deps.store.updateProposal(
+        row!.id,
+        { checks },
+        ["checks_running"],
+        { headSha },
+      );
     };
     const allPassed = await runChecks(checkCtx, {
       start: async (name) => {
@@ -311,6 +322,7 @@ export function createOpenContextPrHandler(
           : {}),
       },
       ["checks_running"],
+      { headSha },
     );
     return contextPrView(row, await deps.store.ledgerLength(scope), null);
   };

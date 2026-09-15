@@ -8,10 +8,14 @@
 import { describe, expect, it } from "vitest";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
 import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createOpenContextPrHandler } from "./context.pr.open";
+import { createProposeRecordHandler } from "./context.proposal.create";
 import { createDismissProposalHandler } from "./context.proposal.dismiss";
+import { createAppendRecordHandler } from "./context.records.append";
 import { ctx, harness } from "./context.steering.test-support";
 
 const API_KEY_CTX = ctx({ userId: null, apiKeyId: "key_1" });
@@ -43,5 +47,33 @@ describe("the role-gated steering writes under an API key", () => {
     ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
     expect(h.github.branches).toHaveLength(0);
     expect(h.store.proposals).toHaveLength(0);
+  });
+});
+
+describe("propose_record and append_record under an API key", () => {
+  it("gate only a signed-in user, so an agent's key reaches the store without the role query", async () => {
+    const h = harness();
+    const record = {
+      lineageId: "ctx.triage.reproduce-first",
+      statement: "Reproduce before labelling.",
+      sharingScope: "workspace",
+    };
+    await createProposeRecordHandler(h)(
+      contextProposalCreate.input.parse({
+        record: { ...record, kind: "rule", force: "should" },
+        rationale: "14 unsatisfied runs in 30 days.",
+      }),
+      API_KEY_CTX,
+    );
+    await createAppendRecordHandler(h)(
+      contextRecordsAppend.input.parse({
+        ...record,
+        kind: "observation",
+        sourceRefs: ["frame:run_1/12"],
+      }),
+      API_KEY_CTX,
+    );
+    expect(h.store.proposals).toHaveLength(1);
+    expect(h.store.appends).toHaveLength(1);
   });
 });

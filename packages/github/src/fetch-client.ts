@@ -62,6 +62,7 @@ interface GHRef {
 interface GHPull {
   number: number;
   html_url: string;
+  body?: string | null;
 }
 
 interface GHErrorBody {
@@ -722,14 +723,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     repo: string;
     head: string;
     base: string;
-  }): Promise<{ number: number; htmlUrl: string } | null> {
+  }): Promise<{ number: number; htmlUrl: string; body: string } | null> {
     const query = `state=open&head=${encodeURIComponent(`${args.owner}:${args.head}`)}&base=${encodeURIComponent(args.base)}`;
     const data = await request<GHPull[]>(
       "GET",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls?${query}`,
     );
     const pr = data[0];
-    return pr ? { number: pr.number, htmlUrl: pr.html_url } : null;
+    return pr
+      ? { number: pr.number, htmlUrl: pr.html_url, body: pr.body ?? "" }
+      : null;
   }
 
   async function listBranches(args: {

@@ -15,6 +15,7 @@ import type {
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
+  headMoved,
   proposalMoved,
   type AppendRow,
   type ProposalRow,
@@ -172,12 +173,15 @@ export class MemoryStore implements SteeringStore {
     id: string,
     patch: Parameters<SteeringStore["updateProposal"]>[1],
     from: readonly ProposalStatus[],
+    guard?: { headSha: string },
   ) {
     const i = this.proposals.findIndex((p) => p.id === id);
     if (i < 0) throw new Error(`no proposal ${id}`);
     const current = this.proposals[i]!;
     if (!from.includes(current.status as ProposalStatus))
       throw proposalMoved(current.publicId, current.status);
+    if (guard && current.headSha !== guard.headSha)
+      throw headMoved(current.publicId, current.headSha, guard.headSha);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
     if (
       OPEN.has(next.status) &&
@@ -567,7 +571,9 @@ export class FakeGitHub implements SteeringGitHub {
     const pr = this.pulls.find(
       (p) => p.head === args.head && p.base === args.base && p.state === "open",
     );
-    return pr ? { number: pr.number, htmlUrl: pullUrl(pr.number) } : null;
+    return pr
+      ? { number: pr.number, htmlUrl: pullUrl(pr.number), body: pr.body }
+      : null;
   }
   async changedPaths(_repo: SteeringRepository, base: string, head: string) {
     const onBase = new Set(this.lineage(this.shaOf(base)));

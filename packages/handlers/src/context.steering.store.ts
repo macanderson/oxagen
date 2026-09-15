@@ -160,14 +160,16 @@ export interface SteeringStore {
     page: Page,
   ): Promise<{ rows: ProposalRow[]; total: number }>;
   /**
-   * Apply the patch only while the proposal's status is one of `from`; a
-   * proposal another call moved on is left as it is and the write throws
-   * `conflict` with the reason `proposal_<its status>`.
+   * Apply the patch only while the proposal's status is one of `from` and,
+   * with `guard`, its head is still `guard.headSha`; a proposal another call
+   * moved on is left as it is and the write throws `conflict` with the reason
+   * `proposal_<its status>`, or `head_moved` when only the head differs.
    */
   updateProposal(
     id: string,
     patch: ProposalPatch,
     from: readonly ProposalStatus[],
+    guard?: { headSha: string },
   ): Promise<ProposalRow>;
 
   listRecords(
@@ -220,6 +222,19 @@ export function proposalMoved(publicId: string, status: string): HandlerError {
     code: "conflict",
     reason: `proposal_${status}`,
     message: `Proposal ${publicId} is ${status}`,
+  });
+}
+
+/** A write tied to the checks on `expected` found the proposal at another head. */
+export function headMoved(
+  publicId: string,
+  headSha: string | null,
+  expected: string,
+): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "head_moved",
+    message: `Proposal ${publicId} moved to ${headSha ?? "no commit"} while the checks ran on ${expected}`,
   });
 }
 
@@ -369,7 +384,7 @@ export const postgresSteeringStore: SteeringStore = {
     });
   },
 
-  async updateProposal(id, patch, from) {
+  async updateProposal(id, patch, from, guard) {
     return withTenantDb(async (tx) => {
       const [row] = await tx
         .update(schema.contextProposals)
@@ -378,6 +393,9 @@ export const postgresSteeringStore: SteeringStore = {
           and(
             eq(schema.contextProposals.id, id),
             inArray(schema.contextProposals.status, [...from]),
+            guard
+              ? eq(schema.contextProposals.headSha, guard.headSha)
+              : undefined,
           ),
         )
         .returning();
@@ -386,6 +404,7 @@ export const postgresSteeringStore: SteeringStore = {
         .select({
           publicId: schema.contextProposals.publicId,
           status: schema.contextProposals.status,
+          headSha: schema.contextProposals.headSha,
         })
         .from(schema.contextProposals)
         .where(eq(schema.contextProposals.id, id))
@@ -394,6 +413,12 @@ export const postgresSteeringStore: SteeringStore = {
         throw new Error(
           `[context.steering] proposal ${id} vanished during update`,
         );
+      if (
+        guard &&
+        from.includes(current.status as ProposalStatus) &&
+        current.headSha !== guard.headSha
+      )
+        throw headMoved(current.publicId, current.headSha, guard.headSha);
       throw proposalMoved(current.publicId, current.status);
     });
   },

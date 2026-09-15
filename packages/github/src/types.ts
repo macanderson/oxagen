@@ -258,14 +258,14 @@ export interface GitHubClient {
 
   /**
    * The open pull request from `head` (a branch in this repository) into
-   * `base`, or null when there is none.
+   * `base`, with its body ("" when it has none), or null when there is none.
    */
   findOpenPullRequest(args: {
     owner: string;
     repo: string;
     head: string;
     base: string;
-  }): Promise<{ number: number; htmlUrl: string } | null>;
+  }): Promise<{ number: number; htmlUrl: string; body: string } | null>;
 
   /**
    * List branches in a repository, paginated up to 300 branches (3 pages of

@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HandlerError } from "@oxagen/oxagen";
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
+
+// The role gate reads iam.principal_role_assignments; the tests decide it.
+const gate = vi.hoisted(() => ({ refuse: false }));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActorOrgRole: async () => null,
+  resolveActorWorkspaceRole: async () => null,
+  assertOrgRole: async () => {
+    if (gate.refuse) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+    }
+    return "Member";
+  },
+}));
+
 import { createAppendRecordHandler } from "./context.records.append";
 import { AUTHOR, ctx, harness } from "./context.steering.test-support";
 
@@ -12,7 +30,28 @@ const input = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+beforeEach(() => {
+  gate.refuse = false;
+});
+
 describe("append_record", () => {
+  it("is refused for a signed-in role the gate excludes and writes nothing; a call with no user is left to the kernel", async () => {
+    const h = harness();
+    const handler = createAppendRecordHandler(h);
+    gate.refuse = true;
+    await expect(handler(input(), ctx())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(h.store.appends).toHaveLength(0);
+    const out = await handler(
+      input(),
+      ctx({ userId: null, apiKeyId: "key_1" }),
+    );
+    expect(out.appended).toBe(true);
+    expect(h.store.appends).toHaveLength(1);
+  });
+
   it("refuses a directive with directive_requires_context_pr and stores nothing", async () => {
     const h = harness();
     await expect(

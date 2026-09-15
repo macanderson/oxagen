@@ -4,7 +4,8 @@
 // proposal with a reason. A proposal that started a Context PR has the PR
 // closed and its branch deleted first, so the next proposal on the lineage
 // opens a fresh branch and PR; that includes a proposal whose open failed
-// after GitHub opened the PR, whose PR is found on its branch. A merged
+// after GitHub opened the PR, whose PR is found on its branch and named in
+// its body. A merged
 // proposal is published and cannot be dismissed; retirement is its own
 // Context PR and is outside this release. The `rejected` write applies only
 // to a proposal still short of `merged`, so a merge that published while
@@ -14,6 +15,7 @@ import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposa
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { assertOrgRole } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import { bodyNamesProposal } from "./context.steering.view";
 
 const DISMISSABLE: readonly ProposalStatus[] = [
   "proposed",
@@ -48,24 +50,27 @@ export function createDismissProposalHandler(
       return { proposalId: row.publicId, status: "rejected" };
     }
     // Without a PR number the branch is this proposal's only while no other
-    // proposal on the lineage has opened a PR on it since.
+    // proposal on the lineage has recorded a PR on it, and a PR found on it
+    // only when its body names this proposal.
     if (
       row.branch &&
       (row.prNumber !== null ||
         !(await deps.store.findOpenPrOnLineage(scope, row.lineageId, row.id)))
     ) {
       const repo = await deps.github.resolveRepository(scope);
-      const prNumber =
-        row.prNumber ??
-        (
-          await deps.github.findOpenPullRequest(repo, {
-            head: row.branch,
-            base: repo.defaultBranch,
-          })
-        )?.number ??
-        null;
-      if (prNumber !== null) await deps.github.closePullRequest(repo, prNumber);
-      await deps.github.deleteBranch(repo, row.branch);
+      const found =
+        row.prNumber === null
+          ? await deps.github.findOpenPullRequest(repo, {
+              head: row.branch,
+              base: repo.defaultBranch,
+            })
+          : null;
+      if (!found || bodyNamesProposal(found.body, row.publicId)) {
+        const prNumber = row.prNumber ?? found?.number ?? null;
+        if (prNumber !== null)
+          await deps.github.closePullRequest(repo, prNumber);
+        await deps.github.deleteBranch(repo, row.branch);
+      }
     }
     try {
       await deps.store.updateProposal(

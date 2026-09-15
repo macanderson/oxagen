@@ -21,6 +21,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 import { createOpenContextPrHandler } from "./context.pr.open";
 import { createGetContextPrHandler } from "./context.pr.get";
 import { createMergeContextPrHandler } from "./context.pr.merge";
+import { createDismissProposalHandler } from "./context.proposal.dismiss";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListRecordsHandler } from "./context.records.list";
 import { stringify } from "smol-toml";
@@ -155,8 +156,8 @@ describe("open_context_pr", () => {
     const seen: string[] = [];
     const store = h.store;
     const original = store.updateProposal.bind(store);
-    store.updateProposal = async (id, patch, from) => {
-      const row = await original(id, patch, from);
+    store.updateProposal = async (id, patch, from, guard) => {
+      const row = await original(id, patch, from, guard);
       const glyph = {
         pending: ".",
         running: "r",
@@ -370,12 +371,12 @@ describe("open_context_pr", () => {
     const store = h.store;
     const update = store.updateProposal.bind(store);
     let fail = true;
-    store.updateProposal = async (rowId, patch, from) => {
+    store.updateProposal = async (rowId, patch, from, guard) => {
       if (fail && patch.status === "pr_open") {
         fail = false;
         throw new Error("db blip");
       }
-      return update(rowId, patch, from);
+      return update(rowId, patch, from, guard);
     };
     const open = createOpenContextPrHandler(h);
     await expect(open({ proposalId: id }, ctx())).rejects.toThrow("db blip");
@@ -392,6 +393,160 @@ describe("open_context_pr", () => {
     expect(h.github.pulls).toHaveLength(1);
     expect(h.github.checkRuns).toHaveLength(6);
     expect(h.github.checkRuns.every((r) => r.headSha === "head2")).toBe(true);
+  });
+
+  it("adopts an open PR on the branch only when its body names the proposal: another proposal's orphan PR is refused, survives the first proposal's dismissal, and is adopted by its own retry", async () => {
+    const h = harness();
+    const open = createOpenContextPrHandler(h);
+    const a = await proposed(h);
+    const b = await proposed(h);
+
+    // A records the branch, then GitHub fails to open the PR.
+    const github = h.github;
+    const openPr = github.openPullRequest.bind(github);
+    let prFails = true;
+    github.openPullRequest = async (repo, args) => {
+      if (prFails) {
+        prFails = false;
+        throw new Error("GitHub API error 502: Bad Gateway");
+      }
+      return openPr(repo, args);
+    };
+    await expect(open({ proposalId: a }, ctx())).rejects.toThrow("502");
+    expect(h.github.pulls).toHaveLength(0);
+
+    // B opens PR 519, then recording it fails.
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let rowFails = true;
+    store.updateProposal = async (rowId, patch, from, guard) => {
+      if (rowFails && patch.status === "pr_open") {
+        rowFails = false;
+        throw new Error("db blip");
+      }
+      return update(rowId, patch, from, guard);
+    };
+    await expect(open({ proposalId: b }, ctx())).rejects.toThrow("db blip");
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.pulls[0]!.body).toContain(`Proposal \`${b}\``);
+
+    await expect(open({ proposalId: a }, ctx())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "lineage_pr_open",
+      message: expect.stringContaining("/pull/519"),
+    });
+    expect(h.store.proposals.find((p) => p.publicId === a)).toMatchObject({
+      status: "proposed",
+      prNumber: null,
+    });
+    expect(h.github.checkRuns).toHaveLength(0);
+
+    await createDismissProposalHandler(h)(
+      { proposalId: a, reason: "superseded" },
+      ctx(),
+    );
+    expect(h.github.pulls[0]).toMatchObject({ number: 519, state: "open" });
+    expect(h.github.deletedBranches).toEqual([]);
+
+    const out = await open({ proposalId: b }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr?.number).toBe(519);
+    expect(h.github.pulls).toHaveLength(1);
+  });
+
+  it("stamps origin from who raised the proposal: an agent's proposal opened by a person is inferred, and its hash recomputes", async () => {
+    const h = harness();
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposalInput(),
+      ctx({ userId: null, apiKeyId: "key_1" }),
+    );
+    const out = await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.checks.find((c) => c.name === "record_hash")?.status).toBe(
+      "passed",
+    );
+    const parsed = parseChecked((await h.github.readFile(REPO, PATH, BRANCH))!);
+    if (!parsed.ok) throw new Error(parsed.reason);
+    expect(parsed.file.record[0]).toMatchObject({
+      origin: "inferred",
+      record_hash: out.record?.recordHash,
+    });
+  });
+
+  it("a re-run that records a newer head while an earlier run finishes wins: the earlier outcome is refused head_moved and nothing merges", async () => {
+    const h = harness();
+    const id = await proposed(h);
+    const open = createOpenContextPrHandler(h);
+    expect((await open({ proposalId: id }, ctx())).status).toBe(
+      "checks_passed",
+    );
+
+    // Run A checks head1 and is held at its last write.
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let releaseA!: () => void;
+    const holdA = new Promise<void>((resolve) => (releaseA = resolve));
+    let parkA!: () => void;
+    const aParked = new Promise<void>((resolve) => (parkA = resolve));
+    let holdingA = true;
+    store.updateProposal = async (rowId, patch, from, guard) => {
+      if (
+        holdingA &&
+        (patch.status === "checks_passed" || patch.status === "checks_failed")
+      ) {
+        holdingA = false;
+        parkA();
+        await holdA;
+      }
+      return update(rowId, patch, from, guard);
+    };
+    // Run B, on the head pushed meanwhile, is held at its first check run.
+    const github = h.github;
+    const report = github.reportCheckRun.bind(github);
+    let releaseB!: () => void;
+    const holdB = new Promise<void>((resolve) => (releaseB = resolve));
+    let parkB!: () => void;
+    const bParked = new Promise<void>((resolve) => (parkB = resolve));
+    let holdingB = true;
+    github.reportCheckRun = async (repo, args) => {
+      if (holdingB && args.headSha === "head2") {
+        holdingB = false;
+        parkB();
+        await holdB;
+      }
+      return report(repo, args);
+    };
+
+    const runA = open({ proposalId: id }, ctx());
+    await aParked;
+    const edited = (await h.github.readFile(REPO, PATH, BRANCH))!.replace(
+      "cache the first read",
+      "cache every read",
+    );
+    h.github.commit(BRANCH, PATH, edited);
+    const runB = open({ proposalId: id }, ctx());
+    await bParked;
+    releaseA();
+    await expect(runA).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+    });
+    releaseB();
+    const out = await runB;
+    expect(out.status).toBe("checks_failed");
+    expect(out.pr?.headSha).toBe("head2");
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_failed",
+      headSha: "head2",
+    });
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ reason: "checks_not_passed" });
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.store.records).toHaveLength(0);
   });
 
   it("is refused for a role the gate excludes, before GitHub is touched", async () => {
