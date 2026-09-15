@@ -49,6 +49,15 @@ const CONSOLE_CONTRACTS = [
   "remove_org_member",
   "accept_member_invite",
   "decline_member_invite",
+  // The #2964 lane: the roles read and the role and workspace settings
+  // writes the Organization page binds (ADR-052 exclusion 2).
+  "list_iam_roles",
+  "create_role",
+  "set_role_grants",
+  "delete_role",
+  "create_workspace",
+  "update_workspace_settings",
+  "archive_workspace",
 ] as const;
 
 /** The one rev1 governed action. */

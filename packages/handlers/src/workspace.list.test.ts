@@ -63,7 +63,7 @@ describe("workspaceListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: "usr_session",
         apiKeyId: null,
@@ -88,7 +88,7 @@ describe("workspaceListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: null,
         apiKeyId: "aky_test",
@@ -106,7 +106,7 @@ describe("workspaceListHandler", () => {
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_no_creator" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -120,7 +120,7 @@ describe("workspaceListHandler", () => {
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_deleted" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -133,7 +133,7 @@ describe("workspaceListHandler", () => {
   it("throws immediately when neither userId nor apiKeyId is set (unauthenticated)", async () => {
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: null }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -185,7 +185,10 @@ describe("workspaceListHandler", () => {
       tx.select.mockReturnValue({
         from: () => ({ leftJoin: () => ({ where: () => ({ orderBy }) }) }),
       });
-      await workspaceListHandler({ orgSlug: "acme" }, session);
+      await workspaceListHandler(
+        { includeArchived: false, orgSlug: "acme" },
+        session,
+      );
       expect(orderBy).toHaveBeenCalledWith(
         asc(schema.workspaces.createdAt),
         asc(schema.workspaces.slug),
@@ -195,7 +198,10 @@ describe("workspaceListHandler", () => {
     it("refuses an organization the caller is not a member of as forbidden, listing nothing (negative)", async () => {
       const tx = runInTx({ org, membership: undefined });
       await expect(
-        workspaceListHandler({ orgSlug: "acme" }, session),
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "acme" },
+          session,
+        ),
       ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
       expect(tx.select).not.toHaveBeenCalled();
     });
@@ -203,7 +209,10 @@ describe("workspaceListHandler", () => {
     it("refuses an unknown organization with the same refusal (negative)", async () => {
       const tx = runInTx({ org: undefined, membership: undefined });
       await expect(
-        workspaceListHandler({ orgSlug: "nope" }, session),
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "nope" },
+          session,
+        ),
       ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
       expect(tx.query.orgUsers.findFirst).not.toHaveBeenCalled();
     });

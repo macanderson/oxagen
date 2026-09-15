@@ -144,7 +144,9 @@
                       "type": "string",
                       "enum": [
                         "gateway_observed",
-                        "client_attested"
+                        "client_attested",
+                        "mixed",
+                        "estimated"
                       ]
                     }
                   },

@@ -132,6 +132,48 @@ export async function resolveActorWorkspaceRole(
   });
 }
 
+/** The credential fields of a `CapabilityContext` the acting user is read from. */
+export interface ActingCredential {
+  readonly orgId: string;
+  readonly userId: string | null;
+  readonly apiKeyId: string | null;
+}
+
+/**
+ * The user a call acts as: the signed-in user, or, for an API-key call (the
+ * only credential MCP accepts), the key's creator
+ * (`auth.api_keys.created_by_user_id`), the mapping the kernel's enterprise
+ * IAM path makes (fetch-authz.ts) and `assign_agent_role` makes for its
+ * ceiling. A deleted key, a key of another org, a key with no recorded
+ * creator, or no credential at all resolves to null, which `assertOrgRole`
+ * refuses as `no_principal`. A handler whose surfaces include `mcp` passes
+ * this user to `assertOrgRole` and records it as the actor.
+ *
+ * Runs inside the caller's tenant scope: `api_keys` carries the org and
+ * workspace RLS policy, and a key's context names the key's own workspace.
+ */
+export async function resolveActingUserId(
+  ctx: ActingCredential,
+): Promise<string | null> {
+  if (ctx.userId) return ctx.userId;
+  const apiKeyId = ctx.apiKeyId;
+  if (!apiKeyId) return null;
+  return withTenantDb(async (tx) => {
+    const [keyRow] = await tx
+      .select({ createdByUserId: schema.apiKeys.createdByUserId })
+      .from(schema.apiKeys)
+      .where(
+        and(
+          eq(schema.apiKeys.id, apiKeyId),
+          eq(schema.apiKeys.orgId, ctx.orgId),
+          isNull(schema.apiKeys.deletedAt),
+        ),
+      )
+      .limit(1);
+    return keyRow?.createdByUserId ?? null;
+  });
+}
+
 /** The fields of a `CapabilityContext` the role gate reads. */
 export interface OrgRoleActor {
   readonly orgId: string;
@@ -155,10 +197,10 @@ export interface OrgRoleRequirement {
  *
  * Roles are assigned to human principals (`iam.principals.parent_user_id`
  * with `kind = 'human'`), so the gate resolves `ctx.userId` and nothing else.
- * A context with no user — an API-key call, or none — is refused with reason
- * `no_principal` before any query: the kernel's enterprise IAM path is where
- * an API key authorizes as its creator (fetch-authz.ts), and this gate makes
- * no such mapping. Reason `org_role_required` covers a user with no active
+ * A context with no user is refused with reason `no_principal` before any
+ * query. The gate makes no key-to-creator mapping itself: a handler that
+ * serves API-key callers resolves the creator with `resolveActingUserId` and
+ * passes it as `userId`. Reason `org_role_required` covers a user with no active
  * principal, no qualifying role, or a role outside both sets. The workspace
  * leg runs only after the org leg failed, and only when the context names a
  * workspace. Returns the role name that satisfied the check so a handler can

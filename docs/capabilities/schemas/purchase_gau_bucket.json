@@ -1,0 +1,79 @@
+{
+  "name": "purchase_gau_bucket",
+  "domain": "billing",
+  "description": "Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "quantityGau": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000
+      },
+      "successPath": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "cancelPath": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      }
+    },
+    "required": [
+      "quantityGau",
+      "successPath",
+      "cancelPath"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "checkoutUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "quantityGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "blockSizeGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "blocks": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "checkoutUrl",
+      "quantityGau",
+      "blockSizeGau",
+      "blocks"
+    ],
+    "additionalProperties": false
+  }
+}

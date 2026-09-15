@@ -56,6 +56,17 @@
       "writes": []
     },
     {
+      "domain": "workspace",
+      "name": "archive_workspace",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -237,6 +248,17 @@
       "writes": []
     },
     {
+      "domain": "iam",
+      "name": "create_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -380,6 +402,17 @@
       "name": "delete_model_credential",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "delete_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2320,6 +2353,17 @@
       "writes": []
     },
     {
+      "domain": "iam",
+      "name": "set_role_grants",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "set_routing_policy",
       "reads": [],
@@ -2773,7 +2817,7 @@
       "writes": []
     }
   ],
-  "contentHash": "3b1c43527897d226f5c138b82748be87aee461860260a5faa794f465de4b42c8",
+  "contentHash": "b66ed4bb4ac8b32e68716b7d7f8180cca2bcc79777496ee9fc3e293aa25762ac",
   "domains": [
     {
       "name": "agent",
@@ -18070,6 +18114,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "archived_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "archived_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "workspace",

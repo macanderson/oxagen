@@ -1,16 +1,28 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * create_workspace — a workspace in the caller's org.
+ *
+ * The handler bootstraps the workspace (its namespace, the creator's Owner
+ * membership, its registry seed) and refuses a slug already used in the org
+ * (`conflict`, `slug_taken`). Org Owners and Admins, and a workspace Owner
+ * calling from a workspace, are checked in the handler (INV-29).
+ */
 export const workspaceCreate = registerCapability({
   name: "create_workspace",
   domain: "workspace",
-  description: "Create a workspace within the active tenant",
+  description:
+    "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
+  // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
+  noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "workspace" },
   sensitivity: "medium",
+  mutates: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

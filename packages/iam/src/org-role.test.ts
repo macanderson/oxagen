@@ -12,6 +12,9 @@
 //     returns it; with a `workspace` requirement, a workspace role in that
 //     set passes after the org leg fails, one outside it is refused, and a
 //     context with no workspace never runs the workspace leg
+//   - resolveActingUserId: the signed-in user with no query; an API key's
+//     creator, the lookup pinned to the key id, the org and a live key; an
+//     unknown or deleted key, or no credential, → null
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
@@ -38,6 +41,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 import { schema } from "@oxagen/database";
 import {
   assertOrgRole,
+  resolveActingUserId,
   resolveActorOrgRole,
   resolveActorWorkspaceRole,
 } from "./org-role";
@@ -307,6 +311,67 @@ describe("assertOrgRole with a workspace requirement", () => {
     await expect(
       assertOrgRole({ ...IN_WS, userId: null }, APPROVER),
     ).rejects.toSatisfy(forbidden("no_principal"));
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveActingUserId", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** Answers the api_keys lookup with the given creator, or no row. */
+  function stubKeyLookup(createdByUserId: string | null) {
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      Promise.resolve(
+        fn({
+          select: () => ({
+            from: (table: unknown) => {
+              if (table !== schema.apiKeys) throw new Error("unexpected table");
+              return {
+                where: () => ({
+                  limit: () =>
+                    Promise.resolve(
+                      createdByUserId ? [{ createdByUserId }] : [],
+                    ),
+                }),
+              };
+            },
+          }),
+        }),
+      ),
+    );
+  }
+
+  it("returns the signed-in user without a query", async () => {
+    stubKeyLookup("creator_1");
+    await expect(
+      resolveActingUserId({ orgId: "org_1", userId: "user_1", apiKeyId: null }),
+    ).resolves.toBe("user_1");
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("returns an API key's creator, reading the live key of this org by id", async () => {
+    stubKeyLookup("creator_1");
+    await expect(
+      resolveActingUserId({ orgId: "org_1", userId: null, apiKeyId: "aky_1" }),
+    ).resolves.toBe("creator_1");
+    expect(mocks.eq).toHaveBeenCalledWith(schema.apiKeys.id, "aky_1");
+    expect(mocks.eq).toHaveBeenCalledWith(schema.apiKeys.orgId, "org_1");
+    expect(mocks.isNull).toHaveBeenCalledWith(schema.apiKeys.deletedAt);
+  });
+
+  it("returns null for a key with no live row: unknown, deleted or another org's (negative)", async () => {
+    stubKeyLookup(null);
+    await expect(
+      resolveActingUserId({ orgId: "org_1", userId: null, apiKeyId: "aky_1" }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null with no credential, before any query (negative)", async () => {
+    await expect(
+      resolveActingUserId({ orgId: "org_1", userId: null, apiKeyId: null }),
+    ).resolves.toBeNull();
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });

@@ -36,6 +36,8 @@ const workspace = (slug: string, name: string, role: string | null) => ({
   namespace: slug,
   name,
   role,
+  // list_workspaces answers archivedAt on every row: null while active.
+  archivedAt: null,
 });
 
 const workspaces = workspaceList.output.parse({

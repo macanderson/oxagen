@@ -73,6 +73,10 @@ import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.pu
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
+import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
+import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
+import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
+import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
@@ -136,6 +140,10 @@ import { spendStatementExportRoute } from "./spend.statement.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { tachoCommandDispatchRoute } from "./tacho.command.dispatch";
 import { tachoCommandListRoute } from "./tacho.command.list";
+import { iamRoleCreateRoute } from "./iam.role.create";
+import { iamRoleGrantsSetRoute } from "./iam.role.grants.set";
+import { iamRoleDeleteRoute } from "./iam.role.delete";
+import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
 
@@ -710,6 +718,56 @@ const ROUTES: ThinRoute[] = [
     body: { runId: "tse_a1b2c3" },
     expectedInput: { runId: "tse_a1b2c3", limit: 50 },
     invalidBody: { runId: "not-a-run-id" },
+    status: 200,
+  },
+  {
+    file: "iam.role.create",
+    route: iamRoleCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleCreate.name,
+    body: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      permissions: ["run.read"],
+    },
+    expectedInput: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      description: null,
+      permissions: ["run.read"],
+    },
+    invalidBody: {
+      name: "agent.release",
+      scopeKind: "workspace",
+      permissions: ["org.*"],
+    },
+    status: 201,
+  },
+  {
+    file: "iam.role.grants.set",
+    route: iamRoleGrantsSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleGrantsSet.name,
+    body: { roleId: "rol_1", permissions: ["run.read"] },
+    invalidBody: { roleId: "rol_1", permissions: [] },
+    status: 200,
+  },
+  {
+    file: "iam.role.delete",
+    route: iamRoleDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: iamRoleDelete.name,
+    body: { roleId: "rol_1" },
+    invalidBody: { roleId: "Owner" },
+    status: 200,
+  },
+  {
+    file: "workspace.archive",
+    route: workspaceArchiveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workspaceArchive.name,
+    body: { workspaceId: "wrk_1" },
+    invalidBody: { workspaceId: "core" },
     status: 200,
   },
   {

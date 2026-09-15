@@ -8,32 +8,39 @@
 
 ## Intent
 
-Update the active workspace's general settings — name, slug, description, and
-avatar — as a **partial** update: omit a field to leave it unchanged, pass a
-value to set it, pass `null` (description and avatarUrl only) to clear it.
-Routes the workspace settings edit through the capability kernel so the same
-fields are reachable from the agent, MCP, and CLI with consistent IAM,
-metering, and audit.
+Update a workspace's general settings — name, slug, description, and avatar —
+as a **partial** update: omit a field to leave it unchanged, pass a value to
+set it, pass `null` (description and avatarUrl only) to clear it. The target
+is the active workspace, or the one `workspaceId` names in the organization
+(the Organization › Workspaces section edits from an org scope). Routes the
+workspace settings edit through the capability kernel so the same fields are
+reachable from the agent, MCP, and CLI with consistent audit.
 
-Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).
+The handler checks roles (`assertOrgRole`, INV-29). Org Owners and Admins edit
+any workspace of the organization. The Owner or Admin of the workspace the call
+is scoped to edits that workspace only: a call that sets `workspaceId` requires
+an org Owner or Admin and is refused with `forbidden` / `org_role_required`
+otherwise. `noBillingGate`:
+a settings write, never a governed action (ADR-052 exclusion 2).
 
 ## Input
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| name | string (1–120, trimmed), optional | New display name |
-| slug | string (1–100, kebab-case), optional | New URL slug; must be unique within the org |
-| description | string (≤2000) \| null, optional | Free-text description; `null` clears it |
-| avatarUrl | string \| null, optional | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
+| Field       | Type                                 | Notes                                                                                                               |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| workspaceId | string (`wrk_…`), optional           | The workspace to update; omitted, the workspace the call is scoped to                                               |
+| name        | string (1–120, trimmed), optional    | New display name                                                                                                    |
+| slug        | string (1–100, kebab-case), optional | New URL slug; must be unique within the org                                                                         |
+| description | string (≤2000) \| null, optional     | Free-text description; `null` clears it                                                                             |
+| avatarUrl   | string \| null, optional             | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
 
 ## Output
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| name | string | Workspace display name after the update |
-| slug | string | URL slug after the update |
-| description | string \| null | Description after the update |
-| avatarUrl | string \| null | Avatar after the update; `null` when unset |
+| Field       | Type           | Notes                                      |
+| ----------- | -------------- | ------------------------------------------ |
+| name        | string         | Workspace display name after the update    |
+| slug        | string         | URL slug after the update                  |
+| description | string \| null | Description after the update               |
+| avatarUrl   | string \| null | Avatar after the update; `null` when unset |
 
 ## Side effects
 
@@ -42,7 +49,9 @@ ClickHouse observes the invocation via the kernel; the change is audit-logged.
 
 ## Errors
 
-- Requires a workspace context.
-- Denied for non-admin members (IAM `defaultEffect: deny`; org/workspace Owner
-  or Admin required).
-- Rejects an invalid or duplicate slug.
+| code            | reason                               | when                                                                                                                                          |
+| --------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forbidden`     | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside the accepted roles |
+| `not_found`     | `workspace_not_found`                | no workspace with that public id in the org, or the active one is not in the org                                                              |
+| `conflict`      | `slug_taken`                         | the slug is already used by another workspace in the org                                                                                      |
+| `invalid_input` | —                                    | the slug fails the contract's validator (kernel)                                                                                              |

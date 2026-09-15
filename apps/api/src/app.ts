@@ -148,6 +148,10 @@ import { pluginSettingsGetAuthAlertsRoute } from "./routes/v1/plugin.settings.ge
 import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.list";
 import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
 import { iamRoleListRoute } from "./routes/v1/iam.role.list";
+import { iamRoleCreateRoute } from "./routes/v1/iam.role.create";
+import { iamRoleGrantsSetRoute } from "./routes/v1/iam.role.grants.set";
+import { iamRoleDeleteRoute } from "./routes/v1/iam.role.delete";
+import { workspaceArchiveRoute } from "./routes/v1/workspace.archive";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyListRoute } from "./routes/v1/api.key.list";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
@@ -415,6 +419,7 @@ orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 // through untouched.
 orgScoped.use("/chat/*", chatRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
+orgScoped.route("/workspaces/archive", workspaceArchiveRoute);
 // Minting an enrollment is an operator action, so it sits behind the session
 // auth this router applies — not beside the ingest route, whose API-key gate
 // an already-enrolled machine could otherwise use to mint more enrollments.
@@ -662,6 +667,10 @@ orgScoped.route("/capability/registry/list", capabilityRegistryListRoute);
 orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
 // IAM roles read (read-only; writes remain provisioning-script-only).
 orgScoped.route("/iam/roles/list", iamRoleListRoute);
+// The role editor (ADR-063): create, replace grants, delete.
+orgScoped.route("/iam/roles", iamRoleCreateRoute);
+orgScoped.route("/iam/roles/grants", iamRoleGrantsSetRoute);
+orgScoped.route("/iam/roles/delete", iamRoleDeleteRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
 // GET on the same path lists the keys in scope (separate thin adapter per capability).
 orgScoped.route("/api-keys", apiKeyListRoute);

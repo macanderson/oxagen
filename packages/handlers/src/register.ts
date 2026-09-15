@@ -90,6 +90,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "archive_workspace",
+    async () =>
+      (await import("./workspace.archive"))
+        .workspaceArchiveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_orgs",
     async () =>
       (await import("./org.list")).orgListHandler as CapabilityHandlerFn,
@@ -984,6 +990,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./iam.role.list"))
         .iamRoleListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_role",
+    async () =>
+      (await import("./iam.role.create"))
+        .iamRoleCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_role_grants",
+    async () =>
+      (await import("./iam.role.grants.set"))
+        .iamRoleGrantsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_role",
+    async () =>
+      (await import("./iam.role.delete"))
+        .iamRoleDeleteHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_auth_alerts",

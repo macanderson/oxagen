@@ -53,9 +53,19 @@ export const workspaces = workspaceSchema.table(
     // Uses the same model_tier enum declared in the auth schema (shared type).
     defaultTextTier: modelTierEnum("default_text_tier"),
     defaultTextModel: text("default_text_model"),
+    // Archived by `archive_workspace` (issue #2964). NULL = active. An
+    // archived workspace leaves `list_workspaces` (the switcher and the CLI
+    // picker) unless the caller asks for it; its rows stay readable and its
+    // slug stays taken. Both columns move together (CHECK below).
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+    archivedByUserId: uuid("archived_by_user_id"),
   },
   (t) => ({
     orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),
+    archivedCheck: check(
+      "workspaces_archived_check",
+      sql`(${t.archivedAt} IS NULL) = (${t.archivedByUserId} IS NULL)`,
+    ),
     // Namespace unique per org + immutable. Immutability is enforced by a
     // BEFORE UPDATE trigger (migration 20260709120000_namespace_identity), not
     // expressible in Drizzle DDL.

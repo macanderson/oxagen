@@ -187,7 +187,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 ## Iam (1)
 
-- [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
+- [iam.role.create](iam.role.create.md) — `create_role`: a custom role from the permission catalogue; one allow grant per capability, within the granter's ceiling (ADR-063)
+- [iam.role.delete](iam.role.delete.md) — `delete_role`: remove a custom role nobody holds
+- [iam.role.grants.set](iam.role.grants.set.md) — `set_role_grants`: replace a custom role's grants with a permission set
+- [iam.role.list](iam.role.list.md) — List the org's IAM roles with grants, catalogue permissions, origin and holder counts, the catalogue and whether roles are enforced for the org
 
 ## Integration (7)
 
@@ -371,7 +374,8 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
-- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
+- [workspace.archive](workspace.archive.md) — `archive_workspace`: freeze a workspace; it leaves the lists, its slug stays taken, its records stay readable
+- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant; org Owner or Admin, refused for a taken slug
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
 - [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members
