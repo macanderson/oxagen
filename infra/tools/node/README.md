@@ -143,7 +143,12 @@ The user name is `oxagen`. Create both without printing either:
 A='env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN aws --region us-east-1'
 umask 077; d=$(mktemp -d)
 openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 40 > "$d/pw"
-docker run --rm caddy:2 caddy hash-password --plaintext "$(cat "$d/pw")" | tr -d '\n' > "$d/hash"
+# The password reaches caddy on stdin, not as --plaintext, where any process on
+# the machine could read it from the command line. docker needs -i to pass
+# stdin through. With stdin not a terminal, caddy hash-password reads one line
+# and strips its newline (only the terminal prompt asks twice). The file holds
+# no newline, so echo adds one; without it caddy fails with "Error: EOF".
+{ cat "$d/pw"; echo; } | docker run --rm -i caddy:2 caddy hash-password | tr -d '\n' > "$d/hash"
 for pair in "INTERNAL_DOCS_PASSWORD:/oxagen/internal/INTERNAL_DOCS_PASSWORD:pw" \
             "INTERNAL_DOCS_PASSWORD_HASH:/oxagen/production/internal-docs/INTERNAL_DOCS_PASSWORD_HASH:hash"; do
   IFS=: read -r _ name file <<<"$pair"
