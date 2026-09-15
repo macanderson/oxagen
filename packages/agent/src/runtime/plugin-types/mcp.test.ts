@@ -69,6 +69,10 @@ vi.mock("@oxagen/plugins", () => ({
   getWorkspaceSecret: vi.fn(async () => null),
   DbOAuthClientProvider: vi.fn(),
   markCredentialNeedsReauth: vi.fn(async () => undefined),
+  findCredentialConnection: vi.fn(async () => null),
+  recordCredentialGrant: vi.fn(async () => {
+    throw new Error("no connection was resolved");
+  }),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
@@ -116,6 +120,13 @@ import {
   recordServerChange,
 } from "../mcp-snapshots";
 import type { McpToolDescriptor } from "../../dispatch/mcp-client";
+import type { KillSwitchGate } from "../kill-switch-gate";
+import type { KillSwitchRow } from "@oxagen/iam";
+
+/** A gate with nothing switched. */
+const openGate = (): KillSwitchGate => ({ check: vi.fn(async () => null) });
+/** Options for a turn with nothing switched. */
+const OPEN = () => ({ killSwitches: openGate() });
 
 const CTX = {
   orgId: "ten_1",
@@ -181,19 +192,25 @@ describe("contributeMcpTools — serverAllowlist filtering", () => {
 
   it("does NOT call inArray when serverAllowlist is undefined", async () => {
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A, SERVER_B]);
-    await contributeMcpTools(CTX, undefined);
+    await contributeMcpTools(CTX, OPEN());
     expect(inArray).not.toHaveBeenCalled();
   });
 
   it("does NOT call inArray when serverAllowlist is an empty Set", async () => {
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A, SERVER_B]);
-    await contributeMcpTools(CTX, { serverAllowlist: new Set() });
+    await contributeMcpTools(CTX, {
+      ...OPEN(),
+      serverAllowlist: new Set(),
+    });
     expect(inArray).not.toHaveBeenCalled();
   });
 
   it("calls inArray with the right column and publicIds when serverAllowlist is non-empty", async () => {
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A]);
-    await contributeMcpTools(CTX, { serverAllowlist: new Set(["mcs_a"]) });
+    await contributeMcpTools(CTX, {
+      ...OPEN(),
+      serverAllowlist: new Set(["mcs_a"]),
+    });
     expect(inArray).toHaveBeenCalledTimes(1);
     const [col, vals] = (vi.mocked(inArray).mock.calls[0] ?? []) as [
       unknown,
@@ -207,6 +224,7 @@ describe("contributeMcpTools — serverAllowlist filtering", () => {
   it("passes all publicIds in the Set to inArray", async () => {
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, []);
     await contributeMcpTools(CTX, {
+      ...OPEN(),
       serverAllowlist: new Set(["mcs_a", "mcs_b"]),
     });
     expect(inArray).toHaveBeenCalledTimes(1);
@@ -220,7 +238,10 @@ describe("contributeMcpTools — serverAllowlist filtering", () => {
   it("returns empty array when no workspace is set in context", async () => {
     // CapabilityContext.workspaceId is string, but contributeMcpTools guards
     // against runtime absence via `if (!ctx.workspaceId)`. Cast to test that path.
-    const result = await contributeMcpTools({ ...CTX, workspaceId: "" }, {});
+    const result = await contributeMcpTools(
+      { ...CTX, workspaceId: "" },
+      OPEN(),
+    );
     expect(result).toEqual([]);
     // DB should never be queried when workspaceId is falsy.
     expect(inArray).not.toHaveBeenCalled();
@@ -269,7 +290,7 @@ describe("contributeMcpTools — healthStatus: 'unknown' servers are included", 
 
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_UNKNOWN_HEALTH]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     // connectMcp must have been called (server was not skipped).
     expect(connectMcp).toHaveBeenCalledTimes(1);
@@ -285,7 +306,7 @@ describe("contributeMcpTools — healthStatus: 'unknown' servers are included", 
     // values, so a future narrowing back to only 'healthy' breaks this test.
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, []);
 
-    await contributeMcpTools(CTX, undefined);
+    await contributeMcpTools(CTX, OPEN());
 
     // Cast the eq spy calls to loose tuples: eq's real signature types the column
     // arg as a drizzle Column, but the mock schema uses string sentinels.
@@ -311,7 +332,7 @@ describe("contributeMcpTools — healthStatus: 'unknown' servers are included", 
       SERVER_UNKNOWN_HEALTH,
     ]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     expect(connectMcp).toHaveBeenCalledTimes(2);
     expect(tools).toHaveLength(2);
@@ -358,7 +379,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
       },
     ]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     expect(tools).toHaveLength(1);
     expect(tools[0]?.realName).toBe("mcp.srv_a.list_prs");
@@ -380,7 +401,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
       },
     ]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     expect(tools).toHaveLength(0);
     expect(recordServerChange).toHaveBeenCalledTimes(1);
@@ -403,7 +424,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
       },
     ]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     // Only the pinned match is contributed; the unpinned addition is dropped.
     expect(tools).toHaveLength(1);
@@ -417,7 +438,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
     vi.mocked(readLatestPinnedDescriptors).mockResolvedValue([]);
     vi.mocked(listMcpToolDescriptors).mockResolvedValue([PIN]);
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     expect(captureToolSnapshots).toHaveBeenCalledWith(
       expect.objectContaining({ mcpServerId: "srv_a", descriptors: [PIN] }),
@@ -433,7 +454,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
       new Error("insert failed"),
     );
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     // Never inject descriptors that could not be pinned.
     expect(tools).toHaveLength(0);
@@ -448,7 +469,7 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
       new Error("audit insert failed"),
     );
 
-    const tools = await contributeMcpTools(CTX, undefined);
+    const tools = await contributeMcpTools(CTX, OPEN());
 
     expect(tools).toHaveLength(0);
   });
@@ -495,7 +516,7 @@ describe("contributeMcpTools — decrypts auth_config before connecting", () => 
       serverWithEncryptedAuth,
     ]);
 
-    await contributeMcpTools(CTX, undefined);
+    await contributeMcpTools(CTX, OPEN());
 
     expect(connectMcp).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -517,7 +538,7 @@ describe("contributeMcpTools — decrypts auth_config before connecting", () => 
     };
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [serverWithLegacyAuth]);
 
-    await contributeMcpTools(CTX, undefined);
+    await contributeMcpTools(CTX, OPEN());
 
     expect(connectMcp).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -556,5 +577,185 @@ describe("resolveMcpOAuthRedirectUrl — APP_URL fallback (OXA prod has only NEX
 
   it("degrades to a relative path only when neither var is set", () => {
     expect(resolveMcpOAuthRedirectUrl({})).toBe(PATH);
+  });
+});
+
+describe("contributeMcpTools — the credential broker's grant log (spec §6.8) and the kill switches (§6.11)", () => {
+  const PIN: McpToolDescriptor = {
+    name: "list_prs",
+    description: "List pull requests",
+    inputSchema: { type: "object" },
+  };
+  const secretServer = {
+    ...SERVER_A,
+    id: "srv_sec",
+    publicId: "mcs_sec",
+    authStrategy: "bearer",
+    authConfig: { token: "static" },
+    orgListingId: "lst_sec",
+    authKind: "secret",
+  };
+  const CONNECTION = {
+    id: "cred_1",
+    publicId: "mcrd_1",
+    authKind: "secret" as const,
+  };
+  const connectionSwitch: KillSwitchRow = {
+    id: "id_1",
+    publicId: "emd_1",
+    targetKind: "connection",
+    targetId: "mcrd_1",
+    scopeKind: "workspace",
+    workspaceId: "ws_1",
+    capabilityId: null,
+    resourceScopeDigest: "sha256:conn",
+    principalId: null,
+    reason: "leaked token",
+    active: true,
+    activatedAt: new Date("2026-09-15T10:00:00.000Z"),
+    deactivatedAt: null,
+    flippedByUserId: "u_1",
+    updatedByUserId: "u_1",
+  };
+
+  beforeEach(async () => {
+    dbMocks.rowsByTable.clear();
+    vi.mocked(connectMcp).mockClear();
+    vi.mocked(listMcpToolDescriptors).mockReset().mockResolvedValue([PIN]);
+    vi.mocked(readLatestPinnedDescriptors).mockReset().mockResolvedValue([PIN]);
+    const plugins = await import("@oxagen/plugins");
+    vi.mocked(plugins.findCredentialConnection)
+      .mockReset()
+      .mockResolvedValue(CONNECTION);
+    vi.mocked(plugins.recordCredentialGrant)
+      .mockReset()
+      .mockResolvedValue({
+        grantId: "grant_1",
+        connectionId: "cred_1",
+        expiresAt: new Date("2026-09-15T11:00:00.000Z"),
+      });
+    vi.mocked(plugins.getWorkspaceSecret).mockReset().mockResolvedValue({
+      secret: "s3cret",
+      accessToken: null,
+      refreshToken: null,
+      oauthClientSecret: null,
+      oauthClientId: null,
+      authKind: "secret",
+      status: "active",
+    });
+  });
+
+  it("records one grant per server reached with a stored credential, before the credential is presented, and names the connection on every tool", async () => {
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [secretServer]);
+    const plugins = await import("@oxagen/plugins");
+    const options = OPEN();
+
+    const tools = await contributeMcpTools(
+      { ...CTX, agentRun: { runId: "run_7" } } as unknown as typeof CTX,
+      options,
+    );
+
+    expect(plugins.findCredentialConnection).toHaveBeenCalledWith({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      orgListingId: "lst_sec",
+    });
+    expect(plugins.recordCredentialGrant).toHaveBeenCalledTimes(1);
+    expect(plugins.recordCredentialGrant).toHaveBeenCalledWith({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      connection: CONNECTION,
+      mcpServerId: "srv_sec",
+      endpointUrl: "https://a.mcp.example.com",
+      runId: "run_7",
+    });
+    // The gate is asked about the connection, the grant is written, and only then is the server reached.
+    const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+      fn.mock.invocationCallOrder[0]!;
+    const check = vi.mocked(options.killSwitches.check);
+    expect(order(check)).toBeLessThan(
+      order(vi.mocked(plugins.recordCredentialGrant)),
+    );
+    expect(order(vi.mocked(plugins.recordCredentialGrant))).toBeLessThan(
+      order(vi.mocked(connectMcp)),
+    );
+    expect(check).toHaveBeenCalledWith({
+      capabilityId: "mcp.srv_sec",
+      serverId: "srv_sec",
+      connectionId: "cred_1",
+      readOnly: false,
+    });
+    expect(tools).toHaveLength(1);
+    expect(tools[0]?.externalConnectionId).toBe("cred_1");
+  });
+
+  it("records no grant for a server reached without a credential, and still asks the gate about the server", async () => {
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A]);
+    const plugins = await import("@oxagen/plugins");
+    const options = OPEN();
+
+    const tools = await contributeMcpTools(CTX, options);
+
+    expect(plugins.findCredentialConnection).not.toHaveBeenCalled();
+    expect(plugins.recordCredentialGrant).not.toHaveBeenCalled();
+    expect(options.killSwitches.check).toHaveBeenCalledWith({
+      capabilityId: "mcp.srv_a",
+      serverId: "srv_a",
+      connectionId: null,
+      readOnly: false,
+    });
+    expect(tools[0]?.externalConnectionId).toBeNull();
+  });
+
+  it("a server under a connection switch is left out of the turn: no grant, no connect, no tools", async () => {
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [
+      secretServer,
+      SERVER_B,
+    ]);
+    const plugins = await import("@oxagen/plugins");
+    const killSwitches: KillSwitchGate = {
+      check: vi.fn(async (facts) =>
+        facts.connectionId === "cred_1" ? connectionSwitch : null,
+      ),
+    };
+
+    const tools = await contributeMcpTools(CTX, { killSwitches });
+
+    expect(plugins.recordCredentialGrant).not.toHaveBeenCalled();
+    expect(connectMcp).toHaveBeenCalledTimes(1);
+    expect(connectMcp).toHaveBeenCalledWith(
+      expect.objectContaining({ endpointUrl: SERVER_B.endpointUrl }),
+    );
+    expect(tools.map((t) => t.externalServerId)).toEqual(["srv_b"]);
+  });
+
+  it("a server under a tool_server switch is left out of the turn", async () => {
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A]);
+    const serverSwitch: KillSwitchRow = {
+      ...connectionSwitch,
+      targetKind: "tool_server",
+      targetId: "mcs_a",
+    };
+    const killSwitches: KillSwitchGate = {
+      check: vi.fn(async () => serverSwitch),
+    };
+
+    const tools = await contributeMcpTools(CTX, { killSwitches });
+
+    expect(connectMcp).not.toHaveBeenCalled();
+    expect(tools).toEqual([]);
+  });
+
+  it("skips the server for the turn when the grant cannot be written, without presenting the credential", async () => {
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [secretServer]);
+    const plugins = await import("@oxagen/plugins");
+    vi.mocked(plugins.recordCredentialGrant).mockRejectedValue(
+      new Error("insert failed"),
+    );
+
+    const tools = await contributeMcpTools(CTX, OPEN());
+
+    expect(connectMcp).not.toHaveBeenCalled();
+    expect(tools).toEqual([]);
   });
 });

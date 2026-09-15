@@ -1,0 +1,237 @@
+{
+  "name": "set_tool_classification",
+  "domain": "tool",
+  "description": "Set a tool version's safety classification — risk grade, side-effect class, egress class, consequence tags, measures and data classes — recording who reclassified it and why. Classification describes the tool; class kill switches and approval rules decide against it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolVersionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "riskGrade": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ]
+      },
+      "classification": {
+        "type": "object",
+        "properties": {
+          "sideEffect": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "irreversible"
+            ]
+          },
+          "egress": {
+            "type": "string",
+            "enum": [
+              "local",
+              "org_tenant",
+              "third_party"
+            ]
+          },
+          "consequenceTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "measures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count",
+                    "identifier",
+                    "environment",
+                    "table",
+                    "text"
+                  ]
+                },
+                "currencyPath": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "dataClasses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        },
+        "required": [
+          "sideEffect",
+          "egress",
+          "consequenceTags",
+          "measures",
+          "dataClasses"
+        ],
+        "additionalProperties": false
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "required": [
+      "toolVersionId",
+      "riskGrade",
+      "classification",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolVersionId": {
+        "type": "string"
+      },
+      "riskGrade": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ]
+      },
+      "classification": {
+        "type": "object",
+        "properties": {
+          "sideEffect": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "irreversible"
+            ]
+          },
+          "egress": {
+            "type": "string",
+            "enum": [
+              "local",
+              "org_tenant",
+              "third_party"
+            ]
+          },
+          "consequenceTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "measures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count",
+                    "identifier",
+                    "environment",
+                    "table",
+                    "text"
+                  ]
+                },
+                "currencyPath": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "dataClasses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        },
+        "required": [
+          "sideEffect",
+          "egress",
+          "consequenceTags",
+          "measures",
+          "dataClasses"
+        ],
+        "additionalProperties": false
+      },
+      "classifiedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "toolVersionId",
+      "riskGrade",
+      "classification",
+      "classifiedAt"
+    ],
+    "additionalProperties": false
+  }
+}

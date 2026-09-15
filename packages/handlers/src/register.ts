@@ -560,6 +560,43 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./tool.declaration.list"))
         .toolDeclarationListHandler as CapabilityHandlerFn,
   );
+  // Tools lane (#2958): the registry with its safety classification,
+  // connections and credential grants, kill switches.
+  registerHandler(
+    "list_tool_versions",
+    async () =>
+      (await import("./tool.version.list"))
+        .toolVersionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_tool_classification",
+    async () =>
+      (await import("./tool.classification.set"))
+        .toolClassificationSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "import_tools",
+    async () =>
+      (await import("./tool.import")).toolImportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_credential_grants",
+    async () =>
+      (await import("./credential.grant.list"))
+        .credentialGrantListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_kill_switch",
+    async () =>
+      (await import("./kill_switch.set"))
+        .killSwitchSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_kill_switches",
+    async () =>
+      (await import("./kill_switch.list"))
+        .killSwitchListHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "publish_context_record",
     async () =>

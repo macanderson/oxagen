@@ -1,5 +1,5 @@
 {
-  "generatedCount": 277,
+  "generatedCount": 283,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1407,6 +1407,17 @@
       "consumes": []
     },
     {
+      "name": "import_tools",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "ingest_stella_operational_telemetry",
       "domain": "telemetry",
       "surfaces": [
@@ -1630,6 +1641,17 @@
       "consumes": []
     },
     {
+      "name": "list_credential_grants",
+      "domain": "credential",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_environments",
       "domain": "environment",
       "surfaces": [
@@ -1704,6 +1726,17 @@
     {
       "name": "list_invoices",
       "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_kill_switches",
+      "domain": "kill_switch",
       "surfaces": [
         "api",
         "mcp"
@@ -1989,6 +2022,17 @@
       "surfaces": [
         "api",
         "agent",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tool_versions",
+      "domain": "tool",
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "component": null,
@@ -2685,6 +2729,18 @@
       "consumes": []
     },
     {
+      "name": "set_kill_switch",
+      "domain": "kill_switch",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_mcp_enabled",
       "domain": "agent",
       "surfaces": [
@@ -2782,6 +2838,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_tool_classification",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

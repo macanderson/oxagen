@@ -5,6 +5,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveCredentialKms } from "./kms";
+import { revokeCredentialGrants } from "./credential-grants";
 import {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
@@ -180,6 +181,12 @@ export async function deleteWorkspaceSecret(key: {
         ),
       )
       .returning({ id: schema.mcpCredentials.id });
+    // A revoked connection's grants die with it (spec §6.8): every live
+    // mcp.credential_grants row drawn on the credential is revoked in the
+    // same transaction.
+    for (const row of deleted) {
+      await revokeCredentialGrants(tx, { connectionId: row.id });
+    }
     return deleted.length > 0;
   });
 }

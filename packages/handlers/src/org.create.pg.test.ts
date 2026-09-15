@@ -99,6 +99,14 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     await closeDatabase();
   });
 
+  // Every withSystemDb call is its own BEGIN + set_config + COMMIT, so the
+  // verification reads are batched into as few transactions as the assertions
+  // allow: the pre-check, then one snapshot transaction that collects the whole
+  // bootstrap and the billing sweep. Read one assertion at a time — and once
+  // per billing table — this test opened ~25 transactions and tipped over
+  // vitest's 5s default on a loaded CI runner. The explicit timeout is the
+  // second guard: this is a DB-bound integration test and the 5s default is
+  // tuned for unit tests.
   it("bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row", async () => {
     const before = await withSystemDb((tx) =>
       tx
@@ -120,31 +128,20 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     expect(out.slug).toBe(slug);
     expect(out.workspace.slug).toBe("core");
 
-    const org = await withSystemDb((tx) =>
-      tx.query.organizations.findFirst({
+    const snapshot = await withSystemDb(async (tx) => {
+      const org = await tx.query.organizations.findFirst({
         where: eq(schema.organizations.slug, slug),
-      }),
-    );
-    expect(org).toBeDefined();
-    if (!org) return;
-    createdOrgIds.push(org.id);
-    expect(org.publicId).toBe(out.publicId);
-    // The namespace is derived server-side from the slug.
-    expect(org.namespace).toMatch(/^[a-z0-9]{2,6}$/);
-    expect(org.createdByUserId).toBe(userId);
+      });
+      if (!org) return { org: null } as const;
 
-    // Owner membership.
-    const memberships = await withSystemDb((tx) =>
-      tx
+      // Owner membership.
+      const memberships = await tx
         .select({ orgId: schema.orgUsers.orgId, role: schema.orgUsers.role })
         .from(schema.orgUsers)
-        .where(eq(schema.orgUsers.userId, userId)),
-    );
-    expect(memberships).toEqual([{ orgId: org.id, role: "owner" }]);
+        .where(eq(schema.orgUsers.userId, userId));
 
-    // IAM bootstrap: the creator's human principal holds the org Owner role.
-    const ownerAssignments = await withSystemDb((tx) =>
-      tx
+      // IAM bootstrap: the creator's human principal holds the org Owner role.
+      const ownerAssignments = await tx
         .select({ role: schema.roles.name, kind: schema.principals.kind })
         .from(schema.principalRoleAssignments)
         .innerJoin(
@@ -155,21 +152,15 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
           schema.principals,
           eq(schema.principals.id, schema.principalRoleAssignments.principalId),
         )
-        .where(eq(schema.principals.parentUserId, userId)),
-    );
-    expect(ownerAssignments).toEqual([{ role: "Owner", kind: "human" }]);
-    const grants = await withSystemDb((tx) =>
-      tx
+        .where(eq(schema.principals.parentUserId, userId));
+      const grants = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.roleGrants)
-        .where(eq(schema.roleGrants.orgId, org.id)),
-    );
-    expect(grants[0]?.n).toBeGreaterThan(0);
+        .where(eq(schema.roleGrants.orgId, org.id));
 
-    // First workspace with the creator as owner, its default environment and
-    // default registry.
-    const workspaces = await withSystemDb((tx) =>
-      tx
+      // First workspace with the creator as owner, its default environment
+      // and default registry.
+      const workspaces = await tx
         .select({
           id: schema.workspaces.id,
           publicId: schema.workspaces.publicId,
@@ -177,67 +168,109 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
           namespace: schema.workspaces.namespace,
         })
         .from(schema.workspaces)
-        .where(eq(schema.workspaces.orgId, org.id)),
-    );
-    expect(workspaces).toHaveLength(1);
-    const ws = workspaces[0]!;
+        .where(eq(schema.workspaces.orgId, org.id));
+      const wsId = workspaces[0]?.id;
+      const wsMembers = wsId
+        ? await tx
+            .select({
+              userId: schema.workspaceUsers.userId,
+              role: schema.workspaceUsers.role,
+            })
+            .from(schema.workspaceUsers)
+            .where(eq(schema.workspaceUsers.workspaceId, wsId))
+        : [];
+      const environments = wsId
+        ? await tx
+            .select({ isDefault: schema.environments.isDefault })
+            .from(schema.environments)
+            .where(eq(schema.environments.workspaceId, wsId))
+        : [];
+      const registries = wsId
+        ? await tx
+            .select({ isDefault: schema.mcpRegistries.isDefault })
+            .from(schema.mcpRegistries)
+            .where(eq(schema.mcpRegistries.workspaceId, wsId))
+        : [];
+
+      // Nothing billing-shaped: every billing.* table keyed by org_id has no
+      // row for the new org. Enumerated from the catalog so a table added
+      // later (contract_terms, gau_buckets, gau_settlements) is covered
+      // without an edit here, and counted in one UNION ALL rather than one
+      // round trip per table.
+      const billingTables = await tx.execute<{ table_name: string }>(sql`
+          select table_name from information_schema.columns
+          where table_schema = 'billing' and column_name = 'org_id'
+          order by table_name
+        `);
+      const names = [...billingTables].map((r) => r.table_name);
+      const billingCounts =
+        names.length === 0
+          ? []
+          : [
+              ...(await tx.execute<{ table_name: string; n: number }>(
+                sql.join(
+                  names.map(
+                    (name) =>
+                      sql`select ${name}::text as table_name, count(*)::int as n from billing.${sql.identifier(name)} where org_id = ${org.id}`,
+                  ),
+                  sql` union all `,
+                ),
+              )),
+            ];
+
+      return {
+        org,
+        memberships,
+        ownerAssignments,
+        grants,
+        workspaces,
+        wsMembers,
+        environments,
+        registries,
+        names,
+        billingCounts,
+      } as const;
+    });
+
+    expect(snapshot.org).not.toBeNull();
+    if (snapshot.org === null) return;
+    const org = snapshot.org;
+    createdOrgIds.push(org.id);
+    expect(org.publicId).toBe(out.publicId);
+    // The namespace is derived server-side from the slug.
+    expect(org.namespace).toMatch(/^[a-z0-9]{2,6}$/);
+    expect(org.createdByUserId).toBe(userId);
+
+    expect(snapshot.memberships).toEqual([{ orgId: org.id, role: "owner" }]);
+    expect(snapshot.ownerAssignments).toEqual([
+      { role: "Owner", kind: "human" },
+    ]);
+    expect(snapshot.grants[0]?.n).toBeGreaterThan(0);
+
+    expect(snapshot.workspaces).toHaveLength(1);
+    const ws = snapshot.workspaces[0]!;
     expect(ws.publicId).toBe(out.workspace.publicId);
     expect(ws.slug).toBe("core");
     expect(ws.namespace).toMatch(/^[a-z0-9]{2,6}$/);
-    const wsMembers = await withSystemDb((tx) =>
-      tx
-        .select({
-          userId: schema.workspaceUsers.userId,
-          role: schema.workspaceUsers.role,
-        })
-        .from(schema.workspaceUsers)
-        .where(eq(schema.workspaceUsers.workspaceId, ws.id)),
-    );
-    expect(wsMembers).toEqual([{ userId, role: "owner" }]);
-    const environments = await withSystemDb((tx) =>
-      tx
-        .select({ isDefault: schema.environments.isDefault })
-        .from(schema.environments)
-        .where(eq(schema.environments.workspaceId, ws.id)),
-    );
-    expect(environments).toEqual([{ isDefault: true }]);
-    const registries = await withSystemDb((tx) =>
-      tx
-        .select({ isDefault: schema.mcpRegistries.isDefault })
-        .from(schema.mcpRegistries)
-        .where(eq(schema.mcpRegistries.workspaceId, ws.id)),
-    );
-    expect(registries).toEqual([{ isDefault: true }]);
+    expect(snapshot.wsMembers).toEqual([{ userId, role: "owner" }]);
+    expect(snapshot.environments).toEqual([{ isDefault: true }]);
+    expect(snapshot.registries).toEqual([{ isDefault: true }]);
 
-    // Nothing billing-shaped: every billing.* table keyed by org_id has no
-    // row for the new org. Enumerated from the catalog so a table added later
-    // (contract_terms, gau_buckets, gau_settlements) is covered without an
-    // edit here.
-    const billingTables = await withSystemDb((tx) =>
-      tx.execute<{ table_name: string }>(sql`
-        select table_name from information_schema.columns
-        where table_schema = 'billing' and column_name = 'org_id'
-        order by table_name
-      `),
-    );
-    const names = [...billingTables].map((r) => r.table_name);
     for (const required of [
       "credit_balances",
       "credit_ledger",
       "credit_lots",
       "org_billing_settings",
     ]) {
-      expect(names, required).toContain(required);
+      expect(snapshot.names, required).toContain(required);
     }
-    for (const name of names) {
-      const rows = await withSystemDb((tx) =>
-        tx.execute<{ n: number }>(
-          sql`select count(*)::int as n from billing.${sql.identifier(name)} where org_id = ${org.id}`,
-        ),
-      );
-      expect([...rows][0]?.n, `billing.${name}`).toBe(0);
+    const counted = new Map(
+      snapshot.billingCounts.map((r) => [r.table_name, r.n]),
+    );
+    for (const name of snapshot.names) {
+      expect(counted.get(name), `billing.${name}`).toBe(0);
     }
-  });
+  }, 20_000);
 
   it("refuses a second organization on the same slug", async () => {
     await expect(

@@ -25,6 +25,8 @@ import type { SQL } from "drizzle-orm";
 const deletedTables: unknown[] = [];
 const whereConditions: unknown[] = [];
 let deleteResult: Array<Record<string, unknown>> = [];
+/** Every grant revocation the delete issued: the table updated and its where(). */
+const revocations: Array<{ table: unknown; cond: unknown }> = [];
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -43,6 +45,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             },
           };
         },
+        update: (table: unknown) => ({
+          set: () => ({
+            where: (cond: unknown) => {
+              revocations.push({ table, cond });
+              return { returning: () => Promise.resolve([{ id: "g1" }]) };
+            },
+          }),
+        }),
       }),
   };
 });
@@ -50,6 +60,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 beforeEach(() => {
   deletedTables.length = 0;
   whereConditions.length = 0;
+  revocations.length = 0;
   deleteResult = [];
   // The delete must work with NO encryption key configured — enforce it for
   // every test in this file.
@@ -82,6 +93,36 @@ describe("deleteWorkspaceSecret", () => {
     });
 
     expect(out).toBe(false);
+  });
+
+  it("revokes the deleted connection's live grants in the same transaction (spec §6.8)", async () => {
+    deleteResult = [{ id: "cred-1" }];
+    const { deleteWorkspaceSecret } = await import("./workspace-credential");
+    const { schema } = await import("@oxagen/database");
+    await deleteWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+    });
+
+    expect(revocations).toHaveLength(1);
+    expect(revocations[0]?.table).toBe(schema.mcpCredentialGrants);
+    const sql = new PgDialect()
+      .sqlToQuery(revocations[0]?.cond as SQL)
+      .sql.toLowerCase();
+    expect(sql).toContain("connection_id");
+    expect(sql).toContain("revoked_at");
+  });
+
+  it("revokes nothing when no credential row existed", async () => {
+    deleteResult = [];
+    const { deleteWorkspaceSecret } = await import("./workspace-credential");
+    await deleteWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l-missing",
+    });
+    expect(revocations).toEqual([]);
   });
 
   it("deletes from mcp.credentials only", async () => {

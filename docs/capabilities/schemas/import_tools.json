@@ -1,0 +1,162 @@
+{
+  "name": "import_tools",
+  "domain": "tool",
+  "description": "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "serverId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "declarations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the tool does"
+            },
+            "input_schema": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "JSON Schema for the tool's input parameters"
+            },
+            "read_only": {
+              "type": "boolean",
+              "default": false
+            },
+            "risk_grade": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "description": "Declared risk grade of invoking this tool"
+            },
+            "policy_group": {
+              "type": "string"
+            },
+            "manifest": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "The full declared manifest body, verbatim"
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "input_schema",
+            "risk_grade",
+            "manifest"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "serverId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "serverId": {
+        "type": "string"
+      },
+      "importDigest": {
+        "type": "string"
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "toolId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "checksum": {
+              "type": "string"
+            },
+            "schemaOrigin": {
+              "type": "string",
+              "enum": [
+                "declared",
+                "imported"
+              ]
+            },
+            "published": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "toolId",
+            "slug",
+            "name",
+            "version",
+            "checksum",
+            "schemaOrigin",
+            "published"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "serverId",
+      "importDigest",
+      "tools"
+    ],
+    "additionalProperties": false
+  }
+}

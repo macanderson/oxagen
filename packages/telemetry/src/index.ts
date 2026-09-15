@@ -29,6 +29,7 @@ export * from "./tacho-events";
 export * from "./tacho-events-ddl";
 export * from "./cost-frames";
 export { chInsert, chSelect } from "./tenant";
+export * from "./tool-invocation-counts";
 // ADR-042 dedicated-plane ClickHouse client lifecycle (rotation + shutdown).
 export {
   closeDedicatedClickhouse,
