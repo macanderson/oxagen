@@ -57,6 +57,7 @@ describe("agent.approval.list handler", () => {
         requester: "usr_0123456789abcdefghjkmn",
         createdAt: "2026-09-13T10:00:00.000Z",
         expiresAt: "2026-09-13T10:05:00.000Z",
+        mandateId: null,
         chain: { agentKey: null, rule: null },
       },
     ],
@@ -123,7 +124,11 @@ import handler_agentApprovalResolve, {
 } from "./agent.approval.resolve";
 
 describe("agent.approval.resolve handler", () => {
-  const validOutput = { approvalId: "apr_1", resolution: "approved" as const };
+  const validOutput = {
+    approvalId: "apr_1",
+    resolution: "approved" as const,
+    mandate: null,
+  };
 
   it("exports schema and metadata", () => {
     expect(agentApprovalResolveSchema).toBeDefined();
