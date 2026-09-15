@@ -594,6 +594,8 @@ const ROUTES: ThinRoute[] = [
       source: "builtin",
       manifest: { v: 1 },
       read_only: false,
+      consequence_tags: [],
+      measures: {},
     },
     invalidBody: {
       name: "read_file",

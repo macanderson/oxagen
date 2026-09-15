@@ -33,9 +33,17 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-vi.mock("@oxagen/config/env", () => ({
-  loadEnv: mocks.loadEnv,
-}));
+// Spread the real module rather than replacing it: `@oxagen/config`'s registry
+// reads `baseEnvSchema.shape` at module scope, so a bare factory mock leaves
+// that export undefined and the whole suite fails to collect. `env.ts` imports
+// only zod and runs nothing at import time, so pulling the original in is free.
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/config/env")>();
+  return {
+    ...real,
+    loadEnv: mocks.loadEnv,
+  };
+});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
