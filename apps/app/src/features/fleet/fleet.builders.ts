@@ -89,6 +89,12 @@ export function fleetSource(reads: FleetReads) {
       toolbelt: refuse,
       incidents: refuse,
     },
+    billing: {
+      plan: refuse,
+      bucket: refuse,
+      contractRate: refuse,
+      invoices: refuse,
+    },
   };
   return { source, calls };
 }
