@@ -231,6 +231,13 @@ call recorded there, not here.
   yet. Until Stella adds it (its ledger vocabulary already has `workspace`),
   `stella context validate` on a main-repo record fails on that field;
   Oxagen's own checks and merge are unaffected. Tracked as a Stella change.
+  **Amended 2026-09-15 (maintainer decision 16c).** Stella's `SharingScope`
+  gains a `workspace` value, matching its ledger vocabulary. Oxagen
+  steering records stay workspace-scoped, and `publishedSharingScopeSchema`
+  (`packages/oxagen/src/contracts/context.steering.shared.ts:36`) keeps
+  `repository` and `workspace`. The change lands in the Stella repository,
+  and once it does `stella context validate` accepts a main-repo record.
+  Nothing in this tree changes for it.
 - `retract_record`, `list_record_effect`, `list_retirement_candidates`, the
   promoter, the effect rollup and the reflector are not built; the
   `archived_at` / `archived_why` columns the issue sketched are not added

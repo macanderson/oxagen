@@ -39,3 +39,14 @@ Neo4j's native vector index (`cosine`, 1536 dims to match
   spec §8.2 mutation contract).
 - Tradeoff: Neo4j vector index is younger than pgvector. Acceptable for
   v1; reassess at 100M+ vectors.
+
+## Amendment 2026-09-15: Neo4j stays through rev1 (maintainer decision)
+
+The scale-back review of 2026-09-14 left Neo4j's future open. The
+maintainer decided on 2026-09-15 that Neo4j stays through the Mission
+Control rev1 release (`apps/app/ARCHITECTURE.md` §9, 2026-09-15). The ADR
+that retires or keeps Neo4j gets written after the witness lane (#2955)
+lands. The witness plane and the run record (ADR-058, which defers
+the `:Run` / `:Frame` projection) are the first readers that could change
+which store holds a graph. Until that ADR exists, rev1 keeps every Neo4j
+dependency, schema runner and `NEO4J_*` variable.

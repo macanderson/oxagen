@@ -2,7 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-08 (open questions answered 2026-09-10; amended
-  2026-09-13 for ADR-055; v1 rates set 2026-09-14)
+  2026-09-13 for ADR-055; v1 rates set 2026-09-14; maintainer decisions
+  of 2026-09-15 recorded in §4.2, §5.6, §6, §7.2, §7.3 and §7.5)
 - **Author:** platform
 - **Related:** [ADR-052](../adr/ADR-052-governed-action-as-the-billable-unit.md)
   (the decision), [ADR-055](../adr/ADR-055-gau-buckets-and-contracted-rates.md)
@@ -178,6 +179,15 @@ four figures at once. `(rate_per_gau_micros × block_size_gau)` must be a
 whole number of cents (a CHECK on both tables), so a block prices without
 rounding: 5,000 micros × 5,000 GAU = $25.00.
 
+**Amended 2026-09-15 (maintainer decision 3).** Enterprise is negotiated
+only. `enterprise-v2` is removed from `SUBSCRIPTION_PLANS` and from the
+Stripe catalogue (WL-56), and an enterprise organisation's terms are its
+`billing.contract_terms` row. The `enterprise` row of the table above and
+the `enterprise-v2` sentence before this paragraph describe the tree until
+WL-56 lands. No feature is gated on the enterprise licence: every feature,
+IAM and the SOC 2 controls included, is on for every tier (ADR-055 §2,
+WL-55).
+
 **Free saves a card or waits (maintainer, 2026-09-14).** A Free org that
 exhausts its monthly allowance (5,000 GAU) is refused further governed actions
 (`gau_exhausted` / 402) until either (a) the next monthly period opens a new
@@ -219,6 +229,19 @@ Beyond the allowance:
   contracted rate at period end, or as an interim invoice for exactly
   `invoice_gau_max` GAUs (default 100,000) the day accrued uninvoiced overage
   reaches it, after which accrual restarts.
+  **Amended 2026-09-15 (maintainer decisions 5, 6 and 12).**
+  - `invoice_gau_max` limits overage beyond the monthly allowance. The
+    interim invoice fires at overage unit `invoice_gau_max`+1 and invoices
+    exactly `invoice_gau_max` GAUs, and that extra unit starts the next
+    accrual. On `build` with the default cap, that is GAU #150,001 of the
+    month.
+  - An invoice-billed organisation is suspended 5 days after an interim or
+    period-close invoice is past due. Metering continues while it is
+    suspended, and paying the full outstanding balance reactivates it.
+  - When invoice billing is switched off, the invoiced overage is added to
+    `purchased_gau`: the invoice is the purchase.
+
+  ADR-055 §7 carries all three.
 
 ### 4.3 Retention
 
@@ -385,6 +408,13 @@ reported. The rate card (`get_rate_card`) and the calculator
 (`get_evidence_retention`) is unmeasured for every organisation and is not on
 the page.
 
+**Amended 2026-09-15 (maintainer decision 7).** `get_rate_card`,
+`preview_action_cost` and `get_evidence_retention` retire at cutover:
+`apps/app/architecture.worklist.json` WL-50 deletes their contracts, routes,
+MCP tools and docs, so the rate card and the calculator stop being contracts
+on API and MCP. `start_subscription_upgrade` stays, and the billing page
+binds it as an in-app Build/Scale upgrade through Stripe Checkout (WL-66).
+
 ---
 
 ## 6. Migration
@@ -412,6 +442,13 @@ window; the bucket model is the charging path from the day it lands and no
 billed history is migrated. Token cost is still priced in full and reported at
 zero (§4.4).
 
+**Amended 2026-09-15: shadow period waived (maintainer decision 14).** The
+maintainer skipped the metering shadow period, and the waiver is dated
+2026-09-15. Steps 1–3 (shadow, compare, notify) do not run: action pricing
+is the charging path from the day the bucket model landed. Step 5's
+grandfathering has no contract to apply to in the zero-customer window.
+`apps/app/ARCHITECTURE.md` §9 and ADR-055 §15 record the decision.
+
 ---
 
 ## 7. Open questions — answered
@@ -437,7 +474,29 @@ that already exists.
 **Revisit if** Oxagen ever executes the deferred work itself, which would make ADR-043 the
 thing to change first.
 
-### 7.2 Ingestion bills per batch of records, through one meter
+### 7.2 An ingestion invocation bills one governed action; the multi-unit `meter` block is built and unused
+
+**Amended 2026-09-15.** The heading this section carried, "Ingestion bills
+per batch of records, through one meter", described a mechanism no contract
+uses. #2873 found the contradiction with §7.1. It was closed in the
+2026-09-13 tracker reset as absorbed by the GAU bucket model, and the text
+was never changed. What is built:
+
+- **The mechanism.** The kernel reads a contract's `meter` block against the
+  validated output (`governedActionUnits`, `packages/oxagen/src/kernel.ts`;
+  the `meter` field in `packages/oxagen/src/types.ts`), and
+  `kernel.usage-recorder.test.ts` covers it.
+- **No contract declares one.** `rg -n 'meter:' packages/oxagen/src/contracts`
+  is empty, so every invocation bills exactly one GAU.
+- **Async sync contracts.** `sync_integration` and `sync_repo` are
+  `mode: "async"` and bill one GAU at dispatch under §7.1. Their output is a
+  dispatch receipt with no record count. `sync_repo`'s `estimatedRecords` is
+  an estimate and is never billed on.
+- **Tacho ingest.** `ingest_tacho_events` is `noBillingGate: true`: recording
+  a run is not a governed action.
+
+A contract that later declares a `meter` block must name a validated output
+field carrying a count of work already done. The original text follows.
 
 A connector pull is one `invoke()` that may write a million graph nodes.
 Per-sync under-prices it by orders of magnitude. §7 raised a third meter; there
@@ -490,6 +549,16 @@ than by a fallback branch: a mis-provisioned enterprise org meters at the
 `scale` figures, and the four columns are NOT NULL so no plan row can be
 absent.
 
+**Amended 2026-09-15 (maintainer decision 3).** Enterprise is negotiated
+only. `enterprise-v2` leaves `SUBSCRIPTION_PLANS` and the Stripe catalogue
+(`apps/app/architecture.worklist.json` WL-56). After that, an enterprise
+organisation's `billing.contract_terms` row is the only source of its terms,
+and no `billing.plans` row sells enterprise. The stored-row bound above
+still covers an organisation whose subscription names the hidden
+`enterprise-v2` row and has no negotiated row. No feature is gated on the
+enterprise licence: every feature, IAM and the SOC 2 controls included, is
+on for every tier (ADR-055 §2, WL-55).
+
 ### 7.4 Retention beyond twelve months is opt-in
 
 Extended retention is **off by default**, so no storage charge accrues on evidence
@@ -514,6 +583,11 @@ in which the platform bills nothing at all.
 **Amended 2026-09-13 (ADR-055).** `OXAGEN_ACTION_METER_MODE` and
 `resolveActionMeterMode` are deleted; see the §6 amendment.
 
+**Amended 2026-09-15 (maintainer decision 14).** The shadow period is
+skipped, with a waiver dated 2026-09-15 (§6). The comparison this section
+describes is still computable over any window, because token cost is still
+priced in full (§4.4). It is no longer a gate on the cut-over.
+
 ---
 
 ## 8. Traceability
@@ -530,5 +604,6 @@ in which the platform bills nothing at all.
 | §4.2 settlements (ADR-055) | `packages/billing/src/gau-settlements.ts`; `billing.gau_settlements`; `BillingProvider.createGauCheckout`, `createGauInvoice`, `finalizeAndPayGauInvoice`, `deleteOrVoidDraftInvoice`; `billing.gau-close` (hourly) |
 | §4.3 retention | `packages/billing/src/action-metering.ts` — `RETENTION_USD_PER_GB_MONTH`, `CREDIT_REASONS.CONSUME_RETENTION`; no charger in rev1 (`chargeEvidenceRetention` deleted, ADR-055 §12) |
 | §4.4 reported at zero | `packages/ai/src/*` charge sites, gated on `fundedBy === "platform"` (ADR-053 §3) |
-| §7.2 multi-unit | contract `meter` block, read in the kernel from validated output |
-| §7.5 shadow | retired (ADR-055) |
+| §7.2 multi-unit | contract `meter` block, read in the kernel from validated output (`governedActionUnits`); no contract declares one, so every invocation bills one GAU (amended 2026-09-15) |
+| §7.3 enterprise | `billing.contract_terms`; `enterprise-v2` leaves `SUBSCRIPTION_PLANS` (WL-56); no tier gate (WL-55) (maintainer decision, 2026-09-15) |
+| §6, §7.5 shadow | retired (ADR-055); shadow period waived 2026-09-15 (maintainer decision) |
