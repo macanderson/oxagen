@@ -89,14 +89,18 @@ function asCapabilityError(
   err: unknown,
 ): { capability: string; code: string; accessRequestId?: string } | null {
   if (!(err instanceof Error) || err.name !== "CapabilityError") return null;
-  const e = err as unknown as Record<string, unknown>;
-  if (typeof e.capability !== "string" || typeof e.code !== "string")
+  if (
+    !("capability" in err) ||
+    typeof err.capability !== "string" ||
+    !("code" in err) ||
+    typeof err.code !== "string"
+  )
     return null;
   return {
-    capability: e.capability,
-    code: e.code,
-    ...(typeof e.accessRequestId === "string"
-      ? { accessRequestId: e.accessRequestId }
+    capability: err.capability,
+    code: err.code,
+    ...("accessRequestId" in err && typeof err.accessRequestId === "string"
+      ? { accessRequestId: err.accessRequestId }
       : {}),
   };
 }

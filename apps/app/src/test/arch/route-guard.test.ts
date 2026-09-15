@@ -96,7 +96,7 @@ function isViewerResolver(binding: Binding | undefined): boolean {
   return (
     binding !== undefined &&
     binding.fromViewer &&
-    (VIEWER_RESOLVERS as readonly string[]).includes(binding.imported)
+    VIEWER_RESOLVERS.some((name) => name === binding.imported)
   );
 }
 
@@ -104,7 +104,7 @@ function isViewerResolver(binding: Binding | undefined): boolean {
 function isForeignResolver(binding: Binding): boolean {
   return (
     !binding.fromViewer &&
-    (VIEWER_RESOLVERS as readonly string[]).includes(binding.imported)
+    VIEWER_RESOLVERS.some((name) => name === binding.imported)
   );
 }
 
