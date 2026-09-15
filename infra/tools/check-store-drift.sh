@@ -271,6 +271,25 @@ ch_url_readonly() {
   esac
 }
 
+# ch_curl_config USER PASSWORD
+#
+# Renders the curl config that carries the ClickHouse credential. curl has ONE
+# credential option, `user`, and its value is "user:password" — there is no
+# `password` option. The first version of this file wrote one anyway, and the
+# two curls in play answered it differently, neither of them by authenticating:
+# Ubuntu's warned, prompted "Enter host password for user 'oxagen'", read
+# nothing from the non-tty and sent the user with no password, which ClickHouse
+# refused as AUTHENTICATION_FAILED (#2987 — three red runs read as a rotated
+# credential that was never rotated); macOS's curl refuses the file outright.
+# The value is double-quoted, so a backslash or a quote in the password is
+# escaped the way curl's config parser unescapes it.
+ch_curl_config() {
+  local user=$1 password=$2
+  user=${user//\\/\\\\}; user=${user//\"/\\\"}
+  password=${password//\\/\\\\}; password=${password//\"/\\\"}
+  printf 'user = "%s:%s"\n' "$user" "$password"
+}
+
 # ---------------------------------------------------------------------------
 # Sourcing stops here. Below this line the script talks to two databases.
 # ---------------------------------------------------------------------------
@@ -307,8 +326,7 @@ status=0
 # state this check exists for read as "could not be queried".
 ch_query() {
   local body=$1 out=$2 err=$3
-  printf 'user = "%s"\npassword = "%s"\n' \
-    "$CLICKHOUSE_USERNAME" "$CLICKHOUSE_PASSWORD" |
+  ch_curl_config "$CLICKHOUSE_USERNAME" "$CLICKHOUSE_PASSWORD" |
     curl -sS --fail-with-body --max-time 30 --config - \
       "$(ch_url_readonly "$CLICKHOUSE_URL")" --data-binary "$body" > "$out" 2>"$err"
 }

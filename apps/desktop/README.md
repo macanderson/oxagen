@@ -31,6 +31,27 @@ pnpm --filter @oxagen/desktop test:unit    # vitest over src/**/*.test.ts
 pnpm --filter @oxagen/desktop test:coverage  # the same with the 90% ratchet
 ```
 
+## Release
+
+```
+gh workflow run desktop.yml --ref main                       # build all four targets in CI
+pnpm --filter @oxagen/desktop publish:downloads --run <id>   # CI artifacts → https://downloads.oxagen.sh/
+pnpm --filter @oxagen/desktop smoke:e2e -- --login --enroll --org <org> --workspace <ws> --cleanup
+```
+
+`publish:downloads` streams the run's artifacts to disk (never `gh run
+download`, which holds each zip in memory), keeps only the installers for the
+package version, uploads them to `desktop/<version>/` with a
+`SHA256SUMS.txt`, rewrites the listing page, and invalidates it. `--dir
+<folder>` publishes installers already on disk; `--dry-run` prints the uploads.
+
+`smoke:e2e` (`scripts/e2e-smoke.mjs`, no repo needed — copy it to the test
+machine) drives the installed app's sidecars with the wizard's own argv against
+the live control plane: sidecar versions, session, the org and workspace
+pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
+recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
+Without `--enroll` it changes nothing on the machine.
+
 Needs Rust (stable) and, on Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev
 librsvg2-dev patchelf`. The sidecars embed the host `node`, so there is no
 cross-compile; `.github/workflows/desktop.yml` builds each OS on its own runner
