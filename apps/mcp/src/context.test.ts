@@ -575,6 +575,7 @@ describe("buildContext and the platform-operator binding", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
