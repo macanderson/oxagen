@@ -31,10 +31,12 @@ The saved ceiling with its live burn — the same `SpendBudgetStatus` shape `bil
 
 ## Roles
 
-Org: Owner, Admin, Billing. Workspace: Owner, Admin. Setting a ceiling is org governance — no Member/Viewer.
+Org: Owner, Admin, Billing. Workspace: Owner, Admin, for that workspace's own ceiling only. Setting a ceiling is org governance — no Member/Viewer. The handler checks the role itself (`assertOrgRole`), because the kernel's IAM check allows every capability below the enterprise tier; a refusal is `forbidden` with reason `org_role_required`. An API-key call acts as the key's creator.
 
 ## Side effects
 
 - Postgres: upserts one row in `billing.spend_budgets` (RLS `workspace_nullable`); records the acting user on the audit columns; resets the threshold-notification watermark so a raised ceiling re-notifies from a clean slate.
 - Kernel: drops the gate's short-TTL config + spend cache for the org so the new ceiling takes effect immediately in-process.
 - Audit: the kernel audit chain records the write, explaining an override.
+
+The saved ceiling is re-read after the write. When that spend read fails the call fails after the write committed; the write is a replace, so repeating the call is safe.

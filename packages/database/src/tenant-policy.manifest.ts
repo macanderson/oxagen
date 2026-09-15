@@ -121,6 +121,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Derived spend rollups, rebuilt from frames; org_id + workspace_id NOT NULL.
   { table: "cost.run_totals", policyClass: "standard" },
   { table: "cost.daily_totals", policyClass: "standard" },
+  // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
+  { table: "cost.findings", policyClass: "standard" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

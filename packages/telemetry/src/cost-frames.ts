@@ -17,6 +17,9 @@
  * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
  * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
  * writes, the same rule the ledger branch applies to `cache_write_tokens`.
+ *
+ * The findings job reads a workspace's tool calls with their digests and
+ * result tokens through the same client (`readTachoToolCallObservations`).
  */
 import { breakerEnvConfig } from "./breaker-config";
 import { getBreaker } from "./circuit-breaker";
@@ -197,4 +200,115 @@ export async function readTachoToolCallFrames(args: {
   );
   const rows = (await result.json()) as { name: string }[];
   return rows.map((r) => ({ name: r.name === "" ? null : r.name }));
+}
+
+/** One hook-recorded tool call of a wrapped run, as the findings job reads it. */
+export interface ToolCallObservationRow {
+  rootSessionUuid: string;
+  /** RFC 3339. */
+  at: string;
+  seq: number;
+  tool: string;
+  inputDigest: string;
+  /** Empty when the hook recorded no output. */
+  outputDigest: string;
+  isMutating: boolean | null;
+  /** The result tokens the OTel tool span recorded for the same tool use; null when none did. */
+  resultTokens: number | null;
+}
+
+/** ClickHouse DateTime64 params want a space-separated, Z-less string. */
+function chDateTime(at: Date): string {
+  return at.toISOString().replace("T", " ").replace("Z", "");
+}
+
+/**
+ * A workspace's tool calls over [from, to), newest first, at most `limit`
+ * (Mission Control spec §12.8; ADR-062). The hook source carries a call once
+ * with its input and output digests and the classifier's mutating flag; the
+ * OTel tool span of the same tool use carries its result tokens, joined on
+ * `tool_use_id`. Throws on a degraded store: the findings job retries rather
+ * than detecting over missing frames.
+ */
+export async function readTachoToolCallObservations(args: {
+  orgId: string;
+  workspaceId: string;
+  from: Date;
+  to: Date;
+  limit: number;
+}): Promise<ToolCallObservationRow[]> {
+  const ch = clickhouse();
+  const result = await breaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT
+        toString(h.root_session_uuid)                                  AS root_session_uuid,
+        formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
+        h.seq                                                          AS seq,
+        h.tool_name                                                    AS tool,
+        h.tool_input_digest                                            AS input_digest,
+        h.tool_output_digest                                           AS output_digest,
+        h.tool_is_mutating                                             AS is_mutating,
+        r.result_tokens                                                AS result_tokens
+      FROM (
+        SELECT root_session_uuid, ts, seq, tool_name, tool_input_digest,
+               tool_output_digest, tool_is_mutating, tool_use_id
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND kind = 'tool_call'
+          AND source = 'hook'
+          AND ts >= {from:DateTime64(3)}
+          AND ts < {to:DateTime64(3)}
+          AND tool_name != ''
+          AND tool_input_digest != ''
+        ORDER BY ts DESC, seq DESC
+        LIMIT {limit:UInt32}
+      ) AS h
+      LEFT JOIN (
+        SELECT tool_use_id, max(tool_result_tokens) AS result_tokens
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND kind = 'tool_call'
+          AND source = 'otel_span'
+          AND ts >= {from:DateTime64(3)}
+          AND ts < {to:DateTime64(3)}
+          AND tool_use_id != ''
+          AND tool_result_tokens IS NOT NULL
+        GROUP BY tool_use_id
+      ) AS r ON r.tool_use_id = h.tool_use_id
+      SETTINGS join_use_nulls = 1
+    `,
+      query_params: {
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        from: chDateTime(args.from),
+        to: chDateTime(args.to),
+        limit: args.limit,
+      },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = {
+    root_session_uuid: string;
+    at: string;
+    seq: string | number;
+    tool: string;
+    input_digest: string;
+    output_digest: string;
+    is_mutating: boolean | null;
+    result_tokens: string | number | null;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    rootSessionUuid: r.root_session_uuid,
+    at: r.at,
+    seq: Number(r.seq),
+    tool: r.tool,
+    inputDigest: r.input_digest,
+    outputDigest: r.output_digest,
+    isMutating: r.is_mutating,
+    resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+  }));
 }

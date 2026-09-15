@@ -277,15 +277,15 @@ describe("getSpendBudgetStatuses", () => {
     expect(Number(s.projectedMicros)).toBeLessThan(11_000_000);
   });
 
-  it("a spend-read failure yields spent=0 rather than throwing", async () => {
-    const statuses = await getSpendBudgetStatuses({
-      loadBudgets: async () => [budgetRow()],
-      readSpend: async () => {
-        throw new Error("clickhouse down");
-      },
-    });
-    expect(statuses[0]!.spentMicros).toBe(0n);
-    expect(statuses[0]!.state).toBe("ok");
+  it("a spend-read failure propagates rather than reporting spent 0 and state ok (#3064)", async () => {
+    await expect(
+      getSpendBudgetStatuses({
+        loadBudgets: async () => [budgetRow({ limitMicros: 1n })],
+        readSpend: async () => {
+          throw new Error("counter down");
+        },
+      }),
+    ).rejects.toThrow("counter down");
   });
 });
 

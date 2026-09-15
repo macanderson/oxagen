@@ -189,6 +189,14 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
         return Promise.resolve(reads.invoices);
       },
     },
+    spend: {
+      byGroup: refuse,
+      fleet: refuse,
+      drill: refuse,
+      waste: refuse,
+      budgets: refuse,
+    },
+    org: { members: refuse },
   };
   return { source, calls };
 }

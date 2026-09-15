@@ -88,6 +88,7 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  apiKeys: (org: string): SafePath => pathOf(org, "api-keys"),
   fleet: (org: string, ws: string): SafePath => pathOf(org, ws),
   /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
   billing: (
@@ -98,6 +99,16 @@ export const routes = {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
       checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
     }),
+  /** A run opened from a list (a run id is a public id, never a raw row id). */
+  run: (org: string, ws: string, run: string): SafePath =>
+    pathOf(org, ws, "runs", run),
+  /** Spend on one tab, or one key's drill on it; a tab is a query, not a route (§1.2). */
+  spend: (
+    org: string,
+    ws: string,
+    view: { tab: string; drill?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "spend"), { tab: view.tab, drill: view.drill }),
 };
 
 /**
