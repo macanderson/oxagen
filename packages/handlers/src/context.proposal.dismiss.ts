@@ -13,7 +13,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { bodyNamesProposal } from "./context.steering.view";
 
@@ -29,7 +29,10 @@ export function createDismissProposalHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextProposalDismiss> {
   return async (input, ctx) => {
-    await assertOrgRole(ctx, { org: ["Owner", "Admin"], workspace: ["Owner"] });
+    await assertOrgRole(
+      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { org: ["Owner", "Admin"], workspace: ["Owner"] },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const row = await deps.store.findProposal(scope, input.proposalId);
     if (!row) {
