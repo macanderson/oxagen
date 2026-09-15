@@ -163,7 +163,7 @@ describe("billing units", () => {
       `${RULE} ${PROBES}/bucket-meter.tsx:4 money-outside-rate-and-invoices`,
     ]);
     expect(moneyJsxViolations(probe("auto-topup.tsx"))).toEqual([
-      `${RULE} ${PROBES}/auto-topup.tsx:5 money-outside-rate-and-invoices`,
+      `${RULE} ${PROBES}/auto-topup.tsx:4 money-outside-rate-and-invoices`,
     ]);
   });
 
