@@ -26,12 +26,13 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
-// The auto top-up save is the control's own test (auto-topup.test.tsx).
-vi.mock("./actions", () => ({ setAutoTopup: vi.fn() }));
+// Each write is tested through its own control (auto-topup.test.tsx,
+// purchase-form.test.tsx). Both mocks live in one factory because a second
+// vi.mock of the same path replaces the first, which left setAutoTopup off
+// the mock and would throw the moment the control read it.
+vi.mock("./actions", () => ({ setAutoTopup: vi.fn(), purchaseGau: vi.fn() }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
-// The purchase form's own states and submission are in purchase-form.test.tsx.
-vi.mock("./actions", () => ({ purchaseGau: vi.fn() }));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
