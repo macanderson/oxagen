@@ -432,7 +432,7 @@ export function redirectTo(path: SafePath): never;
 export function permanentRedirectTo(path: SafePath): never;                    // 308 to a renamed org's or workspace's canonical slug (viewer.ts)
 export function redirectToLoopback(uri: LoopbackUri, q: { code: string; state: string } | { error: "access_denied"; state: string }): never;
 export function redirectToCheckout(url: ExternalCheckoutUrl): never;
-export function responseRedirect(req: Request, path: SafePath): NextResponse;      // route handlers and proxy.ts
+export function responseRedirect(req: Request, path: SafePath, status?: 307 | 308): NextResponse; // route handlers and proxy.ts; 308 for the App. F table
 
 // src/ui/navigation.tsx        — the only useRouter importer, and the only file with a computed href/action
 export function useNavigate(): { replace(path: SafePath): void; push(path: SafePath): void };
@@ -611,7 +611,7 @@ Each invariant is one sentence with a named mechanism. Architecture tests live i
 | Guard | Negative tests |
 |---|---|
 | `resolveViewerWith` | unauthenticated, malformed slug, unknown org, non-member, unknown or non-member workspace, MFA enroll, historical slug, each of the six stored roles resolves |
-| `proxy` | no cookie → `/login?next=`; App. F table (all 72 rows, §7.3) |
+| `proxy` | no cookie → `/login?next=`; App. F table (every row, §7.3) |
 | `sanitizeNext` | `//evil`, `/\evil`, `https://evil`, control characters, sign-in targets |
 | `parseLoopbackUri` | non-loopback host, https, missing port, path traversal |
 | `parseCheckoutUrl` | http, another host, `checkout.stripe.com.evil`, userinfo |

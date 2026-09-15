@@ -30,10 +30,11 @@ export function redirectToLoopback(
   redirect(url.href);
 }
 
-/** A 307 from a route handler or the proxy. */
+/** A 307 from a route handler or the proxy; a 308 for a route that moved for good (the proxy's Appendix F table). */
 export function responseRedirect(
   request: Request,
   path: SafePath,
+  status: 307 | 308 = 307,
 ): NextResponse {
-  return NextResponse.redirect(new URL(path, request.url));
+  return NextResponse.redirect(new URL(path, request.url), status);
 }

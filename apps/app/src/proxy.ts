@@ -1,12 +1,14 @@
 // Request interception (Next 16 `proxy`, formerly `middleware`). Cookies and
 // redirects only: no Node built-ins, database calls or secrets.
 //
-// This is the minimal session gate. It checks that a session cookie exists; the
-// real session and membership check is `requireViewer` in every layout and page.
-// Appendix F legacy redirects are added at cutover (plan §4.11, Batch 5).
+// It answers a legacy route with a 308 to the page that absorbed it (the
+// Appendix F table in shared/legacy-routes.ts, ARCHITECTURE.md §7.3), then acts
+// as the minimal session gate: it checks that a session cookie exists; the real
+// session and membership check is `requireViewer` in every layout and page.
 import { type NextRequest, NextResponse } from "next/server";
+import { LEGACY_ROUTES } from "@/shared/legacy-routes";
 import { responseRedirect } from "@/shared/navigation";
-import { routes, sanitizeNext } from "@/shared/safe-path";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 
 /**
  * Reachable without a session: the sign-in flows, invitations, the auth API and
@@ -39,9 +41,33 @@ export function hasSessionCookie(req: NextRequest): boolean {
     .some((c) => c.name.endsWith("session_token") && c.value !== "");
 }
 
+/**
+ * Each row compiled once: `from` as an anchored pattern with `org` and `ws`
+ * named groups, `to` as its replacement string.
+ */
+const LEGACY = LEGACY_ROUTES.map(({ from, to }) => ({
+  pattern: new RegExp(
+    `^${from
+      .replace("/**", "(?:/.*)?")
+      .replace(/\{(org|ws)\}/g, (_, name: string) => `(?<${name}>[^/]+)`)
+      .replace("{id}", "[^/]+")}$`,
+  ),
+  target: to.replace(/\{(org|ws)\}/g, (_, name: string) => `$<${name}>`),
+}));
+
+/** The §1.2 page a legacy route moved to, or null when no row matches. */
+function legacyTarget(pathname: string): SafePath | null {
+  const row = LEGACY.find(({ pattern }) => pattern.test(pathname));
+  return row === undefined
+    ? null
+    : sanitizeNext(pathname.replace(row.pattern, row.target), routes.root());
+}
+
 export function proxy(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
   if (isPublicPath(pathname)) return NextResponse.next();
+  const moved = legacyTarget(pathname);
+  if (moved !== null) return responseRedirect(req, moved, 308);
   if (hasSessionCookie(req)) return NextResponse.next();
   const next = sanitizeNext(`${pathname}${search}`, routes.root());
   return responseRedirect(req, routes.login(next));

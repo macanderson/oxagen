@@ -68,4 +68,14 @@ describe("responseRedirect", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("https://app.oxagen.sh/");
   });
+
+  it("answers 308 when asked for a permanent move", () => {
+    const res = responseRedirect(
+      new Request("https://app.oxagen.sh/acme/members"),
+      routes.people("acme"),
+      308,
+    );
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe("https://app.oxagen.sh/acme");
+  });
 });
