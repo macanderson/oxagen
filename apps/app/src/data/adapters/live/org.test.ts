@@ -77,7 +77,7 @@ vi.mock("@oxagen/oxagen", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: mocks.getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
-  liveTenancyLookups: { orgRole: mocks.orgRole },
+  systemLookups: { orgRole: mocks.orgRole },
 }));
 vi.mock("@oxagen/database", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/database")>()),

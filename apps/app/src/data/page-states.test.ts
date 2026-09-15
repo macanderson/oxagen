@@ -32,9 +32,4 @@ describe("page failures (plan §2.1)", () => {
       expect(permission).toMatch(/^[a-z]+\.[a-z]+$/);
     },
   );
-
-  it("names the onboarding permissions the gate and Register deny on", () => {
-    expect(PAGE_FAILURES.welcome.permission).toBe("org.create");
-    expect(PAGE_FAILURES.register.permission).toBe("agent.register");
-  });
 });

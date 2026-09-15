@@ -217,7 +217,7 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/features/auth/actions.ts", expect: null },
   ],
   "feature-barrel.ts": [
-    { at: "src/features/onboarding/screens.tsx", expect: null },
+    { at: "src/features/onboarding/new-organization.tsx", expect: null },
     { at: "src/app/[org]/page.tsx", expect: null },
   ],
   "app-imports-feature-internals.tsx": [

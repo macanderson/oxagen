@@ -1,15 +1,18 @@
 "use server";
-// Accept or decline an invitation. Both re-read the invitation and the session
-// and re-run the decision the page made, so a crafted POST cannot accept an
-// invitation addressed to someone else or one that has closed. The write is the
-// `accept_member_invite` / `decline_member_invite` agent tool through the kernel.
+// Accept or decline an invitation. Both re-read the invitation (through the
+// system lookups seam, which carries the org id the write needs) and the
+// session, and re-run the decision the page made, so a crafted POST cannot
+// accept an invitation addressed to someone else or one that has closed. The
+// write is the `accept_member_invite` / `decline_member_invite` agent tool
+// through the kernel.
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { invokeTool } from "@/server/invoke";
 import type { Viewer } from "@/server/scope";
+import { systemLookups } from "@/server/tenancy-lookups";
 import { ORG_ONLY_WS } from "@/server/tenant-scope";
 import { decideInvitation } from "./invitation";
-import { loadInvitation } from "./invitations";
+import { isInvitationToken, toInvitationView } from "./invitations";
 import { getAuthUser } from "./session";
 
 export type InviteActionResult =
@@ -25,10 +28,13 @@ async function decide(
   token: string,
   decision: Decision,
 ): Promise<InviteActionResult> {
-  const [read, user] = await Promise.all([
-    loadInvitation(token),
+  if (!isInvitationToken(token)) return { ok: false, reason: "not_found" };
+  const [record, user] = await Promise.all([
+    systemLookups.invitationByToken(token),
     getAuthUser(),
   ]);
+  if (!record) return { ok: false, reason: "not_found" };
+  const read = toInvitationView(token, record);
   if (!read.ok) return { ok: false, reason: "not_found" };
   const verdict = decideInvitation(read.value, user?.email ?? null);
   if (verdict.kind === "closed") return { ok: false, reason: "closed" };
@@ -38,19 +44,10 @@ async function decide(
     return { ok: false, reason: "wrong_account" };
 
   try {
-    const { withSystemDb } = await import("@oxagen/database");
-    // tenancy: unscoped seam (resolve the invitation's org id before its scope can be entered)
-    const orgId = await withSystemDb(async (tx) => {
-      const row = await tx.query.invitations.findFirst({
-        where: (inv, { eq }) => eq(inv.publicId, token),
-        columns: { orgId: true },
-      });
-      return row?.orgId ?? null;
-    });
-    if (!orgId) return { ok: false, reason: "not_found" };
     // The invitee is not a member yet, so requireViewer has no Viewer to give.
     // This one names the invitation's organization and the signed-in person;
     // IAM and the handler decide (the handler matches the invited address).
+    const { orgId } = record;
     const viewer: Viewer = {
       userId: user.id,
       user: {

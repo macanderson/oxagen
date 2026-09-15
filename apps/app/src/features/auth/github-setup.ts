@@ -23,7 +23,7 @@ export type GithubSetupQueries = {
   mostRecentMembership: (userId: string) => Promise<GithubSetupTargetRow[]>;
 };
 
-export const NO_ORGANIZATION_TARGET = "/welcome";
+export const NO_ORGANIZATION_TARGET = "/new-organization";
 
 export function sourcesPath(orgSlug: string, workspaceSlug: string): string {
   return `/${orgSlug}/${workspaceSlug}/ontology/sources?setup=github`;

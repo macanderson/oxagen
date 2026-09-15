@@ -7,16 +7,8 @@ import {
   orgSegmentKey,
   parseShellPath,
   sidebarSections,
-  visibleCount,
   workspaceHref,
 } from "./nav";
-
-const counts = {
-  pendingApprovals: 2,
-  agents: 38,
-  openProposals: 0,
-  openIncidents: 1,
-};
 
 describe("parseShellPath", () => {
   it("reads organization, workspace and the rest", () => {
@@ -43,7 +35,7 @@ describe("parseShellPath", () => {
   });
 
   it("ignores the query and hash, decodes segments and survives malformed escapes", () => {
-    expect(parseShellPath("/acme/core%20platform?dialog=account#x").ws).toBe(
+    expect(parseShellPath("/acme/core%20platform?tab=x#y").ws).toBe(
       "core platform",
     );
     expect(parseShellPath("/acme/%E0%A4%A").ws).toBe("%E0%A4%A");
@@ -73,7 +65,6 @@ describe("currentNavKey and isNavItemCurrent", () => {
     ["/acme/core-platform/ontology", "ontology"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
-    ["/acme/core-platform/register", "register"],
   ])("%s → %s", (path, key) => {
     expect(currentNavKey(path)).toBe(key);
   });
@@ -102,9 +93,7 @@ describe("hrefs", () => {
     expect(workspaceHref("acme", "core-platform", "agents")).toBe(
       "/acme/core-platform/agents",
     );
-    expect(workspaceHref("acme", "a b", "register")).toBe(
-      "/acme/a%20b/register",
-    );
+    expect(workspaceHref("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(orgHref("acme", "organization")).toBe("/acme");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
     expect(orgHref("acme", "roles")).toBe("/acme/roles");
@@ -116,8 +105,8 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the baseline sections, in order, with counts", () => {
-    const sections = sidebarSections("acme", "core-platform", counts);
+  it("has the baseline sections, in order", () => {
+    const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections[0]?.items.map((i) => i.key)).toEqual([
       "fleet",
@@ -132,37 +121,27 @@ describe("sidebarSections", () => {
       "billing",
       "audit",
     ]);
-    const fleet = sections[0]?.items[0];
-    expect(fleet).toMatchObject({
+    expect(sections[0]?.items[0]).toEqual({
+      key: "fleet",
       href: "/acme/core-platform",
-      count: 2,
-      hot: true,
     });
-    expect(sections[1]?.items[2]).toMatchObject({ count: 1, hot: true });
+    expect(sections[1]?.items[2]).toEqual({
+      key: "audit",
+      href: "/acme/audit",
+    });
   });
 
-  it("shows no count, never a zero, when counts are not recorded", () => {
-    const sections = sidebarSections("acme", "core-platform", null);
-    for (const item of sections.flatMap((s) => s.items))
-      expect(item.count).toBeNull();
+  it("carries a key and an href per item and nothing else (negative)", () => {
+    for (const item of sidebarSections("acme", "core-platform").flatMap(
+      (s) => s.items,
+    ))
+      expect(Object.keys(item).sort()).toEqual(["href", "key"]);
   });
 
   it("omits the workspace section when there is no workspace", () => {
-    expect(sidebarSections("acme", null, counts).map((s) => s.key)).toEqual([
+    expect(sidebarSections("acme", null).map((s) => s.key)).toEqual([
       "organization",
     ]);
-  });
-
-  it("draws only counts above zero", () => {
-    expect(
-      visibleCount({ key: "steering", href: "", count: 0, hot: false }),
-    ).toBeNull();
-    expect(
-      visibleCount({ key: "steering", href: "", count: null, hot: false }),
-    ).toBeNull();
-    expect(
-      visibleCount({ key: "steering", href: "", count: 3, hot: false }),
-    ).toBe(3);
   });
 });
 
@@ -203,11 +182,6 @@ describe("breadcrumbs", () => {
     ).toEqual({
       kind: "nav",
       key: "tools",
-      href: null,
-    });
-    expect(breadcrumbs("/acme/core-platform/register", names).at(-1)).toEqual({
-      kind: "nav",
-      key: "register",
       href: null,
     });
   });

@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
-import type { NavCounts, ShellContext } from "@/data/contracts/shell";
+import type { ShellContext } from "@/data/contracts/shell";
 import { filterByName } from "./switcher-filter";
 import { workspaceHref } from "./nav";
 
@@ -157,11 +157,9 @@ export function OrgSwitcher({ context }: { context: ShellContext }) {
 export function WorkspaceSwitcher({
   context,
   current,
-  counts,
 }: {
   context: ShellContext;
   current: string | null;
-  counts: Record<string, NavCounts> | null;
 }) {
   const t = useTranslations("shell.switcher.ws");
   const [open, setOpen] = useState(false);
@@ -204,7 +202,6 @@ export function WorkspaceSwitcher({
           <ul className="flex flex-col gap-1">
             {workspaces.map((w) => {
               const isCurrent = w.slug === current;
-              const agents = counts?.[w.slug]?.agents ?? w.agentCount;
               return (
                 <li key={w.slug}>
                   <Link
@@ -220,9 +217,9 @@ export function WorkspaceSwitcher({
                       <b className="block truncate text-sm">{w.name}</b>
                       <span className="block truncate font-mono text-xs text-muted-foreground">
                         {detail(w)}
-                        {agents === null
+                        {w.agentCount === null
                           ? null
-                          : ` · ${t("agents", { count: agents })}`}
+                          : ` · ${t("agents", { count: w.agentCount })}`}
                       </span>
                     </span>
                     {isCurrent ? (
