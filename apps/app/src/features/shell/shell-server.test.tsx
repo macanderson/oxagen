@@ -47,12 +47,14 @@ describe("ShellChrome", () => {
       orgName: "Acme Robotics",
       orgRole: "owner",
     });
+    const source = { shell: { context: vi.fn() } };
     const element: ReactElement<{ data: ShellData }> = await ShellChrome({
       ctx,
+      source,
     });
     expect(isValidElement(element)).toBe(true);
     expect(element.props.data).toEqual(shellData());
-    expect(shellSource).toHaveBeenCalledWith(ctx);
+    expect(shellSource).toHaveBeenCalledWith(ctx, source);
   });
 });
 

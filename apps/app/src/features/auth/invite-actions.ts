@@ -4,10 +4,10 @@
 // session, and re-run the decision the page made, so a crafted POST cannot
 // accept an invitation addressed to someone else or one that has closed. The
 // write is the `accept_member_invite` / `decline_member_invite` agent tool
-// through the kernel.
+// through the kernel seam's InviteeCtx overload.
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
-import { invokeTool } from "@/server/invoke";
+import { kernelWrite } from "@/server/kernel";
 import { systemLookups } from "@/server/tenancy-lookups";
 import { requireInvitee } from "@/server/viewer";
 import { decideInvitation } from "./invitation";
@@ -46,22 +46,15 @@ async function decide(
   // organization and the signed-in person it is addressed to; IAM and the
   // handler decide.
   const { ctx } = await requireInvitee(token);
-  try {
-    const input = { invitationPublicId: token };
-    if (decision === "accept")
-      await invokeTool(ctx, orgMemberInviteAccept, input);
-    else await invokeTool(ctx, orgMemberInviteDecline, input);
-    return decision === "accept"
-      ? { ok: true, to: `/${read.value.orgSlug}` }
-      : { ok: true, to: "/" };
-  } catch (err) {
-    const { logger } = await import("@oxagen/handlers/logger");
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err), decision },
-      "[invite] decision failed",
-    );
-    return { ok: false, reason: "failed" };
-  }
+  const input = { invitationPublicId: token };
+  const result =
+    decision === "accept"
+      ? await kernelWrite(ctx, orgMemberInviteAccept, input)
+      : await kernelWrite(ctx, orgMemberInviteDecline, input);
+  if (!result.ok) return { ok: false, reason: "failed" };
+  return decision === "accept"
+    ? { ok: true, to: `/${read.value.orgSlug}` }
+    : { ok: true, to: "/" };
 }
 
 export async function acceptInvitation(

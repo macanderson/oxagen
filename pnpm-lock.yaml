@@ -161,6 +161,9 @@ importers:
       '@base-ui/react':
         specifier: 1.5.0
         version: 1.5.0(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@oxagen/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@oxagen/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -228,9 +231,6 @@ importers:
       '@next/eslint-plugin-next':
         specifier: 16.3.5
         version: 16.3.5(eslint@10.10.0(jiti@2.7.0))
-      '@oxagen/agent':
-        specifier: workspace:*
-        version: link:../../packages/agent
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../../packages/run-ledger

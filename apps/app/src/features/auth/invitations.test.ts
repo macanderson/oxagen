@@ -12,10 +12,8 @@ vi.mock("./session", () => ({ getAuthUser }));
 // requireInvitee reads the same person through the server session seam.
 const getSession = vi.fn();
 vi.mock("@/server/session", () => ({ getSession }));
-const invokeTool = vi.fn();
-vi.mock("@/server/invoke", () => ({ invokeTool }));
-const warn = vi.fn();
-vi.mock("@oxagen/handlers/logger", () => ({ logger: { warn } }));
+const kernelWrite = vi.fn();
+vi.mock("@/server/kernel", () => ({ kernelWrite }));
 vi.mock("@oxagen/oxagen/contracts/org.member_invite.accept", () => ({
   orgMemberInviteAccept: { name: "accept_member_invite" },
 }));
@@ -50,8 +48,7 @@ beforeEach(() => {
   invitationByToken.mockReset();
   getAuthUser.mockReset();
   getSession.mockResolvedValue({ user: priya });
-  invokeTool.mockReset();
-  warn.mockReset();
+  kernelWrite.mockReset();
 });
 
 describe("loadInvitation", () => {
@@ -140,18 +137,18 @@ describe("accept and decline", () => {
       ok: false,
       reason: "sign_in",
     });
-    expect(invokeTool).not.toHaveBeenCalled();
+    expect(kernelWrite).not.toHaveBeenCalled();
   });
 
   it("accepts through the kernel in the org the record names", async () => {
     getAuthUser.mockResolvedValue(priya);
     invitationByToken.mockResolvedValue(record);
-    invokeTool.mockResolvedValue({});
+    kernelWrite.mockResolvedValue({ ok: true, value: {} });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: true,
       to: "/acme",
     });
-    expect(invokeTool).toHaveBeenCalledWith(
+    expect(kernelWrite).toHaveBeenCalledWith(
       {
         userId: "u-priya",
         orgId: record.orgId,
@@ -160,9 +157,9 @@ describe("accept and decline", () => {
       { name: "accept_member_invite" },
       { invitationPublicId: "invi_live" },
     );
-    expect(InviteeCtx.is(invokeTool.mock.calls[0]?.[0])).toBe(true);
+    expect(InviteeCtx.is(kernelWrite.mock.calls[0]?.[0])).toBe(true);
     expect(await declineInvitation("invi_live")).toEqual({ ok: true, to: "/" });
-    expect(invokeTool).toHaveBeenLastCalledWith(
+    expect(kernelWrite).toHaveBeenLastCalledWith(
       expect.objectContaining({ userId: "u-priya" }),
       { name: "decline_member_invite" },
       { invitationPublicId: "invi_live" },
@@ -171,14 +168,17 @@ describe("accept and decline", () => {
     expect(invitationByToken).toHaveBeenCalledTimes(4);
   });
 
-  it("a kernel failure is logged and reported, not thrown", async () => {
+  it("a kernel refusal is reported as failed (negative)", async () => {
     getAuthUser.mockResolvedValue(priya);
     invitationByToken.mockResolvedValue(record);
-    invokeTool.mockRejectedValue(new Error("iam denied"));
+    kernelWrite.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "invitation_closed",
+    });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "failed",
     });
-    expect(warn).toHaveBeenCalledOnce();
   });
 });

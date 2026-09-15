@@ -6,7 +6,6 @@
   "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app",
   "layer src/app/layout.tsx:5 @/i18n/catalogs",
   "layer src/features/auth/invitations.ts:9 @/server/tenancy-lookups",
-  "layer src/features/auth/invite-actions.ts:10 @/server/invoke",
   "layer src/features/auth/invite-actions.ts:11 @/server/tenancy-lookups",
   "layer src/features/auth/session.ts:6 @/server/session",
   "layer src/features/onboarding/actions.ts:5 ../auth/session",
@@ -31,15 +30,11 @@
   "platform src/features/auth/client-auth.ts:18 @oxagen/auth/client",
   "platform src/features/auth/github-setup-queries.ts:23 @oxagen/database",
   "platform src/features/auth/github-setup-queries.ts:70 @oxagen/database",
-  "platform src/features/auth/invite-actions.ts:58 @oxagen/handlers/logger",
   "platform src/features/auth/ui/oauth-buttons.tsx:43 @oxagen/auth/client",
   "platform src/features/onboarding/create-organization.ts:122 @oxagen/handlers/iam-provision",
   "platform src/features/onboarding/create-organization.ts:123 @oxagen/handlers/workspace-agents",
   "platform src/features/onboarding/create-organization.ts:178 @oxagen/handlers/workspace-registry-seed",
   "platform src/features/onboarding/create-organization.ts:185 @oxagen/handlers/workspace-environment-seed",
   "platform src/features/onboarding/create-organization.ts:67 @oxagen/database",
-  "platform src/features/onboarding/create-organization.ts:68 @oxagen/handlers/logger",
-  "platform src/server/invoke.ts:17 @oxagen/oxagen",
-  "platform src/server/invoke.ts:18 @oxagen/tenancy",
-  "platform src/server/invoke.ts:54 @oxagen/handlers/register"
+  "platform src/features/onboarding/create-organization.ts:68 @oxagen/handlers/logger"
 ]
