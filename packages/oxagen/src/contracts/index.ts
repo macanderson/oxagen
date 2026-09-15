@@ -80,6 +80,7 @@ import { agentToolList } from "./agent.tool.list";
 import { billingActionEstimate } from "./billing.action_estimate";
 import { billingActionRateCard } from "./billing.action_rate_card";
 import { billingActionUsage } from "./billing.action_usage";
+import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingInvoiceList } from "./billing.invoice.list";
@@ -453,6 +454,7 @@ export {
   billingActionEstimate,
   billingActionRateCard,
   billingActionUsage,
+  billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingInvoiceList,
@@ -707,6 +709,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingActionEstimate,
   billingActionRateCard,
   billingActionUsage,
+  billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingInvoiceList,

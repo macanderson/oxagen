@@ -712,6 +712,17 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "get_contract_rate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_data_plane",
       "reads": [],
@@ -2632,7 +2643,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d1df76081135aa1c1ba3c344240b4879fb7f6eed96acaadb860e04be32877e84",
+  "contentHash": "306452d2fdef3fde6b25cd52dcb4e7d070124d5d24f01e06dcade460433c3ee0",
   "domains": [
     {
       "name": "agent",

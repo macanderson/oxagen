@@ -119,6 +119,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .billingSubscriptionReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_contract_rate",
+    async () =>
+      (await import("./billing.contract_rate.get"))
+        .billingContractRateGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_usage_breakdown",
     async () =>
       (await import("./billing.usage.breakdown"))
