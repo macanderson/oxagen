@@ -72,7 +72,7 @@ export function ContextPrs({
                     })}
                   </SafeLink>
                   <div className={`${mono} text-xs text-muted-foreground`}>
-                    {proposal.lineageId}
+                    {proposal.lineage}
                   </div>
                 </td>
                 <td className={`${cell} ${mono} text-xs break-all`}>

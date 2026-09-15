@@ -50,7 +50,8 @@ export type ProposalStatus = z.infer<typeof ProposalStatus>;
 /** A published record in force. Kind, force, statement, commit and path are null on a record no Context PR wrote. */
 const PublishedRecord = z.object({
   id: PublicId,
-  lineageId: z.string().min(1),
+  /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
+  lineage: z.string().min(1),
   title: z.string(),
   kind: RecordKind.nullable(),
   force: RecordForce.nullable(),
@@ -72,7 +73,8 @@ export type RecordPage = z.infer<typeof RecordPage>;
 
 export const Proposal = z.object({
   id: PublicId,
-  lineageId: z.string().min(1),
+  /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
+  lineage: z.string().min(1),
   kind: RecordKind,
   force: RecordForce,
   constraintEffect: ConstraintEffect.nullable(),
@@ -122,7 +124,8 @@ const GovernanceMode = z.enum(["solo", "team", "regulated"]);
 
 export const ContextPr = z.object({
   proposalId: PublicId,
-  lineageId: z.string().min(1),
+  /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
+  lineage: z.string().min(1),
   status: ProposalStatus,
   /** Read from governance.toml when the pull request opens; null before. */
   governanceMode: GovernanceMode.nullable(),

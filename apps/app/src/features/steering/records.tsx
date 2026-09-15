@@ -99,7 +99,7 @@ export function Records({
                 force={record.force}
                 constraintEffect={record.constraintEffect}
                 sharingScope={record.sharingScope}
-                lineageId={record.lineageId}
+                lineage={record.lineage}
                 statement={record.statement ?? record.title}
               >
                 <Facts>

@@ -222,7 +222,7 @@ describe("Records", () => {
       { kind: "constraint", offset: "50" },
       {
         records: readOk({
-          records: Array.from({ length: 50 }, (_, i) =>
+          records: Array.from({ length: 2 }, (_, i) =>
             publishedRecord({ id: `ctr_r${String(i)}` }),
           ),
           total: 120,
@@ -231,7 +231,7 @@ describe("Records", () => {
     );
     expect(calls.records).toEqual([[ctx, { kind: "constraint", offset: 50 }]]);
     const pager = screen.getByRole("navigation", { name: "Pages" });
-    expect(pager).toHaveTextContent("51 to 100 of 120");
+    expect(pager).toHaveTextContent("51 to 52 of 120");
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
     ).toHaveAttribute("href", `${BASE}?kind=constraint`);

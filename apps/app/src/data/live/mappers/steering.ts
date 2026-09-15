@@ -20,7 +20,7 @@ export function toRecordPage(
   return {
     records: out.records.map((record) => ({
       id: record.id,
-      lineageId: record.lineageId,
+      lineage: record.lineageId,
       title: record.title,
       kind: record.kind,
       force: record.force,
@@ -42,7 +42,7 @@ export function toProposalPage(
   return {
     proposals: out.proposals.map((proposal) => ({
       id: proposal.id,
-      lineageId: proposal.lineageId,
+      lineage: proposal.lineageId,
       kind: proposal.kind,
       force: proposal.force,
       constraintEffect: proposal.constraintEffect,
@@ -80,7 +80,7 @@ export function toContextPr(
 ): z.input<typeof ContextPr> {
   return {
     proposalId: out.proposalId,
-    lineageId: out.lineageId,
+    lineage: out.lineageId,
     status: out.status,
     governanceMode: out.governanceMode,
     pr:

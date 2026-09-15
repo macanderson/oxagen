@@ -26,7 +26,7 @@ export function publishedRecord(
 ): PublishedRecord {
   return {
     id: "ctr_7k2m9q4x8r1t5v3w6y0z2a",
-    lineageId: LINEAGE,
+    lineage: LINEAGE,
     title: "Read CHANGELOG.md once per run",
     kind: "constraint",
     force: "must",
@@ -44,7 +44,7 @@ export function publishedRecord(
 export function proposal(overrides: Partial<Proposal> = {}): Proposal {
   return {
     id: PROPOSAL_ID,
-    lineageId: LINEAGE,
+    lineage: LINEAGE,
     kind: "constraint",
     force: "must",
     constraintEffect: "forbid",
@@ -116,7 +116,7 @@ export function contextPr(
   const opened = status !== "proposed";
   return {
     proposalId: PROPOSAL_ID,
-    lineageId: LINEAGE,
+    lineage: LINEAGE,
     status,
     governanceMode: opened ? "team" : null,
     pr: opened

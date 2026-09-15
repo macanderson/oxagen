@@ -26,7 +26,7 @@ describe("toRecordPage", () => {
     expect(view.records).toEqual([
       {
         id: "ctr_7k2m9q4x8r1t5v3w6y0z2a",
-        lineageId: LINEAGE,
+        lineage: LINEAGE,
         title: "Read CHANGELOG.md once per run",
         kind: "constraint",
         force: "must",

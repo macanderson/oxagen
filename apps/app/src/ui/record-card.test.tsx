@@ -22,7 +22,7 @@ describe("RecordCard", () => {
           force="must"
           constraintEffect="forbid"
           sharingScope="repository"
-          lineageId="ctx.release.no-reread-changelog"
+          lineage="ctx.release.no-reread-changelog"
           statement="Do not re-read CHANGELOG.md after the first read in a run."
           badge={<span data-testid="badge" />}
         >
@@ -59,7 +59,7 @@ describe("RecordCard", () => {
           force={null}
           constraintEffect={null}
           sharingScope="workspace"
-          lineageId="release-notes"
+          lineage="release-notes"
           statement="Release notes format"
         />
       </IntlProvider>,

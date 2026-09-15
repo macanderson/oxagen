@@ -128,7 +128,7 @@ export function ContextPrPanel({
   return (
     <Section
       id="steering-pr"
-      title={t("title", { lineage: value.lineageId })}
+      title={t("title", { lineage: value.lineage })}
       data-status={status}
     >
       <div className="flex flex-wrap items-center gap-3">

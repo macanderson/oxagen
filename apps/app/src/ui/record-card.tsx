@@ -19,7 +19,7 @@ export function RecordCard({
   force,
   constraintEffect,
   sharingScope,
-  lineageId,
+  lineage,
   statement,
   badge,
   children,
@@ -29,7 +29,7 @@ export function RecordCard({
   force: RecordForce | null;
   constraintEffect: ConstraintEffect | null;
   sharingScope: SharingScope;
-  lineageId: string;
+  lineage: string;
   statement: string;
   /** The record's state, beside its classification. */
   badge?: ReactNode;
@@ -69,7 +69,7 @@ export function RecordCard({
         </div>
         <div data-term="lineage" className="flex min-w-0 gap-1">
           <dt>{t("lineage")}</dt>
-          <dd className={`${mono} break-all`}>{lineageId}</dd>
+          <dd className={`${mono} break-all`}>{lineage}</dd>
         </div>
       </dl>
       {children}

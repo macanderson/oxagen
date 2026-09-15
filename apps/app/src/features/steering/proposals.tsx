@@ -43,7 +43,7 @@ function ProposalItem({ at, proposal }: { at: SteeringAt; proposal: Proposal }) 
       force={proposal.force}
       constraintEffect={proposal.constraintEffect}
       sharingScope={proposal.sharingScope}
-      lineageId={proposal.lineageId}
+      lineage={proposal.lineage}
       statement={proposal.statement}
       badge={
         <>
