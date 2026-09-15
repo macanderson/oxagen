@@ -16,10 +16,12 @@
  *  9. getOrgBillingSettings — throws when DB returns no row after insert
  * 10. readOrgBillingSettings — the GAU-path read: column defaults for an org
  *     with no row, never an insert (asserted on the query log)
- * 11. setAutoTopup — the customer's upsert: tenant-scoped, keyed on org_id,
- *     returns the row as stored, refuses a non-positive block count
+ * 11. setAutoTopup — the customer's upsert: tenant-scoped, ON CONFLICT
+ *     (org_id) with a SET naming only its two columns, returns the row as
+ *     stored, refuses a non-positive block count
  * 12. setOrgBillingTerms — the platform operator's upsert: system-scoped,
- *     keyed on the caller-supplied org_id, returns the stored row
+ *     ON CONFLICT (org_id) with a SET naming only its two columns, returns
+ *     the stored row
  */
 
 import { afterAll, describe, it, expect, vi, beforeEach } from "vitest";
@@ -92,7 +94,14 @@ const {
   updateAssistantSpendCap,
   updateAutoReloadSettings,
 } = await import("./billing-settings");
-const { withTenantDb, withSystemDb } = await import("@oxagen/database");
+const { schema, withTenantDb, withSystemDb } = await import("@oxagen/database");
+
+/** The column names an upsert's ON CONFLICT … DO UPDATE SET clause names. */
+function upsertSetColumns(): string[] {
+  const call = onConflictDoUpdateMock.mock.calls[0];
+  if (!call) throw new Error("expected one onConflictDoUpdate call");
+  return Object.keys((call[0] as { set: Record<string, unknown> }).set).sort();
+}
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -512,7 +521,23 @@ describe("setAutoTopup", () => {
         autoTopupBlocks: 3,
       }),
     );
-    expect(onConflictDoUpdateMock).toHaveBeenCalledOnce();
+  });
+
+  it("is keyed on org_id and updates only its own two columns on conflict", async () => {
+    upsertReturningMock.mockResolvedValue([
+      { autoTopupEnabled: true, autoTopupBlocks: 3 },
+    ]);
+
+    await setAutoTopup("org-001", { enabled: true, blocks: 3 });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ target: schema.orgBillingSettings.orgId }),
+    );
+    expect(upsertSetColumns()).toEqual([
+      "autoTopupBlocks",
+      "autoTopupEnabled",
+      "updatedAt",
+    ]);
   });
 
   it("answers with the stored row rather than the requested values", async () => {
@@ -596,6 +621,31 @@ describe("setOrgBillingTerms", () => {
         invoiceGauMax: 250_000,
       }),
     );
+  });
+
+  it("is keyed on org_id and updates only its own two columns on conflict", async () => {
+    upsertReturningMock.mockResolvedValue([
+      {
+        orgId: "org-001",
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 250_000,
+      },
+    ]);
+
+    await setOrgBillingTerms({
+      orgId: "org-001",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+    });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ target: schema.orgBillingSettings.orgId }),
+    );
+    expect(upsertSetColumns()).toEqual([
+      "approvedForInvoiceBilling",
+      "invoiceGauMax",
+      "updatedAt",
+    ]);
   });
 
   it("writes through withSystemDb — the call carries no tenant to scope to", async () => {

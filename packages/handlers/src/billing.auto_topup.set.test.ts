@@ -4,10 +4,11 @@
  * The org is tier-free in every case: the kernel's IAM check allows every
  * capability there, so a refusal below comes from the handler alone (INV-29).
  * The role gate runs for real against a tx double that answers the principal
- * and role-assignment tables; the write runs against an in-memory settings
- * store that applies the same upsert semantics as the Postgres statement it
- * stands in for — an org with no row gets one, an org with a row keeps its
- * other columns — so the tests assert behaviour rather than a canned reply.
+ * and role-assignment tables; the write is a recording double, so what is
+ * asserted about it is what the handler hands it (the context's org, the two
+ * fields) and that the stored answer is what comes back. The upsert itself
+ * (ON CONFLICT (org_id), the SET naming only its own columns) is asserted in
+ * packages/billing/src/billing-settings.test.ts.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,20 +71,16 @@ function stubRole(roleName: string | null) {
 
 // ── in-memory settings store ──────────────────────────────────────────────────
 
-/** One org_billing_settings row, reduced to what this handler touches. */
+/** One org_billing_settings row, reduced to the two columns this handler owns. */
 type StoredRow = {
   autoTopupEnabled: boolean;
   autoTopupBlocks: number;
-  /** A neighbouring column, here to prove the upsert leaves it alone. */
-  invoiceGauMax: number;
 };
 
-function makeStore(seed: Record<string, StoredRow> = {}) {
-  const rows = new Map(Object.entries(seed));
+function makeStore() {
+  const rows = new Map<string, StoredRow>();
   const write: AutoTopupWriter = async (orgId, input) => {
-    const existing = rows.get(orgId);
     rows.set(orgId, {
-      invoiceGauMax: existing?.invoiceGauMax ?? 100_000,
       autoTopupEnabled: input.enabled,
       autoTopupBlocks: input.blocks,
     });
@@ -149,38 +146,6 @@ describe("set_auto_topup handler — the write", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubRole("Owner");
-  });
-
-  it("creates the row for an org that has no settings row yet", async () => {
-    const store = makeStore();
-    const handler = createBillingAutoTopupSetHandler(store.write);
-
-    await handler({ enabled: false, blocks: 2 }, ctx());
-
-    expect(store.rows.get(ORG)).toEqual({
-      autoTopupEnabled: false,
-      autoTopupBlocks: 2,
-      invoiceGauMax: 100_000,
-    });
-  });
-
-  it("leaves the org's other billing columns alone", async () => {
-    const store = makeStore({
-      [ORG]: {
-        autoTopupEnabled: true,
-        autoTopupBlocks: 1,
-        invoiceGauMax: 250_000,
-      },
-    });
-    const handler = createBillingAutoTopupSetHandler(store.write);
-
-    await handler({ enabled: false, blocks: 7 }, ctx());
-
-    expect(store.rows.get(ORG)).toEqual({
-      autoTopupEnabled: false,
-      autoTopupBlocks: 7,
-      invoiceGauMax: 250_000,
-    });
   });
 
   it("writes to the org the context names, never one the caller could pick", async () => {
