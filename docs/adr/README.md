@@ -81,3 +81,4 @@ first. Move a row into its epic when one fits.
 - [ADR-052](./ADR-052-governed-action-as-the-billable-unit.md) — The governed action is the billable unit; tokens are reported, never billed
 - [ADR-053](./ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md) — The in-app agent runs on Stella's headless engine, and a token is billed only when Oxagen paid for it
 - [ADR-054](./ADR-054-the-migration-connection-carries-the-rls-bypass.md) — The migration connection carries `app.rls_bypass`; the registries policy keeps its narrower WITH CHECK
+- [ADR-055](./ADR-055-stella-is-wrapped-through-its-hooks-until-it-speaks-the-tacho-contract-natively.md) — Stella is wrapped through its hooks until it speaks the Tacho contract natively
