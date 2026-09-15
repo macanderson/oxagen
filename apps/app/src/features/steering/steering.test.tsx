@@ -298,14 +298,14 @@ describe("Proposals", () => {
     ).toHaveAttribute("href", `${BASE}?tab=prs&proposal=${PROPOSAL_ID}`);
   });
 
-  it.each([
+  it.each<[ProposalStatus, string[]]>([
     ["proposed", ["Open a Context PR", "Dismiss"]],
     ["pr_open", ["Run the checks again", "Dismiss"]],
     ["checks_failed", ["Run the checks again", "Dismiss"]],
     ["checks_passed", ["Dismiss"]],
     ["merged", []],
     ["rejected", []],
-  ] as [ProposalStatus, string[]][])(
+  ])(
     "offers a %s proposal exactly its writes",
     async (status, writes) => {
       await renderSteering(
@@ -365,7 +365,7 @@ describe("Context PRs", () => {
       PROPOSAL_ID,
     ]);
     expect(
-      within(rows[0] as HTMLElement).getByRole("link", {
+      within(rows[0] ?? table).getByRole("link", {
         name: "#519 on acme/core-platform",
       }),
     ).toHaveAttribute("href", `${BASE}?tab=prs&proposal=${PROPOSAL_ID}`);

@@ -171,7 +171,9 @@ describe("Merge pull request", () => {
     render(<MergeContextPr {...TARGET} blocked />, { wrapper: intl });
     const button = screen.getByRole("button", { name: "Merge pull request" });
     expect(button).toBeDisabled();
-    fireEvent.submit(button.closest("form") as HTMLFormElement);
+    const form = button.closest("form");
+    if (form === null) throw new Error("the merge button sits in no form");
+    fireEvent.submit(form);
     expect(mergeContextPr).not.toHaveBeenCalled();
     expect(
       screen.getByText("Merge is blocked until every check passes."),

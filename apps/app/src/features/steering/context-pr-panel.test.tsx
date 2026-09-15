@@ -47,14 +47,14 @@ afterEach(async () => {
 });
 
 describe("the state machine", () => {
-  it.each([
+  it.each<[ProposalStatus, string]>([
     ["proposed", "proposed"],
     ["pr_open", "pull request open"],
     ["checks_running", "checks running"],
     ["checks_passed", "checks passed"],
     ["checks_failed", "checks failed"],
     ["merged", "merged"],
-  ] as [ProposalStatus, string][])(
+  ])(
     "marks %s as the current step",
     (status, label) => {
       renderState(status);
