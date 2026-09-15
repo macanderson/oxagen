@@ -123,6 +123,40 @@ describe("generateObjectFor cache option", () => {
     expect(mocks.writeCache).not.toHaveBeenCalled();
   });
 
+  it("treats a hit that no longer satisfies the caller's schema as a miss", async () => {
+    // Same key names as SCHEMA (so the same cache key), but the stored value
+    // was written when `title` was a number.
+    mocks.readCache.mockResolvedValue({
+      hit: {
+        value: { title: 42 },
+        usage: {
+          model: "openai/gpt",
+          inputTokens: 3,
+          outputTokens: 2,
+          cachedTokens: 0,
+          costUsdMicros: 9,
+        },
+        kind: "object",
+        semantic: false,
+        similarity: 1,
+      },
+    });
+
+    const res = await generateObjectFor({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      schema: SCHEMA,
+      model: { modelId: "openai/gpt" } as never,
+      prompt: "classify me",
+      telemetry: TELEMETRY,
+      cache: { ttlSeconds: 3600 },
+    });
+
+    expect(res.object).toEqual({ title: "Fresh" });
+    expect(mocks.generateObject).toHaveBeenCalledTimes(1);
+    expect(mocks.writeCache).toHaveBeenCalledTimes(1);
+  });
+
   it("on a miss, calls the model, writes through the cache, and meters normally", async () => {
     mocks.readCache.mockResolvedValue({
       hit: null,

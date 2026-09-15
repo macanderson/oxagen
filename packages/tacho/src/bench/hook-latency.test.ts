@@ -189,7 +189,11 @@ describe("hook latency", () => {
         `bare request p50 ${controlP50.toFixed(2)} ms; hook adds ${addedP50.toFixed(2)} ms (paired p50); budget < 5 ms\n`,
     );
     expect(addedP50).toBeLessThan(5);
-  });
+    // 440 sequential round trips plus the daemon start: the wall clock is
+    // the machine's (it overran vitest's 5 s default under coverage
+    // instrumentation on a loaded laptop), and the paired delta above is the
+    // only figure this test gates.
+  }, 60_000);
 
   it("measures tacho-hook start-to-decision against the bundled executable", () => {
     if (!existsSync(HOOK_BIN)) {

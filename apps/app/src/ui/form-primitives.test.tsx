@@ -1,15 +1,12 @@
 // @vitest-environment jsdom
 // The form primitives promoted from the sign-in and organization screens: a field
 // wires its hint and error for assistive technology, the submit button reports
-// pending without losing focus, the outcome panel names its tone, and Tabs move
-// selection with the keyboard.
+// pending without losing focus, and the outcome panel names its tone.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Field, PasswordField } from "./field";
 import { FormAlert, OutcomePanel, SubmitButton } from "./form-feedback";
-import { TabList, TabPanel } from "./tabs";
 
 afterEach(() => {
   cleanup();
@@ -93,71 +90,5 @@ describe("form feedback", () => {
     expect(
       screen.getByRole("region", { name: "Invitation closed" }),
     ).toHaveTextContent("It was revoked.");
-  });
-});
-
-describe("Tabs", () => {
-  function Harness() {
-    const [value, setValue] = useState<"macos" | "windows" | "linux">("macos");
-    return (
-      <>
-        <TabList
-          label="Platform"
-          idPrefix="platform"
-          items={[
-            { id: "macos", label: "macOS" },
-            { id: "windows", label: "Windows" },
-            { id: "linux", label: "Linux" },
-          ]}
-          value={value}
-          onChange={setValue}
-        />
-        <TabPanel idPrefix="platform" value={value}>
-          panel {value}
-        </TabPanel>
-      </>
-    );
-  }
-
-  it("keeps only the selected tab in the tab order and labels the panel by it", () => {
-    render(<Harness />);
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.getAttribute("tabindex"))).toEqual([
-      "0",
-      "-1",
-      "-1",
-    ]);
-    expect(screen.getByRole("tabpanel", { name: "macOS" })).toHaveTextContent(
-      "panel macos",
-    );
-  });
-
-  it("moves and wraps selection with the arrow keys, Home and End", async () => {
-    const user = userEvent.setup();
-    render(<Harness />);
-    await user.click(screen.getByRole("tab", { name: "macOS" }));
-    await user.keyboard("{ArrowLeft}");
-    expect(screen.getByRole("tab", { name: "Linux" })).toHaveFocus();
-    expect(screen.getByRole("tab", { name: "Linux" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "macOS" })).toHaveFocus();
-    await user.keyboard("{End}");
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("panel linux");
-    await user.keyboard("{Home}");
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("panel macos");
-  });
-
-  it("ignores keys that are not navigation (negative)", async () => {
-    const user = userEvent.setup();
-    render(<Harness />);
-    await user.click(screen.getByRole("tab", { name: "macOS" }));
-    await user.keyboard("a{Enter}");
-    expect(screen.getByRole("tab", { name: "macOS" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
   });
 });

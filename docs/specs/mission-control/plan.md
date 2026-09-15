@@ -1,10 +1,12 @@
-# Mission Control app — implementation plan
+# Oxagen Mission Control app: implementation plan
 
 | | |
 |---|---|
+| **Status** | Draft |
 | **Date** | 2026-09-12 |
+| **Owner** | Mac Anderson |
 | **Builds** | a new `apps/app` (`@oxagen/app`) in `~/Projects/oxagen`; today's app moves to `apps/app_deprecated` (`@oxagen/app-deprecated`) |
-| **Inputs** | `2026-09-11-oxagen-mission-control-spec.md` (§3, §4, §14, §15, §19, App. A, B, F) · mockups `~/Documents/Oxagen/Mockups` (`mc.html` @ tag `mc-baseline-w4`, W1–W12) · `docs/feedback-mockups.md` · the repo at `origin/main` |
+| **Source** | `2026-09-11-oxagen-mission-control-spec.md` (§3, §4, §14, §15, §19, App. A, B, F) · mockups `~/Documents/Oxagen/Mockups` (`mc.html` @ tag `mc-baseline-w3`, W1–W12) · `docs/feedback-mockups.md` · the repo at `origin/main` |
 | **Optimised for** | parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on |
 
 ---
@@ -62,7 +64,7 @@
 
 | # | Finding | Impact | Resolution in this plan |
 |---|---|---|---|
-| W1 | **The design baseline was split across branches** (resolved). Agent IAM was on `main` (54f9107; the 1b0634c first named here is an unmerged `worktree-audit-fix` commit). `approvalCardSm` and the flyout were on `small-approvals-bottom-dock-scenarios` (3f345d5, which merged the flyout as PR #1). `runMetrics(R)` was only in the `Specs/mockups/mc.html` scratch copy. | Twenty lanes reading "the mockup" would build three different apps. | **Baseline = tag `mc-baseline-w1`: one `mc.html` with Agent IAM + small approval card + sidebar flyout + `runMetrics` instruments.** Read it with `git show mc-baseline-w1:mc.html`; `tools/baseline/README.md` records what each decision came from, and `tools/baseline/check-baseline.mjs` checks it in a browser. Every lane prompt names the tag, never a branch or the Specs scratch. Where a W file or an older branch disagrees, the baseline wins (w2 and w3 still carry the bottom dock). Superseded by `mc-baseline-w2` (2026-09-13), which adds the W1–W11 parity work and the a-intel dataset, by `mc-baseline-w3` (2026-09-13, PR #12), which makes every run's tool calls a subset of its agent's belt at registry versions, and by `mc-baseline-w4` (2026-09-13, PR #14), which keeps the in-app agent's runs out of the tenant's run index while `run(id)` still opens them. Lanes read the newest tag; `tools/baseline/README.md` lists them. |
+| W1 | **The design baseline was split across branches** (resolved). Agent IAM was on `main` (54f9107; the 1b0634c first named here is an unmerged `worktree-audit-fix` commit). `approvalCardSm` and the flyout were on `small-approvals-bottom-dock-scenarios` (3f345d5, which merged the flyout as PR #1). `runMetrics(R)` was only in the `Specs/mockups/mc.html` scratch copy. | Twenty lanes reading "the mockup" would build three different apps. | **Baseline = tag `mc-baseline-w1`: one `mc.html` with Agent IAM + small approval card + sidebar flyout + `runMetrics` instruments.** Read it with `git show mc-baseline-w1:mc.html`; `tools/baseline/README.md` records what each decision came from, and `tools/baseline/check-baseline.mjs` checks it in a browser. Every lane prompt names the tag, never a branch or the Specs scratch. Where a W file or an older branch disagrees, the baseline wins (w2 and w3 still carry the bottom dock). Superseded by `mc-baseline-w2` (2026-09-13), which adds the W1–W11 parity work and the a-intel dataset, and by `mc-baseline-w3` (2026-09-13, PR #12), which makes every run's tool calls a subset of its agent's belt at registry versions. Lanes read the newest tag; `tools/baseline/README.md` lists them. |
 | W2 | **`docs/feedback-mockups.md` items are in no mockup:** (1) approvals render first and collapse when empty; (2) the onboarding content floats right; (3) one-thumb mobile navigation; (4) LLM-generated run name and summary, plus a file-diff card under approvals; (5) run cost large, near the run name, basis in a dialog; (6) prompt shown inspectable but collapsed; (7) run outputs (PRs, files, media) as the story; (8) spend by operator, agent and run on Fleet. | These change the Run and Fleet pages. | In scope: 1, 2, 5, 6, 8 (clear enough to build). 4's UI is in scope; the classifier that writes `run.name`/`run.summary` is a backend gap (G14). **3 and 7 need a design decision.** Their lanes build behind a component seam (`<MobileNav>`, `<RunOutputs>`) with a plain first version, so the design can drop in later. |
 | W3 | **Vocabulary drifts from the spec.** Replay grade: mockup `full/partial/digest/ledger` vs spec `inspect/view/fork/retry`. Egress: `third_party/internal/none` vs `local/org_tenant/third_party`. Schema origin: `observed` vs `observed_proposed/observed_approved`. Financial: `fin: moves_funds/commits_spend` vs `consequence_tags text[]`. Agent status `enrolled` vs `unenrolled/active/suspended/retired`. Verdict `null` vs `none`. Record kinds: 6 in the mockup (from Stella's `RecordKind`) vs "twelve kinds" in spec §3. | Types built from the mockup would diverge from the target schema on day one. | **View-model enums follow the spec (App. A).** The fixture adapter maps mockup values once, in one file. Record kinds: use the six real kinds; flag the spec's "twelve" as a spec defect to fix. |
 | W4 | **Fixture data has integrity defects.** `EVIDENCE` references agent `a-intel.finops.cost-reporter`, which is not in `AGENTS`. `FIX["Refetching a stable list"]` carries the cache-write finding's text. Several `NOTIFS`/`INCIDENTS`/`RECEIPTS` run ids are not in `RUNS`. `FRAMES` is one list shared by every run. The Mandate page always renders `MANDATES[0]`. | Ported naively, links 404 and every run shows the same frames. | The fixture adapter validates referential integrity in a unit test that **fails on a dangling id** (mutation-test it by deleting one agent). Frames are keyed by run. |
@@ -104,7 +106,7 @@ Status comes from table and contract names in the repo. **Batch 3 lanes must con
 | Agents · credentials | identity tab | `iam.credentials` | `auth.api_keys` (hosts), `mcp.credentials` | 🟡 |
 | Agents · mandates | `MANDATES` | `tools.mandates`, `mandate_ledger` | none | ❌ |
 | Agents · budgets | `budget`, `budgetUsed` | `billing.budgets` | `billing.spend_budgets`, `workspace_budget_policy` | ✅ |
-| Agents · trust / spend scores | `SCORES`, `PLATFORM`, `scoreCuts()` | none in spec | none | ❌ G11 |
+| Agents · trust / spend scores | `SCORES` | none in spec | none | ❌ G11 |
 | Agents · incidents | `incidents` | `audit.audit_events` incident kinds | `tacho.incidents` | ✅ |
 | **Tools** · servers | `SERVERS` | `tools.tool_servers` | `mcp.mcp_servers`, `mcp.registries` | ✅ |
 | Tools · tool versions + classification | `TOOLS` | `tools.tool_versions` | `agent.tools`/`tool_versions`, `mcp.tool_snapshots` | 🟡 risk/side-effect/consequence tags/measures to verify |
@@ -152,14 +154,14 @@ Status comes from table and contract names in the repo. **Batch 3 lanes must con
 | Audit · erasure | `ERASURE` | crypto-shred | `privacy_erasure_requests` | 🟡 |
 | Audit · retention | `RETENTION_TIERS` | §13.3 tiers | `evidence.retention_policy_versions` | 🟡 |
 | Audit · assurance history | `ASSURANCE_HISTORY` | M2 suite | none | ❌ |
-| **Shell** · notifications | `NOTIFS` | — | `notification.notifications` | ✅ |
+| **Shell** · notifications | `NOTIFS` | none | `notification.notifications` | ✅ |
 | Shell · people, avatars | `PEOPLE` | `auth.users` | `auth.users`, `user_preferences`; `@oxagen/oxagen/avatar` | ✅ |
 | Shell · assistant flyout | static | `stella serve` (ADR-053) | `chat.stream`, stella-serve service | 🟡 |
 | **Auth + onboarding gate** | `#/welcome/*`, register flow | `org.onboarding_state` | Better Auth pages; `tacho.enrollment.create` | 🟡 no gate state |
 
 ### 3.3 What the mapping says
 
-**Tally: 68 slices — ✅ 19 · 🟡 27 · ❌ 22.**
+**Tally: 68 slices: ✅ 19 · 🟡 27 · ❌ 22.**
 
 - **Backed or nearly backed:** org and workspace administration (members, workspaces, roles, API keys, data plane), agent identity/roles/enrollment, tool servers, sources and repositories, steering records, budgets, notifications. These pages can go live in Batch 3.
 - **Fixture-first by necessity:** mandates, policy versions and simulation, findings, proven spend, reconciliation, receipts, legal holds, KEK rotation, embedding indexes, run proof, context-window evidence, run graph. They map to spec milestones M2–M6 and have **no table today**. The app must ship them as `NotBacked` states, not wait for them.
@@ -180,7 +182,7 @@ Status comes from table and contract names in the repo. **Batch 3 lanes must con
 | G8 | `audit.audit_events` in Postgres, `legal_holds`, `archive_segments` | Audit › holds, exports, receipts | M5 |
 | G9 | `control.commands` `steer` with delivery mode for ledger runs | Run › steer on non-tacho runs | M1/M2 |
 | G10 | `USED_CONTEXT` edges from context assembly | Run › context | M3/M4 |
-| G11 | Agent trust/spend scores. Decided in the mockup (2026-09-13): the score is the agent's own (0–1000, nightly from frames); its colour is its percentile among every scored agent on Oxagen — the tenant's agents plus a nightly platform rollup (`PLATFORM`: org and agent counts and an anonymised sorted score sample per kind). Green at or above p90, no colour p10–p90 (eight in ten by construction), amber below p10, red below p5; cuts recomputed per render (`scoreCuts()`). Needs a `score_distribution` rollup the platform publishes to every org. An agent identity is drawn only by `agentCard()` in three layouts: `list` (rows), `compact` (one agent on someone else's record), `detail` (the agent's page). | Agents scores, auto-approval eligibility | — |
+| G11 | Agent trust/spend scores (spec decision first) | Agents scores, auto-approval eligibility | none |
 | G12 | Auto-approval rules store (spec decision first) | Tools › auto | M2 |
 | G13 | Per-run billing allowance (§12.1) | Billing meters | M2 |
 | G14 | `light`-tier run namer/summariser | Run name + summary (feedback 4) | M1 |
@@ -194,7 +196,7 @@ Status comes from table and contract names in the repo. **Batch 3 lanes must con
 
 ```text
 apps/app/
-├─ package.json               # @oxagen/app — same name, same port, same build/start scripts
+├─ package.json               # @oxagen/app: same name, same port, same build/start scripts
 ├─ next.config.ts
 ├─ tsconfig.json
 ├─ eslint.config.mjs          # ESLint 10, standalone (does not import eslint.next.mjs)
@@ -395,7 +397,7 @@ export default createNextIntlPlugin("./src/i18n/request.ts")(nextConfig);
 ```
 
 ```js
-// apps/app/eslint.config.mjs — ESLint 10. Standalone: eslint.next.mjs is ESLint 9 + eslint-config-next.
+// apps/app/eslint.config.mjs: ESLint 10. Standalone: eslint.next.mjs is ESLint 9 + eslint-config-next.
 import { defineConfig, globalIgnores } from "eslint/config";
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
@@ -553,7 +555,7 @@ export interface DataSource {
 ```
 
 ```ts
-// src/data/source.ts — the ONLY file that imports adapters
+// src/data/source.ts: the ONLY file that imports adapters
 import "server-only";
 import type { DataSource } from "./ports";
 import { liveSource } from "./adapters/live";
@@ -603,7 +605,7 @@ export const liveRuns: RunReadPort = {
 ```ts
 // src/data/adapters/fixture/integrity.test.ts
 import { describe, expect, it } from "vitest";
-import { seed } from "./seed"; // ported from mc.html @ mc-baseline-w4, mapped to spec vocabulary
+import { seed } from "./seed"; // ported from mc.html @ mc-baseline-w3, mapped to spec vocabulary
 
 describe("fixture referential integrity", () => {
   const agentKeys = new Set(seed.agents.map((a) => a.key));
@@ -655,7 +657,7 @@ export const requireViewer = cache(async (orgSlug: string, wsSlug?: string): Pro
 ```
 
 ```ts
-// src/server/invoke.ts — every write in the app goes through here
+// src/server/invoke.ts: every write in the app goes through here
 import "server-only";
 import "@oxagen/handlers/register";
 import { getCapability, invoke, type CapabilityContext } from "@oxagen/oxagen";
@@ -757,7 +759,7 @@ export default async function FleetPage(props: PageProps<"/[org]/[ws]">) {
 ```
 
 ```tsx
-// src/features/fleet/fleet-table.tsx — the Read<T> result drives the four states
+// src/features/fleet/fleet-table.tsx: the Read<T> result drives the four states
 import { dataSource } from "@/data/source";
 import { PageState } from "@/ui/page-state";
 import type { Viewer } from "@/server/scope";
@@ -811,7 +813,7 @@ export async function PageState(props: Props) {
 ```
 
 ```tsx
-// src/app/[org]/[ws]/runs/[run]/run-error-boundary.tsx — 16.3 catchError: retry re-renders the Server Components
+// src/app/[org]/[ws]/runs/[run]/run-error-boundary.tsx: 16.3 catchError: retry re-renders the Server Components
 "use client";
 import { catchError, type ErrorInfo } from "next/error";
 import { ErrorState } from "@/ui/error-state";
@@ -940,7 +942,7 @@ Workspace slugs must not collide with org-level segments (`billing`, `audit`, `m
 ### 4.12 Testing, per lane
 
 ```ts
-// e2e/fleet.spec.ts — one file per page; states come from MC_DATA=fixture + a state cookie honoured only in dev/test
+// e2e/fleet.spec.ts: one file per page; states come from MC_DATA=fixture + a state cookie honoured only in dev/test
 import AxeBuilder from "@axe-core/playwright";
 import { instant } from "@next/playwright";
 import { expect, test } from "@playwright/test";
@@ -1029,7 +1031,7 @@ flowchart LR
 
 | Lane | Owns | Delivers | Waits on |
 |---|---|---|---|
-| **L1 contracts + ports + fixture** | `src/data/**` | All view-model schemas (§4.5) for the ten pages, every port interface, the fixture seed ported from `mc.html` @ `mc-baseline-w4` with W3's vocabulary mapping (its `TOOLPOOL` and `AGENT_BELTS` agree: seed no tool call an agent's belt cannot make; its `ASST_RUNS` stay out of the tenant's run index), the integrity test (W4), and the `mc_state` state switch for dev/e2e | B0 |
+| **L1 contracts + ports + fixture** | `src/data/**` | All view-model schemas (§4.5) for the ten pages, every port interface, the fixture seed ported from `mc.html` @ `mc-baseline-w3` with W3's vocabulary mapping (its `TOOLPOOL` and `AGENT_BELTS` agree: seed no tool call an agent's belt cannot make), the integrity test (W4), and the `mc_state` state switch for dev/e2e | B0 |
 | **L2 ui primitives** | `src/ui/**`, `.storybook/**` | `Money` (large-figure variant + basis dialog, feedback 5), `TierBadge`, `GradeBadge`, `VerdictBadge`, `StatusBadge`, `RiskBadge`, `EffectBadge`, `Gate`, `Hazard`, `ToolCell`, `RecordKindBadge`, `PrincipalKindBadge`, `Avatar` (initials/icon/photo × solid/soft/line), `PageState` + `Skeleton/Empty/Error/Denied/NotRecordedYet`, `DataTable` (search, sort, facet, rows per page, pager: the `listify()` behaviour as a component, opt-out by omission), `RouteTabs`, `FormDialog` (Base UI + `useActionState`), `Sparkline`, `Tile`, `Meter`. House tokens only, Lucide only. Charts: identity is an icon, magnitude is one hue (the tool-family and record-kind tokens fail colour-vision checks as series colours). Stories with a11y addon. | B0 enums |
 | **L3 shell** | `src/app/[org]/layout.tsx`, `src/app/[org]/[ws]/layout.tsx`, `src/features/shell/**` | Sidebar, top bar, org/ws switchers, ⌘K command menu, notifications, Account dialog (profile, preferences, security, privacy), assistant flyout host with the engine-down state (W9), `<MobileNav>` seam with a plain bottom bar (feedback 3 pending design), theme (light/dark/system via `data-theme`) | B0 |
 | **L4 server seams** | `src/server/**`, `src/app/api/mc/**`, `src/ui/hooks/**` | `session`, `requireViewer`, tenancy lookups ported from `resolve-org.ts` (incl. slug-history redirects, MFA gate), `invokeTool` (§4.6), cache tags, SSE route + `useFrames` + `useFleetLive` (§4.9) | B0 |
@@ -1137,7 +1139,7 @@ Read first:
   (§0, §4, and your row in §5)
 - spec: `git -C ~/Documents/Oxagen/Mockups show origin/main:docs/2026-09-11-oxagen-mission-control-spec.md`
   (§3 vocabulary, §14, §19 row for <page>). These docs/ copies are canonical, not ~/Documents/Oxagen/Specs.
-- mockup baseline: `git -C ~/Documents/Oxagen/Mockups show mc-baseline-w4:mc.html` (tag). It carries
+- mockup baseline: `git -C ~/Documents/Oxagen/Mockups show mc-baseline-w3:mc.html` (tag). It carries
   everything in mc-baseline-w1 (Agent IAM, the small approval card, the sidebar flyout, the runMetrics
   instruments), everything W1–W11 showed, per-run frames and context, the tenant Anderson Intelligence Corp.
   at business scale, and the eleven flows as guided scenarios (`#/a-intel/<ws>/scenarios/<id>/<step>`):

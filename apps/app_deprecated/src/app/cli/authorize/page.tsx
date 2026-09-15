@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { getSession } from "@/lib/session";
+import { withReturnTo } from "@/lib/return-to";
 import {
   CLI_AUTH_PKCE_METHOD,
   isLoopbackRedirectUri,
@@ -105,18 +106,20 @@ export default async function CliAuthorizePage({
   }
 
   // --- 2. Require session --------------------------------------------------
+  // This page's own URL, the `returnTo` every detour (sign-in, second
+  // factor, sign-up, new organization) is handed so it ends back here.
+  const selfPath =
+    `/cli/authorize?` +
+    new URLSearchParams({
+      redirect_uri: redirectUri,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: codeChallengeMethod,
+      label,
+    }).toString();
   const session = await getSession();
   if (!session?.user) {
-    const returnTo =
-      `/cli/authorize?` +
-      new URLSearchParams({
-        redirect_uri: redirectUri,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: codeChallengeMethod,
-        label,
-      }).toString();
-    redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+    redirect(withReturnTo("/login", selfPath));
   }
   const userId = session.user.id;
 
@@ -190,14 +193,12 @@ export default async function CliAuthorizePage({
 
   const orgs: OrgOption[] = Array.from(orgMap.values());
 
+  // A brand-new account (the installer's "Create an account", or a social
+  // sign-up that landed here) has nothing to authorize yet: create the
+  // organization and its first workspace, then come back to this consent
+  // page with the PKCE parameters intact.
   if (orgs.length === 0) {
-    return (
-      <ParamErrorPage
-        errors={[
-          "No organizations or workspaces found for your account. Create a workspace before authorizing the CLI.",
-        ]}
-      />
-    );
+    redirect(withReturnTo("/new-organization", selfPath));
   }
 
   // --- 4. Render consent form ---------------------------------------------

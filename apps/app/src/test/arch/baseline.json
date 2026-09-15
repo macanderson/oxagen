@@ -15,7 +15,6 @@
   "layer src/features/auth/session.ts:6 @/server/session",
   "layer src/features/onboarding/actions.ts:5 ../auth/session",
   "layer src/features/shell/source.ts:7 @/server/scope",
-  "layer src/ui/money-basis-dialog.tsx:5 @/data/contracts/common",
   "platform instrumentation.ts:59 @oxagen/telemetry",
   "platform instrumentation.ts:81 @oxagen/telemetry",
   "platform instrumentation.ts:83 @oxagen/database/security",
