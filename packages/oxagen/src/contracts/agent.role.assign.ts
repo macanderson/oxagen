@@ -34,7 +34,7 @@ export const agentRoleAssign = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow" },
+    workspace: {},
   },
   input: z.object({
     agentId: z
