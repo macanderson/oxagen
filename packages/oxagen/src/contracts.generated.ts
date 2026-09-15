@@ -67,6 +67,7 @@ import "./contracts/billing.action_rate_card";
 import "./contracts/billing.action_usage";
 import "./contracts/billing.budget.get";
 import "./contracts/billing.budget.set";
+import "./contracts/billing.contract_rate.get";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.evidence_retention";
 import "./contracts/billing.invoice.list";

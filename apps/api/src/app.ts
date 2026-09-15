@@ -19,6 +19,7 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
@@ -430,6 +431,7 @@ orgScoped.route("/runs/export", runExportRoute);
 orgScoped.route("/runs/summarize", runSummarizeRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
+orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",
   billingSubscriptionUpgradeStartRoute,
