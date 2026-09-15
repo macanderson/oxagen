@@ -426,7 +426,7 @@ export function tachoSessionQuery(
 // ---- Records and mapping -------------------------------------------------------------
 
 /** The generated summary columns a run row carries (`summarize_run`, G14). */
-export type GeneratedSummaryColumns = {
+type GeneratedSummaryColumns = {
   name: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
@@ -573,7 +573,7 @@ export function ledgerRunStatus(status: string): RunItem["status"] {
  * or a word outside the ladder (a broken row reads as ungraded, never as a
  * stronger word). Nothing computes a grade on read.
  */
-export function recordedGrade(grade: string | null): RunItem["replayGrade"] {
+function recordedGrade(grade: string | null): RunItem["replayGrade"] {
   return isReplayGrade(grade) ? grade : null;
 }
 
@@ -585,7 +585,7 @@ export function recordedGaps(value: unknown): string[] {
 }
 
 /** The generated summary, present only when all three columns were set together. */
-export function generatedSummary(
+function generatedSummary(
   columns: GeneratedSummaryColumns,
 ): RunItem["summary"] {
   if (

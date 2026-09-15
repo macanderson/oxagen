@@ -16,7 +16,7 @@ import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 /** Mirrors the `export_run` contract output. */
-export interface RunExportResult {
+interface RunExportResult {
   exportId: string;
   status: "queued";
 }

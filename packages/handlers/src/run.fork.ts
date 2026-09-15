@@ -20,21 +20,18 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole } from "@oxagen/iam/org-role";
-import {
-  type AttemptRecord,
-  createPostgresRunStore,
-  type RunStore,
-} from "@oxagen/run-ledger";
+import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
 import { gradeAllows, isReplayGrade } from "@oxagen/tacho";
 import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
+  ledgerStore,
   readFrames,
   resolveRun,
   type RunReadDeps,
 } from "./lib/run-read";
 
-export const FORK_ROLES = ["Owner", "Admin", "Member"] as const;
+const FORK_ROLES = ["Owner", "Admin", "Member"] as const;
 
 /** Frames checked per page while walking up to the branch point. */
 const PAGE = 500;
@@ -47,7 +44,7 @@ const conflict = (reason: string) =>
   new HandlerError({ code: "conflict", reason });
 
 /** The most recently sealed attempt, or null while none has sealed. */
-export function latestSealedAttempt(
+function latestSealedAttempt(
   attempts: readonly AttemptRecord[],
 ): AttemptRecord | null {
   let latest: AttemptRecord | null = null;
@@ -118,7 +115,7 @@ export function createRunForkHandler(
 }
 
 export function defaultRunForkDeps(): RunForkDeps {
-  const ledger = createPostgresRunStore();
+  const ledger = ledgerStore();
   return {
     ...defaultRunReadDeps(),
     attempts: {

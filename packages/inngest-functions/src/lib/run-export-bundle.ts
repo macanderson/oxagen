@@ -56,7 +56,7 @@ const encoder = new TextEncoder();
  * segment digest is the digest of the NDJSON lines the bundle carries, so
  * the attestation still names the bytes a verifier holds.
  */
-export function attestSegment(
+function attestSegment(
   runId: string,
   segment: SealedSegment,
   key: AttesterKey,
@@ -144,7 +144,7 @@ export function buildRunExportBundle(input: {
  * whose id must be the first 16 hex chars of sha256 over the JSON string of
  * the PEM (the platform's key-id rule).
  */
-export const VERIFIER_SCRIPT = `#!/usr/bin/env node
+const VERIFIER_SCRIPT = `#!/usr/bin/env node
 // verify.mjs — verifies an Oxagen run export offline.
 //   node verify.mjs <directory with manifest.json, frames.ndjson, attestation.json>
 import { createHash, createPublicKey, verify } from "node:crypto";

@@ -59,7 +59,7 @@ export function attesterKeyFromPem(privateKeyPem: string): AttesterKey {
   return { keyId: keyIdForPublicKey(publicKeyPem), publicKeyPem, privateKey };
 }
 
-export function attestationBytes(payload: AttestationPayload): Buffer {
+function attestationBytes(payload: AttestationPayload): Buffer {
   return Buffer.from(jcs(payload as unknown as JsonValue), "utf8");
 }
 

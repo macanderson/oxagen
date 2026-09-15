@@ -40,18 +40,36 @@ export const COMPLETENESS_GAP_KINDS = [
 ] as const;
 export type CompletenessGapKind = (typeof COMPLETENESS_GAP_KINDS)[number];
 
-export const ENFORCEMENT_TIERS_FOR_GRADE = [
-  "gateway",
-  "harness",
-  "observe",
-] as const;
-export type GradeEnforcementTier = (typeof ENFORCEMENT_TIERS_FOR_GRADE)[number];
+/** The enforcement tiers the ladder distinguishes (spec §8.4). */
+type GradeEnforcementTier = "gateway" | "harness" | "observe";
+
+/**
+ * Frames whose bodies a `view` reader reads (spec §8.4: what the agent
+ * asked, what the model returned, what a tool was called with and what came
+ * back), by each recorder's type name: the ledger's `model.call_completed`
+ * and `tool.call_completed`, a wrapped session's `llm_call` and `tool_call`.
+ * Both seals derive `body_missing` from this set, so a recording with no
+ * body on such a frame grades `inspect` whether or not the producer chained
+ * a digest for it.
+ */
+const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
+  "model.call_completed",
+  "tool.call_completed",
+  "llm_call",
+  "tool_call",
+]);
+
+export function isContentBearingFrame(type: string): boolean {
+  return CONTENT_BEARING_FRAME_TYPES.has(type);
+}
 
 export interface ReplayGradeInput {
   /** The gaps the recorder observed, deduplicated by the caller or not. */
   gaps: readonly string[];
   /** Where the frames were observed from; `fork` needs the gateway. */
   enforcementTier: GradeEnforcementTier;
+  /** Bodies the recorder retained. `view` needs at least one. */
+  retainedBodies: number;
   /**
    * The harness reported that it can reproduce the run on a deterministic
    * ladder. Only a harness that says so earns `retry`; nothing infers it.
@@ -104,7 +122,8 @@ export function gradeAllows(
  * The ladder, weakest rung first:
  *
  * - `inspect`: frames only. Any gap that hides what was said, or breaks the
- *   chain, stops here.
+ *   chain, stops here; so does a recording with no retained body, and an
+ *   `observe`-tier run, whose frames were not enforced (spec §8.4).
  * - `view`: every body present. A missing tool result body stops here.
  * - `fork`: `view` plus tool result bodies on a `gateway`-tier run, so a new
  *   model call can be made while tool results are served from the cassette.
@@ -124,6 +143,8 @@ export function computeReplayGrade(input: ReplayGradeInput): ReplayGrade {
   for (const gap of gaps) {
     if (INSPECT_ONLY_GAPS.has(gap)) return "inspect";
   }
+  if (input.retainedBodies === 0) return "inspect";
+  if (input.enforcementTier === "observe") return "inspect";
   if (gaps.has("tool_bodies")) return "view";
   if (input.enforcementTier !== "gateway") return "view";
   if (input.harnessReproducible) return "retry";

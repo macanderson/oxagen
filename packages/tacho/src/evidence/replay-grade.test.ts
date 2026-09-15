@@ -4,6 +4,7 @@ import {
   computeReplayGrade,
   gradeAllows,
   isCompletenessGapKind,
+  isContentBearingFrame,
   isReplayGrade,
   REPLAY_GRADES,
   replayGradeRank,
@@ -13,6 +14,7 @@ const clean = {
   gaps: [] as string[],
   enforcementTier: "gateway" as const,
   harnessReproducible: false,
+  retainedBodies: 2,
 };
 
 describe("computeReplayGrade", () => {
@@ -33,13 +35,34 @@ describe("computeReplayGrade", () => {
     ).toBe("view");
   });
 
-  it("caps a harness- or observe-tier run with every body at view", () => {
+  it("caps a harness-tier run with every body at view", () => {
     expect(computeReplayGrade({ ...clean, enforcementTier: "harness" })).toBe(
       "view",
     );
+  });
+
+  it("grades an observe-tier run inspect whatever its bodies (spec §8.4)", () => {
     expect(computeReplayGrade({ ...clean, enforcementTier: "observe" })).toBe(
-      "view",
+      "inspect",
     );
+    expect(
+      computeReplayGrade({
+        ...clean,
+        enforcementTier: "observe",
+        harnessReproducible: true,
+      }),
+    ).toBe("inspect");
+  });
+
+  it("grades inspect when no body was retained: view needs bytes to read (spec §8.4)", () => {
+    expect(computeReplayGrade({ ...clean, retainedBodies: 0 })).toBe("inspect");
+    expect(
+      computeReplayGrade({
+        ...clean,
+        enforcementTier: "harness",
+        retainedBodies: 0,
+      }),
+    ).toBe("inspect");
   });
 
   it("drops to view when tool result bodies are missing", () => {
@@ -99,5 +122,18 @@ describe("the ladder", () => {
     for (const kind of COMPLETENESS_GAP_KINDS)
       expect(isCompletenessGapKind(kind)).toBe(true);
     expect(isCompletenessGapKind("bodies")).toBe(false);
+  });
+
+  it("names the content-bearing frames of both recorders", () => {
+    for (const type of [
+      "model.call_completed",
+      "tool.call_completed",
+      "llm_call",
+      "tool_call",
+    ])
+      expect(isContentBearingFrame(type)).toBe(true);
+    expect(isContentBearingFrame("tool_requested")).toBe(false);
+    expect(isContentBearingFrame("agent_start")).toBe(false);
+    expect(isContentBearingFrame("context.frames_selected")).toBe(false);
   });
 });

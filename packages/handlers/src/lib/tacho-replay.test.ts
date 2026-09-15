@@ -75,6 +75,7 @@ describe("verifyBatchBodies", () => {
     expect(result.accepted[0]).toMatchObject({
       eventIdIdem: call.event_id_idem,
       sessionUuid: SESSION,
+      kind: "tool_call",
       digest: digestBytes(OUTPUT),
       contentType: "text/plain",
     });
@@ -135,6 +136,20 @@ describe("verifyBatchBodies", () => {
   });
 });
 
+describe("countContentFrames", () => {
+  it("counts a content-bearing kind with no digest as a content frame, and a digest on any kind", () => {
+    const [start, call] = events() as [TachoEvent, TachoEvent];
+    const bare = { ...call, content: undefined } as TachoEvent;
+    expect(countContentFrames([start, bare])).toBe(1);
+    const digestedStart = {
+      ...start,
+      content: { digest: digestBytes("x"), redactions: [] },
+    } as TachoEvent;
+    expect(countContentFrames([digestedStart, bare])).toBe(2);
+    expect(countContentFrames([start])).toBe(0);
+  });
+});
+
 describe("sealTachoSession", () => {
   const clean = {
     hostGaps: [],
@@ -144,14 +159,28 @@ describe("sealTachoSession", () => {
     retentionMode: "content_exact",
     contentFrames: 2,
     bodyFrames: 2,
+    toolCalls: 1,
+    toolBodyFrames: 1,
     enforcementTier: "gateway",
   };
 
-  it("grades fork on a gateway session with every body", () => {
+  it("grades fork on a gateway session with every body, a tool result body among them", () => {
     expect(sealTachoSession(clean)).toEqual({
       completenessGaps: [],
       replayGrade: "fork",
     });
+  });
+
+  it("grades view with tool_bodies on a gateway session whose tool calls kept no result body (negative)", () => {
+    expect(
+      sealTachoSession({ ...clean, toolBodyFrames: 0, toolCalls: 3 }),
+    ).toEqual({ completenessGaps: ["tool_bodies"], replayGrade: "view" });
+  });
+
+  it("adds no tool_bodies gap when the session made no tool call", () => {
+    expect(
+      sealTachoSession({ ...clean, toolCalls: 0, toolBodyFrames: 0 }),
+    ).toEqual({ completenessGaps: [], replayGrade: "fork" });
   });
 
   it("keeps the host's gaps and adds what the control plane observed", () => {
@@ -175,17 +204,32 @@ describe("sealTachoSession", () => {
   });
 
   it("grades digest_only over body_missing, and body_missing from the counters", () => {
+    // A digest_only workspace retains no tool result body either, the same
+    // two gaps the ledger seal records for it.
     expect(
       sealTachoSession({
         ...clean,
         retentionMode: "digest_only",
         bodyFrames: 0,
+        toolBodyFrames: 0,
       }).completenessGaps,
-    ).toEqual(["digest_only"]);
+    ).toEqual(["digest_only", "tool_bodies"]);
     expect(sealTachoSession({ ...clean, bodyFrames: 1 })).toEqual({
       completenessGaps: ["body_missing"],
       replayGrade: "inspect",
     });
+  });
+
+  it("grades inspect on an empty record: no content frame and no body (negative)", () => {
+    expect(
+      sealTachoSession({
+        ...clean,
+        contentFrames: 0,
+        bodyFrames: 0,
+        toolCalls: 0,
+        toolBodyFrames: 0,
+      }),
+    ).toEqual({ completenessGaps: [], replayGrade: "inspect" });
   });
 
   it("keeps a gap word outside the vocabulary and grades inspect", () => {
@@ -194,9 +238,12 @@ describe("sealTachoSession", () => {
     );
   });
 
-  it("caps an observe-tier session at view", () => {
+  it("grades an observe-tier session inspect and a harness-tier session view", () => {
     expect(
       sealTachoSession({ ...clean, enforcementTier: "observe" }).replayGrade,
+    ).toBe("inspect");
+    expect(
+      sealTachoSession({ ...clean, enforcementTier: "harness" }).replayGrade,
     ).toBe("view");
   });
 });

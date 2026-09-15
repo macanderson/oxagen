@@ -72,6 +72,7 @@ import {
   type AttemptEventBodyInput,
   archiveFrameOf,
   bodyRetainedByPolicy,
+  countRetainedBodies,
   deriveCompletenessGaps,
   deriveSealRollup,
   digestOnlyColumns,
@@ -1655,7 +1656,7 @@ export interface AttemptEventReadRow {
 }
 
 /** The body columns as the row holds them; a pre-recorder row has none. */
-export function mapFrameBodyColumns(row: {
+function mapFrameBodyColumns(row: {
   body_ref: string | null;
   body_digest: string | null;
   body_bytes: number | string | null;
@@ -1890,7 +1891,10 @@ async function sealAttemptInTx(
     policy: retentionPolicyOf(attempt),
     terminalStatus: input.terminalStatus,
   });
-  const replayGrade = gradeSealedAttempt(completenessGaps);
+  const replayGrade = gradeSealedAttempt(
+    completenessGaps,
+    countRetainedBodies(input.rows),
+  );
   const rollup = deriveSealRollup(input.rows);
   const segment = buildArchiveSegment(input.rows.map(archiveFrameOf));
   const { ref: archiveSegmentRef } = await input.archive.putSegment({

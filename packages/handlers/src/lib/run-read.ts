@@ -23,6 +23,7 @@ import {
   type RunStore,
   tachoFrame,
 } from "@oxagen/run-ledger";
+import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
 import {
   selectTachoEvents,
   sumTokenUsageByExecutionStep,
@@ -41,7 +42,7 @@ import {
 } from "../run.list";
 
 /** The most frames one read of either store returns. */
-export const FRAME_READ_MAX = 500;
+const FRAME_READ_MAX = 500;
 
 export type ResolvedRun =
   | {
@@ -59,7 +60,7 @@ export type ResolvedRun =
       item: RunItem;
     };
 
-export type TachoFrameReader = typeof selectTachoEvents;
+type TachoFrameReader = typeof selectTachoEvents;
 
 export type RunReadDeps = {
   queries: Pick<
@@ -174,9 +175,19 @@ export async function readFrameAt(
   return frame && frame.seq === seq ? frame : null;
 }
 
+/**
+ * The ledger as every handler reads it. A compacted attempt's frames live in
+ * its archive segment (spec §13.3), so a reader needs the archive; the seam
+ * is deferred because handlers construct at module load, before the storage
+ * driver's environment is required.
+ */
+export function ledgerStore(): RunStore {
+  return createPostgresRunStore({ archive: deferredEvidenceArchive });
+}
+
 export function defaultRunReadDeps(): RunReadDeps {
   // Construction is pure: nothing connects until a read runs inside the scope.
-  const ledger = createPostgresRunStore();
+  const ledger = ledgerStore();
   return {
     queries: postgresRunQueries,
     store: {

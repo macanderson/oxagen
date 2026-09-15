@@ -330,6 +330,27 @@ function toolEvent(attemptSeq: number, callId = "call_1") {
   };
 }
 
+function modelCallEvent(attemptSeq: number) {
+  return {
+    attemptSeq,
+    eventType: "model.call_completed",
+    observedAt: OBSERVED_AT,
+    payload: {
+      model_call_id: `mc_${attemptSeq}`,
+      turn_index: 0,
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+      model_policy_decision_ref: "azd_0123456789abcdef",
+      model_config_digest: SHA_1,
+      system_instruction_digest: SHA_1,
+      message_sequence_digest: SHA_1,
+      tool_schema_digest: SHA_1,
+      ordered_frame_use_digest: SHA_1,
+      outcome: "completed" as const,
+    },
+  };
+}
+
 function terminalEvent(attemptSeq: number) {
   return {
     attemptSeq,
@@ -2400,7 +2421,10 @@ describe("sealAttempt: replay evidence", () => {
     },
   );
 
-  it("grades view with the tool_bodies gap when no tool result body was kept", async () => {
+  it("grades inspect with body_missing and tool_bodies when a tool call arrived with no body at all (negative)", async () => {
+    // No digest, no reference: the producer never handed the ledger the
+    // result. A content-bearing frame without a body is a gap in the
+    // record, never "no content" (spec §8.4).
     const rows = sealedRows([prepareAttemptEvent(toolEvent(1))]);
     const archive = fakeArchiveStore();
     const { tx, executed } = makeRoutingTx([
@@ -2415,8 +2439,51 @@ describe("sealAttempt: replay evidence", () => {
       sealerId: "drain-1",
     });
     const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.params).toContain("view");
-    expect(seal?.params).toContain('["tool_bodies"]');
+    expect(seal?.params).toContain("inspect");
+    expect(seal?.params).toContain('["body_missing","tool_bodies"]');
+  });
+
+  it("grades inspect with body_missing on an empty record: a model call and no body columns (negative)", async () => {
+    const rows = sealedRows([
+      prepareAttemptEvent(modelCallEvent(1)),
+      prepareAttemptEvent(terminalEvent(2)),
+    ]);
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.params).toContain("inspect");
+    expect(seal?.params).toContain('["body_missing"]');
+  });
+
+  it("grades inspect when no frame carried content and no body was retained (negative)", async () => {
+    // Frames only: a terminal receipt and nothing a reader could read
+    // through. `view` needs at least one retained body.
+    const rows = sealedRows([prepareAttemptEvent(terminalEvent(1))]);
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({ archive: archive.store }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.params).toContain("inspect");
+    expect(seal?.params).toContain("[]");
   });
 
   it("refuses to seal when no archive store is configured", async () => {

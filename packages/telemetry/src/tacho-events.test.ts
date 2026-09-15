@@ -130,12 +130,21 @@ describe("bytes_ref is server-owned", () => {
     expect(row["bytes_ref"]).toBe("evb:v1:evidence:env:v1:" + "a".repeat(64));
   });
 
-  it("leaves the column to the flattened envelope when no reference was written", () => {
+  it("blanks a producer's bytes_ref when the control plane retained no body (negative)", () => {
+    const event = {
+      ...genesis(),
+      content: {
+        digest: "sha256:" + "c".repeat(64),
+        bytes_ref: "s3://host/x",
+        redactions: [],
+      },
+    } as TachoEvent;
     const row = tachoEventRow(
-      { event: genesis(), chainVerified: true },
+      { event, chainVerified: true },
       RECEIVED_AT.toISOString(),
     );
-    expect(row["bytes_ref"]).toBeUndefined();
+    expect(row["content_digest"]).toBe("sha256:" + "c".repeat(64));
+    expect(row["bytes_ref"]).toBe("");
   });
 });
 

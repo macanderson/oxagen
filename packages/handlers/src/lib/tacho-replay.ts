@@ -13,6 +13,7 @@ import {
   computeReplayGrade,
   digestBytes,
   isCompletenessGapKind,
+  isContentBearingFrame,
   redactBytes,
   type ReplayGrade,
   type TachoBody,
@@ -25,12 +26,14 @@ export type BodyRejection = TachoEventsIngestOutput["body_rejections"][number];
 export interface VerifiedBody {
   eventIdIdem: string;
   sessionUuid: string;
+  /** The event's kind: the seal counts tool result bodies from it. */
+  kind: string;
   digest: string;
   contentType: string;
   bytes: Uint8Array;
 }
 
-export interface BodyVerification {
+interface BodyVerification {
   accepted: VerifiedBody[];
   rejected: BodyRejection[];
 }
@@ -88,6 +91,7 @@ export function verifyBatchBodies(
     accepted.push({
       eventIdIdem: body.event_id_idem,
       sessionUuid: event.session_uuid,
+      kind: event.kind,
       digest,
       contentType: body.content_type,
       bytes,
@@ -96,12 +100,21 @@ export function verifyBatchBodies(
   return { accepted, rejected };
 }
 
-/** How many events in a batch chained a content digest, per session. */
+/**
+ * How many events in a batch carried content: a content-bearing kind
+ * (`isContentBearingFrame`: `llm_call`, `tool_call`), whether or not the
+ * host chained a digest for it, or any other kind that did. A body is only
+ * accepted for an event that chained a digest, so a session's body count
+ * never exceeds this one.
+ */
 export function countContentFrames(events: readonly TachoEvent[]): number {
-  return events.filter((event) => event.content?.digest !== undefined).length;
+  return events.filter(
+    (event) =>
+      event.content?.digest !== undefined || isContentBearingFrame(event.kind),
+  ).length;
 }
 
-export interface TachoSealInput {
+interface TachoSealInput {
   /** The gaps the host reported on `agent_stop`. */
   hostGaps: readonly string[];
   chainVerified: boolean;
@@ -111,20 +124,25 @@ export interface TachoSealInput {
   retentionMode: string;
   contentFrames: number;
   bodyFrames: number;
+  /** Tool calls the session counted, and how many kept a result body. */
+  toolCalls: number;
+  toolBodyFrames: number;
   enforcementTier: string;
 }
 
-export interface TachoSeal {
+interface TachoSeal {
   completenessGaps: string[];
   replayGrade: ReplayGrade;
 }
 
 /**
  * The seal for a wrapped session: the host's gaps plus what the control
- * plane observed. A gap kind outside the vocabulary is kept on the record
- * and grades `inspect`: a word nobody can grade cannot raise a grade.
- * `retry` needs a harness that reports a reproducible run; no wrapped harness
- * does, so `harnessReproducible` is false here.
+ * plane observed. `tool_bodies` is derived from the session's own counters,
+ * the same rule the ledger seal applies to its rows, so a host's self-report
+ * can add the gap and never remove it. A gap kind outside the vocabulary is
+ * kept on the record and grades `inspect`: a word nobody can grade cannot
+ * raise a grade. `retry` needs a harness that reports a reproducible run; no
+ * wrapped harness does, so `harnessReproducible` is false here.
  */
 export function sealTachoSession(input: TachoSealInput): TachoSeal {
   const gaps = new Set<string>(input.hostGaps);
@@ -133,6 +151,8 @@ export function sealTachoSession(input: TachoSealInput): TachoSeal {
   if (input.telemetryGapCount > 0) gaps.add("telemetry_gap");
   if (input.retentionMode === "digest_only") gaps.add("digest_only");
   else if (input.bodyFrames < input.contentFrames) gaps.add("body_missing");
+  if (input.toolCalls > 0 && input.toolBodyFrames === 0)
+    gaps.add("tool_bodies");
   const known: CompletenessGapKind[] = [];
   let unknown = false;
   for (const gap of gaps) {
@@ -151,6 +171,7 @@ export function sealTachoSession(input: TachoSealInput): TachoSeal {
           gaps: known,
           enforcementTier: tier,
           harnessReproducible: false,
+          retainedBodies: input.bodyFrames,
         }),
   };
 }

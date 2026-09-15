@@ -127,7 +127,7 @@ async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
 }
 
 /** A wrapped frame as the export writes it: the row's chained facts. */
-export function tachoEnvelope(row: TachoFrameRow): JsonValue {
+function tachoEnvelope(row: TachoFrameRow): JsonValue {
   return {
     event_id: row.eventId,
     seq: row.seq,

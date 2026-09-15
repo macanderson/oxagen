@@ -2637,7 +2637,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1f76cdd80a7060edeb6f8e8d5d910f81b6ac5974a9a602ea9f9b0ced2abe4cef",
+  "contentHash": "bac29338cae835e1a98792fb03ff1c6ea00665b93e38dc2b0786a02e97eaebf7",
   "domains": [
     {
       "name": "agent",
@@ -17211,6 +17211,12 @@
         },
         {
           "name": "body_frames",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "tool_body_frames",
           "nullable": false,
           "primaryKey": false,
           "type": "integer"

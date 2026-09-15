@@ -102,12 +102,24 @@ tacho seal and every handler gating on a grade share:
 
 - `inspect`: frames only. Any of `digest_only`, `body_missing`,
   `model_calls`, `hooks_partial`, `unobserved_tail`, `chain_break`,
-  `telemetry_gap`.
-- `view`: every body present. A `tool_bodies` gap, or any enforcement tier
-  below `gateway`, stops here.
+  `telemetry_gap`; a recording with no retained body; an `observe`-tier
+  run (spec §8.4 lists all three under `inspect`).
+- `view`: at least one body retained and every content-bearing frame with
+  one. A `tool_bodies` gap, or the `harness` tier, stops here.
 - `fork`: `view` plus tool result bodies on a `gateway`-tier run.
 - `retry`: `fork` plus a harness that reports a reproducible run; nothing
   infers it.
+
+The rungs above `inspect` require positive evidence. A content-bearing frame
+(`isContentBearingFrame`: the ledger's `model.call_completed` and
+`tool.call_completed`, a wrapped session's `llm_call` and `tool_call`) with
+no retained body is `body_missing` whether or not the producer supplied a
+digest for it, so a producer that ships no bodies seals `inspect` and never
+`view` over an empty record. Both seals derive every gap the ladder keys on
+from their own rows or counters: the ledger from the sealed rows, the tacho
+seal from `content_frames`, `body_frames`, `tool_body_frames` and the
+session's tool call count; a host's self-reported gaps can add to that and
+never remove from it.
 
 A gap kind outside the vocabulary refuses to grade. The grade is written with
 the Merkle root and the archive segment reference, once, at seal; a seal

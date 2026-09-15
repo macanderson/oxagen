@@ -396,11 +396,15 @@ export const tachoSessions = tachoSchema.table(
       .default(sql`'[]'::jsonb`),
     replayGrade: text("replay_grade"),
     evidenceManifestId: uuid("evidence_manifest_id"),
-    // Frames that carried a content digest, and how many of those arrived
-    // with a body the recorder retained. The seal grades `body_missing` when
-    // the second falls short of the first (ADR-058).
+    // Frames that carried content (a content-bearing kind, or any kind that
+    // chained a digest), how many of those arrived with a body the recorder
+    // retained, and how many of the retained bodies belong to a `tool_call`.
+    // The seal grades `body_missing` when the second falls short of the
+    // first and `tool_bodies` when tool calls happened and the third is zero
+    // (ADR-058).
     contentFrames: integer("content_frames").notNull().default(0),
     bodyFrames: integer("body_frames").notNull().default(0),
+    toolBodyFrames: integer("tool_body_frames").notNull().default(0),
     // Presentation
     title: text("title"),
     lastPromptDigest: text("last_prompt_digest"),
@@ -431,7 +435,7 @@ export const tachoSessions = tachoSchema.table(
     ),
     bodyFramesCheck: check(
       "tacho_sessions_body_frames_check",
-      sql`${t.contentFrames} >= 0 AND ${t.bodyFrames} >= 0 AND ${t.bodyFrames} <= ${t.contentFrames}`,
+      sql`${t.contentFrames} >= 0 AND ${t.bodyFrames} >= 0 AND ${t.bodyFrames} <= ${t.contentFrames} AND ${t.toolBodyFrames} >= 0 AND ${t.toolBodyFrames} <= ${t.bodyFrames}`,
     ),
     summaryCheck: check(
       "tacho_sessions_summary_check",

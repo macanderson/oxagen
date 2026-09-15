@@ -21,7 +21,7 @@ import {
   type RunReadDeps,
 } from "./lib/run-read";
 
-export const BISECT_FRAME_CAP = 10_000;
+const BISECT_FRAME_CAP = 10_000;
 
 export function createRunBisectHandler(
   deps: RunReadDeps,

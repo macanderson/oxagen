@@ -19,6 +19,7 @@ import {
   type ArchiveFrame,
   type CompletenessGapKind,
   computeReplayGrade,
+  isContentBearingFrame,
   type JsonValue,
   type Redaction,
   type ReplayGrade,
@@ -211,7 +212,10 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
  * terminal status:
  *
  * - `digest_only` when the pinned policy kept digests alone;
- * - `body_missing` when a frame carried content the policy did not keep;
+ * - `body_missing` when a frame carried content and no body was retained: a
+ *   content-bearing frame (`isContentBearingFrame`) with no body reference,
+ *   whether or not the producer handed the ledger bytes to digest, or any
+ *   other frame whose digest was recorded and whose bytes were not;
  * - `tool_bodies` when tool calls happened and none kept its result body;
  * - `unobserved_tail` when the attempt was abandoned: no producer observed
  *   its end.
@@ -229,7 +233,9 @@ export function deriveCompletenessGaps(input: {
   let toolCalls = 0;
   let toolBodies = 0;
   for (const row of input.rows) {
-    if (row.body_digest !== null && row.body_ref === null) {
+    const carriesContent =
+      row.body_digest !== null || isContentBearingFrame(row.event_type);
+    if (carriesContent && row.body_ref === null) {
       gaps.add(
         input.policy.mode === "digest_only" ? "digest_only" : "body_missing",
       );
@@ -244,6 +250,11 @@ export function deriveCompletenessGaps(input: {
   return [...gaps];
 }
 
+/** The rows whose body the store retained. */
+export function countRetainedBodies(rows: readonly SealedFrameRow[]): number {
+  return rows.filter((row) => row.body_ref !== null).length;
+}
+
 /**
  * A ledger run's evidence is submitted by an engine Oxagen did not host
  * (ADR-043), so its frames are client-attested: the `harness` tier, which
@@ -251,11 +262,15 @@ export function deriveCompletenessGaps(input: {
  * reports a reproducible run are both seams a later lane opens; nothing here
  * infers either.
  */
-export function gradeSealedAttempt(gaps: readonly string[]): ReplayGrade {
+export function gradeSealedAttempt(
+  gaps: readonly string[],
+  retainedBodies: number,
+): ReplayGrade {
   return computeReplayGrade({
     gaps,
     enforcementTier: "harness",
     harnessReproducible: false,
+    retainedBodies,
   });
 }
 

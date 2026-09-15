@@ -19,7 +19,8 @@ export interface TachoEventInsert {
   /**
    * Where the control plane wrote the frame's body (ADR-058). Server-owned:
    * the envelope's own `content.bytes_ref`, if a producer set one, names a
-   * producer-side location and is replaced by this.
+   * producer-side location and is replaced by this, or by the empty string
+   * when no body was retained.
    */
   bytesRef?: string;
 }
@@ -47,7 +48,7 @@ export function tachoEventRow(
   }
   row["chain_verified"] = insert.chainVerified;
   row["received_at"] = receivedAt;
-  if (insert.bytesRef !== undefined) row["bytes_ref"] = insert.bytesRef;
+  row["bytes_ref"] = insert.bytesRef ?? "";
   return row;
 }
 

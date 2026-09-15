@@ -12,8 +12,9 @@
 --   3. agent.agent_runs and tacho.sessions gain the generated summary
 --      (name, summary, summary_generated_at, summary_model; G14).
 --   4. agent.agent_run_attempts gains forked_from_run_seq (fork_run).
---   5. tacho.sessions gains content_frames / body_frames, the counters the
---      tacho seal grades `body_missing` from.
+--   5. tacho.sessions gains content_frames / body_frames / tool_body_frames,
+--      the counters the tacho seal grades `body_missing` and `tool_bodies`
+--      from.
 --   6. evidence.run_exports: the export job export_run queues, with forced
 --      tenant RLS in the manifest's shape (packages/database/src/
 --      tenant-policy.manifest.ts) and the app role's grants.
@@ -117,13 +118,15 @@ ALTER TABLE "agent"."agent_run_attempts"
 -- ── 5. Tacho body counters and the grade's CHECK ─────────────────────────────
 ALTER TABLE "tacho"."sessions"
   ADD COLUMN "content_frames" integer NOT NULL DEFAULT 0,
-  ADD COLUMN "body_frames" integer NOT NULL DEFAULT 0;
+  ADD COLUMN "body_frames" integer NOT NULL DEFAULT 0,
+  ADD COLUMN "tool_body_frames" integer NOT NULL DEFAULT 0;
 
 ALTER TABLE "tacho"."sessions"
   ADD CONSTRAINT "tacho_sessions_replay_grade_check"
     CHECK ("replay_grade" IS NULL OR "replay_grade" IN ('inspect', 'view', 'fork', 'retry')),
   ADD CONSTRAINT "tacho_sessions_body_frames_check"
-    CHECK ("content_frames" >= 0 AND "body_frames" >= 0 AND "body_frames" <= "content_frames");
+    CHECK ("content_frames" >= 0 AND "body_frames" >= 0 AND "body_frames" <= "content_frames"
+      AND "tool_body_frames" >= 0 AND "tool_body_frames" <= "body_frames");
 
 -- ── 6. evidence.run_exports ──────────────────────────────────────────────────
 CREATE TABLE "evidence"."run_exports" (

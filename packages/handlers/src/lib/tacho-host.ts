@@ -24,7 +24,7 @@ export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
 
 /** The transaction shape the helpers need; kept narrow so tests can fake it. */
-export interface TachoTx {
+interface TachoTx {
   query: {
     apiKeys: { findFirst: (args: unknown) => Promise<unknown> };
     tachoHosts: { findFirst: (args: unknown) => Promise<unknown> };
@@ -130,7 +130,7 @@ export async function readDenyGeneration(
 }
 
 /** The bundle's retention clause: what the host may retain and ship. */
-export type BundleRetention = PolicyBundle["retention"];
+type BundleRetention = PolicyBundle["retention"];
 
 /**
  * The workspace's fidelity setting (ADR-058 decision 2): the mode and content

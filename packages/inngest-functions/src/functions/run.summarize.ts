@@ -39,8 +39,8 @@ export const RUN_SUMMARIZE_EVENT = "run/summarize";
 export const SUMMARY_STEP_MAX = 60;
 /** Characters of body text per step. */
 export const SUMMARY_TEXT_MAX = 4_000;
-export const NAME_MAX = 80;
-export const SUMMARY_MAX = 1_200;
+const NAME_MAX = 80;
+const SUMMARY_MAX = 1_200;
 const MODEL_TIMEOUT_MS = 60_000;
 
 export const summarySchema = z.object({

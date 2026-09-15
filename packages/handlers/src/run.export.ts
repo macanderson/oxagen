@@ -23,12 +23,12 @@ import {
   type RunReadDeps,
 } from "./lib/run-read";
 
-export const EXPORT_ROLES = ["Owner", "Admin"] as const;
+const EXPORT_ROLES = ["Owner", "Admin"] as const;
 
 /** The event the export job listens for; its data names the export row. */
 export const RUN_EXPORT_EVENT = "evidence/run-export.build";
 
-export interface RunExportEvent {
+interface RunExportEvent {
   name: typeof RUN_EXPORT_EVENT;
   data: {
     exportId: string;

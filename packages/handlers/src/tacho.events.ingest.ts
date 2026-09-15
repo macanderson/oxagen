@@ -14,14 +14,16 @@
 // liveness; and the control envelope in the response.
 //
 // Bodies (ADR-058): a batch may ship the bytes a frame's `content.digest`
-// names. The control plane verifies each body against the chain and the
-// platform's redaction detectors (lib/tacho-replay.ts), refuses the workspace
-// has opted down to digest_only, writes the accepted bytes through the
-// evidence body store before any row references them, and stamps the object
-// reference on the ClickHouse row. Each session counts the frames that
-// carried a digest and the bodies retained; the `agent_stop` seal grades the
-// session from those counts, the chain verdict and the host's own gaps, and
-// writes `replay_grade` and `completeness_gaps` on the session row.
+// names. The host is resolved first (a revoked, expired or mismatched host
+// writes nothing), then the control plane verifies each body against the
+// chain and the platform's redaction detectors (lib/tacho-replay.ts),
+// refuses the workspace has opted down to digest_only, writes the accepted
+// bytes through the evidence body store before any row references them, and
+// stamps the object reference on the ClickHouse row. Each session counts the
+// frames that carried content, the bodies retained and the tool result
+// bodies among them; the `agent_stop` seal grades the session from those
+// counts, the chain verdict and the host's own gaps, and writes
+// `replay_grade` and `completeness_gaps` on the session row.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
@@ -419,13 +421,35 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   const now = new Date();
   const capability = "ingest_tacho_events";
 
-  // Bodies first: verified against the chain, then written content-addressed
+  // The host before any write: the key must name a live host in this tenant
+  // and every event must name that host. A batch the tenant refuses puts no
+  // object in its store.
+  const { host, retention } = await withTenantDb(async (tx) => {
+    const host = await resolveEnrolledHost(
+      capability,
+      ctx,
+      tx as never,
+      input.host_enrollment_id,
+    );
+    if (
+      input.events.some(
+        (event) => event.agent.host_enrollment_id !== host.publicId,
+      )
+    ) {
+      throw tachoDenied(capability, "Forbidden: event names another host");
+    }
+    const retention = await readWorkspaceRetention(
+      tx as never,
+      ctx.orgId,
+      ctx.workspaceId,
+    );
+    return { host, retention };
+  });
+
+  // Bodies next: verified against the chain, then written content-addressed
   // before any row references them. A rejected body leaves its frame without
   // one; the seal records the gap.
   const verified = verifyBatchBodies(input.events, input.bodies);
-  const retention = await withTenantDb((tx) =>
-    readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
-  );
   const bodyRejections: BodyRejection[] = [...verified.rejected];
   const retained: VerifiedBody[] = [];
   if (retention.mode === "digest_only") {
@@ -450,28 +474,20 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     bytesRefs.set(body.eventIdIdem, ref);
   }
   const bodyFramesBySession = new Map<string, number>();
+  const toolBodyFramesBySession = new Map<string, number>();
   for (const body of retained) {
     bodyFramesBySession.set(
       body.sessionUuid,
       (bodyFramesBySession.get(body.sessionUuid) ?? 0) + 1,
     );
+    if (body.kind === "tool_call")
+      toolBodyFramesBySession.set(
+        body.sessionUuid,
+        (toolBodyFramesBySession.get(body.sessionUuid) ?? 0) + 1,
+      );
   }
 
   const result = await withTenantDb(async (tx) => {
-    const host = await resolveEnrolledHost(
-      capability,
-      ctx,
-      tx as never,
-      input.host_enrollment_id,
-    );
-    if (
-      input.events.some(
-        (event) => event.agent.host_enrollment_id !== host.publicId,
-      )
-    ) {
-      throw tachoDenied(capability, "Forbidden: event names another host");
-    }
-
     const bySession = new Map<string, TachoEvent[]>();
     for (const event of input.events) {
       const list = bySession.get(event.session_uuid) ?? [];
@@ -503,8 +519,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           chainVerified: true,
           hostId: true,
           telemetryGapCount: true,
+          numToolCalls: true,
           contentFrames: true,
           bodyFrames: true,
+          toolBodyFrames: true,
           enforcementTier: true,
         },
       });
@@ -559,6 +577,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       for (const event of events) foldDelta(delta, event);
       const contentFrames = countContentFrames(events);
       const bodyFrames = bodyFramesBySession.get(sessionUuid) ?? 0;
+      const toolBodyFrames = toolBodyFramesBySession.get(sessionUuid) ?? 0;
       const terminal = terminalPatch(events, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
@@ -576,6 +595,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           retentionMode: retention.mode,
           contentFrames: (existing?.contentFrames ?? 0) + contentFrames,
           bodyFrames: (existing?.bodyFrames ?? 0) + bodyFrames,
+          toolCalls: (existing?.numToolCalls ?? 0) + delta.numToolCalls,
+          toolBodyFrames: (existing?.toolBodyFrames ?? 0) + toolBodyFrames,
           enforcementTier:
             existing?.enforcementTier ??
             first.agent.enforcement_tier ??
@@ -616,6 +637,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         telemetryGapCount: sql`${schema.tachoSessions.telemetryGapCount} + ${delta.telemetryGapCount}`,
         contentFrames: sql`${schema.tachoSessions.contentFrames} + ${contentFrames}`,
         bodyFrames: sql`${schema.tachoSessions.bodyFrames} + ${bodyFrames}`,
+        toolBodyFrames: sql`${schema.tachoSessions.toolBodyFrames} + ${toolBodyFrames}`,
         filesRead: sql`${schema.tachoSessions.filesRead} + ${delta.filesRead}`,
         filesWritten: sql`${schema.tachoSessions.filesWritten} + ${delta.filesWritten}`,
         filesDeleted: sql`${schema.tachoSessions.filesDeleted} + ${delta.filesDeleted}`,

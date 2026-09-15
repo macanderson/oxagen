@@ -33,7 +33,7 @@ import {
 } from "./lib/run-read";
 
 /** The most frames a transcript folds; past it the transcript is incomplete. */
-export const TRANSCRIPT_FRAME_CAP = 10_000;
+const TRANSCRIPT_FRAME_CAP = 10_000;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
 
@@ -90,7 +90,7 @@ async function mapConcurrent<T, R>(
   return out;
 }
 
-export function toEntry(
+function toEntry(
   fold: TranscriptFold,
   body: { text: string | null; truncated: boolean },
 ): TranscriptEntry {

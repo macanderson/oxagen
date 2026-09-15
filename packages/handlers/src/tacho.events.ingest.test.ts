@@ -521,39 +521,32 @@ describe("ingest_tacho_events", () => {
       expect(update.values).not.toHaveProperty("initiatingPrincipalId");
   });
 
-  it("denies a batch that names another host, a missing key, or a revoked host", async () => {
+  it("denies a batch that names another host, a missing key, or a revoked host, and writes none of its bodies", async () => {
     const db = fakeDb();
     wire(db);
-    const events = session();
+    const events = sessionWithContent();
+    const bodies = [bodyFor(events[1] as TachoEvent)];
     const foreign = structuredClone(events);
     for (const event of foreign)
       event.agent.host_enrollment_id = "tch_zzzzzzzzzzzzzzzzzzzzzz";
     await expect(
-      tachoEventsIngestHandler(
-        {
-          schema: "tacho.batch.v1",
-          host_enrollment_id: HOST_PUBLIC,
-          events: foreign,
-        },
-        CONTEXT,
-      ),
+      tachoEventsIngestHandler(batch(foreign, bodies), CONTEXT),
     ).rejects.toThrow(/another host/);
     await expect(
-      tachoEventsIngestHandler(
-        { schema: "tacho.batch.v1", host_enrollment_id: HOST_PUBLIC, events },
-        { ...CONTEXT, apiKeyId: null },
-      ),
+      tachoEventsIngestHandler(batch(events, bodies), {
+        ...CONTEXT,
+        apiKeyId: null,
+      }),
     ).rejects.toThrow(/API key required/);
     const revoked = fakeDb();
     (revoked.hosts[0] as Record<string, unknown>)["status"] = "revoked";
     wire(revoked);
     await expect(
-      tachoEventsIngestHandler(
-        { schema: "tacho.batch.v1", host_enrollment_id: HOST_PUBLIC, events },
-        CONTEXT,
-      ),
+      tachoEventsIngestHandler(batch(events, bodies), CONTEXT),
     ).rejects.toThrow(/revoked/);
     expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    // The host is refused before any body reaches the tenant's store.
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
   });
 
   it("surfaces a ClickHouse append failure after logging it", async () => {
@@ -670,8 +663,12 @@ describe("ingest_tacho_events", () => {
 
 const TOOL_OUTPUT = '{"stdout":"hi\\n"}';
 
-/** A short session whose tool_call chains a content digest for TOOL_OUTPUT. */
-function sessionWithContent(): TachoEvent[] {
+/**
+ * A short session whose tool_call chains a content digest for TOOL_OUTPUT.
+ * `tier` is the enforcement tier the events claim; the host's mode decides
+ * when they claim none.
+ */
+function sessionWithContent(tier?: "gateway" | "harness"): TachoEvent[] {
   let cursor: ChainCursor = GENESIS_CURSOR;
   const out: TachoEvent[] = [];
   for (const draft of [
@@ -691,6 +688,7 @@ function sessionWithContent(): TachoEvent[] {
       session_end_reason: "other",
     }),
   ]) {
+    if (tier) draft.agent.enforcement_tier = tier;
     const sealed = sealEvent(draft, cursor);
     cursor = sealed.next;
     out.push(sealed.event);
@@ -716,8 +714,9 @@ function bodyFor(event: TachoEvent, text = TOOL_OUTPUT) {
 }
 
 describe("ingest_tacho_events: bodies and the seal", () => {
-  it("writes a verified body before the row, stamps its reference, and seals view", async () => {
+  it("writes a verified body before the row, stamps its reference, and seals view on a harness-tier host", async () => {
     const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
     wire(db);
     const events = sessionWithContent();
     const toolCall = events[1] as TachoEvent;
@@ -747,8 +746,81 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     );
     expect(inserts.filter((i) => i.bytesRef !== undefined)).toHaveLength(1);
     const row = db.sessions.get(SESSION);
-    // Every content frame has its body on an observe-tier host: view.
+    // Every content frame has its body on a harness-tier host: view.
     expect(row).toMatchObject({ replayGrade: "view", completenessGaps: [] });
+    // The three body counters persist with the session, so a later batch's
+    // seal grades from the whole session and not from its own bodies.
+    const counters = db.updates.find(
+      (u) => u.table === "sessions" && u.values["toolBodyFrames"] !== undefined,
+    );
+    expect(counters?.values).toHaveProperty("contentFrames");
+    expect(counters?.values).toHaveProperty("bodyFrames");
+  });
+
+  it("seals inspect on an observe-tier host whatever bodies it shipped (spec §8.4)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(mocks.bodyPut).toHaveBeenCalledOnce();
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "inspect",
+      completenessGaps: [],
+    });
+  });
+
+  it("seals fork on a gateway-tier session whose tool call kept its result body", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = sessionWithContent("gateway");
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "fork",
+      completenessGaps: [],
+    });
+  });
+
+  it("seals below fork on a gateway-tier session whose tool call kept no result body (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(
+      batch(sessionWithContent("gateway")),
+      CONTEXT,
+    );
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "inspect",
+      completenessGaps: ["body_missing", "tool_bodies"],
+    });
+  });
+
+  it("seals inspect on an empty record: no content frame, no body (negative)", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      replayGrade: "inspect",
+      completenessGaps: [],
+    });
   });
 
   it("seals inspect with body_missing when a content frame arrives without its body", async () => {
@@ -762,7 +834,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(mocks.bodyPut).not.toHaveBeenCalled();
     expect(db.sessions.get(SESSION)).toMatchObject({
       replayGrade: "inspect",
-      completenessGaps: ["body_missing"],
+      completenessGaps: ["body_missing", "tool_bodies"],
     });
   });
 
@@ -784,7 +856,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(mocks.bodyPut).not.toHaveBeenCalled();
     expect(db.sessions.get(SESSION)).toMatchObject({
       replayGrade: "inspect",
-      completenessGaps: ["digest_only"],
+      completenessGaps: ["digest_only", "tool_bodies"],
     });
   });
 

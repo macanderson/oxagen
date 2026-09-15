@@ -25,11 +25,11 @@ import {
   type RunReadDeps,
 } from "./lib/run-read";
 
-export const SUMMARIZE_ROLES = ["Owner", "Admin", "Member"] as const;
+const SUMMARIZE_ROLES = ["Owner", "Admin", "Member"] as const;
 
 export const RUN_SUMMARIZE_EVENT = "run/summarize";
 
-export interface RunSummarizeEvent {
+interface RunSummarizeEvent {
   name: typeof RUN_SUMMARIZE_EVENT;
   data: {
     orgId: string;
@@ -44,7 +44,7 @@ export type RunSummarizeDeps = RunReadDeps & {
 };
 
 /** The gaps the run's seal recorded: the latest ledger seal's, or the session's. */
-export function sealedGaps(run: ResolvedRun): string[] {
+function sealedGaps(run: ResolvedRun): string[] {
   return run.source === "ledger"
     ? recordedGaps(run.record.seal?.completenessGaps)
     : recordedGaps(run.row.session.completenessGaps);

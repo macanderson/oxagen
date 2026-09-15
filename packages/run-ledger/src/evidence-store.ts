@@ -38,8 +38,8 @@ import type { RunArchiveStore, RunBodyStore } from "./frame-body";
 /** `evb:v1:<key id>:<sha256 hex>`: the body reference a frame row carries. */
 const BODY_REF = /^evb:v1:(.+):([0-9a-f]{64})$/;
 
-export const BODY_OBJECT_CONTENT_TYPE = "application/octet-stream";
-export const BUNDLE_CONTENT_TYPE = "application/zip";
+const BODY_OBJECT_CONTENT_TYPE = "application/octet-stream";
+const BUNDLE_CONTENT_TYPE = "application/zip";
 
 /** The longest content type the body frame carries (RFC 6838 names are short). */
 const MAX_CONTENT_TYPE_BYTES = 255;
@@ -69,7 +69,7 @@ export function evidenceBodyKey(
   return `evidence/${scope.orgId}/${scope.workspaceId}/bodies/${digestHex}`;
 }
 
-export function evidenceSegmentKey(
+function evidenceSegmentKey(
   scope: EvidenceScope,
   attemptId: string,
   digestHex: string,
@@ -77,7 +77,7 @@ export function evidenceSegmentKey(
   return `evidence/${scope.orgId}/${scope.workspaceId}/segments/${attemptId}/${digestHex}.ndjson.zst`;
 }
 
-export function evidenceBundleKey(
+function evidenceBundleKey(
   scope: EvidenceScope,
   exportId: string,
   digestHex: string,
@@ -114,10 +114,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /** `[u16be length][content type][bytes]`. */
-export function frameBodyPlaintext(
-  contentType: string,
-  bytes: Uint8Array,
-): Buffer {
+function frameBodyPlaintext(contentType: string, bytes: Uint8Array): Buffer {
   const type = encoder.encode(contentType);
   if (type.length === 0 || type.length > MAX_CONTENT_TYPE_BYTES) {
     throw new RangeError(`content type length out of range: ${type.length}`);
@@ -259,3 +256,15 @@ export function evidenceStore(): EvidenceStore {
   });
   return defaultStore;
 }
+
+/**
+ * The archive seam over the process-wide store, resolved at each call.
+ * `evidenceStore()` opens the storage driver from the environment, so a
+ * module that constructs a run store at load time hands the ledger this and
+ * pays for the driver only when a compacted attempt is read or a seal is
+ * written.
+ */
+export const deferredEvidenceArchive: RunArchiveStore = {
+  getSegment: (ref) => evidenceStore().getSegment(ref),
+  putSegment: (input) => evidenceStore().putSegment(input),
+};
