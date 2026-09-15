@@ -25,8 +25,7 @@ vi.mock("./logger", () => ({
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import { tachoBundleGetHandler } from "./tacho.bundle.get";
-import { tachoCommandDispatchHandler } from "./tacho.command.dispatch";
-import { tachoCommandFetchHandler } from "./tacho.command.fetch";
+import { ackPatch, tachoCommandFetchHandler } from "./tacho.command.fetch";
 import { tachoEnrollmentRevokeHandler } from "./tacho.enrollment.revoke";
 import { tachoHostListHandler } from "./tacho.host.list";
 import { tachoSessionGetHandler } from "./tacho.session.get";
@@ -235,7 +234,7 @@ function wire(db: Fake): void {
           retentionPolicyVersions: { findFirst: async () => undefined },
           tachoControlCommands: {
             findMany: async () =>
-              db.commands.filter((c) => c["outcome"] === "pending"),
+              db.commands.filter((c) => c["outcome"] === "queued"),
           },
         },
         select: () => ({ from: () => ({ where: async () => [{ value: 2 }] }) }),
@@ -320,59 +319,10 @@ describe("get_tacho_bundle", () => {
   });
 });
 
-describe("dispatch_tacho_command and fetch_tacho_commands", () => {
-  it("queues a session command and a host pause that flips the host status", async () => {
-    const db: Fake = {
-      hosts: [host()],
-      sessions: [sessionRow()],
-      commands: [],
-      updates: [],
-      inserts: [],
-    };
-    wire(db);
-    const queued = await tachoCommandDispatchHandler(
-      {
-        hostEnrollmentId: HOST_PUBLIC,
-        sessionUuid: SESSION_UUID,
-        command: "message",
-        payload: { text: "hi" },
-        expiresInS: 60,
-      },
-      OPERATOR,
-    );
-    expect(queued).toMatchObject({ commandId: "tcm_new", outcome: "pending" });
-    expect(db.inserts[0]?.values).toMatchObject({
-      command: "message",
-      sessionId: "s1",
-      payload: { text: "hi", session_uuid: SESSION_UUID },
-    });
-    await tachoCommandDispatchHandler(
-      {
-        hostEnrollmentId: HOST_PUBLIC,
-        command: "pause",
-        payload: {},
-        expiresInS: 60,
-      },
-      OPERATOR,
-    );
-    expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
-      status: "paused",
-    });
-    mocks.resolveActorOrgRole.mockResolvedValueOnce("Member");
-    await expect(
-      tachoCommandDispatchHandler(
-        {
-          hostEnrollmentId: HOST_PUBLIC,
-          command: "pause",
-          payload: {},
-          expiresInS: 60,
-        },
-        OPERATOR,
-      ),
-    ).rejects.toThrow(/Owners and Admins/);
-  });
+describe("fetch_commands", () => {
+  const FETCH = { schema: "tacho.commands.v2" } as const;
 
-  it("acknowledges outcomes and drains pending commands", async () => {
+  it("acknowledges in the §7.4 vocabulary, expires what the clock passed, and drains queued commands as sent", async () => {
     const db: Fake = {
       hosts: [host()],
       sessions: [],
@@ -381,9 +331,13 @@ describe("dispatch_tacho_command and fetch_tacho_commands", () => {
           id: "c1",
           publicId: "tcm_1",
           hostId: HOST_ID,
-          outcome: "pending",
-          command: "pause",
-          payload: { session_uuid: SESSION_UUID },
+          outcome: "queued",
+          command: "steer",
+          payload: { text: "wrap up", session_uuid: SESSION_UUID },
+          requestedMode: "interrupt",
+          deliveryMode: "next_step",
+          degradedReason: "harness_tier",
+          reason: "deploy window closes at five",
           issuedAt: new Date("2026-09-08T10:00:00.000Z"),
           expiresAt: null,
         },
@@ -394,42 +348,117 @@ describe("dispatch_tacho_command and fetch_tacho_commands", () => {
     wire(db);
     const output = await tachoCommandFetchHandler(
       {
+        ...FETCH,
         host_enrollment_id: HOST_PUBLIC,
         acknowledgements: [
-          { command_id: "tcm_0", outcome: "applied", applied_at_seq: 9 },
+          { command_id: "tcm_0", status: "applied", applied_at_seq: 9 },
+          { command_id: "tcm_r", status: "received" },
+          { command_id: "tcm_f", status: "failed", detail: "session gone" },
         ],
         daemon: { hooks_ok: false },
       },
       MACHINE,
     );
-    expect(output.acknowledged).toBe(1);
+    expect(output.acknowledged).toBe(3);
     expect(output.control.commands).toEqual([
       {
         id: "tcm_1",
-        command: "pause",
+        command: "steer",
         session_uuid: SESSION_UUID,
-        payload: { session_uuid: SESSION_UUID },
+        payload: { text: "wrap up", session_uuid: SESSION_UUID },
+        requested_mode: "interrupt",
+        delivery_mode: "next_step",
+        degraded_reason: "harness_tier",
+        reason: "deploy window closes at five",
         issued_at: "2026-09-08T10:00:00.000Z",
         expires_at: null,
       },
     ]);
-    expect(
-      db.updates.some(
-        (u) =>
-          u.table === "control_commands" &&
-          u.values["outcome"] === "applied" &&
-          u.values["appliedAtSeq"] === 9,
-      ),
-    ).toBe(true);
-    expect(
-      db.updates.some(
-        (u) =>
-          u.table === "control_commands" && u.values["outcome"] === "delivered",
-      ),
-    ).toBe(true);
+    const commandUpdates = db.updates
+      .filter((u) => u.table === "control_commands")
+      .map((u) => u.values);
+    expect(commandUpdates[0]).toMatchObject({
+      outcome: "applied",
+      appliedAtSeq: 9,
+    });
+    expect(commandUpdates[0]?.["appliedAt"]).toBeInstanceOf(Date);
+    expect(commandUpdates[0]?.["acknowledgedAt"]).toBeInstanceOf(Date);
+    expect(commandUpdates[1]).toMatchObject({ outcome: "received" });
+    expect(commandUpdates[1]).not.toHaveProperty("acknowledgedAt");
+    expect(commandUpdates[2]).toMatchObject({
+      outcome: "failed",
+      outcomeDetail: "session gone",
+    });
+    // The sweep runs before the drain, then the drained rows become sent.
+    expect(commandUpdates.slice(3).map((v) => v["outcome"])).toEqual([
+      "expired",
+      "sent",
+    ]);
     expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
       hooksOk: false,
     });
+  });
+
+  it("refuses a caller without the host's API key (negative)", async () => {
+    const db: Fake = {
+      hosts: [host()],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    await expect(
+      tachoCommandFetchHandler(
+        { ...FETCH, host_enrollment_id: HOST_PUBLIC, acknowledgements: [] },
+        OPERATOR,
+      ),
+    ).rejects.toThrow(/API key required/);
+    expect(db.updates).toEqual([]);
+  });
+});
+
+describe("ackPatch", () => {
+  const now = new Date("2026-09-08T10:00:00.000Z");
+  it("writes the timestamps and the frame sequence only for the status that proves them", () => {
+    expect(ackPatch({ command_id: "c", status: "received" }, now)).toEqual({
+      outcome: "received",
+      outcomeDetail: null,
+      updatedAt: now,
+    });
+    expect(ackPatch({ command_id: "c", status: "acknowledged" }, now)).toEqual({
+      outcome: "acknowledged",
+      outcomeDetail: null,
+      updatedAt: now,
+      acknowledgedAt: now,
+    });
+    expect(
+      ackPatch({ command_id: "c", status: "applied", applied_at_seq: 4 }, now),
+    ).toEqual({
+      outcome: "applied",
+      outcomeDetail: null,
+      updatedAt: now,
+      acknowledgedAt: now,
+      appliedAt: now,
+      appliedAtSeq: 4,
+    });
+    expect(
+      ackPatch(
+        {
+          command_id: "c",
+          status: "expired",
+          detail: "expired before a boundary",
+        },
+        now,
+      ),
+    ).toEqual({
+      outcome: "expired",
+      outcomeDetail: "expired before a boundary",
+      updatedAt: now,
+    });
+    expect(
+      ackPatch({ command_id: "c", status: "failed", detail: "gone" }, now),
+    ).toEqual({ outcome: "failed", outcomeDetail: "gone", updatedAt: now });
   });
 });
 
@@ -451,6 +480,9 @@ describe("revoke_tacho_enrollment", () => {
     expect(db.updates.map((u) => u.table)).toEqual(["hosts", "api_keys"]);
     expect(db.inserts[0]?.values).toMatchObject({
       command: "revoke",
+      targetKind: "host",
+      targetId: HOST_PUBLIC,
+      reason: "lost",
       payload: { reason: "lost" },
     });
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(

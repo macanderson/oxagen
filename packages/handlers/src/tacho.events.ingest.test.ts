@@ -200,9 +200,13 @@ function fakeDb(): FakeDb {
         id: "c1",
         publicId: "tcm_1",
         hostId: HOST_ID,
-        outcome: "pending",
+        outcome: "queued",
         command: "message",
         payload: { text: "hello" },
+        requestedMode: "next_step",
+        deliveryMode: "next_step",
+        degradedReason: null,
+        reason: null,
         issuedAt: new Date("2026-09-08T10:00:00.000Z"),
         expiresAt: null,
       },
@@ -251,7 +255,7 @@ function wire(db: FakeDb): void {
           },
           tachoControlCommands: {
             findMany: async () =>
-              db.controlCommands.filter((c) => c["outcome"] === "pending"),
+              db.controlCommands.filter((c) => c["outcome"] === "queued"),
           },
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
@@ -283,12 +287,9 @@ function wire(db: FakeDb): void {
             where: async () => {
               const name = tableName(table);
               db.updates.push({ table: name, values });
-              if (
-                name === "control_commands" &&
-                values["outcome"] === "delivered"
-              ) {
+              if (name === "control_commands" && values["outcome"] === "sent") {
                 for (const command of db.controlCommands)
-                  command["outcome"] = "delivered";
+                  command["outcome"] = "sent";
               }
               if (name === "sessions") {
                 const current = db.sessions.get(SESSION);

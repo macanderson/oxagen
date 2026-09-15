@@ -15,7 +15,18 @@ import {
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
-import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -217,45 +228,103 @@ export function signBundle(
   return { ...unsigned, signature: signer.sign(unsigned) };
 }
 
-/** Pending commands for a host, marked delivered as they leave. */
+/**
+ * Expire this host's `queued` commands whose expiry passed before a poll
+ * drained them (spec §7.4 `expired`: "the expiry passed with no boundary
+ * reached"). Runs on every control poll.
+ *
+ * Only `queued` rows are swept: a row is Oxagen's until it leaves on the
+ * wire, and the host's after. The host checks the deadline at receipt and
+ * again at the boundary that would inject a steer, acknowledging `expired`
+ * when it passed, so every acknowledgement it sends is true of the chain,
+ * and it may arrive after the clock passed (a pause applied at receipt is
+ * acknowledged on the next poll; an ingest in between must not turn that
+ * row `expired` and make `fetch_commands` drop the `applied`).
+ * `list_commands` derives `expired` under this same predicate and no wider;
+ * a row the host holds and never acknowledges reads as recorded, with its
+ * `expiresAt` for the interface to show.
+ */
+export async function expireCommands(
+  tx: TachoTx,
+  host: TachoHostRow,
+  now: Date,
+): Promise<void> {
+  await tx
+    .update(schema.tachoControlCommands)
+    .set({ outcome: "expired", updatedAt: now })
+    .where(
+      and(
+        eq(schema.tachoControlCommands.hostId, host.id),
+        eq(schema.tachoControlCommands.outcome, "queued"),
+        lte(schema.tachoControlCommands.expiresAt, now),
+      ),
+    );
+}
+
+type ControlCommandRow = typeof schema.tachoControlCommands.$inferSelect;
+type DeliveredCommand = ControlEnvelope["commands"][number];
+
+/** A queued row as the wire carries it (spec section 7.4). */
+function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
+  const payload = (row.payload as Record<string, unknown>) ?? {};
+  return {
+    id: row.publicId,
+    command: row.command as DeliveredCommand["command"],
+    session_uuid:
+      typeof payload["session_uuid"] === "string"
+        ? (payload["session_uuid"] as string)
+        : null,
+    payload,
+    requested_mode: row.requestedMode as DeliveredCommand["requested_mode"],
+    delivery_mode: row.deliveryMode as DeliveredCommand["delivery_mode"],
+    degraded_reason: row.degradedReason,
+    reason: row.reason,
+    issued_at: row.issuedAt.toISOString(),
+    expires_at: row.expiresAt?.toISOString() ?? null,
+  };
+}
+
+/** Queued commands for a host, marked `sent` as they leave. */
 export async function drainCommands(
   tx: TachoTx,
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope["commands"]> {
+  await expireCommands(tx, host, now);
   const rows = (await tx.query.tachoControlCommands.findMany({
     where: and(
       eq(schema.tachoControlCommands.hostId, host.id),
-      eq(schema.tachoControlCommands.outcome, "pending"),
+      eq(schema.tachoControlCommands.outcome, "queued"),
       or(
         isNull(schema.tachoControlCommands.expiresAt),
         gt(schema.tachoControlCommands.expiresAt, now),
       ),
     ),
-    orderBy: [asc(schema.tachoControlCommands.issuedAt)],
+    // `issued_at` alone is a partial order: `defaultNow()` is the transaction
+    // timestamp, so two commands dispatched in the same instant tie and the
+    // host then receives them in whatever order the heap hands back — a pause
+    // arriving after the steer the operator issued second. The public id is
+    // the tie-break `list_commands` already uses, so the delivery order and
+    // the delivery report agree on one total order rather than two partial
+    // ones.
+    orderBy: [
+      asc(schema.tachoControlCommands.issuedAt),
+      asc(schema.tachoControlCommands.publicId),
+    ],
     limit: 100,
-  })) as Array<
-    typeof schema.tachoControlCommands.$inferSelect & {
-      sessionUuid?: string | null;
-    }
-  >;
-  const delivered: ControlEnvelope["commands"] = [];
-  for (const row of rows) {
+  })) as ControlCommandRow[];
+  if (rows.length > 0) {
     await tx
       .update(schema.tachoControlCommands)
-      .set({ outcome: "delivered", deliveredAt: now, updatedAt: now })
-      .where(eq(schema.tachoControlCommands.id, row.id));
-    delivered.push({
-      id: row.publicId,
-      command: row.command as ControlEnvelope["commands"][number]["command"],
-      session_uuid:
-        (row.payload as { session_uuid?: string } | null)?.session_uuid ?? null,
-      payload: (row.payload as Record<string, unknown>) ?? {},
-      issued_at: row.issuedAt.toISOString(),
-      expires_at: row.expiresAt?.toISOString() ?? null,
-    });
+      .set({ outcome: "sent", deliveredAt: now, updatedAt: now })
+      .where(
+        inArray(
+          schema.tachoControlCommands.id,
+          rows.map((row) => row.id),
+        ),
+      );
   }
-  return delivered;
+  return rows.map(toDeliveredCommand);
 }
 
 /** The control envelope every machine response carries (spec section 7.4). */

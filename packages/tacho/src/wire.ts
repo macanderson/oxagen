@@ -9,6 +9,13 @@ import { tachoEventSchema, type TachoEvent } from "./envelope";
 
 export const TACHO_BATCH_SCHEMA = "tacho.batch.v1" as const;
 export const TACHO_BUNDLE_SCHEMA = "tacho.bundle.v1" as const;
+/**
+ * The control-channel document a host posts to acknowledge and fetch
+ * commands. v2 acknowledges with the §7.4 status vocabulary and receives
+ * commands that carry a delivery mode; a v1 collector's body has no
+ * `schema` field and is refused by the strict shape, which is the bump.
+ */
+export const TACHO_COMMANDS_SCHEMA = "tacho.commands.v2" as const;
 export const TACHO_ENROLLMENT_CLAIMS_SCHEMA =
   "oxagen.tacho.host-enrollment.v1" as const;
 
@@ -35,18 +42,54 @@ export const tachoCommandSchema = z.enum([
   "pause",
   "resume",
   "cancel",
+  "steer",
   "message",
   "revoke",
   "refresh_bundle",
   "kill",
 ]);
-export const tachoCommandOutcomeSchema = z.enum([
-  "pending",
-  "delivered",
+/**
+ * The closed status vocabulary of Mission Control spec §7.4, shared by
+ * commands and messages so one delivery report reads the same whatever was
+ * sent. `applied` is the only success status; `cancelled`, `expired` and
+ * `failed` are the three undelivered endings.
+ */
+export const tachoCommandStatusSchema = z.enum([
+  "draft",
+  "queued",
+  "sent",
+  "received",
+  "acknowledged",
+  "applied",
+  "cancelled",
+  "expired",
+  "failed",
+]);
+/**
+ * The statuses a connection point is in a position to assert about itself.
+ * `expired` is among them: the host holds the deadline for a command it
+ * received, and reports the expiry that passed with no boundary reached.
+ * `sent` is Oxagen's own act and stays Oxagen's to record.
+ */
+export const tachoCommandAckStatusSchema = tachoCommandStatusSchema.extract([
+  "received",
+  "acknowledged",
   "applied",
   "expired",
   "failed",
 ]);
+/**
+ * Spec §7.3 delivery modes: which model request a steer rides, and whether
+ * the current step is cut short to reach one sooner. The hook adapter can
+ * carry `next_step` and `turn_boundary`; `interrupt` degrades to `next_step`
+ * there and the command records the degradation.
+ */
+export const tachoDeliveryModeSchema = z.enum([
+  "next_step",
+  "interrupt",
+  "turn_boundary",
+]);
+export type TachoDeliveryMode = z.output<typeof tachoDeliveryModeSchema>;
 
 export const denyGenerationSchema = z
   .object({
@@ -57,13 +100,23 @@ export const denyGenerationSchema = z
 
 export type DenyGeneration = z.output<typeof denyGenerationSchema>;
 
-/** A command as delivered to a host (spec section 7.4). */
+/**
+ * A command as delivered to a host (spec section 7.4). `requested_mode` and
+ * `delivery_mode` are set for the commands that carry prompt content
+ * (`steer`, `message`); `degraded_reason` names why the two differ. `reason`
+ * is the operator's reason as recorded on the row: the collector shows it at
+ * the boundary a pause denies and the model reads it on resume.
+ */
 export const deliveredCommandSchema = z
   .object({
     id: z.string().min(1),
     command: tachoCommandSchema,
     session_uuid: z.string().uuid().nullable(),
     payload: z.record(z.string(), z.unknown()),
+    requested_mode: tachoDeliveryModeSchema.nullable(),
+    delivery_mode: tachoDeliveryModeSchema.nullable(),
+    degraded_reason: z.string().max(64).nullable(),
+    reason: z.string().max(512).nullable(),
     issued_at: z.string(),
     expires_at: z.string().nullable(),
   })
@@ -260,7 +313,7 @@ export type BundleResponse = z.output<typeof bundleResponseSchema>;
 export const commandAcknowledgementSchema = z
   .object({
     command_id: z.string().min(1),
-    outcome: tachoCommandOutcomeSchema.exclude(["pending"]),
+    status: tachoCommandAckStatusSchema,
     detail: z.string().max(512).optional(),
     applied_at_seq: z.number().int().nonnegative().optional(),
     session_uuid: z.string().uuid().optional(),
