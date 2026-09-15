@@ -1,5 +1,6 @@
 // Money on the wire (ARCHITECTURE.md §3.9, INV-09): integer micro-units as a
-// decimal string with an ISO 4217 currency. This module is the one place
+// decimal string with an ISO 4217 currency, and a metered cost that says who
+// observed it. This module is the one place
 // arithmetic on micros happens, with BigInt, so no figure passes through a
 // float. Formatting is src/ui/money-format.ts.
 import { z } from "zod";
@@ -11,6 +12,17 @@ export const Money = z.object({
   currency: z.string().length(3),
 });
 export type Money = z.infer<typeof Money>;
+
+const CostBasis = z.enum([
+  "gateway_observed",
+  "client_attested",
+  "mixed",
+  "estimated",
+]);
+
+/** A metered cost: money plus who observed it, `null` when nobody recorded that. */
+export const Cost = Money.extend({ basis: CostBasis.nullable() });
+export type Cost = z.infer<typeof Cost>;
 
 /** A micros value that is not an integer string ("2,450.00", "1e6", ""). */
 class InvalidMicrosError extends Error {

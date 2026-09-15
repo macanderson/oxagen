@@ -6,7 +6,6 @@
 // a defect. Every other unbacked in-page slice renders nothing. The table only
 // shrinks; src/test/arch/unrecorded.test.ts holds it to these keys.
 export const UNRECORDED = {
-  agents: { gap: null },
   tools: { gap: null },
   steering: { gap: null },
   spend: { gap: null },

@@ -37,7 +37,13 @@ export const readError = (code: string, status: number): ReadError => ({
 // without access is denied on. The kernel seam (§3.2) answers a refusal with
 // the row of the page that made the read.
 
-export type PageKey = "fleet" | "run" | "organization" | "billing" | "shell";
+export type PageKey =
+  | "fleet"
+  | "run"
+  | "agents"
+  | "organization"
+  | "billing"
+  | "shell";
 
 type PageFailure = {
   error: { code: string; status: number };
@@ -57,6 +63,10 @@ export const PAGE_FAILURES = {
   run: {
     error: { code: "frame_store_unreachable", status: 502 },
     permission: "run.read",
+  },
+  agents: {
+    error: { code: "iam_principals_unavailable", status: 503 },
+    permission: "agent.read",
   },
   organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   billing: {

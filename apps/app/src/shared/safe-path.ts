@@ -88,7 +88,28 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
-  fleet: (org: string, ws: string): SafePath => pathOf(org, ws),
+  /** Fleet; `cursor` opens a later page of its runs table. */
+  fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, ws), { cursor: q?.cursor }),
+  run: (org: string, ws: string, run: string): SafePath =>
+    pathOf(org, ws, "runs", run),
+  /** Agent IAM; `cursor` opens a later page of the identities table. */
+  agents: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, ws, "agents"), { cursor: q?.cursor }),
+  /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
+  agent: (
+    org: string,
+    ws: string,
+    agent: string,
+    q?: { tab: string; cursor?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "agents", agent), {
+      tab: q?.tab,
+      cursor: q?.cursor,
+    }),
+  /** The agent's definition file in the source editor. */
+  agentSource: (org: string, ws: string, agent: string): SafePath =>
+    pathOf(org, ws, "agents", agent, "source"),
   /** Billing; `cursor` opens a later page of its invoices. */
   billing: (org: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, "billing"), { cursor: q?.cursor }),
