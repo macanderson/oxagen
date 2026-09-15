@@ -10,7 +10,6 @@ const gate = vi.hoisted(() => ({
   actors: [] as (string | null)[],
 }));
 vi.mock("@oxagen/iam/org-role", () => ({
-  resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
   resolveActingUserId: async (c: {

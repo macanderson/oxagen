@@ -3,7 +3,6 @@ import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get"
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 
 vi.mock("@oxagen/iam/org-role", () => ({
-  resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
   resolveActingUserId: async (c: { userId: string | null }) => c.userId,
