@@ -594,6 +594,11 @@ const ROUTES: ThinRoute[] = [
       source: "builtin",
       manifest: { v: 1 },
       read_only: false,
+      // ADR-059 decision 6 gave the contract a safety classification with
+      // defaults, so a body that declares neither still reaches invoke with
+      // both keys parsed in.
+      consequence_tags: [],
+      measures: {},
     },
     invalidBody: {
       name: "read_file",

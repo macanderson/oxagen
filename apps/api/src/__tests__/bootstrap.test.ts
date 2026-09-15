@@ -33,7 +33,13 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-vi.mock("@oxagen/config/env", () => ({
+// Override `loadEnv` on top of the real module rather than replacing it. The
+// mandate work (ADR-059) put `@oxagen/config`'s barrel — and with it
+// registry.ts, which reads `baseEnvSchema.shape` at module load — into
+// bootstrap's import graph, so a whole-module replacement drops that export
+// and the suite fails to collect before a single test runs.
+vi.mock("@oxagen/config/env", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/config/env")>()),
   loadEnv: mocks.loadEnv,
 }));
 
