@@ -44,6 +44,7 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { tachoCommandFetch } from "./tacho.command.fetch";
+import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
@@ -438,6 +439,7 @@ export {
   tachoBundleGet,
   tachoCommandDispatch,
   tachoCommandFetch,
+  tachoCommandList,
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
@@ -687,6 +689,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoBundleGet,
   tachoCommandDispatch,
   tachoCommandFetch,
+  tachoCommandList,
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,

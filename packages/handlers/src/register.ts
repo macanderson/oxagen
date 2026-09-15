@@ -814,16 +814,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoBundleGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "dispatch_tacho_command",
+    "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
         .tachoCommandDispatchHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "fetch_tacho_commands",
+    "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))
         .tachoCommandFetchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_commands",
+    async () =>
+      (await import("./tacho.command.list"))
+        .tachoCommandListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_runs",

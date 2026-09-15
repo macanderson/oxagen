@@ -1,0 +1,171 @@
+{
+  "name": "get_action_usage",
+  "domain": "billing",
+  "description": "Governed-action usage for the organisation's current entitlement year: actions taken, actions covered by the plan allowance, actions charged as overage, the volume band in force, credits charged, and the model spend reported at zero beside them. The answer to 'why is my bill this number'.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "includeBreakdown": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "actionsUsed": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "actionsIncluded": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "actionsWithinAllowance": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "actionsCharged": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "actionsRemaining": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "band": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "usdPer1000": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "usdPer1000"
+        ],
+        "additionalProperties": false
+      },
+      "creditsCharged": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "creditsAtFinalBand": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "bandTrueUpCredits": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "meterMode": {
+        "type": "string",
+        "enum": [
+          "shadow",
+          "charge"
+        ]
+      },
+      "modelSpend": {
+        "type": "object",
+        "properties": {
+          "reportedCostMicros": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "chargedCredits": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "assistantTokenCredits": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "reportedCostMicros",
+          "chargedCredits",
+          "assistantTokenCredits"
+        ],
+        "additionalProperties": false
+      },
+      "byCapability": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "capability": {
+              "type": "string"
+            },
+            "actions": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "capability",
+            "actions"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "period",
+      "actionsUsed",
+      "actionsIncluded",
+      "actionsWithinAllowance",
+      "actionsCharged",
+      "actionsRemaining",
+      "band",
+      "creditsCharged",
+      "creditsAtFinalBand",
+      "bandTrueUpCredits",
+      "meterMode",
+      "modelSpend",
+      "byCapability"
+    ],
+    "additionalProperties": false
+  }
+}

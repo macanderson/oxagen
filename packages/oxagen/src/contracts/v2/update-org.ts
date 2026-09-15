@@ -50,7 +50,11 @@ export const updateOrg = defineTool({
   // cannot be recovered). §14's interaction rule — every trust badge shows the
   // recorded value and nothing stronger — is only honest if a human chose the
   // downgrade, so the agent surface asks first.
-  agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "medium",
+    category: "organization",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {

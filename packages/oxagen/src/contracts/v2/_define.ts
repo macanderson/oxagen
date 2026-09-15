@@ -42,7 +42,12 @@ export interface ToolV2<
    * Optional because a tool with no renames needs no ceremony; `exhaustive.test.ts`
    * requires an entry only for a field it can see has gone missing.
    */
-  renames?: readonly { from: string; source: string; to: string; why: string }[];
+  renames?: readonly {
+    from: string;
+    source: string;
+    to: string;
+    why: string;
+  }[];
 
   /**
    * Fields present on an absorbed contract that this tool deliberately does not

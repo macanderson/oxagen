@@ -13,6 +13,8 @@ import {
   type DaemonHealth,
   type IngestResponse,
   ingestResponseSchema,
+  TACHO_BATCH_SCHEMA,
+  TACHO_COMMANDS_SCHEMA,
   type TachoBatch,
 } from "../wire";
 
@@ -115,7 +117,7 @@ export function createControlClient(
     ingest: async (events, daemon) =>
       ingestResponseSchema.parse(
         await post(options.endpoints.ingest, {
-          schema: "tacho.batch.v1",
+          schema: TACHO_BATCH_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           events,
           ...(daemon !== undefined ? { daemon } : {}),
@@ -131,6 +133,7 @@ export function createControlClient(
     commands: async (acknowledgements = [], daemon) =>
       commandsResponseSchema.parse(
         await post(options.endpoints.commands, {
+          schema: TACHO_COMMANDS_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           acknowledgements,
           ...(daemon !== undefined ? { daemon } : {}),

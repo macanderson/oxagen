@@ -52,20 +52,22 @@ export const setMemberRoleInputObject = z.object({
   role: z.union([orgRoleSchema, z.literal("none")]),
 });
 
-const setMemberRoleInput = setMemberRoleInputObject.superRefine((value, ctx) => {
-  if (
-    value.scope === "workspace" &&
-    value.role !== "none" &&
-    !workspaceRoleSchema.safeParse(value.role).success
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["role"],
-      message:
-        "a workspace membership can only be owner, member, viewer, or none (Appendix A wrk.workspace_users.role) — admin, billing and compliance exist only at org scope",
-    });
-  }
-});
+const setMemberRoleInput = setMemberRoleInputObject.superRefine(
+  (value, ctx) => {
+    if (
+      value.scope === "workspace" &&
+      value.role !== "none" &&
+      !workspaceRoleSchema.safeParse(value.role).success
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["role"],
+        message:
+          "a workspace membership can only be owner, member, viewer, or none (Appendix A wrk.workspace_users.role) — admin, billing and compliance exist only at org scope",
+      });
+    }
+  },
+);
 
 export const setMemberRole = defineTool({
   name: "set_member_role",
@@ -95,7 +97,11 @@ export const setMemberRole = defineTool({
 
   // The two sources agree on every risk field, and agree at the strict end:
   // this is the capability that can lock an organization out of itself.
-  agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
