@@ -28,6 +28,8 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// The purchase form's own states and submission are in purchase-form.test.tsx.
+vi.mock("./actions", () => ({ purchaseGau: vi.fn() }));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -106,9 +108,40 @@ describe("Billing reads", () => {
       "Governed action bucket",
       "Auto top-up",
       "Your contracted rate",
+      "Buy governed action units",
       "Invoices",
     ]);
   });
+});
+
+describe("Buy governed action units", () => {
+  const purchase = () =>
+    screen.getByRole("region", { name: "Buy governed action units" });
+
+  it.each(["owner", "billing"] as const)(
+    "offers an %s the purchase at the rate block's block size",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(purchase()).toHaveAttribute("data-state", "ok");
+      expect(
+        within(purchase()).getByRole("spinbutton", {
+          name: "Governed action units",
+        }),
+      ).toHaveAttribute(
+        "step",
+        section("Your contracted rate").getAttribute("data-block-size"),
+      );
+    },
+  );
+
+  it.each(["admin", "member", "compliance", "viewer"] as const)(
+    "shows a %s who can buy instead of the form (negative)",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(purchase()).toHaveAttribute("data-state", "denied");
+      expect(within(purchase()).queryByRole("spinbutton")).toBeNull();
+    },
+  );
 });
 
 describe("checkout banner", () => {
