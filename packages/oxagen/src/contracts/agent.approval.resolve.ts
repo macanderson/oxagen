@@ -60,6 +60,26 @@ export const agentApprovalResolve = registerCapability({
     // Echoes the id in the form the caller sent (public id or uuid).
     approvalId: z.string(),
     resolution: z.enum(["approved", "denied"]),
+    /**
+     * The mandate settlement (ADR-059 decision 4): on a row the mandate gate
+     * parked, the mandate's public id, the reservation by measure, and
+     * whether the reservation stays `held` (approved: the agent's retry
+     * settles it on receipt) or was `released` (denied). Null on a row the
+     * chat approval gate wrote.
+     */
+    mandate: z
+      .object({
+        mandateId: z.string(),
+        reserved: z.array(
+          z.object({
+            measure: z.string(),
+            value: z.string(),
+            unitOrCurrency: z.string(),
+          }),
+        ),
+        outcome: z.enum(["held", "released"]),
+      })
+      .nullable(),
   }),
 });
 

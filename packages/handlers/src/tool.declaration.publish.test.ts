@@ -85,13 +85,19 @@ const INPUT = {
   policy_group: undefined,
   source: "builtin" as const,
   manifest: { name: "read_file" },
+  consequence_tags: [] as string[],
+  measures: {},
+  effect_id_path: undefined,
 };
 
 const EXPECTED_CHECKSUM = sha256Hex(
   canonicalJson({
+    consequence_tags: [],
     description: INPUT.description,
+    effect_id_path: null,
     input_schema: INPUT.input_schema,
     manifest: INPUT.manifest,
+    measures: {},
     name: "read_file",
     policy_group: null,
     read_only: true,

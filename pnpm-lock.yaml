@@ -863,6 +863,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/stella-engine-client':
         specifier: workspace:*
         version: link:../stella-engine-client
@@ -1285,6 +1288,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger

@@ -8,13 +8,12 @@
 // lets the app's `kernelRead` accept it (INV-03).
 //
 // Every item field is either recorded on the approval row, joined from a row
-// the approval names, or null. The store records no run and no chain on an
-// approval today: `agent.approval_requests` carries `message_id`,
-// `execution_step_id` and `tool_call_id` (packages/database/src/schema/
-// agent.ts:130-151) and none of them names an `agent_runs` or
-// `tacho_sessions` row, and no column carries the agent key or the rule that
-// parked the call (the gateway of MC spec §7.5, which writes the four-hop
-// chain, does not exist). Those fields are nullable and null.
+// the approval names, or null. The store records no run and no agent key on
+// an approval: `agent.approval_requests` carries `message_id`,
+// `execution_step_id` and `tool_call_id` and none of them names an
+// `agent_runs` or `tacho_sessions` row. The mandate hop and the rule that
+// parked the call are recorded on rows the mandate gate writes (ADR-059) and
+// null on the chat gate's rows.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
@@ -40,12 +39,22 @@ export const approvalListItem = z
     requester: z.string().nullable(),
     createdAt: instant,
     expiresAt: instant,
-    /** The hops of the four-hop chain the row does not carry itself (MC spec §7.5). */
+    /**
+     * The public id (`mnd_…`) of the mandate the parked call drew on
+     * (`approval_requests.mandate_id`, ADR-059); null on a row the chat
+     * approval gate wrote.
+     */
+    mandateId: z.string().nullable(),
+    /** The hops of the four-hop chain (MC spec §7.5). */
     chain: z
       .object({
         /** The key of the agent that raised the call. Not recorded today. */
         agentKey: z.string().nullable(),
-        /** The grant, mandate or standing rule that parked the call. Not recorded today. */
+        /**
+         * The rule that parked the call: the first of `approval_requests.rule_ids`
+         * (`mandate:<id>:human_above:<measure>` or `…:always_human_for:<tag>`);
+         * null on a row the chat approval gate wrote.
+         */
         rule: z.string().nullable(),
       })
       .strict(),

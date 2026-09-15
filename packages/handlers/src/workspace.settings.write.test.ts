@@ -82,6 +82,27 @@ describe("workspace.settings.write handler", () => {
     expect(out.avatarUrl).toBe(avatar);
   });
 
+  it("replaces the consequence-role overrides as a whole and returns the effective map", async () => {
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research",
+      slug: "research",
+      avatarUrl: null,
+      description: "old",
+      consequenceRoles: { moves_money: ["Billing"] },
+    });
+    const out = await workspaceSettingsWriteHandler(
+      { consequenceRoles: { moves_money: ["Billing"] } },
+      CTX,
+    );
+    const setArg = mocks.set.mock.calls[0]![0] as {
+      consequenceRoles?: Record<string, string[]>;
+    };
+    expect(setArg.consequenceRoles).toEqual({ moves_money: ["Billing"] });
+    expect(out.consequenceRoles.moves_money).toEqual(["Billing"]);
+    // A tag with no override reads the default.
+    expect(out.consequenceRoles.destroys_data).toEqual(["Owner", "Admin"]);
+  });
+
   it("clears the avatarUrl column when passed null", async () => {
     mocks.findFirst
       .mockResolvedValueOnce({

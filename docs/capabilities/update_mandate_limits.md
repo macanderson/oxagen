@@ -1,0 +1,56 @@
+# update_mandate_limits
+
+**Domain:** mandate
+**Mode:** sync
+**Scope:** tenant + workspace
+**Surfaces:** api, mcp, agent (requires approval)
+**Sensitivity:** high
+**Metering:** none (`noBillingGate`)
+
+## Intent
+
+Change limits on an active mandate: the limits, the targets, the mandate's
+own approval rule and the validity end. Omitted fields are unchanged. The
+ledger keeps its rows; the next reservation reads the new `perPeriod` as
+its ceiling against the period's last balance. A limit or target over a
+measure a matched tool does not declare is refused as `grant_mandate`
+refuses it.
+
+## Input
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `mandateId` | `string` | `mnd_…` |
+| `limits` | `MandateLimits?` | Replaces the limits as a whole. |
+| `targets` | `MandateTargets?` | Replaces the targets as a whole. |
+| `approval` | `MandateApproval?` | Replaces the approval rule. |
+| `validTo` | `string?` | ISO instant after `validFrom`. |
+
+At least one field is named.
+
+## Output
+
+The mandate.
+
+## Roles
+
+The consequence roles of every tag on the mandate, as `grant_mandate`.
+
+## Side effects
+
+- Postgres: update `tools.mandates`.
+- Security event `mandate.limits_changed`.
+
+## Errors
+
+| code | reason | meaning |
+| --- | --- | --- |
+| `forbidden` | `org_role_required`, `no_role_covers_all_tags`, `no_principal` | Not an accountable role for every tag. |
+| `not_found` | `mandate_not_found` | Not in this workspace. |
+| `conflict` | `mandate_ended` | Only an active mandate changes. |
+| `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
+| `conflict` | `no_tool_matches`, `measure_not_declared` | Denied by construction. |
+
+## SPEC references
+
+- §6.9 part 3 (Change limits), App. E; ADR-059

@@ -29,9 +29,12 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
   // changed risk grade or schema republishes even when the manifest didn't.
   const checksum = sha256Hex(
     canonicalJson({
+      consequence_tags: input.consequence_tags,
       description: input.description,
+      effect_id_path: input.effect_id_path ?? null,
       input_schema: input.input_schema,
       manifest: input.manifest,
+      measures: input.measures,
       name: slug,
       policy_group: input.policy_group ?? null,
       read_only: input.read_only,
@@ -73,6 +76,9 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     riskGrade: input.risk_grade,
     policyGroup: input.policy_group ?? null,
     manifest: input.manifest,
+    consequenceTags: input.consequence_tags,
+    measures: input.measures,
+    effectIdPath: input.effect_id_path ?? null,
     checksum,
     isLatest: true,
     publishedAt: sql`now()`,

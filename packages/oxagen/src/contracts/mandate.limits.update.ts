@@ -13,6 +13,15 @@ import {
 // ledger keeps its rows; the next reservation reads the new perPeriod. A
 // limit added for a measure a matched tool does not declare is refused as
 // grant_mandate refuses it. Roles: the consequence roles of every tag.
+/** The fields, exported for the xmcp tool (the input is a ZodEffects, no `.shape`). */
+export const mandateLimitsUpdateFields = {
+  mandateId: mandateIdSchema,
+  limits: mandateLimitsSchema.optional(),
+  targets: mandateTargetsSchema.optional(),
+  approval: mandateApprovalSchema.optional(),
+  validTo: z.string().datetime({ offset: true }).optional(),
+};
+
 export const mandateLimitsUpdate = registerCapability({
   name: "update_mandate_limits",
   domain: "mandate",
@@ -36,13 +45,7 @@ export const mandateLimitsUpdate = registerCapability({
     workspace: {},
   },
   input: z
-    .object({
-      mandateId: mandateIdSchema,
-      limits: mandateLimitsSchema.optional(),
-      targets: mandateTargetsSchema.optional(),
-      approval: mandateApprovalSchema.optional(),
-      validTo: z.string().datetime({ offset: true }).optional(),
-    })
+    .object(mandateLimitsUpdateFields)
     .strict()
     .refine(
       (i) =>

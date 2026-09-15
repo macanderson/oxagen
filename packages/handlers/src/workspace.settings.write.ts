@@ -30,7 +30,13 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
   const row = await withTenantDb(async (tx) => {
     const existing = await tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, description: true },
+      columns: {
+        name: true,
+        slug: true,
+        avatarUrl: true,
+        description: true,
+        consequenceRoles: true,
+      },
     });
     if (!existing) return null;
 
@@ -42,6 +48,9 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
     // description is now a real column too: null clears, a string sets.
     if (input.description !== undefined)
       updates.description = input.description;
+    // The consequence-role overrides replace as a whole (ADR-059 decision 1).
+    if (input.consequenceRoles !== undefined)
+      updates.consequenceRoles = input.consequenceRoles;
 
     if (Object.keys(updates).length === 0) {
       return existing;
@@ -78,7 +87,13 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
 
     return tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, description: true },
+      columns: {
+        name: true,
+        slug: true,
+        avatarUrl: true,
+        description: true,
+        consequenceRoles: true,
+      },
     });
   });
 
