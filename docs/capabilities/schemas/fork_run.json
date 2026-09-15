@@ -1,0 +1,57 @@
+{
+  "name": "fork_run",
+  "domain": "run",
+  "description": "Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "run"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "fromSeq": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId",
+      "fromSeq"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "attemptId": {
+        "type": "string"
+      },
+      "attemptNumber": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "attemptId",
+      "attemptNumber"
+    ],
+    "additionalProperties": false
+  }
+}

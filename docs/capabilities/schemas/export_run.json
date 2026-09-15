@@ -1,0 +1,52 @@
+{
+  "name": "export_run",
+  "domain": "run",
+  "description": "Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "exportId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "queued"
+      }
+    },
+    "required": [
+      "exportId",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}
