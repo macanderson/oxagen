@@ -568,17 +568,6 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "get_action_usage",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "get_agent_def",
       "reads": [],
@@ -737,6 +726,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_gau_bucket",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2659,7 +2658,7 @@
       "writes": []
     }
   ],
-  "contentHash": "be3a7175045f3f38974880ca5f7cd51972ab144168bc908e4b367c64bab588f7",
+  "contentHash": "1f82612de3b44aaf582d5de61d4a63969a3822411bca0ccc99a8bf873dd44868",
   "domains": [
     {
       "name": "agent",
@@ -2748,7 +2747,6 @@
         "postgres:billing.credit_lots",
         "postgres:billing.gau_buckets",
         "postgres:billing.gau_settlements",
-        "postgres:billing.governed_action_counters",
         "postgres:billing.invoices",
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
@@ -3058,7 +3056,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 118
+      "tableCount": 117
     },
     {
       "domains": [
@@ -8505,59 +8503,6 @@
           "type": "uuid"
         },
         {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "period_start",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "actions_used",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "actions_charged",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.governed_action_counters",
-      "name": "governed_action_counters",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -9070,12 +9015,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "integer"
-        },
-        {
-          "name": "included_actions_annual",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
         },
         {
           "name": "currency",
