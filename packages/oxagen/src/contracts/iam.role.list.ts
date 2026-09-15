@@ -1,16 +1,19 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { PERMISSION_GROUPS } from "../iam/permission-catalog";
 
 /**
  * iam.role.list — read the org's IAM roles, grants, and assignment counts.
  *
  * The "permitted action" link of the accountability chain made human-readable:
  * which roles exist in this org, which capability grants each role carries
- * (allow / deny / require_approval), and how many principals hold each role.
- * Read-only — role and grant WRITES remain seed-script / provisioning-only
- * until dedicated write contracts are authored (ship-read-first).
+ * (allow / deny / require_approval), which catalogue permissions those grants
+ * cover, and how many principals hold each role. The output carries the
+ * permission catalogue the editor speaks and whether the kernel enforces
+ * roles for this org's tier (ADR-057). `create_role`, `set_role_grants` and
+ * `delete_role` are the writes.
  *
- * Powers the org Governance → Policies roles table.
+ * Powers the Organization › Roles page.
  */
 
 const grantEffect = z.enum(["allow", "deny", "require_approval"]);
@@ -20,11 +23,17 @@ const roleGrantRow = z.object({
   effect: grantEffect,
 });
 
-const roleRow = z.object({
+/** Who a role can be held by: the human system roles, or an agent principal. */
+export const roleKindSchema = z.enum(["human", "agent"]);
+
+export const roleRow = z.object({
   id: z.string().describe("Public role id (rol_…)"),
   name: z.string(),
   description: z.string().nullable(),
   scopeKind: z.enum(["org", "workspace"]),
+  kind: roleKindSchema.describe(
+    "human for the seeded membership roles; agent for the seeded agent roles and every custom role, which only assign_agent_role binds",
+  ),
   isSystemDefault: z
     .boolean()
     .describe(
@@ -42,6 +51,23 @@ const roleRow = z.object({
     .describe(
       "Capability grants carried by the role (empty when includeGrants=false)",
     ),
+  permissions: z
+    .array(z.string())
+    .describe(
+      "Catalogue permission ids every capability of which the role allows (empty when includeGrants=false)",
+    ),
+  createdAt: z.string().describe("ISO-8601"),
+  createdBy: z
+    .string()
+    .nullable()
+    .describe("Display name of the user who created the role, when recorded"),
+});
+
+export const permissionCatalogEntry = z.object({
+  id: z.string(),
+  group: z.enum(PERMISSION_GROUPS),
+  description: z.string(),
+  capabilities: z.array(z.string()),
 });
 
 export const iamRoleList = registerCapability({
@@ -98,6 +124,19 @@ export const iamRoleList = registerCapability({
     hasMore: z.boolean(),
     limit: z.number().int(),
     offset: z.number().int(),
+    catalog: z
+      .array(permissionCatalogEntry)
+      .describe("The permission catalogue, in catalogue order"),
+    enforcement: z
+      .object({
+        tier: z.string().describe("The org's plan tier"),
+        enforced: z
+          .boolean()
+          .describe(
+            "True when the kernel's IAM check runs the resolver for this org (the enterprise tier); false when every capability is allowed and the roles here are documentation",
+          ),
+      })
+      .describe("Whether the roles listed govern anything for this org"),
   }),
 });
 

@@ -105,6 +105,7 @@ import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
 import { workspaceList } from "./workspace.list";
+import { workspaceArchive } from "./workspace.archive";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
@@ -141,6 +142,9 @@ import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
 import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
+import { iamRoleCreate } from "./iam.role.create";
+import { iamRoleGrantsSet } from "./iam.role.grants.set";
+import { iamRoleDelete } from "./iam.role.delete";
 import { conversationChat } from "./conversation.chat";
 import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
@@ -474,6 +478,7 @@ export {
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -510,6 +515,9 @@ export {
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
   listMembers,
   workspaceInviteSend,
@@ -724,6 +732,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
+  workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -760,6 +769,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
+  iamRoleCreate,
+  iamRoleGrantsSet,
+  iamRoleDelete,
   conversationChat,
   listMembers,
   workspaceInviteSend,

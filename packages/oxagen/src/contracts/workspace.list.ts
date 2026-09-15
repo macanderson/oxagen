@@ -26,6 +26,12 @@ export const workspaceListItemSchema = z.object({
     .describe(
       "The caller's workspace role, or null when they are an org admin without a direct workspace membership",
     ),
+  archivedAt: z
+    .string()
+    .nullable()
+    .describe(
+      "ISO-8601 when the workspace was archived (archive_workspace); null while active. Present only when includeArchived is true",
+    ),
 });
 
 export const workspaceList = registerCapability({
@@ -65,6 +71,12 @@ export const workspaceList = registerCapability({
       .string()
       .min(1)
       .describe("Slug of the organization whose workspaces to list"),
+    includeArchived: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Also list archived workspaces (the Organization › Workspaces section); the switcher and the CLI picker leave this off",
+      ),
   }),
   output: z.object({
     organization: z.object({

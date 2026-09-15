@@ -2588,7 +2588,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a4ad17b6a8d02f2ae663f0c4c5e69f4b861d9a3791962f6aa59bd6f57523ef88",
+  "contentHash": "51c54cb7eedee9ad46056e1e5fb8e5f69c86cb6032a49d794efefcdc170ce2e4",
   "domains": [
     {
       "name": "agent",
@@ -17398,6 +17398,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "archived_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "archived_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "workspace",

@@ -1997,6 +1997,60 @@
       }
     },
     {
+      "name": "create_role",
+      "file": "iam.role.create.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "delete_role",
+      "file": "iam.role.delete.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "set_role_grants",
+      "file": "iam.role.grants.set.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "list_iam_roles",
       "file": "iam.role.list.ts",
       "domain": "iam",
@@ -4090,6 +4144,24 @@
       }
     },
     {
+      "name": "archive_workspace",
+      "file": "workspace.archive.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "get_budget_policy",
       "file": "workspace.budget_policy.read.ts",
       "domain": "workspace",
@@ -4142,7 +4214,6 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": false,
         "docs": true
       }
     },

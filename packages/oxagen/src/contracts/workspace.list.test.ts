@@ -14,6 +14,16 @@ describe("list_workspaces contract", () => {
     expect(workspaceList.noBillingGate).toBe(true);
   });
 
+  it("leaves archived workspaces out unless asked (includeArchived defaults false)", () => {
+    expect(workspaceList.input.parse({ orgSlug: "acme" }).includeArchived).toBe(
+      false,
+    );
+    expect(
+      workspaceList.input.parse({ orgSlug: "acme", includeArchived: true })
+        .includeArchived,
+    ).toBe(true);
+  });
+
   it("requires a non-empty orgSlug", () => {
     expect(workspaceList.input.parse({ orgSlug: "acme" }).orgSlug).toBe("acme");
     expect(workspaceList.input.safeParse({ orgSlug: "" }).success).toBe(false);
@@ -35,6 +45,7 @@ describe("list_workspaces contract", () => {
       namespace: "core",
       name: "Core",
       role: null,
+      archivedAt: null,
     };
     expect(
       workspaceList.output.safeParse({ organization, workspaces: [workspace] })
