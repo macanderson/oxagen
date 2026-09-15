@@ -3,17 +3,11 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import {
-  type InviteActionResult,
-  acceptInvitation,
-  declineInvitation,
-} from "./invite-actions";
+import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { LoaderCircle } from "lucide-react";
-
-type Failure = Extract<InviteActionResult, { ok: false }>["reason"];
 
 export function InviteDecision({
   token,
@@ -25,29 +19,29 @@ export function InviteDecision({
   const t = useTranslations("auth.invite");
   const navigate = useNavigate();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
+  const [failed, setFailed] = useState(false);
   const [declined, setDeclined] = useState(false);
 
   async function run(kind: "accept" | "decline") {
     if (pending) return;
     setPending(kind);
-    setFailure(null);
+    setFailed(false);
     try {
       const result =
         kind === "accept"
           ? await acceptInvitation(token)
           : await declineInvitation(token);
       if (!result.ok) {
-        setFailure(result.reason);
+        setFailed(true);
         return;
       }
       if (kind === "decline") {
         setDeclined(true);
         return;
       }
-      navigate.replace(result.to);
+      navigate.replace(result.value.to);
     } catch {
-      setFailure("failed");
+      setFailed(true);
     } finally {
       setPending(null);
     }
@@ -67,7 +61,7 @@ export function InviteDecision({
 
   return (
     <div className="flex flex-col gap-3">
-      {failure ? (
+      {failed ? (
         <FormAlert testId="invite-failure">{t("failed")}</FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">

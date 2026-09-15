@@ -2,11 +2,12 @@
 // Approve or cancel a CLI login (RFC 8252 loopback + PKCE); see cli-authorize.ts
 // for the invariants. Approve mints a single-use code through authorize_cli for
 // the organization and workspace the viewer resolves to, bound to the CLI's
-// PKCE challenge, then hands it to the loopback listener.
+// PKCE challenge, then hands it to the loopback listener. Cancel asks for the
+// same signed-in person before it answers the listener.
 import { authCliAuthorize } from "@oxagen/oxagen/contracts/auth.cli.authorize";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
+import { requireUser, requireViewer } from "@/server/viewer";
 import { parseLoopbackUri } from "@/shared/loopback-uri";
 import { redirectToLoopback } from "@/shared/navigation";
 import { checkAuthorizeParams, readAuthorizeParams } from "./cli-authorize";
@@ -26,14 +27,14 @@ function text(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function invalid(field: string | undefined): CliActionState {
+function invalid(field: string | undefined): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
 
 export async function approveCliAuth(
   _prev: CliActionState,
   form: FormData,
-): Promise<CliActionState> {
+): Promise<ActionResult<never>> {
   const checked = checkAuthorizeParams(
     readAuthorizeParams(
       Object.fromEntries(PARAM_FIELDS.map((name) => [name, text(form, name)])),
@@ -53,12 +54,11 @@ export async function approveCliAuth(
   });
 }
 
-// A "use server" export has to be async even when, like this one, it awaits nothing.
-// eslint-disable-next-line @typescript-eslint/require-await -- a "use server" export has to be async
 export async function cancelCliAuth(
   _prev: CliActionState,
   form: FormData,
-): Promise<CliActionState> {
+): Promise<ActionResult<never>> {
+  await requireUser();
   // Only a checked loopback URI is ever followed.
   const redirectUri = parseLoopbackUri(text(form, "redirect_uri"));
   const state = text(form, "state");

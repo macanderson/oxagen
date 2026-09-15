@@ -61,7 +61,9 @@ describe("OrganizationForm", () => {
   it("lands on the new organization's Fleet page, or shows what the server refused", async () => {
     createOrganizationAction.mockResolvedValueOnce({
       ok: false,
-      fields: { slug: "slugTaken" },
+      reason: "conflict",
+      code: "slugTaken",
+      field: "slug",
     });
     renderWithIntl(<OrganizationForm initialName="Acme Robotics" />);
     await userEvent.type(
@@ -81,7 +83,8 @@ describe("OrganizationForm", () => {
 
     createOrganizationAction.mockResolvedValueOnce({
       ok: false,
-      error: "failed",
+      reason: "unavailable",
+      code: "failed",
     });
     await submit();
     expect(
@@ -97,7 +100,7 @@ describe("OrganizationForm", () => {
 
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
-      to: "/acme-robotics/core-platform",
+      value: { to: "/acme-robotics/core-platform" },
     });
     await submit();
     await waitFor(() => {
@@ -108,7 +111,7 @@ describe("OrganizationForm", () => {
   it("continues to the requested destination instead of the Fleet page", async () => {
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
-      to: "/acme-robotics/core-platform",
+      value: { to: "/acme-robotics/core-platform" },
     });
     renderWithIntl(
       <OrganizationForm

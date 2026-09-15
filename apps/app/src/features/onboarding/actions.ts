@@ -1,46 +1,57 @@
 "use server";
 // The organization form's write: creates the tenant (create-organization.ts)
-// and names the Fleet page of its first workspace as where to go next.
+// and names the Fleet page of its first workspace as where to go next. A
+// refusal names the field and the catalog key the form shows under it.
+import type { ActionResult } from "@/server/kernel";
 import { requireUser } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import {
   OrganizationForm,
   type OrganizationField,
-  type OrgFormErrorKey,
   organizationFieldErrors,
 } from "./org-form";
 
-export type CreateOrganizationState =
-  | { ok: true; to: SafePath }
-  | {
-      ok: false;
-      fields?: Partial<Record<OrganizationField, OrgFormErrorKey>>;
-      error?: "failed";
-    };
+function refuse(
+  reason: "invalid" | "conflict",
+  field: OrganizationField,
+  code: string,
+): ActionResult<never> {
+  return { ok: false, reason, code, field };
+}
 
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
-): Promise<CreateOrganizationState> {
+): Promise<ActionResult<{ to: SafePath }>> {
   const { userId } = await requireUser(routes.newOrganization());
 
   const parsed = OrganizationForm.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, fields: organizationFieldErrors(parsed.error.issues) };
+    const [field, code] =
+      Object.entries(organizationFieldErrors(parsed.error.issues))[0] ?? [];
+    return {
+      ok: false,
+      reason: "invalid",
+      code: code ?? "invalid_input",
+      field,
+    };
   }
 
   const { createOrganization } = await import("./create-organization");
   const result = await createOrganization(userId, parsed.data);
   if (result.ok)
-    return { ok: true, to: routes.fleet(result.orgSlug, result.workspaceSlug) };
+    return {
+      ok: true,
+      value: { to: routes.fleet(result.orgSlug, result.workspaceSlug) },
+    };
   if (result.error === "slugTaken")
-    return { ok: false, fields: { slug: "slugTaken" } };
-  if (result.error === "slugReserved")
-    return { ok: false, fields: { slug: "slugReserved" } };
-  if (result.error === "workspaceSlugReserved")
-    return { ok: false, fields: { workspaceSlug: "workspaceSlugReserved" } };
+    return refuse("conflict", "slug", "slugTaken");
   if (result.error === "namespaceTaken")
-    return { ok: false, fields: { namespace: "namespaceTaken" } };
+    return refuse("conflict", "namespace", "namespaceTaken");
+  if (result.error === "slugReserved")
+    return refuse("invalid", "slug", "slugReserved");
+  if (result.error === "workspaceSlugReserved")
+    return refuse("invalid", "workspaceSlug", "workspaceSlugReserved");
   if (result.error === "invalid")
-    return { ok: false, fields: { slug: "slugInvalid" } };
-  return { ok: false, error: "failed" };
+    return refuse("invalid", "slug", "slugInvalid");
+  return { ok: false, reason: "unavailable", code: "failed" };
 }

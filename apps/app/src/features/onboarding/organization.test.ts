@@ -135,10 +135,9 @@ describe("createOrganizationAction", () => {
       }),
     ).toEqual({
       ok: false,
-      fields: {
-        namespace: "namespaceInvalid",
-        workspaceSlug: "workspaceSlugReserved",
-      },
+      reason: "invalid",
+      code: "namespaceInvalid",
+      field: "namespace",
     });
     expect(inserted).toHaveLength(0);
   });
@@ -147,7 +146,9 @@ describe("createOrganizationAction", () => {
     for (const slug of ["new-organization", "login", "api"])
       expect(await createOrganizationAction({ ...form, slug })).toEqual({
         ok: false,
-        fields: { slug: "slugReserved" },
+        reason: "invalid",
+        code: "slugReserved",
+        field: "slug",
       });
     expect(inserted).toHaveLength(0);
   });
@@ -155,7 +156,7 @@ describe("createOrganizationAction", () => {
   it("creates the tenant and lands on its first workspace's Fleet page", async () => {
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
-      to: "/acme/core-platform",
+      value: { to: "/acme/core-platform" },
     });
   });
 
@@ -163,21 +164,31 @@ describe("createOrganizationAction", () => {
     failInsert = new UniqueViolation("organizations_slug_idx");
     expect(await createOrganizationAction(form)).toEqual({
       ok: false,
-      fields: { slug: "slugTaken" },
+      reason: "conflict",
+      code: "slugTaken",
+      field: "slug",
     });
     failInsert = new UniqueViolation("organizations_namespace_idx");
     expect(await createOrganizationAction(form)).toEqual({
       ok: false,
-      fields: { namespace: "namespaceTaken" },
+      reason: "conflict",
+      code: "namespaceTaken",
+      field: "namespace",
     });
     failInsert = null;
     expect(
       await createOrganizationAction({ ...form, slug: "contract-refuses" }),
-    ).toEqual({ ok: false, fields: { slug: "slugInvalid" } });
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "slugInvalid",
+      field: "slug",
+    });
     failInsert = new Error("connection reset");
     expect(await createOrganizationAction(form)).toEqual({
       ok: false,
-      error: "failed",
+      reason: "unavailable",
+      code: "failed",
     });
     expect(logger.error).toHaveBeenCalledOnce();
   });

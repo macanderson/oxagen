@@ -441,7 +441,10 @@ describe("VerifyPanel", () => {
 
 describe("InviteDecision", () => {
   it("accept replaces the page with the organization", async () => {
-    inviteActions.acceptInvitation.mockResolvedValue({ ok: true, to: "/acme" });
+    inviteActions.acceptInvitation.mockResolvedValue({
+      ok: true,
+      value: { to: "/acme" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(
       screen.getByRole("button", { name: "Accept invitation" }),
@@ -452,7 +455,10 @@ describe("InviteDecision", () => {
   });
 
   it("decline confirms without navigating", async () => {
-    inviteActions.declineInvitation.mockResolvedValue({ ok: true, to: "/" });
+    inviteActions.declineInvitation.mockResolvedValue({
+      ok: true,
+      value: { to: "/" },
+    });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     expect(await screen.findByTestId("invite-declined")).toHaveTextContent(
@@ -464,7 +470,8 @@ describe("InviteDecision", () => {
   it("a refused decision is announced", async () => {
     inviteActions.acceptInvitation.mockResolvedValueOnce({
       ok: false,
-      reason: "failed",
+      reason: "unavailable",
+      code: "kernel_unavailable",
     });
     renderWithIntl(<InviteDecision token="invi_1" orgName="Acme Robotics" />);
     await userEvent.click(

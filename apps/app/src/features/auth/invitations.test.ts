@@ -105,22 +105,26 @@ describe("accept and decline", () => {
     expect(await acceptInvitation("../../etc")).toEqual({
       ok: false,
       reason: "not_found",
+      code: "invitation_not_found",
     });
     expect(invitationByToken).not.toHaveBeenCalled();
     invitationByToken.mockResolvedValueOnce(null);
     expect(await acceptInvitation("invi_nope")).toEqual({
       ok: false,
       reason: "not_found",
+      code: "invitation_not_found",
     });
     invitationByToken.mockResolvedValueOnce({ ...record, role: "Superuser" });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
       reason: "not_found",
+      code: "invitation_not_found",
     });
     invitationByToken.mockResolvedValueOnce({ ...record, status: "accepted" });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
-      reason: "closed",
+      reason: "conflict",
+      code: "invitation_closed",
     });
     invitationByToken.mockResolvedValueOnce({
       ...record,
@@ -128,13 +132,15 @@ describe("accept and decline", () => {
     });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
-      reason: "wrong_account",
+      reason: "denied",
+      code: "wrong_account",
     });
     getAuthUser.mockResolvedValue(null);
     invitationByToken.mockResolvedValueOnce(record);
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
-      reason: "sign_in",
+      reason: "denied",
+      code: "sign_in",
     });
     expect(kernelWrite).not.toHaveBeenCalled();
   });
@@ -145,7 +151,7 @@ describe("accept and decline", () => {
     kernelWrite.mockResolvedValue({ ok: true, value: {} });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: true,
-      to: "/acme",
+      value: { to: "/acme" },
     });
     expect(kernelWrite).toHaveBeenCalledWith(
       {
@@ -157,7 +163,10 @@ describe("accept and decline", () => {
       { invitationPublicId: "invi_live" },
     );
     expect(InviteeCtx.is(kernelWrite.mock.calls[0]?.[0])).toBe(true);
-    expect(await declineInvitation("invi_live")).toEqual({ ok: true, to: "/" });
+    expect(await declineInvitation("invi_live")).toEqual({
+      ok: true,
+      value: { to: "/" },
+    });
     expect(kernelWrite).toHaveBeenLastCalledWith(
       expect.objectContaining({ userId: "u-priya" }),
       { name: "decline_member_invite" },
@@ -167,7 +176,7 @@ describe("accept and decline", () => {
     expect(invitationByToken).toHaveBeenCalledTimes(4);
   });
 
-  it("a kernel refusal is reported as failed (negative)", async () => {
+  it("a kernel refusal reaches the page as the kernel classified it (negative)", async () => {
     getAuthUser.mockResolvedValue(priya);
     invitationByToken.mockResolvedValue(record);
     kernelWrite.mockResolvedValue({
@@ -177,7 +186,8 @@ describe("accept and decline", () => {
     });
     expect(await acceptInvitation("invi_live")).toEqual({
       ok: false,
-      reason: "failed",
+      reason: "conflict",
+      code: "invitation_closed",
     });
   });
 });

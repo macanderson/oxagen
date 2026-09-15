@@ -63,11 +63,14 @@ export function CliConsentForm({
   const org = orgs.find((o) => o.slug === orgSlug) ?? orgs[0];
   const workspaces = org?.workspaces ?? [];
   const [wsSlug, setWsSlug] = useState(workspaces[0]?.slug ?? "");
-  const [approveState, approve, approving] = useActionState(
-    approveCliAuth,
-    null,
-  );
-  const [cancelState, cancel, cancelling] = useActionState(cancelCliAuth, null);
+  const [approveState, approve, approving] = useActionState<
+    CliActionState,
+    FormData
+  >(approveCliAuth, null);
+  const [cancelState, cancel, cancelling] = useActionState<
+    CliActionState,
+    FormData
+  >(cancelCliAuth, null);
   const failure = failureKey(approveState) ?? failureKey(cancelState);
   const busy = approving || cancelling;
 

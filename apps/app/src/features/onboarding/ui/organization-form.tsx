@@ -81,11 +81,18 @@ export function OrganizationForm({
     try {
       const result = await createOrganizationAction(values);
       if (result.ok) {
-        navigate.push(destination ?? result.to);
+        navigate.push(destination ?? result.value.to);
         return;
       }
-      setErrors(result.fields ?? {});
-      setFailed(result.error === "failed");
+      const refused =
+        (result.reason === "invalid" || result.reason === "conflict") &&
+        result.field !== undefined
+          ? organizationFieldErrors([
+              { path: [result.field], message: result.code },
+            ])
+          : {};
+      setErrors(refused);
+      setFailed(Object.keys(refused).length === 0);
     } catch {
       setFailed(true);
     } finally {

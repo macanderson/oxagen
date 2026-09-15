@@ -5,7 +5,7 @@
   "e2e-files apps/app_deprecated/e2e spec-outside-apps-app",
   "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app",
   "layer src/features/auth/invitations.ts:9 @/server/tenancy-lookups",
-  "layer src/features/auth/invite-actions.ts:12 @/server/tenancy-lookups",
+  "layer src/features/auth/invite-actions.ts:13 @/server/tenancy-lookups",
   "platform instrumentation.ts:59 @oxagen/telemetry",
   "platform instrumentation.ts:81 @oxagen/telemetry",
   "platform instrumentation.ts:83 @oxagen/database/security",
