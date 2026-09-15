@@ -3,101 +3,124 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxagen Desktop</title>
-<meta name="description" content="The Oxagen desktop app: how the installer for macOS, Linux and Windows wraps Claude Code and Codex under Tacho, signs a machine in to an organization, and lets an operator set, change or remove the workspace it reports to.">
+<title>Oxagen Desktop: product specification, rev 1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
 <style>
-/* House tokens (packages/ui/src/styles/house-tokens.css), dark-first. */
-:root {
-  --gold: #D6962C; --gold-bright: #F1C364; --gold-deep: #8B5E1A;
-  --bg: #F2EEE5; --panel: #F8F5EE; --hl: #ECE6D9; --border: #D8CDBD; --rule: #C9BFAE;
-  --text: #10100F; --body: #2A2823; --muted: #6B665C; --dim: #8C877C;
-  --gold-text: #8B5E1A; --gold-fill: #D6962C;
-  --font: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+/* Oxagen document shell. One stylesheet for every spec and plan.
+   Tokens are the house system (oxagen-house-brand/tokens/house-tokens.css),
+   the treatment is docs.oxagen.sh: corners on the 8 / 12 / 16 px scale, one
+   gold, no gradient except the sheen on a title's accent word. Light by
+   default, dark by system setting or data-theme. */
+:root{
+  --ground:#F2EEE5; --panel:#F8F5EE; --hl:#ECE6DA; --line:#D8CDBD; --rule:#C9BFAE;
+  --text:#10100F; --body:#2A2823; --muted:#6B665C; --dim:#8C877C;
+  --gold:#D6962C; --gold-bright:#F1C364; --gold-deep:#8B5E1A; --gold-text:#8B5E1A;
+  --ok:#2F7D4F; --warn:#B8651C; --bad:#9A3E2E; --info:#3D5F86;
+  --font:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --s-1:.833rem; --s0:1rem; --s1:1.2rem; --s2:1.44rem; --s3:1.728rem; --s4:2.074rem; --s5:2.488rem;
+  --r:8px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --grad-ember:linear-gradient(100deg,var(--gold-deep) 0%,var(--gold) 46%,var(--gold-bright) 100%);
+  /* aliases hand-drawn figures use */
+  --bg:var(--ground); --border:var(--line);
+  color-scheme:light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #10100F; --panel: #181715; --hl: #201F1C; --border: #292722; --rule: #34322D;
-    --text: #F2EEE5; --body: #DDD8CD; --muted: #9B958A; --dim: #6E6A62;
-    --gold-text: #D6962C;
-  }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --ground:#10100F; --panel:#181715; --hl:#201F1C; --line:#292722; --rule:#34322D;
+  --text:#F2EEE5; --body:#DDD8CD; --muted:#9B958A; --dim:#6E6A62;
+  --gold-text:#D6962C; --ok:#6FA383; --warn:#D9955A; --bad:#C9725F; --info:#86A3C3; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ground:#10100F; --panel:#181715; --hl:#201F1C; --line:#292722; --rule:#34322D;
+  --text:#F2EEE5; --body:#DDD8CD; --muted:#9B958A; --dim:#6E6A62;
+  --gold-text:#D6962C; --ok:#6FA383; --warn:#D9955A; --bad:#C9725F; --info:#86A3C3; color-scheme:dark;
 }
-:root[data-theme="dark"] {
-  --bg: #10100F; --panel: #181715; --hl: #201F1C; --border: #292722; --rule: #34322D;
-  --text: #F2EEE5; --body: #DDD8CD; --muted: #9B958A; --dim: #6E6A62;
-  --gold-text: #D6962C;
-}
-* { box-sizing: border-box; }
-html { color-scheme: light dark; }
-body {
-  margin: 0; background: var(--bg); color: var(--body);
-  font-family: var(--font); font-size: 16px; line-height: 1.55;
-  padding-block: 0 96px; padding-inline: 20px;
-  -webkit-font-smoothing: antialiased;
-}
-.page { max-width: 72ch; margin: 0 auto; }
-.wide { max-width: 96ch; margin-inline: auto; }
-code, pre, .mono { font-family: var(--mono); font-size: 0.88em; }
-pre { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; overflow-x: auto; line-height: 1.5; }
-a { color: var(--gold-text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--gold-text); outline-offset: 2px; }
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--ground);color:var(--body);font:400 var(--s0)/1.6 var(--font);padding-inline:clamp(16px,4vw,48px);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--gold);color:#10100F}
+.wrap{max-width:1240px;margin-inline:auto;padding-block:28px 96px}
 
-.masthead {
-  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  padding-block: 22px 18px; border-bottom: 1px solid var(--border); margin-bottom: 28px;
-}
-.wordmark { font-weight: 600; font-size: 24px; letter-spacing: -0.01em; color: var(--text); }
-.wordmark .x { color: var(--gold); }
-.masthead .meta { color: var(--muted); font-size: 14px; margin-left: auto; }
+/* masthead: the wordmark, then the eyebrow, title, dek, and the facts */
+header.mast{display:grid;gap:18px;padding-block:6px 32px;border-bottom:1px solid var(--line);margin-bottom:36px}
+.wordmark{font-weight:600;font-size:22px;letter-spacing:-.01em;color:var(--text);text-decoration:none}
+.wordmark .x{color:var(--gold)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;width:max-content;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;padding:5px 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 60%,transparent)}
+h1{font-weight:700;font-size:clamp(var(--s4),5vw,var(--s5));line-height:1.08;letter-spacing:-.02em;color:var(--text);margin:0;text-wrap:balance;max-width:24ch}
+h1 .accent{background-image:var(--grad-ember);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.dek{margin:0;max-width:64ch;color:var(--muted);font-size:var(--s1);line-height:1.5;text-wrap:pretty}
+.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:4px 0 0;font-size:var(--s-1);max-width:96ch}
+.facts dt{color:var(--muted);font-weight:500}
+.facts dd{margin:0;color:var(--body);overflow-wrap:anywhere}
+.facts dd code{white-space:normal}
+@media (max-width:560px){.facts{grid-template-columns:1fr;gap:2px}.facts dd{margin-bottom:8px}}
 
-.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-text); margin: 0 0 6px; }
-h1 { font-weight: 700; font-size: clamp(30px, 4.5vw, 42px); line-height: 1.1; letter-spacing: -0.02em; color: var(--text); margin: 0 0 14px; text-wrap: balance; }
-.lede { font-size: 19px; color: var(--body); margin: 0 0 8px; text-wrap: pretty; }
-.status { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 0; padding: 0; list-style: none; }
-.status li { border: 1px solid var(--rule); border-radius: 999px; padding: 2px 11px; font-size: 13px; color: var(--muted); }
-.status li b { color: var(--text); font-weight: 500; }
+/* the page: a sticky contents rail beside the article */
+.grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;align-items:start}
+nav.toc{position:sticky;top:24px;font-size:var(--s-1);max-height:calc(100vh - 48px);overflow:auto}
+nav.toc p{margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;border-left:1px solid var(--line)}
+nav.toc a{display:block;padding:5px 0 5px 14px;margin-left:-1px;border-left:1px solid transparent;color:var(--muted);text-decoration:none;line-height:1.35}
+nav.toc a:hover{color:var(--text);border-left-color:var(--rule)}
+@media (max-width:900px){.grid{grid-template-columns:1fr;gap:28px}nav.toc{position:static;max-height:none}nav.toc ol{border-left:0;display:flex;flex-wrap:wrap;gap:4px 14px}nav.toc a{padding:2px 0;border:0}}
+main{min-width:0}
+main>p,main>ul,main>ol,main>blockquote,main>h3,main>h4{max-width:72ch}
+h2{font-weight:600;font-size:var(--s3);line-height:1.2;letter-spacing:-.01em;color:var(--text);margin:64px 0 16px;padding-top:20px;border-top:1px solid var(--rule);text-wrap:balance}
+main>h2:first-child,main>h2:first-of-type{margin-top:24px}
+h3{font-weight:600;font-size:var(--s1);color:var(--text);margin:36px 0 10px;text-wrap:balance}
+h4{font-weight:600;font-size:var(--s0);color:var(--text);margin:28px 0 8px}
+h5,h6{font-weight:600;font-size:var(--s-1);color:var(--text);margin:22px 0 6px;letter-spacing:.04em;text-transform:uppercase}
+p{margin:0 0 14px;text-wrap:pretty}
+ul,ol{margin:0 0 16px;padding-left:1.3em;display:grid;gap:6px}
+li>ul,li>ol{margin:6px 0 0}
+li::marker{color:var(--dim)}
+strong{color:var(--text);font-weight:600}
+em{font-style:italic}
+a{color:var(--gold-text);text-decoration-color:color-mix(in srgb,var(--gold-text) 40%,transparent);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--gold-text)}
+a:focus-visible{outline:2px solid var(--gold-text);outline-offset:2px;border-radius:var(--r)}
+hr{border:0;height:1px;background:var(--line);margin:40px 0}
+blockquote{margin:0 0 16px;padding:12px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:var(--r-lg);background:var(--panel);color:var(--body)}
+blockquote p:last-child{margin:0}
+code{font-family:var(--mono);font-size:.86em;background:var(--hl);border:1px solid var(--line);border-radius:5px;padding:.05em .35em;color:var(--text);overflow-wrap:anywhere}
+pre{font-family:var(--mono);font-size:.84em;line-height:1.55;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;overflow-x:auto;margin:0 0 18px}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:var(--body)}
+img,svg{max-width:100%;height:auto}
+figure{margin:16px 0 22px}
+figure svg{width:100%;height:auto;display:block}
+figcaption{color:var(--muted);font-size:var(--s-1);margin-top:8px}
 
-h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.01em; color: var(--text); margin: 44px 0 10px; text-wrap: balance; }
-h2 .n { color: var(--dim); font-weight: 500; margin-right: 10px; font-variant-numeric: tabular-nums; }
-h3 { font-weight: 600; font-size: 16px; color: var(--text); margin: 24px 0 6px; }
-p { margin: 0 0 12px; text-wrap: pretty; }
-ul, ol { padding-left: 22px; margin: 0 0 12px; }
-li { margin-bottom: 4px; }
-li::marker { color: var(--dim); }
+/* tables: a rounded frame, flat header, hairline rows */
+.tw{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:var(--s-1);line-height:1.5}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;background:var(--panel);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td:first-child,th:first-child{padding-left:16px}
+td:last-child,th:last-child{padding-right:16px}
+td code{white-space:nowrap}
+.num{font-variant-numeric:tabular-nums;text-align:right}
 
-table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
-.tw { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; margin: 12px 0 16px; }
-th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-weight: 500; font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase; background: var(--panel); }
-tr:last-child td { border-bottom: 0; }
-td code { white-space: nowrap; }
-.num { font-variant-numeric: tabular-nums; text-align: right; }
+/* small semantics a doc can use */
+.pill{display:inline-block;border:1px solid var(--line);border-radius:var(--r-pill);padding:1px 10px;font-size:12.5px;color:var(--muted);background:var(--panel)}
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .info{color:var(--info)}
+.note{border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 16px;margin:16px 0;background:var(--panel)}
+.note b{color:var(--text);font-weight:600}
+footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);font-size:var(--s-1);color:var(--dim);display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+@media print{body{padding:0;background:#fff;color:#111}nav.toc{display:none}.grid{display:block}h2{break-after:avoid}pre,table,figure{break-inside:avoid}}
 
-.check { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
-.check li { position: relative; padding-left: 26px; margin: 0; }
-.check li::before { content: "✓"; position: absolute; left: 2px; top: 0; color: var(--text); font-weight: 600; }
-.check li.no::before { content: "–"; color: var(--dim); }
-
-figure { margin: 16px 0 20px; }
-figure svg { width: 100%; height: auto; display: block; }
-figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
-.note { border: 1px solid var(--rule); border-radius: 10px; padding: 10px 14px; margin: 14px 0; background: var(--panel); }
-.note b { color: var(--text); font-weight: 600; }
-.kv { display: grid; grid-template-columns: max-content 1fr; column-gap: 18px; row-gap: 6px; margin: 8px 0 14px; font-size: 15px; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; overflow-wrap: anywhere; }
-@media (max-width: 480px) { .kv { grid-template-columns: 1fr; row-gap: 2px; } .kv dd { margin-bottom: 8px; } }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<div class="page">
-
-<header class="masthead">
-  <span class="wordmark">o<span class="x">x</span>agen</span>
-  <span class="meta">docs/specs/oxagen-desktop · rev 1 · 2026-09-13</span>
+<div class="wrap">
+<header class="mast">
+  <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
+  <p class="eyebrow">Oxagen · Specification</p>
+  <h1>Oxagen Desktop: product specification, rev 1</h1>
+  <dl class="facts"><dt>Status</dt><dd>Rev 1, built and verified on macOS; Linux and Windows bundles not yet run</dd><dt>Date</dt><dd>2026-09-13</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Source</dt><dd><code>docs/specs/oxagen-desktop</code> on branch <code>worktree-oxagen-installer</code>; Tacho 2.1.1</dd><dt>Ships as</dt><dd>macOS <strong>.dmg</strong>; Linux <strong>.deb / .rpm / .AppImage</strong>; Windows <strong>.msi / .exe</strong></dd><dt>Summary</dt><dd>The Oxagen app puts a machine under Oxagen control: it installs the <code>oxagen</code> CLI and the Tacho wrapper for Claude Code and Codex, signs the machine in to an organization, enrolls it against a workspace, and gives the operator one window to see the connection, move the host to another workspace or org, add or drop a wrapper, sign out, and unenroll.</dd></dl>
 </header>
 
 <p class="eyebrow">Specification</p>
@@ -122,19 +145,36 @@ figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
   <li>Uninstall the wrapper: <code>tacho unenroll</code> strips the hooks in both harnesses, stops the service, revokes on the control plane and deletes the credentials; <code>--purge</code> drops the local event log; the app then removes <code>~/.config/oxagen</code> and points at the platform uninstaller.</li>
   <li>Windows support in Tacho itself: a per-user Task Scheduler service, loopback TCP for the hook, <code>cmd.exe</code> quoting.</li>
   <li class="no">Code signing runs only when the Apple / Azure secrets exist in CI (§9); a local build is ad-hoc signed and Gatekeeper warns on first open.</li>
-  <li class="no">No in-app updater yet; a new version is a new download (§11).</li>
+  <li>An in-app updater: the masthead's <b>Check for updates</b> reads the release feed, and <b>Install</b> downloads the minisign-verified bundle, installs it and relaunches; every release with the updater key signed carries <code>latest.json</code> (§9).</li>
 </ul>
-
-<h2><span class="n">2</span>The rule the app is built on</h2>
+<h2 id="2-the-rule-the-app-is-built-on">2. The rule the app is built on</h2>
 <p>The app owns no state. Every panel reads the files the CLIs already write, and every action that changes the machine runs one of the two CLIs bundled inside the app. A user who does things from the terminal and a user who does them from the app end up in identical files, and <code>tacho status</code> and the Connection panel can never disagree.</p>
-<dl class="kv">
-  <dt><code>~/.config/oxagen/config.json</code></dt><dd>the platform session <code>oxagen login</code> writes: token, org and workspace slugs, API and app URLs. Read for the Account panel; the token never crosses into the webview (the Rust shell attaches it to the two picker calls).</dd>
-  <dt><code>~/.config/oxagen/tacho/host.json</code></dt><dd>the enrollment <code>tacho enroll</code> writes: agent key, enrollment id, org and workspace, harnesses, port, service and hook command lines, bundle facts. Read minus its secrets for the This machine panel.</dd>
-  <dt><code>127.0.0.1:&lt;port&gt;/status</code></dt><dd>the collector daemon, with the per-install bearer from <code>host.json</code>. Polled every 5 s; <code>tacho status --json</code> every 20 s for hook presence per event.</dd>
-  <dt><code>~/.config/oxagen/tacho/tachod.log</code></dt><dd>the service's stdout and stderr, tailed in the Activity panel.</dd>
-</dl>
-
-<div class="wide">
+<div class="tw"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/.config/oxagen/config.json</code></td>
+<td>the platform session <code>oxagen login</code> writes: token, org and workspace slugs, API and app URLs. Read for the Account panel; the token never crosses into the webview (the Rust shell attaches it to the two picker calls).</td>
+</tr>
+<tr>
+<td><code>~/.config/oxagen/tacho/host.json</code></td>
+<td>the enrollment <code>tacho enroll</code> writes: agent key, enrollment id, org and workspace, harnesses, port, service and hook command lines, bundle facts. Read minus its secrets for the This machine panel.</td>
+</tr>
+<tr>
+<td><code>127.0.0.1:&lt;port&gt;/status</code></td>
+<td>the collector daemon, with the per-install bearer from <code>host.json</code>. Polled every 5 s; <code>tacho status --json</code> every 20 s for hook presence per event.</td>
+</tr>
+<tr>
+<td><code>~/.config/oxagen/tacho/tachod.log</code></td>
+<td>the service's stdout and stderr, tailed in the Activity panel.</td>
+</tr>
+</tbody>
+</table></div>
 <figure>
 <svg viewBox="0 0 960 330" role="img" aria-labelledby="fig1t" font-family="Space Grotesk, Helvetica Neue, Arial, sans-serif" font-size="13">
   <title id="fig1t">The app, its two sidecars, the files they share, and the control plane</title>
@@ -205,133 +245,168 @@ figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
 </figure>
 </div>
 
-<h2><span class="n">3</span>The panels</h2>
+<h2><span class="n">3</span>First run: the wizard</h2>
+<p>The app opens as one pane on paper (the light canvas, whatever the OS theme). On a machine with no enrollment it walks five steps; the step is derived from the machine's state, so a relaunch resumes where the operator left off, and an enrolled machine never sees it.</p>
+<ol>
+  <li><b>Authenticate with Oxagen.</b> <code>oxagen login --browser</code> in the browser; <b>Create an account</b> runs it with <code>--signup</code>, which opens the sign-up page with the consent page as its <code>returnTo</code> — the new account names its organization and first workspace, lands back on the consent page, and the loopback callback is the same. The web app carries <code>returnTo</code> through sign-in, the second factor, sign-up and new-organization (a same-origin path only). A saved session that answers 401 is shown as expired and the step reopens.</li>
+  <li><b>Select an organization and workspace.</b> The pickers list only what the signed-in user belongs to (<code>/v1/user/organizations</code>, <code>/v1/user/workspaces</code>), defaulting to the pair the browser sign-in chose.</li>
+  <li><b>Register the agents on this machine.</b> <code>tacho detect --json</code> finds Claude Code and Codex through a login-shell PATH lookup (the app itself launches from Finder with the bare system PATH). Every installed agent is ticked; an absent one is greyed with "not found"; with neither found the step names the two install commands and offers Rescan. "Yes, register … with Oxagen" runs <code>tacho enroll --org … --workspace … --harness …</code>, which writes the hooks into each chosen agent's settings.</li>
+  <li><b>Confirmation.</b> Success shows the agent key, the reports-to pair, the collector's port and the attestation tier. Failure shows the last line of <code>tacho enroll</code>'s stderr, what usually causes it, and leaves the Register button live for a retry.</li>
+  <li><b>Record a first run.</b> One checkbox per registered agent (all ticked); "Yes, run the connect prompt" runs <code>tacho verify --harness &lt;h&gt; --json</code> for each — one headless turn ("reply OK": <code>claude -p</code>, or <code>codex exec</code>) confirmed recorded and sealed by the collector — then <b>Open Mission Control</b> becomes the primary and opens <code>/&lt;org&gt;/&lt;workspace&gt;/runs</code> with that first session in it.</li>
+</ol>
+<p>Every later launch shows the management pane below. Its Wrapped agents panel carries one <b>De-register…</b> per wrapped agent (confirm in place; re-enrolls with the rest, or <code>tacho unenroll</code> when it was the last) and <b>Register</b> for an installed agent not yet wrapped; <b>Uninstall Oxagen…</b> asks twice, then runs <code>tacho unenroll --purge</code>, removes the PATH links and <code>~/.config/oxagen</code>, and names the platform uninstaller — the install side asked twice, so the uninstall side does.</p>
+
+<h2><span class="n">3b</span>The panels</h2>
 <div class="wide"><div class="tw">
 <table>
 <thead><tr><th>Panel</th><th>Shows</th><th>Controls</th><th>Runs</th></tr></thead>
 <tbody>
-<tr><td>Masthead</td><td>wordmark, connection glyph (● connected, ◐ enrolled but collector silent, ○ not enrolled), host status, app version</td><td>—</td><td>—</td></tr>
+<tr><td>Masthead</td><td>wordmark, connection glyph (● connected, ◐ enrolled but collector silent, ○ not enrolled), host status, app version; after a check, <i>up to date (vX)</i> or <i>vY available</i></td><td>Check for updates · Install</td><td><code>tauri-plugin-updater</code>: fetch <code>latest.json</code>, verify the signature, install, relaunch; download milestones stream into Activity</td></tr>
 <tr><td>Account</td><td>signed in to <i>org</i>, the CLI's default workspace, the API URL; or <i>Session expired</i> when the saved token gets a 401</td><td>Sign in · Switch organization… · Sign out</td><td><code>oxagen login</code>, <code>oxagen logout</code></td></tr>
 <tr><td>This machine</td><td>agent key, reports-to slugs, enrollment id, status and mode, bundle version and age, collector uptime / spool / last ingest, service state, attestation tier, expiry</td><td>org and workspace pickers before enrollment; <b>Enroll this machine</b>; Unenroll… (two-step) with <i>also delete the local event log</i></td><td><code>tacho enroll --org … --workspace … --harness …</code>, <code>tacho unenroll [--purge]</code></td></tr>
-<tr><td>Workspace</td><td>the org and workspace the host reports to, as pickers listing the operator's orgs and that org's workspaces</td><td>pick another; the Apply button appears in Wrappers</td><td><code>tacho reassign --org … --workspace …</code></td></tr>
+<tr><td>Workspace</td><td>the org and workspace the host reports to, as pickers listing the operator's orgs and that org's workspaces</td><td>pick another; the Apply button appears in Wrappers, with <i>also make it the CLI default</i> (on by default) beside Reset</td><td><code>tacho reassign --org … --workspace …</code>; with the checkbox, <code>oxagen tacho reassign … --default</code>, which also rewrites the pair in <code>config.json</code></td></tr>
 <tr><td>Wrappers</td><td>Claude Code and Codex with hook completeness per harness and the detected version</td><td>checkboxes (never empty); <b>Reassign to …</b> / <b>Apply wrappers</b>; Reset</td><td><code>tacho reassign --harness …</code></td></tr>
 <tr><td>Command line</td><td>where <code>oxagen</code> and <code>tacho</code> resolve on PATH</td><td>Link into <code>~/.local/bin</code> (or <code>%LOCALAPPDATA%\Oxagen\bin</code>) · Remove links</td><td>Rust: symlinks, or <code>.cmd</code> shims plus the user PATH</td></tr>
 <tr><td>Activity</td><td>streamed output of the last action; the collector log tail</td><td>Open the log file</td><td><code>tacho status --json</code>, log tail</td></tr>
 <tr><td>Uninstall</td><td>the order: unenroll, remove local data, then the platform uninstaller</td><td>Remove local data… (only when unenrolled) · Fleet page</td><td>Rust: delete <code>~/.config/oxagen</code></td></tr>
 </tbody>
-</table>
-</div></div>
-<p>The gold primary is the next step and moves with it: <b>Sign in</b> when there is no session, <b>Enroll this machine</b> when there is no enrollment, <b>Reassign</b> / <b>Apply</b> when a picker differs from the host, and nothing otherwise. Destructive controls (sign out, unenroll, remove data) use the danger treatment and confirm in place; gold never encodes a state.</p>
-
-<h2><span class="n">4</span>Moving a host between workspaces</h2>
+</table></div>
+<p>The gold primary is the next step and moves with it: <strong>Sign in</strong> when there is no session, <strong>Enroll this machine</strong> when there is no enrollment, <strong>Reassign</strong> / <strong>Apply</strong> when a picker differs from the host, and nothing otherwise. Destructive controls (sign out, unenroll, remove data) use the danger treatment and confirm in place; gold never encodes a state.</p>
+<h2 id="4-moving-a-host-between-workspaces">4. Moving a host between workspaces</h2>
 <p>The host API key is minted for the workspace at enrollment, so a move is a revoke plus a fresh enrollment, not an edit. <code>tacho reassign</code> does it as one step and keeps what makes the host recognisable:</p>
 <ol>
-  <li>Revoke the current enrollment with the operator's session (best effort; an offline host stays marked revoked locally and the fleet page can finish it).</li>
+  <li>Revoke the current enrollment with the operator's session (best effort; an offline host keeps host.json marked retired locally, the next <code>unenroll</code> or <code>reassign</code> asks the control plane again, and the fleet page can finish it).</li>
   <li>Strip the old enrollment's hook groups from <code>~/.claude/settings.json</code> and <code>~/.codex/hooks.json</code>. <code>enroll</code> replaces only groups carrying <em>its</em> enrollment id, so without this step the old ones would survive as foreign entries.</li>
   <li>Enroll again with <code>--force</code> in the target org and workspace, on the same API URL, keeping the Ed25519 device key, the loopback port and the local bearer. The hook command lines change only their enrollment id; the service unit is re-applied unchanged.</li>
 </ol>
 <p><code>reassign --harness claude-code,codex</code> with no <code>--workspace</code> re-enrolls in place, which is the one way to <em>drop</em> a wrapper: <code>enroll</code> may add a harness on a re-apply but never silently removes one. The same target and the same harness list is a no-op.</p>
 
 <h2><span class="n">5</span>Sign in, org, and the CLI default</h2>
-<p><code>oxagen login</code> opens the browser; the web app is the org and workspace picker, and the loopback callback returns <code>{token, orgSlug, workspaceSlug}</code>, which the CLI persists. <em>Switch organization…</em> is that same flow run again. The pair in <code>config.json</code> is the CLI's default scope for its other commands; the pair in <code>host.json</code> is where this machine's sessions land. The app shows both and manages the second.</p>
+<p><code>oxagen login</code> opens the browser; the web app is the org and workspace picker, and the loopback callback returns <code>{token, orgSlug, workspaceSlug}</code>, which the CLI persists. <em>Switch organization…</em> is that same flow run again. The pair in <code>config.json</code> is the CLI's default scope for its other commands; the pair in <code>host.json</code> is where this machine's sessions land. The app shows both and manages the second; by default it keeps the first in step.</p>
+<p>The two pairs move together unless the operator says otherwise. <code>oxagen tacho reassign --default</code> writes the host's new org and workspace into <code>config.json</code> after the reassign succeeds (and never before: a failed move leaves the default where it was). <code>config.json</code> is the CLI's file, so the flag lives in <code>oxagen</code> and never reaches <code>@oxagen/tacho</code>; the app runs the reassign through the <code>oxagen</code> sidecar as <code>oxagen tacho reassign … --default</code> when the <i>also make it the CLI default</i> box is ticked. The same rescope is available on its own: <code>oxagen login --org &lt;slug&gt; --workspace &lt;slug&gt;</code> with a saved session re-uses that token — the whoami probe, the shared linker on the given slugs, the pair rewritten — with no browser and no prompt, and a mistyped slug leaves the saved session intact rather than signing the user out. The bare <code>oxagen login</code> still opens the browser.</p>
 <p>A saved token is treated as signed in until the control plane answers 401 to the first picker call; then the Account panel says <em>Session expired</em> and the primary returns to Sign in. This came out of the first launch on a real machine, where a months-old CLI session produced a raw error under a "Signed in" headline.</p>
 
 <h2><span class="n">6</span>Wrappers: Claude Code and Codex</h2>
 <p>Tacho's spec (§13) reserved Codex and asked for a spike before committing. The spike (the upstream hooks documentation, read 2026-09-13) found a near clone of Claude Code's surface, so the adapter is a settings writer and a harness tag rather than a new protocol.</p>
-<div class="wide"><div class="tw">
-<table>
+<div class="tw">
+<div class="tw"><table>
 <thead><tr><th></th><th>Claude Code</th><th>Codex CLI</th></tr></thead>
 <tbody>
 <tr><td>Hook file</td><td><code>~/.claude/settings.json</code> (<code>CLAUDE_CONFIG_DIR</code>)</td><td><code>~/.codex/hooks.json</code> (<code>CODEX_HOME</code>); same <code>{hooks: {Event: [{matcher, hooks: [{type, command, timeout}]}]}}</code> shape</td></tr>
-<tr><td>Enforcement events</td><td colspan="2">SessionStart · UserPromptSubmit · PreToolUse · PermissionRequest · Stop — command hooks, fail closed, same stdin fields (<code>session_id</code>, <code>hook_event_name</code>, <code>tool_name</code>, <code>tool_input</code>, <code>cwd</code>, <code>transcript_path</code>)</td></tr>
+<tr><td>Enforcement events</td><td colspan="2">SessionStart · UserPromptSubmit · PreToolUse · PermissionRequest · Stop: command hooks, fail closed, same stdin fields (<code>session_id</code>, <code>hook_event_name</code>, <code>tool_name</code>, <code>tool_input</code>, <code>cwd</code>, <code>transcript_path</code>)</td></tr>
 <tr><td>Telemetry events</td><td>28 events as <code>http</code> hooks straight to the daemon; OpenTelemetry export through the env block</td><td>PostToolUse · SubagentStart · SubagentStop · PreCompact · PostCompact · SessionEnd · Interrupt as command hooks (Codex has only <code>command</code>); no env block, no OTel</td></tr>
 <tr><td>Decision</td><td colspan="2"><code>hookSpecificOutput.permissionDecision</code> allow / deny with a reason; exit 0 always</td></tr>
 <tr><td>Hook command</td><td><code>&lt;bin&gt;/tacho hook --enrollment tch_…</code></td><td><code>&lt;bin&gt;/tacho hook --enrollment tch_… --harness codex</code></td></tr>
-<tr><td>Session label</td><td><code>agent.harness = claude-code</code>, <code>runtime = claude-code</code></td><td><code>agent.harness = codex</code>, <code>runtime = custom</code> — the control plane's runtime column is a checked enum without a codex member (§11); the free-text harness carries the honest name. Fixed per session at first sight, persisted across a daemon restart.</td></tr>
+<tr><td>Session label</td><td><code>agent.harness = claude-code</code>, <code>runtime = claude-code</code></td><td><code>agent.harness = codex</code>, <code>runtime = codex</code> — <code>tacho.sessions.runtime</code> is a checked enum (<code>TACHO_RUNTIMES</code> in <code>packages/database/src/schema/tacho.ts</code>, mirrored in <code>packages/tacho/src/envelope.ts</code>; migration <code>20260914120000_tacho_sessions_runtime_codex</code> added the member), so the fleet page filters on it directly. The collector's <code>contextForHarness</code> maps each harness to its runtime through a <code>Record&lt;TachoHarness, TachoRuntime&gt;</code>, so a harness without a runtime member is a type error, not a silent <code>custom</code>. Fixed per session at first sight, persisted across a daemon restart.</td></tr>
 <tr><td>Differences absorbed</td><td>—</td><td><code>transcript_path: null</code> (Claude omits it) is accepted; unenroll strips Codex hooks whether or not <code>host.json</code> still lists the harness.</td></tr>
 </tbody>
-</table>
-</div></div>
-
-<h2><span class="n">7</span>Windows</h2>
+</table></div>
+</div>
+<h2 id="7-windows">7. Windows</h2>
 <p>Tacho previously returned a <em>none</em> service manager on <code>win32</code>. Rev 1 adds what an installer needs, keeping the same <code>~/.config/oxagen</code> root so the CLI and the app read one set of files on every platform:</p>
 <ul>
-  <li><b>Service:</b> a per-user Task Scheduler task (<code>schtasks /Create /SC ONLOGON /RL LIMITED</code>, started at once with <code>/Run</code>) that runs a rendered <code>tachod.cmd</code> launcher — Task Scheduler carries no environment, so the launcher sets it and appends to the log.</li>
-  <li><b>Transport:</b> the hook posts to <code>127.0.0.1:&lt;port&gt;</code> with the local bearer; the daemon skips the Unix socket. Same code path, one option.</li>
-  <li><b>Discovery and quoting:</b> <code>where claude</code> / <code>where codex</code> (first line); hook command lines are double-quoted for <code>cmd.exe</code>; paths are handled with <code>path.win32</code> so a macOS test can describe a Windows layout.</li>
-  <li><b>A latent bug fixed on the way:</b> the atomic writer built its temp name by splitting on <code>/</code>, which on a Windows path yielded the whole path and broke the rename.</li>
+<li><strong>Service:</strong> a per-user Task Scheduler task (<code>schtasks /Create /SC ONLOGON /RL LIMITED</code>, started at once with <code>/Run</code>) that runs a rendered <code>tachod.cmd</code> launcher (Task Scheduler carries no environment, so the launcher sets it and appends to the log).</li>
+<li><strong>Transport:</strong> the hook posts to <code>127.0.0.1:&lt;port&gt;</code> with the local bearer; the daemon skips the Unix socket. Same code path, one option.</li>
+<li><strong>Discovery and quoting:</strong> <code>where claude</code> / <code>where codex</code> (first line); hook command lines are double-quoted for <code>cmd.exe</code>; paths are handled with <code>path.win32</code> so a macOS test can describe a Windows layout.</li>
+<li><strong>A latent bug fixed on the way:</strong> the atomic writer built its temp name by splitting on <code>/</code>, which on a Windows path yielded the whole path and broke the rename.</li>
 </ul>
-
-<h2><span class="n">8</span>The binaries</h2>
+<h2 id="8-the-binaries">8. The binaries</h2>
 <p>A <code>.dmg</code> cannot assume Node, so both CLIs ship as single executables: an esbuild CommonJS bundle embedded in a copy of the release runner's <code>node</code> with Node's single-executable support (<code>tools/sea/compile.mjs</code>: blob, copy, strip the Apple signature, <a href="https://github.com/nodejs/postject">postject</a>, ad-hoc re-sign). The host node is the runtime that ships, so each OS builds its own.</p>
-<p><code>tacho</code> is one multi-call binary rather than three: <code>tacho daemon</code> is the service body and <code>tacho hook</code> the command hook. That halves what the app carries (two runtimes instead of four), and <code>runtimeCommands</code> writes <code>&lt;bin&gt;/tacho hook</code> and <code>[&lt;bin&gt;/tacho, daemon]</code> whenever it finds that layout — from inside the app bundle, a Homebrew prefix, or a <code>TACHO_BIN_DIR</code> the app points it at. The native entry dispatches <code>hook</code> before the CLI's dependency graph is built, because the hook runs on every tool call.</p>
-<div class="tw">
-<table>
-<thead><tr><th>Measured on an M-series Mac, Node 24.18</th><th class="num">Value</th></tr></thead>
+<p><code>tacho</code> is one multi-call binary rather than three: <code>tacho daemon</code> is the service body and <code>tacho hook</code> the command hook. That halves what the app carries (two runtimes instead of four), and <code>runtimeCommands</code> writes <code>&lt;bin&gt;/tacho hook</code> and <code>[&lt;bin&gt;/tacho, daemon]</code> whenever it finds that layout, from inside the app bundle, a Homebrew prefix, or a <code>TACHO_BIN_DIR</code> the app points it at. The native entry dispatches <code>hook</code> before the CLI's dependency graph is built, because the hook runs on every tool call.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Measured on an M-series Mac, Node 24.18</th>
+<th>Value</th>
+</tr>
+</thead>
 <tbody>
-<tr><td><code>tacho hook</code> cold start, compiled binary, median of 10</td><td class="num">111 ms</td></tr>
-<tr><td><code>node tacho-hook.mjs</code> cold start, the separate minified bundle</td><td class="num">109 ms</td></tr>
-<tr><td>one compiled binary (<code>tacho</code> or <code>oxagen</code>)</td><td class="num">120.7 MB</td></tr>
-<tr><td><code>Oxagen.app</code> unpacked (shell + both sidecars)</td><td class="num">235 MB</td></tr>
-<tr><td><code>Oxagen_2.1.1_aarch64.dmg</code></td><td class="num">79.5 MB</td></tr>
+<tr>
+<td><code>tacho hook</code> cold start, compiled binary, median of 10</td>
+<td>111 ms</td>
+</tr>
+<tr>
+<td><code>node tacho-hook.mjs</code> cold start, the separate minified bundle</td>
+<td>109 ms</td>
+</tr>
+<tr>
+<td>one compiled binary (<code>tacho</code> or <code>oxagen</code>)</td>
+<td>120.7 MB</td>
+</tr>
+<tr>
+<td><code>Oxagen.app</code> unpacked (shell + both sidecars)</td>
+<td>235 MB</td>
+</tr>
+<tr>
+<td><code>Oxagen_2.1.1_aarch64.dmg</code></td>
+<td>79.5 MB</td>
+</tr>
 </tbody>
-</table>
-</div>
+</table></div>
 <p>The hook's 50 ms budget is the time allowed to <em>reach</em> the daemon, not process start; the two figures above are the same process-start cost the current <code>.mjs</code> install already pays. The size is the cost of two embedded runtimes; §11 lists the two ways down.</p>
-
-<h2><span class="n">9</span>Building and releasing</h2>
-<pre><code>pnpm --filter @oxagen/desktop sidecars     # compile tacho + oxagen, stage as binaries/&lt;name&gt;-&lt;triple&gt;
+<h2 id="9-building-and-releasing">9. Building and releasing</h2>
+<pre><code class="language-sh">pnpm --filter @oxagen/desktop sidecars     # compile tacho + oxagen, stage as binaries/&lt;name&gt;-&lt;triple&gt;
 pnpm --filter @oxagen/desktop bundle:dmg   # macOS: tauri build --bundles dmg
 pnpm --filter @oxagen/desktop bundle       # every bundle the current OS supports
 pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420</code></pre>
-<p><code>.github/workflows/desktop.yml</code> runs on a <code>desktop-v*</code> tag or by hand: one job per target (<code>macos-14</code> arm64, <code>macos-13</code> x64, <code>ubuntu-22.04</code>, <code>windows-latest</code>), each staging its own sidecars, building with <code>tauri-action</code>, uploading the bundles as artifacts and, on a tag, attaching them to a draft GitHub release.</p>
+<p><code>.github/workflows/desktop.yml</code> runs on a <code>desktop-v*</code> tag or by hand: one job per target (<code>macos-15</code> arm64, <code>macos-15-intel</code> x64, <code>ubuntu-22.04</code>, <code>windows-latest</code>; the <code>macos-13</code> label was retired by GitHub in December 2025 and <code>macos-14</code> follows in November 2026), each staging its own sidecars, building with <code>tauri-action</code>, uploading the bundles as artifacts and, on a tag, attaching them to a draft GitHub release together with the bare <code>tacho</code> and <code>oxagen</code> binaries and a <code>.sha256</code> per binary and per <code>.dmg</code> (the cask's digests). The Homebrew cask and formula and the Scoop manifest under <code>tools/packaging/</code> install from those assets; they are templates until a tap and a bucket exist, and <code>tools/packaging/stamp.mjs</code> fills their version and digests from the release. The user-facing install guide is <code>apps/docs/content/docs/cli/desktop.mdx</code>.</p>
 <div class="tw">
 <table>
 <thead><tr><th>Platform</th><th>Signing</th><th>Secrets (skipped when absent)</th></tr></thead>
 <tbody>
-<tr><td>macOS</td><td>Developer ID + notarization; without it the app is ad-hoc signed and Gatekeeper shows "cannot verify" on first open</td><td><code>APPLE_CERTIFICATE</code>, <code>APPLE_CERTIFICATE_PASSWORD</code>, <code>APPLE_SIGNING_IDENTITY</code>, <code>APPLE_ID</code>, <code>APPLE_PASSWORD</code>, <code>APPLE_TEAM_ID</code></td></tr>
-<tr><td>Windows</td><td>Azure Trusted Signing; without it SmartScreen warns</td><td><code>AZURE_TENANT_ID</code>, <code>AZURE_CLIENT_ID</code>, <code>AZURE_CLIENT_SECRET</code></td></tr>
+<tr><td>macOS</td><td>Developer ID + notarization; without it the app is not signed by the bundler (the linker's ad-hoc signature is all it carries) and Gatekeeper shows "cannot verify" on first open. The Apple variables reach the build only from the certificate-import step, which runs only when <code>APPLE_CERTIFICATE</code> is set: an empty <code>APPLE_SIGNING_IDENTITY</code> would make tauri run <code>codesign -s ""</code> and fail</td><td><code>APPLE_CERTIFICATE</code>, <code>APPLE_CERTIFICATE_PASSWORD</code>, <code>APPLE_SIGNING_IDENTITY</code>, <code>APPLE_ID</code>, <code>APPLE_PASSWORD</code>, <code>APPLE_TEAM_ID</code></td></tr>
+<tr><td>Windows</td><td>not signed yet: tauri-bundler signs only through <code>bundle.windows.certificateThumbprint</code> or <code>signCommand</code>, neither configured, and no signing tool is installed in the job; SmartScreen warns on every build until that is wired (Azure Trusted Signing via <code>trusted-signing-cli</code> and a Windows config overlay is the intended shape)</td><td>—</td></tr>
 <tr><td>Linux</td><td>unsigned; the <code>.deb</code> and <code>.rpm</code> carry no repository yet</td><td>—</td></tr>
+<tr><td>Updater (all three)</td><td>minisign: every updater-enabled bundle gets a <code>.sig</code> (the macOS jobs build <code>app</code> alongside <code>dmg</code>, since only the <code>app</code> target yields the <code>Oxagen.app.tar.gz</code> the updater installs; <code>dmg</code> alone produces no darwin entry) and the release carries <code>latest.json</code>; the public half is <code>plugins.updater.pubkey</code> in <code>tauri.conf.json</code>. Without the key the build applies <code>tauri.unsigned.conf.json</code> (<code>createUpdaterArtifacts: false</code>) and publishes no feed, so installed apps read "up to date"</td><td><code>TAURI_SIGNING_PRIVATE_KEY</code>, <code>TAURI_SIGNING_PRIVATE_KEY_PASSWORD</code> (empty for this key)</td></tr>
 </tbody>
 </table>
 </div>
+<p>The updater key was generated with <code>tauri signer generate</code> (no password) and lives outside the repository at <code>~/.tauri/oxagen-desktop.key</code> on the machine that cut it; the <code>.pub</code> beside it is what <code>tauri.conf.json</code> carries. Installed apps poll <code>https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json</code>: a rolling <code>desktop-latest</code> release that the workflow's <code>feed</code> job rewrites with the <code>latest.json</code> of each <code>desktop-v*</code> release as it is published (the repository's <code>/releases/latest</code> is whichever release across the whole repository was published from the newest commit, so a platform <code>v*</code> release would take it over and the feed would 404). A draft feeds nothing until it is published. A local <code>bundle:dmg</code> needs <code>TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/oxagen-desktop.key</code>, or <code>--config src-tauri/tauri.unsigned.conf.json</code> to build without updater artifacts. Losing the private key means a new key, a new public key in the app, and one release users must download by hand.</p>
 <div class="note"><b>Fleet and MDM.</b> The same installers push through MDM. A post-install that runs <code>tacho enroll --token … --org … --workspace … --managed --harness claude-code,codex</code> enrolls silently, and the managed settings document <code>enroll --print-managed</code> renders locks the hooks so a user cannot strip them. The session record still carries <code>enforcement_tier = client_attested</code>; the app's This machine panel says so.</div>
 
 <h2><span class="n">10</span>What was verified</h2>
 <ul>
-  <li><code>@oxagen/tacho</code>: 26 files, 134 tests, typecheck and lint clean. New coverage: the Codex writer (merge, strip, presence, foreign entries kept), <code>--harness</code> parsing and re-apply semantics, <code>reassign</code> (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll), the Windows service manager and launcher, the native layout, and the harness label reaching sealed events across a daemon restart — that last one mutation-tested: with the relabel disabled the test fails.</li>
-  <li><code>@oxagen/desktop</code>: typecheck, lint, Vite build; 6 tests over the argv mapping and the primary-action rule.</li>
+  <li><code>@oxagen/tacho</code>: 27 files, 144 tests, typecheck and lint clean; coverage 95.0% lines, 85.3% branches, 95.4% functions, gated at 90 / 82 / 90 / 90. Coverage: the Codex writer on its own (merge, strip by one enrollment or all, presence, foreign entries kept, junk documents), <code>--harness</code> parsing and re-apply semantics, <code>reassign</code> (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll, the already-revoked skip, the message when the new enrollment is refused after the revoke), the Windows service manager and launcher including a task that registers but will not start, <code>CODEX_HOME</code>, the hook posting over loopback TCP on <code>win32</code> and over the socket elsewhere with the harness label in the envelope and in the spool file, <code>--harness</code> off the hook's argv, the real <code>defaultCliDeps</code> bindings against a scratch home with <code>daemonGet</code> driven by a loopback server, the native layout, and the harness label reaching sealed events across a daemon restart. Mutation-tested: with the relabel disabled, or the <code>win32</code> transport forced to the socket, the test fails.</li>
+  <li><code>@oxagen/desktop</code>: typecheck, lint, Vite build; 14 tests, coverage 100% lines and functions, 99% branches, gated at 90 across the board: the argv mapping and the primary-action rule, <code>parseTachoStatus</code> (the status document narrowed to what the panels show; null for empty, non-JSON, truncated or wrongly-shaped stdout — mutation-tested against a "not enrolled" fallback), and the bridge with the two Tauri modules faked (one <code>invoke</code> per Rust command, the picker envelopes unwrapped, a sidecar's lines streamed as they arrive and the run settling on close, error, or a failed spawn).</li>
+  <li>The updater: <code>cargo check</code> with both plugins and the two new permissions; 11 tests over the check caption, byte formatting, the download-milestone gate (mutation-tested: with the gate always true, the 100 MB run logs 200 lines instead of 11 and the test fails), the null-handle and rejected-feed cases of <code>checkForUpdate</code>, and <code>installUpdate</code> relaunching after a clean install and not after a failed one. Not verified here: a real download against a published <code>latest.json</code> (no signed release yet).</li>
   <li>Both binaries compiled with Node SEA, run from the mounted <code>.dmg</code>: <code>--version</code>, <code>--help</code>, <code>tacho status</code>, <code>tacho hook</code> with a Codex-shaped payload (null transcript) against an unenrolled scratch home.</li>
   <li>The <code>.dmg</code> built, mounted, the app launched and rendered against this machine's real <code>config.json</code> (which is what surfaced the expired-session case in §5).</li>
+  <li>The <code>codex</code> runtime (§6): three guards, each mutation-tested. <code>packages/handlers/src/tacho.runtimes.test.ts</code> holds the wire enum and the database list byte-equal (fails with <code>codex</code> removed from either); <code>packages/database/src/schema/tacho.test.ts</code> holds the latest migration redefining each <code>tacho.sessions</code> CHECK to the schema list (fails with <code>'codex'</code> removed from the migration); the hook-handler test asserts <code>runtime = codex</code> on a sealed Codex event (fails with the harness map pointed back at <code>custom</code>). Ingest files a Codex batch under <code>runtime = codex</code>. <code>atlas migrate hash</code> re-stamped, <code>db:lint-migrations</code> and <code>atlas migrate validate</code> clean; the migration was not applied to any database here.</li>
 </ul>
 <p>Not verified here: an end-to-end enroll against a live control plane from inside the app, the Linux and Windows bundles (no runner in this session), and signing (no certificates).</p>
-
-<h2><span class="n">11</span>Not in rev 1</h2>
+<h2 id="11-not-in-rev-1">11. Not in rev 1</h2>
 <ul>
-  <li><b>A <code>codex</code> runtime.</b> <code>tacho.sessions.runtime</code> is checked to five values; Codex ships as <code>runtime = custom, harness = codex</code>. Widening the enum is an Atlas migration (<code>packages/database/atlas</code>) that needs a diff against a database, so it did not ride this change. It moves reliability: the fleet page should be able to filter by Codex directly.</li>
-  <li><b>Signing secrets and an updater.</b> The workflow signs when secrets exist; the org's Actions were billing-locked at the last stella release, so the first real build may have to run on a fork. <code>tauri-plugin-updater</code> with a minisign key is the next step once releases are signed.</li>
+  <li><b>Signing secrets in CI.</b> The workflow signs when secrets exist; the org's Actions were billing-locked at the last stella release, so the first real build may have to run on a fork. The updater is wired (§9) but its key is not yet in the org's secrets, so no release has carried <code>latest.json</code>.</li>
   <li><b>Smaller sidecars.</b> Two paths: <code>bun build --compile</code> (~60 MB per binary, cross-compiles from one runner) or one binary for both CLIs (<code>oxagen tacho hook</code> / <code>oxagen tacho daemon</code>) once the CLI's start-up is measured on the hook path.</li>
-  <li><b>Making the reassigned workspace the CLI default too.</b> The app changes <code>host.json</code>; <code>config.json</code>'s workspace stays the CLI's default until the user runs <code>oxagen login</code> again. A <code>--workspace</code> on <code>oxagen login</code> that re-uses the saved token would close that.</li>
   <li><b>A headless Linux server.</b> <code>oxagen login</code> needs a browser; the CLI's <code>--token</code> path covers servers and the app is not meant for them.</li>
 </ul>
-
-<h2><span class="n">12</span>Where it lives</h2>
-<div class="tw">
-<table>
-<thead><tr><th>Path</th><th>What</th></tr></thead>
+<h2 id="12-where-it-lives">12. Where it lives</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What</th>
+</tr>
+</thead>
 <tbody>
-<tr><td><code>apps/desktop/</code></td><td>the Tauri app: <code>src/app.tsx</code> (panels), <code>src/bridge.ts</code> (sidecars and Rust commands), <code>src/commands.ts</code> (argv mapping, tested), <code>src-tauri/src/lib.rs</code>, <code>src-tauri/capabilities/default.json</code>, <code>scripts/sidecars.mjs</code>, <code>scripts/icons.mjs</code></td></tr>
+<tr><td><code>apps/desktop/</code></td><td>the Tauri app: <code>src/app.tsx</code> (panels), <code>src/bridge.ts</code> (sidecars and Rust commands, tested against faked Tauri modules), <code>src/tacho-status.ts</code> (<code>tacho status --json</code> parsing, pure and tested), <code>src/commands.ts</code> (argv mapping, tested), <code>src/updater.ts</code> (check, install, relaunch; tested), <code>src-tauri/src/lib.rs</code>, <code>src-tauri/capabilities/default.json</code>, <code>src-tauri/tauri.unsigned.conf.json</code>, <code>scripts/sidecars.mjs</code>, <code>scripts/icons.mjs</code></td></tr>
 <tr><td><code>packages/tacho/src/host/codex-writer.ts</code></td><td>the Codex hooks writer</td></tr>
+<tr><td><code>packages/database/atlas/migrations/20260914120000_tacho_sessions_runtime_codex.sql</code>, <code>packages/tacho/src/collector/registry.ts</code></td><td>the <code>codex</code> runtime: the widened CHECK and the harness → runtime map</td></tr>
 <tr><td><code>packages/tacho/src/cli/reassign.ts</code></td><td><code>tacho reassign</code></td></tr>
 <tr><td><code>packages/tacho/src/host/service.ts</code></td><td>launchd, systemd, and the new Task Scheduler manager</td></tr>
 <tr><td><code>packages/tacho/src/cli/native.ts</code>, <code>collector/run.ts</code>, <code>claude-code/hook-process.ts</code></td><td>the multi-call binary's entry and the two process bodies</td></tr>
 <tr><td><code>tools/sea/compile.mjs</code></td><td>bundle → single executable</td></tr>
-<tr><td><code>.github/workflows/desktop.yml</code></td><td>the four-target release matrix</td></tr>
+<tr><td><code>.github/workflows/desktop.yml</code></td><td>the four-target release matrix; also checksums the bare <code>tacho</code> and <code>oxagen</code> binaries and attaches them to the release next to the bundles</td></tr>
 <tr><td><code>apps/cli/src/commands/tacho.ts</code></td><td><code>oxagen tacho reassign</code>, <code>--harness</code> on enroll</td></tr>
+<tr><td><code>tools/packaging/</code></td><td>package-manager templates until a tap and a bucket exist: <code>homebrew/oxagen.rb</code> (cask for the <code>.dmg</code>), <code>homebrew/tacho.rb</code> (formula for the bare binaries), <code>scoop/oxagen.json</code>; <code>checksums.mjs</code> and <code>stamp.mjs</code> (tested in <code>tools/scripts/packaging.test.ts</code>) and a README with the release flow</td></tr>
+<tr><td><code>apps/docs/content/docs/cli/desktop.mdx</code></td><td>the user-facing Desktop app page: download per OS, first open while unsigned, sign in, enroll, workspace, wrappers, PATH, uninstall order, MDM</td></tr>
+<tr><td><code>packages/tacho/README.md</code>, <code>apps/desktop/README.md</code></td><td>the package READMEs: the compiled multi-call binary, Codex, Windows, reassign; the app's build and layout</td></tr>
 </tbody>
-</table>
-</div>
+</table></div>
 
+<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-14</span></footer>
+</main>
+</div>
 </div>
 </body>
 </html>

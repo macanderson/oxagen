@@ -64,6 +64,9 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # `http://127.0.0.1:4300`, which is `STELLA_SERVE_URL`'s static value in
 # @oxagen/config's registry — the same number, held in two places, and a
 # mismatch shows up as "the assistant engine is unavailable" (ADR-053 §4).
+#
+# 3003 is taken outside this script: `internal-docs` is packaged and shipped by
+# infra/tools/deploy-internal-docs.sh, not built here. Do not hand it out.
 port_for() {
   case $1 in
     app)          echo 3000 ;;
@@ -152,11 +155,23 @@ case $SERVICE in
     ;;
 
   app)
-    log "building @oxagen/app"
+    # The directory that ships as app.oxagen.sh is the one APP_DIR names
+    # (tools/scripts/lib/app-dir.mjs), the same source the parity gates read.
+    # During the Mission Control rebuild that is apps/app_deprecated, the app
+    # customers use; apps/app is the rebuild, whose pages still render
+    # NotBacked. The cutover batch flips APP_DIR once and the deploy follows
+    # (implementation plan §6 Q2). Hardcoding @oxagen/app here shipped the
+    # rebuild the moment its integration branch reached main (#2894).
+    # app-dir.mjs exists only while the rebuild is on the tree; without it
+    # apps/app is the one app there is (tools/scripts/lib/app-dir.sh).
+    . tools/scripts/lib/app-dir.sh
+    app_dir=$(resolve_app_dir)
+    app_pkg=$(node -p "require('./$app_dir/package.json').name")
+    log "building $app_pkg from $app_dir (APP_DIR)"
     # The same 5GB heap the CI build uses. Next's own TypeScript pass is off
     # (`ignoreBuildErrors`), so this is the compile alone.
-    NODE_OPTIONS=--max-old-space-size=5120 STANDALONE=1 pnpm --filter @oxagen/app build
-    assemble_next apps/app
+    NODE_OPTIONS=--max-old-space-size=5120 STANDALONE=1 pnpm --filter "$app_pkg" build
+    assemble_next "$app_dir"
 
     # `serverExternalPackages` and the turbopack aliases keep several packages
     # OUT of the standalone trace on purpose — native addons Turbopack cannot
@@ -176,7 +191,7 @@ case $SERVICE in
     # @oxagen/engram without duckdb present is already a supported state, by
     # the design store/errors.ts spells out.
     log "installing runtime dependencies for the externalised packages"
-    pnpm deploy --filter @oxagen/app --prod --no-optional --legacy "$ROOT/.deploy-app"
+    pnpm deploy --filter "$app_pkg" --prod --no-optional --legacy "$ROOT/.deploy-app"
     # Merged rather than replaced: the standalone trace's node_modules holds
     # what Next bundled for it, and dropping that in favour of the install
     # would lose exactly the modules the trace was for.

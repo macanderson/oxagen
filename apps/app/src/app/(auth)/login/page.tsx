@@ -32,7 +32,7 @@ async function Login({
 }) {
   const params = await searchParams;
   // Only a same-origin relative path survives; anything else lands on "/".
-  const next = sanitizeNext(firstParam(params.next));
+  const next = sanitizeNext(firstParam(params.next ?? params.returnTo));
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

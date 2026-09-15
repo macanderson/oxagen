@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "installation",
+    "desktop",
     "account-setup",
     "quickstart",
     "---",

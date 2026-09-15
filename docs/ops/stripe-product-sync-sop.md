@@ -27,12 +27,17 @@ truth.
 
 The script uses whatever `STRIPE_SECRET_KEY` is in scope and **prints the mode**:
 
-- `sk_test_…` → **test** account (local `.env.local`, Vercel preview/dev).
-- `sk_live_…` → **LIVE** account (prod only). The banner prints `LIVE` in red.
+- `sk_test_…` → a **test-mode** account. The banner prints `test`.
+- `sk_live_…` → a **LIVE** account. The banner prints `LIVE` in red.
 
-Local dev runs against **test**. Production live products are created by running
-the same `--apply` in an environment that has the live key (a deliberate,
-separate step — see §5).
+**Until the production cutover, every environment — local, CI and production
+(`https://app.oxagen.sh`, `https://api.oxagen.sh`) — binds to one shared Stripe
+sandbox (`acct_1Ty2gjK5L8c4uZ0j`, test mode). The banner must read `test`
+everywhere; a `LIVE` banner today means the wrong key is in scope. Stop.**
+[`docs/ops/stripe-sandbox-mode.md`](stripe-sandbox-mode.md) records where the
+sandbox key set lives and how to rotate it. The maintainer switches production
+to live keys as a deliberate, separate step (§5); nothing in this SOP does it
+implicitly.
 
 ---
 
@@ -119,25 +124,35 @@ the increase and the margin percentage holds.
 
 | Env var | Where | Value |
 |---|---|---|
-| `OXAGEN_TARGET_MARGIN` | env catalog (`tools/env-manager/src/catalog.ts`), `.env.local`, Vercel | e.g. `0.65` |
-| `OXAGEN_METER_MARKUP` | optional pin; `.env.local` / Vercel | the value the script prints, e.g. `3.3190` |
+| `OXAGEN_TARGET_MARGIN` | env registry (`packages/config/src/registry.ts`), `.env.local`, Parameter Store `/oxagen/production/` | e.g. `0.65` |
+| `OXAGEN_METER_MARKUP` | optional pin; `.env.local` / Parameter Store | the value the script prints, e.g. `3.3190` |
 
-Catalog → Vercel: after editing the catalog, run the env push tooling
-(`pnpm env:manager`). Locally, `.env.local` already carries
-`OXAGEN_TARGET_MARGIN`.
+Production is AWS (an EC2 node reading `/oxagen/production/` from Parameter
+Store at container start — see `README.md` → Deployment); Vercel is not a
+deploy target. Locally, `.env.local` already carries `OXAGEN_TARGET_MARGIN`.
 
 ---
 
-## 5. Promote to LIVE (production)
+## 5. Promote to LIVE (production) — not yet done; maintainer decision
 
-1. Confirm the model in test: `--report` and a test `--apply` look right.
-2. In an environment with the **live** `STRIPE_SECRET_KEY` (or after pointing
-   the secret at live), run `pnpm billing:stripe-sync --apply`. The banner must
-   read `LIVE`.
-3. Verify in the Stripe dashboard: 5 products, correct prices, `oxagen_slug` /
-   `oxagen_version=v2` metadata present.
-4. Ensure the live webhook endpoint forwards `invoice.paid`,
-   `checkout.session.completed`, and `customer.subscription.*` so grants fire.
+Production runs the sandbox today (§0). When the maintainer decides to go live:
+
+1. Confirm the model in the sandbox: `--report` and a sandbox `--apply` look right.
+2. Write the live `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` /
+   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` to Parameter Store and create the live
+   webhook endpoint (its `whsec_` → `STRIPE_WEBHOOK_SECRET`), following the
+   rotation recipe in `docs/ops/stripe-sandbox-mode.md`. Restart `api`, then
+   merge to `main` so `app` rebuilds with the inlined publishable key.
+3. With the live key in scope, run `pnpm billing:stripe-sync --apply`. The
+   banner must read `LIVE`.
+4. Verify in the Stripe dashboard: 6 products (3 plans + 3 credit packs),
+   correct prices, `oxagen_slug` / `oxagen_version=v2` metadata present.
+5. Ensure the live webhook endpoint forwards the 20 events
+   `packages/billing/src/stripe-provider.ts` `stripeEventType()` maps
+   (`invoice.*`, `checkout.session.completed`, `customer.subscription.*`,
+   `payment_method.*`, `charge.dispute.*`, `charge.refunded`) so grants fire.
+6. Update §0 of this SOP and the registry descriptions in
+   `packages/config/src/registry.ts` so they stop saying "sandbox everywhere".
 
 ---
 

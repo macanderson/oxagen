@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm -w docs:architecture",
     "dev": "next dev --port 3300",
+    "prebuild": "pnpm -w docs:architecture",
     "build": "NODE_ENV=production next build",
     "start": "next start --port 3300",
     "postinstall": "fumadocs-mdx",

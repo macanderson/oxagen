@@ -14,10 +14,16 @@ const assign = new Map((audited.assignments || []).map((a) => [a.tool, a]));
 // A correction's `to` is free text. Split it into a list only when every part is
 // a real screen name — otherwise the auditor wrote prose ("none — sign-in flow,
 // not a page") and comma-splitting it invents screens that do not exist.
-const SCREEN_NAMES = new Set([...SCREENS.map((s) => s.screen), "headless", "chrome"]);
+const SCREEN_NAMES = new Set([
+  ...SCREENS.map((s) => s.screen),
+  "headless",
+  "chrome",
+]);
 const asList = (v) => {
   const parts = v.split(",").map((s) => s.trim());
-  return parts.length > 1 && parts.every((p) => SCREEN_NAMES.has(p)) ? parts : null;
+  return parts.length > 1 && parts.every((p) => SCREEN_NAMES.has(p))
+    ? parts
+    : null;
 };
 
 const applied = [];
@@ -31,19 +37,23 @@ for (const c of audited.audit?.corrections ?? []) {
     // by-screen rollup stays readable.
     const norm = Array.isArray(to)
       ? to
-      : [/^\(?none\b/i.test(String(to)) ? "sign-in flow (not a page)" : String(to)];
+      : [
+          /^\(?none\b/i.test(String(to))
+            ? "sign-in flow (not a page)"
+            : String(to),
+        ];
     a.screens = norm;
-  }
-  else if (c.field === "tables") a.tables = Array.isArray(to) ? to : [to];
+  } else if (c.field === "tables") a.tables = Array.isArray(to) ? to : [to];
   else continue;
   a.corrected = true;
   applied.push(c);
 }
 
 const esc = (s) => String(s ?? "").replace(/\|/g, "\\|");
-const code = (xs) => (xs?.length ? xs.map((x) => `\`${x}\``).join(" ") : "—");
+const code = (xs) =>
+  xs?.length ? xs.map((x) => `\`${x}\``).join(" ") : "none";
 
-let md = `# Mission Control — traceability matrix
+let md = `# Oxagen Mission Control: traceability matrix
 
 Every target tool in Appendix E, traced to the code it replaces, the screen that surfaces it,
 the mockup function that draws it, the tables it touches, and the milestone that ships it.
@@ -54,10 +64,10 @@ audited adversarially by a sixth. **The matrix is generated; do not hand-edit it
 
 | Column | Source | Mechanical? |
 |---|---|---|
-| Tool | Appendix E | yes — literal |
-| Absorbs | joined on \`registerCapability({name})\` in \`packages/oxagen/src/contracts/\` | yes — literal |
+| Tool | Appendix E | yes, literal |
+| Absorbs | joined on \`registerCapability({name})\` in \`packages/oxagen/src/contracts/\` | yes, literal |
 | Screen | §14's ten screens and their primary actions | assigned + audited |
-| Mockup fn | \`mc.html\`'s \`render()\` dispatch | yes — literal |
+| Mockup fn | \`mc.html\`'s \`render()\` dispatch | yes, literal |
 | Tables | Appendix A's 37 tables | assigned + audited |
 | Milestone | §17 M0–M6 | assigned + audited |
 
@@ -87,13 +97,17 @@ for (const ms of MILESTONES) {
 }
 
 const byS = {};
-for (const r of rows) for (const s of assign.get(r.tool)?.screens ?? []) byS[s] = (byS[s] ?? 0) + 1;
+for (const r of rows)
+  for (const s of assign.get(r.tool)?.screens ?? []) byS[s] = (byS[s] ?? 0) + 1;
 md += `\n### By screen\n\n| Screen | Job (§14) | Tools |\n|---|---|---|\n`;
 for (const s of SCREENS) {
   md += `| **${esc(s.screen)}** | ${esc(s.job.slice(0, 80))}… | ${byS[s.screen] ?? 0} |\n`;
 }
-const extraScreens = Object.keys(byS).filter((s) => !SCREENS.some((x) => x.screen === s));
-for (const s of extraScreens) md += `| ${esc(s)} | *(not a §14 page)* | ${byS[s]} |\n`;
+const extraScreens = Object.keys(byS).filter(
+  (s) => !SCREENS.some((x) => x.screen === s),
+);
+for (const s of extraScreens)
+  md += `| ${esc(s)} | *(not a §14 page)* | ${byS[s]} |\n`;
 
 // ---- the matrix ----
 const groups = [...new Set(rows.map((r) => r.group))];
@@ -104,12 +118,12 @@ for (const g of groups) {
     const a = assign.get(r.tool);
     const absorbs = r.absorbs.length
       ? r.absorbs.map((x) => `\`${x.file ?? x.name}\``).join("<br>")
-      : "— *new*";
+      : "*new*";
     const fns = r.renderFns.length
       ? r.renderFns.map((f) => `\`${f.fn}\`:${f.line}`).join("<br>")
-      : "—";
+      : "none";
     const flag = a?.corrected ? " ⚑" : a?.confidence === "low" ? " ?" : "";
-    md += `| \`${r.tool}\` | ${r.grade} | ${absorbs} | ${esc((a?.screens ?? []).join(", ")) || "—"}${flag} | ${fns} | ${code(a?.tables)} | ${a?.milestone ?? "?"} |\n`;
+    md += `| \`${r.tool}\` | ${r.grade} | ${absorbs} | ${esc((a?.screens ?? []).join(", ")) || "none"}${flag} | ${fns} | ${code(a?.tables)} | ${a?.milestone ?? "?"} |\n`;
   }
 }
 
@@ -129,12 +143,14 @@ md += `\n### Structural gaps the audit found (${gaps.length})\n\n`;
 md += gaps.length ? gaps.map((x) => `- ${x}`).join("\n") : "_none reported_";
 
 // ---- table coverage ----
-const touched = new Set((audited.assignments || []).flatMap((a) => a.tables || []));
+const touched = new Set(
+  (audited.assignments || []).flatMap((a) => a.tables || []),
+);
 const untouched = TABLES.filter((t) => !touched.has(t));
 md += `\n\n### Appendix A coverage\n\n`;
 md += `${touched.size} of ${TABLES.length} target tables are read or written by at least one tool.\n\n`;
 if (untouched.length) {
-  md += `Untouched — either a missing tool or a table that should not be in Appendix A:\n\n`;
+  md += `Untouched: either a missing tool or a table that should not be in Appendix A:\n\n`;
   md += untouched.map((t) => `- \`${t}\``).join("\n");
 }
 md += `\n`;

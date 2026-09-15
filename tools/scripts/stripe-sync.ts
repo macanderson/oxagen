@@ -20,8 +20,11 @@
  * to a new price (archiving the old) only when an amount actually changes —
  * Stripe prices are immutable, so this is the supported "edit a price" path.
  *
- * Runs against whatever STRIPE_SECRET_KEY is in scope — sk_test in dev/preview,
- * sk_live in prod. It prints the mode so you always know which account you hit.
+ * Runs against whatever STRIPE_SECRET_KEY is in scope and prints the mode so
+ * you always know which account you hit. Until the production cutover every
+ * environment, production included, holds the shared sandbox's sk_test_ key
+ * (docs/ops/stripe-sandbox-mode.md); a LIVE banner today means the wrong key
+ * is in scope.
  */
 import kleur from "kleur";
 import type Stripe from "stripe";

@@ -32,7 +32,10 @@ async function Signup({
   searchParams: PageProps<"/signup">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(firstParam(params.next), AFTER_SIGNUP);
+  const next = sanitizeNext(
+    firstParam(params.next ?? params.returnTo),
+    AFTER_SIGNUP,
+  );
   const t = await getTranslations("auth");
   return (
     <AuthColumn>

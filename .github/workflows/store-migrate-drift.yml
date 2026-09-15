@@ -73,6 +73,21 @@ jobs:
       # Neo4j keeps no migration ledger, so the only way to ask what it has is
       # to ask it. cypher-shell comes from Neo4j's own apt repository; the
       # runner has no Neo4j otherwise.
+      #
+      # The apt package tracks the latest Neo4j line, which needs Java 21; the
+      # runner's default is 17. On that Java cypher-shell prints "Unsupported
+      # Java 17 detected", exits 0, and returns no rows — for every query. The
+      # check read that as an empty database and filed "production is behind"
+      # against a store that carried the whole schema (#3036). So Java 21 is
+      # set up first, and the version check below insists on a version line
+      # rather than on an exit code, because the exit code is the thing that
+      # lied.
+      - name: Set up Java 21 for cypher-shell
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install cypher-shell
         run: |
           set -euo pipefail
@@ -82,7 +97,13 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/neo4j.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq cypher-shell
-          cypher-shell --version
+          version=$(cypher-shell --version 2>&1 || true)
+          echo "$version"
+          case "$version" in
+            *[Uu]nsupported*|*[Ee]rror*|"")
+              echo "::error::cypher-shell cannot run on this runner; every Neo4j query would return nothing and read as an empty store."
+              exit 1 ;;
+          esac
 
       # By tag, not by a pinned id: the node is replaced whenever its user data
       # changes, and a pinned id points at a terminated box after the first
@@ -146,14 +167,19 @@ jobs:
           set -euo pipefail
           # Written to the environment file rather than echoed: these are
           # SecureString values and a `set -x` here would print them.
+          # NEO4J_DATABASE is on this list for the same reason store-migrate.yml
+          # reads it: SHOW CONSTRAINTS and SHOW INDEXES answer for one database,
+          # and the applier writes to the one this parameter names. Omitting it
+          # pointed the check at the connection default and reported "0 present"
+          # about a database nothing migrates.
           for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
-                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
             value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
               --with-decryption --query Parameter.Value --output text)
             echo "::add-mask::$value"
             echo "$key=$value" >> "$GITHUB_ENV"
           done
-          echo "read 7 parameters"
+          echo "read 8 parameters"
 
       # The parameters name the stores as the node reaches them, over loopback.
       # This runner reaches them over a forwarded port on its own loopback, so

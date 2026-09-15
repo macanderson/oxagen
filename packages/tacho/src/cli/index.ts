@@ -1,4 +1,5 @@
 export * from "./deps";
+export * from "./detect";
 export * from "./enroll";
 export * from "./export";
 export * from "./reassign";

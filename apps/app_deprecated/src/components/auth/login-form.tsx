@@ -3,6 +3,9 @@
  * LoginForm — the email + password form behind both /login and /signup; `mode`
  * picks which. Sign-in stops at /two-factor when Better Auth withholds the
  * session for a second factor, so the app is never entered without one.
+ * `returnTo` (a same-origin path, already validated by the page) is where the
+ * user goes afterwards — the CLI consent page for a browser login — and it
+ * rides through the second factor and the new-organization step.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -10,9 +13,16 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { withReturnTo } from "@/lib/return-to";
 import { authClient } from "@oxagen/auth/client";
 
-export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
+export function LoginForm({
+  mode = "signin",
+  returnTo = null,
+}: {
+  mode?: "signin" | "signup";
+  returnTo?: string | null;
+}) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -38,11 +48,15 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         // which has no session cookie yet and would bounce back to /login.
         const data = res.data as { twoFactorRedirect?: boolean } | null;
         if (data?.twoFactorRedirect) {
-          router.push("/two-factor");
+          router.push(withReturnTo("/two-factor", returnTo));
           return;
         }
       }
-      router.push(mode === "signup" ? "/new-organization" : "/");
+      router.push(
+        mode === "signup"
+          ? withReturnTo("/new-organization", returnTo)
+          : (returnTo ?? "/"),
+      );
       router.refresh();
     } catch (err) {
       // Keep the stack. `setError` renders `err.message` and drops everything

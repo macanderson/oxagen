@@ -15,7 +15,7 @@ const APP_URL = "https://app.oxagen.sh";
  * The copyright year is isolated behind a `use cache` boundary. Cache Components
  * forbid reading the current time in a Server Component during prerender (the
  * output would freeze at build time); inside a cache scope the value is allowed
- * and evaluated once at build/revalidate — exactly right for a copyright year.
+ * and evaluated once at build/revalidate: exactly right for a copyright year.
  */
 async function CopyrightYear() {
   "use cache";
@@ -110,11 +110,12 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto grid w-full max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            {/* The wordmark alone — never the mark beside the word. */}
+            {/* The wordmark alone: never the mark beside the word. */}
             <OxagenWordmark className="h-5" />
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              Oxagen teaches your agents your business, governs what they may
-              do, explains every run, and learns from each one.
+              The control plane for agent work. Every agent runs under a
+              mandate: its access, its budget, its tools, its rules, enforced on
+              every run.
             </p>
           </div>
           {FOOTER.map((col) => (

@@ -5,7 +5,7 @@ description: Which models are available on each plan, how workspace model defaul
 
 ## Model access by plan
 
-Oxagen routes all AI inference through the Vercel AI Gateway. No direct provider API keys are held in the Oxagen codebase — the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own key instead; see [Bring your own key](#bring-your-own-key-byok) below.
+Oxagen routes all AI inference through the Vercel AI Gateway. No direct provider API keys are held in the Oxagen codebase: the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own key instead; see [Bring your own key](#bring-your-own-key-byok) below.
 
 Available models depend on your subscription tier:
 
@@ -13,9 +13,9 @@ Available models depend on your subscription tier:
 |---|---|---|---|---|
 | Claude Haiku 4.5 | Yes | Yes | Yes | Yes |
 | Claude Sonnet 4.6 | Yes | Yes | Yes | Yes |
-| Claude Opus 4.8 | — | Yes | Yes | Yes |
-| Image generation (gpt-image-1, flux-2-max) | — | Yes | Yes | Yes |
-| Video generation (veo-3.0) | — | — | Yes | Yes |
+| Claude Opus 4.8 | none | Yes | Yes | Yes |
+| Image generation (gpt-image-1, flux-2-max) | none | Yes | Yes | Yes |
+| Video generation (veo-3.0) | none |: | Yes | Yes |
 
 All model calls are metered in credits at the per-token rate defined in the billing pricing table. See the [full cost table](/docs/enterprise/use-cases#metered-spend) for per-model credit rates.
 
@@ -178,7 +178,7 @@ Every set and clear is recorded in the audit log. The key itself never appears t
 
 ## Restricting model access per workspace
 
-There is no per-workspace model allowlist yet: no setting blocks a model the subscription tier allows. The closest control today is the workspace default — a workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`) — which chooses a model but does not forbid others.
+There is no per-workspace model allowlist yet: no setting blocks a model the subscription tier allows. The closest control today is the workspace default: a workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`): which chooses a model but does not forbid others.
 
 ## Model governance and org-enforced policies
 
@@ -188,4 +188,4 @@ Org-enforced policies on model access are not available. The IAM resolver has no
 
 Oxagen uses model handles (e.g., `claude-sonnet-5`) rather than hard-coded model slugs. Handles are resolved to the current gateway slug at request time via `modelIdOf()`. This insulates your agents from model naming changes in the underlying provider APIs.
 
-If a gateway model slug is updated or renamed, handle resolution is updated centrally — your agents and playbooks continue to work without changes.
+If a gateway model slug is updated or renamed, handle resolution is updated centrally: your agents and playbooks continue to work without changes.

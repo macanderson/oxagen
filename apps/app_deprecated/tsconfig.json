@@ -6,6 +6,12 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
+    // A Next app emits no declarations; with the base config's `declaration: true`
+    // the staged pre-commit typecheck (a narrowed program) hits TS2883 when
+    // better-auth's client types resolve the hoisted @types/react 19.3.0 while
+    // this app's JSX resolves 19.2.15. Declaration-emit diagnostics are moot here.
+    "declaration": false,
+    "declarationMap": false,
     "allowJs": true,
     "incremental": true,
     "plugins": [{ "name": "next" }],

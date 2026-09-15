@@ -26,6 +26,32 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return [...a].sort().join(",") === [...b].sort().join(",");
 }
 
+/**
+ * `oxagen login --browser`: the PKCE flow forced open. The sidecar runs with
+ * piped stdio, so a bare `login` would refuse (no TTY, no token) or, with a
+ * session saved, print it and exit 0 without re-authenticating; the flag
+ * makes both Sign in and Switch organization the browser flow.
+ */
+export function loginArgs(options: { signup?: boolean } = {}): string[] {
+  return options.signup === true
+    ? ["login", "--browser", "--signup"]
+    : ["login", "--browser"];
+}
+
+/**
+ * An org change is only a change once a workspace in that org is picked:
+ * the previous org's workspace slug means nothing in the new one, and a
+ * same-named slug there is a workspace the operator never chose.
+ */
+export function needsWorkspacePick(
+  currentOrg: string | null,
+  picks: Pick<Picks, "org" | "workspace">,
+): boolean {
+  return (
+    picks.org !== null && picks.org !== currentOrg && picks.workspace === null
+  );
+}
+
 /** What the Workspace and Wrappers panels would change on the host. */
 export function pendingChange(
   host: HostTarget | null,
@@ -33,15 +59,22 @@ export function pendingChange(
 ): { target: boolean; harness: boolean } {
   if (host === null) return { target: false, harness: false };
   const target =
-    (picks.org !== null && picks.org !== host.org_slug) ||
-    (picks.workspace !== null && picks.workspace !== host.workspace_slug);
+    !needsWorkspacePick(host.org_slug, picks) &&
+    ((picks.org !== null && picks.org !== host.org_slug) ||
+      (picks.workspace !== null && picks.workspace !== host.workspace_slug));
   const harness =
     picks.harnesses !== null && !sameSet(picks.harnesses, host.harnesses);
   return { target, harness };
 }
 
-/** `tacho enroll` for a machine that is not enrolled yet. */
+/**
+ * `tacho enroll` for a machine that is not enrolled yet. `--org` never
+ * travels without `--workspace`: tacho would fill the workspace from the
+ * CLI's config.json, which names the previously signed-in org's workspace.
+ */
 export function enrollArgs(picks: Picks): string[] {
+  if (picks.org !== null && picks.workspace === null)
+    throw new Error(`pick a workspace in ${picks.org} first`);
   return [
     "enroll",
     ...(picks.org ? ["--org", picks.org] : []),
@@ -51,11 +84,28 @@ export function enrollArgs(picks: Picks): string[] {
   ];
 }
 
-/** `tacho reassign` carrying only what differs from the host. */
-export function reassignArgs(host: HostTarget, picks: Picks): string[] {
+/** A sidecar and the argv to hand it. */
+export interface SidecarCall {
+  sidecar: "tacho" | "oxagen";
+  args: string[];
+}
+
+/**
+ * `tacho reassign` carrying only what differs from the host. With
+ * `alsoDefault`, the same command runs through the `oxagen` sidecar as
+ * `oxagen tacho reassign … --default`, which also writes the new pair into
+ * `config.json`; `config.json` is the CLI's file, so `tacho` alone cannot.
+ */
+export function reassignArgs(
+  host: HostTarget,
+  picks: Picks,
+  alsoDefault = false,
+): SidecarCall {
+  if (needsWorkspacePick(host.org_slug, picks))
+    throw new Error(`pick a workspace in ${picks.org} first`);
   const change = pendingChange(host, picks);
   const org = picks.org ?? host.org_slug;
-  return [
+  const args = [
     "reassign",
     ...(org !== host.org_slug ? ["--org", org] : []),
     ...(change.target
@@ -65,6 +115,9 @@ export function reassignArgs(host: HostTarget, picks: Picks): string[] {
       ? ["--harness", picks.harnesses.join(",")]
       : []),
   ];
+  return alsoDefault
+    ? { sidecar: "oxagen", args: ["tacho", ...args, "--default"] }
+    : { sidecar: "tacho", args };
 }
 
 /** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */
@@ -93,6 +146,57 @@ export function ago(
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+/**
+ * De-register one harness: re-enroll in place with the rest, or unenroll
+ * outright when it was the last one (the hooks, service and credentials go
+ * with it). The wizard's install side asked twice; the UI asks twice here.
+ */
+export function deregisterArgs(
+  enrolled: readonly string[],
+  harness: Harness,
+): SidecarCall {
+  const remaining = enrolled.filter((h) => h !== harness);
+  if (remaining.length === 0) return { sidecar: "tacho", args: ["unenroll"] };
+  return {
+    sidecar: "tacho",
+    args: ["reassign", "--harness", remaining.join(",")],
+  };
+}
+
+/** Mission Control for the workspace the host reports to. */
+export function missionControlUrl(
+  appUrl: string,
+  org: string,
+  workspace: string,
+): string {
+  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}/runs`;
+}
+
+export type WizardStep = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * Where the first-run wizard stands, derived from the machine's state so a
+ * relaunch resumes at the right step: 1 sign in → 2 org & workspace →
+ * 3 detect and register agents → 4 outcome → 5 record a first run.
+ */
+export function wizardStep(input: {
+  loggedIn: boolean;
+  targetChosen: boolean;
+  enrolled: boolean;
+  outcomeSeen: boolean;
+}): WizardStep {
+  if (!input.loggedIn) return 1;
+  if (!input.enrolled) return input.targetChosen ? 3 : 2;
+  return input.outcomeSeen ? 5 : 4;
+}
+
+/** Default selection for step 3: every installed harness, none of the absent ones. */
+export function defaultRegistration(
+  detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
+): Harness[] {
+  return detected.filter((d) => d.installed).map((d) => d.harness);
 }
 
 /** The one gold action on screen: the next step, never a destructive one. */

@@ -2,8 +2,20 @@ import Link from "next/link";
 import { OxagenWordmark } from "@/components/ui/brand";
 import { LoginForm } from "@/components/auth/login-form";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { safeReturnTo, withReturnTo } from "@/lib/return-to";
 
-export default function SignupPage() {
+/**
+ * /signup. `returnTo` (a same-origin path) follows the new account through
+ * /new-organization and back — the desktop installer's "Create an account"
+ * opens this page with `/cli/authorize?…` as the destination.
+ */
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const returnTo = safeReturnTo(params["returnTo"] ?? params["next"]);
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
@@ -20,7 +32,9 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <OAuthButtons callbackURL="/" />
+        {/* A social sign-up has no organization yet; the root page (or the
+            CLI consent page) sends it to /new-organization and back. */}
+        <OAuthButtons callbackURL={returnTo ?? "/"} />
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
@@ -31,12 +45,12 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <LoginForm mode="signup" />
+        <LoginForm mode="signup" returnTo={returnTo} />
 
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            href="/login"
+            href={withReturnTo("/login", returnTo)}
             className="font-medium text-primary hover:underline"
           >
             Sign in

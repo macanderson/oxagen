@@ -26,7 +26,7 @@ async function TwoFactor({
   searchParams: PageProps<"/two-factor">["searchParams"];
 }) {
   const params = await searchParams;
-  const next = sanitizeNext(firstParam(params.next));
+  const next = sanitizeNext(firstParam(params.next ?? params.returnTo));
   const t = await getTranslations("auth");
   return (
     <AuthColumn>
