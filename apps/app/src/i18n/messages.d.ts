@@ -349,6 +349,63 @@ type Messages = {
       error: string;
     };
   };
+  fleet: {
+    stats: {
+      label: string;
+      live: {
+        title: string;
+        basis: string;
+      };
+      waiting: {
+        title: string;
+        oldest: string;
+        none: string;
+      };
+    };
+    approvals: {
+      title: string;
+      parked: string;
+      empty: string;
+      emptyDetail: string;
+      agent: string;
+      requester: string;
+      timesOut: string;
+      notRecorded: string;
+      openRun: string;
+    };
+    runs: {
+      title: string;
+      columns: {
+        run: string;
+        agent: string;
+        operator: string;
+        status: string;
+        cost: string;
+        frames: string;
+        started: string;
+      };
+      notRecorded: string;
+      basisNotRecorded: string;
+      source: {
+        ledger: string;
+        tacho: string;
+      };
+      older: string;
+      newest: string;
+      pager: string;
+      empty: {
+        title: string;
+        body: string;
+        enroll: string;
+        command: string;
+      };
+    };
+    failure: {
+      denied: string;
+      pendingApproval: string;
+      error: string;
+    };
+  };
   onboarding: {
     errors: {
       orgNameRequired: string;
@@ -453,6 +510,11 @@ type Messages = {
     };
     dialog: {
       close: string;
+    };
+    runStatus: {
+      live: string;
+      sealed: string;
+      halted: string;
     };
   };
 };

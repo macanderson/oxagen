@@ -1,7 +1,7 @@
 // The micros seam: canonical micros strings and products at magnitudes a float
 // cannot hold, with every non-integer input refused.
 import { describe, expect, it } from "vitest";
-import { Money, moneyFromMicros, mulMicros } from "./money";
+import { Cost, Money, moneyFromMicros, mulMicros } from "./money";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
 
@@ -68,15 +68,20 @@ describe("mulMicros", () => {
   });
 });
 
-describe("Money", () => {
-  it("accepts integer micros and a three-letter currency", () => {
+describe("Money and Cost", () => {
+  it("accept integer micros, a three-letter currency and a nullable basis", () => {
     expect(Money.safeParse(usd("-12")).success).toBe(true);
+    expect(Cost.safeParse({ ...usd("12"), basis: null }).success).toBe(true);
+    expect(
+      Cost.safeParse({ ...usd("12"), basis: "gateway_observed" }).success,
+    ).toBe(true);
   });
 
-  it("refuses a display string and a currency name (negative)", () => {
+  it("refuse a display string, a currency name and a missing basis key (negative)", () => {
     expect(Money.safeParse(usd("2,450.00")).success).toBe(false);
     expect(Money.safeParse({ micros: "1", currency: "dollars" }).success).toBe(
       false,
     );
+    expect(Cost.safeParse(usd("1")).success).toBe(false);
   });
 });

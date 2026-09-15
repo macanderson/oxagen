@@ -6,6 +6,11 @@
     },
     "dialog": {
       "close": "Close"
+    },
+    "runStatus": {
+      "live": "live",
+      "sealed": "sealed",
+      "halted": "halted"
     }
   }
 }

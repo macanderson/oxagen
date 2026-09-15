@@ -1,15 +1,17 @@
 // The typed list of reads a page may make (ARCHITECTURE.md §3.3). Every method
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
-// that bind them: the Fleet, Run and Organization ports in WL-34 to WL-37, the
-// Billing port in WL-38.
-import type { OrgCtx, PretenantCtx } from "@/server/viewer";
+// that bind them: the Fleet ports in WL-34, the Run and Organization ports in
+// WL-35 to WL-37, the Billing port in WL-38.
+import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
+import type { ApprovalItem } from "./contracts/approvals";
 import type {
   ContractRate,
   GauBucket,
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
+import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
   ShellContext,
@@ -34,6 +36,17 @@ export interface DataSource {
   };
   /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
   shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
+  /** list_runs, one cursor page, newest first; caller: features/fleet/fleet.tsx. */
+  runs: {
+    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
+  };
+  /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
+  approvals: {
+    pending(
+      ctx: WsCtx,
+      q: { runId: string | null },
+    ): Promise<Read<ApprovalItem[]>>;
+  };
   /**
    * The Billing page's four noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.

@@ -28,6 +28,8 @@ const workspaces = vi.fn();
 const source = {
   pretenant: { orgs, workspaces },
   shell: { context: vi.fn() },
+  runs: { list: vi.fn() },
+  approvals: { pending: vi.fn() },
   billing: {
     plan: vi.fn(),
     bucket: vi.fn(),

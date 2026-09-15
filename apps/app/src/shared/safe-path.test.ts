@@ -135,6 +135,19 @@ describe("routes", () => {
     expect(routes.people("\\evil")).toBe("/%5Cevil");
   });
 
+  it("carries Fleet's runs cursor as a query and builds a run's path", () => {
+    expect(routes.fleet("acme", "core-platform")).toBe("/acme/core-platform");
+    expect(routes.fleet("acme", "core-platform", { cursor: "eyJ+/=" })).toBe(
+      "/acme/core-platform?cursor=eyJ%2B%2F%3D",
+    );
+    expect(routes.run("acme", "core-platform", "arun_7k2")).toBe(
+      "/acme/core-platform/runs/arun_7k2",
+    );
+    expect(routes.run("acme", "core-platform", "../../evil")).toBe(
+      "/acme/core-platform/runs/..%2F..%2Fevil",
+    );
+  });
+
   it("refuses to build a protocol-relative path from an empty first segment (negative)", () => {
     expect(() => routes.fleet("", "evil.example")).toThrow("unsafe_path");
   });

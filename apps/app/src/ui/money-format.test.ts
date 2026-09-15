@@ -1,7 +1,7 @@
-// Money and counts as text: exact micros at any magnitude, half-even cents,
-// trimmed exact precision, and a refusal for a display string.
+// Money, counts and clock readings as text: exact micros at any magnitude,
+// half-even cents, trimmed exact precision, and a refusal for a display string.
 import { describe, expect, it } from "vitest";
-import { formatCount, formatMoney } from "./money-format";
+import { formatClock, formatCount, formatMoney } from "./money-format";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
 const cents = { locale: "en-US", precision: "cents" } as const;
@@ -61,5 +61,17 @@ describe("formatCount", () => {
     expect(formatCount(0, "en-US")).toBe("0");
     expect(formatCount(58450, "en-US")).toBe("58,450");
     expect(formatCount(58450, "de-DE")).toBe("58.450");
+  });
+});
+
+describe("formatClock", () => {
+  it("reads whole seconds as m:ss", () => {
+    expect(formatClock(0, "en-US")).toBe("0:00");
+    expect(formatClock(65.9, "en-US")).toBe("1:05");
+    expect(formatClock(600, "en-US")).toBe("10:00");
+  });
+
+  it("reads a negative duration as 0:00 (negative)", () => {
+    expect(formatClock(-30, "en-US")).toBe("0:00");
   });
 });

@@ -1,0 +1,59 @@
+{
+  "fleet": {
+    "stats": {
+      "label": "Fleet summary",
+      "live": {
+        "title": "Live runs",
+        "basis": "of {agents, plural, one {{count} agent} other {{count} agents}} in this workspace"
+      },
+      "waiting": {
+        "title": "Waiting on a human",
+        "oldest": "oldest approval has waited <clock></clock> of {window}",
+        "none": "nothing is parked"
+      }
+    },
+    "approvals": {
+      "title": "Approvals",
+      "parked": "{count} parked",
+      "empty": "Nothing is waiting on a human.",
+      "emptyDetail": "A call parks here when policy returns approve. Denials never park: they end the call.",
+      "agent": "Agent",
+      "requester": "Requested by",
+      "timesOut": "Times out in <clock></clock>, then the call ends",
+      "notRecorded": "not recorded",
+      "openRun": "Open run"
+    },
+    "runs": {
+      "title": "Runs",
+      "columns": {
+        "run": "Run",
+        "agent": "Agent",
+        "operator": "Operator",
+        "status": "Status",
+        "cost": "Cost",
+        "frames": "Frames",
+        "started": "Started"
+      },
+      "notRecorded": "not recorded",
+      "basisNotRecorded": "basis not recorded",
+      "source": {
+        "ledger": "evidence ledger",
+        "tacho": "wrapped agent"
+      },
+      "older": "Older runs",
+      "newest": "Newest runs",
+      "pager": "Runs pages",
+      "empty": {
+        "title": "No runs yet in {workspace}",
+        "body": "Nothing has reached Oxagen from this workspace. A run appears when an enrolled agent makes its first model call; agents start runs, and this page is where you open one.",
+        "enroll": "Enroll the host an agent runs on, from its repository:",
+        "command": "oxagen tacho enroll"
+      }
+    },
+    "failure": {
+      "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
+      "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
+    }
+  }
+}
