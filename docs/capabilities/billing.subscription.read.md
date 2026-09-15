@@ -47,7 +47,7 @@ Empty object. Tenant scope is resolved from the request context.
 | code             | meaning                                                                                   |
 | ---------------- | ----------------------------------------------------------------------------------------- |
 | `tenant_missing` | No active tenant on the request context.                                                  |
-| `forbidden`      | `HandlerError` (403): no signed-in user (`no_principal`), or the user holds none of Owner, Admin, Billing in the org (`org_role_required`). |
+| `forbidden`      | `HandlerError` (403): no signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) holds none of Owner, Admin, Billing in the org (`org_role_required`). |
 
 ## SPEC references
 

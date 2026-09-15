@@ -2,7 +2,9 @@
 // (Mission Control mockup 2821-2835; G14; ADR-058).
 //
 // Guards, each with its negative test: org Owner, Admin or Member
-// (`assertOrgRole`, ARCHITECTURE.md §3.2); the run is in the caller's
+// (`assertOrgRole`, ARCHITECTURE.md §3.2), for the signed-in user or the
+// creator of the API key (`resolveActingUserId`), who is recorded as the
+// requester; the run is in the caller's
 // workspace (`not_found`); the run is sealed (`conflict`, `run_not_sealed`);
 // the recording kept bodies (`conflict`, `digest_only`): a summary written
 // from receipts alone would be the placeholder the interface forbids. The
@@ -16,7 +18,7 @@ import {
   runSummarize,
   type RunSummarizeOutput,
 } from "@oxagen/oxagen/contracts/run.summarize";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { eventClient } from "./event-client";
 import { recordedGaps, runScope } from "./run.list";
 import {
@@ -55,7 +57,11 @@ export function createRunSummarizeHandler(
   deps: RunSummarizeDeps,
 ): CapabilityHandler<typeof runSummarize> {
   return async (input, ctx): Promise<RunSummarizeOutput> => {
-    await assertOrgRole(ctx, { org: SUMMARIZE_ROLES });
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: SUMMARIZE_ROLES },
+    );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, scope, input.runId);
     if (run.item.status === "live") {
@@ -69,7 +75,8 @@ export function createRunSummarizeHandler(
       data: {
         ...scope,
         runPublicId: input.runId,
-        requestedByUserId: ctx.userId as string,
+        // assertOrgRole refused a call with no acting user above.
+        requestedByUserId: actingUserId as string,
       },
     });
     return { runId: input.runId, status: "queued" };

@@ -51,14 +51,35 @@ const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 const BUCKET = "0192d4a8-7c1e-7a00-8000-0000000b0c01";
 const OTHER_ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3f";
 
-const ctx = (over: { orgId?: string; userId?: string | null } = {}) =>
-  makeCTX({ orgId: ORG, userId: USER, ...over });
+const ctx = (
+  over: {
+    orgId?: string;
+    userId?: string | null;
+    apiKeyId?: string | null;
+  } = {},
+) => makeCTX({ orgId: ORG, userId: USER, ...over });
+
+/** An API-key call: no signed-in user, the key's id. */
+const keyCall = () => ctx({ userId: null, apiKeyId: KEY });
 
 // ── role-gate tx double ───────────────────────────────────────────────────────
 
-/** Answers by the table asked for, so query order does not matter. */
-function stubRole(roleName: string | null) {
+/** The user the API key in these tests was created by, and the key. */
+const KEY_CREATOR = "0192d4a8-7c1e-7a00-8000-0000000c7ea7";
+const KEY = "0192d4a8-7c1e-7a00-8000-0000000a91e1";
+
+/**
+ * Answers by the table asked for, so query order does not matter: the API
+ * key's creator (`keyCreator`, null for a key with none), the principal and
+ * the org role.
+ */
+function stubRole(
+  roleName: string | null,
+  keyCreator: string | null = KEY_CREATOR,
+) {
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === schema.apiKeys)
+      return keyCreator ? [{ createdByUserId: keyCreator }] : [];
     if (table === schema.principals) return [{ id: "prn_1" }];
     if (table === schema.principalRoleAssignments)
       return roleName ? [{ roleName }] : [];
@@ -193,6 +214,34 @@ describe("get_gau_bucket role gate", () => {
     await expect(handlerWith()({}, ctx())).rejects.toSatisfy(
       (e: unknown) => isHandlerError(e) && e.code === "forbidden",
     );
+  });
+
+  it("admits an API key whose creator is an org Billing user", async () => {
+    stubRole("Billing");
+    const out = await handlerWith()({}, keyCall());
+    expect(out.mode).toBe("prepaid");
+  });
+
+  it("refuses an API key whose creator is an org Member (negative)", async () => {
+    stubRole("Member");
+    await expect(handlerWith()({}, keyCall())).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "forbidden" &&
+        e.reason === "org_role_required",
+    );
+  });
+
+  it("refuses an API key with no creator before reading anything (negative)", async () => {
+    stubRole("Owner", null);
+    const bucket = vi.fn();
+    await expect(handlerWith({ bucket })({}, keyCall())).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "forbidden" &&
+        e.reason === "no_principal",
+    );
+    expect(bucket).not.toHaveBeenCalled();
   });
 
   it("refuses an unauthenticated caller before reading anything", async () => {

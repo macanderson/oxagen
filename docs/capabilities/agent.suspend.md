@@ -45,6 +45,6 @@ Org Owner or Admin, checked by the handler (INV-29).
 
 | code | meaning |
 |---|---|
-| `forbidden` | No signed-in user, or not an org Owner or Admin. |
+| `forbidden` | No signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) is not an org Owner or Admin (`org_role_required`). |
 | `not_found` | No live agent with that id or slug (`agent_not_found`). |
 | `conflict` | The agent is retired (`agent_retired`) or has no delegated principal (`agent_principal_missing`). |

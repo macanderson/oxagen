@@ -6,8 +6,9 @@
  *
  * Guards and their negatives:
  *   - role gate: org Owner or Admin, or workspace Owner or Member, resolves;
- *     a Viewer (org and workspace), an API-key call and a user with no
- *     principal → HandlerError forbidden, no UPDATE, no NOTIFY
+ *     an API-key call acts as the key's creator; a Viewer (org and
+ *     workspace), a key with no creator and a user with no principal →
+ *     HandlerError forbidden, no UPDATE, no NOTIFY
  *   - id forms: an apr_ public id matches `public_id`; a uuid matches `id`;
  *     the org and workspace filters, the expiry guard and the unresolved
  *     guard stay in the WHERE either way
@@ -58,6 +59,8 @@ const render = (q: SQL) => dialect.sqlToQuery(q);
 // ── tx double ─────────────────────────────────────────────────────────────────
 
 type Tenant = {
+  /** The creator an API key resolves to, or none. */
+  keyCreator: string | null;
   principalId: string | null;
   orgRole: string | null;
   workspaceRole: string | null;
@@ -91,6 +94,13 @@ function makeTx(tenant: Tenant, captured: Captured) {
             return chain;
           },
           limit: () => {
+            if (table === schema.apiKeys) {
+              return Promise.resolve(
+                tenant.keyCreator
+                  ? [{ createdByUserId: tenant.keyCreator }]
+                  : [],
+              );
+            }
             if (table === schema.principals) {
               return Promise.resolve(
                 tenant.principalId ? [{ id: tenant.principalId }] : [],
@@ -133,6 +143,7 @@ const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
 
 function setup(overrides: Partial<Tenant> = {}): Captured {
   const tenant: Tenant = {
+    keyCreator: "u_creator",
     principalId: "prn_1",
     orgRole: "Owner",
     workspaceRole: null,
@@ -205,16 +216,56 @@ describe("resolve_approval — role gate", () => {
     expect(captured.set).toBeNull();
   });
 
-  it("refuses an API-key call before any query", async () => {
+  it("refuses a call with no user and no API key before any query", async () => {
     const captured = setup();
     await expect(
       agentApprovalResolveHandler(
         { approvalId: PUBLIC_ID, decision: "approved" },
-        makeCTX({ userId: null, apiKeyId: "aky_1" }),
+        makeCTX({ userId: null, apiKeyId: null }),
       ),
     ).rejects.toSatisfy(forbidden);
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(captured.set).toBeNull();
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    const KEY_CTX = makeCTX({ userId: null, apiKeyId: "aky_1" });
+    const refused = (reason: string) => (e: unknown) =>
+      forbidden(e) && isHandlerError(e) && e.reason === reason;
+
+    it("resolves for a creator who is an org Owner, recorded as the resolver", async () => {
+      const captured = setup({ orgRole: "Owner" });
+      await expect(
+        agentApprovalResolveHandler(
+          { approvalId: PUBLIC_ID, decision: "approved" },
+          KEY_CTX,
+        ),
+      ).resolves.toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
+      expect(captured.set?.resolvedByUserId).toBe("u_creator");
+    });
+
+    it("refuses a key whose creator is a Viewer in the org and the workspace (negative)", async () => {
+      const captured = setup({ orgRole: "Viewer", workspaceRole: "Viewer" });
+      await expect(
+        agentApprovalResolveHandler(
+          { approvalId: PUBLIC_ID, decision: "approved" },
+          KEY_CTX,
+        ),
+      ).rejects.toSatisfy(refused("org_role_required"));
+      expect(captured.set).toBeNull();
+      expect(mocks.notifyResolution).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      const captured = setup({ keyCreator: null });
+      await expect(
+        agentApprovalResolveHandler(
+          { approvalId: PUBLIC_ID, decision: "approved" },
+          KEY_CTX,
+        ),
+      ).rejects.toSatisfy(refused("no_principal"));
+      expect(captured.set).toBeNull();
+    });
   });
 });
 

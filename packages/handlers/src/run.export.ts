@@ -2,7 +2,9 @@
 // Control spec §13.4, App. E; ADR-058).
 //
 // Guards, each with its negative test: org Owner or Admin (`assertOrgRole`,
-// ARCHITECTURE.md §3.2); the run is in the caller's workspace (`not_found`);
+// ARCHITECTURE.md §3.2), for the signed-in user or the creator of the API key
+// (`resolveActingUserId`), who is recorded as the requester; the run is in
+// the caller's workspace (`not_found`);
 // the run is sealed (`conflict`, `run_not_sealed`), because the attestation
 // signs the seal. The handler records the job in `evidence.run_exports`
 // inside the tenant scope and dispatches the durable function that builds
@@ -13,7 +15,7 @@ import {
   runExport,
   type RunExportOutput,
 } from "@oxagen/oxagen/contracts/run.export";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eventClient } from "./event-client";
 import { runScope } from "./run.list";
@@ -53,7 +55,11 @@ export function createRunExportHandler(
   deps: RunExportDeps,
 ): CapabilityHandler<typeof runExport> {
   return async (input, ctx): Promise<RunExportOutput> => {
-    await assertOrgRole(ctx, { org: EXPORT_ROLES });
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: EXPORT_ROLES },
+    );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, scope, input.runId);
     if (run.item.status === "live") {
@@ -62,8 +68,8 @@ export function createRunExportHandler(
     const row = await deps.insertExport({
       ...scope,
       runPublicId: input.runId,
-      // assertOrgRole refused a context with no user above.
-      requestedByUserId: ctx.userId as string,
+      // assertOrgRole refused a call with no acting user above.
+      requestedByUserId: actingUserId as string,
     });
     await deps.dispatch({
       name: RUN_EXPORT_EVENT,

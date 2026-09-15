@@ -49,10 +49,9 @@ export const agentDefinitionCommit = registerCapability({
   description:
     "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written.",
   mode: "sync",
-  // The handler requires a signed-in user (assertOrgRole, INV-29). The MCP
-  // server builds every context with `userId: null` (apps/mcp/src/context.ts),
-  // so the write ships on the API alone; `tacho.enrollment.create` set the
-  // pattern for a user-bound write.
+  // The handler acts as the signed-in user or the API key's creator
+  // (resolveActingUserId, assertOrgRole, INV-29). The write ships on the API
+  // alone: no MCP tool is built for it.
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs"],
   scoped: true,

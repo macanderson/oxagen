@@ -14,7 +14,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 
 - API: `POST /v1/:org_slug/:workspace_slug/commands`
 - MCP: `dispatch_command`
-- Authentication: session; the handler requires org Owner or Admin, or workspace Owner or Member on the workspace the call is scoped to (`assertOrgRole`, INV-29) — the kernel's IAM check allows everything for a non-enterprise organisation
+- Authentication: session or API key; the handler requires org Owner or Admin, or workspace Owner or Member on the workspace the call is scoped to, of the signed-in user or the key's creator (`assertOrgRole`, `resolveActingUserId`, INV-29), and records that user as the issuer; a key with no recorded creator is refused `forbidden / no_principal` — the kernel's IAM check allows everything for a non-enterprise organisation
 - Capability name: `dispatch_command`
 - Not billed (`noBillingGate: true`): a lapsed bucket must never leave an agent unstoppable. IAM default-deny; high sensitivity.
 

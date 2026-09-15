@@ -146,8 +146,10 @@ export interface ActingCredential {
  * IAM path makes (fetch-authz.ts) and `assign_agent_role` makes for its
  * ceiling. A deleted key, a key of another org, a key with no recorded
  * creator, or no credential at all resolves to null, which `assertOrgRole`
- * refuses as `no_principal`. A handler whose surfaces include `mcp` passes
- * this user to `assertOrgRole` and records it as the actor.
+ * refuses as `no_principal`. Every handler that runs `assertOrgRole` passes
+ * this user to it and records it as the actor, so a key acts with its
+ * creator's current org role and no more (apps/app/ARCHITECTURE.md §9,
+ * 2026-09-15; packages/handlers/src/role-check.test.ts enforces the call).
  *
  * Runs inside the caller's tenant scope: `api_keys` carries the org and
  * workspace RLS policy, and a key's context names the key's own workspace.
@@ -198,9 +200,9 @@ export interface OrgRoleRequirement {
  * Roles are assigned to human principals (`iam.principals.parent_user_id`
  * with `kind = 'human'`), so the gate resolves `ctx.userId` and nothing else.
  * A context with no user is refused with reason `no_principal` before any
- * query. The gate makes no key-to-creator mapping itself: a handler that
- * serves API-key callers resolves the creator with `resolveActingUserId` and
- * passes it as `userId`. Reason `org_role_required` covers a user with no active
+ * query. The gate makes no key-to-creator mapping itself: every handler
+ * resolves the acting user with `resolveActingUserId` and passes it as
+ * `userId`. Reason `org_role_required` covers a user with no active
  * principal, no qualifying role, or a role outside both sets. The workspace
  * leg runs only after the org leg failed, and only when the context names a
  * workspace. Returns the role name that satisfied the check so a handler can

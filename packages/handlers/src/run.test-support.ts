@@ -41,15 +41,34 @@ export function ctx(scope: RunScope = SCOPE): CapabilityContext {
   };
 }
 
+/** The user an API key in these tests was created by. */
+export const KEY_CREATOR = "0192d4a8-7c1e-7a00-8000-0000000c7ea7";
+
+/** An API-key call in `scope`: no signed-in user, the key's id. */
+export function keyCtx(scope: RunScope = SCOPE): CapabilityContext {
+  return {
+    ...ctx(scope),
+    userId: null,
+    apiKeyId: "0192d4a8-7c1e-7a00-8000-0000000a91e1",
+    surface: "mcp",
+  };
+}
+
 /**
- * A `withTenantDb` transaction double that answers the role gate's two
- * queries (`assertOrgRole` in @oxagen/iam): the acting user's principal and
- * one org-role assignment. `null` is a user with no org role. Every other
- * read the run handlers make goes through injected deps, so a test file
- * mocks `@oxagen/database` with this and nothing else.
+ * A `withTenantDb` transaction double that answers the role gate's queries
+ * (`resolveActingUserId` and `assertOrgRole` in @oxagen/iam): the API key's
+ * creator (`keyCreator`, null for a key with none), the acting user's
+ * principal and one org-role assignment. `null` is a user with no org role.
+ * Every other read the run handlers make goes through injected deps, so a
+ * test file mocks `@oxagen/database` with this and nothing else.
  */
-export function roleTx(roleName: string | null) {
+export function roleTx(
+  roleName: string | null,
+  keyCreator: string | null = KEY_CREATOR,
+) {
   const rowsFor = (table: unknown): unknown[] => {
+    if (table === schema.apiKeys)
+      return keyCreator ? [{ createdByUserId: keyCreator }] : [];
     if (table === schema.principals) return [{ id: "prn_1" }];
     if (table === schema.principalRoleAssignments)
       return roleName ? [{ roleName }] : [];

@@ -1,20 +1,21 @@
 // agent.register.ts — mint an agent identity (MC spec §6.2, #2956).
 //
 // Flow, one tenant-scoped transaction after the guards:
-//   1. Principal guard — a user session is required: the credential records
-//      the registering user as its creator and the principal acts for them.
-//   2. Role gate — assertOrgRole: org Owner or Admin (INV-29).
-//   3. The `agent.agents` row (status draft, deployment inactive, harness as
+//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the
+//      signed-in user or the creator of the API key (resolveActingUserId).
+//      The credential records that user as its creator and the principal
+//      acts for them; a call with no acting user is refused.
+//   2. The `agent.agents` row (status draft, deployment inactive, harness as
 //      given), its delegated `iam.principals` row (kind agent, acting for the
 //      registering user), the default agent role when the org has it seeded,
 //      and the long-lived credential. No version row: the definition is a
 //      file in git, written by `commit_agent_definition`.
-//   4. One security event for the key, and the secret returned once.
+//   3. One security event for the key, and the secret returned once.
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { agentKeysFor } from "@oxagen/agent/handlers/_agent-identity";
 import { DEFAULT_AGENT_ROLE_NAME } from "@oxagen/agent/handlers/_agent-role";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
@@ -30,15 +31,13 @@ export const AGENT_IDENTITY_ROLES = ["Owner", "Admin"] as const;
 export const agentRegisterHandler: CapabilityHandler<
   typeof agentRegister
 > = async (input, ctx) => {
-  if (!ctx.userId) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "no_principal",
-      message: "register_agent requires a signed-in user",
-    });
-  }
-  const userId = ctx.userId;
-  await assertOrgRole(ctx, { org: [...AGENT_IDENTITY_ROLES] });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: [...AGENT_IDENTITY_ROLES] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const userId = actingUserId as string;
 
   const now = new Date();
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };

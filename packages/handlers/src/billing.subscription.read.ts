@@ -2,7 +2,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { schema, withTenantDb } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -29,9 +29,13 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
   }
   // Role gate (ARCHITECTURE.md §3.2, INV-29): the contract's defaultRoles
   // are Owner, Admin and Billing, and the kernel's IAM check enforces them
-  // for enterprise orgs only, so the handler checks them itself. A context
-  // with no signed-in user is refused with reason no_principal.
-  await assertOrgRole(ctx, { org: ["Owner", "Admin", "Billing"] });
+  // for enterprise orgs only, so the handler checks them itself, for the
+  // signed-in user or the creator of the API key. A context with neither is
+  // refused with reason no_principal.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin", "Billing"] },
+  );
 
   // Two parallel round trips: subscription+plan (joined) and credit balance.
   // The plan join eliminates the sequential N+1 lookup; sub and balance are

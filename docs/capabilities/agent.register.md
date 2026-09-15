@@ -38,7 +38,7 @@ Registration writes no definition: the definition of record is the file `.oxagen
 
 ## Roles
 
-Org Owner or Admin, checked by the handler (`assertOrgRole`, INV-29). A call with no signed-in user (an API key alone) is refused with `forbidden`, reason `no_principal`.
+Org Owner or Admin, checked by the handler (`assertOrgRole`, INV-29) for the signed-in user or, on an API-key call, the key's creator (`resolveActingUserId`). That user is recorded as the credential's creator and the principal's parent. A call with no signed-in user and no API key with a live creator is refused with `forbidden`, reason `no_principal`.
 
 ## Side effects
 
@@ -54,5 +54,5 @@ Org Owner or Admin, checked by the handler (`assertOrgRole`, INV-29). A call wit
 
 | code | meaning |
 |---|---|
-| `forbidden` | No signed-in user (`no_principal`), or the user is not an org Owner or Admin (`org_role_required`). |
+| `forbidden` | No signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) is not an org Owner or Admin (`org_role_required`). |
 | `conflict` | The slug is already used in this workspace (`agent_slug_taken`). |

@@ -9,8 +9,15 @@
 // Every entry must also be a registered contract, so a renamed capability
 // fails here rather than silently dropping out of the gate. The array grows
 // with each lane that adds a role-checked handler.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+//
+// The second rule covers every `assertOrgRole` call under packages/*/src: an
+// API key acts as its creator, bounded by the creator's current org role
+// (ARCHITECTURE.md §9, 2026-09-15). The call's first argument is an object
+// literal whose `userId` is the result of `resolveActingUserId` — inline, or a
+// const the same function declared from it. A gate passed `ctx` itself reads
+// `ctx.userId`, which is null on every API-key call, and fails here.
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { getCapability } from "@oxagen/oxagen";
@@ -25,6 +32,7 @@ const ROLE_CHECKED_CONTRACTS = [
 ] as const;
 
 const SRC = join(__dirname);
+const PACKAGES = join(SRC, "..", "..");
 
 /** The `./module` and export name `register.ts` binds a capability to. */
 function handlerBinding(
@@ -53,14 +61,18 @@ function handlerBinding(
   return found;
 }
 
-function parse(file: string): ts.SourceFile {
-  return ts.createSourceFile(
-    file,
-    readFileSync(file, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+function parseSource(file: string, text: string): ts.SourceFile {
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 }
+
+function parse(file: string): ts.SourceFile {
+  return parseSource(file, readFileSync(file, "utf8"));
+}
+
+const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === name;
 
 /** Whether the exported handler's initializer contains a call to `assertOrgRole`. */
 function handlerCallsAssertOrgRole(
@@ -69,12 +81,7 @@ function handlerCallsAssertOrgRole(
 ): boolean {
   let calls = false;
   const scan = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "assertOrgRole"
-    )
-      calls = true;
+    if (isCallTo(node, "assertOrgRole")) calls = true;
     ts.forEachChild(node, scan);
   };
   for (const statement of source.statements) {
@@ -89,6 +96,101 @@ function handlerCallsAssertOrgRole(
     }
   }
   return calls;
+}
+
+/** `resolveActingUserId(...)` or `await resolveActingUserId(...)`. */
+function isResolvedActingUser(expr: ts.Expression): boolean {
+  const inner = ts.isAwaitExpression(expr) ? expr.expression : expr;
+  return isCallTo(inner, "resolveActingUserId");
+}
+
+/** Whether `fn` declares `name` as a variable initialised from `resolveActingUserId`. */
+function declaresActingUser(fn: ts.Node, name: string): boolean {
+  let declared = false;
+  const scan = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      node.initializer &&
+      isResolvedActingUser(node.initializer)
+    )
+      declared = true;
+    ts.forEachChild(node, scan);
+  };
+  scan(fn);
+  return declared;
+}
+
+/**
+ * Every `assertOrgRole` call in `source` whose first argument does not carry
+ * the acting user, as `line:column` locations. An empty list is a pass.
+ */
+function gatesWithoutActingUser(source: ts.SourceFile): string[] {
+  const failures: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (isCallTo(node, "assertOrgRole")) {
+      let fn: ts.Node | undefined = node.parent;
+      while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+      const arg = node.arguments[0];
+      const userId =
+        arg && ts.isObjectLiteralExpression(arg)
+          ? arg.properties.find(
+              (p) =>
+                p.name !== undefined &&
+                ts.isIdentifier(p.name) &&
+                p.name.text === "userId",
+            )
+          : undefined;
+      const ok =
+        fn !== undefined &&
+        userId !== undefined &&
+        ((ts.isPropertyAssignment(userId) &&
+          (isResolvedActingUser(userId.initializer) ||
+            (ts.isIdentifier(userId.initializer) &&
+              declaresActingUser(fn, userId.initializer.text)))) ||
+          (ts.isShorthandPropertyAssignment(userId) &&
+            declaresActingUser(fn, "userId")));
+      if (!ok) {
+        const { line, character } = source.getLineAndCharacterOfPosition(
+          node.getStart(source),
+        );
+        failures.push(`${line + 1}:${character + 1}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return failures;
+}
+
+/** Non-test TypeScript under every `packages/<name>/src` that calls `assertOrgRole`. */
+function gateCallers(): string[] {
+  const files: string[] = [];
+  for (const pkg of readdirSync(PACKAGES, { withFileTypes: true })) {
+    if (!pkg.isDirectory()) continue;
+    const src = join(PACKAGES, pkg.name, "src");
+    let entries: string[];
+    try {
+      entries = readdirSync(src, { recursive: true, encoding: "utf8" });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (
+        !entry.endsWith(".ts") ||
+        entry.endsWith(".d.ts") ||
+        /\.test(-support)?\.ts$/.test(entry) ||
+        entry.includes("node_modules")
+      )
+        continue;
+      const file = join(src, entry);
+      if (readFileSync(file, "utf8").includes("assertOrgRole(")) {
+        files.push(file);
+      }
+    }
+  }
+  return files;
 }
 
 describe("INV-29: role-restricted contracts are gated in their handler", () => {
@@ -111,5 +213,99 @@ describe("INV-29: role-restricted contracts are gated in their handler", () => {
     const { module, exportName } = handlerBinding(register, "list_incidents");
     const source = parse(join(SRC, `${module}.ts`));
     expect(handlerCallsAssertOrgRole(source, exportName)).toBe(false);
+  });
+});
+
+describe("INV-29: every role gate acts as the resolved user", () => {
+  const callers = gateCallers();
+
+  it("finds the gates in packages/handlers and packages/agent", () => {
+    const names = callers.map((f) => relative(PACKAGES, f));
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "agent/src/handlers/agent.approval.resolve.ts",
+        "handlers/src/billing.gau_bucket.purchase.ts",
+        "handlers/src/billing.invoice.list.ts",
+        "handlers/src/tacho.command.dispatch.ts",
+        "handlers/src/workspace.archive.ts",
+      ]),
+    );
+  });
+
+  it("every assertOrgRole call passes the user resolveActingUserId returned", () => {
+    const failures = callers.flatMap((file) =>
+      gatesWithoutActingUser(parse(file)).map(
+        (at) => `${relative(PACKAGES, file)}:${at}`,
+      ),
+    );
+    expect(failures).toEqual([]);
+  });
+
+  describe("probes", () => {
+    const probe = (body: string) =>
+      gatesWithoutActingUser(
+        parseSource(
+          "probe.ts",
+          `export const handler = async (_input, ctx) => {\n${body}\n};`,
+        ),
+      );
+
+    it("passes a const resolved in the same function", () => {
+      expect(
+        probe(
+          `const actingUserId = await resolveActingUserId(ctx);
+           await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });`,
+        ),
+      ).toEqual([]);
+    });
+
+    it("passes an inline resolve", () => {
+      expect(
+        probe(
+          `await assertOrgRole({ ...ctx, userId: await resolveActingUserId(ctx) }, { org: ["Owner"] });`,
+        ),
+      ).toEqual([]);
+    });
+
+    it("passes a shorthand userId resolved in the same function", () => {
+      expect(
+        probe(
+          `const userId = await resolveActingUserId(ctx);
+           await assertOrgRole({ ...ctx, userId }, { org: ["Owner"] });`,
+        ),
+      ).toEqual([]);
+    });
+
+    it("fails a gate passed ctx itself", () => {
+      expect(
+        probe(`await assertOrgRole(ctx, { org: ["Owner"] });`),
+      ).toHaveLength(1);
+    });
+
+    it("fails a gate that resolves the user and then passes ctx", () => {
+      expect(
+        probe(
+          `const actingUserId = await resolveActingUserId(ctx);
+           await assertOrgRole(ctx, { org: ["Owner"] });`,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("fails a gate passed ctx.userId", () => {
+      expect(
+        probe(
+          `await assertOrgRole({ ...ctx, userId: ctx.userId }, { org: ["Owner"] });`,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("fails a const that did not come from resolveActingUserId", () => {
+      expect(
+        probe(
+          `const actingUserId = ctx.userId;
+           await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });`,
+        ),
+      ).toHaveLength(1);
+    });
   });
 });

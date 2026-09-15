@@ -48,7 +48,7 @@ Empty object. Tenant scope is resolved from the request context.
 
 ## Side effects
 
-- Postgres: read-only on `billing.contract_terms`, `billing.subscriptions`, `billing.plans`, and `iam.principals` / `iam.principal_role_assignments` / `iam.roles` for the role gate.
+- Postgres: read-only on `billing.contract_terms`, `billing.subscriptions`, `billing.plans`, and `auth.api_keys` (an API key's creator), `iam.principals` / `iam.principal_role_assignments` / `iam.roles` for the role gate.
 - ClickHouse: none.
 - Neo4j: none.
 
@@ -57,7 +57,7 @@ Empty object. Tenant scope is resolved from the request context.
 | code             | meaning                                                                                                                                    |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tenant_missing` | No active tenant on the request context.                                                                                                    |
-| `forbidden`      | `HandlerError` (403): no signed-in user (`no_principal`), or the user holds none of Owner, Admin, Billing in the org (`org_role_required`).  |
+| `forbidden`      | `HandlerError` (403): no signed-in user and no API key with a live creator (`no_principal`), or the acting user (the signed-in user, or the key's creator) holds none of Owner, Admin, Billing in the org (`org_role_required`).  |
 
 A database with no seeded Free plan row has no published terms to fall back
 to; the resolver throws rather than quoting a rate nobody published.

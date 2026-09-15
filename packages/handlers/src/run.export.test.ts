@@ -27,6 +27,8 @@ import {
 } from "./run.summarize";
 import {
   ctx,
+  KEY_CREATOR,
+  keyCtx,
   ledgerRun,
   memoryEvents,
   memoryStores,
@@ -43,9 +45,9 @@ const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const LIVE_ID = "tse_livelivelivelivelivel";
 const DIGEST_ONLY_ID = "tse_digestdigestdigestdig";
 
-function harness(role: string | null) {
+function harness(role: string | null, keyCreator: string | null = KEY_CREATOR) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(roleTx(role))),
+    Promise.resolve(fn(roleTx(role, keyCreator))),
   );
   const stores = memoryStores(
     [
@@ -108,6 +110,8 @@ function harness(role: string | null) {
 const conflict = (reason: string) => (e: unknown) =>
   isHandlerError(e) && e.code === "conflict" && e.reason === reason;
 const forbidden = (e: unknown) => isHandlerError(e) && e.code === "forbidden";
+const refused = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
 
 describe("export_run", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -152,6 +156,34 @@ describe("export_run", () => {
       expect(h.insertExport).not.toHaveBeenCalled();
       expect(h.dispatchExport).not.toHaveBeenCalled();
     }
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    it("queues the export for a creator who is an org Admin, recorded as the requester", async () => {
+      const h = harness("Admin");
+      await expect(
+        h.exportRun({ runId: TACHO_ID }, keyCtx()),
+      ).resolves.toMatchObject({ status: "queued" });
+      expect(h.insertExport).toHaveBeenCalledWith(
+        expect.objectContaining({ requestedByUserId: KEY_CREATOR }),
+      );
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      const h = harness("Member");
+      await expect(
+        h.exportRun({ runId: TACHO_ID }, keyCtx()),
+      ).rejects.toSatisfy(refused("org_role_required"));
+      expect(h.insertExport).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      const h = harness("Owner", null);
+      await expect(
+        h.exportRun({ runId: TACHO_ID }, keyCtx()),
+      ).rejects.toSatisfy(refused("no_principal"));
+      expect(h.insertExport).not.toHaveBeenCalled();
+    });
   });
 
   it("refuses a live run: the attestation signs the seal (negative)", async () => {

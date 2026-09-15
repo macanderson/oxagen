@@ -11,7 +11,7 @@ import {
 } from "@oxagen/billing";
 import { requireEnv } from "@oxagen/config/env";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { logger } from "./logger";
 
 /**
@@ -20,7 +20,8 @@ import { logger } from "./logger";
  * item 11).
  *
  * Flow:
- *   1. Role gate — assertOrgRole: org Owner or Billing. The kernel's IAM
+ *   1. Role gate — assertOrgRole: org Owner or Billing, for the signed-in
+ *      user or the creator of the API key (resolveActingUserId). The kernel's IAM
  *      check allows every capability for a non-enterprise org, so the
  *      handler owns this check (§3.2, INV-29).
  *   2. Mode — an org approved for invoice billing is never capped and buys
@@ -44,7 +45,11 @@ import { logger } from "./logger";
 export const billingGauBucketPurchaseHandler: CapabilityHandler<
   typeof billingGauBucketPurchase
 > = async (input, ctx) => {
-  await assertOrgRole(ctx, { org: ["Owner", "Billing"] });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Billing"] },
+  );
 
   const settings = await readOrgBillingSettings(ctx.orgId);
   if (settings.approvedForInvoiceBilling) {
@@ -84,7 +89,7 @@ export const billingGauBucketPurchaseHandler: CapabilityHandler<
 
   emitSecurityEvent({
     eventType: "billing.checkout_initiated",
-    actorUserId: ctx.userId ?? null,
+    actorUserId: actingUserId,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId ?? null,
     capability: billingGauBucketPurchase.name,

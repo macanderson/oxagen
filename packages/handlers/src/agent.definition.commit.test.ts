@@ -14,6 +14,7 @@
 //     pnpm --filter @oxagen/handlers exec vitest run src/agent.definition.commit.test.ts
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -82,6 +83,46 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// When `gate.enabled`, withTenantDb answers the role gate's selects (the API
+// key's creator, the principal, the org role) and every other select with no
+// row; otherwise it is the real tenant transaction the Postgres block uses.
+const gate = vi.hoisted(() => ({
+  enabled: false,
+  keyCreator: null as string | null,
+  roleName: null as string | null,
+}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const gateTx = () => ({
+    select: () => ({
+      from: (table: unknown) => {
+        const rows =
+          table === real.schema.apiKeys
+            ? gate.keyCreator
+              ? [{ createdByUserId: gate.keyCreator }]
+              : []
+            : table === real.schema.principals
+              ? [{ id: "prn_row" }]
+              : table === real.schema.principalRoleAssignments && gate.roleName
+                ? [{ roleName: gate.roleName }]
+                : [];
+        const chain = {
+          innerJoin: () => chain,
+          where: () => chain,
+          limit: async () => rows,
+        };
+        return chain;
+      },
+    }),
+  });
+  return {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      gate.enabled ? fn(gateTx()) : real.withTenantDb(fn as never),
+  };
+});
+
+import { makeCTX } from "./test-utils/fixtures";
 import {
   agentDefinitionCommitHandler,
   capabilityToolsOf,
@@ -139,6 +180,58 @@ describe("the definition file readers", () => {
         "no_such_capability",
       ]),
     ).toEqual(["list_runs"]);
+  });
+});
+
+describe("commit_agent_definition: an API-key call acts as the key's creator", () => {
+  // A file with the wrong schema: a call past the gate is refused
+  // `definition_schema` before anything is read, so the refusal names which
+  // side of the gate the call stopped on.
+  const input = agentDefinitionCommit.input.parse({
+    agentId: "release-bot",
+    branch: "agents/x",
+    source: 'schema = "wrong"',
+  });
+  const keyCtx = makeCTX({ userId: null, apiKeyId: "aky_row", surface: "mcp" });
+  const refusal = async () => {
+    const err = await agentDefinitionCommitHandler(input, keyCtx).catch(
+      (e: unknown) => e,
+    );
+    return isHandlerError(err) ? { code: err.code, reason: err.reason } : err;
+  };
+
+  beforeEach(() => {
+    gate.enabled = true;
+    gate.keyCreator = "usr_creator";
+    gate.roleName = null;
+  });
+  afterEach(() => {
+    gate.enabled = false;
+  });
+
+  it("passes the gate for a creator who is an org Member", async () => {
+    gate.roleName = "Member";
+    await expect(refusal()).resolves.toEqual({
+      code: "conflict",
+      reason: "definition_schema",
+    });
+  });
+
+  it("refuses a key whose creator is an org Viewer (negative)", async () => {
+    gate.roleName = "Viewer";
+    await expect(refusal()).resolves.toEqual({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+  });
+
+  it("refuses a key with no creator (negative)", async () => {
+    gate.keyCreator = null;
+    gate.roleName = "Owner";
+    await expect(refusal()).resolves.toEqual({
+      code: "forbidden",
+      reason: "no_principal",
+    });
   });
 });
 

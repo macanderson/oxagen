@@ -2,8 +2,9 @@
 // rev1 write ADR-052 bills (apps/app/ARCHITECTURE.md §1.5).
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin, or workspace Owner or
-//      Member (the contract's defaultRoles). The kernel's IAM check allows
-//      every capability for a non-enterprise org, so the handler checks.
+//      Member (the contract's defaultRoles), for the signed-in user or the
+//      creator of the API key (resolveActingUserId). The kernel's IAM check
+//      allows every capability for a non-enterprise org, so the handler checks.
 //   2. One UPDATE that matches the row by either id form (#2906), inside the
 //      caller's org and workspace, only while it is unexpired and unresolved.
 //   3. No row matched → HandlerError conflict `approval_expired`. The throw
@@ -11,7 +12,7 @@
 //      the no-op is not a governed action (§3.9 item 15).
 
 import { withTenantDb, schema } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
@@ -28,10 +29,11 @@ export async function agentApprovalResolveHandler(
   input: AgentApprovalResolveInput,
   ctx: CapabilityContext,
 ): Promise<AgentApprovalResolveOutput> {
-  await assertOrgRole(ctx, {
-    org: ["Owner", "Admin"],
-    workspace: ["Owner", "Member"],
-  });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+  );
 
   // `approvalId` arrives as the public id (apr_…) or the row uuid (#2906).
   // Reject expired rows atomically: WHERE expires_at > now() guards
@@ -42,7 +44,7 @@ export async function agentApprovalResolveHandler(
       .set({
         resolution: input.decision,
         resolvedAt: new Date(),
-        resolvedByUserId: ctx.userId,
+        resolvedByUserId: actingUserId,
         note: input.note ?? null,
       })
       .where(

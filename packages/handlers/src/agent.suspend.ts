@@ -1,12 +1,13 @@
 // agent.suspend.ts — suspend or resume an agent identity (MC spec §6.2,
-// #2956). Role gate: org Owner or Admin (INV-29). The principal's status is
+// #2956). Role gate: org Owner or Admin (INV-29), for the signed-in user
+// or the creator of the API key (resolveActingUserId). The principal's status is
 // the one write; a retired agent, or one whose principal row is gone, is
 // refused with `conflict`, and a
 // suspend of a suspended agent (or a resume of an active one) answers the
 // current state and the principal's recorded write instant, without a write.
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
@@ -18,15 +19,13 @@ import { logger } from "./logger";
 export const agentSuspendHandler: CapabilityHandler<
   typeof agentSuspend
 > = async (input, ctx) => {
-  if (!ctx.userId) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "no_principal",
-      message: "suspend_agent requires a signed-in user",
-    });
-  }
-  const userId = ctx.userId;
-  await assertOrgRole(ctx, { org: [...AGENT_IDENTITY_ROLES] });
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: [...AGENT_IDENTITY_ROLES] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const userId = actingUserId as string;
 
   const now = new Date();
   const target = input.suspended ? "suspended" : "active";

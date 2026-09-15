@@ -47,7 +47,7 @@ Each row:
 
 ## Roles
 
-Org Owner, Admin, Billing. The handler checks the role with `assertOrgRole`; the kernel's IAM check allows every capability for a non-enterprise org (INV-29).
+Org Owner, Admin, Billing, for the signed-in user or, on an API-key call, the key's creator (`resolveActingUserId`). The handler checks the role with `assertOrgRole`; the kernel's IAM check allows every capability for a non-enterprise org (INV-29).
 
 ## Side effects
 
@@ -62,5 +62,5 @@ None. Read-only; audit-exempt (the kernel's `capability.invoke_*` audit records 
 
 | code | meaning |
 |---|---|
-| `forbidden` (`HandlerError`, 403) | no signed-in user, or the user holds none of Owner, Admin, Billing in the org |
+| `forbidden` (`HandlerError`, 403) | no signed-in user and no API key with a live creator, or the acting user (the signed-in user, or the key's creator) holds none of Owner, Admin, Billing in the org |
 | `invalid_input` | a cursor this capability did not write |

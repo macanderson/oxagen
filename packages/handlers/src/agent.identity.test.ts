@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   emitSecurityEvent: vi.fn(),
   gate: {
     enabled: false,
+    /** The creator an API key resolves to, or none. */
+    keyCreator: null as string | null,
     principalId: null as string | null,
     roleName: null as string | null,
   },
@@ -39,8 +41,9 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// When `mocks.gate.enabled`, withTenantDb answers the two selects the role
-// gate runs (principal, then role), answers every other select with no row,
+// When `mocks.gate.enabled`, withTenantDb answers the selects the role gate
+// runs (the API key's creator, the principal, the role), answers every other
+// select with no row,
 // and throws on a write. A refusal past the gate is therefore one of two
 // known shapes: `not_found` from the identity read, or the store's own
 // error from the first insert; the positive below names which.
@@ -50,15 +53,19 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     select: () => ({
       from: (table: unknown) => {
         const rows =
-          table === real.schema.principals
-            ? mocks.gate.principalId
-              ? [{ id: mocks.gate.principalId }]
+          table === real.schema.apiKeys
+            ? mocks.gate.keyCreator
+              ? [{ createdByUserId: mocks.gate.keyCreator }]
               : []
-            : table === real.schema.principalRoleAssignments
-              ? mocks.gate.roleName
-                ? [{ roleName: mocks.gate.roleName }]
+            : table === real.schema.principals
+              ? mocks.gate.principalId
+                ? [{ id: mocks.gate.principalId }]
                 : []
-              : [];
+              : table === real.schema.principalRoleAssignments
+                ? mocks.gate.roleName
+                  ? [{ roleName: mocks.gate.roleName }]
+                  : []
+                : [];
         const chain = {
           innerJoin: () => chain,
           leftJoin: () => chain,
@@ -90,6 +97,7 @@ import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
+import type { CapabilityContext } from "@oxagen/oxagen";
 import { makeCTX } from "./test-utils/fixtures";
 
 const REGISTER_INPUT = agentRegister.input.parse({
@@ -99,29 +107,33 @@ const REGISTER_INPUT = agentRegister.input.parse({
 });
 
 const WRITES = [
-  ["register_agent", () => agentRegisterHandler(REGISTER_INPUT, makeCTX())],
+  [
+    "register_agent",
+    (ctx: CapabilityContext = makeCTX()) =>
+      agentRegisterHandler(REGISTER_INPUT, ctx),
+  ],
   [
     "rotate_agent_credential",
-    () =>
+    (ctx: CapabilityContext = makeCTX()) =>
       agentCredentialRotateHandler(
         agentCredentialRotate.input.parse({ agentId: "release-bot" }),
-        makeCTX(),
+        ctx,
       ),
   ],
   [
     "suspend_agent",
-    () =>
+    (ctx: CapabilityContext = makeCTX()) =>
       agentSuspendHandler(
         agentSuspend.input.parse({ agentId: "release-bot" }),
-        makeCTX(),
+        ctx,
       ),
   ],
   [
     "retire_agent",
-    () =>
+    (ctx: CapabilityContext = makeCTX()) =>
       agentRetireHandler(
         agentRetire.input.parse({ agentId: "release-bot" }),
-        makeCTX(),
+        ctx,
       ),
   ],
 ] as const;
@@ -131,34 +143,68 @@ const forbidden =
   (err: unknown): boolean =>
     isHandlerError(err) && err.code === "forbidden" && err.reason === reason;
 
+/**
+ * The gate passed: register's next step is the agent insert, which the
+ * double refuses with its own error; the other three read the identity first
+ * and the double answers with no row, so they refuse `not_found`.
+ */
+const pastGate =
+  (name: (typeof WRITES)[number][0]) =>
+  (err: unknown): boolean =>
+    name === "register_agent"
+      ? err instanceof Error && /a write reached the store/.test(err.message)
+      : isHandlerError(err) &&
+        err.code === "not_found" &&
+        err.reason === "agent_not_found";
+
+/** An API-key call: no signed-in user, the key's id. */
+const KEY_CTX = makeCTX({ userId: null, apiKeyId: "aky_row", surface: "mcp" });
+
 describe("agent identity writes: the role gate on a tier-free org", () => {
   beforeEach(() => {
     mocks.gate.enabled = true;
+    mocks.gate.keyCreator = "usr_creator";
     mocks.gate.principalId = "prn_row";
     mocks.gate.roleName = null;
     mocks.emitSecurityEvent.mockClear();
   });
 
   it.each(WRITES)(
-    "%s refuses a call with no signed-in user before any query",
+    "%s refuses a call with no user and no API key",
     async (_name, call) => {
-      const ctx = makeCTX({ userId: null, apiKeyId: "aky_row" });
-      const handlers = {
-        register_agent: () => agentRegisterHandler(REGISTER_INPUT, ctx),
-        rotate_agent_credential: () =>
-          agentCredentialRotateHandler(
-            { agentId: "x", validityDays: 180 },
-            ctx,
-          ),
-        suspend_agent: () =>
-          agentSuspendHandler({ agentId: "x", suspended: true }, ctx),
-        retire_agent: () => agentRetireHandler({ agentId: "x" }, ctx),
-      };
-      void call;
-      await expect(handlers[_name]()).rejects.toSatisfy(
-        forbidden("no_principal"),
+      await expect(
+        call(makeCTX({ userId: null, apiKeyId: null })),
+      ).rejects.toSatisfy(forbidden("no_principal"));
+      expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(WRITES)(
+    "%s refuses an API key with no creator",
+    async (_name, call) => {
+      mocks.gate.keyCreator = null;
+      mocks.gate.roleName = "Owner";
+      await expect(call(KEY_CTX)).rejects.toSatisfy(forbidden("no_principal"));
+      expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(WRITES)(
+    "%s refuses an API key whose creator is an org Member",
+    async (_name, call) => {
+      mocks.gate.roleName = "Member";
+      await expect(call(KEY_CTX)).rejects.toSatisfy(
+        forbidden("org_role_required"),
       );
       expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(WRITES)(
+    "%s lets an API key whose creator is an org Owner past the gate",
+    async (name, call) => {
+      mocks.gate.roleName = "Owner";
+      await expect(call(KEY_CTX)).rejects.toSatisfy(pastGate(name));
     },
   );
 
@@ -178,18 +224,9 @@ describe("agent identity writes: the role gate on a tier-free org", () => {
     });
   }
 
-  it.each(WRITES)("%s lets an org Admin past the gate", async (_name, call) => {
+  it.each(WRITES)("%s lets an org Admin past the gate", async (name, call) => {
     mocks.gate.roleName = "Admin";
-    // The gate passed: register's next step is the agent insert, which the
-    // double refuses with its own error; the other three read the identity
-    // first and the double answers with no row, so they refuse `not_found`.
-    await expect(call()).rejects.toSatisfy((err: unknown) =>
-      _name === "register_agent"
-        ? err instanceof Error && /a write reached the store/.test(err.message)
-        : isHandlerError(err) &&
-          err.code === "not_found" &&
-          err.reason === "agent_not_found",
-    );
+    await expect(call()).rejects.toSatisfy(pastGate(name));
   });
 });
 

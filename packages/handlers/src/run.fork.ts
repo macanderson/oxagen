@@ -3,7 +3,8 @@
 //
 // Guards, in order, each with its negative test:
 //   1. Role: org Owner, Admin or Member (`assertOrgRole`, ARCHITECTURE.md
-//      §3.2); the kernel's IAM check allows everything for a non-enterprise
+//      §3.2), for the signed-in user or the creator of the API key
+//      (`resolveActingUserId`); the kernel's IAM check allows everything for a non-enterprise
 //      org, so the handler is where a Viewer is refused.
 //   2. The run is in the caller's workspace (`not_found`) and is a ledger run
 //      (`conflict`, `fork_requires_ledger_run`): a wrapped session can record
@@ -25,7 +26,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
 import {
   gradeAllows,
@@ -71,7 +72,10 @@ export function createRunForkHandler(
   deps: RunForkDeps,
 ): CapabilityHandler<typeof runFork> {
   return async (input, ctx): Promise<RunForkOutput> => {
-    await assertOrgRole(ctx, { org: FORK_ROLES });
+    await assertOrgRole(
+      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { org: FORK_ROLES },
+    );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, scope, input.runId);
     if (run.source !== "ledger") throw conflict("fork_requires_ledger_run");

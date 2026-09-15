@@ -20,6 +20,8 @@ import {
 } from "./run.summarize";
 import {
   ctx,
+  KEY_CREATOR,
+  keyCtx,
   ledgerRun,
   memoryEvents,
   memoryStores,
@@ -37,11 +39,16 @@ const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 
 function harness(over: {
   role?: string | null;
+  keyCreator?: string | null;
   ledger?: Parameters<typeof ledgerRun>[0];
   session?: NonNullable<Parameters<typeof tachoSession>[0]["session"]>;
 }) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(roleTx(over.role === undefined ? "Member" : over.role))),
+    Promise.resolve(
+      fn(
+        roleTx(over.role === undefined ? "Member" : over.role, over.keyCreator),
+      ),
+    ),
   );
   const stores = memoryStores(
     [
@@ -71,6 +78,8 @@ function harness(over: {
 
 const conflict = (reason: string) => (e: unknown) =>
   isHandlerError(e) && e.code === "conflict" && e.reason === reason;
+const refused = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
 
 describe("summarize_run", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -108,6 +117,40 @@ describe("summarize_run", () => {
       );
       expect(dispatch).not.toHaveBeenCalled();
     }
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    it("queues the job for a creator who is an org Member, recorded as the requester", async () => {
+      const { summarize, dispatch } = harness({ role: "Member" });
+      await expect(summarize({ runId: LEDGER_ID }, keyCtx())).resolves.toEqual({
+        runId: LEDGER_ID,
+        status: "queued",
+      });
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ requestedByUserId: KEY_CREATOR }),
+        }),
+      );
+    });
+
+    it("refuses a key whose creator is an org Viewer (negative)", async () => {
+      const { summarize, dispatch } = harness({ role: "Viewer" });
+      await expect(summarize({ runId: LEDGER_ID }, keyCtx())).rejects.toSatisfy(
+        refused("org_role_required"),
+      );
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      const { summarize, dispatch } = harness({
+        role: "Owner",
+        keyCreator: null,
+      });
+      await expect(summarize({ runId: LEDGER_ID }, keyCtx())).rejects.toSatisfy(
+        refused("no_principal"),
+      );
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 
   it("refuses a live run: nothing is summarised before the seal (negative)", async () => {

@@ -9,9 +9,9 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/summarize`
-- MCP: none. MCP callers authenticate with an API key, which carries no org role, and the handler checks one.
+- MCP: none; no tool is built.
 - CLI: none
-- Authentication: session; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2)
+- Authentication: session or API key; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `summarize_run`
 - `mutates: true`; `agent.requiresApproval: false`; not billed as a governed action (`noBillingGate: true`). The model call is metered through `@oxagen/ai` on the organisation's funding source (`consume_assistant_tokens` when platform-funded), like every other model call. IAM default-deny; medium sensitivity.
 

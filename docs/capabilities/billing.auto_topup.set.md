@@ -36,7 +36,7 @@ The handler returns what the upsert wrote back, not what the caller sent.
 
 ## Roles
 
-Org Owner or Admin. The handler checks the role with `assertOrgRole`; the kernel's IAM check allows every capability for a non-enterprise org (INV-29), so a Member, a Billing user or a Viewer is refused by the handler with `forbidden`.
+Org Owner or Admin, for the signed-in user or, on an API-key call, the key's creator (`resolveActingUserId`). The handler checks the role with `assertOrgRole`; the kernel's IAM check allows every capability for a non-enterprise org (INV-29), so a Member, a Billing user or a Viewer is refused by the handler with `forbidden`.
 
 ## Side effects
 
@@ -53,5 +53,5 @@ No `app` layer: WL-50 binds the control on the Billing page.
 
 | code | meaning |
 |---|---|
-| `forbidden` (`HandlerError`, 403) | no signed-in user, or the user holds neither Owner nor Admin in the org |
+| `forbidden` (`HandlerError`, 403) | no signed-in user and no API key with a live creator, or the acting user (the signed-in user, or the key's creator) holds neither Owner nor Admin in the org |
 | `invalid_input` | `blocks` outside 1-100, a non-integer, a missing field, or an unknown key |

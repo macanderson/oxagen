@@ -23,7 +23,8 @@
 // organization's invoice must still stay out of the list.
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner, Admin or Billing. The kernel's
+//   1. Role gate — assertOrgRole: org Owner, Admin or Billing, for the
+//      signed-in user or the creator of the API key. The kernel's
 //      IAM check allows every capability for a non-enterprise org, so the
 //      handler owns this check (apps/app/ARCHITECTURE.md §3.2, INV-29).
 //   2. Decode the cursor; a cursor this handler did not write is
@@ -40,7 +41,7 @@ import {
   invoiceStatusSchema,
 } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, desc, eq, lt, ne, or, type SQL, sql } from "drizzle-orm";
 
 // ---- Cursor -------------------------------------------------------------------------
@@ -236,7 +237,10 @@ export function createBillingInvoiceListHandler(
 ): CapabilityHandler<typeof billingInvoiceList> {
   return async (input, ctx): Promise<BillingInvoiceListOutput> => {
     // ── Role gate ─────────────────────────────────────────────────────────
-    await assertOrgRole(ctx, { org: ["Owner", "Admin", "Billing"] });
+    await assertOrgRole(
+      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { org: ["Owner", "Admin", "Billing"] },
+    );
 
     // ── Cursor ────────────────────────────────────────────────────────────
     const cursor =
