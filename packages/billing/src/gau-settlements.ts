@@ -11,6 +11,8 @@
  * a crash after the commit leaves a row the hourly job resumes. `paid` is the
  * only terminal status, and `settleGauPaid` grants once whichever of the
  * synchronous result, the first `invoice.paid` or Stripe's retry lands first.
+ * An auto top-up's episode ends when its row is marked `paid` or `failed`;
+ * an `open` row keeps it.
  */
 
 // tenancy: system bypass via withSystemDb in grantGauPurchaseForCheckout (the
@@ -246,12 +248,21 @@ export async function settleGauPaid(
       usedDelta: 0,
       purchasedDelta: row.quantityGau,
     });
-    await tx
-      .update(schema.gauBuckets)
-      .set({ openTopupSettlementId: null, updatedAt: sql`now()` })
-      .where(eq(schema.gauBuckets.openTopupSettlementId, row.id));
+    await endTopupEpisode(tx, row.id);
   }
   return row;
+}
+
+/**
+ * `UPDATE gau_buckets SET open_topup_settlement_id = NULL WHERE
+ * open_topup_settlement_id = :id`: the settlement no longer holds the
+ * bucket's auto top-up episode, so the next exhaustion claims a new one.
+ */
+async function endTopupEpisode(tx: Tx, settlementId: string): Promise<void> {
+  await tx
+    .update(schema.gauBuckets)
+    .set({ openTopupSettlementId: null, updatedAt: sql`now()` })
+    .where(eq(schema.gauBuckets.openTopupSettlementId, settlementId));
 }
 
 async function settlePending(
@@ -284,12 +295,19 @@ export async function settleGauOpen(
   return settlePending(tx, id, "open");
 }
 
-/** Oxagen holds no collectable invoice for a `pending` row (item 7). */
+/**
+ * Oxagen holds no collectable invoice for a `pending` row (item 7). A failed
+ * auto top-up ends its episode: `open_topup_settlement_id` is cleared wherever
+ * it names the row, so the org's next exhaustion in the month claims again.
+ * Only `open` keeps an episode set, because Stripe is still collecting.
+ */
 export async function settleGauFailed(
   tx: Tx,
   id: string,
 ): Promise<GauSettlementRow | null> {
-  return settlePending(tx, id, "failed");
+  const row = await settlePending(tx, id, "failed");
+  if (row?.kind === "auto_topup") await endTopupEpisode(tx, row.id);
+  return row;
 }
 
 // ── The settlement sequence ─────────────────────────────────────────────────

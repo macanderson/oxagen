@@ -38,7 +38,7 @@ Re-assignment after a revoke resurrects the soft-deleted assignment row; an alre
 
 ## Roles
 
-Org Owner, Org Admin, Workspace Owner.
+Org Owner, Org Admin — checked by the handler (`assertOrgRole`, INV-29), the gate `create_role` and `set_role_grants` run, for the acting user: the signed-in user, or the creator of the API key (`resolveActingUserId`), who is the assigner the delegation ceiling reads. A key with no creator, and a call with neither, is refused `forbidden` / `no_principal`; any other role is refused `forbidden` / `org_role_required` (2026-09-15, maintainer decision).
 
 ## Side effects
 

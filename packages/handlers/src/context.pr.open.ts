@@ -83,15 +83,6 @@ export function createOpenContextPrHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now">,
 ): CapabilityHandler<typeof contextPrOpen> {
   return async (input, ctx) => {
-    // Opening a Context PR is a person's act, as merging is; an API key
-    // carries no user and is refused before its creator is looked up.
-    if (!ctx.userId) {
-      throw new HandlerError({
-        code: "forbidden",
-        reason: "no_principal",
-        message: "Opening a Context PR needs a signed-in user",
-      });
-    }
     const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
       { ...ctx, userId: actingUserId },

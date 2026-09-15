@@ -5,8 +5,7 @@ import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.lis
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorOrgRole: async () => null,
   resolveActorWorkspaceRole: async () => null,
-  resolveActingUserId: async (c: { userId?: string | null }) =>
-    c.userId ?? null,
+  resolveActingUserId: async (c: { userId: string | null }) => c.userId,
   assertOrgRole: async () => "Member",
 }));
 
