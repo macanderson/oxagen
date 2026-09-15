@@ -25,7 +25,7 @@ describe("messages/shell.json", () => {
   });
 
   it("names every nav key", () => {
-    for (const key of [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys", "roles"])
+    for (const key of [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"])
       expect(messages.nav).toHaveProperty(key);
     expect(messages.nav.agents).toBe("Agent IAM");
   });

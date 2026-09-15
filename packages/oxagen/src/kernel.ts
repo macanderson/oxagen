@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces } from "./types";
+import { isKernelIssuedPlatformOperator } from "./platform-operator";
 import { isHandlerError, type HandlerErrorCode } from "./handler-error";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
@@ -928,7 +929,9 @@ async function _invokeCoreInner(
   //                           CheckedContext, only from a decision row the IAM
   //                           runtime actually inserted;
   //   deployedAgentInvocation minted only by createDeployedAgentInvocationContext
-  //                           and tracked in the kernel's own registry.
+  //                           and tracked in the kernel's own registry;
+  //   platformOperator        minted only by createPlatformOperatorContext and
+  //                           tracked in platform-operator.ts's registry.
   //
   // Reject the invocation rather than silently stripping the field. Stripping
   // would let the probe succeed and leave no trace; a hard deny plus a security
@@ -940,7 +943,10 @@ async function _invokeCoreInner(
       : ctx.deployedAgentInvocation !== undefined &&
           !isKernelIssuedDeployedAgentInvocation(ctx.deployedAgentInvocation)
         ? "deployedAgentInvocation"
-        : null;
+        : ctx.platformOperator !== undefined &&
+            !isKernelIssuedPlatformOperator(ctx.platformOperator)
+          ? "platformOperator"
+          : null;
   if (forgedBinding !== null) {
     emitSecurityEvent({
       capability: canonical,
@@ -958,6 +964,31 @@ async function _invokeCoreInner(
       "authz_denied",
       `Caller-supplied "${forgedBinding}" on the capability context for "${name}" — ` +
         "that binding is platform-created and can never be an input; failing closed.",
+    );
+  }
+
+  // ── platformOnly (SECURITY, apps/app/ARCHITECTURE.md §3.9 item 12, INV-31) ─
+  //
+  // Refused BEFORE the IAM check, because the IAM check is not a boundary here:
+  // it allows every capability for a non-enterprise organisation, so a
+  // `platformOnly` contract's `defaultRoles: {}` would decide nothing. The
+  // binding above is already proven kernel-issued when it is present at all.
+  if (cap.platformOnly === true && ctx.platformOperator === undefined) {
+    emitSecurityEvent({
+      capability: canonical,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "authz_denied",
+      durationMs: Date.now() - startMs,
+    });
+    throw new CapabilityError(
+      name,
+      "authz_denied",
+      `Capability "${name}" is platform-operator only and the context carries no platform-operator binding`,
     );
   }
 

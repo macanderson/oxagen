@@ -108,7 +108,7 @@ function harness(over: {
         over.events ?? [1, 2, 3].map((n) => event(n, { body: retained })),
       ),
     },
-    sumTokenUsage: stores.sumTokenUsage,
+    readRunCosts: stores.readRunCosts,
     tachoFrames: memoryTachoFrames("none", []),
     attempts: {
       listRunAttempts: () => Promise.resolve(over.attempts ?? [attempt()]),

@@ -15,7 +15,7 @@ export type WorkspaceNavKey =
   | "steering"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
-export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys" | "roles";
+export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys";
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
@@ -39,7 +39,6 @@ export const ORG_SEGMENTS = {
   billing: "billing",
   audit: "audit",
   "api-keys": "apiKeys",
-  roles: "roles",
 } as const satisfies Record<string, NavKey>;
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
@@ -66,7 +65,6 @@ export function orgHref(org: string, key: NavKey): string {
       return base;
     case "billing":
     case "audit":
-    case "roles":
       return `${base}/${key}`;
     case "apiKeys":
       return `${base}/api-keys`;
@@ -129,13 +127,11 @@ export function currentNavKey(pathname: string): NavKey | null {
   return found ? found[0] : null;
 }
 
-/** Whether a sidebar item is the current page. API keys and roles sit under Organization. */
+/** Whether a sidebar item is the current page. API keys sit under Organization. */
 export function isNavItemCurrent(key: NavKey, pathname: string): boolean {
   const current = currentNavKey(pathname);
   if (current === key) return true;
-  return (
-    key === "organization" && (current === "apiKeys" || current === "roles")
-  );
+  return key === "organization" && current === "apiKeys";
 }
 
 export type NavItem = {
@@ -188,7 +184,7 @@ export function breadcrumbs(
   ];
   if (ws === null) {
     const key = currentNavKey(pathname);
-    if (key === "apiKeys" || key === "roles") {
+    if (key === "apiKeys") {
       out.push({ kind: "nav", key: "organization", href: `/${enc(org)}` });
       out.push({ kind: "nav", key, href: null });
     } else if (key !== null) {

@@ -74,7 +74,7 @@ function harness(role: string | null) {
         Promise.resolve(id === LEDGER_ID ? summary() : null),
       readAttemptEventsSince: memoryEvents([]),
     },
-    sumTokenUsage: stores.sumTokenUsage,
+    readRunCosts: stores.readRunCosts,
     tachoFrames: memoryTachoFrames("none", []),
   };
   const insertExport = vi.fn<RunExportDeps["insertExport"]>(() =>

@@ -22,9 +22,9 @@ import {
   memoryStores,
   OTHER_WORKSPACE,
   SCOPE,
+  rollupCostRow,
   seal,
   tachoSession,
-  usage,
 } from "./run.test-support";
 
 const RUN_A = "0192d4a8-7c1e-7a00-8000-0000000000a1";
@@ -83,64 +83,20 @@ describe("list_runs", () => {
     expect(out.nextCursor).toBeNull();
   });
 
-  it("maps a tacho session with no cost_basis to cost null, never 0", async () => {
-    const { list } = handlerOver(
-      [],
-      [
-        tachoSession({
-          publicId: "tse_nobasis",
-          session: { totalCostMicros: 0, costBasis: null },
-        }),
-        tachoSession({
-          publicId: "tse_priced",
-          session: {
-            startedAt: at("2026-09-11T09:01:00.000Z"),
-            totalCostMicros: 97_937,
-            costBasis: "list",
-          },
-        }),
-        tachoSession({
-          publicId: "tse_unknownbasis",
-          session: {
-            startedAt: at("2026-09-11T09:02:00.000Z"),
-            totalCostMicros: 50,
-            costBasis: "unknown",
-          },
-        }),
-        tachoSession({
-          publicId: "tse_unpriced",
-          session: {
-            startedAt: at("2026-09-11T09:03:00.000Z"),
-            totalCostMicros: 50,
-            costBasis: "list",
-            hasUnknownModelCost: true,
-          },
-        }),
-      ],
-    );
-    const out = await list({ limit: 50 }, ctx());
-    const cost = Object.fromEntries(out.runs.map((r) => [r.id, r.cost]));
-    expect(cost["tse_nobasis"]).toBeNull();
-    expect(cost["tse_unknownbasis"]).toBeNull();
-    expect(cost["tse_unpriced"]).toBeNull();
-    expect(cost["tse_priced"]).toEqual({
-      micros: "97937",
-      currency: "USD",
-      basis: "client_attested",
-    });
-    expect(JSON.stringify(out)).not.toContain('"micros":"0"');
-  });
-
-  it("costs a ledger run from gateway-metered token usage and leaves an unmetered one null", async () => {
+  it("costs a run from its rollup row with the basis the row recorded, and leaves an unrolled one null", async () => {
     const { list, stores } = handlerOver(
       [
-        ledgerRun({ publicId: "arun_metered", runId: RUN_A, usage: usage() }),
         ledgerRun({
-          publicId: "arun_unmetered",
+          publicId: "arun_rolled",
+          runId: RUN_A,
+          cost: rollupCostRow(),
+        }),
+        ledgerRun({
+          publicId: "arun_unrolled",
           runId: RUN_B,
           run: {
             runId: RUN_B,
-            publicId: "arun_unmetered",
+            publicId: "arun_unrolled",
             status: "completed",
             createdAt: at("2026-09-11T11:00:00.000Z"),
             startedAt: null,
@@ -151,29 +107,62 @@ describe("list_runs", () => {
           },
         }),
       ],
-      [],
+      [
+        tachoSession({ publicId: "tse_unrolled" }),
+        tachoSession({
+          publicId: "tse_attested",
+          session: { startedAt: at("2026-09-11T09:01:00.000Z") },
+          cost: rollupCostRow({
+            costMicros: 97_937n,
+            costBasis: "client_attested",
+          }),
+        }),
+        tachoSession({
+          publicId: "tse_estimated",
+          session: { startedAt: at("2026-09-11T09:02:00.000Z") },
+          cost: rollupCostRow({ costMicros: 50n, costBasis: "estimated" }),
+        }),
+        tachoSession({
+          publicId: "tse_other",
+          scope: OTHER_WORKSPACE,
+          cost: rollupCostRow(),
+        }),
+      ],
     );
     const out = await list({ limit: 50 }, ctx());
-    expect(out.runs.map((r) => [r.id, r.cost])).toEqual([
-      ["arun_unmetered", null],
+    expect(runList.output.parse(out)).toEqual(out);
+    const cost = Object.fromEntries(out.runs.map((r) => [r.id, r.cost]));
+    expect(cost["arun_rolled"]).toEqual({
+      micros: "12500",
+      currency: "USD",
+      basis: "gateway_observed",
+    });
+    expect(cost["arun_unrolled"]).toBeNull();
+    expect(cost["tse_unrolled"]).toBeNull();
+    expect(cost["tse_attested"]).toEqual({
+      micros: "97937",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(cost["tse_estimated"]).toEqual({
+      micros: "50",
+      currency: "USD",
+      basis: "estimated",
+    });
+    expect(cost["tse_other"]).toBeUndefined();
+    expect(JSON.stringify(out)).not.toContain('"micros":"0"');
+    // One rollup read for the page, over exactly the runs on it.
+    expect(stores.costCalls).toEqual([
       [
-        "arun_metered",
-        { micros: "12500", currency: "USD", basis: "gateway_observed" },
+        "arun_unrolled",
+        "arun_rolled",
+        "tse_estimated",
+        "tse_attested",
+        "tse_unrolled",
       ],
     ]);
-    // One ClickHouse read for the page, over exactly the ledger runs on it.
-    expect(stores.usageCalls).toEqual([[RUN_B, RUN_A]]);
     // A run with no started_at is placed by its created_at.
     expect(out.runs[0]?.startedAt).toBe("2026-09-11T11:00:00.000Z");
-  });
-
-  it("does not read ClickHouse when the page holds no ledger run", async () => {
-    const { list, stores } = handlerOver(
-      [],
-      [tachoSession({ publicId: "tse_a" })],
-    );
-    await list({ limit: 50 }, ctx());
-    expect(stores.usageCalls).toEqual([]);
   });
 
   it("leaves the operator and the agent key null when the row recorded neither", async () => {

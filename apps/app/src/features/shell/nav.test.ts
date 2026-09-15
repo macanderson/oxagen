@@ -20,7 +20,7 @@ describe("parseShellPath", () => {
   });
 
   it("treats the static organization segments as organization pages, not workspaces", () => {
-    for (const segment of ["billing", "audit", "api-keys", "roles"])
+    for (const segment of ["billing", "audit", "api-keys"])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
         ws: null,
@@ -57,7 +57,6 @@ describe("currentNavKey and isNavItemCurrent", () => {
     ["/acme/billing", "billing"],
     ["/acme/audit/exports", "audit"],
     ["/acme/api-keys", "apiKeys"],
-    ["/acme/roles", "roles"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
@@ -74,9 +73,8 @@ describe("currentNavKey and isNavItemCurrent", () => {
     expect(currentNavKey("/acme/core-platform/scenarios")).toBeNull();
   });
 
-  it("marks Organization current for its API keys and roles pages", () => {
+  it("marks Organization current for its API keys page", () => {
     expect(isNavItemCurrent("organization", "/acme/api-keys")).toBe(true);
-    expect(isNavItemCurrent("organization", "/acme/roles")).toBe(true);
   });
 
   it("does not mark an item current on another page", () => {
@@ -96,7 +94,6 @@ describe("hrefs", () => {
     expect(workspaceHref("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(orgHref("acme", "organization")).toBe("/acme");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
-    expect(orgHref("acme", "roles")).toBe("/acme/roles");
   });
 
   it("refuses to build an organization href for a workspace page", () => {

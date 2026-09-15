@@ -19,6 +19,7 @@ import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
+import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
@@ -222,6 +223,12 @@ import { runBisectRoute } from "./routes/v1/run.bisect";
 import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
+import { spendGetRoute } from "./routes/v1/spend.get";
+import { spendDrillRoute } from "./routes/v1/spend.drill";
+import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { runCostGetRoute } from "./routes/v1/run.cost";
+import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
   Variables: {
@@ -429,8 +436,17 @@ orgScoped.route("/runs/bisect", runBisectRoute);
 orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);
 orgScoped.route("/runs/summarize", runSummarizeRoute);
+// Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
+// run's cost and the price book. All noBillingGate reads of Postgres rollups.
+orgScoped.route("/spend", spendGetRoute);
+orgScoped.route("/spend/drill", spendDrillRoute);
+orgScoped.route("/spend/waste", spendWasteListRoute);
+orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);
 orgScoped.route(

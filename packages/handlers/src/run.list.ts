@@ -3,10 +3,13 @@
 //   arun_…  the run evidence ledger: `agent.agent_runs` (V2 rows only; a legacy
 //           V1 row carries no run identity), counts folded from
 //           `agent.agent_run_events`, the latest seal from
-//           `agent.agent_run_attempt_seals`, and gateway-metered spend from
-//           ClickHouse `token_usage` (sumTokenUsageByExecutionStep).
+//           `agent.agent_run_attempt_seals`.
 //   tse_…   wrapped agents in `tacho.sessions`, root sessions only (a subagent
 //           chain is part of its parent's run).
+//
+// Cost and basis for both come from the run's `cost.run_totals` row (ADR-060),
+// which the rollup job rebuilds from the run's frames after its seal; a run
+// with no row yet answers `cost: null`. Nothing here reads ClickHouse.
 //
 // The kernel enters the tenant scope before this handler runs, so every
 // Postgres read goes through withTenantDb, whose RLS is the tenant filter. The
@@ -14,8 +17,7 @@
 // bypass on, and a run from another workspace must still stay out of the list.
 //
 // Every field the store may not have recorded maps to null, never to a
-// substitute: a tacho session with no `cost_basis` has no cost, whatever
-// `total_cost_micros` (NOT NULL DEFAULT 0) holds.
+// substitute.
 //
 // Ported from apps/app/src/data/adapters/live/runs.ts and mappers/runs.ts at
 // 27b9d2520 (ARCHITECTURE.md §7.2), minus the view-model concerns that stay
@@ -29,10 +31,6 @@ import {
 } from "@oxagen/oxagen/contracts/run.list";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { isReplayGrade } from "@oxagen/tacho";
-import {
-  sumTokenUsageByExecutionStep,
-  type TokenUsageByStepRow,
-} from "@oxagen/telemetry";
 import {
   and,
   desc,
@@ -51,8 +49,6 @@ export type RunScope = { orgId: string; workspaceId: string };
 export function runScope(ctx: CapabilityContext): RunScope {
   return { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 }
-
-const USD = "USD";
 
 // ---- Cursor -------------------------------------------------------------------------
 
@@ -361,9 +357,6 @@ const tachoColumns = {
     numModelCalls: sessions.numModelCalls,
     numToolCalls: sessions.numToolCalls,
     seqCount: sessions.seqCount,
-    totalCostMicros: sessions.totalCostMicros,
-    costBasis: sessions.costBasis,
-    hasUnknownModelCost: sessions.hasUnknownModelCost,
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
     replayGrade: sessions.replayGrade,
@@ -494,8 +487,13 @@ export type LedgerRunRecord = LedgerRunRow & {
   rollup: LedgerEventRollup;
   /** The latest attempt seal; null while the run is open or none was recorded. */
   seal: LedgerSeal | null;
-  /** `token_usage` summed for `execution_step_id = agent_runs.id`; null = no row. */
-  usage: TokenUsageByStepRow | null;
+};
+
+/** What a `cost.run_totals` row says about a run's spend. */
+export type RunCost = {
+  costMicros: bigint;
+  currency: string;
+  costBasis: NonNullable<RunItem["cost"]>["basis"];
 };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
@@ -507,9 +505,6 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   numModelCalls: number;
   numToolCalls: number;
   seqCount: number;
-  totalCostMicros: number;
-  costBasis: string | null;
-  hasUnknownModelCost: boolean | null;
   startedAt: Date;
   sealedAt: Date | null;
   /** Written by the seal at `agent_stop`; null while the session is open. */
@@ -523,15 +518,6 @@ export type TachoSessionRow = {
   /** `iam.principals.public_id` for `initiating_principal_id`. */
   operatorPublicId: string | null;
 };
-
-/** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
-export function microsString(micros: number): string {
-  if (!Number.isSafeInteger(micros))
-    throw new RangeError(
-      `cost micros must be a safe integer: ${String(micros)}`,
-    );
-  return String(micros);
-}
 
 /**
  * The agent key `org_ns.ws_ns.slug` (ADR-024), or null when a namespace or the
@@ -601,17 +587,32 @@ function generatedSummary(
   };
 }
 
-/** Gateway-metered token spend. Absent means not metered, never zero. */
-export function ledgerCost(usage: TokenUsageByStepRow | null): RunItem["cost"] {
-  if (!usage) return null;
+/** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
+export function microsString(micros: number): string {
+  if (!Number.isSafeInteger(micros))
+    throw new RangeError(
+      `cost micros must be a safe integer: ${String(micros)}`,
+    );
+  return String(micros);
+}
+
+/**
+ * The run's cost as its rollup row records it. No row yet — the run is open,
+ * or the rollup has not covered its seal — means no cost, never zero.
+ */
+export function rollupCost(row: RunCost | undefined): RunItem["cost"] {
+  if (!row) return null;
   return {
-    micros: microsString(usage.costMicros),
-    currency: USD,
-    basis: "gateway_observed",
+    micros: row.costMicros.toString(),
+    currency: row.currency,
+    basis: row.costBasis,
   };
 }
 
-export function toLedgerRunItem(record: LedgerRunRecord): RunItem {
+export function toLedgerRunItem(
+  record: LedgerRunRecord,
+  cost: RunItem["cost"],
+): RunItem {
   const { run, identity, rollup } = record;
   const status = ledgerRunStatus(run.status);
   return {
@@ -627,7 +628,7 @@ export function toLedgerRunItem(record: LedgerRunRecord): RunItem {
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
     steps: rollup.modelCalls + rollup.toolCalls,
     frames: rollup.frames,
-    cost: ledgerCost(record.usage),
+    cost,
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
@@ -656,28 +657,10 @@ export function tachoRunStatus(outcome: string): RunItem["status"] {
   }
 }
 
-/**
- * The session's cost so far as the harness reported it: client-attested.
- * `total_cost_micros` is NOT NULL DEFAULT 0, so the column alone cannot say
- * whether anything was priced; `cost_basis` can. No basis, a basis the
- * harness itself calls unknown, or a model the collector could not price,
- * and there is no cost to show.
- */
-export function tachoCost(session: TachoSessionColumns): RunItem["cost"] {
-  if (
-    session.costBasis === null ||
-    session.costBasis === "unknown" ||
-    session.hasUnknownModelCost === true
-  )
-    return null;
-  return {
-    micros: microsString(session.totalCostMicros),
-    currency: USD,
-    basis: "client_attested",
-  };
-}
-
-export function toTachoRunItem(row: TachoSessionRow): RunItem {
+export function toTachoRunItem(
+  row: TachoSessionRow,
+  cost: RunItem["cost"],
+): RunItem {
   const { session } = row;
   return {
     id: session.publicId,
@@ -688,7 +671,7 @@ export function toTachoRunItem(row: TachoSessionRow): RunItem {
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
-    cost: tachoCost(session),
+    cost,
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
@@ -756,10 +739,52 @@ export type RunQueries = {
   ) => Promise<TachoSessionRow | null>;
 };
 
-export type SumTokenUsage = (args: {
-  orgId: string;
-  executionStepIds: readonly string[];
-}) => Promise<Map<string, TokenUsageByStepRow>>;
+/** The `cost.run_totals` rows for a page of runs, by public id; a run with no row is absent. */
+export type ReadRunCosts = (
+  scope: RunScope,
+  runIds: readonly string[],
+) => Promise<Map<string, RunCost>>;
+
+const COST_BASES = new Set([
+  "gateway_observed",
+  "client_attested",
+  "mixed",
+  "estimated",
+]);
+
+export const postgresReadRunCosts: ReadRunCosts = async (scope, runIds) => {
+  if (runIds.length === 0) return new Map();
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        runId: schema.runTotals.runId,
+        costMicros: schema.runTotals.costMicros,
+        currency: schema.runTotals.currency,
+        costBasis: schema.runTotals.costBasis,
+      })
+      .from(schema.runTotals)
+      .where(
+        and(
+          eq(schema.runTotals.orgId, scope.orgId),
+          eq(schema.runTotals.workspaceId, scope.workspaceId),
+          inArray(schema.runTotals.runId, [...runIds]),
+        ),
+      ),
+  );
+  const out = new Map<string, RunCost>();
+  for (const r of rows) {
+    // A row whose frames priced nothing carries null cost and basis: no cost.
+    if (r.costMicros === null || r.costBasis === null) continue;
+    if (!COST_BASES.has(r.costBasis))
+      throw new RangeError(`cost basis outside the CHECK: ${r.costBasis}`);
+    out.set(r.runId, {
+      costMicros: r.costMicros,
+      currency: r.currency,
+      costBasis: r.costBasis as RunCost["costBasis"],
+    });
+  }
+  return out;
+};
 
 export const postgresRunQueries: RunQueries = {
   ledgerPage: (scope, q) => withTenantDb((tx) => ledgerPageQuery(tx, scope, q)),
@@ -800,27 +825,20 @@ export const postgresRunQueries: RunQueries = {
   },
 };
 
-/** Spend, seals and rollups for a set of ledger runs, in parallel. */
+/** Seals and event rollups for a set of ledger runs, in parallel. */
 export async function ledgerEnrichment(
-  deps: {
-    queries: Pick<RunQueries, "ledgerRollups" | "ledgerSeals">;
-    sumTokenUsage: SumTokenUsage;
-  },
+  deps: { queries: Pick<RunQueries, "ledgerRollups" | "ledgerSeals"> },
   scope: RunScope,
   runIds: readonly string[],
 ) {
-  const [rollups, sealed, usage] = await Promise.all([
+  const [rollups, sealed] = await Promise.all([
     deps.queries.ledgerRollups(scope, runIds),
     deps.queries.ledgerSeals(scope, runIds),
-    runIds.length === 0
-      ? Promise.resolve(new Map<string, TokenUsageByStepRow>())
-      : deps.sumTokenUsage({ orgId: scope.orgId, executionStepIds: runIds }),
   ]);
   return (row: LedgerRunRow): LedgerRunRecord => ({
     ...row,
     rollup: rollups.get(row.run.runId) ?? EMPTY_ROLLUP,
     seal: sealed.get(row.run.runId) ?? null,
-    usage: usage.get(row.run.runId) ?? null,
   });
 }
 
@@ -828,7 +846,7 @@ export async function ledgerEnrichment(
 
 export type RunListDeps = {
   queries: RunQueries;
-  sumTokenUsage: SumTokenUsage;
+  readRunCosts: ReadRunCosts;
 };
 
 type FleetItem =
@@ -874,18 +892,24 @@ export function createRunListHandler(
       input.limit,
     );
 
-    const enrich = await ledgerEnrichment(
-      deps,
-      scope,
-      merged.items.flatMap((item) =>
-        item.kind === "ledger" ? [item.row.run.runId] : [],
+    const [enrich, costs] = await Promise.all([
+      ledgerEnrichment(
+        deps,
+        scope,
+        merged.items.flatMap((item) =>
+          item.kind === "ledger" ? [item.row.run.runId] : [],
+        ),
       ),
-    );
+      deps.readRunCosts(
+        scope,
+        merged.items.map((item) => item.id),
+      ),
+    ]);
     return {
       runs: merged.items.map((item) =>
         item.kind === "ledger"
-          ? toLedgerRunItem(enrich(item.row))
-          : toTachoRunItem(item.row),
+          ? toLedgerRunItem(enrich(item.row), rollupCost(costs.get(item.id)))
+          : toTachoRunItem(item.row, rollupCost(costs.get(item.id))),
       ),
       nextCursor: merged.nextCursor,
     };
@@ -894,5 +918,5 @@ export function createRunListHandler(
 
 export const runListHandler = createRunListHandler({
   queries: postgresRunQueries,
-  sumTokenUsage: sumTokenUsageByExecutionStep,
+  readRunCosts: postgresReadRunCosts,
 });

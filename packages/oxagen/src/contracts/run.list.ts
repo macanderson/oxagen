@@ -17,6 +17,7 @@
 import { REPLAY_GRADES } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { costSchema } from "./spend.shared";
 
 /** A public id either store mints: the prefix names the store. */
 export const runPublicIdSchema = z
@@ -34,20 +35,12 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
 export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
 
 /**
- * A metered cost. `basis` says who observed the figure: the gateway
- * (`token_usage` rows summed for the run) or the harness that ran the agent
- * (a tacho session's own total, reported by the client). A number never reads
- * stronger than its basis.
+ * A metered cost, read from the run's `cost.run_totals` row (ADR-060). `basis`
+ * says who observed the figure: the gateway, the harness that ran the agent,
+ * both (`mixed`), or nobody with a price for the model (`estimated`). A
+ * number never reads stronger than its basis.
  */
-export const runCostSchema = z
-  .object({
-    /** Integer micro-units as a decimal string, never a float. */
-    micros: z.string().regex(/^-?\d+$/),
-    /** ISO 4217. */
-    currency: z.string().length(3),
-    basis: z.enum(["gateway_observed", "client_attested"]),
-  })
-  .strict();
+export const runCostSchema = costSchema;
 
 /**
  * The replay grade the seal recorded (spec §8.4): the strongest verb a reader
@@ -89,7 +82,7 @@ export const runItemSchema = z
     steps: z.number().int().nonnegative(),
     /** Recorded events (ledger) or hash-chained events (tacho). */
     frames: z.number().int().nonnegative(),
-    /** Null when no cost was metered or the harness could not price it. */
+    /** Null until the rollup has priced the run's frames after its seal. */
     cost: runCostSchema.nullable(),
     /** The goal a ledger run was admitted for; tacho records none. */
     taskRef: z.string().nullable(),

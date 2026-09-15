@@ -24,18 +24,17 @@ import {
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
-import {
-  selectTachoEvents,
-  sumTokenUsageByExecutionStep,
-} from "@oxagen/telemetry";
+import { selectTachoEvents } from "@oxagen/telemetry";
 import {
   ledgerEnrichment,
   type LedgerRunRecord,
   type LedgerRunRow,
+  postgresReadRunCosts,
   postgresRunQueries,
+  type ReadRunCosts,
+  rollupCost,
   type RunQueries,
   type RunScope,
-  type SumTokenUsage,
   type TachoSessionRow,
   toLedgerRunItem,
   toTachoRunItem,
@@ -68,7 +67,7 @@ export type RunReadDeps = {
     "ledgerIdentity" | "ledgerRollups" | "ledgerSeals" | "tachoSession"
   >;
   store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">;
-  sumTokenUsage: SumTokenUsage;
+  readRunCosts: ReadRunCosts;
   tachoFrames: TachoFrameReader;
 };
 
@@ -84,25 +83,29 @@ export async function resolveRun(
   if (publicId.startsWith("tse_")) {
     const row = await deps.queries.tachoSession(scope, publicId);
     if (!row) throw runNotFound();
+    const costs = await deps.readRunCosts(scope, [publicId]);
     return {
       source: "tacho",
       sessionUuid: row.session.sessionUuid,
       row,
-      item: toTachoRunItem(row),
+      item: toTachoRunItem(row, rollupCost(costs.get(publicId))),
     };
   }
   const summary = await deps.store.getRunByPublicId(publicId);
   if (!summary) throw runNotFound();
   const row = await deps.queries.ledgerIdentity(scope, summary.runId);
   if (!row) throw runNotFound();
-  const enrich = await ledgerEnrichment(deps, scope, [summary.runId]);
+  const [enrich, costs] = await Promise.all([
+    ledgerEnrichment(deps, scope, [summary.runId]),
+    deps.readRunCosts(scope, [publicId]),
+  ]);
   const record = enrich(row);
   return {
     source: "ledger",
     runId: summary.runId,
     row,
     record,
-    item: toLedgerRunItem(record),
+    item: toLedgerRunItem(record, rollupCost(costs.get(publicId))),
   };
 }
 
@@ -195,7 +198,7 @@ export function defaultRunReadDeps(): RunReadDeps {
       readAttemptEventsSince: (id, after, limit) =>
         ledger.readAttemptEventsSince(id, after, limit),
     },
-    sumTokenUsage: sumTokenUsageByExecutionStep,
+    readRunCosts: postgresReadRunCosts,
     tachoFrames: selectTachoEvents,
   };
 }

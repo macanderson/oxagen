@@ -20,11 +20,11 @@ import {
   memoryStores,
   memoryTachoFrames,
   OTHER_WORKSPACE,
+  rollupCostRow,
   seal,
   summary,
   tachoRow,
   tachoSession,
-  usage,
 } from "./run.test-support";
 
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
@@ -47,7 +47,11 @@ type Over = {
 function harness(over: Over = {}) {
   const stores = memoryStores(
     over.ledger ?? [
-      ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID, usage: usage() }),
+      ledgerRun({
+        publicId: LEDGER_ID,
+        runId: RUN_UUID,
+        cost: rollupCostRow(),
+      }),
     ],
     over.tacho ?? [tachoSession({ publicId: TACHO_ID })],
   );
@@ -63,7 +67,7 @@ function harness(over: Over = {}) {
         ),
       readAttemptEventsSince: memoryEvents(log),
     },
-    sumTokenUsage: stores.sumTokenUsage,
+    readRunCosts: stores.readRunCosts,
     tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
     now: () => clock,
     sleep: (ms) => {
@@ -113,6 +117,7 @@ describe("get_run", () => {
     expect(out.run).toMatchObject({
       id: TACHO_ID,
       source: "tacho",
+      // No rollup row yet: no cost, never a zero.
       cost: null,
       replayGrade: "view",
     });
@@ -206,6 +211,23 @@ describe("get_run", () => {
     ]);
     // A ledger frame carries no cost record: spend is metered per run.
     expect(out.frames.frames.every((f) => f.cost === null)).toBe(true);
+  });
+
+  it("answers a wrapped session's cost from its rollup row with the basis recorded there", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          cost: rollupCostRow({ costMicros: 97_937n, costBasis: "mixed" }),
+        }),
+      ],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.cost).toEqual({
+      micros: "97937",
+      currency: "USD",
+      basis: "mixed",
+    });
   });
 
   it("answers a ledger run's header and a first frame page whose cursor resumes it", async () => {
@@ -373,7 +395,7 @@ describe("get_run", () => {
     expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
   });
 
-  it("does not read token_usage or the ledger for a wrapped session, and reads only its own session's frames", async () => {
+  it("does not call the ledger reader for a wrapped session, reads its rollup row alone, and reads only its own session's frames", async () => {
     const readEvents = vi.fn();
     const stores = memoryStores([], [tachoSession({ publicId: TACHO_ID })]);
     const tachoFrames = vi.fn(
@@ -382,14 +404,14 @@ describe("get_run", () => {
     const get = createRunGetHandler({
       queries: stores.queries,
       store: { getRunByPublicId: vi.fn(), readAttemptEventsSince: readEvents },
-      sumTokenUsage: stores.sumTokenUsage,
+      readRunCosts: stores.readRunCosts,
       tachoFrames,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(readEvents).not.toHaveBeenCalled();
-    expect(stores.usageCalls).toEqual([]);
+    expect(stores.costCalls).toEqual([[TACHO_ID]]);
     expect(tachoFrames).toHaveBeenCalledWith({
       sessionUuid: SESSION_UUID,
       afterSeq: -1,

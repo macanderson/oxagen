@@ -1,4 +1,6 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
+import { costRunRollup } from "./functions/cost.run-rollup";
+import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -41,6 +43,8 @@ import { runSummarize } from "./functions/run.summarize";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   billingDunningSweep,
+  costRunRollup,
+  costDailyRollup,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,

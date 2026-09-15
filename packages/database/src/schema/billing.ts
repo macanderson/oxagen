@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -736,6 +737,45 @@ export const spendBudgets = billingSchema.table(
       sql`(${t.period} = 'rolling' AND ${t.windowDays} IS NOT NULL AND ${t.windowDays} > 0) OR (${t.period} = 'monthly' AND ${t.windowDays} IS NULL)`,
     ),
     limitCheck: check("spend_budgets_limit_check", sql`${t.limitMicros} > 0`),
+  }),
+);
+
+// ── spend_counters ───────────────────────────────────────────────────────────
+//
+// The running spend counter the recorders keep for the spend-budget gate
+// (spec §12.5, ADR-060 §5). One row per (org, workspace, UTC day) in micro-USD:
+// every gateway-metered model call (`@oxagen/ai`) and every attested tacho
+// llm_call adds its cost with one INSERT … ON CONFLICT DO UPDATE. The gate and
+// the budget panel sum the rows over the ceiling's window in Postgres, so a
+// ClickHouse stall neither zeroes a ceiling nor denies a call (#2820).
+//
+// workspace_id is NULL for a frame that carried no workspace (a gateway call
+// outside a workspace scope); an org-level ceiling sums every row, a workspace
+// ceiling the rows that name it.
+export const spendCounters = billingSchema.table(
+  "spend_counters",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id"),
+    day: date("day", { mode: "string" }).notNull(),
+    // `sql\`0\``: drizzle-kit export cannot serialize a BigInt literal default.
+    spentMicros: bigint("spent_micros", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    scopeDayIdx: uniqueIndex("spend_counters_scope_day_idx").on(
+      t.orgId,
+      sql`coalesce(${t.workspaceId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      t.day,
+    ),
+    spentCheck: check("spend_counters_spent_check", sql`${t.spentMicros} >= 0`),
   }),
 );
 

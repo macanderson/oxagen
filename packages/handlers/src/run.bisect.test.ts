@@ -46,7 +46,7 @@ function harness(over: {
         Promise.resolve(id === LEDGER_ID ? summary() : null),
       readAttemptEventsSince: memoryEvents(over.events ?? []),
     },
-    sumTokenUsage: stores.sumTokenUsage,
+    readRunCosts: stores.readRunCosts,
     tachoFrames: ({ sessionUuid, afterSeq, limit }) =>
       Promise.resolve(
         (bySession[sessionUuid] ?? [])

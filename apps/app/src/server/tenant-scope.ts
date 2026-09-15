@@ -11,7 +11,3 @@ export type Scope = { readonly orgId: string; readonly workspaceId: string };
  * `runInTenantScope`'s UUID assertion satisfied without naming a real workspace.
  */
 export const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-export function isOrgOnlyScope(scope: Scope): boolean {
-  return scope.workspaceId === ORG_ONLY_WS;
-}

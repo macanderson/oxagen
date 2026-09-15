@@ -49,6 +49,12 @@ import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
 import { runList } from "./run.list";
+import { runCostGet } from "./run.cost";
+import { spendGet } from "./spend.get";
+import { spendDrill } from "./spend.drill";
+import { spendWasteList } from "./spend.waste";
+import { spendStatementExport } from "./spend.statement.export";
+import { costPriceEntryList } from "./cost.price_entry.list";
 import { runGet } from "./run.get";
 import { runFrameBodyGet } from "./run.frame_body.get";
 import { runTranscriptGet } from "./run.transcript.get";
@@ -85,11 +91,13 @@ import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationa
 import { agentToolList } from "./agent.tool.list";
 import { billingActionEstimate } from "./billing.action_estimate";
 import { billingActionRateCard } from "./billing.action_rate_card";
+import { billingAutoTopupSet } from "./billing.auto_topup.set";
 import { billingContractRateGet } from "./billing.contract_rate.get";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
 import { billingInvoiceList } from "./billing.invoice.list";
+import { billingOrgTermsSet } from "./billing.org_terms.set";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -277,6 +285,22 @@ export type {
   FieldError as SharedFieldError,
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
+// Spend vocabulary (ADR-060): money in micros with a basis, day ranges, token
+// classes. The shared file is not a capability, so it is exported here to
+// satisfy the check-contracts file-coverage guard.
+export {
+  costBasisSchema,
+  costSchema,
+  moneySchema,
+  spendFigureSchema,
+  tokenCountsSchema,
+} from "./spend.shared";
+export type {
+  Cost,
+  CostBasis,
+  SpendGroupKind,
+  TokenCounts,
+} from "./spend.shared";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
@@ -458,14 +482,22 @@ export {
   runBisect,
   runFork,
   runSummarize,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
+  billingAutoTopupSet,
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
   billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -715,14 +747,22 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runBisect,
   runFork,
   runSummarize,
+  runCostGet,
+  spendGet,
+  spendDrill,
+  spendWasteList,
+  spendStatementExport,
+  costPriceEntryList,
   agentToolList,
   billingActionEstimate,
   billingActionRateCard,
+  billingAutoTopupSet,
   billingContractRateGet,
   billingCreditsPurchase,
   billingEvidenceRetention,
   billingGauBucketGet,
   billingInvoiceList,
+  billingOrgTermsSet,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
