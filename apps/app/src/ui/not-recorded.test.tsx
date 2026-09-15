@@ -1,0 +1,49 @@
+// @vitest-environment jsdom
+import { cleanup, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import en from "../../messages/en.json";
+import { UNRECORDED, type UnrecordedKey } from "@/data/unrecorded";
+import { NotRecorded } from "./not-recorded";
+import { renderWithIntl } from "./testing/render-with-intl";
+
+afterEach(() => {
+  cleanup();
+});
+
+const keys = Object.keys(UNRECORDED) as UnrecordedKey[];
+
+describe("NotRecorded", () => {
+  it.each(keys)("renders the catalog prose for %s", (section) => {
+    renderWithIntl(<NotRecorded section={section} />);
+    const state = screen.getByTestId("not-recorded");
+    expect(state).toHaveAttribute("data-section", section);
+    expect(state.textContent).toMatch(/not recorded/);
+    expect(state).not.toHaveTextContent(/\bG\d+\b/);
+    expect(state).not.toHaveTextContent(/milestone/i);
+  });
+
+  it("carries the backend gap as data only, and only where the row names one", () => {
+    renderWithIntl(<NotRecorded section="run.frames_wrapped" />);
+    expect(screen.getByTestId("not-recorded")).toHaveAttribute(
+      "data-gap",
+      "G6",
+    );
+    cleanup();
+    renderWithIntl(<NotRecorded section="agents" />);
+    expect(screen.getByTestId("not-recorded")).not.toHaveAttribute("data-gap");
+  });
+
+  it("has prose in the catalog for every row and no row without prose", () => {
+    const prose = en.unrecorded as Record<string, unknown>;
+    const flat = new Set<string>();
+    const walk = (node: Record<string, unknown>, prefix: string) => {
+      for (const [k, v] of Object.entries(node)) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === "string") flat.add(key);
+        else walk(v as Record<string, unknown>, key);
+      }
+    };
+    walk(prose, "");
+    expect([...flat].sort()).toEqual([...keys].sort());
+  });
+});

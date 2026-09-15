@@ -14,31 +14,24 @@ const itemClass =
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const { theme, setTheme } = useShellState();
-  const viewer = data.context.ok ? data.context.value.viewer : null;
+  const { viewer } = data;
+  const displayName = viewer.name ?? viewer.email;
   return (
     <Menu.Root>
       <Menu.Trigger
         data-testid="user-menu-trigger"
-        aria-label={
-          viewer === null
-            ? t("topbar.userMenuUnknown")
-            : t("topbar.userMenu", { name: viewer.name })
-        }
+        aria-label={t("topbar.userMenu", { name: displayName })}
         className="grid size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <span aria-hidden="true">
-          {viewer === null ? "?" : initials(viewer.name)}
-        </span>
+        <span aria-hidden="true">{initials(displayName)}</span>
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={8} align="end" className="z-50">
           <Menu.Popup className="min-w-56 rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg shadow-lg outline-none">
-            {viewer === null ? null : (
-              <div className="border-b border-menu-separator px-2.5 pb-2 pt-1.5">
-                <p className="text-sm font-semibold">{viewer.name}</p>
-                <p className="text-xs text-muted-foreground">{viewer.email}</p>
-              </div>
-            )}
+            <div className="border-b border-menu-separator px-2.5 pb-2 pt-1.5">
+              <p className="text-sm font-semibold">{displayName}</p>
+              <p className="text-xs text-muted-foreground">{viewer.email}</p>
+            </div>
             <Menu.Item
               className={itemClass}
               closeOnClick={false}

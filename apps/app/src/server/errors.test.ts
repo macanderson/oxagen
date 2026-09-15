@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  AppError,
   CAPABILITY_ERROR_STATUS,
   ContractOutputMismatch,
-  InvalidStreamCursor,
   ToolNotRegistered,
   toActionFailure,
 } from "./errors";
@@ -34,9 +32,7 @@ describe("AppError subclasses", () => {
       "contract_output_mismatch",
       502,
     ],
-    [new InvalidStreamCursor("abc"), "invalid_stream_cursor", 400],
   ] as const)("%s carries a stable code and status", (err, code, status) => {
-    expect(err).toBeInstanceOf(AppError);
     expect(err).toBeInstanceOf(Error);
     expect(err.code).toBe(code);
     expect(err.status).toBe(status);

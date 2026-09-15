@@ -4,14 +4,14 @@
 // shape of a canned reply.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
-import type { TokenUsageByStepRow } from "@oxagen/telemetry";
 import {
   type LedgerEventRollup,
   type LedgerRunRow,
   type PageQuery,
+  type ReadRunCosts,
+  type RunCost,
   type RunQueries,
   type RunScope,
-  type SumTokenUsage,
   type TachoSessionColumns,
   type TachoSessionRow,
 } from "./run.list";
@@ -45,13 +45,16 @@ export type LedgerFixture = LedgerRunRow & {
   specVersion: number;
   rollup?: LedgerEventRollup;
   sealedAt?: Date | null;
-  usage?: TokenUsageByStepRow | null;
+  /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
+  cost?: RunCost | null;
 };
 
 export type TachoFixture = TachoSessionRow & {
   scope: RunScope;
   /** A subagent chain: never a root session. */
   child?: boolean;
+  /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
+  cost?: RunCost | null;
 };
 
 export function ledgerRun(
@@ -96,9 +99,6 @@ export function tachoSession(
       numModelCalls: 3,
       numToolCalls: 4,
       seqCount: 207,
-      totalCostMicros: 0,
-      costBasis: null,
-      hasUnknownModelCost: null,
       startedAt: new Date("2026-09-11T09:00:00.000Z"),
       sealedAt: new Date("2026-09-11T09:05:00.000Z"),
       ...session,
@@ -131,22 +131,22 @@ function pageOf<T extends Ordered>(rows: T[], q: PageQuery): T[] {
 
 export type MemoryStores = {
   queries: RunQueries;
-  sumTokenUsage: SumTokenUsage;
-  /** Every `sumTokenUsage` call, so a test can assert ClickHouse was not read. */
-  usageCalls: (readonly string[])[];
+  readRunCosts: ReadRunCosts;
+  /** Every `readRunCosts` call, so a test can assert what a page read. */
+  costCalls: (readonly string[])[];
 };
 
 export function memoryStores(
   ledger: readonly LedgerFixture[],
   tacho: readonly TachoFixture[],
 ): MemoryStores {
-  const usageCalls: (readonly string[])[] = [];
+  const costCalls: (readonly string[])[] = [];
   const inScope = (scope: RunScope) => ({
     ledger: ledger.filter((r) => sameScope(r.scope, scope)),
     tacho: tacho.filter((r) => sameScope(r.scope, scope)),
   });
   return {
-    usageCalls,
+    costCalls,
     queries: {
       ledgerPage: (scope, q) =>
         Promise.resolve(
@@ -212,32 +212,30 @@ export function memoryStores(
         );
       },
     },
-    sumTokenUsage: ({ executionStepIds }) => {
-      usageCalls.push(executionStepIds);
+    readRunCosts: (scope, runIds) => {
+      costCalls.push(runIds);
+      const rows = [
+        ...inScope(scope).ledger.map((r) => [r.run.publicId, r.cost] as const),
+        ...inScope(scope).tacho.map(
+          (r) => [r.session.publicId, r.cost] as const,
+        ),
+      ];
       return Promise.resolve(
         new Map(
-          ledger
-            .filter((r) => executionStepIds.includes(r.run.runId) && r.usage)
-            .map((r) => [r.run.runId, r.usage as TokenUsageByStepRow]),
+          rows.flatMap(([id, cost]) =>
+            runIds.includes(id) && cost ? [[id, cost] as const] : [],
+          ),
         ),
       );
     },
   };
 }
 
-export function usage(
-  over: Partial<TokenUsageByStepRow> = {},
-): TokenUsageByStepRow {
+export function rollupCostRow(over: Partial<RunCost> = {}): RunCost {
   return {
-    executionStepId: "0192d4a8-7c1e-7a00-8000-0000000000a1",
-    costMicros: 12_500,
-    inputTokens: 1_000,
-    outputTokens: 200,
-    llmCalls: 3,
-    model: "claude-sonnet-4-5",
-    provider: "anthropic",
-    principalId: "0192d4a8-7c1e-7a00-8000-0000000000p1",
-    principalKind: "human",
+    costMicros: 12_500n,
+    currency: "USD",
+    costBasis: "gateway_observed",
     ...over,
   };
 }

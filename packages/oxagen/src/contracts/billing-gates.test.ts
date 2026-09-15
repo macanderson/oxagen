@@ -10,18 +10,22 @@
  *
  * Both lists are read from the registry by name, so a contract renamed or
  * unregistered fails here rather than silently leaving the list. The INV-27
- * list grows with WL-27, WL-29 and WL-30 (`get_gau_bucket`, `list_invoices`,
+ * list is complete for the billing page: WL-27, WL-28, WL-29 and WL-30 have
+ * all landed (`get_gau_bucket`, `purchase_gau_bucket`, `list_invoices`,
  * `set_auto_topup`).
  */
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import "./index";
 
-/** INV-27: a billing-page read and the two billing writes. */
+/** INV-27: the billing-page reads and the two billing writes. */
 const BILLING_PAGE_CONTRACTS = [
   "get_subscription",
   "get_contract_rate",
+  "get_gau_bucket",
   "purchase_gau_bucket",
+  "list_invoices",
+  "set_auto_topup",
 ] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */

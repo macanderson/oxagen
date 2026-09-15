@@ -1,12 +1,15 @@
-import { notBacked } from "@/data/not-backed";
-import { PageState } from "@/ui/page-state";
-import { PlaceholderPage } from "@/ui/placeholder-page";
+import { getTranslations } from "next-intl/server";
+import { PageHeader } from "@/ui/page-header";
 
-// Batch 0 skeleton; its Batch 2 page lane replaces it.
-export default function FleetPage() {
+// The title alone until WL-34 builds the Fleet page (ARCHITECTURE.md §8).
+export default async function FleetPage() {
+  const t = await getTranslations("routes");
   return (
-    <PlaceholderPage route="fleet">
-      <PageState page="fleet" result={notBacked("M2", "G3")} />
-    </PlaceholderPage>
+    <main
+      id="main"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10"
+    >
+      <PageHeader title={t("fleet.title")} />
+    </main>
   );
 }

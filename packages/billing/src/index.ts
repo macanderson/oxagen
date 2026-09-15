@@ -21,6 +21,10 @@ export * from "./turn-budget-policy";
 export * from "./spend-budget";
 export * from "./spend-budget-store";
 export * from "./spend-budget-gate";
+export * from "./spend-counter";
+export * from "./price-book";
+export * from "./cost-rollup";
+export * from "./cost-rollup-store";
 export * from "./discount";
 export * from "./action-metering";
 export {

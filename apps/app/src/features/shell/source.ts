@@ -1,25 +1,16 @@
-// The shell's reads come from the one data source (`dataSource().shell`, plan
-// §4.5), for the viewer `requireViewer` admits to the organization: signed in,
-// a member, MFA satisfied, on the canonical slug. A stranger or an unknown slug
-// is a 404 before the shell reads anything, exactly as for the page inside it.
+// The shell renders for the viewer `requireViewer` admits to the organization:
+// signed in, a member, MFA satisfied, on the canonical slug. A stranger or an
+// unknown slug is a 404 before anything renders, exactly as for the page
+// inside the shell. No read runs here: `shell.context` (org and workspace
+// lists) is bound in WL-11 as the kernel seam's first production caller.
 import "server-only";
-import type { ShellReadPort } from "@/data/ports";
-import type { Scope } from "@/data/scope";
-import { dataSource } from "@/data/source";
 import { requireViewer } from "@/server/scope";
+import type { ShellData } from "./shell-data";
 
-export type ShellSource = {
-  port: ShellReadPort;
-  /** The organization-level scope the shell reads in. */
-  scope: Scope;
-  userId: string;
-};
-
-export async function shellSource(org: string): Promise<ShellSource> {
+export async function shellSource(org: string): Promise<ShellData> {
   const viewer = await requireViewer(org);
   return {
-    port: dataSource().shell,
-    scope: viewer.scope,
-    userId: viewer.userId,
+    org: { slug: viewer.org.slug, name: viewer.org.name },
+    viewer: { name: viewer.user.name, email: viewer.user.email },
   };
 }
