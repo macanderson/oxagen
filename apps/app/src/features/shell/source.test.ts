@@ -33,6 +33,7 @@ const source = {
     contractRate: vi.fn(),
     invoices: vi.fn(),
   },
+  org: { members: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

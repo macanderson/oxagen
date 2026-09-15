@@ -5,11 +5,11 @@
 **Mode:** sync
 **Scope:** tenant + workspace
 **Surfaces:** api
-**Why api only:** The handler's role gate needs a user; an MCP API key carries none and is refused `no_principal`, so the MCP surface is not declared. The CLI records the proposal with `oxagen context propose` (`propose_record`) and the PR is opened from Mission Control, so the CLI surface is not declared either.
+**Why api only:** The PR is opened from Mission Control, and the CLI records the proposal with `oxagen context propose` (`propose_record`), so neither the MCP nor the CLI surface is declared. Adding the MCP tool is a lane of its own.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
-**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler (`assertOrgRole`, INV-29)
+**Roles:** org Owner or Admin, or workspace Owner or Member — checked by the handler (`assertOrgRole`, INV-29) for the acting user: the signed-in user, or the creator of the API key (`resolveActingUserId`; a key with no creator is refused `no_principal`), who is recorded as the proposal's updater (2026-09-15, maintainer decision)
 
 ## Intent
 

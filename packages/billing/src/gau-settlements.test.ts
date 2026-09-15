@@ -927,6 +927,39 @@ describe("settleGauOpen and settleGauFailed", () => {
     expect(store.settlements).toHaveLength(1);
   });
 
+  it("a top-up that ends failed clears its episode, and the next exhaustion in the month claims again", async () => {
+    const bucket = seedBucket({ usedGau: 5_000 });
+    const tx = makeFakeGauTx(store);
+    const first = await claimAutoTopup(tx, bucket, FREE_TERMS, 1);
+
+    expect(await settleGauFailed(tx, first!.id)).toMatchObject({
+      status: "failed",
+    });
+    expect(bucket.openTopupSettlementId).toBeNull();
+
+    const second = await claimAutoTopup(tx, bucket, FREE_TERMS, 1);
+    expect(second).toMatchObject({ seq: 2, status: "pending" });
+  });
+
+  it("a failed row leaves an episode another settlement holds, and a failed interim row writes no bucket", async () => {
+    const held = crypto.randomUUID();
+    const bucket = seedBucket({ openTopupSettlementId: held, topupSeq: 2 });
+    const tx = makeFakeGauTx(store);
+    const stale = seedSettlement({ bucketId: bucket.id, seq: 1 });
+    const interim = seedSettlement({
+      bucketId: bucket.id,
+      kind: "interim_invoice",
+    });
+
+    await settleGauFailed(tx, stale.id);
+    await settleGauFailed(tx, interim.id);
+
+    expect(bucket.openTopupSettlementId).toBe(held);
+    expect(
+      store.log.filter((s) => s.op === "update" && s.table === "buckets"),
+    ).toHaveLength(1);
+  });
+
   it("a paid Checkout clears the open episode, and the next exhaustion claims again", async () => {
     const bucket = seedBucket({ usedGau: 5_000 });
     const tx = makeFakeGauTx(store);
@@ -1394,17 +1427,19 @@ describe("resumePendingGauSettlements", () => {
     });
   });
 
-  it("marks a row with no invoice id older than 24 hours failed and raises the stale alert, with no provider call", async () => {
-    const bucket = seedBucket({ usedGau: 5_000 });
+  it("marks a row with no invoice id older than 24 hours failed, ends its episode and raises the stale alert, with no provider call", async () => {
+    const bucket = seedBucket({ usedGau: 5_000, topupSeq: 1 });
     const row = seedSettlement({
       bucketId: bucket.id,
       createdAt: new Date(NOW.getTime() - 25 * HOUR),
     });
+    bucket.openTopupSettlementId = row.id;
     const error = vi.spyOn(logger, "error");
 
     await resumePendingGauSettlements(null, NOW);
 
     expect(settlement(row.id).status).toBe("failed");
+    expect(bucket.openTopupSettlementId).toBeNull();
     expect(providerCalls()).toEqual([]);
     expect(error).toHaveBeenCalledWith(
       expect.objectContaining({
