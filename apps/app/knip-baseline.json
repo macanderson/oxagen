@@ -13,7 +13,6 @@
   "exports src/features/auth/github-setup.ts NO_ORGANIZATION_TARGET",
   "exports src/features/auth/github-setup.ts repositoriesPath",
   "exports src/features/auth/github-setup.ts sourcesPath",
-  "exports src/features/auth/index.ts DEFAULT_NEXT",
   "exports src/features/auth/invitations.ts INVITATION_NOT_FOUND",
   "exports src/features/auth/safe-next.ts MAX_NEXT_LENGTH",
   "exports src/features/auth/schemas.ts PASSWORD_MAX",
