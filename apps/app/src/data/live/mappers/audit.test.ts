@@ -80,7 +80,13 @@ describe("toAuditPage", () => {
 
   it("carries no database id onto the page (INV-11)", () => {
     const view = toAuditPage(
-      page({ events: [denied], total: 1, hasMore: false, limit: 50, offset: 0 }),
+      page({
+        events: [denied],
+        total: 1,
+        hasMore: false,
+        limit: 50,
+        offset: 0,
+      }),
     );
     expect(JSON.stringify(view)).not.toContain(denied.id);
     expect(JSON.stringify(view)).not.toContain(denied.actorUserId);

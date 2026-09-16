@@ -34,8 +34,8 @@
       },
       "slug": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 100
+        "minLength": 2,
+        "maxLength": 40
       },
       "description": {
         "anyOf": [

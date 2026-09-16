@@ -124,6 +124,17 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
+  // Tool governance (MC spec §6.9, §6.11, ADR-072, #2958). A kill switch
+  // flip is the emergency deny an operator issues against a tool version, a
+  // tool server, a connection, an agent, an operator, a workspace, the
+  // organisation or a consequence class; every flip, on or off, is recorded
+  // with who, why and what it stopped (spec §6.11: "every switch flip is a
+  // security event"). Reclassifying a tool version changes which class
+  // switches and, later, which approval rules reach it, so it is recorded
+  // too. Emitted by packages/handlers/src/kill_switch.set.ts and
+  // tool.classification.set.ts.
+  "tool.kill_switch_flipped",
+  "tool.classification_changed",
   // Agent identity (MC spec §6.2, ADR-057, #2956). An agent identity is a
   // principal with a long-lived credential and roles; registering one adds a
   // machine actor to the organisation, suspending or resuming one changes

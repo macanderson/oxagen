@@ -159,8 +159,13 @@ describe("organization.create capability", () => {
       }
     });
 
+    // This list was hand-written and went stale the moment #3110 added
+    // /{org}/roles: nothing updated it, so nothing failed, and the segment
+    // shipped unguarded. The authoritative check reads the route directory
+    // itself — apps/app/src/shared/reserved-route-segments.test.ts. This one
+    // stays as the contract-side statement of the same invariant.
     it("covers the rev1 org-level route segments", () => {
-      for (const segment of ["api-keys", "billing", "audit"]) {
+      for (const segment of ["api-keys", "billing", "audit", "roles"]) {
         expect(RESERVED_WORKSPACE_SLUGS.has(segment), segment).toBe(true);
       }
     });

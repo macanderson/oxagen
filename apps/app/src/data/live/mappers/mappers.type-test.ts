@@ -9,13 +9,18 @@ import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
+import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import type { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
+import type { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
+import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { ContractOutput } from "@/server/kernel";
 import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
 import type { toAuditPage } from "./audit";
-import type { toApiKeys } from "./org";
+import type { toFirstFrame, toOnboardingGate } from "./onboarding";
+import type { toApiKeys, toRoleCatalog, toWorkspaceList } from "./org";
 import type { toRunPage } from "./runs";
 
 /** Each field of View that Out also has may be nullable only where Out's is. */
@@ -43,6 +48,11 @@ type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
 type ApiKeyOut = ContractOutput<typeof apiKeyList>["items"][number];
 type ApiKeyView = ReturnType<typeof toApiKeys>[number];
 
+type RoleOut = ContractOutput<typeof iamRoleList>["roles"][number];
+type RoleView = ReturnType<typeof toRoleCatalog>["roles"][number];
+type WorkspaceOut = ContractOutput<typeof workspaceList>["workspaces"][number];
+type WorkspaceView = ReturnType<typeof toWorkspaceList>["workspaces"][number];
+
 declare const runOut: RunOut;
 declare const runView: RunView;
 declare const approvalView: ApprovalView;
@@ -51,7 +61,17 @@ declare const identityView: AgentView["identity"];
 declare const credentialView: AgentView["credentials"][number];
 declare const hostView: AgentView["hosts"][number];
 declare const incidentView: IncidentView;
+declare const roleView: RoleView;
+declare const workspaceView: WorkspaceView;
 declare const apiKeyView: ApiKeyView;
+
+type GateOut = ContractOutput<typeof onboardingStateGet>;
+type GateView = ReturnType<typeof toOnboardingGate>;
+type FrameOut = ContractOutput<typeof onboardingFirstFrameGet>;
+type FrameView = ReturnType<typeof toFirstFrame>;
+
+declare const gateView: GateView;
+declare const frameView: FrameView;
 
 // The positives: both mappers keep a field nullable only where the contract does.
 const _runsHold: NullableOnlyWhenSourceIs<RunView, RunOut> = runView;
@@ -73,6 +93,13 @@ const _hostsHold: NullableOnlyWhenSourceIs<
 > = hostView;
 const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
+// A role's description and author are nullable on both sides; a workspace's
+// role and archival date are the two the store may not have recorded.
+const _rolesHold: NullableOnlyWhenSourceIs<RoleView, RoleOut> = roleView;
+const _workspacesHold: NullableOnlyWhenSourceIs<WorkspaceView, WorkspaceOut> =
+  workspaceView;
+const _gateHolds: NullableOnlyWhenSourceIs<GateView, GateOut> = gateView;
+const _frameHolds: NullableOnlyWhenSourceIs<FrameView, FrameOut> = frameView;
 const _apiKeysHold: NullableOnlyWhenSourceIs<ApiKeyView, ApiKeyOut> =
   apiKeyView;
 

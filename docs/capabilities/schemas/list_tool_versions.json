@@ -1,0 +1,304 @@
+{
+  "name": "list_tool_versions",
+  "domain": "tool",
+  "description": "List the workspace registry's active tool versions with their safety classification, schema origin and digest, the kill switch that stops each one today, and 30-day call counts; cursor-paged, optionally filtered by consequence tag.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "category": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "toolId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "builtin",
+                "custom",
+                "mcp",
+                "foundry"
+              ]
+            },
+            "serverId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "capabilityId": {
+              "type": "string"
+            },
+            "readOnly": {
+              "type": "boolean"
+            },
+            "riskGrade": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            },
+            "classification": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "sideEffect": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "write",
+                        "irreversible"
+                      ]
+                    },
+                    "egress": {
+                      "type": "string",
+                      "enum": [
+                        "local",
+                        "org_tenant",
+                        "third_party"
+                      ]
+                    },
+                    "consequenceTags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "measures": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "money",
+                              "count",
+                              "identifier",
+                              "environment",
+                              "table",
+                              "text"
+                            ]
+                          },
+                          "currencyPath": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "dataClasses": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    }
+                  },
+                  "required": [
+                    "sideEffect",
+                    "egress",
+                    "consequenceTags",
+                    "measures",
+                    "dataClasses"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "classifiedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "schemaOrigin": {
+              "type": "string",
+              "enum": [
+                "declared",
+                "imported"
+              ]
+            },
+            "schemaDigest": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "gate": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "killed_version",
+                    "killed_server",
+                    "killed_class"
+                  ]
+                },
+                "switchId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "switchId"
+              ],
+              "additionalProperties": false
+            },
+            "calls30d": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "toolId",
+            "slug",
+            "name",
+            "description",
+            "version",
+            "source",
+            "serverId",
+            "capabilityId",
+            "readOnly",
+            "riskGrade",
+            "classification",
+            "classifiedAt",
+            "schemaOrigin",
+            "schemaDigest",
+            "enabled",
+            "gate",
+            "calls30d",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "items",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

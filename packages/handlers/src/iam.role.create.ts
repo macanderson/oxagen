@@ -2,14 +2,11 @@
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), for the
 //      signed-in user or the creator of the API key (resolveActingUserId).
-//   2. Tier gate — the kernel runs the IAM resolver only for the enterprise
-//      tier (§1.5); for any other tier the role would never be read, so the
-//      write is refused with `enterprise_tier_required` rather than stored as
-//      documentation.
-//   3. Delegation ceiling — every capability the permissions expand to is
+//   2. Delegation ceiling — every capability the permissions expand to is
 //      resolved for the granter; one they do not hold refuses the whole set
-//      with the capabilities named.
-//   4. The role row and one `allow` grant per capability, in one transaction.
+//      with the capabilities named. The ceiling resolves through the pure
+//      resolver and reads no tier, so it holds on every plan.
+//   3. The role row and one `allow` grant per capability, in one transaction.
 //      A name already used in the same scope kind, or by another custom
 //      role of the org in either scope kind, is a unique index's 23505, read
 //      as `conflict` / `role_exists`.
@@ -22,21 +19,10 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { findDelegationCeilingViolations } from "@oxagen/iam";
 import { logger } from "./logger";
 import { toRoleRow, withRoleStore, type RoleStore } from "./lib/iam-roles";
-import { roleEnforcementOf, type RoleEnforcement } from "./lib/org-tier";
 
 export type RoleEditorDeps = {
   withStore: <T>(fn: (store: RoleStore) => Promise<T>) => Promise<T>;
-  enforcement: typeof roleEnforcementOf;
 };
-
-export function assertRolesEnforced(enforcement: RoleEnforcement): void {
-  if (enforcement.enforced) return;
-  throw new HandlerError({
-    code: "forbidden",
-    reason: "enterprise_tier_required",
-    message: `The kernel does not enforce roles for the ${enforcement.tier} tier; the roles here are documentation until the organization is on the enterprise tier`,
-  });
-}
 
 export async function assertWithinCeiling(
   store: RoleStore,
@@ -75,7 +61,6 @@ export function createRoleHandler(
     );
     // assertOrgRole refused a call with no acting user.
     const userId = actingUserId as string;
-    assertRolesEnforced(await deps.enforcement(ctx));
     const capabilityIds = capabilitiesOf(input.permissions);
 
     const row = await deps.withStore(async (store) => {
@@ -139,5 +124,4 @@ export function createRoleHandler(
 
 export const iamRoleCreateHandler = createRoleHandler({
   withStore: withRoleStore,
-  enforcement: roleEnforcementOf,
 });

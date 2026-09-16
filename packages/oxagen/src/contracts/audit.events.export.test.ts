@@ -70,8 +70,7 @@ describe("export_audit_events contract", () => {
         .success,
     ).toBe(false);
     expect(
-      auditEventsExport.output.safeParse({ ...out, algorithm: "SHA1" })
-        .success,
+      auditEventsExport.output.safeParse({ ...out, algorithm: "SHA1" }).success,
     ).toBe(false);
   });
 

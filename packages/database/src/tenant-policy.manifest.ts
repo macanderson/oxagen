@@ -185,6 +185,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Both carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
   { table: "mcp.consents", policyClass: "standard" },
   { table: "mcp.tool_snapshots", policyClass: "standard" },
+  // The credential broker's grant log (#2958): orgScopeMixin → standard.
+  { table: "mcp.credential_grants", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },

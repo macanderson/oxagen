@@ -15,7 +15,11 @@ export type RoleFixture = {
 };
 
 /** Whether a drizzle SQL tree binds `value` as a parameter. */
-function binds(node: unknown, value: string, seen = new Set<unknown>()): boolean {
+function binds(
+  node: unknown,
+  value: string,
+  seen = new Set<unknown>(),
+): boolean {
   if (node === value) return true;
   if (typeof node !== "object" || node === null || seen.has(node)) return false;
   seen.add(node);
@@ -25,7 +29,11 @@ function binds(node: unknown, value: string, seen = new Set<unknown>()): boolean
   return false;
 }
 
-function rowsFor(table: unknown, where: unknown, roles: RoleFixture): unknown[] {
+function rowsFor(
+  table: unknown,
+  where: unknown,
+  roles: RoleFixture,
+): unknown[] {
   if (table === schema.apiKeys) {
     return roles.keyCreator ? [{ createdByUserId: roles.keyCreator }] : [];
   }

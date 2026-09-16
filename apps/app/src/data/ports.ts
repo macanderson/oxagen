@@ -27,7 +27,13 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { ApiKey, MemberList } from "./contracts/org";
+import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
+import type {
+  ApiKey,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -159,14 +165,35 @@ export interface DataSource {
     ): Promise<Read<SpendFindingEvidence>>;
   };
   /**
-   * The Organization page's two tabs, each an Owner-or-Admin read checked in
-   * its handler; callers: features/organization/people.tsx,
-   * features/organization/api-keys.tsx and features/audit/audit.tsx (actor
-   * names, off `members`).
+   * The onboarding gate and the register flow (#2967, ADR-065).
+   * `get_onboarding_state` (`scoped: false`) answers where the organization
+   * stands, read by features/onboarding/gate.tsx on Fleet and by the register
+   * stepper; `get_first_frame` long-polls one registered agent's first frame,
+   * caller features/onboarding/register.tsx.
+   */
+  onboarding: {
+    /** get_onboarding_state */
+    state(ctx: OrgCtx): Promise<Read<OnboardingGate>>;
+    /** get_first_frame, waiting up to `waitMs` inside the one invoke (§3.5) */
+    firstFrame(
+      ctx: WsCtx,
+      agent: string,
+      q: { waitMs: number },
+    ): Promise<Read<FirstFrame>>;
+  };
+  /**
+   * The Organization pages' four reads, each noBillingGate and org-scoped
+   * (#2964, WL-37), each an Owner-or-Admin read checked in its handler;
+   * callers: features/organization/people.tsx, roles.tsx, workspaces.tsx,
+   * api-keys.tsx and features/audit/audit.tsx (actor names, off `members`).
    */
   org: {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
+    /** list_iam_roles, the roles and the permission catalogue */
+    roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
+    /** list_workspaces, archived rows included */
+    workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
   };

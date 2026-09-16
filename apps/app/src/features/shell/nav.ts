@@ -15,7 +15,9 @@ export type WorkspaceNavKey =
   | "steering"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
-export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys";
+/** Roles and API keys are pages under Organization, not sidebar items of their own. */
+type OrgPageNavKey = "apiKeys" | "roles";
+export type NavKey = WorkspaceNavKey | OrgNavKey | OrgPageNavKey;
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
@@ -30,6 +32,21 @@ export const ORG_NAV: readonly OrgNavKey[] = [
   "billing",
   "audit",
 ];
+/**
+ * The Organization pages that carry a nav label and a breadcrumb but no sidebar
+ * item of their own. Named once because the current-item test and the
+ * breadcrumb trail both spelled the pair out, so `roles` arriving beside
+ * `apiKeys` had to be added in two places to be treated as one of them.
+ */
+const ORG_PAGE_NAV: Readonly<Record<OrgPageNavKey, true>> = {
+  apiKeys: true,
+  roles: true,
+};
+
+/** Whether a nav key is one of the Organization pages without a sidebar item. */
+function isOrgPageNavKey(key: NavKey | null): key is OrgPageNavKey {
+  return key !== null && key in ORG_PAGE_NAV;
+}
 
 type ThumbSlot = Extract<
   WorkspaceNavKey,
@@ -61,6 +78,7 @@ const ORG_SEGMENTS = {
   billing: "billing",
   audit: "audit",
   "api-keys": "apiKeys",
+  roles: "roles",
 } as const satisfies Record<string, NavKey>;
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
@@ -90,6 +108,8 @@ export function orgHref(org: string, key: NavKey): SafePath {
       return pathOf(org, "audit");
     case "apiKeys":
       return pathOf(org, "api-keys");
+    case "roles":
+      return pathOf(org, "roles");
     default:
       throw new Error(`${key} is a workspace page, not an organization page`);
   }
@@ -149,11 +169,11 @@ function currentNavKey(pathname: string): NavKey | null {
   );
 }
 
-/** Whether a sidebar item is the current page. API keys sit under Organization. */
+/** Whether a sidebar item is the current page. Roles and API keys sit under Organization. */
 export function isNavItemCurrent(key: NavKey, pathname: string): boolean {
   const current = currentNavKey(pathname);
   if (current === key) return true;
-  return key === "organization" && current === "apiKeys";
+  return key === "organization" && isOrgPageNavKey(current);
 }
 
 /** Whether the current page is one the More sheet holds, so the More slot is current. */
@@ -209,7 +229,7 @@ export function breadcrumbs(
   const out: Crumb[] = [{ kind: "name", text: names.org, href: pathOf(org) }];
   if (ws === null) {
     const key = currentNavKey(pathname);
-    if (key === "apiKeys") {
+    if (isOrgPageNavKey(key)) {
       out.push({ kind: "nav", key: "organization", href: pathOf(org) });
       out.push({ kind: "nav", key, href: null });
     } else if (key !== null) {

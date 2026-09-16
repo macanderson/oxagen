@@ -12,7 +12,8 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //   Existing tool:
 //     1. existing-check  → select(...).where(...).limit(1)                → [toolRow]
 //     2. latest-version  → select(...).where(...).limit(1)                → [latest?]
-//     3. (changed only) transaction → update version; insert version
+//     3. (changed only) transaction → update version .returning() (the
+//                          classification it carries); insert version
 //                          .returning(); update tools
 // A publish that changes the safety classification reads the workspace's
 // consequence roles (query.workspaces.findFirst) before it writes.
@@ -39,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   insertReturning: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
+  updateReturning: [] as Array<unknown[]>,
   roles: { org: "Owner", workspace: null } as {
     org: string | null;
     workspace: string | null;
@@ -101,7 +103,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     update: () => ({
       set: (vals: unknown) => {
         mocks.updateSets.push(vals as Record<string, unknown>);
-        return { where: () => Promise.resolve() };
+        return {
+          where: () =>
+            Object.assign(Promise.resolve(), {
+              returning: () =>
+                Promise.resolve(mocks.updateReturning.shift() ?? []),
+            }),
+        };
       },
     }),
   });
@@ -175,6 +183,7 @@ beforeEach(() => {
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
+  mocks.updateReturning.length = 0;
 });
 
 describe("tool.declaration.publish handler", () => {

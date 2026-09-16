@@ -54,8 +54,9 @@ const source: DataSource = {
     findings: refuse,
     findingEvidence: refuse,
   },
-  org: { members: refuse, apiKeys: refuse },
+  org: { members: refuse, roles: refuse, workspaces: refuse, apiKeys: refuse },
   audit: { events: refuse, exportEvents },
+  onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
