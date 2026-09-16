@@ -11,6 +11,7 @@ import {
   CONSEQUENCE_OTHER_MAX,
   CONSEQUENCE_TAG,
   isEffective,
+  isUpcoming,
   MAX_CONSEQUENCE_TAGS,
   MEASURE_NAME_MAX,
   MEASURE_VALUE,
@@ -44,6 +45,44 @@ describe("isEffective", () => {
     expect(isEffective(row({ validTo: to }), new Date(to))).toBe(true);
     expect(
       isEffective(row({ validTo: to }), new Date("2026-09-17T00:00:00.000Z")),
+    ).toBe(false);
+  });
+});
+
+describe("isUpcoming", () => {
+  const at = new Date("2026-09-16T12:00:00.000Z");
+  const ahead = "2026-09-17T00:00:00.000Z";
+
+  it("is a granted mandate whose start date is still ahead", () => {
+    expect(isUpcoming(mandateRow({ validFrom: ahead }), at)).toBe(true);
+  });
+
+  it("is false once the window has opened, on the instant it opens", () => {
+    expect(isUpcoming(mandateRow({ validFrom: ahead }), new Date(ahead))).toBe(
+      false,
+    );
+    expect(isUpcoming(mandateRow({}), at)).toBe(false);
+  });
+
+  // The page uses this to say something the status column contradicts
+  // otherwise, so it must not fire for a row that is merely not effective: a
+  // draft dated in the future is a request nobody has granted, and calling it
+  // an upcoming grant would assert authority that does not exist.
+  it.each([["draft"], ["revoked"], ["expired"]] as const)(
+    "%s is never upcoming, however its window is dated (negative)",
+    (status) => {
+      expect(isUpcoming(mandateRow({ status, validFrom: ahead }), at)).toBe(
+        false,
+      );
+    },
+  );
+
+  it("and an expired grant is not upcoming though its window is shut", () => {
+    expect(
+      isUpcoming(
+        mandateRow({ status: "expired", validTo: "2026-09-01T00:00:00.000Z" }),
+        at,
+      ),
     ).toBe(false);
   });
 });

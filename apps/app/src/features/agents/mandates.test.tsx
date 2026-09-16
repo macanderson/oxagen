@@ -371,7 +371,7 @@ describe("Agents › Mandates", () => {
     const cells = within(held())
       .getByTestId("agent-mandate")
       .querySelectorAll("td");
-    expect(cells[2]?.textContent).toBe("$250.00tax");
+    expect(cells[3]?.textContent).toBe("$250.00tax");
   });
 
   // Adjacent to the label fix: a column where every measure is unlimited. An
@@ -388,8 +388,92 @@ describe("Agents › Mandates", () => {
     const cells = within(held())
       .getByTestId("agent-mandate")
       .querySelectorAll("td");
-    expect(cells[2]?.textContent).toBe("no limit");
+    expect(cells[3]?.textContent).toBe("no limit");
     // The columns that do have a figure are unaffected.
-    expect(cells[3]?.textContent).toContain("$2,000.00");
+    expect(cells[4]?.textContent).toContain("$2,000.00");
+  });
+
+  // Two mandates for one agent differing only in tool patterns rendered as the
+  // same row, leaving opaque ids to tell narrowly scoped authority from
+  // workspace-wide authority — and there is no mandate detail view to recover
+  // it from. The Tools ledger had the same defect and was fixed on its own;
+  // both now draw through `MandateScope`.
+  it("shows which tools each mandate covers", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({ tools: ["payments.read@*", "payments.list@2"] }),
+      ]),
+    );
+    const row = within(held()).getByTestId("agent-mandate");
+    expect(row.textContent).toContain("payments.read@*");
+    expect(row.textContent).toContain("payments.list@2");
+    expect(within(row).queryByText("every tool")).toBeNull();
+  });
+
+  it("calls out a mandate over every tool rather than printing an asterisk", async () => {
+    await renderMandates(mandateList([mandateRow({ tools: ["*"] })]));
+    const row = within(held()).getByTestId("agent-mandate");
+    expect(within(row).getByText("every tool")).toHaveAttribute(
+      "data-scope",
+      "every-tool",
+    );
+  });
+
+  // A daily 100 and a monthly 100 are different authorities and rendered
+  // identically. The window is named once per measure, on the limit it resets
+  // against; the remaining balance is tied to it by the measure it names, and
+  // the view model guarantees the tie — no remaining without a per-period
+  // limit beside it.
+  it("names the accounting window each per-period limit is counted over", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority(), callsAuthority()] }),
+      ]),
+    );
+    const cells = within(held())
+      .getByTestId("agent-mandate")
+      .querySelectorAll("td");
+    expect(cells[4]?.textContent).toContain("per month · 2026-09");
+    // A mandate may cap calls daily and money monthly, so each window sits
+    // with the limit it qualifies rather than once per row.
+    expect(cells[4]?.textContent).toContain("per day · 2026-09-16");
+    // A per-call limit is not counted over a window and does not claim one.
+    expect(cells[3]?.textContent).not.toContain("per month");
+  });
+
+  // `isEffective` excludes a granted mandate that has not started, correctly —
+  // but the status column calls it active and the empty state offered only "a
+  // request awaiting a decision, or history". Both readings were on screen at
+  // once, and neither told the reader when the authority becomes usable.
+  it("says a granted mandate has not started yet, and when it starts", async () => {
+    await renderMandates(
+      mandateList([mandateRow({ validFrom: "2026-10-01T00:00:00.000Z" })]),
+    );
+    const section = held();
+    const state = within(section).getByText(/has not reached the date/);
+    expect(state).toHaveAttribute("data-state", "empty");
+    const row = within(section).getByTestId("agent-mandate");
+    expect(row).toHaveAttribute("data-effect", "upcoming");
+    expect(within(row).getByText(/^starts /).textContent).toContain(
+      "Oct 1, 2026",
+    );
+  });
+
+  // The other side of it: rows that really are a request or history keep the
+  // sentence that describes them, and claim no start date.
+  it("keeps the request-or-history sentence when nothing is upcoming (negative)", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({ status: "draft", validFrom: "2026-10-01T00:00:00.000Z" }),
+        mandateRow({ status: "expired" }),
+      ]),
+    );
+    const section = held();
+    expect(
+      within(section).getByText(/a request awaiting a decision, or history/),
+    ).toHaveAttribute("data-state", "empty");
+    expect(within(section).queryByText(/has not reached the date/)).toBeNull();
+    for (const row of within(section).getAllByTestId("agent-mandate"))
+      expect(row).not.toHaveAttribute("data-effect");
   });
 });

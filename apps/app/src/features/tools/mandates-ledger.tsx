@@ -26,62 +26,9 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
-import { NamedMeasure } from "@/ui/measure";
+import { MandateAuthorityList } from "@/ui/mandate-authority";
+import { MandateScope } from "@/ui/mandate-scope";
 import { ReadFailure } from "@/ui/read-failure";
-
-function Authority({
-  authority,
-  pick,
-  window: showWindow = false,
-}: {
-  authority: MandateRow["authority"];
-  pick: (
-    of: MandateRow["authority"][number],
-  ) => MandateRow["authority"][number]["settled"] | null;
-  /**
-   * Names the accounting window this measure's limit and balance belong to.
-   * A daily 100 and a monthly 100 are different authorities and rendered the
-   * same without it, and settled/reserved/remaining mean nothing until the
-   * reader knows which window they are counted over. Each measure carries its
-   * own — a mandate may cap calls daily and money monthly — so the window sits
-   * with the limit it belongs to rather than once per row.
-   */
-  window?: boolean;
-}) {
-  const t = useTranslations("tools.mandates");
-  const values = authority
-    .map((measure) => ({
-      measure: measure.measure,
-      period: measure.period,
-      periodKey: measure.periodKey,
-      value: pick(measure),
-    }))
-    .filter(
-      (
-        entry,
-      ): entry is typeof entry & { value: NonNullable<typeof entry.value> } =>
-        entry.value !== null,
-    );
-  if (values.length === 0)
-    return <span className="text-muted-foreground">{t("noLimit")}</span>;
-  return (
-    <ul className="flex flex-col gap-0.5">
-      {values.map((entry) => (
-        <li key={entry.measure}>
-          <NamedMeasure measure={entry.measure} value={entry.value} />
-          {showWindow ? (
-            <div className="text-xs text-muted-foreground">
-              {t("window", {
-                period: t(`period.${entry.period}`),
-                periodKey: entry.periodKey,
-              })}
-            </div>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function Row({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("tools.mandates");
@@ -117,41 +64,38 @@ function Row({ mandate }: { mandate: MandateRow }) {
       </td>
       <td className="max-w-xs px-3 py-2">{mandate.purpose}</td>
       <td className="px-3 py-2">
-        {mandate.tools.includes(EVERY_TOOL) ? (
-          <span
-            data-scope="every-tool"
-            className="rounded bg-foreground px-1.5 py-0.5 text-xs font-medium text-background"
-          >
-            {t("everyTool")}
-          </span>
-        ) : (
-          <ul className="flex flex-col gap-0.5">
-            {mandate.tools.map((pattern) => (
-              <li key={pattern} className={`${mono} break-all text-xs`}>
-                {pattern}
-              </li>
-            ))}
-          </ul>
-        )}
+        <MandateScope tools={mandate.tools} />
       </td>
       <td className="px-3 py-2 text-right">
-        <Authority authority={mandate.authority} pick={(m) => m.perCall} />
+        <MandateAuthorityList
+          authority={mandate.authority}
+          pick={(m) => m.perCall}
+        />
       </td>
       <td className="px-3 py-2 text-right">
-        <Authority
+        <MandateAuthorityList
           authority={mandate.authority}
           pick={(m) => m.perPeriod}
           window
         />
       </td>
       <td className="px-3 py-2 text-right">
-        <Authority authority={mandate.authority} pick={(m) => m.settled} />
+        <MandateAuthorityList
+          authority={mandate.authority}
+          pick={(m) => m.settled}
+        />
       </td>
       <td className="px-3 py-2 text-right">
-        <Authority authority={mandate.authority} pick={(m) => m.reserved} />
+        <MandateAuthorityList
+          authority={mandate.authority}
+          pick={(m) => m.reserved}
+        />
       </td>
       <td className="px-3 py-2 text-right">
-        <Authority authority={mandate.authority} pick={(m) => m.remaining} />
+        <MandateAuthorityList
+          authority={mandate.authority}
+          pick={(m) => m.remaining}
+        />
       </td>
       <td className="whitespace-nowrap px-3 py-2">
         {format.dateTime(new Date(mandate.validTo), { dateStyle: "medium" })}
@@ -160,16 +104,6 @@ function Row({ mandate }: { mandate: MandateRow }) {
     </tr>
   );
 }
-
-/**
- * The pattern that matches every tool at every version. A mandate scoped `*`
- * and one scoped `payments.read@*` are the difference between an agent that
- * may call everything and one that may call a single tool, and they rendered
- * as the same row on the page an accountable reader uses to review what they
- * granted. It is called out rather than printed, because a reader should not
- * have to notice one character.
- */
-const EVERY_TOOL = "*";
 
 const COLUMNS = [
   "mandate",

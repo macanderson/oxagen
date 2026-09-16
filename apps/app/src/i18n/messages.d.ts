@@ -412,6 +412,7 @@ type Messages = {
       columns: {
         mandate: string;
         effect: string;
+        tools: string;
         perCall: string;
         perPeriod: string;
         remaining: string;
@@ -463,7 +464,8 @@ type Messages = {
       noneListed: string;
       noneListedDetail: string;
       retired: string;
-      noLimit: string;
+      noneEffectiveUpcoming: string;
+      startsOn: string;
     };
   };
   audit: {
@@ -1902,7 +1904,6 @@ type Messages = {
       lead: string;
       empty: string;
       emptyDetail: string;
-      noLimit: string;
       notGranted: string;
       columns: {
         mandate: string;
@@ -1928,13 +1929,6 @@ type Messages = {
       partial: string;
       emptyListed: string;
       emptyListedDetail: string;
-      everyTool: string;
-      window: string;
-      period: {
-        daily: string;
-        weekly: string;
-        monthly: string;
-      };
     };
   };
   ui: {
@@ -1994,6 +1988,19 @@ type Messages = {
       label: string;
       labelReserved: string;
       overLimit: string;
+    };
+    mandateScope: {
+      everyTool: string;
+      noTool: string;
+    };
+    mandateAuthority: {
+      noLimit: string;
+      window: string;
+      period: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
     };
   };
 };

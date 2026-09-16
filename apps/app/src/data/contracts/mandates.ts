@@ -157,6 +157,25 @@ export function isEffective(mandate: MandateRow, at: Date): boolean {
 }
 
 /**
+ * Whether this mandate is granted and has simply not started. `isEffective`
+ * excludes it correctly — a window that has not opened authorizes nothing —
+ * but the exclusion loses why, and the row still reads `active` wherever the
+ * status is printed. Without this a surface has only two sentences for a row
+ * that authorizes nothing, "a request awaiting a decision" and "history", and
+ * an upcoming grant is neither: saying either of them contradicts the status
+ * on the same screen.
+ *
+ * Deliberately not the negation of `isEffective`: a draft, a revoked row and
+ * an expired one are all not-effective and none of them is upcoming. The
+ * question is about a grant that exists and has a start date still ahead.
+ */
+export function isUpcoming(mandate: MandateRow, at: Date): boolean {
+  return (
+    mandate.status === "active" && at.getTime() < Date.parse(mandate.validFrom)
+  );
+}
+
+/**
  * Why this answer is not the whole set, or null when it is. Note the question:
  * not "is it empty" but "is it everything". Incompleteness is a property of the
  * answer and not of its length — a reader-narrowed list of fifty rows is just

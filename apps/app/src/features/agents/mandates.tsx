@@ -33,6 +33,22 @@
 // identity that can never run. The page declines to offer it and says why;
 // closing it on the other surfaces is the handler's, and is filed as #3124.
 //
+// What a row must show is not this page's question to answer on its own. A
+// mandate's scope and its per-measure accounting window are facts of the view
+// model, and the Tools ledger had already dropped both and been corrected; this
+// table dropped the same two independently. Two components re-projecting one
+// view model and losing the same fields is a missing shared presentation, not
+// two local bugs, so both now render through `MandateScope` and
+// `MandateAuthorityList` in `@/ui` and the next table to show a mandate gets
+// them without asking.
+//
+// A third fact is this page's own. An `active` mandate whose `validFrom` is
+// still ahead is granted and not yet usable — `isEffective` excludes it, the
+// status column calls it active, and the empty state offered only "a request
+// awaiting a decision, or history". Both readings were on screen at once. The
+// row now says when it starts and the empty state has a sentence for the state
+// it is in.
+//
 // The warning is driven by authority and not by row count. A draft, a revoked
 // row and an expired one all authorize nothing, and `request_mandate` writes a
 // draft — so a page that asked "are there rows?" would stop warning the moment
@@ -45,11 +61,13 @@ import type { OrgRole } from "@/data/contracts/common";
 import {
   blindSpotOf,
   isEffective,
+  isUpcoming,
   type MandateList,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
-import { NamedMeasure } from "@/ui/measure";
+import { MandateAuthorityList } from "@/ui/mandate-authority";
+import { MandateScope } from "@/ui/mandate-scope";
 import { ReadFailure } from "@/ui/read-failure";
 import { RequestMandate } from "./mandate-request";
 
@@ -58,6 +76,7 @@ type Place = { org: string; ws: string; agentId: string; agentSlug: string };
 const COLUMNS = [
   "mandate",
   "effect",
+  "tools",
   "perCall",
   "perPeriod",
   "remaining",
@@ -84,6 +103,15 @@ export function MandatesSection({
   const asOf = read.ok ? new Date(read.value.asOf) : null;
   const effective =
     asOf === null ? [] : held.filter((mandate) => isEffective(mandate, asOf));
+  /**
+   * Of the rest, the ones that are granted and have simply not started. They
+   * are neither a request awaiting a decision nor history, which is everything
+   * the empty state used to offer, and the table labels them active — so
+   * without this the page gave the accountable reader two contradictory
+   * accounts of why the agent's authority is not usable.
+   */
+  const upcoming =
+    asOf === null ? [] : held.filter((mandate) => isUpcoming(mandate, asOf));
   /**
    * Why an empty `effective` would not establish that the agent holds nothing,
    * or null when it would. A narrowed reader and a truncated page are both
@@ -146,7 +174,9 @@ export function MandatesSection({
                     ? t("noneListed")
                     : held.length === 0
                       ? t("none")
-                      : t("noneEffective")}
+                      : upcoming.length > 0
+                        ? t("noneEffectiveUpcoming")
+                        : t("noneEffective")}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {blindSpot === null ? t("noneDetail") : t("noneListedDetail")}
@@ -171,61 +201,72 @@ export function MandatesSection({
                       </tr>
                     </thead>
                     <tbody>
-                      {held.map((mandate) => (
-                        <tr
-                          key={mandate.id}
-                          data-testid="agent-mandate"
-                          data-status={mandate.status}
-                          className="border-t border-border align-top"
-                        >
-                          <td className="px-3 py-2">
-                            <span className={`${mono} break-all`}>
-                              {mandate.id}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            {mandate.consequenceTags.join(", ")}
-                          </td>
-                          {(["perCall", "perPeriod", "remaining"] as const).map(
-                            (field) => (
-                              <td key={field} className="px-3 py-2">
-                                {mandate.authority.every(
-                                  (measure) => measure[field] === null,
-                                ) ? (
-                                  <span className="text-muted-foreground">
-                                    {t("noLimit")}
-                                  </span>
-                                ) : (
-                                  <ul className="flex flex-col gap-0.5">
-                                    {mandate.authority.map((measure) => {
-                                      const value = measure[field];
-                                      // The name is never conditional: `NamedMeasure` carries
-                                      // it, so a lone `tax` limit is not an unlabelled dollar
-                                      // figure under a column headed Per call.
-                                      return value === null ? null : (
-                                        <li key={measure.measure}>
-                                          <NamedMeasure
-                                            measure={measure.measure}
-                                            value={value}
-                                          />
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                )}
-                              </td>
-                            ),
-                          )}
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {format.dateTime(new Date(mandate.validTo), {
-                              dateStyle: "medium",
-                            })}
-                          </td>
-                          <td className="px-3 py-2">
-                            {t(`status.${mandate.status}`)}
-                          </td>
-                        </tr>
-                      ))}
+                      {held.map((mandate) => {
+                        /** Granted, and not yet started: the row says so beside the status. */
+                        const starts =
+                          asOf !== null && isUpcoming(mandate, asOf);
+                        return (
+                          <tr
+                            key={mandate.id}
+                            data-testid="agent-mandate"
+                            data-status={mandate.status}
+                            data-effect={starts ? "upcoming" : undefined}
+                            className="border-t border-border align-top"
+                          >
+                            <td className="px-3 py-2">
+                              <span className={`${mono} break-all`}>
+                                {mandate.id}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {mandate.consequenceTags.join(", ")}
+                            </td>
+                            <td className="px-3 py-2">
+                              <MandateScope tools={mandate.tools} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <MandateAuthorityList
+                                authority={mandate.authority}
+                                pick={(measure) => measure.perCall}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <MandateAuthorityList
+                                authority={mandate.authority}
+                                pick={(measure) => measure.perPeriod}
+                                window
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <MandateAuthorityList
+                                authority={mandate.authority}
+                                pick={(measure) => measure.remaining}
+                              />
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {format.dateTime(new Date(mandate.validTo), {
+                                dateStyle: "medium",
+                              })}
+                            </td>
+                            <td className="px-3 py-2">
+                              {t(`status.${mandate.status}`)}
+                              {starts ? (
+                                <div
+                                  data-state="upcoming"
+                                  className="whitespace-nowrap text-xs text-muted-foreground"
+                                >
+                                  {t("startsOn", {
+                                    date: format.dateTime(
+                                      new Date(mandate.validFrom),
+                                      { dateStyle: "medium" },
+                                    ),
+                                  })}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
