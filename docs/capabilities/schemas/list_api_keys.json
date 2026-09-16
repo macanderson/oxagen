@@ -74,6 +74,10 @@
                   "type": "null"
                 }
               ]
+            },
+            "rotatable": {
+              "type": "boolean",
+              "description": "Whether rotate_api_key will replace this key. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service. Revocation is always available."
             }
           },
           "required": [
@@ -83,7 +87,8 @@
             "createdAt",
             "lastUsedAt",
             "expiresAt",
-            "revokedAt"
+            "revokedAt",
+            "rotatable"
           ],
           "additionalProperties": false
         }
