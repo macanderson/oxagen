@@ -116,7 +116,7 @@ export class SessionRecorder {
   readonly sessionUuid: string;
   readonly rootSessionUuid: string;
   readonly harnessSessionId: string;
-  private readonly options: RecorderOptions;
+  private options: RecorderOptions;
   private cursor: ChainCursor = GENESIS_CURSOR;
   private readonly events: TachoEvent[] = [];
   private readonly children = new Map<string, SubagentLink>();
@@ -224,6 +224,20 @@ export class SessionRecorder {
       totals: { ...this.totals },
       children,
     };
+  }
+
+  /**
+   * Take on the agent identity of the harness that claimed an ambient
+   * session, and pass it to every child chain. Only the labels move: the
+   * chain cursor, the events already sealed and the session uuid are the
+   * recorder's own, so the chain continues rather than forking. The uuid is
+   * seeded from the harness session id (and, for a custom agent, from the
+   * agent), so a caller may only relabel between identities that seed it the
+   * same way — `SessionRegistry.adopt` is the one that decides that.
+   */
+  relabel(context: ClaudeCodeContext): void {
+    this.options = { ...this.options, context };
+    for (const link of this.children.values()) link.recorder.relabel(context);
   }
 
   /** The chain head after the last sealed event. */

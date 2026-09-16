@@ -539,6 +539,12 @@ pub struct CliInstallView {
     pub skipped: Vec<String>,
     /// The shell profile file we edited, if any.
     pub profile: Option<String>,
+    /// Windows: the install directory is on the user PATH — it already was,
+    /// or the edit that put it there succeeded. A failed PowerShell edit
+    /// leaves this false, so nothing tells the user they are linked when the
+    /// shims sit in a directory no shell will look in. Always false on Unix,
+    /// which reports the same thing through `profile`.
+    pub path_updated: bool,
     pub note: String,
 }
 
@@ -550,6 +556,7 @@ impl Default for CliInstallView {
             files: Vec::new(),
             skipped: Vec::new(),
             profile: None,
+            path_updated: false,
             note: "Checking whether the CLIs are on PATH…".to_string(),
         }
     }
@@ -664,8 +671,13 @@ fn keep_sidecars(sidecars: &Path) -> Result<PathBuf, String> {
 /// travels out-of-band in `$env:OXAGEN_BIN`, never spliced into the script:
 /// `%LOCALAPPDATA%` carries the user name, and `O'Brien` is a legal one
 /// whose apostrophe would end a single-quoted literal and fail the parse.
+///
+/// An account that has never had a user-scoped `Path` reads back `$null`,
+/// and calling `.TrimEnd` on it throws, so the value is normalized to an
+/// empty string first and the separator is only written when there is
+/// something to separate from.
 #[allow(dead_code)]
-const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if(($p -split ';') -notcontains $d){ [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $d), 'User') }";
+const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($null -eq $p){ $p='' }; $p=$p.TrimEnd(';'); if(($p -split ';') -notcontains $d){ if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }; [Environment]::SetEnvironmentVariable('Path', $p, 'User') }";
 
 #[cfg(windows)]
 fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
@@ -833,7 +845,11 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
             if let Some(profile) = &view.profile {
                 format!("Linked into {}; added to {} for new terminals.", view.dir, profile)
             } else if cfg!(windows) {
-                "Linked into your user PATH; open a new terminal.".to_string()
+                if view.path_updated {
+                    "Linked into your user PATH; open a new terminal.".to_string()
+                } else {
+                    format!("Linked into {}, but it could not be added to your user PATH; see skipped.", view.dir)
+                }
             } else {
                 format!("Linked into {}, already on PATH.", view.dir)
             }
@@ -861,6 +877,7 @@ fn install_cli_locked() -> CliInstallView {
         files: Vec::new(),
         skipped: Vec::new(),
         profile: None,
+        path_updated: false,
         note: String::new(),
     };
 
@@ -981,9 +998,11 @@ fn install_cli_locked() -> CliInstallView {
             let already = std::env::var_os("PATH")
                 .map(|p| path_var_contains(&p.to_string_lossy(), &dir))
                 .unwrap_or(false);
+            view.path_updated = already;
             if !already {
-                if let Err(e) = add_to_user_path_windows(&dir.display().to_string()) {
-                    view.skipped.push(format!("user PATH: {e}"));
+                match add_to_user_path_windows(&dir.display().to_string()) {
+                    Ok(()) => view.path_updated = true,
+                    Err(e) => view.skipped.push(format!("user PATH: {e}")),
                 }
             }
         }
@@ -1020,6 +1039,7 @@ pub fn ensure_cli_installed() -> CliInstallView {
             files: Vec::new(),
             skipped: Vec::new(),
             profile: None,
+            path_updated: false,
             note: String::new(),
         };
         view.note = note_for("opted_out", &view);
@@ -1058,7 +1078,10 @@ pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult
         *state.0.lock().unwrap() = view.clone();
         return Err(view.note);
     }
-    let on_path = view.state == "already" || cfg!(windows);
+    // On Windows the shims only answer once their directory is on the user
+    // PATH, so the edit has to have landed; `cfg!(windows)` alone reported
+    // success for an install whose PowerShell edit failed.
+    let on_path = view.state == "already" || view.path_updated;
     let result = InstallResult {
         dir: view.dir.clone(),
         files: view.files.clone(),
@@ -1160,6 +1183,7 @@ pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>
         files: Vec::new(),
         skipped,
         profile: None,
+        path_updated: false,
         note: note_for("opted_out", &CliInstallView::default()),
     };
     Ok(removed)
@@ -1510,6 +1534,45 @@ mod tests {
         assert!(ADD_TO_USER_PATH_PS.contains("$env:OXAGEN_BIN"));
         assert!(!ADD_TO_USER_PATH_PS.contains("{dir}"));
         assert!(!ADD_TO_USER_PATH_PS.contains("{}"));
+    }
+
+    #[test]
+    fn the_path_script_survives_an_account_with_no_user_path() {
+        // `GetEnvironmentVariable('Path','User')` is null on an account that
+        // has never had one, and `$null.TrimEnd(';')` throws: the shims get
+        // written and nothing puts their directory on PATH. The script has to
+        // normalize null first, and must not leave a leading separator.
+        assert!(ADD_TO_USER_PATH_PS.contains("if($null -eq $p){ $p='' }"));
+        let normalize = ADD_TO_USER_PATH_PS.find("$null -eq $p").expect("null check");
+        let trim = ADD_TO_USER_PATH_PS.find(".TrimEnd(';')").expect("trim");
+        assert!(normalize < trim, "null must be normalized before TrimEnd");
+        assert!(ADD_TO_USER_PATH_PS.contains("if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }"));
+    }
+
+    #[test]
+    fn a_failed_user_path_edit_is_not_reported_as_linked() {
+        // The Windows branch only claims the PATH when the edit landed; the
+        // note has to say so too, or a user whose PowerShell failed is told
+        // to open a new terminal that will still not find the shims.
+        let mut view = CliInstallView {
+            state: "linked".to_string(),
+            dir: "C:\\Users\\a\\AppData\\Local\\Oxagen\\bin".to_string(),
+            files: vec!["oxagen.cmd".to_string()],
+            skipped: vec!["user PATH: powershell exited 1".to_string()],
+            profile: None,
+            path_updated: false,
+            note: String::new(),
+        };
+        view.note = note_for("linked", &view);
+        if cfg!(windows) {
+            assert!(view.note.contains("could not be added"), "{}", view.note);
+            view.path_updated = true;
+            view.note = note_for("linked", &view);
+            assert!(view.note.contains("Linked into your user PATH"), "{}", view.note);
+        } else {
+            // Unix never reads path_updated: PATH is the profile's business.
+            assert!(view.note.contains("already on PATH"), "{}", view.note);
+        }
     }
 
     // ---- link_one against a real (temp) directory, Unix only ----

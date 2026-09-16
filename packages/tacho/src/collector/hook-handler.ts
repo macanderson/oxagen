@@ -9,6 +9,7 @@ import {
   hookInputSchema,
   normalizeHook,
   type HookDraft,
+  type HookInput,
 } from "../claude-code/hooks";
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
@@ -146,6 +147,56 @@ function operatorBlock(
   return undefined;
 }
 
+/**
+ * Stella issues no tool-use id, so `tacho-hook` derives one from the call
+ * itself (`stellaToolUseId`): the same tool with the same input digests to
+ * the same id, which is what pairs a PreToolUse with its PostToolUse. Two
+ * identical calls in one session would then also share it, and the trace
+ * oracles read that as one call executed twice and one effect performed
+ * twice — a legitimate repeat of a shell command reported as a replay. The
+ * daemon numbers each invocation instead: the PreToolUse that opens a call
+ * writes the id, keyed by the derived one, and every later event on that
+ * call reads it back, so the pair still matches and the invocations are told
+ * apart. The chain seq supplies the number, so a daemon restart cannot
+ * reissue one the chain already used.
+ *
+ * Only a derived id is rewritten, and only for the harness that derives it:
+ * a harness with real tool-use ids is left exactly as it arrived.
+ */
+function invocationToolUseId(
+  raw: unknown,
+  input: HookInput,
+  record: SessionRecord,
+): unknown {
+  const derived = input.tool_use_id;
+  if (record.harness !== "stella" || derived === undefined) return raw;
+  if (input.hook_event_name === "PreToolUse") {
+    record.toolUseIds[derived] =
+      `${derived}_${record.recorder.chainCursor.seq}`;
+  }
+  const id = record.toolUseIds[derived];
+  if (id === undefined) return raw;
+  if (input.hook_event_name === "PostToolUse") delete record.toolUseIds[derived];
+  return { ...(raw as Record<string, unknown>), tool_use_id: id };
+}
+
+/**
+ * Whether a message drained at this boundary actually reaches the agent.
+ * Claude Code takes `additionalContext` at SessionStart and at
+ * UserPromptSubmit; Stella reads only SessionStart stdout as prompt text and
+ * answers every other event with a decision document that has nowhere to put
+ * prose (`stellaAnswer`). Draining at Stella's UserPromptSubmit would seal
+ * `message_delivered` and tell the fleet the command applied while Stella
+ * never saw a word, so the message stays queued for a boundary that carries
+ * it.
+ */
+function deliversMessages(
+  harness: TachoHarness | undefined,
+  hookEventName: string,
+): boolean {
+  return harness !== "stella" || hookEventName === "SessionStart";
+}
+
 function drainMessages(
   record: SessionRecord,
   deps: HookHandlerDeps,
@@ -209,6 +260,9 @@ export async function handleHookEvent(
     ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),
   });
+  // Stella's tool-use ids are derived from the call, so the daemon numbers
+  // each invocation before anything reads the payload.
+  const payload = invocationToolUseId(raw, input, record);
   const view = deps.policy();
   const events: TachoEvent[] = [];
   const replayAttrs: Record<string, string> =
@@ -224,9 +278,13 @@ export async function handleHookEvent(
     case "SessionStart": {
       const block = operatorBlock(view, record);
       const context = view.bundle.context.system;
-      const messages = drainMessages(record, deps, events);
+      // A blocked start answers with `continue: false` and carries no
+      // context, so a message drained here would be sealed as delivered and
+      // dropped. It waits for a start that is not blocked.
+      const messages =
+        block === undefined ? drainMessages(record, deps, events) : [];
       events.push(
-        ...record.recorder.ingestHook(raw, env, at, (draft) =>
+        ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
             attrs: {
@@ -283,9 +341,12 @@ export async function handleHookEvent(
     case "UserPromptSubmit": {
       const block = operatorBlock(view, record);
       const messages =
-        block === undefined ? drainMessages(record, deps, events) : [];
+        block === undefined &&
+        deliversMessages(record.harness, input.hook_event_name)
+          ? drainMessages(record, deps, events)
+          : [];
       events.push(
-        ...record.recorder.ingestHook(raw, env, at, (draft) =>
+        ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
             body: {
@@ -371,7 +432,7 @@ export async function handleHookEvent(
       }
       const facts = policyFacts(evaluation, currentView);
       const attrs = policyAttrs(evaluation, replay);
-      const toolDrafts = normalizeHook(raw, env, {
+      const toolDrafts = normalizeHook(payload, env, {
         sessionUuid: record.recorder.sessionUuid,
       });
       const toolBody =
@@ -385,7 +446,7 @@ export async function handleHookEvent(
       );
       const denied = evaluation.decision === "deny";
       events.push(
-        ...record.recorder.ingestHook(raw, env, at, (draft) =>
+        ...record.recorder.ingestHook(payload, env, at, (draft) =>
           draft.kind === "tool_requested"
             ? {
                 ...draft,
@@ -430,7 +491,7 @@ export async function handleHookEvent(
     case "PermissionRequest": {
       const block = operatorBlock(view, record);
       events.push(
-        ...record.recorder.ingestHook(raw, env, at, (draft) =>
+        ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
             body: {
@@ -471,13 +532,13 @@ export async function handleHookEvent(
     }
 
     case "SessionEnd": {
-      events.push(...record.recorder.ingestHook(raw, env, at, withReplay));
+      events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       deps.registry.seal(record);
       return { events, response: {}, record };
     }
 
     default: {
-      events.push(...record.recorder.ingestHook(raw, env, at, withReplay));
+      events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       return { events, response: {}, record };
     }
   }

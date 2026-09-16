@@ -20,8 +20,11 @@
  *     Stella exits: Stella has no SessionEnd. The start time is what keeps a
  *     reused pid off the retained sealed chain of the run that had it before.
  *   - `tool_use_id` is a digest of the tool name and input, so a PreToolUse
- *     and its PostToolUse pair. Two identical calls in one session share an
- *     id; they are still recorded in order.
+ *     and its PostToolUse pair. Two identical calls in one session digest
+ *     alike, so this id names the call, not the invocation; the daemon
+ *     numbers each invocation from the chain seq when the PreToolUse lands
+ *     (`invocationToolUseId`), because the trace oracles read a repeated id
+ *     as one call executed twice.
  *
  * Out: Stella reads `{"action":"allow"|"deny"|"require_approval", ...}`.
  * A JSON object without `action` is informational, but a malformed decision
@@ -84,7 +87,11 @@ export function stellaHarnessPid(
   return SHELLS.has(name) && parent.ppid > 1 ? parent.ppid : parentPid;
 }
 
-/** A deterministic tool-use id from the call itself, so Pre and Post pair. */
+/**
+ * A deterministic tool-use id from the call itself, so Pre and Post pair.
+ * It identifies the call, not the invocation: the daemon adds the number
+ * that tells two identical calls apart.
+ */
 export function stellaToolUseId(name: string, input: unknown): string {
   const digest = digestJcs({
     name,

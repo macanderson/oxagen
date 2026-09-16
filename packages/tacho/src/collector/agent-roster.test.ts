@@ -177,6 +177,70 @@ describe("agent roster", () => {
     expect(restored.list()).toHaveLength(3);
   });
 
+  it("gives an adopted ambient session the identity of the agent that claims it", () => {
+    const clock = clockAt("2026-09-15T10:00:00.000Z");
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    // OTel saw the session before any hook named its owner.
+    const ambient = registry.ensure("sess-amb", { ambient: true, pid: 77 });
+    start(ambient.record);
+    const uuid = ambient.record.recorder.sessionUuid;
+    clock.advance(1_000);
+    const claimed = registry.ensure("sess-amb", { harness: "stella" });
+    // One chain, not a fork.
+    expect(claimed.created).toBe(false);
+    expect(claimed.record).toBe(ambient.record);
+    expect(claimed.record.recorder.sessionUuid).toBe(uuid);
+    // ...and every view of it now says Stella: the facts, the events the
+    // recorder seals from here, and the roster.
+    expect(claimed.record.harness).toBe("stella");
+    expect(registry.agentOf(claimed.record).key).toBe("stella:stella");
+    const event = claimed.record.recorder.sealCollectorEvent(
+      "oxagen:notification",
+      { notification_type: "init" },
+    );
+    expect(event.agent as { harness: string; runtime: string }).toMatchObject({
+      harness: "stella",
+      runtime: "stella",
+    });
+    expect(registry.agents().map((a) => [a.key, a.sessions_total])).toEqual([
+      ["stella:stella", 1],
+    ]);
+    // Persistence keeps it Stella's rather than filing it as unclaimed again.
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    restored.restore(
+      JSON.parse(JSON.stringify(registry.state())) as RegistryState,
+    );
+    expect(restored.ensure("sess-amb", { harness: "stella" }).created).toBe(
+      false,
+    );
+    expect(restored.get("sess-amb")?.harness).toBe("stella");
+
+    // A custom agent cannot adopt: its chain uuid is seeded from its name as
+    // well as the id, so it opens its own record instead of renaming a chain
+    // that is already running.
+    const other = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const loose = other.ensure("sess-amb", { ambient: true });
+    start(loose.record);
+    const custom = other.ensure("sess-amb", { customAgent: "reviewer" });
+    expect(custom.created).toBe(true);
+    expect(custom.record).not.toBe(loose.record);
+    expect(custom.record.recorder.sessionUuid).not.toBe(
+      loose.record.recorder.sessionUuid,
+    );
+  });
+
   it("closes a session whose process exited after Stop as completed, and anything else as crashed", () => {
     const clock = clockAt("2026-09-15T10:00:00.000Z");
     const registry = new SessionRegistry({

@@ -96,6 +96,12 @@ export interface SessionRecord extends SessionFacts {
   lastCheckpointSeq: number;
   /** The session never sent a hook; only OTel or a transcript showed it. */
   ambient: boolean;
+  /**
+   * Open tool calls whose harness issues no tool-use id of its own (Stella),
+   * as `derived id -> the id this invocation was given`. See
+   * `invocationToolUseId` in the hook handler.
+   */
+  toolUseIds: Record<string, string>;
 }
 
 export interface PersistedSession extends SessionFacts {
@@ -107,6 +113,8 @@ export interface PersistedSession extends SessionFacts {
   sealed: boolean;
   lastCheckpointSeq: number;
   ambient: boolean;
+  /** Absent in files written before derived tool-use ids were numbered. */
+  toolUseIds?: Record<string, string>;
 }
 
 /** One kind of agent this host has run. */
@@ -259,20 +267,49 @@ export class SessionRegistry {
    * A record opened before any agent named itself (OTel or the transcript
    * detector saw the session first) belongs to the agent that names itself
    * first: it is the same session, and adopting it keeps one chain rather
-   * than forking it. Only the key moves; the events already chained carry the
-   * context the recorder was built with.
+   * than forking it. The record takes the agent's identity with it — the
+   * facts, the roster entry `agentOf` derives from them, the key it persists
+   * under, and the recorder's own agent labels — so nothing downstream keeps
+   * calling it Claude Code.
+   *
+   * A custom agent cannot adopt: its chain uuid is seeded from the agent name
+   * as well as the id, so taking over an unclaimed chain would have to
+   * rename it mid-chain. It opens its own record instead, and the unclaimed
+   * one closes on the next sweep.
    */
   private adopt(
     harnessSessionId: string,
     facts: SessionFacts,
   ): SessionRecord | undefined {
+    if (facts.customAgent !== undefined) return undefined;
     const unclaimed = this.key(harnessSessionId, {});
     const record = this.sessions.get(unclaimed);
     if (record === undefined || record.sealed) return undefined;
     if (record.harness !== undefined || record.customAgent !== undefined)
       return undefined;
     this.sessions.delete(unclaimed);
+    if (facts.harness !== undefined) record.harness = facts.harness;
+    record.recorder.relabel(
+      contextForHarness(this.options.context, facts.harness, undefined),
+    );
     this.sessions.set(this.key(harnessSessionId, facts), record);
+    if (!isInternalSession(harnessSessionId)) {
+      // The session was counted against Claude Code when it opened
+      // unclaimed; it was this agent's session all along. An entry left with
+      // nothing to its name is dropped, or the roster would list an agent
+      // this host never ran.
+      const openerKey = this.agentOf({}).key;
+      const opener = this.roster.get(openerKey);
+      if (opener !== undefined) {
+        opener.sessions_total = Math.max(0, opener.sessions_total - 1);
+        if (
+          opener.sessions_total === 0 &&
+          !this.list().some((other) => this.agentOf(other).key === openerKey)
+        )
+          this.roster.delete(openerKey);
+      }
+      this.noteAgent(record, true);
+    }
     return record;
   }
 
@@ -323,6 +360,7 @@ export class SessionRegistry {
       sealed: false,
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
+      toolUseIds: {},
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
@@ -408,6 +446,9 @@ export class SessionRegistry {
         sealed: record.sealed,
         lastCheckpointSeq: record.lastCheckpointSeq,
         ambient: record.ambient,
+        ...(Object.keys(record.toolUseIds).length > 0
+          ? { toolUseIds: { ...record.toolUseIds } }
+          : {}),
         ...optionalFacts(record),
       })),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
@@ -437,6 +478,7 @@ export class SessionRegistry {
         sealed: persisted.sealed,
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
+        toolUseIds: { ...persisted.toolUseIds },
         ...optionalFacts(persisted),
       });
     }
