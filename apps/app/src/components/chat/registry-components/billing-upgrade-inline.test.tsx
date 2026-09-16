@@ -131,6 +131,54 @@ describe("BillingUpgradeInline", () => {
     expect(scaleBtn).toBeTruthy();
   });
 
+  it("submits a slug that exists in the billing catalog, not a bare tier", async () => {
+    // The regression: this card hard-coded `build` / `scale` / `enterprise`,
+    // none of which any `billing.plans` row has carried since the `-v2`
+    // catalog landed, so every upgrade from chat asked for a plan that does
+    // not exist. Assert against SUBSCRIPTION_PLANS rather than a literal so
+    // the next slug bump cannot re-open it.
+    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
+
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
+    render(<BillingUpgradeInline orgSlug="my-org" suggestedPlan="scale" />);
+    await userEvent.click(screen.getByRole("button", { name: /Upgrade to/ }));
+
+    await waitFor(() => expect(changePlanAction).toHaveBeenCalled());
+    const sent = vi.mocked(changePlanAction).mock.calls[0]?.[0];
+    expect(SUBSCRIPTION_PLANS.map((p) => p.slug)).toContain(
+      sent?.targetPlanSlug,
+    );
+    expect(sent?.targetPlanSlug).toBe(
+      SUBSCRIPTION_PLANS.find((p) => p.tier === "scale")?.slug,
+    );
+  });
+
+  it("quotes each plan at the catalog's monthly price", async () => {
+    // The card advertised $20 / $99 / $500 while the Stripe catalogue the app
+    // checks out against held the v1 GAU prices, so it showed one number and
+    // Checkout charged another.
+    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
+
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
+    render(<BillingUpgradeInline />);
+    for (const plan of SUBSCRIPTION_PLANS) {
+      const expected = `$${(plan.monthlyCents / 100).toLocaleString("en-US")}/mo`;
+      expect(screen.getByText(expected)).toBeInTheDocument();
+    }
+  });
+
   it("shows error message when changePlanAction fails", async () => {
     const { changePlanAction } = await import(
       "@/app/[orgSlug]/billing/actions"
