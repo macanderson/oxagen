@@ -865,6 +865,37 @@ type Messages = {
       never: string;
       empty: string;
     };
+    apiKeys: {
+      lead: string;
+      tableLabel: string;
+      columns: {
+        name: string;
+        prefix: string;
+        created: string;
+        lastUsed: string;
+        expires: string;
+        status: string;
+      };
+      status: {
+        live: string;
+        revoked: string;
+      };
+      never: string;
+      neverUsed: string;
+      empty: string;
+      denied: {
+        title: string;
+        body: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+      };
+    };
     denied: {
       title: string;
       body: string;

@@ -238,8 +238,13 @@ export function createSkillListHandler(
     const cursor =
       input.cursor === undefined ? null : decodeSkillCursor(input.cursor);
     if (input.cursor !== undefined && cursor === null)
-      throw new CapabilityError(skillList.name, "invalid_input", "invalid_cursor");
-    const window = cursor?.window ?? windowEndingAt(deps.now(), input.windowDays);
+      throw new CapabilityError(
+        skillList.name,
+        "invalid_input",
+        "invalid_cursor",
+      );
+    const window =
+      cursor?.window ?? windowEndingAt(deps.now(), input.windowDays);
 
     // ── Read ──────────────────────────────────────────────────────────────
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };

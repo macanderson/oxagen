@@ -96,11 +96,14 @@ describe("skills.inventory", () => {
     { ok: false, reason: "denied", permission: "skills.read" },
     { ok: false, reason: "pending_approval", accessRequestId: "acr_1" },
     readError("session_store_unavailable", 503),
-  ] as const)("passes a $reason read through untouched (negative)", async (refusal) => {
-    kernelRead.mockResolvedValue(refusal);
-    expect(await skills.inventory(ctx, { cursor: null })).toEqual(refusal);
-    expect(captureError).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    "passes a $reason read through untouched (negative)",
+    async (refusal) => {
+      kernelRead.mockResolvedValue(refusal);
+      expect(await skills.inventory(ctx, { cursor: null })).toEqual(refusal);
+      expect(captureError).not.toHaveBeenCalled();
+    },
+  );
 
   it("reports an answer the view model refuses once, as record_unmappable (negative)", async () => {
     kernelRead.mockResolvedValue(
