@@ -37,7 +37,15 @@ export function toToolVersionPage(
               egress: item.classification.egress,
               consequenceTags: item.classification.consequenceTags,
               dataClasses: item.classification.dataClasses,
-              measures: Object.keys(item.classification.measures),
+              measures: Object.entries(item.classification.measures).map(
+                ([name, measure]) => ({
+                  name,
+                  path: measure.path,
+                  type: measure.type,
+                  currencyPath: measure.currencyPath ?? null,
+                  unit: measure.unit ?? null,
+                }),
+              ),
             },
       classifiedAt: item.classifiedAt,
       schemaOrigin: item.schemaOrigin,

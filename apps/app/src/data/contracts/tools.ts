@@ -38,13 +38,35 @@ export const ToolGate = z.object({
 });
 export type ToolGate = z.infer<typeof ToolGate>;
 
+/**
+ * A path into the call's input the mandate gate measures. Authored where the
+ * tool is declared or imported, never on this page: reclassifying carries the
+ * version's measures through unchanged.
+ */
+export const ToolMeasure = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  type: z.enum([
+    "money",
+    "count",
+    "identifier",
+    "environment",
+    "table",
+    "text",
+  ]),
+  /** For `money`: where the call carries the currency. */
+  currencyPath: z.string().min(1).nullable(),
+  /** For `count`: what is counted. */
+  unit: z.string().min(1).nullable(),
+});
+export type ToolMeasure = z.infer<typeof ToolMeasure>;
+
 export const ToolClassification = z.object({
   sideEffect: ToolSideEffect,
   egress: ToolEgress,
   consequenceTags: z.array(ConsequenceTag),
   dataClasses: z.array(z.string().min(1)),
-  /** Measure names in the tool's input; the page shows what the mandate gate can read. */
-  measures: z.array(z.string().min(1)),
+  measures: z.array(ToolMeasure),
 });
 export type ToolClassification = z.infer<typeof ToolClassification>;
 

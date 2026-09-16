@@ -103,6 +103,7 @@ const source: DataSource = {
   skills: { inventory: read },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 
 function withIntl(element: ReactNode) {

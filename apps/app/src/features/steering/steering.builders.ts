@@ -225,6 +225,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         return Promise.resolve(reads.contextPr);
       },
     },
+    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };
 }
