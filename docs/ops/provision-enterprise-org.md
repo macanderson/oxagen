@@ -48,6 +48,20 @@ pnpm db:provision-enterprise --org acme --actions-annual 25000000 --apply
 | `--actions-annual` | `1500000` | the recorded governed-action commitment |
 | `--apply` | off | write; without it the run is read-only |
 
+**It runs against a database behind the migration.** `negotiated_actions_annual`
+arrives with `20260916120000`, and production migrates by hand, so the gap
+between a merge and an apply is real. The script probes for the column, says so,
+and skips only the allowance — the credit floor, the tier and the cap all still
+apply.
+
+**Every --apply confirms, whatever the host looks like.** Production Aurora is
+reached through an SSM port-forward, so its connection string reads
+`localhost:15432` — indistinguishable by hostname from a dev Postgres on 5433. A
+check that keyed on that would wave through exactly the run that most needed
+stopping. The prompt also prints how many organisations are in the target
+database, which is the cheapest fact that tells a dev database from production.
+Pass `--yes` to skip it for scripted local use.
+
 **Every step is idempotent.** Re-running converges rather than accumulating: the
 credit step grants only the shortfall below the floor, so running it a second
 time right away is a no-op, and running it after the balance has been spent down

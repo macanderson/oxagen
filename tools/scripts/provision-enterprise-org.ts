@@ -76,7 +76,8 @@
  * Safety:
  *   - Defaults to --dry-run; pass --apply to write.
  *   - Prints the sanitized target host + database at startup.
- *   - Requires explicit confirmation before --apply against a non-local host.
+ *   - Every --apply confirms, whatever the host looks like: a tunnelled
+ *     production cluster reads as `localhost`. `--yes` is the explicit opt-out.
  *   - Every step is idempotent: re-running converges, it does not accumulate.
  *
  * Usage:
@@ -84,6 +85,7 @@
  *   pnpm db:provision-enterprise --email mac@oxagen.sh --apply
  *   pnpm db:provision-enterprise --org acme --floor-usd 500000 --apply
  *   pnpm db:provision-enterprise --org acme --actions-annual 25000000 --apply
+ *   pnpm db:provision-enterprise --org acme --apply --yes   # no prompt (scripted)
  *
  * Env:
  *   DATABASE_URL — required. `tsx --env-file` does NOT override a shell-set
@@ -95,7 +97,7 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
-import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { db, closeDatabase, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -246,6 +248,31 @@ async function confirm(question: string): Promise<boolean> {
   });
 }
 
+/**
+ * Is `negotiated_actions_annual` on this database yet?
+ *
+ * The column arrives with 20260916120000, and a database can legitimately be
+ * behind it — production migrates by hand from the app node, so the gap between
+ * a merge and an apply is real and can be days. Selecting a column that is not
+ * there fails the whole run with a 42703 about a column name, which tells an
+ * operator nothing about what to do. Probing lets the run do everything else —
+ * including the credit floor, which is the part someone is usually standing
+ * there waiting for — and say plainly which one thing it could not do.
+ */
+async function hasNegotiatedAllowanceColumn(
+  d: ReturnType<typeof db>,
+): Promise<boolean> {
+  const rows = await d.execute(sql`
+    select 1
+      from information_schema.columns
+     where table_schema = 'org'
+       and table_name = 'organizations'
+       and column_name = 'negotiated_actions_annual'
+     limit 1
+  `);
+  return Array.from(rows as Iterable<unknown>).length > 0;
+}
+
 interface TargetOrg {
   id: string;
   publicId: string;
@@ -253,7 +280,7 @@ interface TargetOrg {
   slug: string;
   planType: string;
   status: string;
-  negotiatedActionsAnnual: bigint | null;
+  negotiatedActionsAnnual?: bigint | null;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -261,6 +288,7 @@ interface TargetOrg {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const DRY_RUN = !args.includes("--apply");
+  const SKIP_CONFIRM = args.includes("--yes");
   const email = flagValue(args, "--email");
   const orgRef = flagValue(args, "--org");
   const floorUsd = parseFloorUsd(flagValue(args, "--floor-usd"));
@@ -303,11 +331,38 @@ async function main(): Promise<void> {
   );
   console.log();
 
-  if (!DRY_RUN && !isLocalHost(host)) {
-    console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm(
-      `  Proceed with write to ${host}/${database}? [y/N] `,
+  // Every --apply confirms, not only a remote-looking one.
+  //
+  // The host string cannot tell you which database you are about to write to.
+  // Production Aurora is VPC-only and is reached through an SSM port-forward,
+  // so the connection string for the REAL production cluster reads
+  // `localhost:15432` — indistinguishable by hostname from a laptop's dev
+  // Postgres on 5433, and a check that keyed on that would wave through exactly
+  // the run that most needed stopping. So the prompt is unconditional and
+  // `--yes` is the explicit opt-out for scripted local use.
+  //
+  // The fingerprint is there for the same reason: an operator confirming a
+  // write needs one fact the hostname cannot give them. A dev database has a
+  // handful of organisations and production has whatever it has, so the count
+  // is the cheapest thing that distinguishes them at a glance.
+  if (!DRY_RUN && !SKIP_CONFIRM) {
+    const [fingerprint] = await db()
+      .select({ orgs: count() })
+      .from(schema.organizations);
+    if (!isLocalHost(host)) {
+      console.log(kleur.red("  ⚠  Non-local database in --apply mode."));
+    }
+    console.log(
+      kleur.yellow(
+        `  About to WRITE to ${host}/${database} — ${fingerprint?.orgs ?? "?"} organisation(s) in org.organizations.`,
+      ),
     );
+    console.log(
+      kleur.yellow(
+        "  A tunnelled production cluster also reads as localhost. Confirm you know which database this is.",
+      ),
+    );
+    const ok = await confirm("  Proceed? [y/N] ");
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       await closeDatabase();
@@ -318,6 +373,15 @@ async function main(): Promise<void> {
 
   const d = db();
 
+  const canRecordAllowance = await hasNegotiatedAllowanceColumn(d);
+  if (!canRecordAllowance) {
+    console.log(
+      kleur.yellow(
+        "  org.organizations.negotiated_actions_annual is missing — this database is behind migration 20260916120000.\n  Everything else still runs; the action commitment is skipped and the org keeps the bounded enterprise fallback.\n",
+      ),
+    );
+  }
+
   // ── 1. Resolve the target orgs ─────────────────────────────────────────────
   let orgs: TargetOrg[];
   const cols = {
@@ -327,7 +391,11 @@ async function main(): Promise<void> {
     slug: schema.organizations.slug,
     planType: schema.organizations.planType,
     status: schema.organizations.status,
-    negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+    ...(canRecordAllowance
+      ? {
+          negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+        }
+      : {}),
   };
 
   if (email) {
@@ -429,18 +497,30 @@ async function main(): Promise<void> {
       // alerts on, and it would alert on every governed action from here on.
       const tierIsSet =
         org.planType === "enterprise" && org.status === "active";
+      // On a database behind 20260916120000 there is no column to compare or to
+      // write, so the allowance half is satisfied by definition and the org
+      // keeps `resolveActionAllowance`'s bounded enterprise fallback.
       const allowanceIsSet =
-        org.negotiatedActionsAnnual !== null &&
-        Number(org.negotiatedActionsAnnual) === actionsAnnual;
+        !canRecordAllowance ||
+        (org.negotiatedActionsAnnual !== null &&
+          org.negotiatedActionsAnnual !== undefined &&
+          Number(org.negotiatedActionsAnnual) === actionsAnnual);
+      const recorded = canRecordAllowance
+        ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
+        : " (allowance column absent — bounded fallback applies)";
 
       if (tierIsSet && allowanceIsSet) {
         console.log(
-          `      tier            : already enterprise/active, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`,
+          `      tier            : already enterprise/active${recorded}`,
         );
       } else if (DRY_RUN) {
         console.log(
           kleur.blue(
-            `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active', negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`,
+            `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
+              canRecordAllowance
+                ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
+                : " (allowance column absent — skipped)"
+            }`,
           ),
         );
       } else {
@@ -449,14 +529,14 @@ async function main(): Promise<void> {
           .set({
             planType: "enterprise",
             status: "active",
-            negotiatedActionsAnnual: BigInt(actionsAnnual),
+            ...(canRecordAllowance
+              ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
+              : {}),
             updatedAt: new Date(),
           })
           .where(eq(schema.organizations.id, org.id));
         console.log(
-          kleur.green(
-            `      tier            : enterprise/active, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`,
-          ),
+          kleur.green(`      tier            : enterprise/active${recorded}`),
         );
       }
 
