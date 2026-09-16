@@ -135,13 +135,17 @@ async function inScope<T>(
   }) as Promise<T>;
 }
 
-const sqlstateOf = async (p: Promise<unknown>): Promise<string> => {
+/** The SQLSTATE and message of a write the policy refused. */
+const refusalOf = async (
+  p: Promise<unknown>,
+): Promise<{ code: string; message: string }> => {
   const err: unknown = await p.then(
     () => null,
     (e: unknown) => e,
   );
   if (err === null) throw new Error("expected the write to be refused");
-  return String((err as { code?: string }).code);
+  const { code, message } = err as { code?: string; message?: string };
+  return { code: String(code), message: String(message) };
 };
 
 const insertSlugHistory = (tx: postgres.TransactionSql, newSlug: string) =>
@@ -176,12 +180,13 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
   // #3029, the update_workspace_settings half. A name-only edit works, which is
   // why this went unnoticed; the re-slug the action promises does not.
   it("refuses the slug-history INSERT with 42501: workspace_slug_history is standard, not org_only", async () => {
-    const code = await sqlstateOf(
+    const { code, message } = await refusalOf(
       inScope(ORG, ORG_ONLY_WORKSPACE_ID, (tx) =>
         insertSlugHistory(tx, "oos-ws-renamed"),
       ),
     );
     expect(code).toBe(RLS_REFUSAL);
+    expect(message).toMatch(/row-level security/i);
     // Not a unique violation, so `isUniqueViolation` never sees it and the
     // handler's slug_taken catch cannot classify it — it reaches the caller raw.
     expect(code).not.toBe("23505");
@@ -190,12 +195,13 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
   // #3029, the create_workspace half: the first row the bootstrap writes after
   // the workspace itself.
   it("refuses the workspace-membership INSERT with 42501: workspace_users is workspace_only", async () => {
-    const code = await sqlstateOf(
+    const { code, message } = await refusalOf(
       inScope(ORG, ORG_ONLY_WORKSPACE_ID, (tx) =>
         insertMembership(tx, "wsu_denied"),
       ),
     );
     expect(code).toBe(RLS_REFUSAL);
+    expect(message).toMatch(/row-level security/i);
   });
 
   // The fix, both halves: the same statements under the TARGET workspace's
