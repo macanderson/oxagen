@@ -2,9 +2,17 @@
  * Unit tests for the get_evidence_retention handler
  * (billing.evidence_retention).
  *
- * Strategy: stub `withTenantDb` and queue the three reads the handler makes
+ * Strategy: stub `withSystemDb` and queue the three reads the handler makes
  * inside it — settings, the pinned retention policies, the retention ledger.
  * The published constants stay real.
+ *
+ * `withSystemDb` is the seam because the policy read is deliberately
+ * organisation-wide — "the longest window ANY pinned policy declares" — over
+ * `evidence.retention_policy_versions`, whose policy class is `standard`. A
+ * tenant-scoped read could only ever see one workspace's policies, and under
+ * the org-only workspace sentinel none at all; max() over the empty set is SQL
+ * NULL, which this handler documents as "no policy pinned". `withTenantDb` is
+ * mocked inert so that regression fails here.
  *
  * The load-bearing case is the last one: an unmeasured evidence volume must
  * come back as null with `storedGbMeasured: false`. A zero there would read as
@@ -14,12 +22,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  withTenantDb: vi.fn(),
+  withSystemDb: vi.fn(),
+  withTenantDb: vi.fn(() => undefined),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  return {
+    ...real,
+    withSystemDb: mocks.withSystemDb,
+    withTenantDb: mocks.withTenantDb,
+  };
 });
 
 vi.mock("./logger", () => ({
@@ -61,7 +74,7 @@ function makeTx(resultSets: unknown[][]): TxChain {
 /** Queue, in order: settings rows, retention-policy rows, ledger rows. */
 function queueDbReads(resultSets: unknown[][]): void {
   const tx = makeTx(resultSets);
-  mocks.withTenantDb.mockImplementation(
+  mocks.withSystemDb.mockImplementation(
     (fn: (t: TxChain) => Promise<unknown>) => fn(tx),
   );
 }
@@ -157,5 +170,30 @@ describe("billingEvidenceRetentionHandler", () => {
 
     expect(() => billingEvidenceRetention.output.parse(out)).not.toThrow();
     expect(out.effectiveRetentionDays).toBe(1095);
+  });
+});
+
+describe("the organisation-wide policy read", () => {
+  it("reads through the system seam, never the tenant-scoped one", async () => {
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: true }],
+      [{ maxTtlDays: 365 }],
+      [{ total: "0" }],
+    ]);
+    await billingEvidenceRetentionHandler({}, TEST_CTX);
+    expect(mocks.withSystemDb).toHaveBeenCalled();
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("reports the longest window pinned anywhere in the organisation", async () => {
+    // Two workspaces' policies in one answer, which is what the contract asks
+    // for and what a workspace-scoped read could not return.
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: true }],
+      [{ maxTtlDays: 730 }],
+      [{ total: "0" }],
+    ]);
+    const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
+    expect(out.effectiveRetentionDays).toBe(730);
   });
 });
