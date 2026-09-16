@@ -1213,7 +1213,7 @@ export function App() {
                 </span>
                 <span className="meta">{meta}</span>
                 {/*
-                  Both lines, always. ADR-069 §2: a row that shows only what a
+                  Both lines, always. ADR-078 §2: a row that shows only what a
                   tier records reads as coverage it does not have, and the two
                   tiers do not rank against each other.
                 */}

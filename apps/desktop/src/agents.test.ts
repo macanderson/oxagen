@@ -120,7 +120,7 @@ describe("computeAgentRows: not wrapped", () => {
     ]);
     expect(rows.every((r) => !r.wrapped)).toBe(true);
     // Every row carries its tier even when nothing is covered, so no surface
-    // has to infer one (ADR-069).
+    // has to infer one (ADR-078).
     expect(rows.map((r) => r.tier)).toEqual([
       "harness",
       "harness",
@@ -508,7 +508,7 @@ describe("summarizeAgents", () => {
 });
 
 /**
- * The connected tier (ADR-069). What matters here is that a connected row is
+ * The connected tier (ADR-078). What matters here is that a connected row is
  * never rendered as if it were wrapped: it has no hooks, no sessions, and no
  * step record, and it carries its own health path so none of the wrapped
  * cascade's readings can leak into it.
@@ -650,7 +650,7 @@ describe("computeAgentRows: connected apps", () => {
   });
 
   it("shows how much of the app Oxagen cannot see", () => {
-    // ADR-069 §3: nothing in this repo can stop a user adding another MCP
+    // ADR-078 §3: nothing in this repo can stop a user adding another MCP
     // server, so the honest thing is to show the size of the gap.
     const row = connectedOf(
       state({ host: host({ harnesses: ["claude-desktop"] }) }),

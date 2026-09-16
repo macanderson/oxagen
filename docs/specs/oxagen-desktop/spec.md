@@ -7,7 +7,7 @@
 | **Owner** | Mac Anderson |
 | **Source** | `docs/specs/oxagen-desktop` on branch `worktree-oxagen-installer`; Tacho 2.1.1 |
 | **Ships as** | macOS **.dmg**; Linux **.deb / .rpm / .AppImage**; Windows **.msi / .exe** |
-| **Rev 2** | The app stops being a wrapper installer for coding agents and becomes the control plane for the AI apps on a machine, developer or not. ADR-069 settles the two enforcement tiers it now spans: **wrapped** apps run an Oxagen hook and **connected** apps are served their toolbelt through a local MCP gateway, and neither dominates the other (§13). Claude Desktop is the first connected app. PATH linking stops being on by default on a machine with no coding agent on it. |
+| **Rev 2** | The app stops being a wrapper installer for coding agents and becomes the control plane for the AI apps on a machine, developer or not. ADR-078 settles the two enforcement tiers it now spans: **wrapped** apps run an Oxagen hook and **connected** apps are served their toolbelt through a local MCP gateway, and neither dominates the other (§13). Claude Desktop is the first connected app. PATH linking stops being on by default on a machine with no coding agent on it. |
 | **Summary** | The Oxagen app puts a machine under Oxagen control: on first launch it links the `oxagen` CLI and the Tacho wrapper onto the operator's PATH, then signs the machine in to an organization, enrolls it against a workspace, and gives the operator one window to see the connection, move the host to another workspace or org, add or drop a wrapper for Claude Code, Codex, or Stella, sign out, and unenroll. A custom agent wraps too, by calling `tacho hook --agent <name>` around its own steps; the app shows it once it does. |
 
 
@@ -257,7 +257,7 @@ Tacho installed a `PreToolUse` command hook and from then on saw every action
 the agent took. The AI applications a non-developer actually runs have no hook
 surface at all. They have an MCP client config.
 
-ADR-069 settles what Oxagen does about that, and the part of it this spec is
+ADR-078 settles what Oxagen does about that, and the part of it this spec is
 bound by is that **the two tiers do not rank against each other**:
 
 | Product word | `enforcement_tier` | Apps | Mechanism |

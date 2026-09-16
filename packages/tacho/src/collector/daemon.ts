@@ -492,7 +492,7 @@ export async function startDaemon(
   }
 
   /**
-   * The local MCP gateway (ADR-069). Connected apps have no hook surface, so
+   * The local MCP gateway (ADR-078). Connected apps have no hook surface, so
    * the only thing Oxagen governs for them is the toolbelt it serves, and the
    * gateway is how it serves one without the app ever holding a credential.
    *
@@ -643,7 +643,7 @@ export async function startDaemon(
       // Every kind of agent this host has run; the daemon's own chain is
       // not one of them.
       agents: registry.agents(),
-      // Connected apps (ADR-069): one row per MCP client that has called
+      // Connected apps (ADR-078): one row per MCP client that has called
       // through the local gateway. Deliberately a separate list from
       // `agents`, which is the wrapped ones: a surface that merged them
       // would have to invent a tier for each row after the fact.

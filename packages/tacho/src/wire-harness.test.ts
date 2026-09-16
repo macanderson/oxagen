@@ -4,7 +4,7 @@
  * means they are written out rather than derived. This file is what keeps them
  * honest — a harness added to the enum without being classified fails here
  * rather than quietly reading as wrapped, which would have the product claim
- * a step record for an app that produces none (ADR-069 §2).
+ * a step record for an app that produces none (ADR-078 §2).
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -63,7 +63,7 @@ describe("every harness is classified, exactly once", () => {
 
 describe("the tier summaries are the honesty rule in one line each", () => {
   it("the wrapped summary says the record is what the agent reported", () => {
-    // ADR-069 §2 / tacho spec §2: harness tier is client_attested, and no
+    // ADR-078 §2 / tacho spec §2: harness tier is client_attested, and no
     // surface may say "prevented" where the record says "observed".
     expect(TACHO_TIER_SUMMARY.harness).toContain("every action");
     expect(TACHO_TIER_SUMMARY.harness).toContain("does not run the process");

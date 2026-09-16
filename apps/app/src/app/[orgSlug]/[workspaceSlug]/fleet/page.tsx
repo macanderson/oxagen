@@ -1,6 +1,6 @@
 /**
  * Fleet: every machine enrolled in this workspace, and — the point of the
- * screen — what Oxagen actually records for each app on it (ADR-069).
+ * screen — what Oxagen actually records for each app on it (ADR-078).
  *
  * `harnesses` alone says which apps a machine has and nothing about what that
  * coverage means, and the two tiers mean very different things:
@@ -22,6 +22,21 @@ import { Badge } from "@/components/ui/badge";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspaceOrRedirect } from "@/lib/resolve-org";
 import { type FleetHost, listFleetAction } from "./actions";
+
+// No route segment config. `cacheComponents` (apps/app/next.config.mjs)
+// replaces `dynamic`/`revalidate` and fails the build on a segment that still
+// declares one, which is what `dynamic = "force-dynamic"` here did. Removing it
+// does not risk a stale prerender: nothing on this page opts into `use cache`,
+// and every read below is uncached runtime IO — the session cookie, the org and
+// workspace lookups, `listFleetAction` — so under Cache Components the whole
+// fleet itself is server-rendered on every request, which is what
+// force-dynamic was asking for. The Suspense boundary that build-time
+// enforcement requires around that IO is the parent segment's
+// `[workspaceSlug]/loading.tsx`, which wraps this page as the layout's
+// children; the build reports the route as ◐ (partial prerender), meaning the
+// shell is static and the fleet streams in behind that boundary. A stale fleet
+// is a wrong fleet, so if this page ever grows a cached read, cache the read —
+// never the page.
 
 /** What each tier records, and what it does not. Both lines, always. */
 const TIER_COPY = {

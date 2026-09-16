@@ -33,7 +33,7 @@ import {
  * agent.
  */
 /**
- * Only *wrapped* harnesses appear here. A connected one (ADR-069) never opens
+ * Only *wrapped* harnesses appear here. A connected one (ADR-078) never opens
  * a session: it has no hook, so nothing marks a session's start or end, and
  * its gateway calls are sealed on the daemon's own chain instead. Giving it a
  * runtime would invite a caller to open a chain for a session that does not

@@ -3,7 +3,7 @@
  * already covers. The desktop first run calls it before asking the operator
  * what to connect.
  *
- * Two kinds of app, and they are found two different ways (ADR-069):
+ * Two kinds of app, and they are found two different ways (ADR-078):
  *
  *   - a **wrapped** harness is a CLI, found on PATH. `sh -lc` lookup means a
  *     login-shell PATH (Homebrew, nvm, `~/.local/bin`) is honoured even when

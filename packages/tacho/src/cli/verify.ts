@@ -113,7 +113,7 @@ export async function verify(
   const requested = options.harness ?? "claude-code";
   if (!isWrappedHarness(requested)) {
     // `verify` drives one headless turn and waits for a sealed chain. A
-    // connected harness (ADR-069) is a GUI app with no headless mode and no
+    // connected harness (ADR-078) is a GUI app with no headless mode and no
     // hook to fire, so there is nothing to drive and nothing to wait for.
     // Saying so beats reporting a failure the operator cannot act on.
     return {

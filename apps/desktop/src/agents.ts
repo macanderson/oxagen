@@ -79,7 +79,7 @@ export interface AgentRow {
   sessionsLive: number;
   sessionsTotal: number;
   /**
-   * Which enforcement tier this row is (ADR-069). Every row carries one, so
+   * Which enforcement tier this row is (ADR-078). Every row carries one, so
    * no surface has to infer it, and a connected row can never be rendered as
    * though it were wrapped.
    */
@@ -89,7 +89,7 @@ export interface AgentRow {
   /** What this tier records. */
   records: string;
   /**
-   * What this tier does not record. Never optional and never empty: ADR-069
+   * What this tier does not record. Never optional and never empty: ADR-078
    * §2 is that neither tier dominates the other, and a row that shows only
    * what it captures reads as coverage it does not have.
    */
@@ -231,7 +231,7 @@ function healthFor(input: HealthInput): {
 /**
  * The tier fields, filled from one place so no row can be built without them.
  * `omits` is as mandatory as `records`: a row that shows only what it captures
- * reads as coverage it does not have (ADR-069 §2).
+ * reads as coverage it does not have (ADR-078 §2).
  */
 function tierFields(
   tier: Tier,
@@ -353,7 +353,7 @@ function customRow(
 }
 
 /**
- * One row per connected app (ADR-069). Its health is not the wrapped cascade
+ * One row per connected app (ADR-078). Its health is not the wrapped cascade
  * and deliberately shares none of it:
  *
  *   1. not in `host.harnesses` → "not_wrapped" (the row still shows, so the

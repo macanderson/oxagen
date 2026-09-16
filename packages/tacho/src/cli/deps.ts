@@ -100,7 +100,7 @@ export interface RuntimeCommands {
   daemonCommand: string[];
   /**
    * argv that runs the MCP stdio shim, for a connected app whose config file
-   * spawns a process rather than dialling a URL (ADR-069). Computed here
+   * spawns a process rather than dialling a URL (ADR-078). Computed here
    * beside the other two so all three reference the same binary layout: a
    * connected app's entry must not outlive the executable it names any more
    * than a hook may.

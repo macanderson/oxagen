@@ -1,6 +1,6 @@
 /**
  * `tacho mcp-stdio`: the stdio shim for a connected app that cannot dial a
- * URL (ADR-069).
+ * URL (ADR-078).
  *
  * Claude Desktop's `claude_desktop_config.json` takes `command` / `args` /
  * `env` and nothing else — no `type`, no `url`. Remote servers are added

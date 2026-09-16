@@ -1,5 +1,5 @@
 /**
- * The loopback listener's browser guard (ADR-069).
+ * The loopback listener's browser guard (ADR-078).
  *
  * Until the MCP gateway, the collector's TCP listener was reached by two
  * things we installed ourselves: Claude Code's `http` hooks and its OTLP

@@ -2,7 +2,7 @@
 
 /**
  * actions.ts — the Fleet screen's one read: every machine enrolled in this
- * workspace, with the enforcement tier each of its apps reaches (ADR-069).
+ * workspace, with the enforcement tier each of its apps reaches (ADR-078).
  *
  * Same shape as the other app-side capability calls:
  *   1. getSessionOrRedirect()  — session guard

@@ -1,6 +1,6 @@
 /**
  * The Claude Desktop config writer — the first *connected*-tier harness
- * (ADR-069). Claude Desktop exposes no hook surface, so Tacho cannot see the
+ * (ADR-078). Claude Desktop exposes no hook surface, so Tacho cannot see the
  * actions it takes; what it can do is serve the workspace toolbelt through
  * the collector's loopback gateway and refuse, server-side, any call the
  * mandate does not allow.
@@ -45,7 +45,7 @@
  * **on/off switches for local MCP as a whole**, not a named-server allowlist;
  * the one real allowlist Anthropic ships governs the Desktop Extension
  * (`.mcpb`) registry, not hand-written entries in this file. So the connected
- * tier on this app is advisory with respect to *other* servers, and ADR-069 §3
+ * tier on this app is advisory with respect to *other* servers, and ADR-078 §3
  * requires every surface to say so instead of implying coverage it does not
  * have. `oxagenMcpPresence` returns the count and names of those other servers
  * for exactly that purpose.

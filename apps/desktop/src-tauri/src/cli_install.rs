@@ -168,7 +168,7 @@ fn write_json_object(path: &Path, obj: &Map<String, Value>) -> Result<(), String
 /// The default used to be unconditional on. That was right when the app only
 /// wrapped coding agents: anyone installing it already had a terminal and a
 /// harness on PATH. It is wrong now that the app also connects apps like
-/// Claude Desktop (ADR-069), because the person connecting one may never open
+/// Claude Desktop (ADR-078), because the person connecting one may never open
 /// a terminal, and linking two binaries into `~/.local/bin` and editing their
 /// shell profile to reach them is a change they did not ask for and cannot
 /// evaluate.
@@ -1591,7 +1591,7 @@ mod tests {
         assert!(auto_link_cli_enabled_with(&Map::new(), true));
     }
 
-    /// ADR-069: a machine with no coding agent on it belongs to someone who
+    /// ADR-078: a machine with no coding agent on it belongs to someone who
     /// may never open a terminal, and linking two binaries into ~/.local/bin
     /// and editing their shell profile is a change they did not ask for.
     #[test]

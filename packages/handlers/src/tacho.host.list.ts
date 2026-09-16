@@ -27,7 +27,7 @@ function decodeCursor(
 }
 
 /**
- * The enforcement tier each of a host's harnesses reaches (ADR-069). Resolved
+ * The enforcement tier each of a host's harnesses reaches (ADR-078). Resolved
  * here from the harness names the host reported, because the tier is a
  * property of the harness rather than of the enrollment: the same machine
  * normally carries both, and which one a given app is does not change.
