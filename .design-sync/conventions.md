@@ -7,7 +7,7 @@ the logo is the only difference.
 ### The rule that will bite you
 
 **`styles.css` is a COMPILED, CLOSED stylesheet — there is no Tailwind runtime here.**
-Only the 325 utility classes the library itself already uses exist. A class you
+Only the ~597 utility classes the library itself already uses exist. A class you
 invent (`bg-sidebar-bg`, `p-12`, `gap-8`) silently does nothing — no error, just
 unstyled output.
 
