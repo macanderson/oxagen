@@ -46,7 +46,10 @@ describe("MandateBar", () => {
   it("names the period and the limit the authority is counted against", async () => {
     const { container } = draw(<MandateBar authority={authority()} />);
     expect(bar()).toHaveAttribute("data-measure", "amount");
-    expect(bar()).toHaveTextContent("Remaining authority · monthly · 2026-09");
+    // The measure names itself: an approval card draws one bar per measure.
+    expect(bar()).toHaveTextContent(
+      "Remaining authority · amount · monthly · 2026-09",
+    );
     expect(bar()).toHaveTextContent("of $2,000.00");
     await expectNoAxe(container);
   });
@@ -54,7 +57,7 @@ describe("MandateBar", () => {
   it("draws settled and the reservation, and reads them out in the label", async () => {
     const { container } = draw(<MandateBar authority={authority()} />);
     expect(meter()).toHaveAccessibleName(
-      "$1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
+      "amount: $1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
     );
     const parts = [...bar().querySelectorAll("i")].map((part) => [
       part.dataset.part,
@@ -78,7 +81,7 @@ describe("MandateBar", () => {
       ["settled"],
     );
     expect(meter()).toHaveAccessibleName(
-      "$1,204.18 settled, $615.82 remaining of $2,000.00",
+      "amount: $1,204.18 settled, $615.82 remaining of $2,000.00",
     );
     await expectNoAxe(container);
   });
@@ -105,7 +108,7 @@ describe("MandateBar", () => {
     expect(bar()).toHaveTextContent("of 50 calls");
     expect(bar()).toHaveTextContent("11 calls");
     expect(meter()).toHaveAccessibleName(
-      "11 calls settled, 1 calls reserved by calls in flight, 38 calls remaining of 50 calls",
+      "calls: 11 calls settled, 1 calls reserved by calls in flight, 38 calls remaining of 50 calls",
     );
     await expectNoAxe(container);
   });
@@ -264,5 +267,26 @@ describe("MandateBar", () => {
       ["settled", "80%"],
       ["reserved", "20%"],
     ]);
+  });
+
+  // Two per-period measures in one currency draw two bars that would otherwise
+  // be indistinguishable on screen and to a screen reader alike.
+  it("tells two bars of one currency apart by their measure", () => {
+    draw(
+      <>
+        <MandateBar authority={authority()} />
+        <MandateBar authority={authority({ measure: "tax" })} />
+      </>,
+    );
+    const headings = screen
+      .getAllByTestId("mandate-bar")
+      .map((el) => el.textContent);
+    expect(headings[0]).toContain("· amount ·");
+    expect(headings[1]).toContain("· tax ·");
+    const names = screen
+      .getAllByRole("img")
+      .map((el) => el.getAttribute("aria-label"));
+    expect(names[0]).toMatch(/^amount:/);
+    expect(names[1]).toMatch(/^tax:/);
   });
 });

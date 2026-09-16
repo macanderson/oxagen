@@ -255,4 +255,17 @@ describe("Tools › mandates ledger", () => {
       );
     },
   );
+
+  // The name is not conditional on there being two: a lone `tax` limit under a
+  // column headed Per call is an unlabelled dollar figure.
+  it("names the measure on a row that limits exactly one", async () => {
+    await renderTools(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority({ measure: "tax" })] }),
+      ]),
+    );
+    expect(within(ledger()).getByTestId("mandate").textContent).toContain(
+      "tax",
+    );
+  });
 });

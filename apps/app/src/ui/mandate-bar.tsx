@@ -58,7 +58,13 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
   const reservedWidth = Math.min(Math.max(0, reservedRatio), 1 - settledWidth);
   /** Answered from the ledger's integers (`sumExceeds`), never from the clamped ratios. */
   const over = authority.overLimit;
+  // The measure names itself in the heading and in the accessible name, not
+  // only in a data attribute: an approval card draws one bar per measure, and
+  // two per-period measures in one currency are otherwise indistinguishable
+  // both on screen and to a screen reader. The component takes the authority,
+  // so the name is always to hand and no caller can decline to pass it.
   const label = t(showReserved ? "labelReserved" : "label", {
+    measure: authority.measure,
     settled: text(authority.settled),
     reserved: text(authority.reserved),
     remaining: remaining === null ? text(perPeriod) : text(remaining),
@@ -73,6 +79,7 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className={eyebrow}>
           {t("title", {
+            measure: authority.measure,
             period: t(`period.${authority.period}`),
             periodKey: authority.periodKey,
           })}

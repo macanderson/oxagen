@@ -32,3 +32,28 @@ export function useMeasureText(): (value: MeasureValue) => string {
           unit: value.unit,
         });
 }
+
+/**
+ * A measured figure with the measure it belongs to. This is the only form a
+ * figure takes in a list of them, and the name is never conditional: two
+ * measures in one currency are two identical-looking figures, and a lone one is
+ * self-explanatory only when it happens to be the expected measure — a single
+ * `tax` limit under a column headed *Per call* is an unlabelled dollar figure
+ * with nothing on the row to say which budget it governs. The name travels with
+ * the value so that no caller decides to omit it and no later caller inherits
+ * the omission.
+ */
+export function NamedMeasure({
+  measure,
+  value,
+}: {
+  measure: string;
+  value: MeasureValue;
+}) {
+  return (
+    <>
+      <Measure value={value} />
+      <span className="ml-1 text-xs text-muted-foreground">{measure}</span>
+    </>
+  );
+}

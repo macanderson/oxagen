@@ -359,11 +359,18 @@ describe("Agents › Mandates", () => {
     expect(row.textContent).toContain("tax");
   });
 
-  it("names no measure when a mandate limits exactly one", async () => {
-    await renderMandates(mandateList([mandateRow()]));
+  // The name is not conditional on there being two. A lone `tax` limit under a
+  // column headed Per call is an unlabelled dollar figure, with nothing on the
+  // row to say which budget it governs.
+  it("names the measure when a mandate limits exactly one", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority({ measure: "tax" })] }),
+      ]),
+    );
     const cells = within(held())
       .getByTestId("agent-mandate")
       .querySelectorAll("td");
-    expect(cells[2]?.textContent).toBe("$250.00");
+    expect(cells[2]?.textContent).toBe("$250.00tax");
   });
 });

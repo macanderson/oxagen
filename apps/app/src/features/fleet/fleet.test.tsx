@@ -333,8 +333,11 @@ describe("Fleet approvals › the mandate bar", () => {
     const bar = within(approvalsSection()).getByTestId("mandate-bar");
     expect(bar).toHaveAttribute("data-measure", "amount");
     expect(bar).toHaveTextContent("$615.82");
+    // The measure is on the card, not only in a data attribute: this panel is
+    // where a mandate draws one bar per measure.
+    expect(bar).toHaveTextContent("Remaining authority · amount · monthly");
     expect(within(bar).getByRole("img")).toHaveAccessibleName(
-      "$1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
+      "amount: $1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
     );
     await expectNoAxe(container);
   });

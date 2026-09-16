@@ -49,7 +49,7 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
-import { Measure } from "@/ui/measure";
+import { NamedMeasure } from "@/ui/measure";
 import { ReadFailure } from "@/ui/read-failure";
 import { RequestMandate } from "./mandate-request";
 
@@ -192,18 +192,16 @@ export function MandatesSection({
                                 <ul className="flex flex-col gap-0.5">
                                   {mandate.authority.map((measure) => {
                                     const value = measure[field];
-                                    // Two measures in one currency are two dollar
-                                    // figures, and which budget each governs is the
-                                    // whole question; the Tools ledger names them
-                                    // the same way.
+                                    // The name is never conditional:
+                                    // `NamedMeasure` carries it, so a lone
+                                    // `tax` limit is not an unlabelled dollar
+                                    // figure under a column headed Per call.
                                     return value === null ? null : (
                                       <li key={measure.measure}>
-                                        <Measure value={value} />
-                                        {mandate.authority.length > 1 ? (
-                                          <span className="ml-1 text-xs text-muted-foreground">
-                                            {measure.measure}
-                                          </span>
-                                        ) : null}
+                                        <NamedMeasure
+                                          measure={measure.measure}
+                                          value={value}
+                                        />
                                       </li>
                                     );
                                   })}

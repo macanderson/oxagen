@@ -26,7 +26,7 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
-import { Measure } from "@/ui/measure";
+import { NamedMeasure } from "@/ui/measure";
 import { ReadFailure } from "@/ui/read-failure";
 
 function Authority({
@@ -53,12 +53,7 @@ function Authority({
     <ul className="flex flex-col gap-0.5">
       {values.map((entry) => (
         <li key={entry.measure}>
-          <Measure value={entry.value} />
-          {authority.length > 1 ? (
-            <span className="ml-1 text-xs text-muted-foreground">
-              {entry.measure}
-            </span>
-          ) : null}
+          <NamedMeasure measure={entry.measure} value={entry.value} />
         </li>
       ))}
     </ul>
