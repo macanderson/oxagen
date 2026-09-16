@@ -39,6 +39,19 @@
 // carries eq(orgId), and the two revocations assert the row count they touched
 // rather than trusting a silent UPDATE. This is the shape
 // packages/handlers/src/iam.role.list.ts documents over the same tables.
+//
+// WHICH PLANE (ADR-042, and ADR-074's Decision 2 requires this to be stated):
+// shared for every table touched here. ADR-042 §2 names `iam`, `org` and `auth`
+// among the platform tables that always live on the shared plane; the two
+// `workspace.*` tables are org structure rather than tenant data — that list is
+// traces, evidence, graph, memory, context records, conversations and ingestion
+// state — and the app's own new-workspace action creates both through
+// withSystemDb. So the data-plane resolution and assertDataPlaneUsable that
+// withTenantDb was doing guarded a binding none of these tables follow, and
+// nothing reachable is lost by dropping them. See
+// apps/app_deprecated/src/lib/audit-query.ts for the full reasoning, and
+// billing.evidence_retention.ts for the opposite case — a table ADR-042 §2
+// calls tenant data, which carries the two calls explicitly.
 
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";

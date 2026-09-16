@@ -20,6 +20,23 @@
 // and assertOrgFenced() re-checks the rows that come back. This is the same
 // shape packages/handlers/src/audit.log.query.ts and iam.role.list.ts use over
 // the same tables.
+//
+// WHICH PLANE (ADR-042, and ADR-074's Decision 2 requires this to be stated):
+// shared, and nothing is lost by dropping the plane resolution withTenantDb was
+// doing. `security.security_events` has exactly one writer —
+// makeSecurityEventInserter in packages/database/src/security.ts — and it
+// inserts through withSystemDb, so the rows are on the shared plane by
+// construction. The tenant-scoped read this replaced resolved the org's
+// POSTGRES binding and opened whatever plane it named; for an org on a
+// dedicated plane that is a database these events were never written to, and
+// the export would have been signed empty. Dropping assertDataPlaneUsable with
+// it costs nothing reachable: assertDataPlaneUsable refuses on `status`, and no
+// writer in the tree produces a `shared` binding that is not `active`
+// (set_data_plane hard-codes it, and its contract has no `status` field). Were
+// an operator to disable a shared binding by hand, emitSecurityEvent would keep
+// writing this table through withSystemDb and query_audit_log would keep
+// serving it, so refusing here alone would be an inconsistency rather than a
+// kill switch.
 
 import {
   and,

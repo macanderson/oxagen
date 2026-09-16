@@ -42,6 +42,16 @@ export const EMPTY_POSTURE: Posture = {
 // control state and its auditor-facing rationale on the page. Tenant isolation is
 // enforced here explicitly instead — eq(orgId) on every query — which is the
 // shape packages/handlers/src/audit.log.query.ts uses over the same table.
+//
+// WHICH PLANE (ADR-042, and ADR-074's Decision 2 requires this to be stated):
+// shared for both tables, so the plane resolution and assertDataPlaneUsable
+// that withTenantDb was doing are not guarantees this read gives up.
+// `security.security_events` has one writer and it inserts through
+// withSystemDb (packages/database/src/security.ts); ADR-042 §2 names `auth` as
+// platform state that always lives on the shared plane. See
+// apps/app_deprecated/src/lib/audit-query.ts for the full reasoning on why
+// re-adding the assertion here would gate a shared-plane read on a tenant's
+// Postgres binding rather than restoring a kill switch.
 export async function loadPosture(orgId: string): Promise<Posture> {
   const since = new Date(Date.now() - SEVEN_DAYS_MS);
   const now = new Date();

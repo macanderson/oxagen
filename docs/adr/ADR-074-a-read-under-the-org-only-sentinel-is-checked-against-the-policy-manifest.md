@@ -106,6 +106,18 @@ of it. This ADR is the enforcement.
      the key's own workspace and invoke inside it, which leaves the handlers'
      `withTenantDb` correct and untouched.
 
+   **A conversion off `withTenantDb` says, per call site, which plane the
+   table is on.** `withTenantDb` resolves the organisation's data plane and
+   calls `assertDataPlaneUsable`; `withSystemDb` does neither. Substituting one
+   for the other therefore drops a guarantee that nothing in the diff, and
+   nothing `check:org-sentinel-reads` can see, will mention — the loss that
+   produced this change's own regression. A table ADR-042 §2 places on the
+   shared plane loses nothing it had; a table §2 calls tenant data does, and
+   until the plane-aware organisation-wide seam exists (#3132) it carries the
+   two calls explicitly, as `billing.evidence_retention.ts` does. Whichever it
+   is, the call site says so in a comment, because the next reader cannot
+   recover it from the code.
+
 3. **`pnpm check:org-sentinel-reads` enforces it.** The check resolves every
    table a sentinel-scoped tenant read touches through the policy manifest and
    fails, naming the table, its class and what the sentinel does to it. It runs
@@ -190,27 +202,30 @@ read is correctly fenced against the wrong database.
 
 ### The sweep
 
-Every read this change converts, against both properties. No exceptions,
-including the sites no review flagged.
+Every `withSystemDb` read this change introduces, against both properties. No
+exceptions, including the sites no review flagged. Six of the eight are
+**conversions** — a `runInTenantScope` + `withTenantDb` region replaced in
+place, which is the shape where a guarantee can be dropped silently. The two in
+`developer/tokens/api-key.ts` are **new code**: that file held no database
+access at all in the base, so they have no prior seam to have lost anything
+from. The distinction is load-bearing for the plane question below, so the
+table carries it.
 
-| converted read | who may see it | which plane |
-|---|---|---|
-| `lib/audit-query.ts` — `security.security_events` | **was membership; now Owner/Admin.** `security/audit/page.tsx` gated with `assertOrgMember`; it now uses `assertSecurityManager`, matching `query_audit_log`'s `ORG_AUDIT_ROLES` and the export route beside it, which already checked `SECURITY_MANAGER_ROLES` | shared. Not named literally by ADR-042 §2, but `emitSecurityEvent` writes it through `withSystemDb` and the governed `audit.log.query` handler reads it through `withSystemDb`: the spine is shared-plane by construction, or nothing written would ever be read |
-| `security/posture.ts` — `security.security_events`, `auth.api_keys` | **was membership; now Owner/Admin.** Not flagged in review. Counts rather than rows, so a smaller leak — but it is still every workspace's posture, and it is the SOC 2 dashboard summarising the feed above. `assertSecurityManager` | shared, as above and `auth` is named by ADR-042 §2 |
-| `developer/tokens/tokens-body.tsx` — `auth.api_keys` | **was membership; now Owner/Admin.** The three actions on the same panel already gated (`buildApiKeyCtx` → `assertOrgAdmin`); the listing did not. `list_api_keys` is high-sensitivity Owner/Admin | shared (`auth`) |
-| `developer/mcp/page.tsx` and `workbench/tools/mcp/page.tsx` — `auth.api_keys` | **the read is gone.** See below | n/a |
-| `developer/tokens/api-key.ts` — `auth.api_keys`, `workspace.workspaces`, `workspace.workspace_users` | already Owner/Admin: both helpers run after `buildApiKeyCtx`, which calls `assertOrgAdmin` before either | shared. `auth` is named; the two `workspace.*` tables are not named by either list, and this is org structure rather than tenant data — the base's own `new-workspace/actions.ts` creates both through `withSystemDb`. Stated as an inference from that precedent, not a citation |
-| `org.member.remove.ts` — `iam.*`, `org.org_users`, `auth.api_keys`, `workspace.*` | already Owner/Admin: this is the governed capability, and its own actor gate runs before the transaction | shared (`IAM`, `org`, `auth`; `workspace.*` as above) |
-| `billing.evidence_retention.ts` — `billing.org_billing_settings`, `billing.credit_ledger` | governed capability; kernel IAM applies | shared (`billing`) |
-| `billing.evidence_retention.ts` — `evidence.retention_policy_versions` | governed capability | **dedicated, and this is the one that was wrong.** ADR-042 §2 names evidence as tenant data. See below |
+| `withSystemDb` read | conv. | who may see it | which plane |
+|---|---|---|---|
+| `lib/audit-query.ts` — `security.security_events` | converted | **was membership; now Owner/Admin.** `security/audit/page.tsx` gated with `assertOrgMember`; it now uses `assertSecurityManager`, matching `query_audit_log`'s `ORG_AUDIT_ROLES` and the export route beside it, which already checked `SECURITY_MANAGER_ROLES` | shared. Not named literally by ADR-042 §2, but `emitSecurityEvent` writes it through `withSystemDb` and the governed `audit.log.query` handler reads it through `withSystemDb`: the spine is shared-plane by construction, or nothing written would ever be read |
+| `security/posture.ts` — `security.security_events`, `auth.api_keys` | converted | **was membership; now Owner/Admin.** Not flagged in review. Counts rather than rows, so a smaller leak — but it is still every workspace's posture, and it is the SOC 2 dashboard summarising the feed above. `assertSecurityManager` | shared, as above and `auth` is named by ADR-042 §2 |
+| `developer/tokens/tokens-body.tsx` — `auth.api_keys` | converted | **was membership; now Owner/Admin.** The three actions on the same panel already gated (`buildApiKeyCtx` → `assertOrgAdmin`); the listing did not. `list_api_keys` is high-sensitivity Owner/Admin | shared (`auth`) |
+| `developer/mcp/page.tsx` and `workbench/tools/mcp/page.tsx` — `auth.api_keys` | n/a | **the read is gone.** See below | n/a |
+| `developer/tokens/api-key.ts` — `auth.api_keys`, `workspace.workspaces`, `workspace.workspace_users` (two calls) | **new** | already Owner/Admin: both helpers run after `buildApiKeyCtx`, which calls `assertOrgAdmin` before either | shared. `auth` is named; the two `workspace.*` tables are not named by either list, and this is org structure rather than tenant data — the base's own `new-workspace/actions.ts` creates both through `withSystemDb`. Stated as an inference from that precedent, not a citation |
+| `org.member.remove.ts` — `iam.*`, `org.org_users`, `auth.api_keys`, `workspace.*` (two calls) | converted | already Owner/Admin: this is the governed capability, and its own actor gate runs before the transaction | shared (`IAM`, `org`, `auth`; `workspace.*` as above) |
+| `billing.evidence_retention.ts` — `billing.org_billing_settings`, `billing.credit_ledger` | converted | governed capability; kernel IAM applies | shared (`billing`) |
+| `billing.evidence_retention.ts` — `evidence.retention_policy_versions` | converted | governed capability | **dedicated, and this is the one that was wrong.** ADR-042 §2 names evidence as tenant data. See below |
 
 **One substitution needed more than a fence.** Of the eight `withSystemDb` calls
 this change introduces across six files, seven read tables ADR-042 §2 puts on
 the shared plane always — `auth`, `iam`, `org`, `billing`, and the security
-spine, which `emitSecurityEvent` writes through `withSystemDb` too. For those,
-`withSystemDb` is the canonical seam and no caller in the tree asserts a plane
-binding: `assertDataPlaneUsable` is called only by the three store clients'
-tenant seams.
+spine, which `emitSecurityEvent` writes through `withSystemDb` too.
 
 The eighth stands in for a plane-aware read, and `withTenantDb` was doing **two**
 things there: resolving the plane and calling `assertDataPlaneUsable`, which
@@ -220,6 +235,69 @@ an operator had explicitly disabled or marked degraded would have had its
 retention posture read off that plane anyway — **the data-plane kill switch,
 bypassed by the fix for a different bug.** Both checks are there now, mode
 first so a dedicated plane refuses for the reason that actually applies.
+
+#### Why the other six conversions do not get the same assertion
+
+The first version of this section cleared them on the ground that
+`withSystemDb` is the canonical seam for a shared-plane table and that no other
+caller in the tree asserts a binding. **That argument does not survive the
+sentence above it.** `assertDataPlaneUsable` refuses on `status`, before it
+looks at `mode` — so if a disabled *shared* binding is what refuses the
+evidence-retention read, then "these tables are on the shared plane" cannot be
+the reason the others need no check. *Shared* says which plane, not whether that
+plane is usable. And the precedent cited for it, `audit.log.query.ts` and
+`iam.role.list.ts`, is not a precedent at all: both were always `withSystemDb`
+and never held an assertion to lose. Six of these were **converted from
+`withTenantDb`**, which is exactly the case the cited files are not.
+
+The real reason is narrower, and it is three separate facts.
+
+**1. No code path in this tree produces a `shared` binding that is not
+`active`.** `set_data_plane` is the only writer of `org.data_planes`, and it
+hard-codes `status: "active"` on both the insert and the update path; its
+contract carries no `status` field at all. ADR-042 §3's `degraded` marking
+belongs to the per-plane migration runners, which §"Consequences" defers to a
+later body of work and which mark a *dedicated* plane whose schema version
+lags. `narrowStatus` fails closed on an unrecognised value, but the column's
+CHECK admits only the three known ones. The state the assertion would catch
+here is reachable only by an operator's hand-written UPDATE.
+
+**2. On the axis that *is* reachable — `dedicated` — the conversion is a fix,
+not a regression.** Take the audit spine, the sharpest case, because it ends in
+an HMAC-signed SOC 2 file. `security.security_events` is written *only* through
+`withSystemDb` (`packages/database/src/security.ts`, the one inserter), so the
+rows are on the shared plane by construction. The pre-conversion
+`withTenantDb` therefore asserted the org's *postgres* binding and then opened
+whichever plane it named — and for a dedicated-plane organisation that is a
+database the events were never written to. It would have rendered, and signed,
+an empty export. The assertion was guarding a plane the data is not on.
+
+**3. Even in the hand-made case, the refusal was one-sided.** If an operator
+disables an organisation's *shared* binding, `emitSecurityEvent` keeps writing
+that organisation's events, `query_audit_log` keeps serving them, and identity
+resolution, billing and IAM keep answering — all through `withSystemDb`, none
+of which consults the binding. A read refusal on one app page while the write
+path stays open is not a kill switch. It is a divergence between an app library
+and the governed capability over the same table, and it is the divergence this
+conversion removes.
+
+So the fix for the six is not to give each caller its own
+`resolveDataPlane` + `assertDataPlaneUsable`. That would gate a shared-plane
+platform read on a tenant's Postgres binding — the blanket assertion inside
+`withSystemDb` that its own docblock rules out, spelled once per caller — and
+would re-open the app-library/handler divergence deliberately closed here. The
+evidence-retention site gets the assertion because its table is tenant data
+under ADR-042 §2 and `withSystemDb` there is an acknowledged stand-in for a
+seam that does not exist: refusing is the honest behaviour for a read that
+would otherwise answer off the wrong plane. The other six are on the seam that
+is already correct for them.
+
+**What is actually missing is the seam, and it is #3132's step 2.**
+`withTenantDb` resolves the plane but demands a workspace; `withSystemDb` needs
+no workspace but is shared-plane by construction. An organisation-wide read of a
+tenant table has no correct seam today, and inventing one inside this change
+would be a storage-boundary decision made in a PR about a static check. It is
+recorded there and not built here.
 
 The shape is worth naming because it is the mirror of the one this ADR is
 about: there, a tenant scope was doing confidentiality work nobody had asked it
@@ -351,10 +429,10 @@ and the answer should be written rather than assumed.
 
 ### This check is best-effort, and it does not converge
 
-Ten failures were found in it during one review cycle. **Every one reported
+Eleven failures were found in it during one review cycle. **Every one reported
 clean rather than erroring**, which is the property that makes a green
 mandatory check worse than no check: it turns "nobody has verified this" into
-"CI says it is fine". They fall on four axes, and the axes are the point —
+"CI says it is fine". They fall on five axes, and the axes are the point —
 above all the split between *reading something wrong* and *never looking*.
 
 | # | axis | what it could not do |
@@ -363,6 +441,7 @@ above all the split between *reading something wrong* and *never looking*.
 | 5, 8 | whether a predicate constrains the statement it belongs to | it compared totals across a file; it accepted an `isNull` inside an `or`, which is an alternative rather than a constraint |
 | 6 | which table a read touches | it matched the literal identifier `schema` |
 | 7, 9, 10 | **whether it looked at all** — coverage, not precision | it read one registry, so `@oxagen/agent`'s 45 handlers were never examined; it discarded a handler's helper for having no transaction of its own; it did not scan for capability names when `invokeOrgCapability` was reached through a wrapper |
+| 11 | **what the seam it recommends stops doing** — coverage | it judges a read on table policy class against seam, and holds no model of what `withTenantDb` was doing *besides* narrowing: the data-plane resolution and `assertDataPlaneUsable` that a conversion to `withSystemDb` silently drops |
 
 Each was closed. Closing axis 1 took the call-site analysis from regexes to a
 TypeScript parse. Closing axis 3 — resolving `import { schema as db }` and
@@ -374,15 +453,15 @@ condition on an input supplied in another file: path sensitivity, then
 interprocedural constant propagation. A fourth axis, opened by closing the
 third.
 
-**Three of these are a different kind, and the distinction is the stopping
+**Four of these are a different kind, and the distinction is the stopping
 rule.** Most were the check looking at something and reading it wrong, which
-costs a false negative in CI. Three were the check **never looking**, which is
+costs a false negative in CI. Four were the check **never looking**, which is
 worse for the job this check has left: an incomplete inventory sends #3132's
 conversion out short, and the runtime refusal then starts raising on paths
 nobody reviewed. A coverage gap gets fixed; a precision gap gets written into
 the residual list below.
 
-The three coverage gaps:
+The four coverage gaps:
 
 1. **A second registry.** `readHandlerModules` parsed
    `packages/handlers/src/register.ts` alone: `readHandlerModules` parsed
@@ -408,6 +487,24 @@ means nothing.
    org-sentinel invocation on that page was unexamined. The direct `invoke()`
    path already scanned the file's capability names when its argument did not
    resolve; this one now takes the same branch.
+
+4. **What the recommended seam stops doing.** The check reasons about one
+   property of a read — is this table narrowed by RLS when it should not be —
+   and its remedy is "move it to `withSystemDb` with an org fence". It holds no
+   model of the *other* things `withTenantDb` does. That helper resolves the
+   organisation's data plane and calls `assertDataPlaneUsable`; `withSystemDb`
+   does neither, by design. So a conversion the check asks for can drop a
+   guarantee the check cannot name, and it reports clean either way — which is
+   how the evidence-retention regression above got into this change with the
+   checker green over it. Unlike the other three, **this one is not closed**,
+   and it is not closable at this layer: deciding whether a converted read still
+   needs the binding asserted means knowing which plane its table lives on, and
+   ADR-042 §2's split is prose, not a manifest the script can read. It is
+   recorded here rather than fixed because it is the gap that matters most to
+   #3132, whose step 2 is a mass conversion of exactly this shape. The
+   mitigation is procedural and is stated in the Decision: a conversion off
+   `withTenantDb` states, per call site, which plane the table is on and why the
+   dropped assertion is not needed.
 
 Closing (2) produced one false positive, and closing it was the same kind of
 work as the other named seams: `workspace-bootstrap` calls

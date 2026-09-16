@@ -17,6 +17,14 @@ import { TokensPanel } from "./tokens-panel";
 // rather than as the failure it was. Tenant isolation is enforced here
 // explicitly instead, by the eq(orgId) fence below, and a genuine read failure
 // is now logged rather than swallowed silently.
+//
+// WHICH PLANE (ADR-042, and ADR-074's Decision 2 requires this to be stated):
+// shared. ADR-042 §2 names `auth` among the platform tables that always live on
+// the shared plane, so the data-plane resolution and assertDataPlaneUsable that
+// withTenantDb was performing guarded a binding this table does not follow. See
+// apps/app_deprecated/src/lib/audit-query.ts for why re-adding that assertion
+// per caller would gate a shared-plane read on a tenant's Postgres binding
+// rather than restore a kill switch.
 export async function DeveloperTokensBody({ orgSlug }: { orgSlug: string }) {
   const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
