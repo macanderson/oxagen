@@ -10,6 +10,11 @@ import { registerCapability } from "../registry";
 // Revoked keys are included with their revokedAt so the page can show them;
 // live keys carry revokedAt: null.
 //
+// Each item says whether rotate_api_key will replace it. The rotate handler
+// refuses a key carrying a server-owned scope purpose, and both read the one
+// list in packages/handlers/src/lib/api-key-purpose.ts, so a page cannot offer
+// a rotation that is certain to be denied.
+//
 // Authorization: org Owner or Admin only, checked in the handler.
 export const apiKeyList = registerCapability({
   name: "list_api_keys",
@@ -48,6 +53,11 @@ export const apiKeyList = registerCapability({
           .string()
           .nullable()
           .describe("ISO-8601 revocation timestamp, or null for a live key"),
+        rotatable: z
+          .boolean()
+          .describe(
+            "Whether rotate_api_key will replace this key. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service. Revocation is always available.",
+          ),
       }),
     ),
   }),

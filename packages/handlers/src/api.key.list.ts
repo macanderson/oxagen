@@ -14,6 +14,14 @@
 //
 // The select names its columns: key_hash is never read, so a later change to
 // the row shape cannot leak it through a `select()` with no projection.
+//
+// `scope` is read but never returned. It is there to answer one question the
+// page cannot answer for itself: whether rotate_api_key would replace this key.
+// A key minted by an enrollment or a login flow carries a server-owned purpose
+// and rotation is refused for it (lib/api-key-purpose.ts, the same list the
+// rotate handler refuses from), so the row reports `rotatable` and a page does
+// not offer a control that can only fail. Revocation is unaffected: a key is
+// revocable whatever its purpose.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -21,6 +29,7 @@ import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import { actorCanManageApiKeys } from "./lib/api-key-authz";
+import { isRotatableKeyScope } from "./lib/api-key-purpose";
 import { logger } from "./logger";
 
 export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
@@ -87,6 +96,7 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
         lastUsedAt: schema.apiKeys.lastUsedAt,
         expiresAt: schema.apiKeys.expiresAt,
         revokedAt: schema.apiKeys.deletedAt,
+        scope: schema.apiKeys.scope,
       })
       .from(schema.apiKeys)
       .where(
@@ -107,6 +117,7 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       expiresAt: row.expiresAt?.toISOString() ?? null,
       revokedAt: row.revokedAt?.toISOString() ?? null,
+      rotatable: isRotatableKeyScope(row.scope),
     })),
   };
 };

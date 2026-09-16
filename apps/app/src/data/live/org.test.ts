@@ -121,6 +121,7 @@ const storedKey = {
   lastUsedAt: null,
   expiresAt: null,
   revokedAt: null,
+  rotatable: true,
 };
 
 describe("org.workspaces", () => {
@@ -183,6 +184,7 @@ describe("org.apiKeys", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ]),
     );

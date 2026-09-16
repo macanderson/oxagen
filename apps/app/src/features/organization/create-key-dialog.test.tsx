@@ -181,6 +181,31 @@ describe("create", () => {
     expect(document.body).not.toHaveTextContent(SECRET);
   });
 
+  it("shows the secret even when the person closed the dialog while the write was in flight (negative)", async () => {
+    // The secret exists nowhere else and cannot be asked for again; a rotation
+    // has already revoked the key it replaces.
+    let answer: (result: unknown) => void = () => undefined;
+    createApiKey.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    render(createDialog());
+    const dialog = await openDialog("Create a key", "create-api-key");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create it" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByTestId("create-api-key")).toBeNull();
+
+    answer({ ok: true, value: minted });
+    const panel = await screen.findByTestId("api-key-secret");
+    expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
+      SECRET,
+    );
+  });
+
   it("reloads the page when the person closes the secret, and shows it no more", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());

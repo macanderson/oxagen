@@ -91,6 +91,7 @@ const listed = {
   lastUsedAt: null,
   expiresAt: null,
   revokedAt: null,
+  rotatable: true,
 };
 
 const shown = {
@@ -227,6 +228,7 @@ describe("createApiKey", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ],
     });

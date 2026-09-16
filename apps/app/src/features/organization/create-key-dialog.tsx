@@ -106,6 +106,10 @@ function SecretPanel({ secret }: { secret: NewApiKey }) {
  * carries a secret replaces it with the one showing, and an answer that does
  * not closes the dialog. Closing reloads the roster when something changed.
  *
+ * A secret always reaches the screen: an answer that carries one reopens the
+ * dialog, because the write cannot be asked for its result again and a rotation
+ * has already ended the key it replaced.
+ *
  * `listedIds` is the roster the server last sent. The first render on which it
  * names the key whose secret is on screen, the reload has landed: the secret is
  * cleared out of state and the dialog closes with it, so no later render can
@@ -186,7 +190,13 @@ function KeyWriteDialog({
         setOpen(false);
         navigate.replace(after);
       } else {
+        // The secret is shown even if the person dismissed the dialog while the
+        // write was in flight. It exists nowhere else and cannot be asked for
+        // again, and a rotation has already revoked the key it replaces in the
+        // same transaction — closing the dialog early would otherwise leave the
+        // integration with neither credential.
         setWritten(minted);
+        setOpen(true);
       }
     } catch {
       setFailure(failureText(UNANSWERED));

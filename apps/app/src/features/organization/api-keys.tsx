@@ -12,6 +12,11 @@
 // are open to whoever can read this table: all four contracts are gated on the
 // same org roles in the same place (INV-29). The secret a minting write returns
 // is shown once by the client island, never by anything this section reads.
+//
+// Rotate is offered only where it would work: the key has not expired (the
+// replacement would inherit the expiry that ended it) and `list_api_keys`
+// reports it rotatable (a key an enrollment or a login flow owns is refused by
+// `rotate_api_key`). Revoke is offered on any key that is not already revoked.
 import { useTranslations } from "next-intl";
 import type { ApiKey } from "@/data/contracts/org";
 import type { WorkspaceChoice } from "@/data/contracts/shell";
@@ -312,7 +317,7 @@ function Keys({
                       ws={ws}
                       keyId={key.id}
                       keyName={key.name}
-                      rotatable={state === "live"}
+                      rotatable={state === "live" && key.rotatable}
                       listedIds={listedIds}
                       after={here}
                     />

@@ -44,6 +44,7 @@ type StoredKey = {
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   deletedAt: Date | null;
+  scope: Record<string, unknown>;
 };
 
 const LIVE: StoredKey = {
@@ -55,6 +56,7 @@ const LIVE: StoredKey = {
   lastUsedAt: new Date("2026-09-13T11:30:00.000Z"),
   expiresAt: null,
   deletedAt: null,
+  scope: { env: "prod" },
 };
 
 const REVOKED: StoredKey = {
@@ -66,6 +68,23 @@ const REVOKED: StoredKey = {
   lastUsedAt: null,
   expiresAt: new Date("2026-12-31T00:00:00.000Z"),
   deletedAt: new Date("2026-09-10T08:00:00.000Z"),
+  scope: {},
+};
+
+/** A key an enrollment owns: rotate_api_key refuses to replace it. */
+const ENROLLED: StoredKey = {
+  publicId: "aky_host",
+  name: "build-01 host key",
+  keyPrefix: "ox_tachotacho",
+  keyHash: "sha256-of-the-host-key",
+  createdAt: new Date("2026-09-05T09:00:00.000Z"),
+  lastUsedAt: null,
+  expiresAt: null,
+  deletedAt: null,
+  scope: {
+    purpose: "tacho_host_v1",
+    host_enrollment_id: "tch_0123456789abcdefghijkl",
+  },
 };
 
 // ── tx doubles ────────────────────────────────────────────────────────────────
@@ -235,6 +254,7 @@ describe("list_api_keys — read", () => {
           lastUsedAt: "2026-09-13T11:30:00.000Z",
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
         {
           publicId: "aky_old",
@@ -244,9 +264,21 @@ describe("list_api_keys — read", () => {
           lastUsedAt: null,
           expiresAt: "2026-12-31T00:00:00.000Z",
           revokedAt: "2026-09-10T08:00:00.000Z",
+          rotatable: true,
         },
       ],
     });
+  });
+
+  it("reports a key an enrollment owns as not rotatable, the same answer rotate_api_key gives", async () => {
+    // Both read lib/api-key-purpose.ts, so a surface cannot offer a rotation
+    // the handler is certain to refuse.
+    setup("Owner", [LIVE, ENROLLED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_host", false],
+    ]);
   });
 
   it("returns the same shape for an Admin", async () => {

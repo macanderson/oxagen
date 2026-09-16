@@ -90,6 +90,13 @@ const unused = apiKey({
   lastUsedAt: null,
   expiresAt: "2099-03-01T23:59:59.999Z",
 });
+const serviceOwned = apiKey({
+  id: "aky_1q2w3e4r5t6y7u8i9o0p1a",
+  name: "build-01 host key",
+  prefix: "ox_tachotacho",
+  lastUsedAt: null,
+  rotatable: false,
+});
 const expired = apiKey({
   id: "aky_4f3e2d1c0b9a8z7y6x5w4v",
   name: "Old runner",
@@ -184,6 +191,20 @@ describe("ok", () => {
     // expired key would show a secret that is already unusable.
     expect(labels(expired)).toEqual(["Revoke"]);
     expect(within(rowFor(revoked)).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("offers Revoke alone on a key an enrollment owns, whose rotation the handler refuses (negative)", async () => {
+    // rotate_api_key denies a key carrying a server-owned scope purpose, and
+    // list_api_keys reports it, so the row offers no control that can only fail.
+    await renderApiKeys(readOk([live, serviceOwned]));
+    expect(
+      within(rowFor(serviceOwned))
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Revoke"]);
+    expect(
+      within(rowFor(serviceOwned)).getByText("live").closest("[data-status]"),
+    ).toHaveAttribute("data-status", "live");
   });
 
   it("offers the create control above the table, closed until it is opened", async () => {

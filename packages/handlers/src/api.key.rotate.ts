@@ -17,10 +17,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
-import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
-import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
-import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
-import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
+import { reservedKeyPurposeOf } from "./lib/api-key-purpose";
 import { logger } from "./logger";
 
 export const apiKeyRotateHandler: CapabilityHandler<
@@ -89,51 +86,18 @@ export const apiKeyRotateHandler: CapabilityHandler<
       });
     }
 
-    if (requestsReservedTachoPurpose(oldKey.scope)) {
+    // The one list of server-owned purposes (lib/api-key-purpose.ts), which
+    // list_api_keys reads too so a page never offers a rotation this refuses.
+    const reserved = reservedKeyPurposeOf(oldKey.scope);
+    if (reserved) {
       logger.warn(
         { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
-        "api.key.rotate: rejected — reserved Tacho host purpose",
+        reserved.log,
       );
       throw new CapabilityError(
         "rotate_api_key",
         "authz_denied",
-        "Forbidden: enrolled Tacho host keys require operator rotation",
-      );
-    }
-
-    if (requestsReservedAgentCredentialPurpose(oldKey.scope)) {
-      logger.warn(
-        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
-        "api.key.rotate: rejected — reserved agent credential purpose",
-      );
-      throw new CapabilityError(
-        "rotate_api_key",
-        "authz_denied",
-        "Forbidden: agent credentials rotate through rotate_agent_credential",
-      );
-    }
-
-    if (requestsReservedStellaTelemetryPurpose(oldKey.scope)) {
-      logger.warn(
-        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
-        "api.key.rotate: rejected — reserved Stella telemetry purpose",
-      );
-      throw new CapabilityError(
-        "rotate_api_key",
-        "authz_denied",
-        "Forbidden: enrolled Stella telemetry keys require operator rotation",
-      );
-    }
-
-    if (requestsReservedCliSessionPurpose(oldKey.scope)) {
-      logger.warn(
-        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
-        "api.key.rotate: rejected — reserved CLI session purpose",
-      );
-      throw new CapabilityError(
-        "rotate_api_key",
-        "authz_denied",
-        "Forbidden: a CLI session key is replaced by `oxagen login`",
+        reserved.denial,
       );
     }
 
