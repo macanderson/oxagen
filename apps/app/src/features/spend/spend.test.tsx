@@ -103,6 +103,7 @@ const source: DataSource = {
   },
   spend: { byGroup, fleet: vi.fn(), drill, waste, budgets },
   org: { members: vi.fn() },
+  skills: { inventory: vi.fn() },
 };
 
 async function renderSpend(searchParams: Record<string, string> = {}) {

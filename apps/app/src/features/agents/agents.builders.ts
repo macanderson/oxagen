@@ -249,6 +249,7 @@ export function agentsSource(reads: AgentReads) {
       budgets: refuse,
     },
     org: { members: refuse },
+    skills: { inventory: refuse },
   };
   return { source, calls };
 }
