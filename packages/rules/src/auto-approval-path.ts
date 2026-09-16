@@ -79,6 +79,7 @@ export async function autoApproveParkedCall(
       input: args.input,
       workspaceId: args.ctx.workspaceId,
       digest,
+      rules,
       now: at,
     });
     return {

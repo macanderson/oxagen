@@ -5,6 +5,7 @@ import {
   evaluateAutoApproval,
   isFloorReason,
   REASON,
+  selectAutoApprovalRule,
   withinBusinessHours,
   type AutoApprovalSubject,
 } from "./auto-approval";
@@ -45,6 +46,39 @@ function subject(over: Partial<AutoApprovalSubject> = {}): AutoApprovalSubject {
     ...over,
   };
 }
+
+describe("selectAutoApprovalRule", () => {
+  // The subject builder picks the applicable rule before it finishes building
+  // the subject, so it can skip the standing-approval lookup no rule needs.
+  // It and evaluateAutoApproval go through this one function on purpose:
+  // two copies of the selection would let the rule whose needs decide what is
+  // loaded drift from the rule that later judges the call.
+  it("is the first enabled rule in authoring order that covers the call", () => {
+    const first = rule({ id: "first" });
+    const second = rule({ id: "second" });
+    expect(selectAutoApprovalRule([first, second], subject())?.id).toBe(
+      "first",
+    );
+    expect(
+      selectAutoApprovalRule([{ ...first, enabled: false }, second], subject())
+        ?.id,
+    ).toBe("second");
+    expect(
+      selectAutoApprovalRule([rule({ tools: ["linear__*"] })], subject()),
+    ).toBeUndefined();
+    expect(selectAutoApprovalRule([], subject())).toBeUndefined();
+  });
+
+  it("agrees with the rule evaluateAutoApproval reports", () => {
+    const rules = [
+      { ...rule({ id: "off" }), enabled: false },
+      rule({ id: "on" }),
+    ];
+    expect(selectAutoApprovalRule(rules, subject())?.id).toBe(
+      evaluateAutoApproval(rules, subject())?.ruleId,
+    );
+  });
+});
 
 describe("which rule answers", () => {
   it("has no opinion when no rule covers the tool", () => {

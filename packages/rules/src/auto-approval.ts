@@ -126,6 +126,22 @@ export function isFloorReason(reason: string): boolean {
 }
 
 /**
+ * The rule that answers for this call: the first enabled one in authoring
+ * order whose tool patterns match, or undefined when none covers it.
+ *
+ * `evaluateAutoApproval` and the subject builder both go through this, so the
+ * rule whose needs decide what the builder loads is the same rule that later
+ * judges the call. Two copies of this `find` would be a silent way for the
+ * two to disagree.
+ */
+export function selectAutoApprovalRule(
+  rules: readonly AutoApprovalRule[],
+  subject: AutoApprovalCoverage,
+): AutoApprovalRule | undefined {
+  return rules.find((r) => r.enabled && ruleCovers(r, subject));
+}
+
+/**
  * Judge one parked call against the workspace's auto-approval rules.
  *
  * Returns the first enabled rule in authoring order whose tool patterns match
@@ -137,7 +153,7 @@ export function evaluateAutoApproval(
   rules: readonly AutoApprovalRule[],
   subject: AutoApprovalSubject,
 ): AutoApprovalOutcome | null {
-  const rule = rules.find((r) => r.enabled && ruleCovers(r, subject));
+  const rule = selectAutoApprovalRule(rules, subject);
   if (rule === undefined) return null;
 
   const reasons = [...floorReasons(subject), ...ruleReasons(rule, subject)];
@@ -150,10 +166,21 @@ export function evaluateAutoApproval(
   };
 }
 
+/**
+ * The part of a subject that decides which rule answers for a call. Splitting
+ * it out lets the subject builder pick the applicable rule before it has
+ * finished assembling the subject, so it can skip work only that rule needs
+ * (`selectAutoApprovalRule`).
+ */
+export type AutoApprovalCoverage = Pick<
+  AutoApprovalSubject,
+  "capability" | "tool"
+>;
+
 /** A rule covers a call by its tool patterns: `slug@version` when declared, the capability name otherwise. */
 function ruleCovers(
   rule: AutoApprovalRule,
-  subject: AutoApprovalSubject,
+  subject: AutoApprovalCoverage,
 ): boolean {
   if (subject.tool !== null) {
     return toolMatches(rule.tools, subject.tool.slug, subject.tool.version);

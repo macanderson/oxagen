@@ -26,7 +26,8 @@ type MeasureReadFailure =
   | "missing"
   | "not_a_number"
   | "negative"
-  | "not_a_string";
+  | "not_a_string"
+  | "too_precise";
 
 type MeasureReadResult =
   | { ok: true; measure: ReadMeasure }
@@ -44,29 +45,60 @@ export function readPath(input: unknown, path: string): unknown {
 
 const DECIMAL = /^(\d+)(?:\.(\d+))?$/;
 
+/** An amount converted to micros, or why it could not be. */
+export type AmountToMicros =
+  | { ok: true; micros: string }
+  | { ok: false; reason: "not_a_number" | "too_precise" };
+
 /**
  * Convert an amount the tool expresses in `scale` decimal places to micros,
  * with string arithmetic: `"12.50"` at scale 2 is `12500000`. A number is
- * printed first through its shortest round-trip form; a value with more
- * decimals than `scale` is rounded down to what the tool itself can express.
+ * printed first through its shortest round-trip form.
+ *
+ * A value this cannot represent EXACTLY is refused, never rounded down. Two
+ * ways that happens, and both used to truncate:
+ *
+ * - more decimals than the measure declares — `"10.009"` at scale 2 became
+ *   `10000000`, the same micros as `"10.00"`;
+ * - a scale above 6, which is finer than micros — `"1.2345678"` at scale 7
+ *   became `1234567`, dropping the last digit.
+ *
+ * Truncating is not a rounding preference, it is a fail-open. The decision
+ * path would judge a smaller number than the one the handler goes on to
+ * execute, so a rule whose ceiling sits at the truncated value releases a
+ * call that is actually over it, and both halves look self-consistent. Every
+ * caller treats an unreadable measure as a refusal — the mandate gate denies
+ * (`measure_unreadable`), the auto-approval evaluator records
+ * `measure_unreadable:<measure>` and leaves the call with a person — so
+ * refusing here sends the call to a human rather than releasing it on a
+ * number nobody wrote.
  */
 export function amountToMicros(
   raw: string | number,
   scale: number,
-): string | null {
+): AmountToMicros {
   const text = typeof raw === "number" ? String(raw) : raw.trim();
   const m = DECIMAL.exec(text);
-  if (!m) return null;
+  if (!m) return { ok: false, reason: "not_a_number" };
   const whole = m[1]!;
-  const frac = (m[2] ?? "").slice(0, scale).padEnd(scale, "0");
+  const fracRaw = m[2] ?? "";
+  if (fracRaw.length > scale) return { ok: false, reason: "too_precise" };
+  const frac = fracRaw.padEnd(scale, "0");
   // micros = value * 10^6 = (whole + frac / 10^scale) * 10^6
   const digits = `${whole}${frac}`.replace(/^0+(?=\d)/, "");
   const shift = 6 - scale;
-  const micros =
-    shift >= 0
-      ? `${digits}${"0".repeat(shift)}`
-      : (BigInt(digits) / 10n ** BigInt(-shift)).toString();
-  return micros.replace(/^0+(?=\d)/, "");
+  if (shift >= 0) {
+    return {
+      ok: true,
+      micros: `${digits}${"0".repeat(shift)}`.replace(/^0+(?=\d)/, ""),
+    };
+  }
+  // scale > 6: the declaration is finer than micros. Exact only when the
+  // digits past the sixth are zero.
+  const divisor = 10n ** BigInt(-shift);
+  const value = BigInt(digits);
+  if (value % divisor !== 0n) return { ok: false, reason: "too_precise" };
+  return { ok: true, micros: (value / divisor).toString() };
 }
 
 /** Read one declared measure from the validated call input. */
@@ -84,8 +116,8 @@ export function readMeasure(
       if (typeof raw === "number" && (raw < 0 || !Number.isFinite(raw)))
         return { ok: false, reason: raw < 0 ? "negative" : "not_a_number" };
       const micros = amountToMicros(raw, declaration.scale ?? 2);
-      if (micros === null) return { ok: false, reason: "not_a_number" };
-      return { ok: true, measure: { kind: "value", value: micros } };
+      if (!micros.ok) return { ok: false, reason: micros.reason };
+      return { ok: true, measure: { kind: "value", value: micros.micros } };
     }
     case "count": {
       const n =

@@ -17,8 +17,10 @@ import {
   assertRulesSavable,
   lockWorkspaceRuleSet,
   readRules,
+  publicUserId,
   requireRule,
   requireWorkspace,
+  stamp,
   withCounters,
   writeRules,
 } from "./_approval_rule";
@@ -33,6 +35,7 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     { org: ["Owner", "Admin"] },
   );
 
+  const at = new Date();
   const out = await withTenantDb(async (tx) => {
     // Serialises with every other rule write on this workspace. Two operators
     // switching off two DIFFERENT rules at once both stick; without the lock
@@ -42,11 +45,21 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     const rules = await readRules(tx, workspaceId);
     const rule = requireRule(rules, input.ruleId);
     if (input.enabled) await assertRulesSavable(tx, ctx, workspaceId, [rule]);
+    // Re-stamp the toggled rule. `createdBy` and `createdAt` are documented as
+    // whoever LAST wrote the rule and when (approvalRuleSchema), and a toggle
+    // is a write: it is the change that decides whether this rule releases
+    // calls without a person. Keeping the original author would have
+    // list_approval_rules attribute the currently active state to someone who
+    // did not choose it, which is the one question an auditor asks of this
+    // record. Only the toggled rule is re-stamped; the others are untouched.
+    const author = await publicUserId(tx, actingUserId);
     const next = rules.map((r) =>
-      r.id === input.ruleId ? { ...r, enabled: input.enabled } : r,
+      r.id === input.ruleId
+        ? stamp({ ...r, enabled: input.enabled }, author, at)
+        : r,
     );
     await writeRules(tx, workspaceId, next);
-    return withCounters(tx, workspaceId, next);
+    return withCounters(tx, workspaceId, next, at);
   });
 
   await emitSecurityEventAsync({

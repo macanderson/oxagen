@@ -20,6 +20,7 @@
  *     workspace rule
  */
 import { randomUUID } from "node:crypto";
+import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 describe.skipIf(!process.env.DATABASE_URL)(
@@ -52,7 +53,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const inScope = <T>(fn: () => Promise<T>) =>
       runInTenantScope({ orgId, workspaceId }, fn);
 
-    const RULE = {
+    const RULE: AutoApprovalRule = {
       id: "small-vendor-payments",
       name: "Small vendor payments",
       tools: ["stripe__create_payment@*"],
@@ -282,6 +283,68 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(subject.targets).toEqual({ counterparty: "vendor:aws" });
       expect(subject.tainted).toBe(false);
       expect(subject.standingApprovalAt?.toISOString()).toBe(
+        "2026-09-16T09:00:00.000Z",
+      );
+    });
+
+    it("skips the standing-approval lookup when no applicable rule asks for one", async () => {
+      // The lookup is a read of approval history sorted by resolved_at, on the
+      // decision path, and only a rule with a standing window reads it. Handed
+      // the rules, the builder runs it only when the rule that will answer for
+      // this call names a window — so a workspace whose rules are all off,
+      // cover other tools, or set no window pays nothing for it.
+      const digest = inputDigest(CALL);
+      await withSystemDb((tx) =>
+        tx.insert(schema.approvalRequests).values({
+          orgId,
+          workspaceId,
+          capabilityName: "stripe__create_payment",
+          inputPreview: {},
+          riskLevel: "high",
+          inputDigest: digest,
+          resolution: "approved",
+          resolvedByUserId: userId,
+          resolvedAt: new Date("2026-09-16T09:00:00.000Z"),
+          expiresAt: new Date("2026-09-17T00:00:00.000Z"),
+        }),
+      );
+      const build = (rules?: readonly AutoApprovalRule[]) =>
+        inScope(() =>
+          withTenantDb((tx) =>
+            buildAutoApprovalSubject(tx, {
+              capability: "stripe__create_payment",
+              input: CALL,
+              workspaceId,
+              rules,
+              now: NOW,
+            }),
+          ),
+        );
+
+      // RULE sets standingWindowMs: null, so the fact is not read.
+      expect((await build([RULE])).standingApprovalAt).toBeNull();
+      // A rule covering another tool is not the rule that answers.
+      expect(
+        (
+          await build([
+            { ...RULE, tools: ["linear__*"], standingWindowMs: 60_000 },
+          ])
+        ).standingApprovalAt,
+      ).toBeNull();
+      // A disabled rule is not the rule that answers either.
+      expect(
+        (await build([{ ...RULE, enabled: false, standingWindowMs: 60_000 }]))
+          .standingApprovalAt,
+      ).toBeNull();
+      // A rule that does ask for a window gets the fact.
+      expect(
+        (
+          await build([{ ...RULE, standingWindowMs: 60_000 }])
+        ).standingApprovalAt?.toISOString(),
+      ).toBe("2026-09-16T09:00:00.000Z");
+      // No rules handed over at all: the lookup still runs, so a caller that
+      // does not know the clause is never given a subject quietly missing it.
+      expect((await build()).standingApprovalAt?.toISOString()).toBe(
         "2026-09-16T09:00:00.000Z",
       );
     });

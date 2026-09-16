@@ -232,6 +232,23 @@ export const approvalRequests = agentSchema.table(
     autoRuleIdx: index("approval_requests_auto_rule_idx")
       .on(t.workspaceId, t.autoRuleId, t.createdAt)
       .where(sql`auto_rule_id IS NOT NULL`),
+    // The standing-approval lookup an auto-approval rule's window reads
+    // (ADR-070, lastHumanApprovalOf): the newest approval of this exact call
+    // that a PERSON resolved. mandate_digest_idx above cannot serve it — that
+    // one is partial on mandate_id IS NOT NULL and keys on mandate_id, and
+    // this lookup has no mandate and keys on capability_name. Partial on the
+    // same predicate as the query, so it stays small: only resolved rows a
+    // person approved.
+    humanApprovalDigestIdx: index("approval_requests_human_digest_idx")
+      .on(
+        t.workspaceId,
+        t.capabilityName,
+        t.inputDigest,
+        sql`${t.resolvedAt} DESC`,
+      )
+      .where(
+        sql`resolution = 'approved' AND resolved_by_user_id IS NOT NULL AND resolved_at IS NOT NULL`,
+      ),
     resolvedByPolicyFormCheck: check(
       "approval_requests_resolved_by_policy_form_check",
       sql`${t.resolvedByPolicy} IS NULL OR ${t.resolvedByPolicy} ~ '^policy:[a-z0-9][a-z0-9._-]*$'`,

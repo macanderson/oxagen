@@ -22,27 +22,57 @@ describe("readPath", () => {
 });
 
 describe("amountToMicros", () => {
+  const micros = (raw: string | number, scale: number) => {
+    const out = amountToMicros(raw, scale);
+    return out.ok ? out.micros : null;
+  };
+
   it("converts with string arithmetic at the tool's scale", () => {
-    expect(amountToMicros("12.50", 2)).toBe("12500000");
-    expect(amountToMicros("250", 2)).toBe("250000000");
-    expect(amountToMicros(250, 2)).toBe("250000000");
-    expect(amountToMicros("0", 2)).toBe("0");
-    expect(amountToMicros("0.01", 2)).toBe("10000");
-    // Whole-unit tools (scale 0) and a sub-micro scale that rounds down.
-    expect(amountToMicros("7", 0)).toBe("7000000");
-    expect(amountToMicros("1.2345678", 7)).toBe("1234567");
-    // More decimals than the tool expresses are dropped, never rounded up.
-    expect(amountToMicros("1.999", 2)).toBe("1990000");
+    expect(micros("12.50", 2)).toBe("12500000");
+    expect(micros("250", 2)).toBe("250000000");
+    expect(micros(250, 2)).toBe("250000000");
+    expect(micros("0", 2)).toBe("0");
+    expect(micros("0.01", 2)).toBe("10000");
+    // Whole-unit tools (scale 0), and fewer decimals than declared.
+    expect(micros("7", 0)).toBe("7000000");
+    expect(micros("1.99", 2)).toBe("1990000");
     // Beyond a float's precision, still exact.
-    expect(amountToMicros("123456789012345678.99", 2)).toBe(
-      "123456789012345678990000",
-    );
+    expect(micros("123456789012345678.99", 2)).toBe("123456789012345678990000");
   });
+
   it("refuses what is not a non-negative decimal", () => {
-    expect(amountToMicros("-1", 2)).toBeNull();
-    expect(amountToMicros("1e3", 2)).toBeNull();
-    expect(amountToMicros("abc", 2)).toBeNull();
-    expect(amountToMicros("", 2)).toBeNull();
+    for (const bad of ["-1", "1e3", "abc", ""]) {
+      expect(amountToMicros(bad, 2)).toEqual({
+        ok: false,
+        reason: "not_a_number",
+      });
+    }
+  });
+
+  it("refuses an amount it cannot represent exactly, rather than truncating it", () => {
+    // The fail-open this closes: "10.009" at scale 2 used to convert to
+    // 10000000 micros — the same as "10.00" — so a ceiling at 10.00 released
+    // a call the handler then executed for 10.009. The decision path and the
+    // execution path read different numbers, always in the direction that
+    // releases the call.
+    expect(amountToMicros("10.009", 2)).toEqual({
+      ok: false,
+      reason: "too_precise",
+    });
+    expect(amountToMicros("1.999", 2)).toEqual({
+      ok: false,
+      reason: "too_precise",
+    });
+    // A scale finer than micros truncated the same way: "1.2345678" at scale
+    // 7 used to convert to 1234567, dropping the last digit.
+    expect(amountToMicros("1.2345678", 7)).toEqual({
+      ok: false,
+      reason: "too_precise",
+    });
+    // Exactly representable at that scale is still fine.
+    expect(micros("1.234567", 7)).toBe("1234567");
+    // A trailing zero past the sixth decimal carries no value, so it converts.
+    expect(micros("1.2345670", 7)).toBe("1234567");
   });
 });
 

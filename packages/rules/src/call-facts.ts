@@ -16,7 +16,11 @@ import {
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
-import type { AutoApprovalSubject } from "./auto-approval";
+import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
+import {
+  selectAutoApprovalRule,
+  type AutoApprovalSubject,
+} from "./auto-approval";
 import { readMeasure } from "./mandates/measures";
 
 /** The declared tool the capability resolves to, with its active version. */
@@ -173,6 +177,12 @@ interface SubjectArgs {
   tool?: DeclaredTool | null;
   /** The call's canonical digest, when the caller already computed it. */
   digest?: string;
+  /**
+   * The clause the subject will be judged against. Given it, the builder
+   * skips the standing-approval lookup unless the rule that answers for this
+   * call names a window. Omit it and the lookup always runs.
+   */
+  rules?: readonly AutoApprovalRule[];
   now: Date;
 }
 
@@ -199,7 +209,7 @@ export async function buildAutoApprovalSubject(
     tool === null
       ? { measures: {}, targets: {} }
       : readDeclaredMeasures(args.input, tool.measures);
-  return {
+  const coverage = {
     capability: args.capability,
     tool:
       tool === null
@@ -210,15 +220,29 @@ export async function buildAutoApprovalSubject(
             riskGrade: tool.riskGrade,
             consequenceTags: tool.consequenceTags,
           },
+  };
+  // The standing-approval lookup is a scan of approval history sorted by
+  // resolved_at, on the decision hot path, and only one condition reads it.
+  // When the caller hands over the rules, run it only if the rule that will
+  // actually answer for this call names a standing window: a workspace whose
+  // rules are all disabled, cover other tools, or set no window pays nothing.
+  // Without the rules the lookup still runs, so a caller that does not know
+  // them cannot be handed a subject that quietly lacks the fact.
+  const rule =
+    args.rules === undefined
+      ? undefined
+      : selectAutoApprovalRule(args.rules, coverage);
+  const needsStanding =
+    args.rules === undefined ||
+    (rule !== undefined && rule.standingWindowMs !== null);
+  return {
+    ...coverage,
     measures,
     targets,
     tainted: false,
-    standingApprovalAt: await lastHumanApprovalOf(
-      tx,
-      args.workspaceId,
-      args.capability,
-      digest,
-    ),
+    standingApprovalAt: needsStanding
+      ? await lastHumanApprovalOf(tx, args.workspaceId, args.capability, digest)
+      : null,
     now: args.now,
   };
 }

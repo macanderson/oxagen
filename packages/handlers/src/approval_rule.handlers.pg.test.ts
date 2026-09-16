@@ -488,6 +488,64 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(on.items[0]!.enabled).toBe(true);
     });
 
+    it("stamps the toggle with whoever flipped it, not the rule's original author", async () => {
+      // approvalRuleSchema documents createdBy/createdAt as whoever LAST wrote
+      // the rule and when, and a toggle is the write that decides whether the
+      // rule releases calls without a person. Attributing the currently active
+      // state to the previous author is the one thing an auditor must not read
+      // off this record.
+      const secondAdminId = randomUUID();
+      doubles.roles.set(secondAdminId, "Admin");
+      const secondAdminPublicId = await withSystemDb(async (tx) => {
+        const [u] = await tx
+          .insert(schema.users)
+          .values({
+            id: secondAdminId,
+            email: `admin2-${tag}@rules.test`,
+            status: "active",
+          })
+          .returning({ publicId: schema.users.publicId });
+        return u!.publicId;
+      });
+
+      await set(adminUserId, [RULE]);
+      const authored = (await list(adminUserId)).items[0]!;
+      expect(authored.createdBy).toBe(adminPublicId);
+
+      const after = await inScope(() =>
+        approvalRuleEnabledSetHandler(
+          { ruleId: RULE.id, enabled: false },
+          ctx(secondAdminId),
+        ),
+      );
+      const toggled = after.items.find((r) => r.id === RULE.id)!;
+      expect(toggled.enabled).toBe(false);
+      expect(toggled.createdBy).toBe(secondAdminPublicId);
+      expect(
+        Date.parse(toggled.createdAt) >= Date.parse(authored.createdAt),
+      ).toBe(true);
+    });
+
+    it("re-stamps only the rule it toggles", async () => {
+      await set(adminUserId, [RULE, { ...RULE, id: "release-tooling" }]);
+      const before = await list(adminUserId);
+      const untouchedBefore = before.items.find(
+        (r) => r.id === "release-tooling",
+      )!;
+      const after = await inScope(() =>
+        approvalRuleEnabledSetHandler(
+          { ruleId: RULE.id, enabled: false },
+          ctx(adminUserId),
+        ),
+      );
+      const untouchedAfter = after.items.find(
+        (r) => r.id === "release-tooling",
+      )!;
+      expect(untouchedAfter.createdAt).toBe(untouchedBefore.createdAt);
+      expect(untouchedAfter.createdBy).toBe(untouchedBefore.createdBy);
+      expect(untouchedAfter.enabled).toBe(untouchedBefore.enabled);
+    });
+
     it("keeps both of two rules switched off at once, against a concurrent write", async () => {
       // The lost update this guards: both calls read the same array, each
       // changes its own rule, and the second stores a copy that still has the

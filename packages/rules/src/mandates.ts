@@ -754,6 +754,7 @@ async function evaluateParkedCall(
     workspaceId: args.workspaceId,
     tool: args.tool,
     digest: args.digest,
+    rules,
     now: args.at,
   });
   return evaluateAutoApproval(rules, subject);
