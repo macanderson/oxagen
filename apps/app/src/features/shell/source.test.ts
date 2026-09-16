@@ -27,8 +27,6 @@ const context = vi.fn();
 const source = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context },
-  runs: { list: vi.fn() },
-  approvals: { pending: vi.fn() },
   billing: {
     plan: vi.fn(),
     bucket: vi.fn(),
