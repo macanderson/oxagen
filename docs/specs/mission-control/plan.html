@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
 <style>
 /* Oxagen document shell. One stylesheet for every spec and plan.
-   Tokens are the house system (oxagen-house-brand/tokens/house-tokens.css),
+   Tokens are the house system (oxagenai/oxagen-brand, tokens/house-tokens.css),
    the treatment is docs.oxagen.sh: corners on the 8 / 12 / 16 px scale, one
    gold, no gradient except the sheen on a title's accent word. Light by
    default, dark by system setting or data-theme. */
@@ -120,7 +120,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Plan</p>
   <h1>Oxagen Mission Control app: implementation plan</h1>
-  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd><dt>Deletes</dt><dd>nothing outside the new <code>apps/app</code>'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is <strong>de-registered, not deleted</strong>: <code>DEREGISTERED.md</code> at the repo root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if one of them disappears</dd></dl>
 </header>
 <div class="grid">
 <nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-decisions-in-one-place">0. Decisions in one place</a></li><li><a href="#1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</a></li><li><a href="#2-evaluation-the-wireframes">2. Evaluation: the wireframes</a></li><li><a href="#3-evaluation-the-data-mapping">3. Evaluation: the data mapping</a></li><li><a href="#4-architecture-of-the-new-apps-app">4. Architecture of the new <code>apps/app</code></a></li><li><a href="#5-batches-parallel-lanes">5. Batches: parallel lanes</a></li><li><a href="#6-open-decisions-each-blocks-a-named-lane-and-each-has-a-recommendation">6. Open decisions (each blocks a named lane, and each has a recommendation)</a></li><li><a href="#7-lane-prompt-template">7. Lane prompt template</a></li></ol></nav>
@@ -1626,6 +1626,9 @@ import { NextResponse, type NextRequest } from &quot;next/server&quot;;
 const PUBLIC = [/^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/, /^\/invite\//, /^\/api\/auth\//, /^\/cli\/authorize/, /^\/github\/setup/];
 
 // Appendix F: every old route → the page that absorbed it, for one release. [pattern, target]
+// The redirect is what gets removed after that release, never the page file behind it:
+// `/{org}/{ws}/marketplace` and `workbench/environments` point at de-registered features
+// whose screens stay in apps/app_deprecated on purpose (spec §2.2, DEREGISTERED.md).
 const LEGACY: Array&lt;[RegExp, (m: RegExpMatchArray) =&gt; string]&gt; = [
   [/^\/([^/]+)\/([^/]+)\/(sessions|workbench|dashboard)\/?$/, (m) =&gt; `/${m[1]}/${m[2]}`],
   [/^\/([^/]+)\/([^/]+)\/sessions\/([^/]+)/, (m) =&gt; `/${m[1]}/${m[2]}/runs/${m[3]}`],
@@ -1736,7 +1739,7 @@ test(&quot;fleet · phone&quot;, async ({ page }) =&gt; {
 <tbody>
 <tr>
 <td>0.1</td>
-<td><code>git mv apps/app apps/app_deprecated</code>; package name <code>@oxagen/app-deprecated</code>; remove its <code>vercel.json</code> and its <code>test:e2e</code> script (the deprecated app is no longer deployed, so its e2e does not gate).</td>
+<td><code>git mv apps/app apps/app_deprecated</code>; package name <code>@oxagen/app-deprecated</code>; remove its <code>vercel.json</code> and its <code>test:e2e</code> script (the deprecated app is no longer deployed, so its e2e does not gate). Keep its <code>lint</code> and <code>typecheck</code> tasks: it is a permanent, unrouted archive of the de-registered screens (§5 Batch 5.5, <code>DEREGISTERED.md</code>), and an archive that stops compiling is an archive nobody can restore from.</td>
 <td><code>apps/app_deprecated/**</code></td>
 </tr>
 <tr>
@@ -2034,7 +2037,7 @@ test(&quot;fleet · phone&quot;, async ({ page }) =&gt; {
 <li>Flip <code>APP_DIR</code> in the three gates to <code>apps/app</code>; commit the new <code>capability-ui-map.json</code>, a regenerated <code>capability-ui-parity-baseline.json</code>, and <code>mobile-parity.json</code>; <code>check_manifest</code> e2e expectations point at the new per-page specs (§6 Q2).</li>
 <li><code>pnpm gate</code> green; e2e green on the <strong>live</strong> adapter against a seeded local stack (<code>pnpm db:migrate</code>, <code>db:seed-platform</code>).</li>
 <li>Merge <code>app-rebuild</code> → <code>main</code>. The deploy pipeline builds <code>@oxagen/app</code> from <code>apps/app</code> exactly as before. Verify <code>app.oxagen.sh</code> serves <code>/login</code> and a seeded org's Fleet.</li>
-<li>One release later: delete <code>apps/app_deprecated</code>, drop its ESLint ignore and <code>APP_DIR</code> history.</li>
+<li>One release later: drop the Appendix F redirects and the <code>APP_DIR</code> history. <strong><code>apps/app_deprecated</code> is not deleted.</strong> It is the only place today's marketplace, connector-setup and workbench-environments screens exist, and spec §2.2 de-registers those features without deleting them. The deprecated app stays in the workspace, unbuilt and undeployed (no <code>vercel.json</code>, no <code>test:e2e</code>), but still linted and typechecked — an excluded package rots silently, and a screen that no longer compiles has been deleted in every way that matters. <code>DEREGISTERED.md</code> records why it is there. Removing it takes an ADR that names it.</li>
 </ol>
 <h3 id="sizing-agent-days-rough">Sizing (agent-days, rough)</h3>
 <div class="tw"><table>
@@ -2169,7 +2172,7 @@ Done when: pnpm --filter @oxagen/app lint typecheck test:unit test:e2e -- &lt;pa
 stories for new components; PR body lists each §3 row you touched with its status.
 </code></pre>
 
-<footer class="colophon"><span>Oxagen · Plan</span><span>Source: <code>plan.md</code> · rendered 2026-09-14</span></footer>
+<footer class="colophon"><span>Oxagen · Plan</span><span>Source: <code>plan.md</code> · rendered 2026-09-16</span></footer>
 </main>
 </div>
 </div>
