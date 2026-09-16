@@ -109,7 +109,9 @@ export type MandateDraft = {
    * The consequences the mandate answers for, comma-separated. A mandate must
    * name **every** tag each covered tool declares or it authorizes none of
    * them (`findCoveringMandate`), so this is a set the operator states and not
-   * a single choice.
+   * a single choice — and not a closed one either: the starter six are a
+   * starting point the workspace extends, and a tool declaring a tag of its
+   * own must be nameable or it can never be given a mandate.
    */
   consequenceTags: string;
   /** The measure the tool version declares the limit under (`rows`, `recipients`). */
@@ -135,6 +137,10 @@ export type MandateDraft = {
 };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** `consequenceTagSchema` (packages/oxagen/src/mandates/schemas.ts), which §2 keeps out of the app. */
+const CONSEQUENCE_TAG = /^[a-z][a-z0-9_]{1,63}$/;
+/** `mandateSchema.consequenceTags.max(16)`. */
+const MAX_CONSEQUENCE_TAGS = 16;
 const WHOLE = /^\d{1,9}$/;
 /** A limit: whole units, up to what the measure-value regex admits. */
 const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
@@ -206,18 +212,7 @@ export async function requestMandate(
   draft: MandateDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
   const unit = draft.unit.trim();
-  // A limit denominated in an ISO 4217 code reads back as money
-  // (`isCurrencyCode`, src/data/contracts/money.ts) while the figure beside it
-  // is whole units — the one shape this form must not write, since it is the
-  // shape it cannot scale. Refusing the code keeps the write and the read
-  // agreed: every limit this form writes is a count and reads back as one.
-  // The membership test is on the upper-cased name so that "usd" is refused
-  // beside "USD": an operator who meant money means it in either casing, and
-  // the refusal has to reach them both times. The unit itself is stored as
-  // typed.
-  if (unit === "" || isCurrencyCode(unit.toUpperCase())) return refuse("unit");
   const measure = draft.measure.trim();
-  if (measure === "" || measure === RESERVED_MEASURE) return refuse("measure");
   // `findCoveringMandate` (packages/rules/src/mandates.ts) accepts a mandate
   // only when `tool.consequenceTags.every(t => mandate.consequenceTags.includes(t))`,
   // so a mandate naming one tag of a tool that declares two covers nothing —
@@ -237,7 +232,12 @@ export async function requestMandate(
         .filter((tag) => tag !== ""),
     ),
   ];
-  if (consequenceTags.length === 0) return refuse("consequenceTags");
+  if (
+    consequenceTags.length === 0 ||
+    consequenceTags.length > MAX_CONSEQUENCE_TAGS ||
+    !consequenceTags.every((tag) => CONSEQUENCE_TAG.test(tag))
+  )
+    return refuse("consequenceTags");
 
   // Verbatim: `WHOLE_UNITS` admits "0" and a figure with no leading zero, so
   // what passes is already the digits the ledger records and there is nothing
@@ -247,15 +247,44 @@ export async function requestMandate(
 
   const perCall = draft.perCall.trim();
   const perPeriod = draft.perPeriod.trim();
-  if (perCall === "" && perPeriod === "") return refuse("perPeriod");
-  const perCallValue = perCall === "" ? null : limitValue(perCall);
-  if (perCall !== "" && perCallValue === null) return refuse("perCall");
-  const perPeriodValue = perPeriod === "" ? null : limitValue(perPeriod);
-  if (perPeriod !== "" && perPeriodValue === null) return refuse("perPeriod");
-
   const callsPerDay = draft.callsPerDay.trim();
   if (callsPerDay !== "" && !WHOLE.test(callsPerDay))
     return refuse("callsPerDay");
+
+  // A mandate over the built-in measure alone is a legitimate shape and the
+  // only one available for a tool that carries a consequence and declares no
+  // numeric measure: `mandateLimitsSchema` needs one limit and `calls` is one,
+  // and `assertToolsDeclareMeasures` exempts it from the declared-measure
+  // check for exactly that reason. Requiring a measure limit as well shut that
+  // tool out entirely — blank fields refused here, an invented measure refused
+  // by the handler — so the measure entry is written only when it is asked
+  // for, and the four fields that make it stand or fall together.
+  const wantsMeasure =
+    measure !== "" || unit !== "" || perCall !== "" || perPeriod !== "";
+  if (!wantsMeasure && callsPerDay === "") return refuse("perPeriod");
+
+  let perCallValue: string | null = null;
+  let perPeriodValue: string | null = null;
+  if (wantsMeasure) {
+    if (measure === "" || measure === RESERVED_MEASURE)
+      return refuse("measure");
+    // A limit denominated in an ISO 4217 code reads back as money
+    // (`isCurrencyCode`, src/data/contracts/money.ts) while the figure beside
+    // it is whole units — the one shape this form must not write, since it is
+    // the shape it cannot scale. Refusing the code keeps the write and the
+    // read agreed: every limit this form writes is a count and reads back as
+    // one. The membership test is on the upper-cased name so that "usd" is
+    // refused beside "USD": an operator who meant money means it in either
+    // casing, and the refusal has to reach them both times. The unit itself is
+    // stored as typed.
+    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
+      return refuse("unit");
+    if (perCall === "" && perPeriod === "") return refuse("perPeriod");
+    perCallValue = perCall === "" ? null : limitValue(perCall);
+    if (perCall !== "" && perCallValue === null) return refuse("perCall");
+    perPeriodValue = perPeriod === "" ? null : limitValue(perPeriod);
+    if (perPeriod !== "" && perPeriodValue === null) return refuse("perPeriod");
+  }
 
   const tools = draft.tools
     .split(",")
@@ -281,12 +310,16 @@ export async function requestMandate(
     agentId: draft.agentId,
     consequenceTags,
     limits: {
-      [measure]: {
-        ...(perCallValue === null ? {} : { perCall: perCallValue }),
-        ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
-        period: draft.period,
-        currencyOrUnit: unit,
-      },
+      ...(wantsMeasure
+        ? {
+            [measure]: {
+              ...(perCallValue === null ? {} : { perCall: perCallValue }),
+              ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
+              period: draft.period,
+              currencyOrUnit: unit,
+            },
+          }
+        : {}),
       ...(callsPerDay === ""
         ? {}
         : {

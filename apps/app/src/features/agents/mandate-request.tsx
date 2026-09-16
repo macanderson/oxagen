@@ -14,7 +14,15 @@
 // A mandate covers a tool only when it names every consequence that tool
 // declares, so the consequences are a set rather than a choice: naming one of
 // a tool's two mints a mandate that is granted as asked and authorizes nothing,
-// and the failure shows up at the moment of use, far from here.
+// and the failure shows up at the moment of use, far from here. The set is not
+// closed either — the six are a starter set the workspace extends, and a tool
+// declaring a tag of its own could otherwise never be given a mandate — so a
+// tag the boxes do not offer can be typed beside them.
+//
+// The measure entry is optional. `calls` is a limit in its own right and the
+// only one available to a tool that carries a consequence and declares no
+// numeric measure, so leaving the measure fields blank and naming calls per
+// day alone is a mandate this form can write.
 //
 // Every limit here is whole units and is stored exactly as typed. Scaling one
 // to micros is correct only for a measure the tool declares as an `amount`, and
@@ -117,7 +125,12 @@ export function RequestMandate({
     try {
       const result = await requestMandate(org, ws, {
         agentId,
-        consequenceTags: chosen(form, "consequenceTags").join(","),
+        consequenceTags: [
+          ...chosen(form, "consequenceTags"),
+          text(form, "consequenceOther"),
+        ]
+          .filter((tag) => tag !== "")
+          .join(","),
         measure: text(form, "measure"),
         unit: text(form, "unit"),
         perCall: text(form, "perCall"),
@@ -184,6 +197,18 @@ export function RequestMandate({
                 </label>
               ))}
             </div>
+            <label
+              htmlFor={id("consequenceOther")}
+              className="mt-1 text-xs text-muted-foreground"
+            >
+              {t("consequenceOther")}
+            </label>
+            <input
+              id={id("consequenceOther")}
+              name="consequenceOther"
+              maxLength={256}
+              className={inputBase}
+            />
             <p className="text-xs text-muted-foreground">
               {t("consequenceTagsHint")}
             </p>
@@ -192,7 +217,6 @@ export function RequestMandate({
             <input
               id={id("measure")}
               name="measure"
-              required
               maxLength={64}
               className={inputBase}
             />
@@ -201,7 +225,6 @@ export function RequestMandate({
             <input
               id={id("unit")}
               name="unit"
-              required
               maxLength={32}
               className={inputBase}
             />

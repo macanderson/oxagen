@@ -502,6 +502,112 @@ describe("requestMandate", () => {
     });
   });
 
+  // The six are a starter set the workspace extends, and `findCoveringMandate`
+  // still wants every tag the tool declares — so a tool declaring a tag of the
+  // workspace's own could otherwise never be given a mandate.
+  it("sends a consequence tag the starter set does not hold", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      consequenceTags: "ships_code, moves_money",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      consequenceTags: ["ships_code", "moves_money"],
+    });
+  });
+
+  it.each([["Ships_Code"], ["ships code"], ["s"], ["9lives"], ["ships-code"]])(
+    "refuses %s, which is not a consequence tag (negative)",
+    async (tag) => {
+      expect(
+        await requestMandate("acme", "core-platform", {
+          ...good,
+          consequenceTags: tag,
+        }),
+      ).toMatchObject({ ok: false, field: "consequenceTags" });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses more tags than the mandate shape admits (negative)", async () => {
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        consequenceTags: Array.from(
+          { length: 17 },
+          (_, i) => `tag_${String(i)}`,
+        ).join(","),
+      }),
+    ).toMatchObject({ ok: false, field: "consequenceTags" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // `calls` is a limit in its own right, and the only one a tool that carries
+  // a consequence and declares no numeric measure can be given: the contract
+  // takes it alone and `assertToolsDeclareMeasures` exempts it from the
+  // declared-measure check. Requiring a measure limit as well shut that tool
+  // out — blank fields refused here, an invented measure refused there.
+  it("writes a calls-only mandate when no measure is named", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        measure: "",
+        unit: "",
+        perCall: "",
+        perPeriod: "",
+        callsPerDay: "500",
+      }),
+    ).toMatchObject({ ok: true });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      limits: {
+        calls: { perPeriod: "500", period: "daily", currencyOrUnit: "calls" },
+      },
+    });
+    // The measure entry is absent, not blank: no key but `calls`.
+    expect(invoke.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        limits: {
+          calls: { perPeriod: "500", period: "daily", currencyOrUnit: "calls" },
+        },
+      }),
+    );
+  });
+
+  it.each([
+    // Half a measure entry is refused rather than half-written: the four
+    // fields stand or fall together.
+    [{ measure: "rows", unit: "", perCall: "", perPeriod: "" }, "unit"],
+    [{ measure: "", unit: "rows", perCall: "", perPeriod: "" }, "measure"],
+    [{ measure: "", unit: "", perCall: "50", perPeriod: "" }, "measure"],
+  ])(
+    "refuses %j, a measure entry only partly filled (negative)",
+    async (patch, field) => {
+      expect(
+        await requestMandate("acme", "core-platform", {
+          ...good,
+          ...patch,
+          callsPerDay: "500",
+        }),
+      ).toMatchObject({ ok: false, field });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a mandate that names no limit at all (negative)", async () => {
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        measure: "",
+        unit: "",
+        perCall: "",
+        perPeriod: "",
+        callsPerDay: "",
+      }),
+    ).toMatchObject({ ok: false, field: "perPeriod" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("returns a denial as denied (negative)", async () => {
     invoke.mockRejectedValue(denied("request_mandate"));
     expect(await requestMandate("acme", "core-platform", good)).toMatchObject({

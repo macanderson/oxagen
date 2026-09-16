@@ -452,6 +452,7 @@ type Messages = {
         perCallHint: string;
         consequenceTags: string;
         consequenceTagsHint: string;
+        consequenceOther: string;
       };
       truncated: string;
       noneEffective: string;

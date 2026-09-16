@@ -378,7 +378,7 @@
         "title": "Request a mandate",
         "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
         "measure": "Measure",
-        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit.",
+        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit. Leave the measure fields blank to limit calls alone — the only limit a tool that declares no measure can carry.",
         "perCall": "Per call",
         "perPeriod": "Per period",
         "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
@@ -399,10 +399,11 @@
         "confirm": "Request the mandate",
         "pending": "Requesting",
         "unit": "Unit",
-        "unitHint": "What the measure counts, in its own name — rows, recipients, messages. Not a currency code: a limit in money is scaled by the tool's declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
+        "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, messages. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
         "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so what is granted is what is asked for.",
         "consequenceTags": "Consequences",
-        "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied."
+        "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
+        "consequenceOther": "Others the tools declare, separated by commas"
       },
       "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here.",
       "noneEffective": "No mandate this agent holds is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",

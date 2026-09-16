@@ -85,6 +85,12 @@ describe("RequestMandate", () => {
     ]);
     for (const box of chosen) expect(box).not.toBeChecked();
     expect(dialog()).toHaveTextContent("Name every consequence");
+    // The six are a starter set; a workspace defines its own, and a tool
+    // declaring one of those must still be nameable here.
+    expect(dialog()).toHaveTextContent("the starter set");
+    expect(
+      within(dialog()).getByLabelText(/Others the tools declare/),
+    ).toHaveValue("");
     expect(dialog()).toHaveTextContent("There is no unbounded option.");
     expect(dialog()).toHaveTextContent("It cannot be “calls”");
     expect(dialog()).toHaveTextContent("never scaled");
@@ -140,6 +146,37 @@ describe("RequestMandate", () => {
         "numeric",
       );
     }
+  });
+
+  it("sends a workspace tag typed beside the boxes", async () => {
+    requestMandate.mockResolvedValue({
+      ok: true,
+      value: { mandateId: "mnd_4f2a9c", status: "draft" },
+    });
+    draw();
+    const user = await open();
+    await user.type(
+      within(dialog()).getByLabelText(/Others the tools declare/),
+      "ships_code",
+    );
+    await ask(user);
+    expect(requestMandate).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({ consequenceTags: "moves_money,ships_code" }),
+    );
+  });
+
+  // A tool that carries a consequence and declares no numeric measure can only
+  // be limited on calls, so the measure fields cannot be required.
+  it("lets a calls-only mandate through with the measure fields blank", async () => {
+    draw();
+    await open();
+    const form = dialog();
+    for (const label of ["Measure", "Unit"]) {
+      expect(within(form).getByLabelText(label)).not.toBeRequired();
+    }
+    expect(within(form).getByLabelText("Calls per day")).toBeInTheDocument();
   });
 
   it("names a refusal in the dialog and navigates nowhere (negative)", async () => {
