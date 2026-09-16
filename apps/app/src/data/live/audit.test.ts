@@ -106,7 +106,7 @@ describe("audit.events", () => {
       readOk({ events: [], total: 0, hasMore: false, limit: 50, offset: 0 }),
     );
     await audit.events(ctx, { ...NO_FILTERS, to: "2026-12-31", offset: 0 });
-    expect(kernelRead.mock.calls[0]?.[1]?.input?.to).toBe(
+    expect(kernelRead.mock.calls[0]?.[1]?.input.to).toBe(
       "2027-01-01T00:00:00.000Z",
     );
   });
