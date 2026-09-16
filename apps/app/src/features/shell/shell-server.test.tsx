@@ -77,6 +77,8 @@ describe("ShellChrome", () => {
         drill: vi.fn(),
         waste: vi.fn(),
         budgets: vi.fn(),
+        findings: vi.fn(),
+        findingEvidence: vi.fn(),
       },
       org: { members: vi.fn(), apiKeys: vi.fn() },
       skills: { inventory: vi.fn() },

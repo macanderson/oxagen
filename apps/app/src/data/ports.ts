@@ -33,6 +33,8 @@ import type {
   SpendBudgets,
   SpendDrill,
   SpendDrillKind,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendGroupKind,
   SpendReport,
   SpendWaste,
@@ -140,6 +142,13 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+    /** list_findings over the open findings (#2963): the Findings section's cards and the totals above them */
+    findings(ctx: WsCtx): Promise<Read<SpendFindings>>;
+    /** get_finding_evidence: the runs, calls and prices one finding cites */
+    findingEvidence(
+      ctx: WsCtx,
+      findingId: string,
+    ): Promise<Read<SpendFindingEvidence>>;
   };
   /**
    * The Organization page's two tabs, each an Owner-or-Admin read checked in

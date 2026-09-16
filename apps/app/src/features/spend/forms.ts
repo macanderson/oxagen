@@ -75,3 +75,8 @@ export function budgetFieldErrors(
 export function isStatementMonth(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
+
+/** A finding's public id as the finding contracts take it (`fnd_…`). */
+export function isFindingId(value: string): boolean {
+  return /^fnd_[0-9a-z]+$/.test(value);
+}

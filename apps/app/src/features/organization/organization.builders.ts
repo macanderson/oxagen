@@ -67,6 +67,8 @@ export function orgSource(reads: OrgReads): {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: {
       members: answer(reads.members, "members"),
