@@ -118,7 +118,7 @@ describe("recordCredentialGrant", () => {
       connectionPublicId: "mcrd_1",
       mcpServerId: "server-1",
       // Named on the row, not joined: the server row does not outlive an
-      // uninstall and the grants log has to (ADR-069).
+      // uninstall and the grants log has to (ADR-071).
       mcpServerPublicId: "mcs_gh",
       mcpServerName: "GitHub",
       runId: "run_1",

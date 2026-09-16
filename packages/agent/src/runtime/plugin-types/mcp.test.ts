@@ -667,7 +667,7 @@ describe("contributeMcpTools — the credential broker's grant log (spec §6.8) 
       connection: CONNECTION,
       mcpServerId: "srv_sec",
       // The server is named on the grant row, not joined: plugin uninstall
-      // hard-deletes the server row and the log has to outlive it (ADR-069).
+      // hard-deletes the server row and the log has to outlive it (ADR-071).
       mcpServerPublicId: "mcs_sec",
       mcpServerName: "Server A",
       endpointUrl: "https://a.mcp.example.com",

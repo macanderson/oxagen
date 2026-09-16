@@ -1,4 +1,4 @@
--- ADR-069 (G2958 review): two fixes to the tool-governance lane.
+-- ADR-071 (G2958 review): two fixes to the tool-governance lane.
 --
 -- 1. mcp.credential_grants names its server the way it already names its
 --    connection. `mcp_server_id` carries no foreign key on purpose (the server

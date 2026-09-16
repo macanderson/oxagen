@@ -28,7 +28,7 @@ State this when an operator asks what a switch covers. An emergency control whos
 
 ## Deleting what a switch names
 
-While a switch is on, the delete paths that would hard-delete its target refuse with `conflict` / `kill_switch_on` (ADR-069): `revoke_plugin_credential` for a `connection` switch, and `uninstall_plugin` for a `tool_server` or `tool_version` switch. Both keyed on an internal uuid, so a delete-and-recreate would leave the switch reporting on while matching nothing. Turn the switch off first.
+While a switch is on, the delete paths that would hard-delete its target refuse with `conflict` / `kill_switch_on` (ADR-071): `revoke_plugin_credential` for a `connection` switch, and `uninstall_plugin` for a `tool_server` or `tool_version` switch. Both keyed on an internal uuid, so a delete-and-recreate would leave the switch reporting on while matching nothing. Turn the switch off first.
 
 ## A class switch and the two tag columns
 

@@ -1,6 +1,6 @@
 /**
  * assertNoActiveKillSwitch — the guard that stops a delete dismantling a kill
- * switch (ADR-069).
+ * switch (ADR-071).
  *
  * A `connection`, `tool_server` or `tool_version` switch denies on a digest
  * over an INTERNAL uuid. `deleteWorkspaceSecret` and `plugin.org.uninstall`

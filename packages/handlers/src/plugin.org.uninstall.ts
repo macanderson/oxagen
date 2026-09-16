@@ -53,7 +53,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       // denies on a digest over the server's INTERNAL uuid. Deleting the row
       // and reinstalling mints a new uuid the deny matches nothing against, so
       // the uninstall would dismantle the control while `list_kill_switches`
-      // kept reporting it on (ADR-069). Turning the switch off is the way
+      // kept reporting it on (ADR-071). Turning the switch off is the way
       // through; uninstall is not.
       if (doomedServers.length > 0) {
         const serverIds = doomedServers.map((row) => row.id);

@@ -3209,7 +3209,7 @@
       "writes": []
     }
   ],
-  "contentHash": "eb2e16e121bdd181154c4c677038ece7458d028105180f842392a455760e2c3b",
+  "contentHash": "444b2dbec7fd6417867d108f7956b8061908750a8e52ca61679f6cdbfc63f5b0",
   "domains": [
     {
       "name": "agent",
@@ -14748,6 +14748,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "mcp_server_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "mcp_server_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "run_id",

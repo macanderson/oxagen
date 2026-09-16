@@ -27,7 +27,7 @@ const whereConditions: unknown[] = [];
 let deleteResult: Array<Record<string, unknown>> = [];
 /**
  * The credential rows the delete would take. The handler reads these first so
- * it can ask whether a kill switch names one (ADR-069). Defaults to one row,
+ * it can ask whether a kill switch names one (ADR-071). Defaults to one row,
  * so a test that only sets `deleteResult` behaves as it did before.
  */
 let credentialRows: Array<Record<string, unknown>> = [];
@@ -183,7 +183,7 @@ describe("deleteWorkspaceSecret", () => {
     expect(rendered.params).toEqual(["org-guard", "ws-guard", "listing-guard"]);
   });
 
-  it("refuses while a connection kill switch names the credential (ADR-069)", async () => {
+  it("refuses while a connection kill switch names the credential (ADR-071)", async () => {
     // The blocker this guard exists for. `set_kill_switch` denies on a digest
     // over `mcp.credentials.id`. Deleting the row and re-authenticating mints a
     // new uuid, so the deny matches nothing and the connection is live again

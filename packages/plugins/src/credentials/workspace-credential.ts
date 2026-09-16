@@ -162,7 +162,7 @@ export async function listWorkspaceCredentialStatuses(key: {
  * so it needs no KMS key. Returns true when a row was deleted, false when no
  * credential existed for the key.
  *
- * Refused while a connection kill switch names the credential (ADR-069). The
+ * Refused while a connection kill switch names the credential (ADR-071). The
  * switch denies on a digest over `mcp.credentials.id`, so deleting the row and
  * re-authenticating would mint a new id the deny matches nothing against —
  * the connection live again with the switch still reporting on. Any workspace

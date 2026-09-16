@@ -6,7 +6,7 @@
  * an explicit user action, never an uninstall side effect. This pins that
  * invariant — the handler deletes only mcp_servers rows, never sandbox_templates.
  *
- * It must also not dismantle a kill switch (ADR-069). A `tool_server` switch
+ * It must also not dismantle a kill switch (ADR-071). A `tool_server` switch
  * denies on a digest over `mcp.mcp_servers.id` and a `tool_version` switch on
  * the capability id `mcp.<that uuid>.<name>`. Uninstalling hard-deletes the
  * server row, and reinstalling mints a new uuid, so the switch would match
@@ -127,7 +127,7 @@ describe("plugin.org.uninstall", () => {
     expect(state.updates).toEqual([schema.pluginInstalledPlugins]);
   });
 
-  it("refuses while a tool_server kill switch names one of its servers (ADR-069)", async () => {
+  it("refuses while a tool_server kill switch names one of its servers (ADR-071)", async () => {
     killSwitchRows = [
       activeSwitch({ targetKind: "tool_server", targetId: "mcs_acme" }),
     ];

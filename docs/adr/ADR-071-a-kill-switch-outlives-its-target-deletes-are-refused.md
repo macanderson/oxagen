@@ -1,4 +1,4 @@
-# ADR-069: A kill switch outlives its target — deleting what it names is refused
+# ADR-071: A kill switch outlives its target — deleting what it names is refused
 
 - **Status:** Accepted
 - **Date:** 2026-09-16

@@ -206,7 +206,7 @@ export async function readActiveKillSwitches(
  * over it, so deleting that row and re-creating it mints a new id the deny
  * matches nothing against: the control reports on and stops nothing. Rather
  * than let a delete dismantle a control, the delete paths ask this first and
- * refuse while a switch names their target (ADR-069). The caller passes public
+ * refuse while a switch names their target (ADR-071). The caller passes public
  * ids, which is what `target_id` holds.
  *
  * Runs in the caller's transaction, so the check and the delete commit or roll
