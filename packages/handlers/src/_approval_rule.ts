@@ -180,13 +180,27 @@ export async function publicUserId(
   return row?.publicId ?? null;
 }
 
-/** The rule with the provenance the handler records, ready to store. */
+/**
+ * The rule with the provenance the handler records, ready to store.
+ *
+ * `authoredConsequences` is the effective tag set `assertRulesSavable` just
+ * checked this rule against. It is stamped on every write that runs that gate,
+ * so the rule and the accountability it was granted under stay together.
+ */
 export function stamp(
   body: AutoApprovalRuleBody,
   createdBy: string | null,
   at: Date,
+  authoredConsequences: readonly string[] | undefined,
 ): AutoApprovalRule {
-  return { ...body, createdBy, createdAt: at.toISOString() };
+  return {
+    ...body,
+    createdBy,
+    createdAt: at.toISOString(),
+    authoredConsequences: authoredConsequences
+      ? [...authoredConsequences]
+      : undefined,
+  };
 }
 
 interface DeclaredTool {
@@ -296,18 +310,29 @@ function assertDeclaredAs(
   }
 }
 
+/**
+ * The effective consequence tags each rule was checked against, by rule id —
+ * what `stamp` records so the evaluation can tell that a tool's consequences
+ * grew under a rule that was already saved (`approvalRuleSchema`).
+ */
+export type AuthoredConsequences = ReadonlyMap<string, string[]>;
+
 export async function assertRulesSavable(
   tx: Tx,
   ctx: CheckedContext,
   workspaceId: string,
   rules: readonly AutoApprovalRuleBody[],
-): Promise<void> {
-  if (rules.length === 0) return;
+): Promise<AuthoredConsequences> {
+  const authored = new Map<string, string[]>();
+  if (rules.length === 0) return authored;
   const declared = await declaredTools(tx, workspaceId);
   const overrides = await loadConsequenceRoles(tx, workspaceId);
   const tags = new Set<string>();
 
   for (const rule of rules) {
+    // Per rule as well as across all of them: the role check needs every tag
+    // any rule touches together, and the stamp needs each rule's own.
+    const perRule = new Set<string>();
     for (const pattern of rule.tools) {
       const matched = declared.filter((t) =>
         toolMatches([pattern], t.slug, t.version),
@@ -334,14 +359,19 @@ export async function assertRulesSavable(
         for (const measure of Object.keys(rule.allowTargets)) {
           assertDeclaredAs(tool, measure, "target");
         }
-        for (const tag of tool.consequenceTags) tags.add(tag);
+        for (const tag of tool.consequenceTags) {
+          tags.add(tag);
+          perRule.add(tag);
+        }
       }
     }
+    authored.set(rule.id, [...perRule].sort());
   }
 
   if (tags.size > 0) {
     await assertConsequenceRole(ctx, [...tags].sort(), overrides);
   }
+  return authored;
 }
 
 /**

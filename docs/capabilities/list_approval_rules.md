@@ -29,7 +29,10 @@ ceiling, micros for a currency), `allowTargets` (measure → the globs its
 target must match), `standingWindowMs` (the window in which a person's
 approval of the same call digest re-applies, or null), `businessHours`
 (`{ timezone, days, start, end }` local to the rule's own zone, or null),
-`createdBy` (`usr_…`) and `createdAt`.
+`createdBy` (`usr_…`), `createdAt`, and `authoredConsequences` — the effective
+consequence tags the rule's tools carried when it was last written, which the
+evaluation compares a call's tool against so a tool classified afterwards
+cannot be auto-approved under a rule nobody was accountable for.
 
 Beside each rule, over `windowDays` (30): `hits30d`, the calls it released
 with no person, and `skipped30d`, the calls that reached a person's queue with

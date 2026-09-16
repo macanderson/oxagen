@@ -263,7 +263,12 @@ describe("registryCapabilityId", () => {
 });
 
 describe("unionConsequenceTags", () => {
-  it("takes the declared column and the classified jsonb together, deduped", () => {
+  it("takes the declared column and the classified jsonb together, deduped and SORTED", () => {
+    // The order is part of the contract, not an artefact of which half
+    // contributed a tag first (ADR-070). It became load-bearing when a rule's
+    // `authoredConsequences` stamp started comparing a stored set against a
+    // later one, so the union sorts once at the point it is formed and every
+    // reader gets the same answer. These assertions are exact on purpose.
     expect(
       unionConsequenceTags({
         consequenceTags: ["moves_money"],
@@ -281,7 +286,7 @@ describe("unionConsequenceTags", () => {
         consequenceTags: ["moves_money", "deletes_data"],
         classification: { consequenceTags: ["moves_money", "sends_external"] },
       }),
-    ).toEqual(["moves_money", "deletes_data", "sends_external"]);
+    ).toEqual(["deletes_data", "moves_money", "sends_external"]);
   });
 
   it("ignores a classification that is not the schema's shape", () => {

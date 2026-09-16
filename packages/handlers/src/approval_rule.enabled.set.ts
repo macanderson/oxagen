@@ -44,7 +44,14 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     await lockWorkspaceRuleSet(tx, workspaceId);
     const rules = await readRules(tx, workspaceId);
     const rule = requireRule(rules, input.ruleId);
-    if (input.enabled) await assertRulesSavable(tx, ctx, workspaceId, [rule]);
+    // Switching ON re-runs the gate, so it also re-stamps the consequences the
+    // rule is now accountable for — that re-authorisation is what clears a
+    // `consequences_changed` rule. Switching OFF runs neither: it takes no new
+    // authority, and re-stamping there would silently bless a tool that was
+    // classified since, so the existing stamp is carried through untouched.
+    const authored = input.enabled
+      ? await assertRulesSavable(tx, ctx, workspaceId, [rule])
+      : undefined;
     // Re-stamp the toggled rule. `createdBy` and `createdAt` are documented as
     // whoever LAST wrote the rule and when (approvalRuleSchema), and a toggle
     // is a write: it is the change that decides whether this rule releases
@@ -55,7 +62,12 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     const author = await publicUserId(tx, actingUserId);
     const next = rules.map((r) =>
       r.id === input.ruleId
-        ? stamp({ ...r, enabled: input.enabled }, author, at)
+        ? stamp(
+            { ...r, enabled: input.enabled },
+            author,
+            at,
+            authored?.get(r.id) ?? r.authoredConsequences,
+          )
         : r,
     );
     await writeRules(tx, workspaceId, next);

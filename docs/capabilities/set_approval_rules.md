@@ -20,10 +20,19 @@ first. An agent's call waits for a person (`agent.requiresApproval`).
 | --- | --- | --- |
 | `rules` | `ApprovalRuleBody[]` | Up to 256. An empty array clears the clause. |
 
-A rule body is the rule shape without `createdBy` and `createdAt`, which the
-handler records. Every condition defaults off, so a rule names only what it
-asks for: `enabled` true, `maxMeasures` and `allowTargets` empty,
-`standingWindowMs` and `businessHours` null.
+A rule body is the rule shape without `createdBy`, `createdAt` and
+`authoredConsequences`, which the handler records. Every condition defaults
+off, so a rule names only what it asks for: `enabled` true, `maxMeasures` and
+`allowTargets` empty, `standingWindowMs` and `businessHours` null.
+
+`authoredConsequences` is the effective consequence tags the rule's tools
+carried at this write — the union of the declared column and the classified
+jsonb. It is the handler's to set and an author cannot supply it. The
+evaluation compares a call's tool against it, so a tool classified AFTER a
+rule was authored stops that rule releasing calls (`consequences_changed`)
+until it is saved again, which re-runs the role check below. A consequence
+REMOVED from a tool leaves the rule qualifying: losing one cannot make the
+rule more dangerous than it was approved to be.
 
 ## Output
 

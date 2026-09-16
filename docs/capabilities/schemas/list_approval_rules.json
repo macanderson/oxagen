@@ -141,6 +141,12 @@
             "createdAt": {
               "type": "string"
             },
+            "authoredConsequences": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "hits30d": {
               "type": "integer",
               "minimum": 0

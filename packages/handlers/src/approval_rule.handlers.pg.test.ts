@@ -441,6 +441,74 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     });
 
+    it("stamps the consequences a rule was authored against, and re-stamps only on a write that re-checks them", async () => {
+      // The ordering attack the stamp closes (#3133): the accountability gate
+      // is on the WRITE, so authoring the rule while the tool is harmless and
+      // classifying it `moves_money` afterwards reaches the same end without
+      // the gate ever firing. The stamp is what the evaluation compares
+      // against, so the rule stops releasing calls until someone saves it
+      // again — and saving re-runs the gate.
+      await set(ownerUserId, [RULE]);
+      const authored = (await list(ownerUserId)).items[0]!;
+      // Sorted and effective: the payment tool declares moves_money.
+      expect(authored.authoredConsequences).toEqual(["moves_money"]);
+
+      // Switching OFF takes no new authority, so it re-checks nothing and must
+      // carry the stamp through rather than blessing whatever the tool carries
+      // now.
+      const off = await inScope(() =>
+        approvalRuleEnabledSetHandler(
+          { ruleId: RULE.id, enabled: false },
+          ctx(ownerUserId),
+        ),
+      );
+      expect(
+        off.items.find((r) => r.id === RULE.id)!.authoredConsequences,
+      ).toEqual(["moves_money"]);
+
+      // A classification lands under the rule while it is off.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.toolVersions)
+          .set({
+            classification: {
+              sideEffect: "write",
+              egress: "third_party",
+              consequenceTags: ["changes_access"],
+              measures: {},
+              dataClasses: [],
+            },
+            classifiedRiskGrade: "high",
+            classifiedAt: new Date("2026-09-16T08:00:00.000Z"),
+          })
+          .where(eq(schema.toolVersions.id, paymentVersionId)),
+      );
+      try {
+        // Switching ON re-runs the gate, so it re-stamps — and the new tag is
+        // in the stamp because the caller was just held accountable for it.
+        const on = await inScope(() =>
+          approvalRuleEnabledSetHandler(
+            { ruleId: RULE.id, enabled: true },
+            ctx(ownerUserId),
+          ),
+        );
+        expect(
+          on.items.find((r) => r.id === RULE.id)!.authoredConsequences,
+        ).toEqual(["changes_access", "moves_money"]);
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.toolVersions)
+            .set({
+              classification: null,
+              classifiedRiskGrade: null,
+              classifiedAt: null,
+            })
+            .where(eq(schema.toolVersions.id, paymentVersionId)),
+        );
+      }
+    });
+
     it("refuses two rules under one id and leaves the stored document as it was", async () => {
       await set(ownerUserId, [RULE]);
       const before = await settingsOf();

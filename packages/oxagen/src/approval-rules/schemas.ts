@@ -22,6 +22,17 @@
  * units for a count.
  */
 import { z } from "zod";
+// The same tag vocabulary the tools carry, so the stamp and the fact it is
+// compared against cannot drift apart.
+import { consequenceTagSchema } from "../contracts/tool.classification";
+
+/**
+ * The ceiling on a rule's authored-consequence stamp. A rule's patterns can
+ * match many tools and each carries at most `MAX_CONSEQUENCE_TAGS`; this bound
+ * is generous against that and exists so a stored document cannot grow without
+ * limit.
+ */
+export const MAX_AUTHORED_CONSEQUENCES = 64;
 
 /** The discriminator a rule set carrying an auto-approval clause is written with. */
 export const RULE_SET_SCHEMA_V2 = "oxagen.decision-rules.v2";
@@ -92,9 +103,11 @@ export const MAX_RULE_MEASURES = 16;
 
 /**
  * The most reasons one evaluation can record: the four floors, one per capped
- * measure, one per allow-listed target, the standing window and the business
- * hours — 4 + 16 + 16 + 2 = 38, rounded up so the two bounds do not have to
- * move together.
+ * measure, one per allow-listed target, the standing window, the business
+ * hours and the authored-consequence check — 4 + 16 + 16 + 2 + 1 = 39,
+ * rounded up so the two bounds do not have to move together. The rounding is
+ * what absorbed ADR-070's `consequences_changed` without this constant
+ * moving; the arithmetic is restated rather than left stale.
  */
 export const MAX_AUTO_APPROVAL_REASONS = 64;
 
@@ -146,6 +159,47 @@ export const approvalRuleSchema = approvalRuleBodySchema.extend({
   createdBy: z.string().max(64).nullable(),
   /** When it was last written, ISO-8601. */
   createdAt: z.string().datetime({ offset: true }),
+  /**
+   * The effective consequence tags the rule's tools carried when it was last
+   * written — the union of the declared column and the classified jsonb over
+   * every tool the rule's patterns matched at that moment.
+   *
+   * It exists because the accountability gate is on the WRITE. An author is
+   * refused a rule over a tool that moves money unless they are accountable
+   * for money, but the same end is reached by ordering: author the rule while
+   * the tool is harmless, then classify the tool `moves_money` afterwards.
+   * The gate never fires, because the write already happened. The stamp is
+   * what the evaluation compares against, so a tool whose consequences grew
+   * under a rule stops that rule releasing calls until someone saves it again
+   * — and saving re-runs the gate, which is where accountability belongs.
+   *
+   * SEMANTICS, stated rather than left to the subset test:
+   *
+   * - A tag the tool carries that is NOT in this set → the rule does not
+   *   qualify (`consequences_changed`). It is the growth that matters.
+   * - A tag REMOVED from the tool after authoring leaves the rule qualifying,
+   *   because the current set is still within the stamp. Intended: losing a
+   *   consequence cannot make a rule more dangerous than it was approved to be.
+   * - ABSENT → the rule does not qualify, ever, until it is written again.
+   *
+   * That last reading is the strict one, and it is free rather than weighed:
+   * the three capabilities that write this clause (`set_approval_rules`,
+   * `set_approval_rule_enabled`, `delete_approval_rule`) all arrive with
+   * ADR-070 and are the only writers of `settings.decisionRules.autoApproval`
+   * — `update_workspace_settings` takes named fields and cannot reach it,
+   * nothing seeds or backfills it, and there is no table. So no stored rule
+   * can lack the stamp, and choosing the safe default costs nothing. Read it
+   * as "this could not happen yet", not as a trade someone judged.
+   *
+   * Optional in the schema on purpose: a rule set that does not parse reads as
+   * NO rule set, which would take the gate's own deny and require_approval
+   * rules down with the clause. Keeping the field optional means the document
+   * always parses and the strictness lands on the auto-approval axis alone.
+   */
+  authoredConsequences: z
+    .array(consequenceTagSchema)
+    .max(MAX_AUTHORED_CONSEQUENCES)
+    .optional(),
 });
 
 export type AutoApprovalRuleBody = z.infer<typeof approvalRuleBodySchema>;

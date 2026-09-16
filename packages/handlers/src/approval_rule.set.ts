@@ -42,9 +42,16 @@ export const approvalRuleSetHandler: CapabilityHandler<
   const out = await withTenantDb(async (tx) => {
     // Serialises with every other rule write on this workspace.
     await lockWorkspaceRuleSet(tx, workspaceId);
-    await assertRulesSavable(tx, ctx, workspaceId, input.rules);
+    const authored = await assertRulesSavable(
+      tx,
+      ctx,
+      workspaceId,
+      input.rules,
+    );
     const author = await publicUserId(tx, actingUserId);
-    const rules = input.rules.map((rule) => stamp(rule, author, at));
+    const rules = input.rules.map((rule) =>
+      stamp(rule, author, at, authored.get(rule.id)),
+    );
     await writeRules(tx, workspaceId, rules);
     return withCounters(tx, workspaceId, rules, at);
   });

@@ -108,6 +108,13 @@ export const REASON = {
   noStandingApproval: "no_standing_approval",
   /** The call arrived outside the rule's business hours. */
   outsideBusinessHours: "outside_business_hours",
+  /**
+   * The tool carries a consequence the rule was not written against — it was
+   * classified after the rule was authored, or the pattern now matches a tool
+   * that carries one. Not a floor: the rule is not wrong, it is out of date,
+   * and saving it again re-runs the accountability gate and clears this.
+   */
+  consequencesChanged: "consequences_changed",
 } as const;
 
 /**
@@ -229,12 +236,42 @@ function floorReasons(subject: AutoApprovalSubject): string[] {
   return reasons;
 }
 
+/**
+ * The consequences the rule was written against, against the ones the call's
+ * tool carries now.
+ *
+ * The accountability gate is on the write, so it cannot see a tool classified
+ * AFTER a rule was authored — author the rule while the tool is harmless,
+ * classify it `moves_money` afterwards, and the gate never fires because the
+ * write already happened. Comparing against the stamp closes that by ordering
+ * rather than by re-checking a role at call time, which would put a lookup on
+ * the decision path and would silently disable rules when a role is revoked.
+ *
+ * Growth disqualifies; shrinkage does not. A tag removed from a tool leaves
+ * the current set within the stamp and the rule still qualifies, because
+ * losing a consequence cannot make a rule more dangerous than it was approved
+ * to be. An absent stamp disqualifies outright (see `approvalRuleSchema`).
+ */
+function consequencesOutsideStamp(
+  rule: AutoApprovalRule,
+  subject: AutoApprovalSubject,
+): boolean {
+  const carried = subject.tool?.consequenceTags ?? [];
+  if (carried.length === 0) return false;
+  const stamp = rule.authoredConsequences;
+  if (stamp === undefined) return true;
+  return carried.some((t) => !stamp.includes(t));
+}
+
 /** The rule's own conditions, in the order §6.9 part 2 names them. */
 function ruleReasons(
   rule: AutoApprovalRule,
   subject: AutoApprovalSubject,
 ): string[] {
   const reasons: string[] = [];
+  if (consequencesOutsideStamp(rule, subject)) {
+    reasons.push(REASON.consequencesChanged);
+  }
 
   for (const [measure, ceiling] of sorted(rule.maxMeasures)) {
     const value = subject.measures[measure];

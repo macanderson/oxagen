@@ -399,6 +399,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           consequenceTags: ["destroys_data"],
         });
         const raised = await tags();
+        // Sorted, and the assertion is exact on purpose: `unionConsequenceTags`
+        // guarantees the order (see its contract), so a literal here tests a
+        // real promise rather than an incidental one. Unsorted, the order
+        // depended on which half contributed the tag first — the same
+        // unspecified-representation hazard the digest canonicaliser sorts Map
+        // entries and Set members to avoid, one level up.
         expect(raised?.consequenceTags).toEqual([
           "destroys_data",
           "moves_money",

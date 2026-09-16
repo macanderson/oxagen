@@ -24,6 +24,9 @@ function rule(over: Partial<AutoApprovalRule> = {}): AutoApprovalRule {
     businessHours: null,
     createdBy: "usr_0123456789abcdefghjkmn",
     createdAt: "2026-09-02T00:00:00.000Z",
+    // The subject fixture's tool carries moves_money, so the default rule is
+    // stamped with it: every case below is about some other condition.
+    authoredConsequences: ["moves_money"],
     ...over,
   };
 }
@@ -47,6 +50,68 @@ function subject(over: Partial<AutoApprovalSubject> = {}): AutoApprovalSubject {
     ...over,
   };
 }
+
+describe("consequences that changed under the rule", () => {
+  // The bypass this closes is reached by ORDERING, not by a write the gate can
+  // see: author the rule while the tool is harmless, then classify the tool
+  // `moves_money` afterwards. The accountability gate is on the write and the
+  // write already happened, so it never fires.
+  it("refuses a tag the rule was not written against", () => {
+    const out = evaluateAutoApproval(
+      [rule({ authoredConsequences: [] })],
+      subject(),
+    );
+    expect(out?.ok).toBe(false);
+    expect(out?.reasons).toContain(REASON.consequencesChanged);
+    // Not a floor: the rule is out of date rather than wrong, and saving it
+    // again re-runs the gate and clears this.
+    expect(out?.floor).toBe(false);
+    expect(isFloorReason(REASON.consequencesChanged)).toBe(false);
+  });
+
+  it("still qualifies when the tool's consequences SHRANK", () => {
+    // Intended, and stated in approvalRuleSchema rather than left to fall out
+    // of the subset test: losing a consequence cannot make a rule more
+    // dangerous than it was approved to be.
+    const out = evaluateAutoApproval(
+      [rule({ authoredConsequences: ["moves_money", "changes_access"] })],
+      subject(),
+    );
+    expect(out?.reasons).not.toContain(REASON.consequencesChanged);
+    expect(out?.ok).toBe(true);
+  });
+
+  it("qualifies when the tool carries exactly what it was written against", () => {
+    expect(evaluateAutoApproval([rule()], subject())?.ok).toBe(true);
+  });
+
+  it("refuses outright when the rule carries no stamp", () => {
+    // Absent is the strict reading. It costs nothing today because no stored
+    // rule can lack it — the three capabilities that write this clause all
+    // arrive with ADR-070 and are its only writers.
+    const out = evaluateAutoApproval(
+      [rule({ authoredConsequences: undefined })],
+      subject(),
+    );
+    expect(out?.reasons).toContain(REASON.consequencesChanged);
+  });
+
+  it("has no opinion when the tool carries no consequences at all", () => {
+    const out = evaluateAutoApproval(
+      [rule({ authoredConsequences: undefined })],
+      subject({
+        tool: {
+          slug: "stripe__create_payment",
+          version: 3,
+          riskGrade: "medium",
+          sideEffect: null,
+          consequenceTags: [],
+        },
+      }),
+    );
+    expect(out?.reasons).not.toContain(REASON.consequencesChanged);
+  });
+});
 
 describe("selectAutoApprovalRule", () => {
   // The subject builder picks the applicable rule before it finishes building
@@ -156,7 +221,12 @@ describe("the floors no rule can lift", () => {
 
   it("refuses an irreversible consequence", () => {
     const out = evaluateAutoApproval(
-      [rule({ tools: ["db__drop_table@*"] })],
+      [
+        rule({
+          tools: ["db__drop_table@*"],
+          authoredConsequences: ["alters_production", "destroys_data"],
+        }),
+      ],
       subject({
         capability: "db__drop_table",
         tool: {
@@ -177,7 +247,12 @@ describe("the floors no rule can lift", () => {
     // and it is reported once rather than twice.
     const judge = (sideEffect: string | null, consequenceTags: string[]) =>
       evaluateAutoApproval(
-        [rule({ tools: ["db__drop_table@*"] })],
+        [
+          rule({
+            tools: ["db__drop_table@*"],
+            authoredConsequences: consequenceTags,
+          }),
+        ],
         subject({
           capability: "db__drop_table",
           tool: {
@@ -204,7 +279,9 @@ describe("the floors no rule can lift", () => {
 
   it("refuses whatever a rule with no conditions says, and reports every floor at once", () => {
     const out = evaluateAutoApproval(
-      [rule()],
+      // Stamped with what the tool carries, so this stays a test about the
+      // floors rather than also catching `consequences_changed`.
+      [rule({ authoredConsequences: ["destroys_data"] })],
       subject({
         tainted: true,
         tool: {
@@ -485,7 +562,11 @@ describe("the recorded reason list stays readable", () => {
         },
       }),
     );
-    expect(out?.reasons).toHaveLength(37);
+    // 38 now, not 37: ADR-070's `consequences_changed` is the +1 in the
+    // arithmetic beside MAX_AUTO_APPROVAL_REASONS. The rule here is stamped
+    // with nothing while the tool carries `destroys_data`, which is the worst
+    // case this bound exists for.
+    expect(out?.reasons).toHaveLength(38);
     expect(out!.reasons.length).toBeLessThanOrEqual(MAX_AUTO_APPROVAL_REASONS);
   });
 });

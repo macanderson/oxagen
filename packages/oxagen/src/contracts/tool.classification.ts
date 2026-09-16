@@ -173,6 +173,14 @@ function classifiedPart(raw: unknown): {
  *
  * Replacement would allow the second, which is why the two halves are unioned
  * rather than one preferred over the other.
+ *
+ * SORTED, and that is part of the contract rather than tidiness. Unsorted, the
+ * order depended on which half contributed a tag first, which is exactly the
+ * kind of unspecified representation that turns load-bearing the moment
+ * anything compares, stores or digests the result — and a rule's
+ * `authoredConsequences` stamp does compare a stored set against a later one.
+ * Sorting once, here, gives all five readers the same answer and gives that
+ * comparison a stable basis.
  */
 export function unionConsequenceTags(row: ClassificationHalves): string[] {
   const tags = new Set<string>();
@@ -182,7 +190,7 @@ export function unionConsequenceTags(row: ClassificationHalves): string[] {
   for (const t of classifiedPart(row.classification).consequenceTags) {
     tags.add(t);
   }
-  return [...tags];
+  return [...tags].sort();
 }
 
 /** Side-effect classes from least to most severe (`toolSideEffectClassSchema`). */
