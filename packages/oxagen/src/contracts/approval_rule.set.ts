@@ -36,7 +36,26 @@ export const approvalRuleSet = registerCapability({
   },
   input: z
     .object({
-      rules: z.array(approvalRuleBodySchema).max(256),
+      // Ids are unique, refused here rather than stored. A set with two rules
+      // under one id parses on the way in and then fails the stored document's
+      // own uniqueness check on the way out, which takes the workspace's whole
+      // rule set — the gate clause with it — dark until somebody repairs the
+      // JSON by hand. A refused write is the cheaper failure.
+      rules: z
+        .array(approvalRuleBodySchema)
+        .max(256)
+        .superRefine((rules, issues) => {
+          const seen = new Set<string>();
+          for (const rule of rules) {
+            if (seen.has(rule.id)) {
+              issues.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `duplicate rule id "${rule.id}" — ids are the audit citation and must be unique`,
+              });
+            }
+            seen.add(rule.id);
+          }
+        }),
     })
     .strict(),
   output: z

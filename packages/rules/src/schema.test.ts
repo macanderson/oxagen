@@ -174,6 +174,36 @@ describe("the auto-approval clause", () => {
     expect(withWindow(60_000)).not.toThrow();
   });
 
+  test("rejects a rule naming more measures than the reason list can hold", () => {
+    const many = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`m_${i}`, "0"]));
+    expect(() =>
+      parseRuleSet({
+        ...v2,
+        autoApproval: [{ ...ruleBody, maxMeasures: many(17) }],
+      }),
+    ).toThrow(/at most 16 measures/);
+    expect(() =>
+      parseRuleSet({
+        ...v2,
+        autoApproval: [
+          {
+            ...ruleBody,
+            allowTargets: Object.fromEntries(
+              Object.keys(many(17)).map((k) => [k, ["*"]]),
+            ),
+          },
+        ],
+      }),
+    ).toThrow(/at most 16 measures/);
+    expect(() =>
+      parseRuleSet({
+        ...v2,
+        autoApproval: [{ ...ruleBody, maxMeasures: many(16) }],
+      }),
+    ).not.toThrow();
+  });
+
   test("rejects an unknown key on a rule", () => {
     expect(() =>
       parseRuleSet({ ...v2, autoApproval: [{ ...ruleBody, minTrust: 800 }] }),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
+import { MAX_AUTO_APPROVAL_REASONS } from "@oxagen/oxagen/approval-rules/schemas";
 import {
   evaluateAutoApproval,
   isFloorReason,
@@ -375,5 +376,46 @@ describe("the conditions together", () => {
       reasons: [],
       floor: false,
     });
+  });
+});
+
+describe("the recorded reason list stays readable", () => {
+  it("never grows past what the output schema accepts, even at the authored maximum", () => {
+    // A rule may cap 16 measures and allow-list 16 targets; the call carries
+    // none of them, and every floor fires too. That is the worst case, and it
+    // must still parse back through `autoEligibilitySchema`.
+    const sixteen = (prefix: string) =>
+      Object.fromEntries(
+        Array.from({ length: 16 }, (_, i) => [`${prefix}_${i}`, "0"]),
+      );
+    const out = evaluateAutoApproval(
+      [
+        rule({
+          maxMeasures: sixteen("m"),
+          allowTargets: Object.fromEntries(
+            Object.keys(sixteen("t")).map((k) => [k, ["nothing"]]),
+          ),
+          standingWindowMs: 60_000,
+          businessHours: {
+            timezone: "UTC",
+            days: [1],
+            start: "09:00",
+            end: "17:00",
+          },
+        }),
+      ],
+      subject({
+        tainted: true,
+        now: new Date("2026-09-19T03:00:00.000Z"),
+        tool: {
+          slug: "stripe__create_payment",
+          version: 3,
+          riskGrade: "critical",
+          consequenceTags: ["destroys_data"],
+        },
+      }),
+    );
+    expect(out?.reasons).toHaveLength(37);
+    expect(out!.reasons.length).toBeLessThanOrEqual(MAX_AUTO_APPROVAL_REASONS);
   });
 });

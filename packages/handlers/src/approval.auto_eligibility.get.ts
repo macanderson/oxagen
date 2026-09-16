@@ -33,22 +33,24 @@ export const approvalAutoEligibilityGetHandler: CapabilityHandler<
     ? eq(ar.publicId, input.approvalId)
     : eq(ar.id, input.approvalId);
 
-  const row = await withTenantDb(async (tx) => {
-    const [found] = await tx
-      .select({
-        autoRuleId: ar.autoRuleId,
-        resolvedReasons: ar.resolvedReasons,
-        resolvedByPolicy: ar.resolvedByPolicy,
-        resolverPublicId: schema.users.publicId,
-      })
-      .from(ar)
-      .leftJoin(schema.users, eq(schema.users.id, ar.resolvedByUserId))
-      .where(
-        and(byId, eq(ar.orgId, ctx.orgId), eq(ar.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    return found;
-  });
+  // The person who answered is reached through the declared relation
+  // (`packages/database/src/relations.ts`), never a cross-schema join written
+  // here: `agent.approval_requests` and `auth.users` are different domains.
+  const row = await withTenantDb((tx) =>
+    tx.query.approvalRequests.findFirst({
+      where: and(
+        byId,
+        eq(ar.orgId, ctx.orgId),
+        eq(ar.workspaceId, workspaceId),
+      ),
+      columns: {
+        autoRuleId: true,
+        resolvedReasons: true,
+        resolvedByPolicy: true,
+      },
+      with: { resolvedBy: { columns: { publicId: true } } },
+    }),
+  );
   if (!row) {
     throw new HandlerError({
       code: "not_found",
@@ -62,7 +64,7 @@ export const approvalAutoEligibilityGetHandler: CapabilityHandler<
     approvalId: input.approvalId,
     resolvedBy:
       row.resolvedByPolicy ??
-      (row.resolverPublicId === null ? null : `user:${row.resolverPublicId}`),
+      (row.resolvedBy === null ? null : `user:${row.resolvedBy.publicId}`),
     eligibility:
       row.autoRuleId === null
         ? null

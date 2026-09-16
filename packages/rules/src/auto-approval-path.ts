@@ -4,11 +4,15 @@
  * ADR-070).
  *
  * The gate asks this module at exactly one point: a `require_approval`
- * verdict, before it throws. When a rule's conditions hold, an approval row
- * is written already resolved, with `resolved_by_policy = policy:<rule id>`
- * and its single-use token spent by the call that is about to proceed, and
- * the gate lets the call through. When they do not hold, nothing is written
- * and the gate throws exactly as it did before: the call goes to a person.
+ * verdict, before it throws. The ask is READ-ONLY. It evaluates the clause
+ * and, when a rule's conditions hold, hands back a `commit` that writes the
+ * approval row already resolved, with `resolved_by_policy = policy:<rule id>`
+ * and its single-use token spent. The gate calls it at the very end, once the
+ * mandate check has cleared as well, because a mandate's own approval rule
+ * runs after the rules and can still park the call — and a receipt saying no
+ * person looked, for a call a person was required to look at, inverts the one
+ * thing the `policy:` form exists for. When the conditions do not hold,
+ * nothing is written and the gate throws exactly as it did before.
  *
  * The row is the receipt's evidence that no person looked. `resolved_by_user_id`
  * stays null, and the two columns cannot both be set (the migration's CHECK),
@@ -41,22 +45,27 @@ export interface AutoApproveArgs {
   now?: () => Date;
 }
 
+/** What the evaluator said, and what writing the answer down will take. */
+export type AutoApprovalDecision = AutoApprovalOutcome & {
+  /** Present only when `ok`; writes the approval row and emits the event. */
+  commit?: () => Promise<void>;
+};
+
 /**
- * Evaluate the workspace's auto-approval clause against one parked call, and
- * record the approval when it qualifies.
+ * Evaluate the workspace's auto-approval clause against one parked call.
  *
- * Returns the evaluation, or null when no rule covers the call. Only an
- * outcome with `ok` has written anything.
+ * Writes nothing. Returns the evaluation, or null when no rule covers the
+ * call; `commit` is the caller's to run once every later check has cleared.
  */
 export async function autoApproveParkedCall(
   args: AutoApproveArgs,
-): Promise<AutoApprovalOutcome | null> {
+): Promise<AutoApprovalDecision | null> {
   const rules = args.ruleSet.autoApproval ?? [];
   if (rules.length === 0) return null;
   const at = (args.now ?? (() => new Date()))();
   const digest = inputDigest(args.input);
 
-  const outcome = await withTenantDb(async (tx) => {
+  const evaluated = await withTenantDb(async (tx) => {
     const subject = await buildAutoApprovalSubject(tx, {
       capability: args.capability,
       input: args.input,
@@ -64,45 +73,52 @@ export async function autoApproveParkedCall(
       digest,
       now: at,
     });
-    const evaluated = evaluateAutoApproval(rules, subject);
-    if (evaluated === null || !evaluated.ok) return evaluated;
-
-    await tx.insert(schema.approvalRequests).values({
-      orgId: args.ctx.orgId,
-      workspaceId: args.ctx.workspaceId,
-      capabilityName: args.capability,
-      inputPreview: (args.input ?? {}) as object,
-      // The declared tool's grade: `ok` is unreachable without one, because a
-      // capability with no declared tool is a floor.
+    return {
+      outcome: evaluateAutoApproval(rules, subject),
       riskLevel: subject.tool?.riskGrade ?? "low",
-      ruleIds: [args.verdict.ruleId],
-      inputDigest: digest,
-      autoRuleId: evaluated.ruleId,
-      resolvedReasons: [],
-      resolution: "approved",
-      resolvedAt: at,
-      resolvedByPolicy: policyApprover(evaluated.ruleId),
-      // The token is minted and spent by the call this decision releases; an
-      // approval nobody has to act on never waits.
-      tokenUsedAt: at,
-      expiresAt: at,
-      createdByUserId: args.ctx.userId ?? undefined,
-    });
-    return evaluated;
+    };
   });
+  const outcome = evaluated.outcome;
+  if (outcome === null) return null;
+  if (!outcome.ok) return outcome;
 
-  if (outcome?.ok) {
-    emitAutoApproved(args);
-    logger.info(
-      {
-        capability: args.capability,
-        rule: args.verdict.ruleId,
-        autoRule: outcome.ruleId,
-      },
-      "auto-approval: the call proceeded with no person",
-    );
-  }
-  return outcome;
+  return {
+    ...outcome,
+    commit: async () => {
+      await withTenantDb((tx) =>
+        tx.insert(schema.approvalRequests).values({
+          orgId: args.ctx.orgId,
+          workspaceId: args.ctx.workspaceId,
+          capabilityName: args.capability,
+          inputPreview: (args.input ?? {}) as object,
+          // The declared tool's grade: `ok` is unreachable without one,
+          // because a capability with no declared tool is a floor.
+          riskLevel: evaluated.riskLevel,
+          ruleIds: [args.verdict.ruleId],
+          inputDigest: digest,
+          autoRuleId: outcome.ruleId,
+          resolvedReasons: [],
+          resolution: "approved",
+          resolvedAt: at,
+          resolvedByPolicy: policyApprover(outcome.ruleId),
+          // The token is minted and spent by the call this decision releases;
+          // an approval nobody has to act on never waits.
+          tokenUsedAt: at,
+          expiresAt: at,
+          createdByUserId: args.ctx.userId ?? undefined,
+        }),
+      );
+      emitAutoApproved(args);
+      logger.info(
+        {
+          capability: args.capability,
+          rule: args.verdict.ruleId,
+          autoRule: outcome.ruleId,
+        },
+        "auto-approval: the call proceeded with no person",
+      );
+    },
+  };
 }
 
 /**

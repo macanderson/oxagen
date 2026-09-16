@@ -32,9 +32,13 @@ approval of the same call digest re-applies, or null), `businessHours`
 `createdBy` (`usr_…`) and `createdAt`.
 
 Beside each rule, over `windowDays` (30): `hits30d`, the calls it released
-with no person, and `skipped30d`, the calls it was read against and did not
-release. Both are counted from `agent.approval_requests`, so they are the
-record rather than a rollup of it.
+with no person, and `skipped30d`, the calls that reached a person's queue with
+this rule recorded beside them. Both are counted from
+`agent.approval_requests`, so they are the record rather than a rollup of it,
+and both count only calls that produced an approval row. A decision rule's
+`require_approval` verdict that no auto-approval rule released writes no such
+row — the gate refuses the call rather than queueing it — so it appears in
+neither figure; what is counted is every call a mandate parked.
 
 ## Readers
 

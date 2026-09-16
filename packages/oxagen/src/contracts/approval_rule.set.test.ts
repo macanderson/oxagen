@@ -51,4 +51,18 @@ describe("set_approval_rules contract", () => {
   it("accepts an empty set — clearing the clause is a write like any other", () => {
     expect(approvalRuleSet.input.parse({ rules: [] })).toEqual({ rules: [] });
   });
+
+  it("refuses two rules under one id, which would take the stored set dark", () => {
+    const duplicate = approvalRuleSet.input.safeParse({
+      rules: [body, { ...body, name: "A second rule, same id" }],
+    });
+    expect(duplicate.success).toBe(false);
+    expect(JSON.stringify(duplicate)).toContain("duplicate rule id");
+    // Two rules under two ids are fine.
+    expect(
+      approvalRuleSet.input.safeParse({
+        rules: [body, { ...body, id: "release-tooling" }],
+      }).success,
+    ).toBe(true);
+  });
 });

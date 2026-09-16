@@ -109,16 +109,29 @@ export function readDeclaredMeasures(
 }
 
 /**
- * When a person last approved this exact call digest in this workspace, or
- * null. A rule's standing window is measured from it.
+ * When a person last approved this exact call in this workspace, or null. A
+ * rule's standing window is measured from it.
  *
- * Bound to the workspace and the digest and to nothing narrower, because no
- * approval row records the agent that raised the call (`list_approvals`
- * reports `chain.agentKey` as null for the same reason). ADR-070 decision 3.
+ * A call is a capability AND its input, so the lookup is narrowed on both.
+ * `inputDigest` is sha256 over the input alone, so two capabilities called
+ * with the same payload share a digest — without the capability in the
+ * predicate, a person's approval of `archive_thing {"id":"x"}` would satisfy
+ * a standing window for `delete_thing {"id":"x"}`, which is the worst thing
+ * this subsystem could do.
+ *
+ * It is NOT narrowed to the agent that raised the call, and that is a
+ * different axis: no approval row records one (`list_approvals` reports
+ * `chain.agentKey` as null for the same reason), so the column to filter on
+ * does not exist. It arrives with the lane that records the agent on an
+ * approval. ADR-070 decision 3.
+ *
+ * Only a PERSON's approval counts (`resolved_by_user_id` is not null), so one
+ * auto-approval can never open the window for the next.
  */
 export async function lastHumanApprovalOf(
   tx: Tx,
   workspaceId: string,
+  capability: string,
   digest: string,
 ): Promise<Date | null> {
   const ar = schema.approvalRequests;
@@ -128,6 +141,7 @@ export async function lastHumanApprovalOf(
     .where(
       and(
         eq(ar.workspaceId, workspaceId),
+        eq(ar.capabilityName, capability),
         eq(ar.inputDigest, digest),
         eq(ar.resolution, "approved"),
         isNotNull(ar.resolvedByUserId),
@@ -187,7 +201,12 @@ export async function buildAutoApprovalSubject(
     measures,
     targets,
     tainted: false,
-    standingApprovalAt: await lastHumanApprovalOf(tx, args.workspaceId, digest),
+    standingApprovalAt: await lastHumanApprovalOf(
+      tx,
+      args.workspaceId,
+      args.capability,
+      digest,
+    ),
     now: args.now,
   };
 }

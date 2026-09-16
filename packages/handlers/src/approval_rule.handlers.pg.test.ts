@@ -78,10 +78,13 @@ vi.mock("@oxagen/database/security", () => ({
 describe.skipIf(!process.env.DATABASE_URL)(
   "auto-approval rule handlers against Postgres",
   async () => {
-    const { schema, withSystemDb } = await import("@oxagen/database");
+    const { schema, withSystemDb, withTenantDb } = await import(
+      "@oxagen/database"
+    );
     const { runInTenantScope } = await import("@oxagen/tenancy");
     const { eq } = await import("drizzle-orm");
     const { clearDecisionRulesCache } = await import("@oxagen/rules");
+    const { writeRules } = await import("./_approval_rule");
     const { approvalRuleListHandler } = await import("./approval_rule.list");
     const { approvalRuleSetHandler } = await import("./approval_rule.set");
     const { approvalRuleDeleteHandler } = await import(
@@ -263,12 +266,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.approvalRequests)
           .where(eq(schema.approvalRequests.workspaceId, workspaceId));
-        await tx
-          .delete(schema.toolVersions)
-          .where(eq(schema.toolVersions.workspaceId, workspaceId));
+        // `tools.active_version_id` references `tool_versions.id`, so the
+        // referencing rows go first (the order mandates.pg.test.ts uses).
         await tx
           .delete(schema.tools)
           .where(eq(schema.tools.workspaceId, workspaceId));
+        await tx
+          .delete(schema.toolVersions)
+          .where(eq(schema.toolVersions.workspaceId, workspaceId));
         await tx
           .delete(schema.workspaces)
           .where(eq(schema.workspaces.id, workspaceId));
@@ -342,6 +347,33 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await expect(set(complianceUserId, [RULE])).rejects.toSatisfy(
         forbidden("org_role_required"),
       );
+    });
+
+    it("refuses two rules under one id and leaves the stored document as it was", async () => {
+      await set(adminUserId, [RULE]);
+      const before = await settingsOf();
+      // The contract refuses it at the edge; the handler's own parse of the
+      // document it is about to store is the second guard, so a set that
+      // reaches it still writes nothing.
+      await expect(
+        set(adminUserId, [RULE, { ...RULE, name: "Same id, other name" }]),
+      ).rejects.toThrow();
+      expect(await settingsOf()).toEqual(before);
+    });
+
+    it("refuses to store a document the gate could not load", async () => {
+      await set(adminUserId, [RULE]);
+      const before = await settingsOf();
+      await expect(
+        inScope(() =>
+          withTenantDb((tx) =>
+            writeRules(tx, workspaceId, [
+              { ...RULE, createdBy: null, createdAt: "not a timestamp" },
+            ] as never),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("rule_set_would_not_load"));
+      expect(await settingsOf()).toEqual(before);
     });
 
     it("clears the clause when the caller sends no rules", async () => {

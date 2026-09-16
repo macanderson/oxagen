@@ -119,6 +119,13 @@ default. The fact it is measured against is the most recent approval in the
 workspace of the same canonical input digest that a person resolved
 (`lastHumanApprovalOf`).
 
+It is bounded to the **capability** as well as the input. `input_digest` is
+sha256 over the input alone, so two capabilities called with the same payload
+share a digest; without the capability in the predicate, a person's approval of
+`archive_thing {"id":"x"}` would open a standing window for
+`delete_thing {"id":"x"}`. A call is a capability and its input, and
+`approval_requests.capability_name` records it, so the lookup narrows on both.
+
 It is not bounded to the agent or the run's task, as #2970 recommended, because
 no approval row records either: `agent.approval_requests` carries the mandate,
 the rule ids, the digest and the message, and `list_approvals` reports
@@ -144,6 +151,14 @@ The mockup's per-rule counters are a grouped count over those rows in a 30-day
 window, computed by the read. There is no rollup table and no nightly job: the
 approval rows are the record, the rule set holds tens of rules, and a figure
 derived at read time has nothing to fall out of date.
+
+Both figures therefore count the calls that produced an approval row.
+`hits30d` is the calls a rule released; `skipped30d` is the calls that reached
+a person's queue with the rule recorded beside them. A `require_approval`
+verdict that no rule released writes no approval row — the gate refuses the
+call rather than queueing it, and a row nobody could act on would be worse than
+none — so it is in neither figure. The field says so, and the counters are not
+described as "every call the rule was read against".
 
 ### 5. Where it fires, and where it does not
 

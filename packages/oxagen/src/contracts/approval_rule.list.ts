@@ -9,7 +9,8 @@
 // The two counters are computed from `agent.approval_requests` over the window
 // rather than kept in a rollup: they count the rows a rule was read against,
 // and the rule set holds tens of rules, so the grouped count is the figure
-// itself with nothing to fall out of date.
+// itself with nothing to fall out of date. What they do and do not count is on
+// `skipped30d` below.
 import { z } from "zod";
 import { approvalRuleSchema } from "../approval-rules/schemas";
 import { registerCapability } from "../registry";
@@ -18,7 +19,16 @@ export const approvalRuleListItem = approvalRuleSchema
   .extend({
     /** Calls this rule released with no person in the last 30 days. */
     hits30d: z.number().int().nonnegative(),
-    /** Calls it was read against in the last 30 days that it did not release. */
+    /**
+     * Calls in the last 30 days that reached a person's queue with this rule
+     * recorded beside them — it was read and did not release them.
+     *
+     * Both figures count approval rows, so both count the calls that produced
+     * one. A decision rule's `require_approval` verdict that no auto-approval
+     * rule released writes no approval row at all (the gate refuses the call
+     * rather than queueing it), so it appears in neither figure; what is
+     * counted is every call a mandate parked. ADR-070.
+     */
     skipped30d: z.number().int().nonnegative(),
   })
   .strict();

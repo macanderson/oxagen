@@ -291,12 +291,14 @@ describe("auto-approval at a require_approval verdict", () => {
   };
 
   test("releases the call when a rule qualified, and asks only at that verdict", async () => {
-    const autoApprove = vi.fn(async () => ({ ok: true }));
+    const commit = vi.fn(async () => {});
+    const autoApprove = vi.fn(async () => ({ ok: true, commit }));
     const gate = createDecisionRulesGate({
       loadRuleSet: async () => RULES,
       autoApprove,
     });
     await expect(gate(parked)).resolves.toBeUndefined();
+    expect(commit).toHaveBeenCalledOnce();
     expect(autoApprove).toHaveBeenCalledWith(
       expect.objectContaining({
         capability: "issue_refund",
@@ -348,7 +350,10 @@ describe("auto-approval at a require_approval verdict", () => {
   });
 
   test("a call with no workspace never auto-approves — the rules are a workspace's", async () => {
-    const autoApprove = vi.fn(async () => ({ ok: true }));
+    const autoApprove = vi.fn(async () => ({
+      ok: true,
+      commit: async () => {},
+    }));
     const gate = createDecisionRulesGate({
       loadRuleSet: async () => RULES,
       autoApprove,
@@ -357,5 +362,83 @@ describe("auto-approval at a require_approval verdict", () => {
       gate({ ...parked, ctx: { ...CTX, workspaceId: null } }),
     ).rejects.toThrow(DecisionRuleApprovalRequiredError);
     expect(autoApprove).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The receipt saying no person looked is written last, because a mandate's
+ * own approval rule runs after the rules and can still park the call
+ * (ADR-070). A `policy:<rule id>` row for a call a person was required to
+ * look at would invert the one thing that form exists for.
+ */
+describe("the auto-approval receipt is written after every later check", () => {
+  const agent = {
+    kind: "agent" as const,
+    id: "prn_agent",
+  } as unknown as Parameters<
+    ReturnType<typeof createDecisionRulesGate>
+  >[0]["principal"];
+  const parkedByAgent = {
+    capability: "issue_refund",
+    input: { amount_usd: 100 },
+    ctx: CTX,
+    principal: agent,
+  };
+
+  test("a mandate that parks the call leaves no receipt behind", async () => {
+    const commit = vi.fn(async () => {});
+    const checkMandate = vi.fn(async () => {
+      throw new Error("the mandate requires a person");
+    });
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({ ok: true, commit }),
+      checkMandate,
+    });
+    await expect(gate(parkedByAgent)).rejects.toThrow(
+      "the mandate requires a person",
+    );
+    expect(checkMandate).toHaveBeenCalledOnce();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  test("a mandate that clears lets the receipt be written, once, and returns its settlement", async () => {
+    const commit = vi.fn(async () => {});
+    const settlement = { settle: async () => {}, release: async () => {} };
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({ ok: true, commit }),
+      checkMandate: async () => settlement,
+    });
+    await expect(gate(parkedByAgent)).resolves.toBe(settlement);
+    expect(commit).toHaveBeenCalledOnce();
+  });
+
+  test("a hook that says ok and hands back nothing to write sends the call to a person", async () => {
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({ ok: true }),
+    });
+    await expect(gate(parkedByAgent)).rejects.toThrow(
+      DecisionRuleApprovalRequiredError,
+    );
+  });
+
+  test("a receipt that cannot be written sends the call to a person, and reports it", async () => {
+    const onError = vi.fn();
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({
+        ok: true,
+        commit: async () => {
+          throw new Error("approval insert failed");
+        },
+      }),
+      onError,
+    });
+    await expect(gate(parkedByAgent)).rejects.toThrow(
+      /auto_approval_not_recorded/,
+    );
+    expect(onError).toHaveBeenCalledOnce();
   });
 });

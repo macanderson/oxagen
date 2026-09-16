@@ -171,12 +171,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .where(eq(schema.mandateLedger.mandateId, id));
           await tx.delete(schema.mandates).where(eq(schema.mandates.id, id));
         }
-        await tx
-          .delete(schema.toolVersions)
-          .where(eq(schema.toolVersions.workspaceId, workspaceId));
+        // `tools.active_version_id` references `tool_versions.id`, so the
+        // referencing rows go first (the order mandates.pg.test.ts uses).
         await tx
           .delete(schema.tools)
           .where(eq(schema.tools.workspaceId, workspaceId));
+        await tx
+          .delete(schema.toolVersions)
+          .where(eq(schema.toolVersions.workspaceId, workspaceId));
         await tx
           .delete(schema.workspaces)
           .where(eq(schema.workspaces.id, workspaceId));
@@ -283,6 +285,82 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    it("never reads a person's approval of a DIFFERENT capability with the same input", async () => {
+      // The digest is over the input alone, so these two calls share one. A
+      // person approving the first must not open a standing window for the
+      // second (ADR-070 decision 3).
+      const digest = inputDigest(CALL);
+      await withSystemDb((tx) =>
+        tx.insert(schema.approvalRequests).values({
+          orgId,
+          workspaceId,
+          capabilityName: "stripe__refund_payment",
+          inputPreview: {},
+          riskLevel: "high",
+          inputDigest: digest,
+          resolution: "approved",
+          resolvedAt: new Date("2026-09-16T09:00:00.000Z"),
+          resolvedByUserId: userId,
+          expiresAt: new Date("2026-09-17T00:00:00.000Z"),
+        }),
+      );
+      const other = await inScope(() =>
+        withTenantDb((tx) =>
+          buildAutoApprovalSubject(tx, {
+            capability: "stripe__create_payment",
+            input: CALL,
+            workspaceId,
+            now: NOW,
+          }),
+        ),
+      );
+      expect(other.standingApprovalAt).toBeNull();
+
+      const same = await inScope(() =>
+        withTenantDb((tx) =>
+          buildAutoApprovalSubject(tx, {
+            capability: "stripe__refund_payment",
+            input: CALL,
+            workspaceId,
+            now: NOW,
+          }),
+        ),
+      );
+      expect(same.standingApprovalAt?.toISOString()).toBe(
+        "2026-09-16T09:00:00.000Z",
+      );
+    });
+
+    it("never reads an auto-approval as the standing approval that opens the next one", async () => {
+      const digest = inputDigest(CALL);
+      await withSystemDb((tx) =>
+        tx.insert(schema.approvalRequests).values({
+          orgId,
+          workspaceId,
+          capabilityName: "stripe__create_payment",
+          inputPreview: {},
+          riskLevel: "high",
+          inputDigest: digest,
+          autoRuleId: RULE.id,
+          resolution: "approved",
+          resolvedAt: new Date("2026-09-16T09:00:00.000Z"),
+          resolvedByPolicy: `policy:${RULE.id}`,
+          expiresAt: new Date("2026-09-16T09:00:00.000Z"),
+        }),
+      );
+      const subject = await inScope(() =>
+        withTenantDb((tx) =>
+          buildAutoApprovalSubject(tx, {
+            capability: "stripe__create_payment",
+            input: CALL,
+            workspaceId,
+            now: NOW,
+          }),
+        ),
+      );
+      expect(subject.standingApprovalAt).toBeNull();
+    });
+
     it("carries no tool and no measures for a capability the workspace has not declared", async () => {
       const subject = await inScope(() =>
         withTenantDb((tx) =>
@@ -301,10 +379,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // ── the decision ─────────────────────────────────────────────────────────
 
-    it("records an approval resolved by the rule, with its token spent and no person on it", async () => {
-      const outcome = await autoApprove(CALL, [RULE]);
-      expect(outcome).toMatchObject({ ruleId: RULE.id, ok: true, reasons: [] });
+    it("writes nothing until the caller commits, then records the receipt", async () => {
+      const decision = await autoApprove(CALL, [RULE]);
+      expect(decision).toMatchObject({
+        ruleId: RULE.id,
+        ok: true,
+        reasons: [],
+      });
+      // The evaluation alone leaves no trace: a mandate can still park this
+      // call, and a receipt saying no person looked would then be a lie.
+      expect(await approvalsOf()).toEqual([]);
 
+      await decision?.commit?.();
       const [row] = await approvalsOf();
       expect(row).toMatchObject({
         capabilityName: "stripe__create_payment",
@@ -327,6 +413,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         [RULE],
       );
       expect(outcome).toMatchObject({ ok: false, floor: false });
+      expect(outcome?.commit).toBeUndefined();
       expect(outcome?.reasons).toEqual([
         "measure_above_ceiling:amount",
         "target_not_allowed:counterparty",

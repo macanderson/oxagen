@@ -107,6 +107,20 @@ export async function writeRules(
     rules: Array.isArray(existing.rules) ? existing.rules : [],
     autoApproval: rules,
   };
+  // The document is parsed before it is stored, so no write can leave behind
+  // one the gate cannot load. A stored set that does not parse takes the
+  // workspace's whole rule set dark — the gate clause with it — and the only
+  // repair is by hand, so the write is refused instead.
+  try {
+    parseRuleSet(next);
+  } catch {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "rule_set_would_not_load",
+      message:
+        "The rule set this write would store does not parse; nothing was written",
+    });
+  }
   await tx
     .update(schema.workspaces)
     .set({

@@ -79,6 +79,29 @@ const measureValueSchema = z
     "an integer string: micros for a currency, whole units otherwise",
   );
 
+/**
+ * How many measures one rule may cap, and how many it may allow-list.
+ *
+ * The bound exists so the recorded reason list has a known maximum: the
+ * evaluator writes one reason per failed condition, and a reason list the
+ * output schema refuses would make a stored approval unreadable through the
+ * API — an audit record that cannot be read back is close to one that does
+ * not exist. `MAX_AUTO_APPROVAL_REASONS` is the arithmetic.
+ */
+export const MAX_RULE_MEASURES = 16;
+
+/**
+ * The most reasons one evaluation can record: the four floors, one per capped
+ * measure, one per allow-listed target, the standing window and the business
+ * hours — 4 + 16 + 16 + 2 = 38, rounded up so the two bounds do not have to
+ * move together.
+ */
+export const MAX_AUTO_APPROVAL_REASONS = 64;
+
+const boundedMeasureCount = <T extends Record<string, unknown>>(record: T) =>
+  Object.keys(record).length <= MAX_RULE_MEASURES;
+const tooManyMeasures = `a rule names at most ${MAX_RULE_MEASURES} measures`;
+
 /** The fields an author writes. `createdBy` and `createdAt` are the handler's. */
 export const approvalRuleBodySchema = z
   .object({
@@ -90,10 +113,14 @@ export const approvalRuleBodySchema = z
     /** Off leaves the rule in the set and out of every evaluation. */
     enabled: z.boolean().default(true),
     /** measure → the inclusive ceiling its value may not exceed. */
-    maxMeasures: z.record(measureNameSchema, measureValueSchema).default({}),
+    maxMeasures: z
+      .record(measureNameSchema, measureValueSchema)
+      .refine(boundedMeasureCount, tooManyMeasures)
+      .default({}),
     /** measure → the globs its target must match (a counterparty, an environment). */
     allowTargets: z
       .record(measureNameSchema, z.array(z.string().min(1).max(256)).min(1))
+      .refine(boundedMeasureCount, tooManyMeasures)
       .default({}),
     /**
      * The window in which a person's approval of the same call digest
@@ -136,7 +163,7 @@ export const autoEligibilitySchema = z
      * the measure it is about (`measure_above_ceiling:amount`); the app maps a
      * code to its copy.
      */
-    reasons: z.array(z.string().min(1).max(128)).max(32),
+    reasons: z.array(z.string().min(1).max(128)).max(MAX_AUTO_APPROVAL_REASONS),
     /** True when at least one reason is a floor no rule can lift. */
     floor: z.boolean(),
   })
