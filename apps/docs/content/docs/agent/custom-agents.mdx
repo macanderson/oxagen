@@ -1,50 +1,45 @@
 ---
 title: Custom agents
-description: "Define, version, publish, and deploy your own agents: instructions, graph access, tools, triggers, and environment bindings."
+description: "Define, version, publish, and deploy your own agents: instructions, graph scope, tools, triggers, and environment bindings."
 ---
 
-Beyond the built-in workspace agent, you can define **custom agents**: named agents with their own instructions, scoped graph access, an explicit tool set, and triggers that start them automatically. Manage them in **Workspace → Workbench → Agents**.
+Beyond the built-in workspace agent, you can define **custom agents**. A custom agent is a named agent with its own instructions, a scoped view of the graph, an explicit tool set, and triggers that start it. Manage them under **Agents** in the workspace sidebar.
 
 ## Lifecycle
 
 An agent definition separates *identity* from *configuration*:
 
-1. **Draft**: creating an agent inserts the identity (name, immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
-2. **Versioned edits**: every config change snapshots a **new unpublished version**; published versions are immutable and never edited in place.
-3. **Publish**: publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
-4. **Deploy**: activation requires a published version. Deactivating is always allowed and makes the agent's triggers dormant.
+1. **Draft**. Creating an agent inserts the identity (name and immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
+2. **Versioned edits**. Every config change snapshots a **new unpublished version**. Published versions are immutable and never edited in place.
+3. **Publish**. Publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
+4. **Deploy**. Activation needs a published version. Deactivating is always allowed and makes the agent's triggers dormant.
 
-The audit consequence: what an agent was configured to do at any point in time is provable from the version history.
+For an audit, the version history shows what an agent was configured to do at any point in time.
 
 ## Configuration
 
 | Section | What it controls |
 |---|---|
 | Instructions | The agent's system prompt, layered over the workspace baseline |
-| Graph access | Which ontology it can read (or extend), the retrieval strategy (semantic / lexical / hybrid / explicit), and a traversal budget (max hops, max nodes, min relevance) |
+| Graph access | Which ontology it can read (or extend), the retrieval strategy (semantic, lexical, hybrid, or explicit), and a traversal budget (max hops, max nodes, and min relevance) |
 | Tools | Explicitly equipped capabilities, skills, MCP servers, or other agents |
 | Triggers | What starts it: `manual`, `schedule` (cron), or `event` (source events, with branch and path-glob filters) |
-| Access | The agent's [role](/docs/governance/agent-roles): the ceiling on everything above. New agents start as **Agent Contributor**. |
+| Access | The agent's [role](/docs/governance/agent-roles), which is the ceiling on everything above. New agents start as **Agent Contributor**. |
 
-Everything in that table except Access is the agent's **request**. The role is the **ceiling**, and what the agent can actually do is the intersection of the two, so equipping a tool the role denies is inert rather than an error. The builder's Review step shows you that intersection before you save. See [Agent roles](/docs/governance/agent-roles).
+Everything in that table except Access is the agent's **request**. The role is the **ceiling**. What the agent can do is the intersection of the two, so equipping a tool the role denies is inert rather than an error. The builder's Review step shows that intersection before you save. See [Agent roles](/docs/governance/agent-roles).
 
-AI can draft all of this for you: describe the agent in plain language and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities, including the narrowest role that still lets the drafted agent do its job, and you review and save. Revisions work the same way and always land as a new unpublished version, so an AI edit never silently changes what is live.
+Oxagen can draft the whole configuration. Describe the agent in plain language, and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities. The draft includes the narrowest role that still lets the agent do its job. You review it and save. Revisions work the same way and always land as a new unpublished version, so a drafted edit never changes what is live without you.
 
 ## Triggers
 
-Triggers bind an agent to a start condition and can be enabled or disabled independently of the agent's deployment status:
+A trigger binds an agent to a start condition. You enable or disable each trigger independently of the agent's deployment status:
 
-- `manual`: started by a person or an API call.
+- `manual`: a person or an API call starts it.
 - `schedule`: a cron expression.
-- `event`: an event from a connected source (e.g. a GitHub push), filtered by branches, path globs, or payload conditions.
+- `event`: an event from a connected source (for example, a GitHub push), filtered by branches, path globs, or payload conditions.
 
-A trigger only fires when the agent is deployed **active**.
+A trigger fires only when the agent is deployed **active**.
 
 ## Environments
 
-An agent resolves which credentials it may use at run time through its
-**environment binding**: bind an agent to an [environment](/docs/configuration/environments-and-secrets),
-and mark one binding primary. Without a binding, the workspace's default
-environment applies. This is governance metadata on the agent registry, declaring which secret scope an agent identity is authorized to resolve, not runtime execution state; Oxagen has no execution engine of its own to
-inject those secrets into.
-
+An agent's **environment binding** names the secret scope its identity may draw on. Bind an agent to an [environment](/docs/configuration/environments-and-secrets), and mark one binding primary. Without a binding, the workspace's default environment applies. The binding is governance metadata on the agent registry, not run state. Oxagen has no engine of its own that injects those secrets into a run.

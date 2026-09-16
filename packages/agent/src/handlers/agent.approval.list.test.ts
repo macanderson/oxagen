@@ -61,6 +61,8 @@ describe("list_approvals item", () => {
         createdAt: new Date("2026-09-13T10:00:00.000Z"),
         expiresAt: new Date("2026-09-13T10:05:00.000Z"),
         requesterPublicId: "usr_0123456789abcdefghjkmn",
+        mandatePublicId: null,
+        ruleIds: [],
       }),
     ).toEqual({
       id: "apr_0123456789abcdefghjkmn",
@@ -69,8 +71,29 @@ describe("list_approvals item", () => {
       requester: "usr_0123456789abcdefghjkmn",
       createdAt: "2026-09-13T10:00:00.000Z",
       expiresAt: "2026-09-13T10:05:00.000Z",
+      mandateId: null,
       chain: { agentKey: null, rule: null },
     });
+  });
+
+  it("carries the mandate hop and the first rule id on a row the mandate gate parked", () => {
+    const item = toApprovalListItem({
+      publicId: "apr_0123456789abcdefghjkmn",
+      capabilityName: "stripe__create_payment",
+      createdAt: new Date("2026-09-13T10:00:00.000Z"),
+      expiresAt: new Date("2026-09-14T10:00:00.000Z"),
+      requesterPublicId: null,
+      mandatePublicId: "mnd_0123456789abcdefghjkmn",
+      ruleIds: [
+        "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
+        "mandate:mnd_0123456789abcdefghjkmn:always_human_for:moves_money",
+      ],
+    });
+    expect(item.mandateId).toBe("mnd_0123456789abcdefghjkmn");
+    expect(item.chain.rule).toBe(
+      "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
+    );
+    expect(item.requester).toBeNull();
   });
 });
 

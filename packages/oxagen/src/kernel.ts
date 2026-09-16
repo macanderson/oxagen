@@ -283,6 +283,19 @@ export function setCapabilityEntitlementGate(
 // throws @oxagen/rules' DecisionRuleDeniedError /
 // DecisionRuleApprovalRequiredError to refuse, and MUST fail open on its own
 // infrastructure (a broken rules store never takes every action down with it).
+//
+// A gate may return a settlement (ADR-059 decision 4): the mandate check
+// reserves authority at decision time, and the kernel calls `settle` with the
+// validated output once the handler definitively succeeded, or `release`
+// when the handler threw or its output failed validation. Neither call may
+// fail the invocation: the ledger is the record of what was decided, and a
+// call that ran is not un-run by a failed bookkeeping write, so the kernel
+// reports and continues.
+
+export interface DecisionSettlement {
+  settle(output: unknown): Promise<void>;
+  release(): Promise<void>;
+}
 
 export type DecisionRulesKernelGateFn = (args: {
   capability: string;
@@ -292,8 +305,11 @@ export type DecisionRulesKernelGateFn = (args: {
     workspaceId: string | null;
     userId: string | null;
     surface?: string;
+    requestId?: string;
   };
-}) => Promise<void>;
+  /** The IAM-resolved acting principal, or null (the non-enterprise fast-path). */
+  principal: ResolvedPrincipal | null;
+}) => Promise<void | DecisionSettlement>;
 
 let _decisionRulesGate: DecisionRulesKernelGateFn | null = null;
 
@@ -554,6 +570,28 @@ const cache = new Map<string, CapabilityHandlerFn>();
 // kernel it invalidates its importers too, so a fresh `loaders` always comes
 // with a fresh `registeredTokens`. See `registerHandlersOnce`.
 const registeredTokens = new Set<string>();
+
+/**
+ * Apply the decision gate's settlement once the handler's outcome is known:
+ * `settle` with the validated output on success, `release` otherwise. A
+ * failure here is logged and never replaces the invocation's own outcome.
+ */
+async function applyDecisionSettlement(
+  settlement: DecisionSettlement | null,
+  capability: string,
+  success: { output: unknown } | null,
+): Promise<void> {
+  if (settlement === null) return;
+  try {
+    if (success) await settlement.settle(success.output);
+    else await settlement.release();
+  } catch (err) {
+    console.error(
+      `[kernel] decision settlement (${success ? "settle" : "release"}) failed for "${capability}" — the ledger did not record the outcome:`,
+      err,
+    );
+  }
+}
 
 export type CapabilityErrorCode =
   | "unknown_capability"
@@ -1170,6 +1208,9 @@ async function _invokeCoreInner(
   // never reaches here because the forged-binding guard above rejects the
   // whole invocation first.
   let authorizationDecision: AuthorizationDecisionRef | null = null;
+  // The settlement the decision gate handed back, applied once the handler's
+  // outcome is known (ADR-059 decision 4). Null when the gate reserved nothing.
+  let decisionSettlement: DecisionSettlement | null = null;
   try {
     output = await withScope(async () => {
       // ── IAM check ────────────────────────────────────────────────────────
@@ -1428,7 +1469,7 @@ async function _invokeCoreInner(
       // alike — a rule about refunds binds the action, not the door it came
       // through.
       if (_decisionRulesGate !== null && ctx.orgId && isScoped) {
-        await _decisionRulesGate({
+        const settlement = await _decisionRulesGate({
           capability: canonical,
           // The VALIDATED input — the same value the handler receives, so a
           // rule and the action it governs read one shape.
@@ -1438,8 +1479,11 @@ async function _invokeCoreInner(
             workspaceId: ctx.workspaceId ?? null,
             userId: ctx.userId ?? null,
             surface: opts?.surface,
+            requestId: ctx.requestId,
           },
+          principal: resolvedPrincipal,
         });
+        if (settlement) decisionSettlement = settlement;
       }
       // ── End decision-rules gate ─────────────────────────────────────────────
 
@@ -1477,6 +1521,14 @@ async function _invokeCoreInner(
       );
     });
   } catch (err) {
+    // A settlement exists only when the first withScope succeeded, so
+    // re-entering the scope here cannot throw on the fail-closed path (orgId
+    // "") and the deny event below still reaches the audit chain.
+    if (decisionSettlement !== null) {
+      await withScope(() =>
+        applyDecisionSettlement(decisionSettlement, canonical, null),
+      );
+    }
     // Distinguish CapabilityError (handler not found → deny) from a
     // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP
     // orgId:"" fail-open path) carries a stable `code` we surface to the
@@ -1535,6 +1587,9 @@ async function _invokeCoreInner(
 
   const outputResult = cap.output.safeParse(output);
   if (!outputResult.success) {
+    await withScope(() =>
+      applyDecisionSettlement(decisionSettlement, canonical, null),
+    );
     emitSecurityEvent({
       capability: canonical,
       outcome: "error",
@@ -1567,7 +1622,13 @@ async function _invokeCoreInner(
     );
   }
 
-  // Successful invocation.
+  // Successful invocation: the reserved authority, if any, is settled on the
+  // validated output (the effect happened; its id is read from the output).
+  await withScope(() =>
+    applyDecisionSettlement(decisionSettlement, canonical, {
+      output: outputResult.data,
+    }),
+  );
   emitSecurityEvent({
     capability: canonical,
     outcome: "allow",

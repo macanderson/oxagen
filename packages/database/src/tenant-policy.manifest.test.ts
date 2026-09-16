@@ -137,6 +137,9 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
+    // 106 as of tools.mandates and tools.mandate_ledger (ADR-059, G2957) over
+    // the 104 this branch merged, which counted org.onboarding_state and
+    // tacho.enrollment_tokens (#2967, ADR-065). Was
     // 102 as of cost.findings (ADR-062, G2963). Was 101 as of
     // agent.context_proposals and agent.context_appends (ADR-061, #2961).
     // Was 99 as of evidence.run_exports (ADR-058, #2952).
@@ -149,7 +152,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(102);
+    expect(POLICY_MANIFEST.length).toBe(106);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

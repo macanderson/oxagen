@@ -2663,6 +2663,114 @@
       }
     },
     {
+      "name": "get_mandate",
+      "file": "mandate.get.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "grant_mandate",
+      "file": "mandate.grant.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "update_mandate_limits",
+      "file": "mandate.limits.update.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_mandates",
+      "file": "mandate.list.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "request_mandate",
+      "file": "mandate.request.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "revoke_mandate",
+      "file": "mandate.revoke.ts",
+      "domain": "mandate",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_model_capabilities",
       "file": "model.capability.list.ts",
       "domain": "model",
@@ -2713,6 +2821,55 @@
         "mcp": true,
         "unit": true,
         "app": true
+      }
+    },
+    {
+      "name": "advance_onboarding",
+      "file": "onboarding.advance.ts",
+      "domain": "onboarding",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_first_frame",
+      "file": "onboarding.first_frame.get.ts",
+      "domain": "onboarding",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_onboarding_state",
+      "file": "onboarding.state.get.ts",
+      "domain": "onboarding",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -3616,6 +3773,21 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "bind_main_repository",
+      "file": "repository.main.bind.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }
@@ -4605,12 +4777,44 @@
       }
     },
     {
+      "name": "create_enrollment_token",
+      "file": "tacho.enrollment_token.create.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "ingest_tacho_events",
       "file": "tacho.events.ingest.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [
         "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "enroll_host",
+      "file": "tacho.host.enroll.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "layers": {
         "schema": true,

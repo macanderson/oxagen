@@ -45,6 +45,15 @@
       "writes": []
     },
     {
+      "domain": "onboarding",
+      "name": "advance_onboarding",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "append_record",
       "reads": [],
@@ -124,6 +133,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "bind_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -253,6 +271,16 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "create_enrollment_token",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -587,6 +615,16 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "enroll_host",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
       "domain": "privacy",
       "name": "erase_data",
       "reads": [],
@@ -893,6 +931,16 @@
       "writes": []
     },
     {
+      "domain": "onboarding",
+      "name": "get_first_frame",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_gau_bucket",
       "reads": [],
@@ -939,6 +987,17 @@
     {
       "domain": "integration",
       "name": "get_integration_metrics",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "get_mandate",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1017,6 +1076,16 @@
       "reads": [],
       "surfaces": [
         "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "onboarding",
+      "name": "get_onboarding_state",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -1321,6 +1390,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "grant_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "import_env_secrets",
       "reads": [],
@@ -1614,6 +1694,17 @@
       "name": "list_invoices",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "list_mandates",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2261,6 +2352,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "request_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "resolve_approval",
       "reads": [],
@@ -2347,6 +2449,17 @@
     {
       "domain": "api_key",
       "name": "revoke_api_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "revoke_mandate",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2867,6 +2980,17 @@
       "writes": []
     },
     {
+      "domain": "mandate",
+      "name": "update_mandate_limits",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "update_memory",
       "reads": [],
@@ -3067,7 +3191,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9ec8ff5738ec5908cdb3098d85ba7afc15661871db3f6a44d739118bfa99816e",
+  "contentHash": "df57f091a04776155613b8fe276596c56aff8ab3ada7e00f1f115cf96fe7ba57",
   "domains": [
     {
       "name": "agent",
@@ -3330,6 +3454,7 @@
         "postgres:org.data_planes",
         "postgres:org.invitations",
         "postgres:org.model_credentials",
+        "postgres:org.onboarding_state",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
         "postgres:org.organizations"
@@ -3397,6 +3522,7 @@
       "tables": [
         "postgres:tacho.checkpoints",
         "postgres:tacho.control_commands",
+        "postgres:tacho.enrollment_tokens",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
         "postgres:tacho.session_commands",
@@ -3415,6 +3541,16 @@
         "clickhouse:events",
         "clickhouse:execution_logs",
         "clickhouse:tool_invocations"
+      ]
+    },
+    {
+      "name": "tools",
+      "stores": [
+        "postgres"
+      ],
+      "tables": [
+        "postgres:tools.mandate_ledger",
+        "postgres:tools.mandates"
       ]
     },
     {
@@ -3467,11 +3603,12 @@
         "schema_registry",
         "security",
         "tacho",
+        "tools",
         "workspace"
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 121
+      "tableCount": 125
     },
     {
       "domains": [
@@ -6931,6 +7068,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "registered_via",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -7004,7 +7147,7 @@
         },
         {
           "name": "message_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
@@ -7025,6 +7168,30 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "mandate_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "rule_ids",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "resolution",
@@ -7870,6 +8037,24 @@
         {
           "name": "checksum",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "consequence_tags",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "measures",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "effect_id_path",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         }
@@ -15018,6 +15203,76 @@
     {
       "columns": [
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "step",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "first_frame_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "first_run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provisional_until",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "main_repo_bound_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "detected_repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.onboarding_state",
+      "name": "onboarding_state",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -16801,6 +17056,94 @@
       "domain": "tacho",
       "id": "postgres:tacho.control_commands",
       "name": "control_commands",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "token_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "issued_to_user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "used_by_host_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "rejected_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.enrollment_tokens",
+      "name": "enrollment_tokens",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -18770,6 +19113,255 @@
           "type": "uuid"
         },
         {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "mandate_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:tools.mandates",
+          "type": "uuid"
+        },
+        {
+          "name": "tool_call_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "measure",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "value",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "numeric"
+        },
+        {
+          "name": "unit_or_currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "external_effect_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "period_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "balance_after",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "numeric"
+        }
+      ],
+      "domain": "tools",
+      "id": "postgres:tools.mandate_ledger",
+      "name": "mandate_ledger",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "requested_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "granted_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "role_at_grant",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "consequence_tags",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "limits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "targets",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "tools",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "approval_rules",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "purpose",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "valid_from",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "valid_to",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "revoked_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "revoked_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "tools",
+      "id": "postgres:tools.mandates",
+      "name": "mandates",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -19181,6 +19773,12 @@
         },
         {
           "name": "settings",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "consequence_roles",
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"

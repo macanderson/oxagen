@@ -60,8 +60,37 @@ describe("agent.approval.resolve capability", () => {
     const parsed = agentApprovalResolve.output.parse({
       approvalId: PUBLIC_ID,
       resolution: "approved",
+      mandate: null,
     });
     expect(parsed.resolution).toBe("approved");
+  });
+
+  it("carries the mandate settlement on a row the mandate gate parked, and refuses an outcome it cannot produce", () => {
+    const parsed = agentApprovalResolve.output.parse({
+      approvalId: PUBLIC_ID,
+      resolution: "denied",
+      mandate: {
+        mandateId: "mnd_0123456789abcdefghjkmn",
+        reserved: [
+          { measure: "amount", value: "250000000", unitOrCurrency: "USD" },
+        ],
+        outcome: "released",
+      },
+    });
+    expect(parsed.mandate?.outcome).toBe("released");
+    expect(
+      agentApprovalResolve.output.safeParse({
+        approvalId: PUBLIC_ID,
+        resolution: "approved",
+        mandate: { mandateId: "mnd_x", reserved: [], outcome: "settled" },
+      }).success,
+    ).toBe(false);
+    expect(
+      agentApprovalResolve.output.safeParse({
+        approvalId: PUBLIC_ID,
+        resolution: "approved",
+      }).success,
+    ).toBe(false);
   });
 
   it.each(["expired", "stalled"])(
@@ -71,6 +100,7 @@ describe("agent.approval.resolve capability", () => {
         agentApprovalResolve.output.safeParse({
           approvalId: PUBLIC_ID,
           resolution,
+          mandate: null,
         }).success,
       ).toBe(false);
     },

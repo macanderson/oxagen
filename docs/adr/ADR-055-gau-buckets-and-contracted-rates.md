@@ -426,3 +426,29 @@ an invoice and accrual restarts.
   the Appendix E billing rows and the "billing.invoices is gone" row of
   A.10 are superseded by this ADR; the spec carries a dated amendment at
   each place.
+
+## Amendment 2026-09-15: two meters
+
+Maintainer decision, 2026-09-15. Oxagen charges on two meters.
+
+1. **Governed actions, in GAUs.** This ADR's model, at the figures in
+   `docs/specs/governed-action-metering.md` §4: list $5 per 1,000, 5,000-GAU
+   blocks at $25, Free 5,000 GAU a month, Build $199 a month with 50,000,
+   Scale $999 a month with 300,000, Enterprise negotiated on its
+   `billing.contract_terms` row, every feature on every tier, volume bands
+   $5 / $4 / $3 / $2 per 1,000. `resolve_approval` is the billable governed
+   action and membership writes are free (§14).
+2. **In-app AI usage, in usage credits.** 1 credit = $0.01. The credit gate
+   meters the in-app agent's model calls at provider cost times the meter
+   markup (`packages/billing/src/pricing.ts`), under ADR-053 §3. A new
+   organisation's balance is the $5 signup grant `create_org` writes, in
+   place of §13's "grants no credits"; credit packs bought through
+   `purchase_credits` top it up. Tokens are not passed through at cost.
+
+The meters share no balance: credits never buy GAUs, and a GAU block never
+adds credits. Proven spend stays a report figure on neither meter. §12 still
+holds for token counts. The billing page adds the usage credit balance and
+its top-up beside the GAU bucket and the contracted rate
+(`apps/app/ARCHITECTURE.md` §1.4, WL-67), so money also renders in that
+section, beside the rate block, the purchase total and the invoices named in
+the second Consequences bullet.

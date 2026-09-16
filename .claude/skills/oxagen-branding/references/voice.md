@@ -23,7 +23,8 @@ A senior engineer who has read the logs and is telling you what happened.
 | Website hero | Most compressed. One claim, one sentence of how, one action. | The agent doesn't get to decide it's done. Oxagen locks a definition of done before the first tool call and blocks the run until it holds. Wrap Claude Code in sixty seconds. |
 | Product page | Explains the mechanism in order. Reads like a good README. | see `examples.md` |
 | Docs | Second person, imperative, one step per sentence. | Add two hooks to your Claude Code settings. Run a prompt. The lock appears before the first tool call. |
-| UI strings | Terse, present tense, never a full sentence where a fragment reads faster. | Stop blocked. Broken: unit, scope. |
+| UI strings | Terse, present tense, never a full sentence where a fragment reads faster. | Stop blocked. Broken: unit, scope. Denied by rule `no-push-main`. |
+| Access requests | The request first, then the answer, then who gave it. Never the credential. | Push to `release/2026.09` requested by stella for Dana's task. Waiting on Priya, rule `release-branch`. |
 | Errors | Say what happened and what to do, in that order. Never apologize. | The dod on disk does not match the lock. Restore `$OXAGEN_RUN_DIR/dod.toml` or start a new run. |
 | Sales email | Two short paragraphs. The first names their situation. The second names one thing Oxagen would show them. | see `examples.md` |
 | Launch post | Same as the product page, plus one paragraph on why now. No "we're thrilled." | see `examples.md` |
@@ -64,6 +65,18 @@ After: Every frame is hash-chained to the one before it, and the seal signs the 
 **Marketing "we"**
 Before: We believe agents should be accountable.
 After: A run cannot end until its dod holds.
+
+**Handing over the keys**
+Before: Connect your agent to GitHub, Slack, and your database in one click.
+After: The agent asks for GitHub when the task needs it. A rule you wrote answers, or a person you named does. The key stays in Oxagen.
+
+**Automation as the sell**
+Before: Requests are auto-approved so your agents never wait.
+After: Reads of the public repo are allowed by rule. A push to main is denied by rule. A push to a release branch waits on the release owner.
+
+**Vault talk**
+Before: Enterprise-grade secret management keeps your credentials safe.
+After: The agent never sees the key. There is nothing for it to leak.
 
 ## Punctuation and typography
 

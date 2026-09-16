@@ -6,7 +6,9 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
+  noOperatorMessage,
   resolveActorOrgRole as resolveActorRole,
+  resolveOperatorUserId,
 } from "./lib/api-key-authz";
 import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
 import { logger } from "./logger";
@@ -27,10 +29,12 @@ function denied(message: string): CapabilityError {
 export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   typeof tachoEnrollmentRevoke
 > = async (input, ctx) => {
-  if (!ctx.userId) throw denied("Unauthorized: no authenticated user");
   if (!ctx.orgId) throw denied("Forbidden: orgId is required");
-  const userId = ctx.userId;
-  const actorRole = await resolveActorRole(ctx.orgId, userId);
+  // `tacho unenroll` and a harness change revoke with the `oxagen login` key;
+  // a host's own machine-bound key never acts for a person.
+  const operatorUserId = await resolveOperatorUserId(ctx);
+  if (!operatorUserId) throw denied(noOperatorMessage(ctx));
+  const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
   if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
     throw denied(
       "Forbidden: only org Owners and Admins can revoke Tacho hosts",
@@ -54,7 +58,7 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
     await revokeHostEnrollment(tx, host, {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      userId,
+      userId: operatorUserId,
       reason: input.reason ?? null,
       now,
     });
@@ -64,7 +68,7 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   if (!result.already) {
     emitSecurityEvent({
       eventType: "api_key.revoked",
-      actorUserId: ctx.userId,
+      actorUserId: operatorUserId,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       capability: "revoke_tacho_enrollment",

@@ -1,19 +1,19 @@
 ---
 title: Permissions
-description: Control which external MCP tools are allowed, denied, or require confirmation before execution.
+description: Write rules that allow an external MCP tool, deny it, or ask a person to confirm before it runs.
 ---
 
-The permission system lets you control what external MCP tools can do: without modifying the MCP server itself. Permissions are defined in the same settings files as server definitions and use glob patterns for flexible matching.
+Permission rules decide what an external MCP tool may do, without any change to the MCP server itself. The rules live in the same settings files as the server definitions and match tool names with glob patterns.
 
-## Permission policies
+## Three answers
 
-Every tool invocation is evaluated against one of three policies:
+A rule gives every tool call one of three answers:
 
 | Policy | Behavior |
 |--------|----------|
-| `allow` | Tool executes immediately without prompting |
-| `deny` | Tool is blocked: never shown to the model or executed |
-| `ask` | User is prompted for confirmation before execution (default) |
+| `allow` | The tool runs without asking anyone |
+| `deny` | The tool is withheld: the model never sees it and it never runs |
+| `ask` | The person running the turn confirms before the tool runs (default) |
 
 ## Configuration
 
@@ -40,14 +40,14 @@ Every tool invocation is evaluated against one of three policies:
 
 ## Evaluation order
 
-Rules are evaluated in this order (first match wins):
+The runtime checks rules in this order, and the first match wins:
 
-1. **Per-server deny rules**: if the tool matches any deny pattern, it's blocked
-2. **Per-server allow rules**: if the tool matches any allow pattern, it's permitted
+1. **Per-server deny rules**: a tool that matches any deny pattern is denied
+2. **Per-server allow rules**: a tool that matches any allow pattern is allowed
 3. **Per-server `defaultPolicy`**: applies when no specific rule matches
-4. **Global `defaultMcpPolicy`**: fallback when no server-level config exists
+4. **Global `defaultMcpPolicy`**: the fallback when no server-level config exists
 
-Deny always takes priority over allow at the same scope level. This means you can safely write:
+At the same scope, deny wins over allow. So you can write:
 
 ```json
 {
@@ -56,7 +56,7 @@ Deny always takes priority over allow at the same scope level. This means you ca
 }
 ```
 
-This allows all tools except those starting with `delete_`.
+This allows every tool except those that start with `delete_`.
 
 ## Glob patterns
 
@@ -72,18 +72,18 @@ Patterns support wildcards:
 
 ## How denied tools work
 
-Denied tools are **never advertised to the model**. They are filtered out during tool materialization, before the model sees the tool list. This means:
+The model is **never shown a denied tool**. Tool materialization filters denied tools out before the model sees the tool list. As a result:
 
-- The model cannot attempt to call a denied tool
-- No consent card is shown for denied tools
-- Denied tools do not consume context window space
-- The user never sees the tool in the chat interface
+- The model cannot call a denied tool
+- No consent card appears for a denied tool
+- A denied tool takes no context window space
+- The person running the turn never sees the tool in the chat interface
 
 ## Scope precedence for permissions
 
-When the same server has permission rules in multiple scopes:
+When the same server has permission rules in more than one scope:
 
-- `deny` and `allow` lists **append** across scopes (all rules apply)
+- `deny` and `allow` lists **append** across scopes (every rule applies)
 - `defaultPolicy` follows the standard override order: local > project > user
 
 Example with two scopes:
@@ -119,7 +119,7 @@ Effective result: `defaultPolicy: "allow"`, deny: `["delete_repository", "force_
 
 ## Tool visibility
 
-Separate from permissions, **tool visibility** controls which tools are shown to the model at all: even if they would be allowed by permissions:
+Separate from permissions, **tool visibility** decides which tools the model sees at all, including tools a permission rule would allow:
 
 ```json
 {
@@ -136,17 +136,17 @@ Separate from permissions, **tool visibility** controls which tools are shown to
 
 | Field | Behavior |
 |-------|----------|
-| `include` | Only these tools are shown (whitelist). Glob patterns. |
-| `exclude` | These tools are hidden (blacklist). Applied after include. Glob patterns. |
+| `include` | Only these tools are shown (allowlist). Glob patterns. |
+| `exclude` | These tools are hidden (denylist). Applied after include. Glob patterns. |
 
-If a server exposes 40 tools but you only need 3, use `include` to keep the model's context focused.
+If a server exposes 40 tools and you need 3, use `include` to keep the model's context focused.
 
 ## Interaction with platform IAM
 
-When both file-based permissions and platform IAM policies apply (e.g. when using the platform runtime), the most restrictive policy wins:
+When file-based permissions and platform IAM policies both apply (for example, on the platform runtime), the stricter answer wins:
 
-- If file-based config says `allow` but platform IAM says `deny` → denied
-- If file-based config says `deny` → denied (regardless of platform IAM)
-- If file-based config says `ask` and platform IAM says `allow` → ask
+- File-based config says `allow` and platform IAM says `deny` → denied
+- File-based config says `deny` → denied, whatever platform IAM says
+- File-based config says `ask` and platform IAM says `allow` → ask
 
-The file-based permission system is designed to be the **developer-side** control. Platform IAM is the **org-admin-side** control. Both are enforced independently.
+File-based permissions are the developer's control. Platform IAM is the org admin's control. Each one is enforced on its own.

@@ -35,6 +35,7 @@
     "@oxagen/plugins": "workspace:*",
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",
+    "@oxagen/rules": "workspace:*",
     "@oxagen/stella-engine-client": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

@@ -11,13 +11,16 @@ import { eq } from "drizzle-orm";
 import { grantSignupCredits } from "@oxagen/billing";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
+import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
- * the IAM roles and grants, and the first workspace with everything a
- * workspace needs, and the $5 signup grant (grantSignupCredits), in one
- * system transaction. The grant funds the in-app agent's platform-paid turns
+ * the IAM roles and grants, the first workspace with everything a workspace
+ * needs, the onboarding gate opened on that workspace (#2967: the
+ * organization exists, so the gate is at `wrap` with its 14-day provisional
+ * window), and the $5 signup grant (grantSignupCredits), in one system
+ * transaction. The grant funds the in-app agent's platform-paid turns
  * (ADR-053 §2; apps/app/ARCHITECTURE.md §9, 2026-09-15), so an org never
  * exists without it. No other billing row is written: no contract_terms,
  * gau_buckets or gau_settlements row, and the billing settings row appears on
@@ -133,6 +136,12 @@ export const organizationCreateHandler: CapabilityHandler<
       // back rather than leaving an org whose first assistant turn the credit
       // gate refuses.
       await grantSignupCredits(tx, org.id);
+
+      await openOnboardingGate(tx, {
+        orgId: org.id,
+        workspaceId: workspace.id,
+        now: org.createdAt,
+      });
 
       return { org, workspace };
     });

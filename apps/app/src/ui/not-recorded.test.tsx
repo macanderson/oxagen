@@ -46,7 +46,7 @@ describe("NotRecorded", () => {
       "G6",
     );
     cleanup();
-    renderWithIntl(<NotRecorded section="agents" />);
+    renderWithIntl(<NotRecorded section="tools" />);
     expect(screen.getByTestId("not-recorded")).not.toHaveAttribute("data-gap");
   });
 
