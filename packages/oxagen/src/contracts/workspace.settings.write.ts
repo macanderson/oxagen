@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlSchema, avatarUrlOutputSchema } from "../avatar";
+import { consequenceRolesSchema } from "../mandates/schemas";
 
 // Partial update of a workspace's general settings. Every field optional:
 //   omit = unchanged, value = set, null = clear (description + avatar).
@@ -11,7 +12,7 @@ export const workspaceSettingsWrite = registerCapability({
   name: "update_workspace_settings",
   domain: "workspace",
   description:
-    "Update a workspace's general settings (partial): name, slug, and description. The active workspace unless workspaceId names another one in the organization. The handler checks roles: org Owners and Admins edit any workspace of the organization; the Owner or Admin of the workspace the call is scoped to edits that workspace only, without workspaceId.",
+    "Update a workspace's general settings (partial): name, slug, description, and the consequence-role overrides for mandates. The active workspace unless workspaceId names another one in the organization. The handler checks roles: org Owners and Admins edit any workspace of the organization; the Owner or Admin of the workspace the call is scoped to edits that workspace only, without workspaceId. Only an org Owner writes consequenceRoles.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -53,12 +54,17 @@ export const workspaceSettingsWrite = registerCapability({
     // designed-avatar string), null = clear the avatar. Models avatarUrl exactly
     // like org.settings.write (partial, nullable-to-clear).
     avatarUrl: avatarUrlSchema.nullable().optional(),
+    // The consequence-role overrides (ADR-059 decision 1): tag → org roles.
+    // Replaces the stored overrides as a whole; a tag left out falls back to
+    // the defaults. Omit = unchanged.
+    consequenceRoles: consequenceRolesSchema.optional(),
   }),
   output: z.object({
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
     avatarUrl: avatarUrlOutputSchema,
+    consequenceRoles: consequenceRolesSchema,
   }),
 });
 
