@@ -168,6 +168,19 @@ pnpm billing:stripe-sync --apply
 # DB-side:
 psql "$DATABASE_URL" -c \
   "select slug, monthly_cents, included_credit_cents, stripe_product_id from billing.plans where slug like '%-v2';"
+
+# End-to-end: every price in the catalogue must open a Checkout session. This is
+# the check that catches a price archived out from under billing.plans, which a
+# row-level SELECT cannot see.
+for lk in build_v2_month scale_v2_month enterprise_v2_month; do
+  pid=$(curl -sS "https://api.stripe.com/v1/prices?lookup_keys[]=$lk&active=true&limit=1" \
+    -u "$STRIPE_SECRET_KEY:" | jq -r '.data[0].id')
+  curl -sS https://api.stripe.com/v1/checkout/sessions -u "$STRIPE_SECRET_KEY:" \
+    -d mode=subscription -d "line_items[0][price]=$pid" -d "line_items[0][quantity]=1" \
+    --data-urlencode 'success_url=https://app.oxagen.sh/billing' \
+    --data-urlencode 'cancel_url=https://app.oxagen.sh/billing' \
+    | jq -r '"'"'"\(.id) livemode=\(.livemode) amount=\(.amount_total)"'"'"'
+done
 ```
 
 ---
