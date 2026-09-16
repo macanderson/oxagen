@@ -126,3 +126,114 @@ describe("kernel decision-rules gate", () => {
     expect(gate).not.toHaveBeenCalled();
   });
 });
+
+// ── The settlement seam (ADR-059 decision 4) ─────────────────────────────────
+//
+// A gate may return `{ settle, release }`. The kernel calls exactly one of
+// them once the handler's outcome is known — settle with the validated
+// output on success, release on a throw or on an output that fails the
+// contract — inside the tenant scope, and a settlement that throws never
+// replaces the invocation's own outcome.
+
+describe("kernel decision-rules gate — settlement", () => {
+  const settlementDouble = () => {
+    const calls: string[] = [];
+    const settled: unknown[] = [];
+    return {
+      calls,
+      settled,
+      settlement: {
+        settle: async (output: unknown) => {
+          calls.push("settle");
+          settled.push(output);
+        },
+        release: async () => {
+          calls.push("release");
+        },
+      },
+    };
+  };
+
+  it("settles once with the validated output after a successful handler", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({
+      ok: true,
+      extra: "stripped",
+    }));
+    const d = settlementDouble();
+    setDecisionRulesGate(async () => d.settlement);
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx),
+    ).resolves.toEqual({ ok: true });
+    expect(d.calls).toEqual(["settle"]);
+    expect(d.settled).toEqual([{ ok: true }]);
+  });
+
+  it("releases when the handler throws, and the throw is still the outcome", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => {
+      throw new Error("provider down");
+    });
+    const d = settlementDouble();
+    setDecisionRulesGate(async () => d.settlement);
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx),
+    ).rejects.toThrow("provider down");
+    expect(d.calls).toEqual(["release"]);
+  });
+
+  it("releases when the output fails the contract", async () => {
+    registerRefund();
+    registerHandler(
+      "test.refund",
+      async () => async () => ({ ok: "yes" }) as unknown as { ok: boolean },
+    );
+    const d = settlementDouble();
+    setDecisionRulesGate(async () => d.settlement);
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx),
+    ).rejects.toThrow(/invalid_output|output/i);
+    expect(d.calls).toEqual(["release"]);
+  });
+
+  it("hands the gate the resolved principal and the request id", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    const seen: unknown[] = [];
+    setDecisionRulesGate(async (args) => {
+      seen.push({ principal: args.principal, requestId: args.ctx.requestId });
+    });
+    await invoke("test.refund", { amount_usd: 10 }, ctx);
+    // No IAM runtime is registered in this test, so the principal is null;
+    // the field is present either way.
+    expect(seen).toEqual([{ principal: null, requestId: "r" }]);
+  });
+
+  it("a settlement that throws is reported and never replaces the invocation's outcome", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    setDecisionRulesGate(async () => ({
+      settle: async () => {
+        throw new Error("ledger unavailable");
+      },
+      release: async () => undefined,
+    }));
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx),
+    ).resolves.toEqual({ ok: true });
+    expect(error).toHaveBeenCalledWith(
+      expect.stringMatching(/decision settlement \(settle\) failed/),
+      expect.any(Error),
+    );
+  });
+
+  it("a gate that returns nothing settles nothing", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    setDecisionRulesGate(async () => undefined);
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx),
+    ).resolves.toEqual({ ok: true });
+  });
+});

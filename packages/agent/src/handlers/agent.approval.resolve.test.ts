@@ -13,9 +13,22 @@
  *     the org and workspace filters, the expiry guard and the unresolved
  *     guard stay in the WHERE either way
  *   - no row matched (unknown, expired, already resolved, wrong tenant) →
- *     HandlerError conflict `approval_expired`, no NOTIFY
+ *     HandlerError conflict `approval_expired`, no NOTIFY; the same when the
+ *     row lapsed between the read and the UPDATE
  *   - through the kernel with a fake usage recorder: a matched decision is
  *     recorded once; the conflict and the forbidden paths record nothing
+ *   - mandate hop (ADR-059): a row carrying mandate_id and tool_call_id →
+ *     `denied` releases the reservation under the mandate lock and reports
+ *     `released`, in the one transaction the UPDATE runs in; `approved`
+ *     releases nothing and reports `held`; a row with no mandate reports
+ *     null and never touches the ledger
+ *   - who answers a mandate row (§6.9, INV-29): a workspace Member who
+ *     passes the wide gate but holds no role for moves_money → forbidden,
+ *     no lock, no release, no UPDATE; an agent principal (resolved or on an
+ *     agent run) → forbidden `agent_cannot_resolve_own_mandate`; an org
+ *     Billing user resolves; approvers narrow it: a role outside the list
+ *     → `not_an_approver`, a user the list names resolves; a mandate row
+ *     gone at the read → `approval_expired`
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,6 +52,31 @@ import "@oxagen/oxagen/contracts/agent.approval.resolve";
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   notifyResolution: vi.fn(async () => undefined),
+  lockMandate: vi.fn(async (_tx: unknown, id: string) => ({
+    id,
+    publicId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
+  })),
+  release: vi.fn(async () => 1),
+}));
+
+vi.mock("@oxagen/rules", () => ({
+  lockMandate: mocks.lockMandate,
+  release: mocks.release,
+  parseMandateRow: (row: {
+    id: string;
+    publicId: string;
+    consequenceTags: string[];
+    approvalRules: { approvers: string[] };
+  }) => ({
+    id: row.id,
+    publicId: row.publicId,
+    consequenceTags: row.consequenceTags,
+    approval: {
+      humanAbove: {},
+      alwaysHumanFor: [],
+      approvers: row.approvalRules.approvers,
+    },
+  }),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -64,11 +102,34 @@ type Tenant = {
   principalId: string | null;
   orgRole: string | null;
   workspaceRole: string | null;
-  /** The uuid RETURNING yields when the UPDATE matched a row; null for no match. */
+  /** The uuid of the pending row the read finds; null for no match. */
   matchedRowId: string | null;
+  /** The mandate hop on the matched row (ADR-059); absent for a chat gate row. */
+  mandate?: {
+    mandateId: string;
+    toolCallId: string;
+    /** The mandate's tags; moves_money when absent. */
+    tags?: string[];
+    approvers?: string[];
+    /** False when the mandate row is not found. */
+    exists?: boolean;
+  };
+  /** The workspace's consequence-role overrides. */
+  consequenceRoles?: Record<string, string[]>;
+  /** The caller's users.public_id. */
+  userPublicId?: string;
+  /** False when the row lapsed between the read and the UPDATE. */
+  updateMatches?: boolean;
 };
 
-type Captured = { set: Record<string, unknown> | null; where: SQL | null };
+type Captured = {
+  set: Record<string, unknown> | null;
+  where: SQL | null;
+  /** The tx the UPDATE ran on. */
+  updateTx: unknown;
+  /** Whether `release` had run when the UPDATE started. */
+  releasedBeforeUpdate: boolean;
+};
 
 /**
  * Answers the role lookups by the table read and the scope the WHERE pinned
@@ -83,7 +144,23 @@ function makeTx(tenant: Tenant, captured: Captured) {
     const name = pinsWorkspace ? tenant.workspaceRole : tenant.orgRole;
     return name ? [{ roleName: name }] : [];
   };
-  return {
+  const pendingRow = () =>
+    tenant.matchedRowId
+      ? [
+          {
+            mandateId: tenant.mandate?.mandateId ?? null,
+            toolCallId: tenant.mandate?.toolCallId ?? null,
+          },
+        ]
+      : [];
+  const tx = {
+    query: {
+      workspaces: {
+        findFirst: async () => ({
+          consequenceRoles: tenant.consequenceRoles ?? {},
+        }),
+      },
+    },
     select: () => ({
       from: (table: unknown) => {
         let lastWhere: SQL | null = null;
@@ -109,7 +186,43 @@ function makeTx(tenant: Tenant, captured: Captured) {
             if (table === schema.principalRoleAssignments) {
               return Promise.resolve(roleRows(lastWhere));
             }
+            if (table === schema.approvalRequests) {
+              return Promise.resolve(pendingRow());
+            }
+            if (table === schema.mandates) {
+              const m = tenant.mandate;
+              return Promise.resolve(
+                m && m.exists !== false
+                  ? [
+                      {
+                        id: m.mandateId,
+                        publicId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
+                        consequenceTags: m.tags ?? ["moves_money"],
+                        approvalRules: { approvers: m.approvers ?? [] },
+                      },
+                    ]
+                  : [],
+              );
+            }
+            if (table === schema.users) {
+              return Promise.resolve(
+                tenant.userPublicId ? [{ publicId: tenant.userPublicId }] : [],
+              );
+            }
             throw new Error("unexpected table");
+          },
+          // The ledger read of the mandate hop: one open reservation.
+          then: (resolve: (rows: unknown[]) => unknown) => {
+            if (table !== schema.mandateLedger)
+              throw new Error("unexpected table");
+            return resolve([
+              {
+                measure: "amount",
+                value: "250000000",
+                unitOrCurrency: "USD",
+                kind: "reserve",
+              },
+            ]);
           },
         };
         return chain;
@@ -121,13 +234,17 @@ function makeTx(tenant: Tenant, captured: Captured) {
       return {
         set: (values: Record<string, unknown>) => {
           captured.set = values;
+          captured.updateTx = tx;
+          captured.releasedBeforeUpdate = mocks.release.mock.calls.length > 0;
           return {
             where: (cond: SQL) => {
               captured.where = cond;
               return {
                 returning: () =>
                   Promise.resolve(
-                    tenant.matchedRowId ? [{ id: tenant.matchedRowId }] : [],
+                    tenant.matchedRowId && tenant.updateMatches !== false
+                      ? [{ id: tenant.matchedRowId }]
+                      : [],
                   ),
               };
             },
@@ -136,6 +253,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
       };
     },
   };
+  return tx;
 }
 
 const ROW_UUID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
@@ -150,7 +268,12 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     matchedRowId: ROW_UUID,
     ...overrides,
   };
-  const captured: Captured = { set: null, where: null };
+  const captured: Captured = {
+    set: null,
+    where: null,
+    updateTx: null,
+    releasedBeforeUpdate: false,
+  };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx(tenant, captured))),
   );
@@ -177,7 +300,11 @@ describe("resolve_approval — role gate", () => {
         { approvalId: PUBLIC_ID, decision: "approved" },
         CTX,
       ),
-    ).resolves.toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
+    ).resolves.toEqual({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+    });
   });
 
   it.each(["Owner", "Member"])(
@@ -189,7 +316,11 @@ describe("resolve_approval — role gate", () => {
           { approvalId: PUBLIC_ID, decision: "denied" },
           CTX,
         ),
-      ).resolves.toEqual({ approvalId: PUBLIC_ID, resolution: "denied" });
+      ).resolves.toEqual({
+        approvalId: PUBLIC_ID,
+        resolution: "denied",
+        mandate: null,
+      });
     },
   );
 
@@ -240,7 +371,11 @@ describe("resolve_approval — role gate", () => {
           { approvalId: PUBLIC_ID, decision: "approved" },
           KEY_CTX,
         ),
-      ).resolves.toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
+      ).resolves.toEqual({
+        approvalId: PUBLIC_ID,
+        resolution: "approved",
+        mandate: null,
+      });
       expect(captured.set?.resolvedByUserId).toBe("u_creator");
     });
 
@@ -317,17 +452,34 @@ describe("resolve_approval — the UPDATE", () => {
       resolution: "approved",
       note: null,
     });
-    expect(res).toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
+    expect(res).toEqual({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+    });
   });
 
   it("throws conflict approval_expired when no row matched, and notifies nobody", async () => {
-    setup({ matchedRowId: null });
+    const captured = setup({ matchedRowId: null });
     await expect(
       agentApprovalResolveHandler(
         { approvalId: PUBLIC_ID, decision: "approved" },
         CTX,
       ),
     ).rejects.toSatisfy(conflict);
+    expect(captured.set).toBeNull();
+    expect(mocks.notifyResolution).not.toHaveBeenCalled();
+  });
+
+  it("throws conflict approval_expired when the row lapsed between the read and the UPDATE", async () => {
+    const captured = setup({ updateMatches: false });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(conflict);
+    expect(captured.set).toMatchObject({ resolution: "approved" });
     expect(mocks.notifyResolution).not.toHaveBeenCalled();
   });
 });
@@ -375,7 +527,11 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
       { approvalId: PUBLIC_ID, decision: "approved" },
       kernelCtx,
     );
-    expect(out).toEqual({ approvalId: PUBLIC_ID, resolution: "approved" });
+    expect(out).toEqual({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+    });
     expect(recorder).toHaveBeenCalledTimes(1);
     expect(recorder.mock.calls[0]?.[0]).toMatchObject({
       capability: "resolve_approval",
@@ -422,5 +578,181 @@ describe("resolve_approval — governed-action accrual through the kernel", () =
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(captured.set).toBeNull();
     expect(recorder).not.toHaveBeenCalled();
+  });
+});
+
+// ── the mandate hop ──────────────────────────────────────────────────────────
+
+describe("resolve_approval — the mandate hop", () => {
+  const MANDATE_ID = "6f0c2a4e-1b3d-4c5e-8a7f-9d1e3b5c7a2f";
+  const TOOL_CALL_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+  it("denied: releases the reservation under the mandate lock, in the UPDATE's transaction, and reports released", async () => {
+    const captured = setup({
+      mandate: { mandateId: MANDATE_ID, toolCallId: TOOL_CALL_ID },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied" },
+      CTX,
+    );
+    // The lock, the release and the UPDATE share one transaction.
+    expect(captured.updateTx).not.toBeNull();
+    expect(mocks.lockMandate).toHaveBeenCalledWith(
+      captured.updateTx,
+      MANDATE_ID,
+    );
+    expect(mocks.release).toHaveBeenCalledWith(captured.updateTx, {
+      mandate: expect.objectContaining({ id: MANDATE_ID }),
+      toolCallId: TOOL_CALL_ID,
+    });
+    // The mandate row lock and the release precede the resolution write.
+    expect(captured.releasedBeforeUpdate).toBe(true);
+    expect(out.mandate).toEqual({
+      mandateId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
+      reserved: [
+        { measure: "amount", value: "250000000", unitOrCurrency: "USD" },
+      ],
+      outcome: "released",
+    });
+  });
+
+  it("approved: leaves the reservation held for the retry and reports held", async () => {
+    setup({ mandate: { mandateId: MANDATE_ID, toolCallId: TOOL_CALL_ID } });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(out.mandate?.outcome).toBe("held");
+    expect(out.mandate?.reserved).toHaveLength(1);
+  });
+
+  it("a row with no mandate never touches the ledger", async () => {
+    setup();
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied" },
+      CTX,
+    );
+    expect(mocks.lockMandate).not.toHaveBeenCalled();
+    expect(out.mandate).toBeNull();
+  });
+});
+
+// ── who answers a mandate row ────────────────────────────────────────────────
+
+describe("resolve_approval — who answers a call a mandate parked", () => {
+  const MANDATE_ID = "6f0c2a4e-1b3d-4c5e-8a7f-9d1e3b5c7a2f";
+  const TOOL_CALL_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  const hop = { mandateId: MANDATE_ID, toolCallId: TOOL_CALL_ID };
+  const refused = (reason: string) => (e: unknown) =>
+    isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
+
+  const untouched = (captured: Captured) => {
+    expect(mocks.lockMandate).not.toHaveBeenCalled();
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(captured.set).toBeNull();
+    expect(mocks.notifyResolution).not.toHaveBeenCalled();
+  };
+
+  it("refuses a workspace Member on a moves_money mandate: no lock, no ledger row, no UPDATE", async () => {
+    const captured = setup({
+      orgRole: "Viewer",
+      workspaceRole: "Member",
+      mandate: hop,
+    });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(refused("org_role_required"));
+    untouched(captured);
+  });
+
+  it.each([
+    [
+      "a resolved agent principal",
+      {
+        principal: {
+          id: "prn_agent",
+          kind: "agent" as const,
+          orgId: CTX.orgId,
+          workspaceId: CTX.workspaceId,
+        },
+      },
+    ],
+    ["an agent run", { agentRun: { principalKind: "agent" } as never }],
+  ])("refuses %s", async (_label, extra) => {
+    const captured = setup({ mandate: hop });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        { ...CTX, ...extra },
+      ),
+    ).rejects.toSatisfy(refused("agent_cannot_resolve_own_mandate"));
+    untouched(captured);
+  });
+
+  it("lets an org Billing user who is a workspace Member deny, releasing the reservation", async () => {
+    setup({ orgRole: "Billing", workspaceRole: "Member", mandate: hop });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "denied" },
+      CTX,
+    );
+    expect(mocks.release).toHaveBeenCalledTimes(1);
+    expect(out.mandate?.outcome).toBe("released");
+  });
+
+  it("follows the workspace's consequence-role override", async () => {
+    const captured = setup({
+      orgRole: "Owner",
+      mandate: hop,
+      consequenceRoles: { moves_money: ["Billing"] },
+    });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(refused("org_role_required"));
+    untouched(captured);
+  });
+
+  it("refuses a caller outside the mandate's approvers", async () => {
+    const captured = setup({
+      orgRole: "Owner",
+      mandate: { ...hop, approvers: ["role:Billing"] },
+    });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(refused("not_an_approver"));
+    untouched(captured);
+  });
+
+  it("lets a user the approvers name resolve", async () => {
+    setup({
+      orgRole: "Owner",
+      userPublicId: "usr_01owner",
+      mandate: { ...hop, approvers: ["user:usr_01owner"] },
+    });
+    const out = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(out.mandate?.outcome).toBe("held");
+  });
+
+  it("reads a row whose mandate is gone as not pending", async () => {
+    const captured = setup({ mandate: { ...hop, exists: false } });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).rejects.toSatisfy(conflict);
+    untouched(captured);
   });
 });
