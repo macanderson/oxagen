@@ -1,38 +1,64 @@
 /**
- * The session registry (spec plan PR 3): one recorder per live Claude Code
- * session, keyed by the harness session id, with the operator control state
- * a command can set (pause, cancel, message) and the process facts the
- * detector and the kill path need. Persists to `daemon.json` so a daemon
- * restart continues every chain instead of forking it.
+ * The session registry (spec plan PR 3): one recorder per live agent
+ * session, keyed by the agent and the harness session id, with the operator
+ * control state a command can set (pause, cancel, message) and the process
+ * facts the detector and the kill path need. Persists to `daemon.json` so a
+ * daemon restart continues every chain instead of forking it.
+ *
+ * It also keeps the agent roster: one entry per kind of agent this host has
+ * run (`claude-code`, `codex`, `stella`, or a named custom agent), with when
+ * it was first and last seen and how many sessions it opened. The roster
+ * outlives the sessions it counted — `forgetSealed` drops sealed sessions,
+ * never roster entries — so the desktop app can show every agent the host
+ * has run, not only those with a live session.
  */
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent, TachoRuntime } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { TachoHarness } from "../wire";
+import { TACHO_HARNESS_LABELS, type TachoHarness } from "../wire";
 
 /**
  * The recorder context for a session's harness. The daemon's context is
- * Claude Code's; a Codex session keeps every other fact and relabels the
- * agent with its own runtime. `runtime` is the control plane's checked enum
- * (`TACHO_RUNTIMES`), so every harness this map admits must also be a member
- * there: the fleet page filters on `runtime`, and a harness that had to
- * borrow `custom` could not be told apart from a custom agent.
+ * Claude Code's; a Codex or Stella session keeps every other fact and
+ * relabels the agent with its own runtime. `runtime` is the control plane's
+ * checked enum (`TACHO_RUNTIMES`), so every harness this map admits must
+ * also be a member there: the fleet page filters on `runtime`, and a
+ * harness that had to borrow `custom` could not be told apart from a custom
+ * agent.
  */
 const RUNTIME_FOR_HARNESS: Record<TachoHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
+  stella: "stella",
 };
 
+/**
+ * A custom agent (`tacho hook --agent <name>`) is `runtime: "custom"` with
+ * its name as the harness, and wins over `harness`: the name is the more
+ * specific claim.
+ */
 export function contextForHarness(
   context: ClaudeCodeContext,
   harness: TachoHarness | undefined,
+  customAgent?: string,
 ): ClaudeCodeContext {
+  if (customAgent !== undefined) {
+    return {
+      ...context,
+      agent: { ...context.agent, harness: customAgent, runtime: "custom" },
+    };
+  }
   if (harness === undefined || harness === "claude-code") return context;
   return {
     ...context,
     agent: { ...context.agent, harness, runtime: RUNTIME_FOR_HARNESS[harness] },
   };
+}
+
+/** The daemon's own chain (`tachod-<ulid>`) is host bookkeeping, not an agent. */
+export function isInternalSession(harnessSessionId: string): boolean {
+  return harnessSessionId.startsWith("tachod-");
 }
 
 export interface SessionControl {
@@ -48,6 +74,14 @@ export interface SessionFacts {
   pid?: number;
   /** Which harness runs the session; fixed at first sight, Claude Code by default. */
   harness?: TachoHarness;
+  /** A custom agent's name (`--agent`); fixed at first sight. */
+  customAgent?: string;
+  /**
+   * The newest hook event the session sent. Stella has no SessionEnd, so a
+   * chain whose process is gone after a `Stop` ended cleanly; without a
+   * `Stop` it did not.
+   */
+  lastHookEvent?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -62,6 +96,12 @@ export interface SessionRecord extends SessionFacts {
   lastCheckpointSeq: number;
   /** The session never sent a hook; only OTel or a transcript showed it. */
   ambient: boolean;
+  /**
+   * Open tool calls whose harness issues no tool-use id of its own (Stella),
+   * as `derived id -> the id this invocation was given`. See
+   * `invocationToolUseId` in the hook handler.
+   */
+  toolUseIds: Record<string, string>;
 }
 
 export interface PersistedSession extends SessionFacts {
@@ -73,11 +113,33 @@ export interface PersistedSession extends SessionFacts {
   sealed: boolean;
   lastCheckpointSeq: number;
   ambient: boolean;
+  /** Absent in files written before derived tool-use ids were numbered. */
+  toolUseIds?: Record<string, string>;
+}
+
+/** One kind of agent this host has run. */
+export interface AgentRosterEntry {
+  /** `${runtime}:${harness}`, e.g. `stella:stella` or `custom:reviewer`. */
+  key: string;
+  runtime: TachoRuntime;
+  harness: string;
+  /** "Claude Code", "Codex", "Stella", or the custom agent's name. */
+  label: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  sessions_total: number;
+}
+
+export interface AgentStatus extends AgentRosterEntry {
+  /** Sessions of this agent whose chain is not sealed. */
+  sessions_live: number;
 }
 
 export interface RegistryState {
   schema: "tacho.daemon-state.v1";
   sessions: PersistedSession[];
+  /** Absent in files written before the roster existed. */
+  agents?: AgentRosterEntry[];
 }
 
 export interface RegistryOptions {
@@ -89,6 +151,7 @@ export interface RegistryOptions {
 export class SessionRegistry {
   private readonly options: RegistryOptions;
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly roster = new Map<string, AgentRosterEntry>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -98,8 +161,19 @@ export class SessionRegistry {
     return toProtocolTimestamp(this.options.now());
   }
 
+  /**
+   * The record for a harness session id, whoever owns it: the live one
+   * first, then the most recently seen. Two agents can hand out the same id,
+   * so a caller that knows which agent it is goes through `ensure`, which
+   * never crosses from one agent's record to another's.
+   */
   get(harnessSessionId: string): SessionRecord | undefined {
-    return this.sessions.get(harnessSessionId);
+    let best: SessionRecord | undefined;
+    for (const record of this.sessions.values()) {
+      if (record.harnessSessionId !== harnessSessionId) continue;
+      if (best === undefined || preferRecord(record, best)) best = record;
+    }
+    return best;
   }
 
   byUuid(sessionUuid: string): SessionRecord | undefined {
@@ -121,28 +195,164 @@ export class SessionRegistry {
     return this.list().filter((record) => !record.sealed);
   }
 
+  /** Which agent a session belongs to: runtime, harness, and the label a person reads. */
+  agentOf(record: SessionFacts): {
+    key: string;
+    runtime: TachoRuntime;
+    harness: string;
+    label: string;
+  } {
+    if (record.customAgent !== undefined) {
+      return {
+        key: `custom:${record.customAgent}`,
+        runtime: "custom",
+        harness: record.customAgent,
+        label: record.customAgent,
+      };
+    }
+    const harness = record.harness ?? "claude-code";
+    const runtime = RUNTIME_FOR_HARNESS[harness];
+    return {
+      key: `${runtime}:${harness}`,
+      runtime,
+      harness,
+      label: TACHO_HARNESS_LABELS[harness],
+    };
+  }
+
+  private noteAgent(record: SessionRecord, created: boolean): void {
+    if (isInternalSession(record.harnessSessionId)) return;
+    const agent = this.agentOf(record);
+    const now = record.lastSeenAt;
+    const entry = this.roster.get(agent.key);
+    if (entry === undefined) {
+      this.roster.set(agent.key, {
+        ...agent,
+        first_seen_at: now,
+        last_seen_at: now,
+        sessions_total: created ? 1 : 0,
+      });
+      return;
+    }
+    entry.last_seen_at = now;
+    if (created) entry.sessions_total += 1;
+  }
+
+  /** Every agent this host has run, with its live session count. */
+  agents(): AgentStatus[] {
+    const live = new Map<string, number>();
+    for (const record of this.live()) {
+      if (isInternalSession(record.harnessSessionId)) continue;
+      const key = this.agentOf(record).key;
+      live.set(key, (live.get(key) ?? 0) + 1);
+    }
+    return [...this.roster.values()].map((entry) => ({
+      ...entry,
+      sessions_live: live.get(entry.key) ?? 0,
+    }));
+  }
+
+  /**
+   * The map key. A harness session id is unique only within the agent that
+   * issued it: a custom agent whose harness hands out an id another agent is
+   * already using must not land on that agent's recorder, or two runs share
+   * one hash chain and one roster label. `harnessSessionId` stays the raw id
+   * the harness gave, and that is what every payload reports.
+   */
+  private key(harnessSessionId: string, facts: SessionFacts): string {
+    return `${this.agentOf(facts).key} ${harnessSessionId}`;
+  }
+
+  /**
+   * A record opened before any agent named itself (OTel or the transcript
+   * detector saw the session first) belongs to the agent that names itself
+   * first: it is the same session, and adopting it keeps one chain rather
+   * than forking it. The record takes the agent's identity with it — the
+   * facts, the roster entry `agentOf` derives from them, the key it persists
+   * under, and the recorder's own agent labels — so nothing downstream keeps
+   * calling it Claude Code.
+   *
+   * A custom agent cannot adopt: its chain uuid is seeded from the agent name
+   * as well as the id, so taking over an unclaimed chain would have to
+   * rename it mid-chain. It opens its own record instead, and the unclaimed
+   * one closes on the next sweep.
+   */
+  private adopt(
+    harnessSessionId: string,
+    facts: SessionFacts,
+  ): SessionRecord | undefined {
+    if (facts.customAgent !== undefined) return undefined;
+    const unclaimed = this.key(harnessSessionId, {});
+    const record = this.sessions.get(unclaimed);
+    if (record === undefined || record.sealed) return undefined;
+    if (record.harness !== undefined || record.customAgent !== undefined)
+      return undefined;
+    this.sessions.delete(unclaimed);
+    if (facts.harness !== undefined) record.harness = facts.harness;
+    record.recorder.relabel(
+      contextForHarness(this.options.context, facts.harness, undefined),
+    );
+    this.sessions.set(this.key(harnessSessionId, facts), record);
+    if (!isInternalSession(harnessSessionId)) {
+      // The session was counted against Claude Code when it opened
+      // unclaimed; it was this agent's session all along. An entry left with
+      // nothing to its name is dropped, or the roster would list an agent
+      // this host never ran.
+      const openerKey = this.agentOf({}).key;
+      const opener = this.roster.get(openerKey);
+      if (opener !== undefined) {
+        opener.sessions_total = Math.max(0, opener.sessions_total - 1);
+        if (
+          opener.sessions_total === 0 &&
+          !this.list().some((other) => this.agentOf(other).key === openerKey)
+        )
+          this.roster.delete(openerKey);
+      }
+      this.noteAgent(record, true);
+    }
+    return record;
+  }
+
   /** Find or open the record for a harness session, absorbing new facts. */
   ensure(
     harnessSessionId: string,
     facts: SessionFacts & { ambient?: boolean } = {},
   ): { record: SessionRecord; created: boolean } {
     const now = this.ts();
-    const existing = this.sessions.get(harnessSessionId);
+    // A caller that names no agent (OTel, the transcript detector) joins
+    // whichever agent already owns the id; a caller that names one only ever
+    // matches its own agent's record, or adopts one nobody has claimed.
+    const named =
+      facts.harness !== undefined || facts.customAgent !== undefined;
+    const existing = named
+      ? (this.sessions.get(this.key(harnessSessionId, facts)) ??
+        this.adopt(harnessSessionId, facts))
+      : this.get(harnessSessionId);
     if (existing) {
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) existing.cwd = facts.cwd;
       if (facts.pid !== undefined) existing.pid = facts.pid;
+      if (facts.lastHookEvent !== undefined)
+        existing.lastHookEvent = facts.lastHookEvent;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
+      this.noteAgent(existing, false);
       return { record: existing, created: false };
     }
     const record: SessionRecord = {
       harnessSessionId,
       recorder: new SessionRecorder({
-        context: contextForHarness(this.options.context, facts.harness),
+        context: contextForHarness(
+          this.options.context,
+          facts.harness,
+          facts.customAgent,
+        ),
         harnessSessionId,
         scope: this.options.scope,
+        ...(facts.customAgent === undefined
+          ? {}
+          : { customAgent: facts.customAgent }),
       }),
       control: { paused: null, cancelled: null, messages: [] },
       startedAt: now,
@@ -150,36 +360,42 @@ export class SessionRegistry {
       sealed: false,
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
-      ...(facts.harness !== undefined ? { harness: facts.harness } : {}),
-      ...(facts.transcriptPath !== undefined
-        ? { transcriptPath: facts.transcriptPath }
-        : {}),
-      ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
-      ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+      toolUseIds: {},
+      ...optionalFacts(facts),
     };
-    this.sessions.set(harnessSessionId, record);
+    this.sessions.set(this.key(harnessSessionId, facts), record);
+    this.noteAgent(record, true);
     return { record, created: true };
   }
 
   touch(harnessSessionId: string): void {
-    const record = this.sessions.get(harnessSessionId);
-    if (record) record.lastSeenAt = this.ts();
+    const record = this.get(harnessSessionId);
+    if (record) {
+      record.lastSeenAt = this.ts();
+      this.noteAgent(record, false);
+    }
   }
 
-  /** Mark a chain sealed after `agent_stop` landed on it. */
-  seal(harnessSessionId: string): void {
-    const record = this.sessions.get(harnessSessionId);
+  /**
+   * Mark a chain sealed after `agent_stop` landed on it. A caller holding the
+   * record passes it: a session id alone cannot tell two agents' chains apart.
+   */
+  seal(session: string | SessionRecord): void {
+    const record = typeof session === "string" ? this.get(session) : session;
     if (record) record.sealed = true;
   }
 
-  /** Forget sealed sessions older than `retainMs`. */
+  /**
+   * Forget sealed sessions older than `retainMs`, and report the harness
+   * session ids dropped. The roster keeps them counted.
+   */
   forgetSealed(retainMs: number): string[] {
     const cutoff = this.options.now() - retainMs;
     const removed: string[] = [];
-    for (const [id, record] of this.sessions) {
+    for (const [key, record] of this.sessions) {
       if (record.sealed && Date.parse(record.lastSeenAt) < cutoff) {
-        this.sessions.delete(id);
-        removed.push(id);
+        this.sessions.delete(key);
+        removed.push(record.harnessSessionId);
       }
     }
     return removed;
@@ -187,8 +403,11 @@ export class SessionRegistry {
 
   /**
    * Close chains whose process is gone (or, with no pid known, idle past
-   * `idleMs`). Returns the sealing events. A session that only ever showed
-   * up through OTel or a transcript is closed as `crashed` too: the harness
+   * `idleMs`). Returns the sealing events. A session whose process is gone
+   * right after a `Stop` hook completed its turn and exited: that is how
+   * Stella, which has no SessionEnd, ends every session, so it closes as
+   * `completed`. Anything else closes as `crashed`, including a session
+   * that only ever showed up through OTel or a transcript: the harness
    * never told us it ended.
    */
   sweep(isAlive: (pid: number) => boolean, idleMs: number): TachoEvent[] {
@@ -203,7 +422,9 @@ export class SessionRegistry {
         record.sealed = true;
         continue;
       }
-      out.push(...record.recorder.finalize("crashed", this.ts()));
+      const outcome =
+        gone && record.lastHookEvent === "Stop" ? "completed" : "crashed";
+      out.push(...record.recorder.finalize(outcome, this.ts()));
       record.sealed = true;
     }
     return out;
@@ -225,24 +446,30 @@ export class SessionRegistry {
         sealed: record.sealed,
         lastCheckpointSeq: record.lastCheckpointSeq,
         ambient: record.ambient,
-        ...(record.harness !== undefined ? { harness: record.harness } : {}),
-        ...(record.transcriptPath !== undefined
-          ? { transcriptPath: record.transcriptPath }
+        ...(Object.keys(record.toolUseIds).length > 0
+          ? { toolUseIds: { ...record.toolUseIds } }
           : {}),
-        ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-        ...(record.pid !== undefined ? { pid: record.pid } : {}),
+        ...optionalFacts(record),
       })),
+      agents: [...this.roster.values()].map((entry) => ({ ...entry })),
     };
   }
 
   restore(state: RegistryState): void {
     for (const persisted of state.sessions) {
-      this.sessions.set(persisted.harnessSessionId, {
+      this.sessions.set(this.key(persisted.harnessSessionId, persisted), {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
-          context: contextForHarness(this.options.context, persisted.harness),
+          context: contextForHarness(
+            this.options.context,
+            persisted.harness,
+            persisted.customAgent,
+          ),
           harnessSessionId: persisted.harnessSessionId,
           scope: this.options.scope,
+          ...(persisted.customAgent === undefined
+            ? {}
+            : { customAgent: persisted.customAgent }),
           restore: persisted.recorder,
         }),
         control: persisted.control,
@@ -251,15 +478,40 @@ export class SessionRegistry {
         sealed: persisted.sealed,
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
-        ...(persisted.harness !== undefined
-          ? { harness: persisted.harness }
-          : {}),
-        ...(persisted.transcriptPath !== undefined
-          ? { transcriptPath: persisted.transcriptPath }
-          : {}),
-        ...(persisted.cwd !== undefined ? { cwd: persisted.cwd } : {}),
-        ...(persisted.pid !== undefined ? { pid: persisted.pid } : {}),
+        toolUseIds: { ...persisted.toolUseIds },
+        ...optionalFacts(persisted),
       });
     }
+    for (const entry of state.agents ?? []) {
+      this.roster.set(entry.key, { ...entry });
+    }
   }
+}
+
+/**
+ * Which of two records for the same session id a caller that named no agent
+ * means: a live chain over a sealed one, then the more recently seen.
+ * `lastSeenAt` is a protocol timestamp, so it sorts as text.
+ */
+function preferRecord(candidate: SessionRecord, best: SessionRecord): boolean {
+  if (candidate.sealed !== best.sealed) return !candidate.sealed;
+  return candidate.lastSeenAt > best.lastSeenAt;
+}
+
+/** The optional session facts, copied only when set (the state file omits absent keys). */
+function optionalFacts(facts: SessionFacts): SessionFacts {
+  return {
+    ...(facts.harness !== undefined ? { harness: facts.harness } : {}),
+    ...(facts.customAgent !== undefined
+      ? { customAgent: facts.customAgent }
+      : {}),
+    ...(facts.transcriptPath !== undefined
+      ? { transcriptPath: facts.transcriptPath }
+      : {}),
+    ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
+    ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+    ...(facts.lastHookEvent !== undefined
+      ? { lastHookEvent: facts.lastHookEvent }
+      : {}),
+  };
 }

@@ -17,7 +17,7 @@
  * cannot stand in for the answer being timed. The process-spawn figure stays
  * ungated for the reason recorded in the plan.
  */
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
@@ -195,7 +195,46 @@ describe("hook latency", () => {
     // only figure this test gates.
   }, 60_000);
 
-  it("measures tacho-hook start-to-decision against the bundled executable", () => {
+  /**
+   * One `tacho-hook` run, from spawn to exit, with the payload on stdin.
+   *
+   * Asynchronous on purpose. The daemon the first test started runs inside
+   * this vitest process, and `spawnSync` blocks this process's event loop
+   * until the child exits, so the daemon could not answer the hook's POST:
+   * every sample waited out the hook's 10 s PreToolUse response budget and
+   * then decided locally. That measured the timeout (p50 10 158 ms on the
+   * reference laptop, on main and on this branch alike), not start to
+   * decision (docs/specs/tacho/plan.md records p50 108 ms). With `spawn` the
+   * event loop keeps serving the daemon while the child runs, as a separate
+   * `tachod` process does in production.
+   */
+  const runHook = (
+    input: string,
+  ): Promise<{ status: number | null; stdout: string; ms: number }> =>
+    new Promise((resolve, reject) => {
+      const t0 = process.hrtime.bigint();
+      const child = spawn(process.execPath, [HOOK_BIN], {
+        env: { ...process.env, TACHO_HOME: paths.root },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+      });
+      child.stderr.resume();
+      child.on("error", reject);
+      child.on("close", (status) =>
+        resolve({
+          status,
+          stdout,
+          ms: Number(process.hrtime.bigint() - t0) / 1e6,
+        }),
+      );
+      child.stdin.end(input);
+    });
+
+  it("measures tacho-hook start-to-decision against the bundled executable", async () => {
     if (!existsSync(HOOK_BIN)) {
       process.stdout.write(
         "\n[bench] dist-standalone/tacho-hook.mjs missing; run `pnpm --filter @oxagen/tacho bundle` to measure\n",
@@ -205,15 +244,11 @@ describe("hook latency", () => {
     const pre = JSON.parse(
       readFileSync(join(FIXTURES, "06-PreToolUse.json"), "utf8"),
     ) as { stdin: unknown };
+    const input = JSON.stringify(pre.stdin);
     const samples: number[] = [];
     for (let i = 0; i < 20; i += 1) {
-      const t0 = process.hrtime.bigint();
-      const result = spawnSync(process.execPath, [HOOK_BIN], {
-        input: JSON.stringify(pre.stdin),
-        env: { ...process.env, TACHO_HOME: paths.root },
-        encoding: "utf8",
-      });
-      samples.push(Number(process.hrtime.bigint() - t0) / 1e6);
+      const result = await runHook(input);
+      samples.push(result.ms);
       expect(result.status).toBe(0);
       expect(JSON.parse(result.stdout)).toBeTypeOf("object");
     }
@@ -226,5 +261,11 @@ describe("hook latency", () => {
     // cannot meet the 30 ms budget, which is why the compiled hook is a
     // pre-GA follow-up rather than a gate here.
     expect(samples.length).toBe(20);
-  });
+    // Not the budget: a guard that the figure is a decision and not the
+    // hook's 10 s response budget expiring. A Node start plus a decision is
+    // far below 5 s even under coverage on a loaded machine; a sample at the
+    // budget means the daemon could not answer, the regression this test
+    // once measured without noticing.
+    expect(Math.max(...samples)).toBeLessThan(5_000);
+  }, 60_000);
 });

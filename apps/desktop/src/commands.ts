@@ -3,12 +3,16 @@
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
  */
-export type Harness = "claude-code" | "codex";
+export type Harness = "claude-code" | "codex" | "stella";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  stella: "Stella",
 };
+
+/** Every harness the app knows how to wrap, in display order. */
+export const HARNESSES: Harness[] = ["claude-code", "codex", "stella"];
 
 export interface HostTarget {
   org_slug: string;
@@ -165,13 +169,18 @@ export function deregisterArgs(
   };
 }
 
-/** Mission Control for the workspace the host reports to. */
-export function missionControlUrl(
+/**
+ * The workspace root in the Oxagen app, where the host reports to. Not
+ * `/runs`: that route does not exist in `apps/app` (its workspace sections
+ * are `knowledge`, `marketplace`, `sessions`, `settings`, `workbench`, plus
+ * the workspace root itself), so a `/runs` link 404s.
+ */
+export function workspaceUrl(
   appUrl: string,
   org: string,
   workspace: string,
 ): string {
-  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}/runs`;
+  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}`;
 }
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -197,6 +206,55 @@ export function defaultRegistration(
   detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
 ): Harness[] {
   return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
+/** What `DesktopState.cli_install` reports about the launch-time PATH link. */
+export interface CliInstallReport {
+  state: "linked" | "already" | "skipped" | "opted_out" | "failed" | "pending";
+  dir: string;
+  files: string[];
+  skipped: string[];
+  profile: string | null;
+  note: string;
+}
+
+/** The Command line panel's one line on what the launch-time auto-link did. */
+export function describeCliInstall(
+  install: CliInstallReport | null | undefined,
+): string | null {
+  if (!install) return null;
+  const files = install.files.length > 0 ? install.files.join(", ") : "nothing";
+  const profile = install.profile ? ` Updated ${install.profile}.` : "";
+  const skipped =
+    install.skipped.length > 0 ? ` Skipped ${install.skipped.join(", ")}.` : "";
+  switch (install.state) {
+    case "linked":
+      // "linked" with nothing in `files` means every link was already
+      // correct: there was nothing to do, so say that rather than
+      // "Linked nothing into ...". `profile` can still be set (the profile
+      // block is checked every launch regardless), so it still shows.
+      return install.files.length > 0
+        ? `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`
+        : `Already on PATH in ${install.dir}.${profile}${skipped}`;
+    case "already":
+      // The Rust side leaves `files` empty here: nothing needed linking, so
+      // there is nothing to list. Say so plainly rather than "nothing
+      // already on PATH".
+      return `Already on PATH in ${install.dir}.${skipped}`;
+    case "skipped":
+      return `Skipped linking on launch: ${install.note}`;
+    case "opted_out":
+      // "Remove links" lands here, and it reports what it refused to delete
+      // (a binary of the same name that Oxagen did not create) the same way
+      // the install path reports what it refused to overwrite.
+      return `Not linked: you opted out. ${install.note}${skipped}`;
+    case "failed":
+      return `Could not link into ${install.dir}: ${install.note}`;
+    case "pending":
+      return "Linking on launch…";
+    default:
+      return install.note;
+  }
 }
 
 /** The one gold action on screen: the next step, never a destructive one. */

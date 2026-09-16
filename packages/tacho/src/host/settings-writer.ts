@@ -6,6 +6,7 @@
  * needs a foreign key in the document and never touches an entry it did not
  * write.
  */
+import type { TachoHarness } from "../wire";
 
 /** Enforcement events run `tacho-hook` as a command hook (fail closed). */
 export const COMMAND_HOOK_EVENTS = [
@@ -75,12 +76,14 @@ export interface HookInstallConfig {
 /**
  * Hook and env entries are Claude Code's. Codex CLI's `hooks.json` shares
  * the group shape but supports only command hooks and reads no env block,
- * so its writer (`codex-writer.ts`) composes these helpers differently.
+ * so its writer (`codex-writer.ts`) composes these helpers differently;
+ * Stella's writer (`stella-writer.ts`) takes the command line and replaces
+ * the timeout with its own millisecond field.
  */
 export function commandHookEntry(
   config: HookInstallConfig,
   timeoutS: number,
-  harness: "claude-code" | "codex" = "claude-code",
+  harness: TachoHarness = "claude-code",
 ): HookEntry {
   const tag = harness === "claude-code" ? "" : ` --harness ${harness}`;
   return {

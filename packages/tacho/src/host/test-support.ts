@@ -78,6 +78,7 @@ export function scratchPaths(): TachoPaths {
       TACHO_HOME: join(root, "home"),
       CLAUDE_CONFIG_DIR: join(root, "claude"),
       CODEX_HOME: join(root, "codex"),
+      STELLA_HOME: join(root, "stella"),
     },
     root,
   );

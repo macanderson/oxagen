@@ -13,6 +13,10 @@
  *     touches `hooks` only.
  *
  * Every entry carries `--harness codex` so the daemon labels the session.
+ *
+ * The group merge, strip and presence helpers are shared with Stella's
+ * legacy `settings.json` (`stella-writer.ts`), whose `hooks` member has the
+ * same group shape.
  */
 import {
   COMMAND_HOOK_EVENTS,
@@ -70,25 +74,33 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function documentOf(existing: unknown): SettingsDocument {
+  return existing !== null && typeof existing === "object"
+    ? clone(existing as SettingsDocument)
+    : {};
+}
+
 export interface CodexMergeResult {
   settings: SettingsDocument;
   changed: boolean;
 }
 
-/** Merge Tacho's groups into a `hooks.json` document; foreign groups survive. */
-export function mergeCodexHooks(
+/**
+ * Merge hook groups into a `hooks`-keyed document for one enrollment:
+ * foreign groups survive, earlier groups of the same enrollment are
+ * replaced, and the input is never mutated.
+ */
+export function mergeHookGroups(
   existing: unknown,
-  config: HookInstallConfig,
+  entries: Record<string, HookGroup[]>,
+  enrollmentId: string,
 ): CodexMergeResult {
-  const settings: SettingsDocument =
-    existing !== null && typeof existing === "object"
-      ? clone(existing as SettingsDocument)
-      : {};
+  const settings = documentOf(existing);
   const before = JSON.stringify(settings);
   const hooks = { ...(settings.hooks ?? {}) };
-  for (const [event, groups] of Object.entries(codexHookEntries(config))) {
+  for (const [event, groups] of Object.entries(entries)) {
     const foreign = (hooks[event] ?? []).filter(
-      (group) => !isTachoGroup(group, config.enrollmentId),
+      (group) => !isTachoGroup(group, enrollmentId),
     );
     hooks[event] = [...foreign, ...groups];
   }
@@ -96,15 +108,12 @@ export function mergeCodexHooks(
   return { settings, changed: JSON.stringify(settings) !== before };
 }
 
-/** Remove Tacho's groups (one enrollment, or any) from a `hooks.json` document. */
-export function stripCodexHooks(
+/** Remove Tacho's groups (one enrollment, or any) and drop emptied events. */
+export function stripHookGroups(
   existing: unknown,
   enrollmentId?: string,
 ): CodexMergeResult {
-  const settings: SettingsDocument =
-    existing !== null && typeof existing === "object"
-      ? clone(existing as SettingsDocument)
-      : {};
+  const settings = documentOf(existing);
   const before = JSON.stringify(settings);
   if (settings.hooks !== undefined) {
     const hooks: Record<string, HookGroup[]> = {};
@@ -118,28 +127,59 @@ export function stripCodexHooks(
   return { settings, changed: JSON.stringify(settings) !== before };
 }
 
-export interface CodexHookPresence {
+export interface HookGroupPresence<E extends string> {
   complete: boolean;
-  present: CodexHookEventName[];
-  missing: CodexHookEventName[];
+  present: E[];
+  missing: E[];
 }
 
-/** Which of Tacho's Codex hooks are installed for this enrollment. */
-export function codexHookPresence(
+/** Which of `events` carry a Tacho group for this enrollment. */
+export function hookGroupPresence<E extends string>(
   existing: unknown,
+  events: readonly E[],
   enrollmentId: string,
-): CodexHookPresence {
+): HookGroupPresence<E> {
   const settings =
     existing !== null && typeof existing === "object"
       ? (existing as SettingsDocument)
       : {};
-  const present: CodexHookEventName[] = [];
-  const missing: CodexHookEventName[] = [];
-  for (const event of CODEX_HOOK_EVENTS) {
+  const present: E[] = [];
+  const missing: E[] = [];
+  for (const event of events) {
     const groups = settings.hooks?.[event] ?? [];
     if (groups.some((group) => isTachoGroup(group, enrollmentId)))
       present.push(event);
     else missing.push(event);
   }
   return { complete: missing.length === 0, present, missing };
+}
+
+/** Merge Tacho's groups into a `hooks.json` document; foreign groups survive. */
+export function mergeCodexHooks(
+  existing: unknown,
+  config: HookInstallConfig,
+): CodexMergeResult {
+  return mergeHookGroups(
+    existing,
+    codexHookEntries(config),
+    config.enrollmentId,
+  );
+}
+
+/** Remove Tacho's groups (one enrollment, or any) from a `hooks.json` document. */
+export function stripCodexHooks(
+  existing: unknown,
+  enrollmentId?: string,
+): CodexMergeResult {
+  return stripHookGroups(existing, enrollmentId);
+}
+
+export type CodexHookPresence = HookGroupPresence<CodexHookEventName>;
+
+/** Which of Tacho's Codex hooks are installed for this enrollment. */
+export function codexHookPresence(
+  existing: unknown,
+  enrollmentId: string,
+): CodexHookPresence {
+  return hookGroupPresence(existing, CODEX_HOOK_EVENTS, enrollmentId);
 }
