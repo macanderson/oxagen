@@ -1,9 +1,9 @@
 // Shared pieces of the auto-approval rule handlers (MC spec §6.9 part 2,
-// ADR-069): where the clause is stored, the guards a rule must clear before it
+// ADR-070): where the clause is stored, the guards a rule must clear before it
 // is saved, and the 30-day counters every read returns beside it.
 //
 // The rules are the second clause of the rule set the decision gate already
-// loads, stored in `workspace.workspaces.settings.decisionRules` (ADR-069
+// loads, stored in `workspace.workspaces.settings.decisionRules` (ADR-070
 // decision 2). One store, one loader, one read on the decision path. Every
 // write goes through `writeRules`, which touches that one key of the settings
 // bag and leaves every sibling key alone.

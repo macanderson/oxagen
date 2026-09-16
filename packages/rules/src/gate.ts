@@ -63,7 +63,7 @@ type MandateCheck = (args: {
 }) => Promise<DecisionSettlement | undefined>;
 
 /**
- * The auto-approval clause of the same rule set (ADR-069). The gate asks it
+ * The auto-approval clause of the same rule set (ADR-070). The gate asks it
  * once, on a `require_approval` verdict: an outcome with `ok` has recorded
  * the approval as `policy:<rule id>` and the call proceeds; anything else
  * leaves the call with the person it was already going to.

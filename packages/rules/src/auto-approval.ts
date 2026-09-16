@@ -1,6 +1,6 @@
 /**
  * Auto-approval: the conditions under which an approval resolves without a
- * person (MC spec §6.9 part 2, ADR-069).
+ * person (MC spec §6.9 part 2, ADR-070).
  *
  * An auto-approval rule is the second clause of a workspace's rule set. The
  * first clause, `rules`, decides at the kernel gate: allow, deny, or a person
@@ -101,7 +101,7 @@ export const REASON = {
 
 /**
  * The floors. A reason in this set means no rule could ever have admitted the
- * call — the conditions ADR-069 decision 1 fixes in code.
+ * call — the conditions ADR-070 decision 1 fixes in code.
  */
 export const HARD_FLOOR_REASONS: readonly string[] = [
   REASON.toolNotDeclared,
@@ -113,7 +113,7 @@ export const HARD_FLOOR_REASONS: readonly string[] = [
 /**
  * The consequences that are irreversible on the record. The spec's
  * `irreversible` side-effect class is not a column any tool version carries
- * (ADR-069 decision 1), so the floor reads the starter-set tag that means the
+ * (ADR-070 decision 1), so the floor reads the starter-set tag that means the
  * same thing: an action that destroys data cannot be undone.
  */
 export const IRREVERSIBLE_CONSEQUENCE_TAGS: readonly string[] = [

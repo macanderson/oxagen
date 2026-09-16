@@ -1,5 +1,5 @@
 // delete_approval_rule — take one auto-approval rule out of the workspace's
-// rule set (MC spec §6.9 part 2; ADR-069).
+// rule set (MC spec §6.9 part 2; ADR-070).
 //
 // The Tools page offers "switch off instead" beside it, because a rule that is
 // off keeps its id and so keeps the 30-day counters and every receipt that

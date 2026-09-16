@@ -1,5 +1,5 @@
 // set_approval_rule_enabled — switch one auto-approval rule on or off
-// (MC spec §6.9 part 2; ADR-069).
+// (MC spec §6.9 part 2; ADR-070).
 //
 // Switching ON re-checks the guards `set_approval_rules` applied when the rule
 // was written: the declared tools it matches, and the org role accountable for

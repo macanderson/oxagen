@@ -1,5 +1,5 @@
 // list_approval_rules — the workspace's auto-approval rules with what each one
-// did in the last 30 days (MC spec §6.9 part 2, ADR-069).
+// did in the last 30 days (MC spec §6.9 part 2, ADR-070).
 //
 // audit-exempt: read-only; the kernel's capability.invoke_* row is the audit.
 

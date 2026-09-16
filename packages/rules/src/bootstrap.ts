@@ -27,7 +27,7 @@ export function bootstrapDecisionRulesRuntime(): void {
       loadRuleSet: loadWorkspaceRuleSet,
       // The mandate check for agent principals (ADR-059 decision 4).
       checkMandate,
-      // The auto-approval clause of the same rule set (ADR-069): a call a rule
+      // The auto-approval clause of the same rule set (ADR-070): a call a rule
       // sent to a person skips them when an auto-approval rule's conditions
       // hold, recorded as an approval whose approver is `policy:<rule id>`.
       autoApprove: autoApproveParkedCall,

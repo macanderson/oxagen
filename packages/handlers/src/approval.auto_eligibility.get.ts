@@ -1,5 +1,5 @@
 // get_auto_eligibility — the auto-approval evaluation recorded for one
-// approval request, and who resolved it (MC spec §6.9 part 2, §6.10; ADR-069).
+// approval request, and who resolved it (MC spec §6.9 part 2, §6.10; ADR-070).
 //
 // Read, never recomputed. The row carries the rule that was read and every
 // reason the call did not qualify, written when the call was parked, so the

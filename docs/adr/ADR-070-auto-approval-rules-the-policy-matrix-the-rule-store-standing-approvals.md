@@ -1,4 +1,4 @@
-# ADR-069: Auto-approval rules: the policy matrix, the rule store, standing approvals
+# ADR-070: Auto-approval rules: the policy matrix, the rule store, standing approvals
 
 - **Status:** Accepted
 - **Date:** 2026-09-16

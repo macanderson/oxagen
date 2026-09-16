@@ -49,4 +49,4 @@ An org Owner, Admin or Compliance.
 
 ## SPEC references
 
-- §6.9 part 2 (auto-approval), §6.12 (policy is deterministic); ADR-069
+- §6.9 part 2 (auto-approval), §6.12 (policy is deterministic); ADR-070

@@ -1,4 +1,4 @@
-// approval_rule.handlers.test.ts — the five auto-approval tools (ADR-069).
+// approval_rule.handlers.test.ts — the five auto-approval tools (ADR-070).
 //
 // Same pattern as the other tool suites: the kernel `invoke` and the context
 // seam are mocked, and each tool is asserted to carry the contract's schema

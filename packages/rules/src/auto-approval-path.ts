@@ -1,7 +1,7 @@
 /**
  * What happens when a decision rule sends a call to a person and an
  * auto-approval rule says it does not have to go (MC spec §6.9 part 2,
- * ADR-069).
+ * ADR-070).
  *
  * The gate asks this module at exactly one point: a `require_approval`
  * verdict, before it throws. When a rule's conditions hold, an approval row

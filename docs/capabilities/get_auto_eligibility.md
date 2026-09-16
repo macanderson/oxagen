@@ -59,4 +59,4 @@ line is rendered on.
 ## SPEC references
 
 - §6.9 part 2 (the receipt says plainly that no person looked), §6.10 (the
-  Authority group), App. A.6 `control.approvals.resolved_by`; ADR-069
+  Authority group), App. A.6 `control.approvals.resolved_by`; ADR-070

@@ -45,4 +45,4 @@ it off runs none of them: it can only send more calls to a person.
 
 ## SPEC references
 
-- §6.9 part 2; ADR-069
+- §6.9 part 2; ADR-070

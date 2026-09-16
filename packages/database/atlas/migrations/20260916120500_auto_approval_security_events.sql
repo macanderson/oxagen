@@ -1,4 +1,4 @@
--- ADR-069 (G2970): the security_events event_type CHECK gains the three
+-- ADR-070 (G2970): the security_events event_type CHECK gains the three
 -- auto-approval events: approval.auto_approved (a call a decision rule sent to
 -- a person that a rule released instead), approval_rule.changed and
 -- approval_rule.deleted (the rules themselves)

@@ -70,7 +70,7 @@ describe("parseRuleSet", () => {
 });
 
 /**
- * The auto-approval clause (ADR-069). A v1 document has none; a v2 document
+ * The auto-approval clause (ADR-070). A v1 document has none; a v2 document
  * carries one, and what it may carry is what the evaluator can judge.
  */
 const ruleBody = {

@@ -5,7 +5,7 @@
  *
  * Both decisions use them. The mandate check (ADR-059) reads the tool's
  * consequence tags and the measures a mandate limits; the auto-approval
- * evaluator (ADR-069) reads the same tool's safety classification and every
+ * evaluator (ADR-070) reads the same tool's safety classification and every
  * measure a rule may cap or allow-list. They live here so neither module has
  * to import the other.
  */
@@ -114,7 +114,7 @@ export function readDeclaredMeasures(
  *
  * Bound to the workspace and the digest and to nothing narrower, because no
  * approval row records the agent that raised the call (`list_approvals`
- * reports `chain.agentKey` as null for the same reason). ADR-069 decision 3.
+ * reports `chain.agentKey` as null for the same reason). ADR-070 decision 3.
  */
 export async function lastHumanApprovalOf(
   tx: Tx,

@@ -1,5 +1,5 @@
 // set_approval_rule_enabled — switch one auto-approval rule on or off
-// (MC spec §6.9 part 2; ADR-069).
+// (MC spec §6.9 part 2; ADR-070).
 //
 // The one write on this page that is not a rewrite of the whole set: an
 // operator stopping a rule mid-incident should not have to send every other

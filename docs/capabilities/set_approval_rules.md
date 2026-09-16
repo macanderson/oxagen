@@ -48,4 +48,4 @@ every consequence the rules' tools carry.
 
 ## SPEC references
 
-- §6.9 part 2, App. E; ADR-069
+- §6.9 part 2, App. E; ADR-070

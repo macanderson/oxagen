@@ -38,4 +38,4 @@ so no consequence-role check rides with it.
 
 ## SPEC references
 
-- §6.9 part 2; ADR-069
+- §6.9 part 2; ADR-070
