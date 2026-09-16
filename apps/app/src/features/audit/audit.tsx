@@ -309,13 +309,13 @@ function EventsTable({
           <td className={`${cell} ${mono}`}>{event.eventType}</td>
           <td className={cell}>
             {event.actor === null ? (
-              <NotRecorded />
+              <NotRecordedValue />
             ) : (
               (names.get(event.actor) ?? <span className={mono}>{event.actor}</span>)
             )}
           </td>
           <td className={`${cell} ${mono}`}>
-            {event.capability ?? <NotRecorded />}
+            {event.capability ?? <NotRecordedValue />}
           </td>
           <td className={cell}>
             <Outcome outcome={event.outcome} />
@@ -341,7 +341,7 @@ function When({ iso }: { iso: string }) {
   );
 }
 
-function NotRecorded() {
+function NotRecordedValue() {
   const t = useTranslations("audit");
   return (
     <span data-recorded="false" className="text-muted-foreground">
@@ -353,7 +353,7 @@ function NotRecorded() {
 /** The result as a dot and a word, so it survives greyscale. */
 function Outcome({ outcome }: { outcome: AuditEvent["outcome"] }) {
   const t = useTranslations("audit");
-  if (outcome === null) return <NotRecorded />;
+  if (outcome === null) return <NotRecordedValue />;
   return (
     <span
       data-outcome={outcome}
@@ -381,13 +381,13 @@ function Details({ event }: { event: AuditEvent }) {
       </summary>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 pt-2 text-xs">
         <dt className={label}>{t("events.workspace")}</dt>
-        <dd className={mono}>{event.workspace ?? <NotRecorded />}</dd>
+        <dd className={mono}>{event.workspace ?? <NotRecordedValue />}</dd>
         <dt className={label}>{t("events.ip")}</dt>
-        <dd className={mono}>{event.ip ?? <NotRecorded />}</dd>
+        <dd className={mono}>{event.ip ?? <NotRecordedValue />}</dd>
         <dt className={label}>{t("events.request")}</dt>
-        <dd className={mono}>{event.request ?? <NotRecorded />}</dd>
+        <dd className={mono}>{event.request ?? <NotRecordedValue />}</dd>
         <dt className={label}>{t("events.userAgent")}</dt>
-        <dd className="break-all">{event.userAgent ?? <NotRecorded />}</dd>
+        <dd className="break-all">{event.userAgent ?? <NotRecordedValue />}</dd>
       </dl>
     </details>
   );

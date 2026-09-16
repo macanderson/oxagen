@@ -36,7 +36,10 @@ const AuditEvent = z.object({
   eventType: z.string().min(1),
   actor: PublicId.nullable(),
   capability: z.string().nullable(),
-  outcome: AuditOutcome.nullable(),
+  // The contract records the outcome as a plain string, so the view narrows it
+  // here: a value outside the CHECK constraint fails the parse and the adapter
+  // reports record_unmappable rather than drawing an outcome nothing recorded.
+  outcome: z.string().pipe(AuditOutcome).nullable(),
   workspace: z.string().nullable(),
   ip: z.string().nullable(),
   userAgent: z.string().nullable(),

@@ -91,8 +91,8 @@ declare const auditEventView: AuditEventView;
 const _auditEventsHold: NullableOnlyWhenSourceIs<AuditEventView, AuditOut> =
   auditEventView;
 
-// @ts-expect-error -- capability may be null on the contract, and eventType is required on the view
 const _auditNullableIntoRequired: Pick<AuditEventView, "eventType"> = {
+  // @ts-expect-error -- capability may be null on the contract, and eventType is required on the view
   eventType: auditOut.capability,
 };
 

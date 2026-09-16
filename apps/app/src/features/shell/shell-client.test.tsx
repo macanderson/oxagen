@@ -169,7 +169,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(7);
+    expect(within(main).getAllByRole("link")).toHaveLength(8);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -195,7 +195,7 @@ describe("sidebar", () => {
       within(main)
         .getAllByRole("link")
         .map((l) => l.textContent),
-    ).toEqual(["Organization", "Billing"]);
+    ).toEqual(["Organization", "Billing", "Audit"]);
     expect(screen.queryByTestId("workspace-switcher")).toBeNull();
   });
 });
@@ -242,6 +242,7 @@ describe("command menu", () => {
       "Organization",
       "API keys",
       "Billing",
+      "Audit",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");
