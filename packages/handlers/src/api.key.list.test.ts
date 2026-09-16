@@ -271,13 +271,30 @@ describe("list_api_keys — read", () => {
   });
 
   it("reports a key an enrollment owns as not rotatable, the same answer rotate_api_key gives", async () => {
-    // Both read lib/api-key-purpose.ts, so a surface cannot offer a rotation
+    // Both read lib/api-key-rotatable.ts, so a surface cannot offer a rotation
     // the handler is certain to refuse.
     setup("Owner", [LIVE, ENROLLED]);
     const result = await apiKeyListHandler({}, TEST_CTX);
     expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
       ["aky_live", true],
       ["aky_host", false],
+    ]);
+  });
+
+  it("reports an expired key as not rotatable, the same answer rotate_api_key gives", async () => {
+    // Both read lib/api-key-rotatable.ts. rotate_api_key copies the old
+    // expiry onto the replacement, so an expired key cannot be rotated and the
+    // roster must not say it can.
+    const EXPIRED: StoredKey = {
+      ...LIVE,
+      publicId: "aky_expired",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z"),
+    };
+    setup("Owner", [LIVE, EXPIRED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_expired", false],
     ]);
   });
 

@@ -50,4 +50,8 @@ events. The old key is invalid immediately after the call.
 ## Errors
 
 - Only org Owners and Admins can rotate API keys.
-- Throws when the key does not exist, is not in this org, or is already revoked.
+- Throws `not_found` / `api_key_not_found` when the key does not exist, is not in this org, or is already revoked.
+- Throws `authz_denied` for a key an enrollment or a login flow owns — a Tacho host key, an agent credential, a Stella telemetry key, a CLI session key. That service owns the credential's lifecycle, and the message names which one.
+- Throws `conflict` / `api_key_expired` for a key whose expiry has passed. Rotation copies the rotated key's `expires_at` onto the replacement, so rotating an expired key would revoke a key and mint one that is already expired, spending the single display of a secret nobody can use. The row is still present — `deleted_at` is null — so the not-found guard does not cover this.
+
+The last two refusals and the `rotatable` field on `list_api_keys` are the same function, `packages/handlers/src/lib/api-key-rotatable.ts`, so a surface's control and this handler's answer cannot drift. A surface check is a courtesy against a value that can go stale; this refusal is the guarantee, and it is the same one on the API and MCP.

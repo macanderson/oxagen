@@ -17,7 +17,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
-import { reservedKeyPurposeOf } from "./lib/api-key-purpose";
+import { rotationRefusalFor } from "./lib/api-key-rotatable";
 import { logger } from "./logger";
 
 export const apiKeyRotateHandler: CapabilityHandler<
@@ -86,19 +86,28 @@ export const apiKeyRotateHandler: CapabilityHandler<
       });
     }
 
-    // The one list of server-owned purposes (lib/api-key-purpose.ts), which
-    // list_api_keys reads too so a page never offers a rotation this refuses.
-    const reserved = reservedKeyPurposeOf(oldKey.scope);
-    if (reserved) {
+    // The whole answer to "may this key be rotated" (lib/api-key-rotatable.ts),
+    // which list_api_keys reads too so its `rotatable` and this refusal cannot
+    // disagree. This is the enforcement: the app, the API and MCP all arrive
+    // here, and a page's own check is a courtesy that can be stale.
+    const refusal = rotationRefusalFor(oldKey, Date.now());
+    if (refusal) {
       logger.warn(
         { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
-        reserved.log,
+        refusal.log,
       );
-      throw new CapabilityError(
-        "rotate_api_key",
-        "authz_denied",
-        reserved.denial,
-      );
+      if (refusal.kind === "denied") {
+        throw new CapabilityError(
+          "rotate_api_key",
+          "authz_denied",
+          refusal.denial,
+        );
+      }
+      throw new HandlerError({
+        code: "conflict",
+        reason: refusal.reason,
+        message: refusal.message,
+      });
     }
 
     const { rawKey, keyPrefix, keyHash } = generateApiKey();

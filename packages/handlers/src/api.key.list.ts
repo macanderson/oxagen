@@ -17,11 +17,12 @@
 //
 // `scope` is read but never returned. It is there to answer one question the
 // page cannot answer for itself: whether rotate_api_key would replace this key.
-// A key minted by an enrollment or a login flow carries a server-owned purpose
-// and rotation is refused for it (lib/api-key-purpose.ts, the same list the
-// rotate handler refuses from), so the row reports `rotatable` and a page does
-// not offer a control that can only fail. Revocation is unaffected: a key is
-// revocable whatever its purpose.
+// The whole answer lives in lib/api-key-rotatable.ts and the rotate handler
+// refuses from the same function, so `rotatable` and the refusal cannot
+// disagree — a server-owned purpose and an expiry that has passed both make a
+// key unrotatable. `rotatable` is what this read saw at the instant it ran; the
+// handler is the authority and checks again against its own clock. Revocation
+// is unaffected: a key is revocable whatever its purpose or its expiry.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -29,7 +30,7 @@ import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import { actorCanManageApiKeys } from "./lib/api-key-authz";
-import { isRotatableKeyScope } from "./lib/api-key-purpose";
+import { isRotatableKey } from "./lib/api-key-rotatable";
 import { logger } from "./logger";
 
 export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
@@ -108,6 +109,9 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
       .orderBy(desc(schema.apiKeys.createdAt), desc(schema.apiKeys.id)),
   );
 
+  // One instant for the whole page, so two rows of the same list cannot be
+  // judged against different clocks.
+  const now = Date.now();
   return {
     items: rows.map((row) => ({
       publicId: row.publicId,
@@ -117,7 +121,7 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       expiresAt: row.expiresAt?.toISOString() ?? null,
       revokedAt: row.revokedAt?.toISOString() ?? null,
-      rotatable: isRotatableKeyScope(row.scope),
+      rotatable: isRotatableKey(row, now),
     })),
   };
 };

@@ -14,7 +14,13 @@
 // value still held can be shown again by any later roster that does not list
 // the key, and the workspace picker sends exactly that.
 import { useTranslations } from "next-intl";
-import { type ReactNode, type SyntheticEvent, useState } from "react";
+import {
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useState,
+} from "react";
+import { credentialState } from "@/shared/credential-state";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { endOfUtcDay } from "@/shared/expiry-day";
@@ -57,9 +63,12 @@ function useFailureText(): (failure: Failure) => string {
         return t("denied");
       case "not_found":
       case "conflict":
-        return failure.code === "api_key_not_found"
-          ? t("keyNotFound")
-          : t("refused", { code: failure.code });
+        if (failure.code === "api_key_not_found") return t("keyNotFound");
+        // The page's clock can be older than the key's expiry; the handler
+        // judges against its own and is the authority (INV-29's shape: the
+        // refusal is the guarantee, the control is a courtesy).
+        if (failure.code === "api_key_expired") return t("keyExpired");
+        return t("refused", { code: failure.code });
       case "invalid":
         switch (failure.code) {
           case "name_required":
@@ -307,12 +316,43 @@ export function CreateKeyDialog({
   );
 }
 
+/**
+ * How long a row waits before it re-reads the clock. A page left open crosses a
+ * key's expiry without a reload, and Rotate must not still be on screen after
+ * it: rotation copies the expiry that ended the key onto the replacement. This
+ * only narrows the window — `rotate_api_key` refuses an expired key and that
+ * refusal is the guarantee (the API and MCP reach it without this page at all).
+ */
+const EXPIRY_TICK_MS = 30_000;
+
+/**
+ * The server's instant, then the browser's once a row has an expiry to cross.
+ * A row with no expiry, or one already past it, sets no timer.
+ */
+function useExpiryClock(expiresAt: string | null, now: number): number {
+  const [current, setCurrent] = useState(now);
+  const pending = expiresAt !== null && Date.parse(expiresAt) > current;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => {
+      setCurrent(Date.now());
+    }, EXPIRY_TICK_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [pending]);
+  return current;
+}
+
 export function KeyRowActions({
   org,
   ws,
   keyId,
   keyName,
+  expiresAt,
+  revokedAt,
   rotatable,
+  now,
   listedIds,
   after,
 }: {
@@ -321,20 +361,28 @@ export function KeyRowActions({
   ws: string;
   keyId: string;
   keyName: string;
+  /** The key's own instants, so the row can re-judge its expiry as the page ages. */
+  expiresAt: string | null;
+  revokedAt: string | null;
   /**
-   * Whether Rotate is offered. `rotate_api_key` gives the replacement the
-   * rotated key's expiry (`packages/handlers/src/api.key.rotate.ts:151`), so
-   * rotating an expired key would spend the one showing of a secret on a key
-   * `resolveApiKey` already refuses. An expired key keeps Revoke.
+   * Whether `list_api_keys` reported the key rotatable. False for a key an
+   * enrollment or a login flow owns, whose lifecycle belongs to that service.
    */
   rotatable: boolean;
+  /** The instant the keys were read. */
+  now: number;
   listedIds: readonly string[];
   after: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
+  const current = useExpiryClock(expiresAt, now);
+  // Rotate is offered only where it would work: the key is live on this row's
+  // own clock and the read said the service does not own it.
+  const mayRotate =
+    rotatable && credentialState({ expiresAt, revokedAt }, current) === "live";
   return (
     <div className="flex flex-wrap gap-2">
-      {rotatable ? (
+      {mayRotate ? (
         <KeyWriteDialog
           open={t("rotate.open")}
           title={t("rotate.title", { name: keyName })}

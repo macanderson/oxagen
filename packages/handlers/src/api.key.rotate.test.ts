@@ -122,7 +122,9 @@ const OLD_ROW: OldRow = {
   publicId: "aky_old123",
   name: "CI deploy key",
   scope: { env: "prod" },
-  expiresAt: new Date("2027-01-01T00:00:00Z"),
+  // Well clear of any clock this suite runs on: the handler now refuses to
+  // rotate an expired key, so a near-future fixture would start failing.
+  expiresAt: new Date("2099-01-01T00:00:00Z"),
   workspaceId: "wrk_1",
 };
 const NEW_ROW: NewRow = {
@@ -223,6 +225,44 @@ describe("api.key.rotate handler — protected Stella telemetry scope", () => {
     expect(insertSpy).not.toHaveBeenCalled();
     expect(updateSpy).not.toHaveBeenCalled();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("api.key.rotate handler — a key that has expired", () => {
+  it("refuses before generating, inserting or revoking, because the replacement would carry the expiry that ended it", async () => {
+    // deleted_at is null, so the not-found guard does not catch it. A page left
+    // open across the expiry keeps offering Rotate; this refusal is what makes
+    // clicking it harmless, and it is the same guarantee on api and mcp.
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const expiredRow: OldRow = {
+      ...OLD_ROW,
+      expiresAt: new Date("2020-01-01T00:00:00Z"),
+    };
+    vi.clearAllMocks();
+    setupHappyPath("Owner", expiredRow, NEW_ROW, vi.fn(), insertSpy, updateSpy);
+
+    await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "conflict" &&
+        e.reason === "api_key_expired",
+    );
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("rotates a key whose expiry is still ahead", async () => {
+    vi.clearAllMocks();
+    setupHappyPath("Owner", {
+      ...OLD_ROW,
+      expiresAt: new Date("2099-06-01T00:00:00Z"),
+    });
+    await expect(
+      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
+    ).resolves.toMatchObject({ publicId: "aky_new456" });
   });
 });
 

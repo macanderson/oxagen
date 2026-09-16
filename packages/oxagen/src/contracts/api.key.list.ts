@@ -12,7 +12,7 @@ import { registerCapability } from "../registry";
 //
 // Each item says whether rotate_api_key will replace it. The rotate handler
 // refuses a key carrying a server-owned scope purpose, and both read the one
-// list in packages/handlers/src/lib/api-key-purpose.ts, so a page cannot offer
+// answer in packages/handlers/src/lib/api-key-rotatable.ts, so a page cannot offer
 // a rotation that is certain to be denied.
 //
 // Authorization: org Owner or Admin only, checked in the handler.

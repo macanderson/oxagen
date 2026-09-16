@@ -912,6 +912,7 @@ type Messages = {
         failure: {
           denied: string;
           keyNotFound: string;
+          keyExpired: string;
           nameRequired: string;
           expiryNotADay: string;
           expiryInThePast: string;
