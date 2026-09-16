@@ -137,11 +137,11 @@ const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
 /**
  * The one built-in measure (`CALLS_MEASURE`, packages/oxagen/src/mandates/
  * schemas.ts): every call draws exactly one of it, and the gate reads it that
- * way whatever a limit says. A money limit filed under that name would be
- * read as a ceiling of that many calls — $250 per call as 250,000,000 calls —
- * and the grant handler cannot catch it, because it exempts `calls` from the
- * measure a tool version must declare. The measure field refuses the name,
- * and the calls-per-day field is the only writer of that limit.
+ * way whatever a limit says. So a limit on anything else filed under that name
+ * stops measuring what it names — 50 rows per period becomes a ceiling of 50
+ * calls — and the grant handler cannot catch it, because it exempts `calls`
+ * from the measure a tool version must declare. The measure field refuses the
+ * name, and the calls-per-day field is the only writer of that limit.
  */
 const RESERVED_MEASURE = "calls";
 
