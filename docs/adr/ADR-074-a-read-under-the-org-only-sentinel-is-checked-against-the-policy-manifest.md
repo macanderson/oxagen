@@ -204,6 +204,29 @@ including the sites no review flagged.
 | `billing.evidence_retention.ts` — `billing.org_billing_settings`, `billing.credit_ledger` | governed capability; kernel IAM applies | shared (`billing`) |
 | `billing.evidence_retention.ts` — `evidence.retention_policy_versions` | governed capability | **dedicated, and this is the one that was wrong.** ADR-042 §2 names evidence as tenant data. See below |
 
+**One substitution needed more than a fence.** Of the eight `withSystemDb` calls
+this change introduces across six files, seven read tables ADR-042 §2 puts on
+the shared plane always — `auth`, `iam`, `org`, `billing`, and the security
+spine, which `emitSecurityEvent` writes through `withSystemDb` too. For those,
+`withSystemDb` is the canonical seam and no caller in the tree asserts a plane
+binding: `assertDataPlaneUsable` is called only by the three store clients'
+tenant seams.
+
+The eighth stands in for a plane-aware read, and `withTenantDb` was doing **two**
+things there: resolving the plane and calling `assertDataPlaneUsable`, which
+refuses any binding that is not `active`. Replacing it with a plane-mode check
+kept the first and dropped the second, so an organisation whose shared binding
+an operator had explicitly disabled or marked degraded would have had its
+retention posture read off that plane anyway — **the data-plane kill switch,
+bypassed by the fix for a different bug.** Both checks are there now, mode
+first so a dedicated plane refuses for the reason that actually applies.
+
+The shape is worth naming because it is the mirror of the one this ADR is
+about: there, a tenant scope was doing confidentiality work nobody had asked it
+for; here, a helper was carrying a guarantee its replacement did not. **A call
+site that replaces a helper inherits everything the helper was doing, and the
+loss is invisible in the diff** — nothing in the replacement looks wrong.
+
 ### The read that should not have been fixed at all
 
 Two MCP install pages read the org's first active key to inject it into the

@@ -52,7 +52,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import { schema, withSystemDb } from "@oxagen/database";
-import { resolveDataPlane } from "@oxagen/tenancy";
+import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import {
   CREDIT_REASONS,
@@ -68,6 +68,20 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
   // ADR-042: the policy aggregate below is tenant evidence state, and
   // withSystemDb is shared-plane by construction. Refuse before reading rather
   // than report a dedicated-plane organisation's evidence as absent.
+  //
+  // BOTH CHECKS, because `withTenantDb` was doing both. It resolves the plane
+  // AND calls `assertDataPlaneUsable`, which refuses any binding that is not
+  // `active`. Standing in for it with a mode check alone kept the first
+  // guarantee and dropped the second, so an organisation whose shared binding
+  // an operator had explicitly disabled or marked degraded would have had its
+  // retention posture read off that plane anyway — the data-plane kill switch,
+  // bypassed. `assertDataPlaneUsable` is the same helper every other
+  // plane-aware path uses; a local status check here would be a second answer
+  // to "is this binding usable".
+  //
+  // ORDER: the mode check first. A dedicated plane cannot be read here at all,
+  // whatever its status, so that is the cause worth naming; a disabled shared
+  // binding then refuses for its own reason with its own error.
   const plane = await resolveDataPlane(ctx.orgId, "postgres");
   if (plane.mode !== "shared") {
     logger.error(
@@ -86,6 +100,8 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
         "organisation's pinned policies as absent.",
     );
   }
+  // Throws DataPlaneUnavailableError for any binding that is not active.
+  assertDataPlaneUsable(plane);
 
   // The same entitlement window the action meter uses (`actionPeriodStart`), so
   // "this period" means one thing across the two capabilities a customer reads

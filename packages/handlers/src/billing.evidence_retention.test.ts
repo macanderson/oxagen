@@ -88,8 +88,15 @@ function queueDbReads(resultSets: unknown[][]): void {
 beforeEach(() => {
   vi.clearAllMocks();
   // ADR-042 §1: absence of a binding row means the shared plane, which is what
-  // every organisation is today.
-  mocks.resolveDataPlane.mockResolvedValue({ mode: "shared" });
+  // every organisation is today. `status` matters: assertDataPlaneUsable
+  // refuses anything that is not active, which is the kill switch withTenantDb
+  // used to apply on this handler's behalf.
+  mocks.resolveDataPlane.mockResolvedValue({
+    orgId: TEST_CTX.orgId,
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+  });
 });
 
 describe("billingEvidenceRetentionHandler", () => {
@@ -229,7 +236,12 @@ describe("the data plane the evidence aggregate reads (ADR-042)", () => {
     // policies, and max() over the empty set is NULL, which this handler
     // documents as "no policy pinned" — the same wrong answer the workspace
     // narrowing produced, by a different route.
-    mocks.resolveDataPlane.mockResolvedValue({ mode: "dedicated" });
+    mocks.resolveDataPlane.mockResolvedValue({
+      orgId: TEST_CTX.orgId,
+      kind: "postgres",
+      mode: "dedicated",
+      status: "active",
+    });
     queueDbReads([
       [{ extendedEvidenceRetentionEnabled: true }],
       [{ maxTtlDays: 365 }],
@@ -241,11 +253,65 @@ describe("the data plane the evidence aggregate reads (ADR-042)", () => {
   });
 
   it("reads nothing at all when it refuses", async () => {
-    mocks.resolveDataPlane.mockResolvedValue({ mode: "dedicated" });
+    mocks.resolveDataPlane.mockResolvedValue({
+      orgId: TEST_CTX.orgId,
+      kind: "postgres",
+      mode: "dedicated",
+      status: "active",
+    });
     queueDbReads([[], [], []]);
     await expect(
       billingEvidenceRetentionHandler({}, TEST_CTX),
     ).rejects.toThrow();
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+});
+
+describe("the data-plane kill switch", () => {
+  const plane = (status: string) => ({
+    orgId: TEST_CTX.orgId,
+    kind: "postgres" as const,
+    mode: "shared" as const,
+    status,
+  });
+
+  it.each(["degraded", "disabled"])(
+    "refuses a shared binding an operator marked %s",
+    async (status) => {
+      // withTenantDb resolved the plane AND called assertDataPlaneUsable.
+      // Standing in for it with a mode check alone kept the first guarantee and
+      // dropped the second, so a plane an operator had explicitly disabled was
+      // readable anyway — the kill switch, bypassed.
+      mocks.resolveDataPlane.mockResolvedValue(plane(status));
+      queueDbReads([[], [], []]);
+      await expect(
+        billingEvidenceRetentionHandler({}, TEST_CTX),
+      ).rejects.toThrow();
+      expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reads an active shared binding", async () => {
+    mocks.resolveDataPlane.mockResolvedValue(plane("active"));
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: true }],
+      [{ maxTtlDays: 30 }],
+      [{ total: "0" }],
+    ]);
+    const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
+    expect(out.effectiveRetentionDays).toBe(30);
+  });
+
+  it("names the plane mode, not the status, for a disabled DEDICATED plane", async () => {
+    // A dedicated plane cannot be read here whatever its status, so that is the
+    // cause worth reporting.
+    mocks.resolveDataPlane.mockResolvedValue({
+      ...plane("disabled"),
+      mode: "dedicated" as const,
+    });
+    queueDbReads([[], [], []]);
+    await expect(billingEvidenceRetentionHandler({}, TEST_CTX)).rejects.toThrow(
+      /dedicated Postgres plane/,
+    );
   });
 });
