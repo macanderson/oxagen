@@ -1,7 +1,7 @@
 // Typed Billing values for the Billing component tests (ARCHITECTURE.md §5): a
 // subscription, a prepaid bucket, a Free bucket with no card, an invoice-billed
 // bucket, a negotiated and a published-tier rate, invoice rows and a
-// DataSource that answers the four Billing reads with what a test hands it.
+// DataSource that answers the five Billing reads with what a test hands it.
 // Importable from tests only.
 import type {
   ContractRate,
@@ -165,7 +165,7 @@ export type BillingReads = {
   usageCredits: Read<UsageCredits>;
 };
 
-/** A DataSource answering the four Billing reads; `calls` records their arguments. */
+/** A DataSource answering the five Billing reads; `calls` records their arguments. */
 export function billingSource(overrides: Partial<BillingReads> = {}) {
   const reads: BillingReads = {
     plan: readOk({ subscription: SUBSCRIPTION }),
