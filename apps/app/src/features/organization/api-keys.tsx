@@ -125,6 +125,10 @@ function ApiKeysView({
   now: number;
 }) {
   const t = useTranslations("organization");
+  // Computed once: the picker lists these and the archived note asks which of
+  // them is in scope.
+  const mine = workspaces.ok ? enterable(workspaces.value) : [];
+  const chosen = mine.find((ws) => ws.slug === current);
   return (
     <div className="flex flex-col gap-6">
       {/* The shared strip, not a local copy of it: a hand-rolled two-entry
@@ -145,11 +149,10 @@ function ApiKeysView({
         <>
           <WorkspacePicker
             orgSlug={orgSlug}
-            workspaces={enterable(workspaces.value)}
+            workspaces={mine}
             current={current}
           />
-          {enterable(workspaces.value).find((ws) => ws.slug === current)
-            ?.archivedAt != null ? (
+          {chosen !== undefined && chosen.archivedAt !== null ? (
             <OutcomePanel
               tone="neutral"
               testId="api-keys-archived-workspace"
