@@ -8,7 +8,12 @@
 // The in-app agent's own turns stay out of the run rows, as in list_runs.
 // The eight slots are dealt across the kinds asked for, so no kind crowds
 // the others out: the belt alone holds hundreds of tools.
-import { schema, withTenantDb } from "@oxagen/database";
+import {
+  hidesWitnessRuns,
+  notWitnessRun,
+  schema,
+  withTenantDb,
+} from "@oxagen/database";
 import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
 import {
   SEARCH_KINDS,
@@ -38,7 +43,9 @@ export async function toolsSearchHandler(
     kinds.has("tool") ? searchTools(ctx, query) : Promise.resolve([]),
     withTenantDb((tx) =>
       Promise.all([
-        kinds.has("run") ? searchRuns(tx, scope, query, pattern) : [],
+        kinds.has("run")
+          ? searchRuns(tx, scope, query, pattern, hidesWitnessRuns(ctx))
+          : [],
         kinds.has("agent") ? searchAgents(tx, scope, query, pattern) : [],
         kinds.has("approval") ? searchApprovals(tx, scope, query, pattern) : [],
       ]),
@@ -94,6 +101,7 @@ async function searchRuns(
   scope: Scope,
   query: string,
   pattern: string,
+  hideWitnesses: boolean,
 ): Promise<SearchRow[]> {
   const runs = schema.agentRuns;
   const goal = sql<string | null>`${runs.spec}->>'goal'`;
@@ -111,6 +119,11 @@ async function searchRuns(
         eq(runs.workspaceId, scope.workspaceId),
         eq(runs.specVersion, 2),
         notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
+        // Same exclusion list_runs applies (ADR-064) and for the same reason:
+        // an API-key caller is a worker, and a run a verdict names as its
+        // witness run is what checked that worker. The predicate is shared,
+        // not copied — see notWitnessRun in @oxagen/database.
+        hideWitnesses ? notWitnessRun(runs) : undefined,
         query
           ? or(ilike(runs.publicId, pattern), ilike(goal, pattern))
           : undefined,
@@ -131,25 +144,40 @@ async function searchRuns(
         eq(sessions.orgId, scope.orgId),
         eq(sessions.workspaceId, scope.workspaceId),
         isNull(sessions.parentSessionUuid),
+        hideWitnesses ? notWitnessRun(sessions) : undefined,
         query ? ilike(sessions.publicId, pattern) : undefined,
       ),
     )
     .orderBy(desc(sessions.startedAt))
     .limit(PER_KIND);
+  // Both stores hold runs and each answered its own newest PER_KIND. Taking
+  // the ledger's rows first and slicing would drop every Tacho session
+  // whenever PER_KIND ledger runs matched, however much newer the session
+  // was; the run kind has to be the newest runs across both stores, so carry
+  // each row's timestamp, merge on it, and slice once at the end.
   return [
     ...ledger.map((r) => ({
-      kind: "run" as const,
-      id: r.publicId,
-      label: r.goal ?? r.publicId,
-      contextLine: r.status,
+      at: r.at,
+      row: {
+        kind: "run" as const,
+        id: r.publicId,
+        label: r.goal ?? r.publicId,
+        contextLine: r.status,
+      },
     })),
     ...tacho.map((r) => ({
-      kind: "run" as const,
-      id: r.publicId,
-      label: r.publicId,
-      contextLine: r.outcome,
+      at: r.startedAt,
+      row: {
+        kind: "run" as const,
+        id: r.publicId,
+        label: r.publicId,
+        contextLine: r.outcome,
+      },
     })),
-  ].slice(0, PER_KIND);
+  ]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, PER_KIND)
+    .map((r) => r.row);
 }
 
 async function searchAgents(

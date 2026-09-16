@@ -442,39 +442,72 @@ async function runPreparedTurn(
   });
   hooks.onRun?.({ runId: run.runPublicId });
 
-  const turn = await runGovernedTurn({
-    telemetry: {
-      ...scope,
-      surface: request.surface === "chat" ? "app" : "api",
-      messageId,
-    },
-    model: p.turnModel,
-    ...(p.tier ? { tier: p.tier } : {}),
-    ...(funding.fundedBy === "org" ? { credential: funding.credential } : {}),
-    governance: { ...materialised.governance, ...belt.governance },
-    principal: userId,
-    system: resolvePrompt({
-      key: "chat.system",
-      baseline: buildChatSystemPrompt({
-        orgSlug: request.orgSlug,
-        workspaceSlug: request.workspaceSlug,
-        orgName: names.orgName,
-        workspaceName: names.workspaceName,
+  // `openAssistantRun` has admitted the run and opened its attempt, but
+  // `runGovernedTurn` does not install its sealing path until after its
+  // preflight — the engine readiness probe, the provider tool-count cap, the
+  // contract conversion — and every seal it does install runs on the detached
+  // chain after it has already returned. So anything the preflight throws
+  // lands in a window where the run exists and nothing will ever seal it,
+  // leaving it open for ever against the per-run governance and lineage
+  // invariant. An engine outage refuses every turn, so that is not one stray
+  // row: it is the record filling with unsealed runs at exactly the moment
+  // the record matters most. Seal as failed, then rethrow — the refusal is
+  // still the turn's answer, and this never double-seals because
+  // runGovernedTurn cannot reject after a seal.
+  let turn: Awaited<ReturnType<typeof runGovernedTurn>>;
+  try {
+    turn = await runGovernedTurn({
+      telemetry: {
+        ...scope,
+        surface: request.surface === "chat" ? "app" : "api",
+        messageId,
+      },
+      model: p.turnModel,
+      ...(p.tier ? { tier: p.tier } : {}),
+      ...(funding.fundedBy === "org" ? { credential: funding.credential } : {}),
+      governance: { ...materialised.governance, ...belt.governance },
+      principal: userId,
+      system: resolvePrompt({
+        key: "chat.system",
+        baseline: buildChatSystemPrompt({
+          orgSlug: request.orgSlug,
+          workspaceSlug: request.workspaceSlug,
+          orgName: names.orgName,
+          workspaceName: names.workspaceName,
+        }),
+        config: promptConfig,
       }),
-      config: promptConfig,
-    }),
-    history,
-    contextMessages: [pageContextMessage(request.pageContext), recalledMemory],
-    instruction: request.content,
-    tools: belt.tools,
-    modelTools: belt.modelTools,
-    mutatingToolNames: materialised.mutatingToolNames,
-    ...(p.effort ? { effort: p.effort } : {}),
-    ...(budgetGuard !== undefined ? { budgetGuard } : {}),
-    fundedBy: funding.fundedBy,
-    ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
-    ledger: run,
-  });
+      history,
+      contextMessages: [
+        pageContextMessage(request.pageContext),
+        recalledMemory,
+      ],
+      instruction: request.content,
+      tools: belt.tools,
+      modelTools: belt.modelTools,
+      mutatingToolNames: materialised.mutatingToolNames,
+      ...(p.effort ? { effort: p.effort } : {}),
+      ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+      fundedBy: funding.fundedBy,
+      ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
+      ledger: run,
+    });
+  } catch (err) {
+    // A seal that itself fails must not replace the refusal the caller needs
+    // to see; it is logged and the original error propagates.
+    await run
+      .seal({
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+      })
+      .catch((sealErr: unknown) => {
+        logger.error(
+          { err: sealErr, runId: run.runPublicId },
+          "assistant run could not be sealed after a turn preflight refusal",
+        );
+      });
+    throw err;
+  }
 
   let streamError: { error: unknown } | null = null;
   for await (const part of turn.fullStream) {

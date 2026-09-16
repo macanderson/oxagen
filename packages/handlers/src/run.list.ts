@@ -42,7 +42,13 @@ import {
   runList,
   type RunListOutput,
 } from "@oxagen/oxagen/contracts/run.list";
-import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import {
+  hidesWitnessRuns,
+  notWitnessRun,
+  schema,
+  type Tx,
+  withTenantDb,
+} from "@oxagen/database";
 import { isReplayGrade } from "@oxagen/tacho";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
@@ -111,7 +117,6 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
-const verdicts = schema.verdicts;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -148,8 +153,12 @@ export type PageQuery = {
   withoutWitnessRuns: boolean;
 };
 
-/** No verdict in the run's workspace names it as a witness run, when the page asks. */
-function notWitnessRun(
+/**
+ * No verdict in the run's workspace names it as a witness run, when the page
+ * asks. The predicate itself is `notWitnessRun` in `@oxagen/database`, shared
+ * with `search_tools`; this only decides whether this page applies it.
+ */
+function hideWitnessRuns(
   q: PageQuery,
   run: {
     orgId: typeof runs.orgId | typeof sessions.orgId;
@@ -158,7 +167,7 @@ function notWitnessRun(
   },
 ): SQL | undefined {
   if (!q.withoutWitnessRuns) return undefined;
-  return sql`not exists (select 1 from ${verdicts} where ${verdicts.orgId} = ${run.orgId} and ${verdicts.workspaceId} = ${run.workspaceId} and ${verdicts.witnessRunId} = ${run.publicId}::text)`;
+  return notWitnessRun(run);
 }
 
 const ledgerColumns = {
@@ -220,7 +229,7 @@ export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(runs.specVersion, 2),
         notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
-        notWitnessRun(q, runs),
+        hideWitnessRuns(q, runs),
       ),
     )
     .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
@@ -428,7 +437,7 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(sessions.workspaceId, scope.workspaceId),
         isNull(sessions.parentSessionUuid),
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
-        notWitnessRun(q, sessions),
+        hideWitnessRuns(q, sessions),
       ),
     )
     .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
@@ -923,7 +932,7 @@ export function createRunListHandler(
     const page = {
       cursor,
       limit: input.limit,
-      withoutWitnessRuns: ctx.apiKeyId !== null,
+      withoutWitnessRuns: hidesWitnessRuns(ctx),
     };
 
     const [ledger, tacho] = await Promise.all([
