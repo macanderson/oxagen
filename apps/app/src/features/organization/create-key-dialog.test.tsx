@@ -433,3 +433,101 @@ describe("revoke", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
+
+describe("leaving the page", () => {
+  // `openChange` holds the dialog's own close paths, and the modal's inert
+  // backdrop holds the links behind it. Neither reaches the browser: a
+  // refresh, a tab closing, a typed address or Back unmounts this island
+  // whatever is on screen, and the secret exists only in its state. For a
+  // rotation that is an outage — the replaced key is already revoked.
+  //
+  // The value is not written anywhere durable to survive the reload. A secret
+  // shown once must not sit in browser storage; the window is held instead.
+  function tryToLeave(): boolean {
+    return !window.dispatchEvent(
+      new Event("beforeunload", { cancelable: true }),
+    );
+  }
+  function pressBack(): void {
+    window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+  }
+
+  it("holds a refresh and turns Back back while the write is in flight", async () => {
+    let answer: (result: unknown) => void = () => undefined;
+    rotateApiKey.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    renderRow();
+    const dialog = await openDialog("Rotate", "rotate-api-key");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Rotate it" }),
+    );
+
+    expect(tryToLeave()).toBe(true);
+    fireEvent(window, new PopStateEvent("popstate", { state: null }));
+    expect(
+      await screen.findByTestId("rotate-api-key-held-back"),
+    ).toHaveTextContent(
+      "Oxagen is still writing this key. Its secret is shown once and cannot be asked for again, so leaving now would lose it. This takes a moment.",
+    );
+
+    // A rotation's replacement carries an id of its own, so the roster this
+    // row was rendered from does not list it and the showing stands.
+    answer({
+      ok: true,
+      value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" },
+    });
+    expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
+  });
+
+  it("holds a refresh and turns Back back while the secret is on screen, unacknowledged", async () => {
+    createApiKey.mockResolvedValue({ ok: true, value: minted });
+    render(createDialog());
+    const dialog = await openDialog("Create a key", "create-api-key");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create it" }),
+    );
+    await screen.findByTestId("api-key-secret");
+
+    expect(tryToLeave()).toBe(true);
+    fireEvent(window, new PopStateEvent("popstate", { state: null }));
+    expect(
+      await screen.findByTestId("create-api-key-held-back"),
+    ).toHaveTextContent(
+      "The secret is on this screen and nowhere else. Copy it, then close this — leaving now loses it for good.",
+    );
+    // Held, not trapped: Close is the way out, and it ends the showing.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    });
+    expect(tryToLeave()).toBe(false);
+  });
+
+  it("lets the window go when no write is in flight and no secret is owed (negative)", async () => {
+    // A prompt that fires when there is nothing to lose is one people learn to
+    // click through, and then it does not work the once it matters.
+    renderRow();
+    expect(tryToLeave()).toBe(false);
+    await openDialog("Revoke", "revoke-api-key");
+    expect(tryToLeave()).toBe(false);
+    pressBack();
+    expect(screen.queryByTestId("revoke-api-key-held-back")).toBeNull();
+  });
+
+  it("lets the window go once a revoke lands, because it owes no secret (negative)", async () => {
+    revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
+    renderRow();
+    const dialog = await openDialog("Revoke", "revoke-api-key");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke" }),
+    );
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(HERE);
+    });
+    expect(tryToLeave()).toBe(false);
+  });
+});

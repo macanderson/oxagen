@@ -909,6 +909,10 @@ type Messages = {
           body: string;
           named: string;
         };
+        heldBack: {
+          pending: string;
+          secret: string;
+        };
         failure: {
           denied: string;
           keyNotFound: string;

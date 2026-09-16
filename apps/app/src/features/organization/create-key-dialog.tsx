@@ -19,6 +19,7 @@ import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { endOfUtcDay } from "@/shared/expiry-day";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import { useExitGuard } from "@/ui/exit-guard";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -149,6 +150,7 @@ function KeyWriteDialog({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [written, setWritten] = useState<NewApiKey | null>(null);
+  const [heldBack, setHeldBack] = useState(false);
 
   // The showing is over the moment the roster the server sent names the key,
   // and the secret leaves this component with it — cleared, not hidden. Holding
@@ -166,6 +168,15 @@ function KeyWriteDialog({
   const secret = listed ? null : written;
   const showing = open && !listed;
 
+  // The window where a secret can be lost: a write the server has not answered
+  // yet, or one it answered with a secret nobody has acknowledged. Outside it
+  // there is nothing to lose and the guard is down, so the prompt keeps its
+  // meaning. `openChange` holds the dialog's own close paths; this holds the
+  // browser's (`ui/exit-guard.ts`).
+  useExitGuard(pending || secret !== null, () => {
+    setHeldBack(true);
+  });
+
   function openChange(next: boolean) {
     // A key write in flight is not dismissable. The secret comes back once and
     // exists nowhere else, and a rotation has already revoked the key it
@@ -177,6 +188,7 @@ function KeyWriteDialog({
     if (pending && !next) return;
     setOpen(next);
     setFailure(null);
+    setHeldBack(false);
     if (next) {
       setWritten(null);
       return;
@@ -192,6 +204,7 @@ function KeyWriteDialog({
     if (pending) return;
     setPending(true);
     setFailure(null);
+    setHeldBack(false);
     try {
       const result = await write();
       if (!result.ok) {
@@ -235,6 +248,13 @@ function KeyWriteDialog({
         title={secret === null ? title : t("secret.title")}
         testId={testId}
       >
+        {heldBack ? (
+          <div className="mb-3">
+            <FormAlert testId={`${testId}-held-back`}>
+              {secret === null ? t("heldBack.pending") : t("heldBack.secret")}
+            </FormAlert>
+          </div>
+        ) : null}
         {secret === null ? (
           <form
             onSubmit={(e) => void submit(e)}

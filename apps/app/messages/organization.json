@@ -103,6 +103,10 @@
           "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
           "named": "{name} · begins {prefix}"
         },
+        "heldBack": {
+          "pending": "Oxagen is still writing this key. Its secret is shown once and cannot be asked for again, so leaving now would lose it. This takes a moment.",
+          "secret": "The secret is on this screen and nowhere else. Copy it, then close this — leaving now loses it for good."
+        },
         "failure": {
           "denied": "Your organization role does not allow this. Nothing was changed.",
           "keyNotFound": "This key is no longer here, or it was already revoked.",
