@@ -14,7 +14,7 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
   return (
     <TuiFrame
       id="tui-answer"
-      title="~/acme-web — oxagen"
+      title="~/acme-web · oxagen"
       width={560}
       height={306}
       className={className}

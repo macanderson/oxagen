@@ -55,6 +55,7 @@ const source = {
     budgets: vi.fn(),
   },
   org: { members: vi.fn(), apiKeys: vi.fn() },
+  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };

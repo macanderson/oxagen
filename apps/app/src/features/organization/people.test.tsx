@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// Organization › People over org.members: the tabs, the members and pending
-// invitations in the ok state, each section's empty line, and the denied,
-// pending-approval and error states that replace both sections. Every state
-// is checked with axe. No settings, roles or workspaces section renders.
+// Organization › People over org.members: the tabs, the members with the two
+// writes their row carries and pending invitations in the ok state, each
+// section's empty line, and the denied, pending-approval and error states that
+// replace both sections. Every state is checked with axe. No settings, roles or
+// workspaces section renders.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +17,13 @@ vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
     <a {...rest}>{children}</a>
   ),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock("./actions", () => ({
+  changeMemberRole: vi.fn(),
+  removeOrgMember: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -43,6 +51,34 @@ async function renderPeople(
     orgRole,
   });
   const { source, calls } = orgSource({ members: read });
+  const members = vi.fn<Members>().mockResolvedValue(read);
+  const source = {
+    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
+    shell: { context: vi.fn() },
+    billing: {
+      plan: vi.fn(),
+      bucket: vi.fn(),
+      contractRate: vi.fn(),
+      invoices: vi.fn(),
+    },
+    runs: { list: vi.fn() },
+    approvals: { pending: vi.fn() },
+    agents: {
+      list: vi.fn(),
+      get: vi.fn(),
+      toolbelt: vi.fn(),
+      incidents: vi.fn(),
+    },
+    spend: {
+      byGroup: vi.fn(),
+      fleet: vi.fn(),
+      drill: vi.fn(),
+      waste: vi.fn(),
+      budgets: vi.fn(),
+    },
+    org: { members },
+    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  };
   const view = render(
     <IntlProvider>{await People({ ctx, source })}</IntlProvider>,
   );
@@ -144,6 +180,36 @@ describe("ok", () => {
     expect(sectionTitles()).toEqual(["People", "Pending invitations"]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
     expect(screen.queryByText(/settings|workspaces|roles/i)).toBeNull();
+  });
+});
+
+describe("the writes on a member's row", () => {
+  it("an Owner opens the two writes on every member", async () => {
+    await renderPeople(readOk(roster));
+    const members = screen.getByRole("region", { name: "People" });
+    for (const row of within(members).getAllByRole("row").slice(1)) {
+      expect(
+        within(row).getByRole("button", { name: "Change role" }),
+      ).toBeInTheDocument();
+      expect(
+        within(row).getByRole("button", { name: "Remove" }),
+      ).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId("member-actions-denied")).toBeNull();
+  });
+
+  it("a Member sees the roster with both writes refused, and opens neither (negative)", async () => {
+    await renderPeople(readOk(roster), "member");
+    const members = screen.getByRole("region", { name: "People" });
+    const rows = within(members).getAllByRole("row").slice(1);
+    expect(screen.getAllByTestId("member-actions-denied")).toHaveLength(
+      rows.length,
+    );
+    expect(screen.getAllByTestId("member-actions-denied")[0]).toHaveTextContent(
+      "Changing a role and removing a member are Owner and Admin actions.",
+    );
+    expect(screen.queryByRole("button", { name: "Change role" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   });
 });
 

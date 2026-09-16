@@ -6,7 +6,9 @@
 // session's hash-chained events cursored on its dense `seq`, both behind an
 // opaque cursor this handler owns. Each frame carries its body reference and
 // never its bytes (ADR-058; `get_run_frame_body` reads those on demand) and
-// its own cost record when it carried one.
+// its own cost record when it carried one. A witness run answers the worker
+// run it reported on as `witnessFor` (ADR-064); to an API-key caller a
+// witness run is `not_found` (lib/run-read.ts).
 //
 // `waitMs` is the handler-side long poll (ARCHITECTURE.md §3.5): with no event
 // past the cursor, the handler sleeps POLL_INTERVAL_MS at a time inside the
@@ -19,7 +21,7 @@ import {
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
-import { invalidCursor, microsString, runScope } from "./run.list";
+import { invalidCursor, microsString } from "./run.list";
 import {
   defaultRunReadDeps,
   readFrames,
@@ -120,14 +122,13 @@ export function createRunGetHandler(
   }
 
   return async (input, ctx): Promise<RunGetOutput> => {
-    const scope = runScope(ctx);
     const cursor =
       input.framesAfter === undefined
         ? undefined
         : decodeFrameCursor(input.framesAfter);
     if (cursor === null) throw invalidCursor(runGet.name);
 
-    const run = await resolveRun(deps, scope, input.runId);
+    const run = await resolveRun(deps, ctx, input.runId);
     const frames = await poll(
       run,
       cursor ?? startCursorSeq(run),
@@ -141,6 +142,7 @@ export function createRunGetHandler(
         frames: frames.map(toFrame),
         cursor: last ? encodeFrameCursor(last.seq) : null,
       },
+      witnessFor: run.witnessFor,
     };
   };
 }

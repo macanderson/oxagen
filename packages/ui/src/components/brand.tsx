@@ -3,7 +3,7 @@
  *
  * Geometry comes from `./brand-marks.generated.ts`, extracted by
  * `tools/scripts/sync-brand-assets.mjs` from the house brand kit
- * (macanderson/oxagen-house-brand). Nothing here is drawn: both wordmarks are
+ * (oxagenai/oxagen-brand). Nothing here is drawn: both wordmarks are
  * Space Grotesk's own outlines at weight 600, and both icons are the same face
  * at display weight, so the marks and the product's running text cannot drift
  * apart. To change a mark, change the kit and re-run the sync.

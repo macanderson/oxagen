@@ -18,7 +18,38 @@
       "person": "Person",
       "role": "Role",
       "joined": "Joined",
+      "actions": "Actions",
       "empty": "This organization has no members."
+    },
+    "actions": {
+      "denied": "Changing a role and removing a member are Owner and Admin actions.",
+      "role": {
+        "open": "Change role",
+        "title": "Change the role of {name}",
+        "body": "This replaces the role they hold across the organization. The record keeps the change with your name on it.",
+        "label": "Role",
+        "confirm": "Change it",
+        "pending": "Changing"
+      },
+      "remove": {
+        "open": "Remove",
+        "title": "Remove {name} from the organization",
+        "body": "They lose {role} and every workspace grant, and Oxagen revokes the command-line keys they minted. Runs stay attributed to them. Only a new invitation brings them back.",
+        "confirm": "Remove",
+        "pending": "Removing"
+      },
+      "failure": {
+        "lastOwner": "This is the last owner of the organization. Make someone else an owner first.",
+        "targetNotMember": "This person is no longer a member of this organization.",
+        "roleNotFound": "This organization has no role by that name. Nothing was changed.",
+        "roleNotGrantable": "That role is not one this organization grants. Nothing was changed.",
+        "insufficientRole": "Your organization role does not allow this change. Nothing was changed.",
+        "noPrincipal": "The request carried no signed-in user. Sign in and try again.",
+        "refused": "The change was refused: {code}. Nothing was changed.",
+        "invalid": "The request was refused as invalid. Nothing was changed.",
+        "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The change could not be made: {code}. Nothing was changed."
+      }
     },
     "invitations": {
       "title": "Pending invitations",

@@ -33,7 +33,7 @@ export function createRunFrameBodyGetHandler(
 ): CapabilityHandler<typeof runFrameBodyGet> {
   return async (input, ctx): Promise<RunFrameBodyGetOutput> => {
     const scope = runScope(ctx);
-    const run = await resolveRun(deps, scope, input.runId);
+    const run = await resolveRun(deps, ctx, input.runId);
     const frame = await readFrameAt(deps, run, input.seq);
     if (!frame) {
       throw new HandlerError({ code: "not_found", reason: "frame_not_found" });

@@ -293,4 +293,73 @@ describe("orgMemberRemoveHandler", () => {
       }),
     );
   });
+
+  it("a member named by public id is resolved to their user id, after the actor gate", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => {
+        const limit = vi.fn().mockResolvedValue(result);
+        const where = vi.fn().mockReturnValue({ limit });
+        const innerJoin = vi.fn().mockReturnValue({ where });
+        const from = vi.fn().mockReturnValue({ where, innerJoin });
+        return { from };
+      };
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
+      if (callCount === 2) return build([{ roleName: "Admin" }]); // actor PRA = Admin
+      if (callCount === 3) return build([{ userId: "target-user-uuid" }]); // usr_… → users.id
+      if (callCount === 4) return build([{ id: "target-ou", role: "member" }]); // target orgUser
+      if (callCount === 5) return build([{ id: "owner-role-id" }]); // Owner role row
+      if (callCount === 6) return build([{ n: 2 }]); // 2 owners — no lockout
+      if (callCount === 7) return build([{ id: "target-principal-id" }]); // target principal
+      if (callCount === 8) return build([]); // target holds no Owner PRA
+      if (callCount === 9) return build([{ id: "target-principal-id" }]); // mutation principal
+      return build([]);
+    });
+
+    const updateWhere = vi.fn().mockResolvedValue([]);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockTx.update = vi.fn().mockReturnValue({ set: updateSet });
+    const deleteWhere = vi.fn().mockResolvedValue([]);
+    mockTx.delete = vi.fn().mockReturnValue({ where: deleteWhere });
+
+    const result = await orgMemberRemoveHandler(
+      { targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a" },
+      makeCtx(),
+    );
+
+    // The answer names the target the caller named, not the uuid it resolved.
+    expect(result).toMatchObject({
+      removed: true,
+      targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+    });
+    expect(mockTx.delete).toHaveBeenCalledOnce();
+  });
+
+  it("a public id that names nobody in this org → not_found, nothing deleted", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => {
+        const limit = vi.fn().mockResolvedValue(result);
+        const where = vi.fn().mockReturnValue({ limit });
+        const innerJoin = vi.fn().mockReturnValue({ where });
+        const from = vi.fn().mockReturnValue({ where, innerJoin });
+        return { from };
+      };
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
+      if (callCount === 2) return build([{ roleName: "Owner" }]);
+      return build([]); // 3: the public id resolves to no member of this org
+    });
+    mockTx.delete = vi.fn();
+    mockTx.update = vi.fn();
+
+    await expectHandlerError(
+      orgMemberRemoveHandler({ targetUserId: "usr_0000000000000000000000" }, makeCtx()),
+      "not_found",
+      "target_not_member",
+    );
+    expect(mockTx.delete).not.toHaveBeenCalled();
+    expect(mockTx.update).not.toHaveBeenCalled();
+  });
 });

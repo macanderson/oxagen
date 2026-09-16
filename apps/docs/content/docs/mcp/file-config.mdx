@@ -1,13 +1,13 @@
 ---
 title: File-based configuration
-description: "Configure MCP servers using settings.json files: offline-first, version-controllable, and CLI-friendly."
+description: "Configure MCP servers in settings.json files that work offline and live in version control."
 ---
 
-The file-based configuration system lets you define MCP servers, permissions, and tool visibility in JSON files. It works offline, supports version control, and mirrors the layered settings approach used by Claude Code.
+File-based configuration defines MCP servers, permission rules, and tool visibility in JSON files. The files work offline, live in version control, and follow the same layered settings model as Claude Code.
 
 ## File hierarchy
 
-Settings are loaded from three scopes, with later scopes overriding earlier ones:
+The runtime loads settings from three scopes, and a later scope overrides an earlier one:
 
 | Scope | Path | VCS | Purpose |
 |-------|------|-----|---------|
@@ -93,14 +93,14 @@ Settings are loaded from three scopes, with later scopes overriding earlier ones
 
 | Section | Merge behavior |
 |---------|---------------|
-| `mcpServers` | Keyed by name. Later scope replaces entire server entry (no deep-merge within a server). |
+| `mcpServers` | Keyed by name. A later scope replaces the whole server entry (no deep merge within a server). |
 | `permissions.defaultMcpPolicy` | Later scope wins. |
-| `permissions.mcpServers` | Keyed by server name. `deny`/`allow` lists **append**; `defaultPolicy` **overwrites**. |
-| `toolVisibility` | Keyed by server name. Later scope fully replaces that server's visibility. |
+| `permissions.mcpServers` | Keyed by server name. `deny`/`allow` lists **append**. `defaultPolicy` **overwrites**. |
+| `toolVisibility` | Keyed by server name. A later scope fully replaces that server's visibility. |
 
 ## Environment variable expansion
 
-All string values in the settings support `${VAR}` expansion:
+Every string value in the settings supports `${VAR}` expansion:
 
 ```json
 {
@@ -115,7 +115,7 @@ All string values in the settings support `${VAR}` expansion:
 }
 ```
 
-Missing env vars resolve to an empty string and produce a warning on stderr. The server is skipped if the URL becomes empty.
+A missing env var resolves to an empty string and prints a warning on stderr. The runtime skips the server if its URL ends up empty.
 
 ## Disabling a server
 
@@ -135,11 +135,11 @@ Set `"disabled": true` to keep a server in the config without loading it:
 }
 ```
 
-Disabled servers appear in `oxagen mcp list` but are not connected or probed.
+The runtime does not connect to or probe a disabled server.
 
 ## Project root detection
 
-The CLI finds the project root by walking up from the current directory looking for an `.oxagen/` directory. If none is found, the current working directory is used.
+The runtime finds the project root by walking up from the current directory to the nearest `.oxagen/` directory. If it finds none, it uses the current working directory. The example below uses the retired `oxagen mcp list` command, which prints a retirement notice. The lookup it illustrates is the one the runtime performs.
 
 ```bash
 # These all work from any subdirectory of the project:
@@ -155,7 +155,7 @@ echo '{}' > .oxagen/settings.json
 echo 'settings.local.json' >> .oxagen/.gitignore
 ```
 
-Or use the `add` command which creates the directory and file automatically:
+The `add` command below is retired in the Oxagen CLI. It prints a retirement notice, exits non-zero, and creates nothing, so create the directory and file with the commands above.
 
 ```bash
 oxagen mcp add my-server --url https://example.com/mcp
