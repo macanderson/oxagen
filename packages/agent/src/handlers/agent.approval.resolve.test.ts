@@ -106,6 +106,8 @@ type Tenant = {
   matchedRowId: string | null;
   /** The user whose conversation holds the parked message; null when no message matches. */
   requesterUserId: string | null;
+  /** The message the resolved row carries; null when a run parked the call outside any conversation. */
+  messageId: string | null;
   /** The mandate hop on the matched row (ADR-059); absent for a chat gate row. */
   mandate?: {
     mandateId: string;
@@ -259,7 +261,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
                       ? [
                           {
                             id: tenant.matchedRowId,
-                            messageId: MESSAGE_UUID,
+                            messageId: tenant.messageId,
                             capabilityName: "set_budget",
                           },
                         ]
@@ -296,6 +298,7 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     workspaceRole: null,
     matchedRowId: ROW_UUID,
     requesterUserId: "u_asker",
+    messageId: MESSAGE_UUID,
     ...overrides,
   };
   const captured: Captured = {
@@ -520,6 +523,7 @@ describe("resolve_approval — the UPDATE", () => {
   it.each([
     ["the resolver is the person who asked", { requesterUserId: "u_1" }],
     ["no chat message backs the approval", { requesterUserId: null }],
+    ["the row carries no message id", { messageId: null }],
     ["no row matched", { matchedRowId: null }],
   ])(
     "writes no approval.resolved row when %s (negative)",
@@ -532,6 +536,16 @@ describe("resolve_approval — the UPDATE", () => {
       expect(captured.notification).toBeNull();
     },
   );
+
+  it("runs no requester lookup at all when the row carries no message id", async () => {
+    const captured = setup({ messageId: null });
+    await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    expect(captured.requesterWhere).toBeNull();
+    expect(captured.notification).toBeNull();
+  });
 
   it("throws conflict approval_expired when no row matched, and notifies nobody", async () => {
     const captured = setup({ matchedRowId: null });

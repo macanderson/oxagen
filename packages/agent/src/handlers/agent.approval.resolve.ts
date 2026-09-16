@@ -146,33 +146,38 @@ export async function agentApprovalResolveHandler(
 
     // MC spec §7.7 approval.resolved: the person whose message parked the
     // call hears the decision, written with the decision. A person who
-    // resolves their own approval already knows.
-    const [requester] = await tx
-      .select({ userId: schema.conversations.userId })
-      .from(schema.messages)
-      .innerJoin(
-        schema.conversations,
-        eq(schema.conversations.id, schema.messages.conversationId),
-      )
-      .where(
-        and(
-          eq(schema.messages.id, updated.messageId),
-          eq(schema.messages.orgId, ctx.orgId),
-          eq(schema.messages.workspaceId, ctx.workspaceId),
-        ),
-      )
-      .limit(1);
-    if (requester && requester.userId !== actingUserId) {
-      await tx.insert(schema.notifications).values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        userId: requester.userId,
-        kind: "approval",
-        event: "approval.resolved",
-        title: `Approval ${input.decision}: ${updated.capabilityName}`,
-        body: input.note ?? null,
-        deepLink: null,
-      });
+    // resolves their own approval already knows. approval_requests.message_id
+    // is nullable — an approval a run parked outside any conversation has no
+    // requester to tell, so there is nobody to look up.
+    const messageId = updated.messageId;
+    if (messageId) {
+      const [requester] = await tx
+        .select({ userId: schema.conversations.userId })
+        .from(schema.messages)
+        .innerJoin(
+          schema.conversations,
+          eq(schema.conversations.id, schema.messages.conversationId),
+        )
+        .where(
+          and(
+            eq(schema.messages.id, messageId),
+            eq(schema.messages.orgId, ctx.orgId),
+            eq(schema.messages.workspaceId, ctx.workspaceId),
+          ),
+        )
+        .limit(1);
+      if (requester && requester.userId !== actingUserId) {
+        await tx.insert(schema.notifications).values({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: requester.userId,
+          kind: "approval",
+          event: "approval.resolved",
+          title: `Approval ${input.decision}: ${updated.capabilityName}`,
+          body: input.note ?? null,
+          deepLink: null,
+        });
+      }
     }
     return { rowId: updated.id, mandate };
   });
