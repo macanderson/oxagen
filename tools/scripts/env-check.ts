@@ -156,6 +156,12 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "ANTHROPIC_MODEL",
   // Terminal emulators set this; tacho reads it to name the host program
   "TERM_PROGRAM",
+  // The credential an SDK-wrapped agent reads from its own process. The
+  // register flow's wrap step prints the line that reads it
+  // (apps/app/src/features/onboarding/ui/wrap-agent.tsx), so the name appears
+  // in this tree as copy for the operator's environment and never as a value
+  // any Oxagen service loads.
+  "OXAGEN_AGENT_TOKEN",
 ]);
 
 // ── Schema-exempt keys ────────────────────────────────────────────────────────
