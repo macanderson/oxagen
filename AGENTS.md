@@ -138,7 +138,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm db:atlas-validate` | Validates Atlas schema against current DB state |
 | `pnpm db:seed-iam` | Seed IAM roles and permissions |
 | `pnpm db:seed-platform` | Seed platform defaults (also runs at the end of `db:migrate`) |
-| `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the sibling `../oxagen-house-brand` build outputs) |
+| `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the house kit `oxagenai/oxagen-brand` checked out at `$OXAGEN_HOUSE_BRAND` or `../oxagen-house-brand`) |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
 | `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |

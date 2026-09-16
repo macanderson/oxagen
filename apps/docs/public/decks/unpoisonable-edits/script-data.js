@@ -4,23 +4,23 @@
 window.OX_SCRIPT = [
   {
     title: "Un-poisonable edits · title",
-    say: "This briefing covers a harness feature we shipped today. The short version: an Oxagen agent can no longer silently misapply an edit or silently break a file. Every edit is anchored to a content hash, parsed before it lands, and recorded with a verifiable before and after anchor. I'll show what shipped, where it goes, and why we think it's the wedge in miniature.",
+    say: "This briefing covers a harness feature that ships today. The short version: an Oxagen agent can no longer silently misapply an edit or silently break a file. Every edit is anchored to a content hash, parsed before it lands, and recorded with a verifiable before and after anchor. I'll show what shipped, where it goes, and why it's the wedge in miniature.",
   },
   {
     title: "The problem",
-    say: "Agent edits fail in two quiet ways. Torn patches: the file changed between the agent's read and its edit, so the patch lands on the wrong version. And silent damage: the edit applies cleanly but breaks the syntax, and nobody notices until a build fails many turns later. On a tree where multiple sessions work in parallel, both are routine. And afterwards nothing records who broke what. These are structural failures, so the fix has to be structural.",
+    say: "Agent edits fail in two quiet ways. Torn patches: the file changed between the agent's read and its edit, so the patch lands on the wrong version. And silent damage: the edit applies cleanly but breaks the syntax, and nobody notices until a build fails many turns later. On a tree where multiple runs work in parallel, both are routine. And afterwards nothing records who broke what. These are structural failures, so the fix has to be structural.",
   },
   {
     title: "Shipped today · hash anchors",
-    say: "First gate: hash anchoring. Every whole-file read records a sha256 anchor in a per-run ledger. Before any mutation, the harness re-hashes the file on disk. If the hashes disagree, the world moved, and the edit is refused with a corrective message instead of being misapplied. One re-read recovers. Successful edits re-anchor, so chains of edits stay cheap. And the model never manages any of this; it's harness state.",
+    say: "First gate: hash anchoring. Every whole-file read records a sha256 anchor in a per-run ledger. Before any mutation, the harness re-hashes the file on disk. If the hashes disagree, the world moved, and the edit is refused with a corrective message instead of being misapplied. One re-read recovers. Successful edits re-anchor, so chains of edits stay cheap. And the model never manages any of this. It's harness state.",
   },
   {
     title: "Shipped today · syntax gate",
-    say: "Second gate: before a write touches disk, we parse the candidate content. TypeScript, TSX, JavaScript, JSON. An edit that would introduce new syntax errors is rejected with the exact diagnostics quoted back. Note the word new: a file that was already broken is not re-punished. And when breakage is intentional, mid-refactor, the agent declares it with expect underscore errors, the write proceeds, and the declaration is recorded. Declared, not silent.",
+    say: "Second gate: before a write touches disk, the harness parses the candidate content. TypeScript, TSX, JavaScript, JSON. An edit that would introduce new syntax errors is rejected with the exact diagnostics quoted back. Note the word new. A file that was already broken is not re-punished. And when breakage is intentional, mid-refactor, the agent declares it with expect underscore errors, the write proceeds, and the declaration is recorded. Declared, not silent.",
   },
   {
     title: "Shipped today · one seam",
-    say: "Third: where it lives. All of this is enforced at the single tool layer every agent run shares, the same seam as our graph-backed file locks. Chat, CLI, fleet workers, sandboxed runs: all inherit it with zero per-surface wiring, and none can opt out. We also shipped a diagnostics provider port, which is the seam a full project typechecker plugs into next.",
+    say: "Third: where it lives. All of this is enforced at the single tool layer every agent run shares, the same seam as the graph-backed file locks. Chat, CLI, fleet workers, sandboxed runs: all inherit it with no per-surface wiring, and none can opt out. A diagnostics provider port ships too, and it is the seam a full project typechecker plugs into next.",
   },
   {
     title: "The audit trail",
@@ -32,10 +32,10 @@ window.OX_SCRIPT = [
   },
   {
     title: "Why it matters",
-    say: "Why this is important. The frontier models converged; the harness is now the differentiator. Accuracy is a property of the loop. Refusing the bad write beats repairing it, every time, and that's the accuracy moat. The per-edit audit chain is the trust moat: enterprises can prove what their agents did. Hash anchoring exists elsewhere; the delta gate and the lineage record don't. This is our typed-contract wedge applied to the file system itself.",
+    say: "Why this matters. The frontier models converged, and the harness is now the differentiator. Accuracy is a property of the loop. Refusing the bad write beats repairing it, and that's the accuracy moat. The per-edit audit chain is the trust moat: enterprises can show what their agents did. Hash anchoring exists elsewhere. The delta gate and the lineage record don't. This is Oxagen's typed-contract wedge applied to the file system itself.",
   },
   {
     title: "The close",
-    say: "So: torn patches, structurally impossible. Shipped today at one seam for every surface. Typecheck deltas, AST transforms, lineage, and governed billable edits on the way. The platforms that win the agent era are the ones whose loops cannot silently damage your code, and can prove it.",
+    say: "So: torn patches are refused before they land, at one seam, for every surface. Typecheck deltas, AST transforms, lineage, and governed billable edits come next. An edit that would silently damage your code is refused before it lands, and the record shows every one.",
   },
 ];

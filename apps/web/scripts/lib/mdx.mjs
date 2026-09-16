@@ -7,6 +7,7 @@ import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as jsxRuntime from "react/jsx-runtime";
 import remarkGfm from "remark-gfm";
+import { FIGURES } from "./figures.mjs";
 
 /**
  * A URL-safe id from heading text, mirroring what GitHub does: lowercase,
@@ -37,7 +38,8 @@ export function textOf(node) {
 /**
  * The component map every post renders with. Headings get ids (and are
  * recorded for the table of contents), external links open in a new tab,
- * tables get a scroll wrapper, and the two authoring components live here.
+ * tables get a scroll wrapper, and the authoring components live here: the
+ * two below, plus the drawn figures from figures.mjs.
  * @param {{ headings: Array<{depth: number, id: string, text: string}> }} state
  */
 export function buildComponents(state) {
@@ -107,6 +109,7 @@ export function buildComponents(state) {
         createElement("img", { src, alt, loading: "lazy", decoding: "async" }),
         caption ? createElement("figcaption", null, caption) : null,
       ),
+    ...FIGURES,
   };
 }
 

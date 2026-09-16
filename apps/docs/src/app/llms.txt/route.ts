@@ -5,9 +5,9 @@ import { collectOrderedPageUrls, source } from "@/lib/source";
 // two in sync means every llms.txt link resolves to a real, crawlable URL.
 const BASE_URL = "https://docs.oxagen.sh";
 
-const SITE_NAME = "Oxagen Docs";
+const SITE_NAME = "Oxagen docs";
 const SITE_DESCRIPTION =
-  "Documentation for Oxagen — the metered, governed, graph-grounded control plane for teams that build and resell AI agents.";
+  "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.";
 
 // Page-tree node type, inferred from the loader output so it stays in sync with
 // fumadocs-core without importing internal type paths.

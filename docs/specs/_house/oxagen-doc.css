@@ -1,5 +1,5 @@
 /* Oxagen document shell. One stylesheet for every spec and plan.
-   Tokens are the house system (oxagen-house-brand/tokens/house-tokens.css),
+   Tokens are the house system (oxagenai/oxagen-brand, tokens/house-tokens.css),
    the treatment is docs.oxagen.sh: corners on the 8 / 12 / 16 px scale, one
    gold, no gradient except the sheen on a title's accent word. Light by
    default, dark by system setting or data-theme. */
