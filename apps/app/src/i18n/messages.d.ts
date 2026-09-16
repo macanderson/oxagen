@@ -874,6 +874,47 @@ type Messages = {
         lastUsed: string;
         expires: string;
         status: string;
+        actions: string;
+      };
+      actions: {
+        create: {
+          open: string;
+          title: string;
+          body: string;
+          name: string;
+          expires: string;
+          confirm: string;
+          pending: string;
+        };
+        rotate: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
+        revoke: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
+        secret: {
+          title: string;
+          body: string;
+          named: string;
+        };
+        failure: {
+          denied: string;
+          keyNotFound: string;
+          nameRequired: string;
+          expiryNotADay: string;
+          refused: string;
+          invalid: string;
+          pendingApproval: string;
+          unavailable: string;
+        };
       };
       status: {
         live: string;

@@ -36,7 +36,7 @@ vi.mock("./logger", () => ({
 }));
 
 import { apiKeyRevokeHandler } from "./api.key.revoke";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { type CapabilityContext, isHandlerError } from "@oxagen/oxagen";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 // ── shared fixtures ───────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ describe("api.key.revoke handler — role gate", () => {
 });
 
 describe("api.key.revoke handler — key not found", () => {
-  it("throws Error('Not found...') when key does not exist or is already revoked", async () => {
+  it("refuses a key that does not exist or is already revoked as not_found", async () => {
     let callCount = 0;
     mocks.withTenantDb.mockImplementation(
       (fn: (tx: unknown) => Promise<unknown>) => {
@@ -249,7 +249,7 @@ describe("api.key.revoke handler — key not found", () => {
     );
   });
 
-  it("not-found error is a plain Error, not a CapabilityError", async () => {
+  it("names the refusal so every surface classifies it: not_found / api_key_not_found", async () => {
     let callCount = 0;
     mocks.withTenantDb.mockImplementation(
       (fn: (tx: unknown) => Promise<unknown>) => {
@@ -261,7 +261,10 @@ describe("api.key.revoke handler — key not found", () => {
     );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
-      (e: unknown) => e instanceof Error && !(e instanceof CapabilityError),
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "api_key_not_found",
     );
   });
 });

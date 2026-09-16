@@ -10,7 +10,7 @@
 //   3. One transaction: load old (IDOR-safe) → insert new → soft-delete old.
 //   4. Emit api_key.created + api_key.revoked security events (fire-and-forget).
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyRotate } from "@oxagen/oxagen/contracts/api.key.rotate";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -81,9 +81,12 @@ export const apiKeyRotateHandler: CapabilityHandler<
       .limit(1);
 
     if (!oldKey) {
-      throw new Error(
-        "Not found: API key does not exist, is not in this org, or is already revoked",
-      );
+      throw new HandlerError({
+        code: "not_found",
+        reason: "api_key_not_found",
+        message:
+          "Not found: API key does not exist, is not in this org, or is already revoked",
+      });
     }
 
     if (requestsReservedTachoPurpose(oldKey.scope)) {

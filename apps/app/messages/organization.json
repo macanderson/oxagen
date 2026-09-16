@@ -69,7 +69,48 @@
         "created": "Created",
         "lastUsed": "Last used",
         "expires": "Expires",
-        "status": "Status"
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": {
+          "open": "Create a key",
+          "title": "Create an API key",
+          "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
+          "name": "Name",
+          "expires": "Expires on (optional)",
+          "confirm": "Create it",
+          "pending": "Creating"
+        },
+        "rotate": {
+          "open": "Rotate",
+          "title": "Rotate {name}",
+          "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first.",
+          "confirm": "Rotate it",
+          "pending": "Rotating"
+        },
+        "revoke": {
+          "open": "Revoke",
+          "title": "Revoke {name}",
+          "body": "Every request presenting this key is refused from this moment. The row stays in the record with the time it ended. Only a new key restores access.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
+        },
+        "secret": {
+          "title": "Copy the key now",
+          "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
+          "named": "{name} · begins {prefix}"
+        },
+        "failure": {
+          "denied": "Your organization role does not allow this. Nothing was changed.",
+          "keyNotFound": "This key is no longer here, or it was already revoked.",
+          "nameRequired": "Give the key a name so the roster can tell it apart.",
+          "expiryNotADay": "That expiry is not a date. Pick a day, or leave it empty for a key that does not expire.",
+          "refused": "The change was refused: {code}. Nothing was changed.",
+          "invalid": "The request was refused as invalid. Nothing was changed.",
+          "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+          "unavailable": "The change could not be made: {code}. Nothing was changed."
+        }
       },
       "status": {
         "live": "live",

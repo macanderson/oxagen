@@ -4,7 +4,7 @@
  * Coverage:
  *   - auth + scope guards (no principal / no org) → CapabilityError authz_denied
  *   - role gate (Member) → CapabilityError authz_denied
- *   - old key not found / already revoked → plain Error("Not found...")
+ *   - old key not found / already revoked → HandlerError(not_found)
  *   - happy path → returns new rawKey + revokedKeyPublicId + revokedAt
  *   - replacement inherits old name unless overridden; inherits expiry
  *   - emits api_key.created + api_key.revoked; single atomic withTenantDb txn
@@ -35,7 +35,7 @@ vi.mock("./logger", () => ({
 }));
 
 import { apiKeyRotateHandler } from "./api.key.rotate";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { type CapabilityContext, isHandlerError } from "@oxagen/oxagen";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = { keyPublicId: "aky_old123" };
@@ -183,14 +183,14 @@ describe("api.key.rotate handler — guards", () => {
 });
 
 describe("api.key.rotate handler — not found", () => {
-  it("throws a plain Error when the old key does not exist / is revoked", async () => {
+  it("refuses an old key that does not exist or is revoked as not_found", async () => {
     vi.clearAllMocks();
     setupHappyPath("Owner", null);
     await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
-        e instanceof Error &&
-        !(e instanceof CapabilityError) &&
-        /Not found/.test(e.message),
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "api_key_not_found",
     );
   });
 });

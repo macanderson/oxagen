@@ -3,17 +3,21 @@
 // contract returns no secret and no hash, so the table prints the prefix that
 // identifies a key on sight and the instants of its life, and nothing that
 // could be exchanged for access. A refused or failed read replaces the table;
-// the tabs stay. Create, rotate and revoke land with the API key writes.
+// the tabs stay. The three writes on a key — create, rotate, revoke (WL-43) —
+// are open to whoever can read this table: all four contracts are gated on the
+// same org roles in the same place (INV-29). The secret a minting write returns
+// is shown once by the client island, never by anything this section reads.
 import { useTranslations } from "next-intl";
 import type { ApiKey } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
 import { cell, Table } from "@/ui/table";
+import { CreateKeyDialog, KeyRowActions } from "./create-key-dialog";
 import { DateCell, emptyLine } from "./parts";
 
 export async function ApiKeys({
@@ -57,7 +61,7 @@ function ApiKeysView({
         ]}
       />
       {read.ok ? (
-        <Keys keys={read.value} />
+        <Keys keys={read.value} org={orgSlug} here={routes.apiKeys(orgSlug)} />
       ) : read.reason === "denied" ? (
         <OutcomePanel
           tone="deny"
@@ -108,11 +112,26 @@ function KeyStatus({ revokedAt }: { revokedAt: string | null }) {
   );
 }
 
-function Keys({ keys }: { keys: readonly ApiKey[] }) {
+function Keys({
+  keys,
+  org,
+  here,
+}: {
+  keys: readonly ApiKey[];
+  org: string;
+  /** This page, reloaded after a key was minted, rotated or revoked. */
+  here: SafePath;
+}) {
   const t = useTranslations("organization.apiKeys");
+  // The ids the server just listed: the client island drops a shown secret the
+  // moment its key appears here, so no reload can leave one on screen.
+  const listedIds = keys.map((key) => key.id);
   return (
     <div className="flex flex-col gap-3">
       <p className="max-w-prose text-sm text-muted-foreground">{t("lead")}</p>
+      <div className="flex justify-end">
+        <CreateKeyDialog org={org} listedIds={listedIds} after={here} />
+      </div>
       {keys.length === 0 ? (
         <p className={emptyLine}>{t("empty")}</p>
       ) : (
@@ -125,6 +144,7 @@ function Keys({ keys }: { keys: readonly ApiKey[] }) {
             { label: t("columns.lastUsed") },
             { label: t("columns.expires") },
             { label: t("columns.status") },
+            { label: t("columns.actions") },
           ]}
         >
           {keys.map((key) => (
@@ -152,6 +172,17 @@ function Keys({ keys }: { keys: readonly ApiKey[] }) {
               </td>
               <td className={cell}>
                 <KeyStatus revokedAt={key.revokedAt} />
+              </td>
+              <td className={cell}>
+                {key.revokedAt === null ? (
+                  <KeyRowActions
+                    org={org}
+                    keyId={key.id}
+                    keyName={key.name}
+                    listedIds={listedIds}
+                    after={here}
+                  />
+                ) : null}
               </td>
             </tr>
           ))}

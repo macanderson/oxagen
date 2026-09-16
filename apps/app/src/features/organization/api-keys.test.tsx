@@ -19,6 +19,14 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock("./api-key-actions", () => ({
+  createApiKey: vi.fn(),
+  revokeApiKey: vi.fn(),
+  rotateApiKey: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -119,26 +127,45 @@ describe("ok", () => {
     ).toHaveAttribute("data-status", "revoked");
   });
 
-  it("says what a key can do, and renders no secret and no lifecycle control (negative)", async () => {
+  it("says what a key can do, and lists no secret and no hash (negative)", async () => {
     await renderApiKeys(readOk([live, revoked]));
     expect(
       screen.getByText(
         "A key acts as the person who created it: on the API, MCP and the CLI it can do what that person can do, and no more.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/secret|hash/i)).toBeNull();
-    expect(screen.queryAllByRole("button")).toEqual([]);
-    expect(document.querySelector("form")).toBeNull();
+    expect(keysTable()).not.toHaveTextContent(/secret|hash/i);
+  });
+
+  it("carries rotate and revoke on a live key, and neither on a revoked one", async () => {
+    await renderApiKeys(readOk([live, revoked]));
+    expect(
+      within(rowFor(live))
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Rotate", "Revoke"]);
+    expect(within(rowFor(revoked)).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("offers the create control above the table, closed until it is opened", async () => {
+    await renderApiKeys(readOk([live]));
+    expect(
+      screen.getByRole("button", { name: "Create a key" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("create-api-key")).toBeNull();
   });
 });
 
 describe("empty", () => {
-  it("says the organization holds no keys, in place of the table", async () => {
+  it("says the organization holds no keys, and still offers the first one", async () => {
     await renderApiKeys(readOk([]));
     expect(
       screen.getByText("This organization has no API keys."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Create a key" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -154,6 +181,7 @@ describe("a read that did not list", () => {
     );
     expect(panel).toHaveTextContent("Signed in as Member. Needed: org.admin.");
     expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryAllByRole("button")).toEqual([]);
     expect(
       screen.getByRole("navigation", { name: "Organization" }),
     ).toBeInTheDocument();
