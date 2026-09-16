@@ -10,13 +10,13 @@
 // token count and no per-call cost appears here (§1.4).
 //
 // Owners and billing members top up; anyone else who can read the balance sees
-// who can. The presets are the CREDIT_PACKS prices, carried on the contract
-// because the app may import a contract module and nothing else from the
-// platform; packages/billing's pricing.test.ts keeps them equal.
-import {
-  CREDIT_TOPUP_PRESETS_USD,
-  MIN_CREDIT_TOPUP_USD,
-} from "@oxagen/oxagen/contracts/billing.credits.purchase";
+// who can. The presets and the minimum arrive as props. They are the
+// CREDIT_PACKS prices carried on the purchase contract, which billing.tsx
+// reads on the server and hands down, the way it hands the GAU purchase form
+// its maximum: a contract module registers its capability when it loads, so
+// reading one here would put the capability registry in the client bundle.
+// packages/billing's pricing.test.ts keeps the contract's list equal to
+// CREDIT_PACKS.
 import { useLocale, useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
 import type { UsageCredits } from "@/data/contracts/billing";
@@ -48,18 +48,24 @@ function failureKey(state: CreditTopupState) {
   }
 }
 
-function TopUpForm({ org }: { org: string }) {
+function TopUpForm({
+  org,
+  presetsUsd,
+  minUsd,
+}: {
+  org: string;
+  presetsUsd: readonly number[];
+  minUsd: number;
+}) {
   const t = useTranslations("billing.usageCredits");
   const locale = useLocale();
-  const [text, setText] = useState(
-    String(CREDIT_TOPUP_PRESETS_USD[0] ?? MIN_CREDIT_TOPUP_USD),
-  );
+  const [text, setText] = useState(String(presetsUsd[0] ?? minUsd));
   const [state, action, pending] = useActionState<CreditTopupState, FormData>(
     purchaseCredits.bind(null, org),
     null,
   );
   const failure = failureKey(state);
-  const min = formatCount(MIN_CREDIT_TOPUP_USD, locale);
+  const min = formatCount(minUsd, locale);
   return (
     <SafeForm action={action} className="flex flex-col gap-3">
       {failure === null ? null : (
@@ -70,7 +76,7 @@ function TopUpForm({ org }: { org: string }) {
         aria-label={t("presets")}
         className="flex flex-wrap items-center gap-2"
       >
-        {CREDIT_TOPUP_PRESETS_USD.map((preset) => (
+        {presetsUsd.map((preset) => (
           <button
             key={preset}
             type="button"
@@ -91,7 +97,7 @@ function TopUpForm({ org }: { org: string }) {
           name="amountUsd"
           type="number"
           required
-          min={MIN_CREDIT_TOPUP_USD}
+          min={minUsd}
           step={1}
           value={text}
           aria-describedby="credits-min"
@@ -119,11 +125,17 @@ export function UsageCreditsSection({
   org,
   credits,
   allowed,
+  presetsUsd,
+  minUsd,
 }: {
   org: string;
   credits: Read<UsageCredits>;
   /** Owner and Billing top up; the handler checks it again. */
   allowed: boolean;
+  /** The CREDIT_PACKS prices, in whole dollars of face value. */
+  presetsUsd: readonly number[];
+  /** The smallest top-up the contract accepts, in whole dollars. */
+  minUsd: number;
 }) {
   const t = useTranslations("billing.usageCredits");
   const locale = useLocale();
@@ -159,7 +171,7 @@ export function UsageCreditsSection({
         </p>
       ) : null}
       {allowed ? (
-        <TopUpForm org={org} />
+        <TopUpForm org={org} presetsUsd={presetsUsd} minUsd={minUsd} />
       ) : (
         <p className="text-sm text-muted-foreground">{t("denied")}</p>
       )}

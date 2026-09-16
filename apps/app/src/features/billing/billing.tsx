@@ -4,6 +4,10 @@
 // invoices, and the in-app AI usage credit balance with its top-up — the
 // second meter (§3.9). The page makes five reads; money appears only in the
 // rate block, the purchase total, the invoices and the credit balance.
+import {
+  CREDIT_TOPUP_PRESETS_USD,
+  MIN_CREDIT_TOPUP_USD,
+} from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { PURCHASE_GAU_MAX } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
@@ -63,6 +67,8 @@ export async function Billing({
         org={ctx.orgSlug}
         credits={credits}
         allowed={buys}
+        presetsUsd={CREDIT_TOPUP_PRESETS_USD}
+        minUsd={MIN_CREDIT_TOPUP_USD}
       />
     </div>
   );

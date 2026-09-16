@@ -7,6 +7,10 @@
 // tested in billing.test.tsx, as is the section's presence in both billing
 // modes — the section takes no mode, because credits are the second meter and
 // are metered apart from governed action units.
+import {
+  CREDIT_TOPUP_PRESETS_USD,
+  MIN_CREDIT_TOPUP_USD,
+} from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +34,13 @@ function renderSection({
 }: { credits?: Read<UsageCredits>; allowed?: boolean } = {}) {
   render(
     <IntlProvider>
-      <UsageCreditsSection org="acme" credits={credits} allowed={allowed} />
+      <UsageCreditsSection
+        org="acme"
+        credits={credits}
+        allowed={allowed}
+        presetsUsd={CREDIT_TOPUP_PRESETS_USD}
+        minUsd={MIN_CREDIT_TOPUP_USD}
+      />
     </IntlProvider>,
   );
 }
