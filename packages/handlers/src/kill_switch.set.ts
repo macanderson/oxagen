@@ -230,6 +230,17 @@ export async function resolveKillSwitchTarget(
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   switch (target.kind) {
     case "tool_version": {
+      // A `tool_version` switch bites only on a tool whose calls actually run
+      // under the id `registryCapabilityId` returns. For `source: "mcp"` that
+      // is `mcp.<server id>.<name>`, exactly what materializeTools governs an
+      // external tool under, so the deny matches. For every other source it is
+      // `row.slug`, which `toolSlugOf` lowercased at publish time, while the
+      // gate matches on `cap.name` — the contract's own verb-first name. So a
+      // switch on a NON-MCP registry tool is inert by construction. Nothing
+      // executes declared tools today (the registry is a record, not a
+      // dispatcher), so nothing is broken by it; it is written down so the
+      // next person does not read coverage into it. Wiring a dispatcher for
+      // declared tools means making these two ids one id first.
       const version = await lookups.toolVersion(scope, target.id);
       if (!version) throw notFound(target);
       return {

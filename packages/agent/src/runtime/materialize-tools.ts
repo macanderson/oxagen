@@ -454,6 +454,13 @@ export async function materializeTools(
             // version carries stops the call at this boundary. Checked before
             // an approval card opens and again once it is approved, so a
             // switch flipped during the wait stops the call (§7.4).
+            //
+            // `readOnly` decides whether the gate re-reads the deny generation
+            // first. A read-only capability is checked against the turn's
+            // snapshot, which is what §7.4's guarantee column grants
+            // ("guaranteed for non-read-only tools"): a switch flipped
+            // mid-turn stops every mutation immediately and stops reads from
+            // the next turn. That is the intent, not an oversight.
             const refuseIfKilled = async () => {
               const killed = await killSwitches.check({
                 capabilityId: cap.name,
@@ -720,6 +727,11 @@ export async function materializeTools(
                 readOnly: false,
               });
               if (killed === null) return null;
+              // The capability path throws and the generic catch records
+              // `err.name`. This path returns a message to the model instead
+              // of throwing, so it records the same class off the same object
+              // — one `error_class` counts every kill-switch refusal.
+              const denied = new KillSwitchDeniedError(killed);
               try {
                 await insertToolInvocation(
                   buildInvocationPayload(
@@ -734,14 +746,14 @@ export async function materializeTools(
                       status: "failed",
                       outputBytes: 0,
                       latencyMs: Date.now() - startedAt,
-                      errorClass: "KillSwitchDenied",
+                      errorClass: denied.name,
                     },
                   ),
                 );
               } catch {
                 /* telemetry must never fail the call */
               }
-              return new KillSwitchDeniedError(killed).message;
+              return denied.message;
             };
             const killedBeforeGates = await refuseIfKilled();
             if (killedBeforeGates !== null) return killedBeforeGates;

@@ -163,6 +163,25 @@ describe("list_credential_grants", () => {
     ]);
   });
 
+  it("reads a grant whose server row was deleted by a plugin uninstall", async () => {
+    // The regression. `mcp.credential_grants.mcp_server_id` carries no foreign
+    // key and plugin.org.uninstall hard-deletes `mcp.mcp_servers` rows, so the
+    // handler's LEFT JOIN returned nulls and `toItem` threw RangeError
+    // unconditionally. Under a newest-first order the orphan lands on page 1,
+    // and no cursor skips it and no filter excludes it — one uninstall made
+    // the Connections grants log, an audit surface, permanently unreadable for
+    // the workspace. The row now names its server the way it already named its
+    // connection, at mint time, and there is no join to go null.
+    const orphan = grant({
+      serverPublicId: "mcs_uninstalled",
+      serverName: "Acme (uninstalled)",
+    });
+    const out = await handlerOver([orphan, grant()])({ limit: 50 }, ctx());
+    expect(out.items).toHaveLength(2);
+    expect(out.items.map((i) => i.serverId)).toContain("mcs_uninstalled");
+    expect(out.items.map((i) => i.serverName)).toContain("Acme (uninstalled)");
+  });
+
   it("filters by connection and pages on an opaque cursor", async () => {
     const rows = [
       grant(),

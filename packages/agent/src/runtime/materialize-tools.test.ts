@@ -941,7 +941,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
       mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown]
     )?.[0] as Record<string, unknown>;
     expect(call.status).toBe("failed");
-    expect(call.error_class).toBe("KillSwitchDenied");
+    expect(call.error_class).toBe("KillSwitchDeniedError");
   });
 
   /** A gate that finds `capabilityId` open on its first call and switched from the second on. */
@@ -1018,7 +1018,9 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
     const failed = mocks.insertToolInvocation.mock.calls.map(
       (c) => (c as unknown as [Record<string, unknown>])[0],
     );
-    expect(failed.map((r) => r.error_class)).toEqual(["KillSwitchDenied"]);
+    expect(failed.map((r) => r.error_class)).toEqual([
+      "KillSwitchDeniedError",
+    ]);
   });
 });
 

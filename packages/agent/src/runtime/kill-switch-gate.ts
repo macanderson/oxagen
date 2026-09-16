@@ -8,8 +8,17 @@
 // for the tools a turn materializes. It holds the switches that were on when
 // it last looked and the generation vector it looked under; before a
 // non-read-only call runs it re-reads the vector, and when the vector moved it
-// re-reads the switches. A read-only call is checked against what the gate
-// last saw (§7.4: "non-read-only actions re-checked before they run").
+// re-reads the switches.
+//
+// A read-only call is checked against what the gate last saw, and that is
+// deliberate, not a shortcut. Spec §7.4's table for a deny-generation bump
+// reads "non-read-only actions re-checked before they run" with the guarantee
+// column "guaranteed for non-read-only tools" — the spec grants a read-only
+// tool the turn's snapshot on purpose, because the cost of a vector read on
+// every read is paid on the hottest path in the product for a call that
+// changes nothing. A switch flipped mid-turn therefore stops every mutation at
+// once and stops reads from the next turn. Widening this to an unconditional
+// refresh is a spec change, not a bug fix; make it there first.
 //
 // Which switches reach a call is decided by `matchKillSwitch` in @oxagen/iam,
 // the same matcher `list_tool_versions` prints the gate with. The facts a call

@@ -261,3 +261,94 @@ describe("registryCapabilityId", () => {
     ).toBe("list_runs");
   });
 });
+
+describe("unionConsequenceTags", () => {
+  it("takes the declared column and the classified jsonb together, deduped", () => {
+    expect(
+      unionConsequenceTags({
+        consequenceTags: ["moves_money"],
+        classification: null,
+      }),
+    ).toEqual(["moves_money"]);
+    expect(
+      unionConsequenceTags({
+        consequenceTags: null,
+        classification: { consequenceTags: ["sends_external"] },
+      }),
+    ).toEqual(["sends_external"]);
+    expect(
+      unionConsequenceTags({
+        consequenceTags: ["moves_money", "deletes_data"],
+        classification: { consequenceTags: ["moves_money", "sends_external"] },
+      }),
+    ).toEqual(["moves_money", "deletes_data", "sends_external"]);
+  });
+
+  it("ignores a classification that is not the schema's shape", () => {
+    expect(
+      unionConsequenceTags({
+        consequenceTags: ["moves_money"],
+        classification: { consequenceTags: "moves_money" },
+      }),
+    ).toEqual(["moves_money"]);
+    expect(
+      unionConsequenceTags({ consequenceTags: [], classification: 7 }),
+    ).toEqual([]);
+  });
+});
+
+describe("a class kill switch and a tool whose tags were declared, not classified", () => {
+  /**
+   * The regression this file exists for. `import_tools` and
+   * `publish_tool_declaration` write consequence tags to
+   * `agent.tool_versions.consequence_tags`; only `set_tool_classification`
+   * writes the `classification` jsonb. The gate's index used to read the jsonb
+   * alone, filtered on `classification IS NOT NULL`, so an admin could publish
+   * a tool tagged `moves_money`, flip a `class` kill switch on `moves_money`,
+   * see `list_kill_switches` report it on — and the tool still ran.
+   */
+  it("stops a tool tagged only in the declared column", async () => {
+    const capabilityId = `mcp.${SERVER}.create_payment`;
+    const { reads } = store({
+      generation: 1,
+      snapshot: {
+        generation: { org: 1, workspace: 0 },
+        switches: [classSwitch("moves_money")],
+        // What readClassificationIndex now builds: the union of both halves,
+        // for a version with NO classification jsonb at all.
+        tags: new Map([
+          [
+            capabilityId,
+            unionConsequenceTags({
+              consequenceTags: ["moves_money"],
+              classification: null,
+            }),
+          ],
+        ]),
+      },
+    });
+    const gate = createKillSwitchGate(ctx, reads);
+    const hit = await gate.check({
+      capabilityId,
+      serverId: SERVER,
+      readOnly: false,
+    });
+    expect(hit?.targetKind).toBe("class");
+    expect(hit?.targetId).toBe("moves_money");
+  });
+
+  it("leaves a tool carrying neither half's tag open", async () => {
+    const { reads } = store({
+      generation: 1,
+      snapshot: {
+        generation: { org: 1, workspace: 0 },
+        switches: [classSwitch("moves_money")],
+        tags: new Map([["reads_only", ["reads_data"]]]),
+      },
+    });
+    const gate = createKillSwitchGate(ctx, reads);
+    expect(
+      await gate.check({ capabilityId: "reads_only", readOnly: false }),
+    ).toBeNull();
+  });
+});

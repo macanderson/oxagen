@@ -340,6 +340,76 @@ describe("import_tools", () => {
   });
 });
 
+describe("import_tools when a publish partway through throws", () => {
+  /**
+   * Each publish commits on its own transaction (publishTool holds the
+   * identity row's insert race), so a throw on publish #3 leaves #1 and #2
+   * committed. The stamp used to be written only after the whole loop, so
+   * `last_import_digest` kept describing a registry state that no longer
+   * existed — the digest a later import diffs against. The handler now stamps
+   * what actually landed on the way out and rethrows.
+   */
+  it("stamps the registry as it actually is, then rethrows", async () => {
+    const reg = memoryRegistry(PINS);
+    const publish = reg.deps.publish;
+    let calls = 0;
+    reg.deps.publish = async (args: PublishToolArgs) => {
+      calls += 1;
+      if (calls === 2) throw new Error("server closed the connection");
+      return publish(args);
+    };
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toThrow("server closed the connection");
+
+    // One tool landed, and the stamp names exactly that.
+    expect(reg.tools.size).toBe(1);
+    expect(reg.stamps).toHaveLength(1);
+    expect(reg.stamps[0]).toEqual({
+      serverId: SERVER,
+      digest: importDigestOf(
+        await reg.deps.activeChecksums({
+          orgId: ORG,
+          workspaceId: WS,
+          serverId: SERVER,
+        }),
+      ),
+    });
+  });
+
+  it("writes no stamp when the first publish throws", async () => {
+    const reg = memoryRegistry(PINS);
+    reg.deps.publish = async () => {
+      throw new Error("server closed the connection");
+    };
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toThrow("server closed the connection");
+    // Nothing landed, so nothing is claimed to have been imported.
+    expect(reg.stamps).toEqual([]);
+  });
+
+  it("surfaces the publish failure even when the stamp itself fails", async () => {
+    const reg = memoryRegistry(PINS);
+    const publish = reg.deps.publish;
+    let calls = 0;
+    reg.deps.publish = async (args: PublishToolArgs) => {
+      calls += 1;
+      if (calls === 2) throw new Error("server closed the connection");
+      return publish(args);
+    };
+    reg.deps.stampImport = async () => {
+      throw new Error("stamp write failed");
+    };
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toThrow("server closed the connection");
+  });
+});
+
 describe("toolSlugOf", () => {
   it("identifies a server's tool under its server and a declared tool by its lowercased name", () => {
     expect(

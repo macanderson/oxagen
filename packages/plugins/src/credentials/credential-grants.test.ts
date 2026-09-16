@@ -62,6 +62,8 @@ const args = {
   workspaceId: "w1",
   connection: OAUTH,
   mcpServerId: "server-1",
+  mcpServerPublicId: "mcs_gh",
+  mcpServerName: "GitHub",
   endpointUrl: "https://mcp.github.com/mcp",
   runId: "run_1",
   now: new Date("2026-09-15T10:00:00.000Z"),
@@ -115,6 +117,10 @@ describe("recordCredentialGrant", () => {
       connectionId: "cred-1",
       connectionPublicId: "mcrd_1",
       mcpServerId: "server-1",
+      // Named on the row, not joined: the server row does not outlive an
+      // uninstall and the grants log has to (ADR-069).
+      mcpServerPublicId: "mcs_gh",
+      mcpServerName: "GitHub",
       runId: "run_1",
       providerTokenId: null,
       scope: {
@@ -134,6 +140,8 @@ describe("recordCredentialGrant", () => {
       "expiresAt",
       "issuedAt",
       "mcpServerId",
+      "mcpServerName",
+      "mcpServerPublicId",
       "orgId",
       "providerTokenId",
       "runId",

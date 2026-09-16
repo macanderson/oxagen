@@ -163,9 +163,13 @@ function registryPageQuery(
         // the declared text[] column or the classified jsonb. Filtering on the
         // jsonb alone hid every declared-tag tool from the page the class kill
         // switch is operated from.
+        // Both halves are written with a jsonb_path_ops / array GIN index
+        // (tool_versions_classification_tags_gin,
+        // tool_versions_consequence_tags_gin), so `@>` on either is an index
+        // lookup rather than a scan of the workspace's registry.
         q.category === null
           ? undefined
-          : sql`(${versions.classification}->'consequenceTags' ? ${q.category} OR ${q.category} = ANY(${versions.consequenceTags}))`,
+          : sql`(${versions.classification}->'consequenceTags' @> ${JSON.stringify([q.category])}::jsonb OR ${versions.consequenceTags} @> ARRAY[${q.category}]::text[])`,
         afterCursor(q.cursor),
       ),
     )

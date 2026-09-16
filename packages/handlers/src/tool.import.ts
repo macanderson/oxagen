@@ -16,6 +16,14 @@
 //   4. Stamp the server's last import: now, and a digest over the sorted
 //      checksums of its tools' active versions.
 //
+// Each publish commits on its own transaction (publishTool holds the identity
+// row's insert race), so a throw partway through leaves the tools before it
+// committed. The stamp is therefore written for what ACTUALLY landed, on the
+// way out of a failure too: `last_import_digest` is a digest over the active
+// versions as they now are, so it never describes a registry state that does
+// not exist. The failure is then rethrown — a partial import is a failed one,
+// and re-running it republishes only what changed.
+//
 // The pull-request path the mockup shows (declarations to `.oxagen/tools/` on
 // a branch) needs a bound repository, which no capability records; ADR-068.
 
@@ -29,6 +37,7 @@ import type { McpToolDescriptor } from "@oxagen/agent/dispatch/mcp-client";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { sha256Hex } from "./registry-digest";
 import { publishTool, type PublishToolArgs } from "./lib/tool-registry";
+import { logger } from "./logger";
 
 /** A tool as the server pins it; the shape mcp-snapshots.ts reads back. */
 export type PinnedDescriptor = McpToolDescriptor;
@@ -202,39 +211,63 @@ export function createToolImportHandler(
       }
     }
 
-    const tools = [];
-    for (const p of publishes) {
-      const published = await deps.publish({
-        ...p,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
+    const stampWhatLanded = async (): Promise<string> => {
+      const digest = importDigestOf(
+        await deps.activeChecksums({ ...scope, serverId: server.id }),
+      );
+      await deps.stampImport({
+        serverId: server.id,
+        digest,
         userId: actingUserId,
-        source: "mcp",
-        mcpServerId: server.id,
       });
-      tools.push({
-        id: published.versionPublicId,
-        toolId: published.publicId,
-        slug: published.slug,
-        name: p.name,
-        version: published.version,
-        checksum: published.checksum,
-        schemaOrigin: p.schemaOrigin,
-        consequenceTags: [...(p.consequenceTags ?? [])],
-        measures: p.measures ?? {},
-        effectIdPath: p.effectIdPath ?? null,
-        published: published.published,
-      });
+      return digest;
+    };
+
+    const tools = [];
+    let landed = 0;
+    try {
+      for (const p of publishes) {
+        const published = await deps.publish({
+          ...p,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: actingUserId,
+          source: "mcp",
+          mcpServerId: server.id,
+        });
+        landed += 1;
+        tools.push({
+          id: published.versionPublicId,
+          toolId: published.publicId,
+          slug: published.slug,
+          name: p.name,
+          version: published.version,
+          checksum: published.checksum,
+          schemaOrigin: p.schemaOrigin,
+          consequenceTags: [...(p.consequenceTags ?? [])],
+          measures: p.measures ?? {},
+          effectIdPath: p.effectIdPath ?? null,
+          published: published.published,
+        });
+      }
+    } catch (err) {
+      // Publishes before the throw are committed. Stamp the registry as it now
+      // is so the recorded digest describes a state that exists, then surface
+      // the failure. A stamp that itself fails must not mask the real error.
+      if (landed > 0) {
+        try {
+          await stampWhatLanded();
+        } catch (stampErr) {
+          logger.error(
+            { err: stampErr, serverId: server.publicId, landed },
+            "tool.import: partial import could not be stamped",
+          );
+        }
+      }
+      throw err;
     }
 
-    const importDigest = importDigestOf(
-      await deps.activeChecksums({ ...scope, serverId: server.id }),
-    );
-    await deps.stampImport({
-      serverId: server.id,
-      digest: importDigest,
-      userId: actingUserId,
-    });
+    const importDigest = await stampWhatLanded();
 
     return { serverId: server.publicId, importDigest, tools };
   };

@@ -66,3 +66,12 @@ CREATE TRIGGER "tool_versions_tags_insert_deny_generation"
   WHEN (NEW.classification IS NOT NULL
         OR COALESCE(array_length(NEW.consequence_tags, 1), 0) > 0)
   EXECUTE FUNCTION "iam"."deny_generation_scoped_trigger"();
+
+-- ── 3. The category filter's two halves are index lookups ────────────────────
+-- list_tool_versions filters the registry by consequence tag, and a tag lives
+-- in either half. Without these, the Tools page's category filter sequentially
+-- scanned every version in the workspace.
+CREATE INDEX IF NOT EXISTS "tool_versions_classification_tags_gin"
+  ON "agent"."tool_versions" USING gin (("classification" -> 'consequenceTags') jsonb_path_ops);
+CREATE INDEX IF NOT EXISTS "tool_versions_consequence_tags_gin"
+  ON "agent"."tool_versions" USING gin ("consequence_tags");

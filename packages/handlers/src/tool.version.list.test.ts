@@ -31,6 +31,7 @@ import {
   type ToolVersionListDeps,
 } from "./tool.version.list";
 import { makeCTX } from "./test-utils/fixtures";
+import { unionConsequenceTags } from "@oxagen/agent/runtime/tool-registry-facts";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";
@@ -94,6 +95,7 @@ function row(over: Partial<RegistryRow> & { slug: string }): RegistryRow {
     riskGrade: "high",
     classifiedRiskGrade: null,
     classification: null,
+    consequenceTags: [],
     classifiedAt: null,
     schemaOrigin: "imported",
     checksum: "a".repeat(64),
@@ -115,9 +117,8 @@ function memoryPage(rows: RegistryRow[]) {
     rows
       .filter((r) => {
         if (q.category === null) return true;
-        const tags = (r.classification as { consequenceTags?: string[] } | null)
-          ?.consequenceTags;
-        return tags?.includes(q.category) ?? false;
+        // The SQL matches either half of the consequence tags; so does this.
+        return unionConsequenceTags(r).includes(q.category);
       })
       .filter((r) => {
         if (!q.cursor) return true;
@@ -336,6 +337,60 @@ describe("list_tool_versions", () => {
       kind: "open",
       switchId: null,
     });
+  });
+
+  it("a class switch reaches a tool tagged only in the declared column", async () => {
+    // The page and the gateway's gate have to agree, or the operator flips a
+    // class switch, sees `open` on the Tools page and concludes it missed. A
+    // tool published through import_tools or publish_tool_declaration carries
+    // its tags in agent.tool_versions.consequence_tags and has no
+    // classification jsonb at all until an admin classifies it.
+    const declaredOnly = row({
+      slug: "wire_transfer",
+      consequenceTags: ["moves_money"],
+      classification: null,
+      classifiedAt: null,
+    });
+    const classSwitch = switchRow("class", {
+      scopeKind: "org",
+      workspaceId: null,
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "class",
+        id: "moves_money",
+      }),
+      targetId: "moves_money",
+    });
+    const page = await handlerOver([declaredOnly], [classSwitch])(
+      { limit: 50 },
+      ctx(),
+    );
+    expect(page.items[0]?.gate).toEqual({
+      kind: "killed_class",
+      switchId: classSwitch.publicId,
+    });
+    // The classification itself stays absent — the tag is declared, not set.
+    expect(page.items[0]?.classification).toBeNull();
+  });
+
+  it("filters by category on either half of the consequence tags", async () => {
+    const declared = row({
+      slug: "wire_transfer",
+      consequenceTags: ["moves_money"],
+    });
+    const classifiedRow = row({
+      slug: "create_payment",
+      classification: classified,
+      classifiedAt: new Date(),
+    });
+    const neither = row({ slug: "search" });
+    const page = await handlerOver([declared, classifiedRow, neither])(
+      { limit: 50, category: "moves_money" },
+      ctx(),
+    );
+    expect(page.items.map((i) => i.slug).sort()).toEqual([
+      "create_payment",
+      "wire_transfer",
+    ]);
   });
 
   it("a workspace or organisation switch is the page header's, never a version's gate", () => {

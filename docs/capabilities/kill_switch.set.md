@@ -15,6 +15,25 @@ Kill switches at every level of MC spec §6.11 (ADR-068 §4, §5): a tool versio
 
 The flip takes effect at the next call boundary through the deny generation: the row write bumps `iam.authorization_deny_generations` in the same transaction (the table's trigger), the handler reads the vector back on that transaction, and every cached allow keyed by the old generation is stale. A connection switch revokes the connection's live credential grants in the same transaction, and the tool gateway asks the gate about each server and its connection before the server is reached on later turns, so a connection or tool-server switch leaves the server out of the turn with no connect, no tools/list and no new grant. Every flip that changes a switch is a `tool.kill_switch_flipped` security event carrying the actor and the capability; a flip that finds the switch already on changes nothing and emits none. The row carries what the switch stops, who flipped it on and why (`flipped_by_user_id`, `reason`), and who cleared it and why (`updated_by_user_id`, `cleared_reason`).
 
+## What a kill switch reaches, and what it does not
+
+A switch is enforced in two places, and they are not the whole product:
+
+- **The tool gateway's per-turn gate** (`packages/agent/src/runtime/kill-switch-gate.ts`). Every tool `materializeTools` presents — a capability the in-app agent may call, and every external MCP tool — is checked against the switches that are on, before the call and again after a person answers an approval or consent card. This is the path that matches `tool_server`, `connection` and `class` switches.
+- **The kernel's agent-run IAM check** (`checkAgentRunIAM`, `packages/iam/src/check-iam.ts`). Emergency denies are consulted here for a call whose context carries an agent run.
+
+A switch **does not** stop a caller that carries neither. A customer agent holding an Oxagen API key against `api.oxagen.sh` or `mcp.oxagen.sh` invokes capabilities with `principalKind: "human"` and no `agentRun`, so `checkIAM` never reaches `checkAgentRunIAM` and no emergency deny is consulted. An `org`, `operator`, `workspace` or `class` switch therefore does not stop that traffic. Governing it means an IAM policy or revoking the key.
+
+State this when an operator asks what a switch covers. An emergency control whose blast radius is overstated is worse than one whose limits are written down.
+
+## Deleting what a switch names
+
+While a switch is on, the delete paths that would hard-delete its target refuse with `conflict` / `kill_switch_on` (ADR-069): `revoke_plugin_credential` for a `connection` switch, and `uninstall_plugin` for a `tool_server` or `tool_version` switch. Both keyed on an internal uuid, so a delete-and-recreate would leave the switch reporting on while matching nothing. Turn the switch off first.
+
+## A class switch and the two tag columns
+
+A `class` switch matches a tool by its consequence tags, and a version carries those in two columns: `agent.tool_versions.consequence_tags` (the declared half, written by `publish_tool_declaration` and `import_tools` from the descriptor) and `classification->'consequenceTags'` (the classified half, written by `set_tool_classification`). Both draw on one vocabulary. The gate and `list_tool_versions` match on the **union**, so a tool tagged in either half is stopped.
+
 ## Input
 
 | Field | Type | Required | Constraint |
