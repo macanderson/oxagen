@@ -275,7 +275,15 @@ export function Curve({
       h("span", { className: `fig-key fig-key-line fig-series-${i}` }),
       s.label,
     );
-  const rowsFor = xs.map((x) => [
+  // The axis ticks are a visual convenience and are routinely sparser than the
+  // data — the compounding curve plots 21 samples behind 5 ticks. Building the
+  // table off `xs` would drop the other 16 from every series, so the rows come
+  // from the union of the plotted x-coordinates and the ticks are left to the
+  // axis alone.
+  const sampleXs = [
+    ...new Set(series.flatMap((s) => s.points.map(([x]) => x))),
+  ].sort((a, b) => a - b);
+  const rowsFor = (sampleXs.length > 0 ? sampleXs : xs).map((x) => [
     `${x}`,
     ...series.map((s) => {
       const p = s.points.find(([px0]) => px0 === x);
@@ -428,6 +436,33 @@ export function Ladder({ title, caption, axis, steps = [] }) {
  *   marker?: { at: number, label: string },
  *   rows: Array<{ label: string, when: string, from: number, to: number, ended?: boolean }> }} props
  */
+/**
+ * What a timeline row says for a screen reader. With no marker there is no
+ * instant to judge against, so the author's `ended` flag is all there is. With
+ * one, the flag is the wrong question: it is a fact about the row, while the
+ * marker asks whether the row covers one instant. Reading `ended` instead
+ * reversed both rows of the ontology figure — a January-to-March fact marked
+ * `ended` reads "No longer holds" at a mid-March marker it plainly contains,
+ * and the April-onward row reads "Holds" months before it starts.
+ *
+ * A row is half-open `[from, to)`, except that a row reaching the end of the
+ * timeline is still running and includes it: without that, "Today" (`at` equal
+ * to `end`) falls outside every current row.
+ * @param {{ from?: number, to?: number, ended?: boolean }} row
+ * @param {{ at: number, label: string } | undefined} marker
+ * @param {number} end
+ */
+function statusAt(row, marker, end) {
+  if (!marker) return row.ended ? "No longer holds" : "Holds";
+  const { from, to } = row;
+  if (from === undefined || to === undefined) {
+    return row.ended ? "No longer holds" : "Holds";
+  }
+  const ongoing = to >= end;
+  if (from <= marker.at && (marker.at < to || ongoing)) return "Holds";
+  return to <= marker.at ? "No longer holds" : "Not yet";
+}
+
 export function Timeline({
   title,
   caption,
@@ -496,12 +531,8 @@ export function Timeline({
       ),
     ),
     h(DataTable, {
-      head: ["Fact", "Holds", "Status"],
-      rows: rows.map((r) => [
-        r.label,
-        r.when,
-        r.ended ? "No longer holds" : "Holds",
-      ]),
+      head: ["Fact", "Holds", marker ? `Status (${marker.label})` : "Status"],
+      rows: rows.map((r) => [r.label, r.when, statusAt(r, marker, end)]),
     }),
   );
 }
