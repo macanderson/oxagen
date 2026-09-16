@@ -16,6 +16,14 @@ import { RouteTabs } from "@/ui/route-tabs";
 import { cell, Table } from "@/ui/table";
 import { DateCell, emptyLine } from "./parts";
 
+// The expiry clock starts from the instant the read returned, the way Fleet's
+// approval clock does (`features/fleet/fleet.tsx`) — one instant for the whole
+// table, taken beside the read rather than during a render.
+async function readApiKeys(ctx: OrgCtx, source: DataSource) {
+  const read = await source.org.apiKeys(ctx);
+  return { read, now: Date.now() };
+}
+
 export async function ApiKeys({
   ctx,
   source,
@@ -23,9 +31,14 @@ export async function ApiKeys({
   ctx: OrgCtx;
   source: DataSource;
 }) {
-  const read = await source.org.apiKeys(ctx);
+  const { read, now } = await readApiKeys(ctx, source);
   return (
-    <ApiKeysView orgSlug={ctx.orgSlug} orgRole={ctx.orgRole} read={read} />
+    <ApiKeysView
+      orgSlug={ctx.orgSlug}
+      orgRole={ctx.orgRole}
+      read={read}
+      now={now}
+    />
   );
 }
 
@@ -33,10 +46,13 @@ function ApiKeysView({
   orgSlug,
   orgRole,
   read,
+  now,
 }: {
   orgSlug: string;
   orgRole: OrgRole;
   read: Read<ApiKey[]>;
+  /** Epoch millis the page was rendered at; an expiry is compared against it. */
+  now: number;
 }) {
   const t = useTranslations("organization");
   return (
@@ -57,7 +73,7 @@ function ApiKeysView({
         ]}
       />
       {read.ok ? (
-        <Keys keys={read.value} />
+        <Keys keys={read.value} now={now} />
       ) : read.reason === "denied" ? (
         <OutcomePanel
           tone="deny"
@@ -104,15 +120,17 @@ function ApiKeysView({
 function KeyStatus({
   revokedAt,
   expiresAt,
+  now,
 }: {
   revokedAt: string | null;
   expiresAt: string | null;
+  now: number;
 }) {
   const t = useTranslations("organization.apiKeys.status");
   const status =
     revokedAt !== null
       ? "revoked"
-      : expiresAt !== null && Date.parse(expiresAt) <= Date.now()
+      : expiresAt !== null && Date.parse(expiresAt) <= now
         ? "expired"
         : "live";
   return (
@@ -129,7 +147,7 @@ function KeyStatus({
   );
 }
 
-function Keys({ keys }: { keys: readonly ApiKey[] }) {
+function Keys({ keys, now }: { keys: readonly ApiKey[]; now: number }) {
   const t = useTranslations("organization.apiKeys");
   return (
     <div className="flex flex-col gap-3">
@@ -175,6 +193,7 @@ function Keys({ keys }: { keys: readonly ApiKey[] }) {
                 <KeyStatus
                   revokedAt={key.revokedAt}
                   expiresAt={key.expiresAt}
+                  now={now}
                 />
               </td>
             </tr>

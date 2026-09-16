@@ -51,6 +51,7 @@ async function renderWorkspaces(
     shell: { context: vi.fn() },
     billing: {
       plan: vi.fn(),
+      usageCredits: vi.fn(),
       bucket: vi.fn(),
       contractRate: vi.fn(),
       invoices: vi.fn(),
@@ -69,6 +70,8 @@ async function renderWorkspaces(
       drill: vi.fn(),
       waste: vi.fn(),
       budgets: vi.fn(),
+      findings: vi.fn(),
+      findingEvidence: vi.fn(),
     },
     org: { members: vi.fn(), roles: vi.fn(), workspaces, apiKeys: vi.fn() },
     skills: { inventory: vi.fn() },
