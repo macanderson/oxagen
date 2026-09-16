@@ -143,6 +143,7 @@ export interface DataSource {
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+  };
   /**
    * The Steering page's three noBillingGate reads on the workspace; caller:
    * features/steering/steering.tsx.
