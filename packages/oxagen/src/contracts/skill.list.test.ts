@@ -43,7 +43,7 @@ describe("list_skills contract", () => {
       JSON.stringify([
         "2026-08-16T00:00:00.000Z",
         "2026-09-15T00:00:00.000Z",
-        "".repeat(512),
+        "\u0007".repeat(512),
       ]),
       "utf8",
     ).toString("base64url");
