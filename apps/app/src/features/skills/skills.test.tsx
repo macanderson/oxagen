@@ -95,6 +95,7 @@ const source: DataSource = {
   },
   org: { members: vi.fn(), apiKeys: vi.fn() },
   skills: { inventory: read },
+  audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 

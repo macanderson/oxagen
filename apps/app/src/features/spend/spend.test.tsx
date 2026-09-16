@@ -120,6 +120,7 @@ const source: DataSource = {
     findingEvidence,
   },
   org: { members: vi.fn(), apiKeys: vi.fn() },
+  audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };

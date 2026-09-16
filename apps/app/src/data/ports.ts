@@ -3,7 +3,8 @@
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
 // WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
-// lane adds its page's port (#2956: agents; #2961: steering; #3098: skills).
+// lane adds its page's port (#2956: agents; #2961: steering; #3097: audit;
+// #3098: skills).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -12,6 +13,13 @@ import type {
   Toolbelt,
 } from "./contracts/agents";
 import type { ApprovalItem } from "./contracts/approvals";
+import type {
+  AuditExport,
+  AuditExportFormat,
+  AuditFilters,
+  AuditPage,
+  AuditQuery,
+} from "./contracts/audit";
 import type {
   ContractRate,
   GauBucket,
@@ -152,14 +160,29 @@ export interface DataSource {
   };
   /**
    * The Organization page's two tabs, each an Owner-or-Admin read checked in
-   * its handler; callers: features/organization/people.tsx and
-   * features/organization/api-keys.tsx.
+   * its handler; callers: features/organization/people.tsx,
+   * features/organization/api-keys.tsx and features/audit/audit.tsx (actor
+   * names, off `members`).
    */
   org: {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+  };
+  /**
+   * The organization's audit record (#3097), both noBillingGate reads for an
+   * org Owner or Admin (checked in the handlers); callers:
+   * features/audit/audit.tsx and features/audit/export.ts.
+   */
+  audit: {
+    /** query_audit_log, one page at `offset` */
+    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same filters */
+    exportEvents(
+      ctx: OrgCtx,
+      q: AuditFilters & { format: AuditExportFormat },
+    ): Promise<Read<AuditExport>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;

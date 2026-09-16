@@ -251,6 +251,7 @@ import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
 import { apiKeyRotate } from "./api.key.rotate";
 import { auditLogQuery } from "./audit.log.query";
+import { auditEventsExport } from "./audit.events.export";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { orgDataPlaneGet } from "./org.data_plane.get";
@@ -739,6 +740,7 @@ export {
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,
@@ -1053,6 +1055,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,

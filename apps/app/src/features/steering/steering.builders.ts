@@ -203,6 +203,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       findingEvidence: refuse,
     },
     org: { members: refuse, apiKeys: refuse },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: {
       records: (...args) => {

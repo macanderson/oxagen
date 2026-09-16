@@ -226,6 +226,7 @@ import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
+import { auditEventsExportRoute } from "./routes/v1/audit.events.export";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
@@ -798,6 +799,7 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+orgScoped.route("/audit/events/export", auditEventsExportRoute);
 // Creating a workspace needs an org and cannot need a workspace: the caller is
 // asking for their first one. Mounted only under the workspace-scoped group, the
 // REST surface could not take a new account past org creation — every attempt
@@ -812,6 +814,11 @@ orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
 orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
 // The onboarding gate for an organization (#2967): its gate row.
 orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
+// An audit export answers for the whole organization, and the documented path
+// is `POST /v1/:org_slug/audit/events/export`. Mounted only on the
+// workspace-scoped group above, that URL matched no route and 404'd, leaving
+// the advertised REST surface unreachable (#3097).
+orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

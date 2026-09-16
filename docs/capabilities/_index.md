@@ -98,9 +98,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
 
-## Audit (1)
+## Audit (2)
 
-- [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
+- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
+- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
 
 ## Billing (15)
 

@@ -73,6 +73,7 @@ import "./contracts/approval_rule.enabled.set";
 import "./contracts/approval_rule.list";
 import "./contracts/approval_rule.set";
 import "./contracts/asset.upload";
+import "./contracts/audit.events.export";
 import "./contracts/audit.log.query";
 import "./contracts/auth.cli.authorize";
 import "./contracts/billing.action_estimate";
