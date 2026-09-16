@@ -276,7 +276,7 @@ async function upsertSecretKeyTx(
             }
           : {}),
         updatedAt: new Date(),
-        updatedByUserId: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       })
       .where(eq(schema.secretKeys.id, existing.id));
     return { id: existing.publicId };
@@ -294,8 +294,8 @@ async function upsertSecretKeyTx(
       defaultValueEnc: insertCols.enc,
       defaultValueText: insertCols.text,
       defaultValueKmsKeyId: insertCols.kmsKeyId,
-      createdByUserId: actor.userId ?? null,
-      updatedByUserId: actor.userId ?? null,
+      createdById: actor.userId ?? null,
+      updatedById: actor.userId ?? null,
     })
     .returning({ publicId: schema.secretKeys.publicId });
   if (!row) throw new Error("[vault] secret key insert returned no row");
@@ -335,8 +335,8 @@ async function setSecretValueTx(
       valueEnc: cols.enc,
       valueText: cols.text,
       valueKmsKeyId: cols.kmsKeyId,
-      createdByUserId: actor.userId ?? null,
-      updatedByUserId: actor.userId ?? null,
+      createdById: actor.userId ?? null,
+      updatedById: actor.userId ?? null,
     })
     .onConflictDoUpdate({
       target: [
@@ -348,7 +348,7 @@ async function setSecretValueTx(
         valueText: cols.text,
         valueKmsKeyId: cols.kmsKeyId,
         updatedAt: new Date(),
-        updatedByUserId: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       },
     });
 }
@@ -469,7 +469,7 @@ export async function deleteSecretKey(
       .where(eq(schema.secretValues.secretKeyId, key.id));
     await tx
       .update(schema.secretKeys)
-      .set({ deletedAt: new Date(), deletedByUserId: actor.userId ?? null })
+      .set({ deletedAt: new Date(), deletedById: actor.userId ?? null })
       .where(eq(schema.secretKeys.id, key.id));
   });
   return { ok: true };

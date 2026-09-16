@@ -72,7 +72,7 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<
       .set({
         status: "declined",
         updatedAt: new Date(),
-        updatedByUserId: actorId,
+        updatedById: actorId,
       })
       .where(eq(schema.invitations.id, invitation.id)),
   );

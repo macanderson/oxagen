@@ -76,8 +76,8 @@ export const integrationInstallHandler: CapabilityHandler<
         deliveryMethod: connector.deliveryMethod,
         deliveryConfig: parsed.data as Record<string, unknown>,
         status: "pending_setup",
-        createdByUserId: ctx.userId ?? undefined,
-        updatedByUserId: ctx.userId ?? undefined,
+        createdById: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .returning({
         id: schema.sourceConnections.id,

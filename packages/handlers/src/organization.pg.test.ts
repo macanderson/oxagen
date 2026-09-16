@@ -151,7 +151,7 @@ describe.skipIf(!enabled)(
             keyHash: `hash-${tag}`,
             name: "g2964 walk",
             scope: {},
-            createdByUserId: userId,
+            createdById: userId,
           })
           .returning({ id: schema.apiKeys.id });
         if (!key) throw new Error("fixture insert returned no row");
@@ -392,12 +392,12 @@ describe.skipIf(!enabled)(
         tx
           .select({
             id: schema.workspaces.id,
-            createdByUserId: schema.workspaces.createdByUserId,
+            createdById: schema.workspaces.createdById,
           })
           .from(schema.workspaces)
           .where(eq(schema.workspaces.publicId, created.publicId)),
       );
-      expect(createdRow?.createdByUserId).toBe(userId);
+      expect(createdRow?.createdById).toBe(userId);
       await expect(
         refusal(
           scoped(() =>
@@ -430,7 +430,7 @@ describe.skipIf(!enabled)(
             slug: "ingest",
             name: "ingest",
             agentType: "sdk",
-            createdByUserId: userId,
+            createdById: userId,
           })
           .returning({ id: schema.agents.id }),
       );

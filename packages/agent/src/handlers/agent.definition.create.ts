@@ -61,8 +61,8 @@ export async function agentDefinitionCreateHandler(
         agentType: input.agentType,
         status: "draft",
         deploymentStatus: "inactive",
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .returning({
         id: schema.agents.id,
@@ -102,7 +102,7 @@ export async function agentDefinitionCreateHandler(
         isPublished: false,
         checksum: null,
         config,
-        createdByUserId: userId,
+        createdById: userId,
       })
       .returning({ version: schema.agentVersions.version });
     if (!version) throw new Error("agent_versions insert failed");
@@ -132,8 +132,8 @@ export async function agentDefinitionCreateHandler(
           workspaceId:
             defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
           assignedBy: userId,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .onConflictDoNothing();
     } else {

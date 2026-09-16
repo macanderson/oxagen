@@ -26,7 +26,7 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
     const row = await loadMandateRow(tx, workspaceId, input.mandateId);
     if (operatorId !== null) {
       const [agent] = await tx
-        .select({ createdByUserId: schema.agents.createdByUserId })
+        .select({ createdById: schema.agents.createdById })
         .from(schema.agents)
         .where(
           and(
@@ -35,7 +35,7 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
           ),
         )
         .limit(1);
-      if (agent?.createdByUserId !== operatorId) {
+      if (agent?.createdById !== operatorId) {
         throw new HandlerError({
           code: "forbidden",
           reason: "org_role_required",

@@ -96,7 +96,7 @@ function defaultRunExportDeps(): RunExportDeps {
             workspaceId: row.workspaceId,
             runPublicId: row.runPublicId,
             requestedByUserId: row.requestedByUserId,
-            createdByUserId: row.requestedByUserId,
+            createdById: row.requestedByUserId,
             status: "queued",
           })
           .returning({

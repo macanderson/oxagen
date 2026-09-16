@@ -50,7 +50,7 @@ type ProposalInsert = Pick<
   | "supportAgents"
   | "supportingRecordIds"
   | "evidenceLinks"
-  | "createdByUserId"
+  | "createdById"
 >;
 
 /** The columns a handler may change after insert. */
@@ -71,7 +71,7 @@ type ProposalPatch = Partial<
     | "checks"
     | "dismissedAt"
     | "dismissedReason"
-    | "updatedByUserId"
+    | "updatedById"
   >
 >;
 
@@ -102,7 +102,7 @@ type AppendInsert = Pick<
   | "sourceRefs"
   | "evidenceLinks"
   | "proposalId"
-  | "createdByUserId"
+  | "createdById"
 >;
 
 interface RecordFilter {
@@ -658,7 +658,7 @@ export const postgresSteeringStore: SteeringStore = {
         publishedAt: input.mergedAt,
         activatedByUserId: input.mergedByUserId ?? undefined,
         activatedAt: input.mergedAt,
-        updatedByUserId: input.mergedByUserId ?? undefined,
+        updatedById: input.mergedByUserId ?? undefined,
         updatedAt: input.mergedAt,
       };
 
@@ -697,7 +697,7 @@ export const postgresSteeringStore: SteeringStore = {
             orgId: scope.orgId,
             workspaceId: scope.workspaceId,
             slug: proposal.lineageId,
-            createdByUserId: input.mergedByUserId ?? undefined,
+            createdById: input.mergedByUserId ?? undefined,
             ...classification,
           })
           .returning({
@@ -732,8 +732,8 @@ export const postgresSteeringStore: SteeringStore = {
               by: proposal.publicId,
             },
           ],
-          createdByUserId: input.mergedByUserId ?? undefined,
-          updatedByUserId: input.mergedByUserId ?? undefined,
+          createdById: input.mergedByUserId ?? undefined,
+          updatedById: input.mergedByUserId ?? undefined,
         })
         .returning({ id: schema.contextRecordVersions.id });
       if (!versionRow)
@@ -791,7 +791,7 @@ export const postgresSteeringStore: SteeringStore = {
           policyVersion: input.policyVersion,
           prevChainDigest,
           chainDigest,
-          createdByUserId: input.mergedByUserId ?? undefined,
+          createdById: input.mergedByUserId ?? undefined,
         })
         .returning({
           id: schema.contextPromotions.id,
@@ -812,7 +812,7 @@ export const postgresSteeringStore: SteeringStore = {
           mergedByUserId: input.mergedByUserId,
           publishedRecordId: recordId,
           promotionEventId: promotion.id,
-          updatedByUserId: input.mergedByUserId ?? undefined,
+          updatedById: input.mergedByUserId ?? undefined,
           updatedAt: input.mergedAt,
         })
         .where(

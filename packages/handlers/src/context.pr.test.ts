@@ -587,7 +587,7 @@ describe("open_context_pr", () => {
     const out = await createOpenContextPrHandler(h)({ proposalId: a }, KEY_CTX);
     expect(out.status).toBe("checks_passed");
     expect(h.store.proposals[0]).toMatchObject({
-      updatedByUserId: "u_key_creator",
+      updatedById: "u_key_creator",
     });
   });
 });

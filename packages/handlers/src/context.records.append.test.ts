@@ -77,7 +77,7 @@ describe("append_record", () => {
     );
     expect(gate.actors).toEqual(["u_key_creator"]);
     expect(out.appended).toBe(true);
-    expect(h.store.appends[0]?.createdByUserId).toBeNull();
+    expect(h.store.appends[0]?.createdById).toBeNull();
 
     gate.keyCreator = null;
     await expect(
@@ -113,7 +113,7 @@ describe("append_record", () => {
     );
     expect(again).toEqual({ ...first, appended: false });
     expect(h.store.appends).toHaveLength(1);
-    expect(h.store.appends[0]?.createdByUserId).toBe(AUTHOR);
+    expect(h.store.appends[0]?.createdById).toBe(AUTHOR);
     const changed = await handler(
       input({ statement: "It stopped flaking in September." }),
       ctx(),

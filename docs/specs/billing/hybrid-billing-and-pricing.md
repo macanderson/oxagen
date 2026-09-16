@@ -258,7 +258,7 @@ Currently absent (Step 2 of build sequence). New orgs start with zero credits.
 
 ```sql
 -- Append-only audit log. One row per credit transaction.
--- Schema policy: only id, created_at, created_by_user_id — no updated_*, no deleted_at.
+-- Schema policy: only id, created_at, created_by_id — no updated_*, no deleted_at.
 CREATE TABLE billing.credit_ledger (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id            UUID NOT NULL REFERENCES organizations(id),
@@ -267,7 +267,7 @@ CREATE TABLE billing.credit_ledger (
   reference_type    TEXT,                     -- "stripe_invoice" | "stripe_checkout" | "agent_turn" | null
   reference_id      UUID,                     -- internal UUID (not Stripe string IDs — see note)
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_by_user_id UUID                     -- null for system grants
+  created_by_id UUID                     -- null for system grants
 );
 
 -- Mutable balance cache. One row per org. Updated atomically with ledger insert.
@@ -534,7 +534,7 @@ This section maps each policy in the `oxagen-engineering-policy` skill (`.agents
 
 - Do not add nullable columns without a documented performance or migration reason.
 - `billing.plans` `tier` CHECK: current values are `'free','pro','enterprise'`. The v3 tier slug mapping (Starter→free, Growth→pro, Scale→enterprise) fits without a migration. If display names are added as a column later, use an enum, not a free-text column.
-- `auto_top_up_configs` table (when added): must have `id UUID PK`, `created_at`, `created_by_user_id`, `updated_at`, `updated_by_user_id`. No `deleted_at` (rows are disabled, not deleted — use an `enabled BOOLEAN` column).
+- `auto_top_up_configs` table (when added): must have `id UUID PK`, `created_at`, `created_by_id`, `updated_at`, `updated_by_id`. No `deleted_at` (rows are disabled, not deleted — use an `enabled BOOLEAN` column).
 
 ### Policy 5 (Migrations) — any schema change
 

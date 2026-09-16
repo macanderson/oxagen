@@ -94,7 +94,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     const w = here();
     if (!w) throw new Error(`no tenant scope entered for ${scope.orgId}`);
     if (table === real.schema.apiKeys)
-      return key.creator ? [{ createdByUserId: key.creator }] : [];
+      return key.creator ? [{ createdById: key.creator }] : [];
     if (table === real.schema.principals) return [{ id: PRINCIPAL_ID }];
     if (table === real.schema.principalRoleAssignments)
       return w.role ? [{ roleName: w.role }] : [];

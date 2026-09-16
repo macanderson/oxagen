@@ -142,7 +142,7 @@ export interface ActingCredential {
 /**
  * The user a call acts as: the signed-in user, or, for an API-key call (the
  * only credential MCP accepts), the key's creator
- * (`auth.api_keys.created_by_user_id`), the mapping the kernel's enterprise
+ * (`auth.api_keys.created_by_id`), the mapping the kernel's enterprise
  * IAM path makes (fetch-authz.ts); `assign_agent_role` reads its delegation
  * ceiling for this user. A deleted key, a key of another org, a key with no recorded
  * creator, or no credential at all resolves to null, which `assertOrgRole`
@@ -162,7 +162,7 @@ export async function resolveActingUserId(
   if (!apiKeyId) return null;
   return withTenantDb(async (tx) => {
     const [keyRow] = await tx
-      .select({ createdByUserId: schema.apiKeys.createdByUserId })
+      .select({ createdById: schema.apiKeys.createdById })
       .from(schema.apiKeys)
       .where(
         and(
@@ -172,7 +172,7 @@ export async function resolveActingUserId(
         ),
       )
       .limit(1);
-    return keyRow?.createdByUserId ?? null;
+    return keyRow?.createdById ?? null;
   });
 }
 

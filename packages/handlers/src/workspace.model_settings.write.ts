@@ -30,7 +30,7 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
   // Only include explicitly provided fields in the update. "not provided" means
   // leave the column unchanged; "explicitly null" clears the model preference.
   const updateSet: Record<string, unknown> = {
-    updatedByUserId: ctx.userId,
+    updatedById: ctx.userId,
   };
 
   if ("defaultTextTier" in input) {

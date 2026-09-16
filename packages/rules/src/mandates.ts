@@ -756,7 +756,7 @@ export async function decideMandate(
           ruleIds,
           inputDigest: digest,
           expiresAt: new Date(at.getTime() + MANDATE_APPROVAL_TTL_MS),
-          createdByUserId: args.userId ?? undefined,
+          createdById: args.userId ?? undefined,
         })
         .returning({ publicId: schema.approvalRequests.publicId });
       if (!row) throw new Error("mandate: approval insert returned no row");

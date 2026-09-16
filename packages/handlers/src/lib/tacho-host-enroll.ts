@@ -158,8 +158,8 @@ export async function mintHostEnrollment(
         host_enrollment_id: hostEnrollmentId,
       },
       expiresAt,
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
+      createdById: args.userId,
+      updatedById: args.userId,
     })
     .returning({
       id: schema.apiKeys.id,
@@ -219,8 +219,8 @@ export async function mintHostEnrollment(
       expiresAt,
       managed: facts.managed,
       mode: "observe",
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
+      createdById: args.userId,
+      updatedById: args.userId,
     })
     .returning();
   if (!inserted) {

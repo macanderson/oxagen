@@ -176,8 +176,8 @@ export async function seedAgent(
         deploymentStatus: "inactive",
         principalId: principal?.id ?? null,
         deletedAt: over.deletedAt ?? null,
-        createdByUserId: tenant.userId,
-        updatedByUserId: tenant.userId,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
       })
       .returning({ id: schema.agents.id, publicId: schema.agents.publicId });
     return {
@@ -217,8 +217,8 @@ export async function seedCredential(
         },
         expiresAt: new Date(now + (over.expired ? -1 : 180) * DAY_MS),
         deletedAt: over.revoked ? new Date(now - DAY_MS) : null,
-        createdByUserId: tenant.userId,
-        updatedByUserId: tenant.userId,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
       })
       .returning({ id: schema.apiKeys.id, publicId: schema.apiKeys.publicId });
     return row!;
@@ -246,8 +246,8 @@ export async function seedHost(
         keyHash: `hash-${Math.random().toString(36).slice(2)}`,
         name: `tacho host ${over.hostname ?? "build"}`,
         scope: { purpose: "tacho_host_v1" },
-        createdByUserId: tenant.userId,
-        updatedByUserId: tenant.userId,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
       })
       .returning({ id: schema.apiKeys.id });
     const [host] = await tx
@@ -270,8 +270,8 @@ export async function seedHost(
         enrollmentSignature: "sig",
         expiresAt: new Date(now.getTime() + 30 * DAY_MS),
         revokedAt: status === "revoked" ? now : null,
-        createdByUserId: tenant.userId,
-        updatedByUserId: tenant.userId,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
       })
       .returning({
         id: schema.tachoHosts.id,

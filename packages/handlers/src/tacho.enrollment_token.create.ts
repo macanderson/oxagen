@@ -86,7 +86,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         issuedToUserId: userId,
         expiresAt,
         createdAt: now,
-        createdByUserId: userId,
+        createdById: userId,
       })
       .returning({ publicId: schema.tachoEnrollmentTokens.publicId });
     if (!row) throw new Error("enrollment_tokens insert returned no row");

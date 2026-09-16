@@ -167,7 +167,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         keyHash: `hash-${tag}`,
         name: `tacho host ${tag}`,
         scope: { purpose: "tacho_host_v1", host_enrollment_id: hostPublicId },
-        createdByUserId: userId,
+        createdById: userId,
       });
       await tx.insert(schema.tachoHosts).values({
         id: hostId,

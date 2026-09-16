@@ -85,7 +85,7 @@ describe("propose_record", () => {
       supportAgents: ["a-intel.core.cc"],
       evidenceLinks: ["fnd_01K5RT6C"],
       source: `user:${AUTHOR}`,
-      createdByUserId: AUTHOR,
+      createdById: AUTHOR,
     });
     const labelled = await createProposeRecordHandler(h)(
       proposal({ source: "findings job · fnd_01K5RT6C" }),
@@ -122,7 +122,7 @@ describe("propose_record", () => {
     expect(out.status).toBe("proposed");
     expect(h.store.proposals[0]).toMatchObject({
       source: "api_key:key_1",
-      createdByUserId: null,
+      createdById: null,
     });
 
     gate.keyCreator = null;
@@ -359,7 +359,7 @@ describe("dismiss_proposal", () => {
     expect(out.status).toBe("rejected");
     expect(h.store.proposals[0]).toMatchObject({
       status: "rejected",
-      updatedByUserId: "u_key_creator",
+      updatedById: "u_key_creator",
     });
   });
 

@@ -56,8 +56,8 @@ export async function bootstrapWorkspace(
       name,
       slug,
       namespace,
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdById: userId,
+      updatedById: userId,
     })
     .returning({
       id: schema.workspaces.id,
@@ -73,8 +73,8 @@ export async function bootstrapWorkspace(
     userId,
     role: "owner",
     joinedAt: new Date(),
-    createdByUserId: userId,
-    updatedByUserId: userId,
+    createdById: userId,
+    updatedById: userId,
   });
 
   await bootstrapWorkspaceAgents({ workspaceId: ws.id, orgId, userId, tx });

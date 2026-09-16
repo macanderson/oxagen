@@ -631,8 +631,8 @@ chatStreamRoute.post("/", async (c) => {
                     content,
                     contentBlocks: [],
                     metadata: { surface: "api" },
-                    createdByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
-                    updatedByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
+                    createdById: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
+                    updatedById: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
                   });
 
                   const [assistantMsg] = await tx
@@ -645,8 +645,8 @@ chatStreamRoute.post("/", async (c) => {
                       content: assistantText,
                       contentBlocks: [],
                       metadata: { status: "complete", surface: "api" },
-                      createdByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
-                      updatedByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
+                      createdById: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
+                      updatedById: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
                     })
                     .returning({ id: schema.messages.id });
 

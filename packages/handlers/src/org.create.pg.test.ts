@@ -140,7 +140,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     expect(org.publicId).toBe(out.publicId);
     // The namespace is derived server-side from the slug.
     expect(org.namespace).toMatch(/^[a-z0-9]{2,6}$/);
-    expect(org.createdByUserId).toBe(userId);
+    expect(org.createdById).toBe(userId);
 
     // Owner membership.
     const memberships = await withSystemDb((tx) =>

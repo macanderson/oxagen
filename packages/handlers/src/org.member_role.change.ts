@@ -289,9 +289,9 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         .update(schema.principalRoleAssignments)
         .set({
           deletedAt: new Date(),
-          deletedByUserId: actorId,
+          deletedById: actorId,
           updatedAt: new Date(),
-          updatedByUserId: actorId,
+          updatedById: actorId,
         })
         .where(
           and(
@@ -310,8 +310,8 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           roleId: newRoleRow.id,
           orgId: ctx.orgId,
           assignedBy: actorId,
-          createdByUserId: actorId,
-          updatedByUserId: actorId,
+          createdById: actorId,
+          updatedById: actorId,
         })
         .onConflictDoNothing();
     }
@@ -325,7 +325,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .set({
         role: input.newRole,
         updatedAt: new Date(),
-        updatedByUserId: actorId,
+        updatedById: actorId,
       })
       .where(
         and(

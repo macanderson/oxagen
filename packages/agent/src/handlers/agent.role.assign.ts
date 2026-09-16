@@ -138,11 +138,11 @@ export async function agentRoleAssignHandler(
         .update(schema.principalRoleAssignments)
         .set({
           deletedAt: null,
-          deletedByUserId: null,
+          deletedById: null,
           assignedBy: assignerUserId,
           assignedAt: new Date(),
           updatedAt: new Date(),
-          updatedByUserId: assignerUserId,
+          updatedById: assignerUserId,
         })
         .where(eq(schema.principalRoleAssignments.id, existing.id));
     } else {
@@ -154,8 +154,8 @@ export async function agentRoleAssignHandler(
           orgId: ctx.orgId,
           workspaceId: praWorkspaceId,
           assignedBy: assignerUserId,
-          createdByUserId: assignerUserId,
-          updatedByUserId: assignerUserId,
+          createdById: assignerUserId,
+          updatedById: assignerUserId,
         })
         .onConflictDoNothing();
     }

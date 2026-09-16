@@ -82,7 +82,7 @@ describe("workspaceListHandler", () => {
   it("resolves the effective user from the API key and returns their workspaces", async () => {
     // Call 1: API-key lookup returns the key's creator.
     mocks.withSystemDb.mockResolvedValueOnce({
-      createdByUserId: "usr_key_creator",
+      createdById: "usr_key_creator",
     });
     // Call 2: org+membership+listing transaction.
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
@@ -101,8 +101,8 @@ describe("workspaceListHandler", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 
-  it("throws when the API key row has no createdByUserId (fail-closed)", async () => {
-    mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: null });
+  it("throws when the API key row has no createdById (fail-closed)", async () => {
+    mocks.withSystemDb.mockResolvedValueOnce({ createdById: null });
 
     await expect(
       workspaceListHandler(

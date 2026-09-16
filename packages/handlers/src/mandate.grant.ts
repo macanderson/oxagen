@@ -62,7 +62,7 @@ export const mandateGrantHandler: CapabilityHandler<
       roleAtGrant,
       status: "active" as const,
       updatedAt: new Date(),
-      updatedByUserId: actingUserId ?? undefined,
+      updatedById: actingUserId ?? undefined,
     };
     if (input.requestId !== undefined) {
       const draft = await loadMandateRow(tx, workspaceId, input.requestId);
@@ -90,7 +90,7 @@ export const mandateGrantHandler: CapabilityHandler<
         ...body,
         orgId: ctx.orgId,
         workspaceId,
-        createdByUserId: actingUserId ?? undefined,
+        createdById: actingUserId ?? undefined,
       })
       .returning();
   });

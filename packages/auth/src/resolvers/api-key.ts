@@ -125,7 +125,7 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
         workspaceId: true,
         expiresAt: true,
         scope: true,
-        createdByUserId: true,
+        createdById: true,
       },
     }),
   );
@@ -164,7 +164,7 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   // member of the key's org and workspace. The bearer path skips the org and
   // workspace middleware's membership checks, so this is where a removed
   // member's key stops working.
-  const creatorId = row.createdByUserId;
+  const creatorId = row.createdById;
   if (!creatorId) return { ok: false, kind: "invalid" };
   // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
   const member = await withSystemDb(async (tx) => {

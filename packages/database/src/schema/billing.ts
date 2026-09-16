@@ -14,7 +14,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
+import {
+  auditMixin,
+  citext,
+  idMixin,
+  softDeleteMixin,
+  uuidv7Default,
+} from "./_mixins";
 import { organizations } from "./org";
 
 /**
@@ -191,8 +197,7 @@ export const paymentMethods = billingSchema.table(
   {
     ...idMixin("pm"),
     ...auditMixin(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-    deletedByUserId: uuid("deleted_by_user_id"),
+    ...softDeleteMixin(),
     // FK → org.organizations.id
     orgId: uuid("org_id")
       .notNull()
@@ -311,7 +316,7 @@ export const creditLedger = billingSchema.table(
     reason: text("reason").notNull(),
     referenceType: text("reference_type"),
     referenceId: uuid("reference_id"),
-    createdByUserId: uuid("created_by_user_id"),
+    createdById: uuid("created_by_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

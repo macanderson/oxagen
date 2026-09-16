@@ -5,7 +5,7 @@
 //   2. Role gate — actor must hold Owner or Admin in the org.
 //   3. Resolve the key by publicId within ctx.orgId (IDOR guard: 404 if the
 //      key does not belong to this org, or if it is already revoked).
-//   4. Soft-delete: set deletedAt = now(), deletedByUserId = actorId.
+//   4. Soft-delete: set deletedAt = now(), deletedById = actorId.
 //   5. Emit api_key.revoked security event (fire-and-forget).
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -95,9 +95,9 @@ export const apiKeyRevokeHandler: CapabilityHandler<
       .update(schema.apiKeys)
       .set({
         deletedAt: revokedAt,
-        deletedByUserId: ctx.userId ?? undefined,
+        deletedById: ctx.userId ?? undefined,
         updatedAt: revokedAt,
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .where(eq(schema.apiKeys.id, existing.id));
 

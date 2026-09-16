@@ -34,16 +34,16 @@ export async function revokeHostEnrollment(
       revokedAt: args.now,
       revokeReason: args.reason,
       updatedAt: args.now,
-      updatedByUserId: args.userId,
+      updatedById: args.userId,
     })
     .where(eq(schema.tachoHosts.id, host.id));
   await tx
     .update(schema.apiKeys)
     .set({
       deletedAt: args.now,
-      deletedByUserId: args.userId,
+      deletedById: args.userId,
       updatedAt: args.now,
-      updatedByUserId: args.userId,
+      updatedById: args.userId,
     })
     .where(eq(schema.apiKeys.id, host.apiKeyId));
   await tx.insert(schema.tachoControlCommands).values({
@@ -58,7 +58,7 @@ export async function revokeHostEnrollment(
     issuedByUserId: args.userId,
     issuedAt: args.now,
     expiresAt: new Date(args.now.getTime() + REVOKE_COMMAND_TTL_MS),
-    createdByUserId: args.userId,
-    updatedByUserId: args.userId,
+    createdById: args.userId,
+    updatedById: args.userId,
   });
 }

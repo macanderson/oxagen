@@ -92,7 +92,7 @@ export function createRoleHandler(
           name: input.name,
           scopeKind: input.scopeKind,
           description: input.description,
-          createdByUserId: userId,
+          createdById: userId,
         });
       } catch (err) {
         if (isUniqueViolation(err)) {

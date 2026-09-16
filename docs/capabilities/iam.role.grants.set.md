@@ -37,5 +37,5 @@ Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate`. Sensit
 
 ## Side effects
 
-- Postgres: `iam.role_grants` rows of the role replaced; `iam.roles.updated_at` and `updated_by_user_id` set; the deny-generation trigger bumps the org's counter.
+- Postgres: `iam.role_grants` rows of the role replaced; `iam.roles.updated_at` and `updated_by_id` set; the deny-generation trigger bumps the org's counter.
 - `security.security_events`: `iam.role_grants_set`.
