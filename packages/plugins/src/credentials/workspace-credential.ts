@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveCredentialKms } from "./kms";
 import { revokeCredentialGrants } from "./credential-grants";
-import { assertNoActiveKillSwitch } from "@oxagen/iam";
+import { assertNoActiveKillSwitch } from "@oxagen/iam/kill-switch-guard";
 import {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
