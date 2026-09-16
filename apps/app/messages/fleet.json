@@ -21,7 +21,8 @@
       "requester": "Requested by",
       "timesOut": "Times out in <clock></clock>, then the call ends",
       "notRecorded": "not recorded",
-      "openRun": "Open run"
+      "openRun": "Open run",
+      "mandateUnread": "Drew on mandate {mandate}. Its remaining authority was not read, so none is shown."
     },
     "runs": {
       "title": "Runs",

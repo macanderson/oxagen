@@ -81,6 +81,7 @@ describe("RequestMandate", () => {
       ]),
     );
     expect(dialog()).toHaveTextContent("There is no unbounded option.");
+    expect(dialog()).toHaveTextContent("It cannot be “calls”");
     await expectNoAxe(document.body);
   });
 

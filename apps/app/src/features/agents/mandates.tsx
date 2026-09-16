@@ -62,7 +62,16 @@ export function MandatesSection({
             <p className="text-xs text-muted-foreground">{t("noneDetail")}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="flex flex-col gap-3">
+            {read.value.truncatedAt === null ? null : (
+              <p
+                data-state="truncated"
+                className="max-w-prose text-sm text-foreground"
+              >
+                {t("truncated", { shown: String(read.value.truncatedAt) })}
+              </p>
+            )}
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -117,8 +126,9 @@ export function MandatesSection({
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

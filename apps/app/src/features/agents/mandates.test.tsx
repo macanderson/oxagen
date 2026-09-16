@@ -10,7 +10,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { callsAuthority, mandateAuthority, mandateRow } from "@/test/mandate-views";
+import {
+  callsAuthority,
+  mandateAuthority,
+  mandateList,
+  mandateRow,
+} from "@/test/mandate-views";
 import { agentDetail, agentsSource } from "./agents.builders";
 
 vi.mock("next/link", () => ({
@@ -73,14 +78,14 @@ afterEach(async () => {
 
 describe("Agents › Mandates", () => {
   it("reads only this agent's mandates, by its public id", async () => {
-    const calls = await renderMandates(readOk({ mandates: [mandateRow()] }));
+    const calls = await renderMandates(mandateList([mandateRow()]));
     expect(calls.mandates).toEqual([[ctx, { agentId: "agt_releasebot" }]]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);
   });
 
   it("lists each mandate with its consequence, limits, remaining and expiry", async () => {
-    await renderMandates(readOk({ mandates: [mandateRow()] }));
+    await renderMandates(mandateList([mandateRow()]));
     const row = within(held()).getByTestId("agent-mandate");
     expect(row).toHaveAttribute("data-status", "active");
     const text = row.textContent;
@@ -98,13 +103,9 @@ describe("Agents › Mandates", () => {
 
   it("prints every measure a mandate limits", async () => {
     await renderMandates(
-      readOk({
-        mandates: [
-          mandateRow({
-            authority: [mandateAuthority(), callsAuthority()],
-          }),
-        ],
-      }),
+      mandateList([
+        mandateRow({ authority: [mandateAuthority(), callsAuthority()] }),
+      ]),
     );
     const row = within(held()).getByTestId("agent-mandate");
     expect(row.textContent).toContain("50 calls");
@@ -112,7 +113,7 @@ describe("Agents › Mandates", () => {
   });
 
   it("says what an agent with no mandate cannot do, and offers the request", async () => {
-    await renderMandates(readOk({ mandates: [] }));
+    await renderMandates(mandateList([]));
     const section = held();
     expect(within(section).getByRole("heading")).toHaveTextContent(
       "No mandate",
@@ -126,6 +127,13 @@ describe("Agents › Mandates", () => {
     expect(
       within(section).getByRole("button", { name: "Request a mandate" }),
     ).toBeInTheDocument();
+  });
+
+  it("says older mandates are not listed when the answer filled its page (negative)", async () => {
+    await renderMandates(mandateList([mandateRow()], 100));
+    expect(
+      within(held()).getByText(/older ones are not listed/),
+    ).toHaveAttribute("data-state", "truncated");
   });
 
   it("says who may read the ledger when the viewer may not (negative)", async () => {

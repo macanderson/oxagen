@@ -48,8 +48,11 @@ export function mandateRow(overrides: Partial<MandateRow> = {}): MandateRow {
   };
 }
 
-export function mandateList(mandates: MandateRow[]): Read<MandateList> {
-  return readOk({ mandates });
+export function mandateList(
+  mandates: MandateRow[],
+  truncatedAt: number | null = null,
+): Read<MandateList> {
+  return readOk({ mandates, truncatedAt });
 }
 
 /** The built-in `calls` limit, a count measure beside an amount. */
@@ -59,10 +62,10 @@ export function callsAuthority(): MandateRow["authority"][number] {
     period: "daily",
     periodKey: "2026-09-16",
     perCall: null,
-    perPeriod: { kind: "count", count: 50, unit: "calls" },
-    settled: { kind: "count", count: 11, unit: "calls" },
-    reserved: { kind: "count", count: 1, unit: "calls" },
-    remaining: { kind: "count", count: 38, unit: "calls" },
+    perPeriod: { kind: "count", count: "50", unit: "calls" },
+    settled: { kind: "count", count: "11", unit: "calls" },
+    reserved: { kind: "count", count: "1", unit: "calls" },
+    remaining: { kind: "count", count: "38", unit: "calls" },
     settledRatio: 0.22,
     reservedRatio: 0.02,
   });

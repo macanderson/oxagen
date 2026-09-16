@@ -20,12 +20,17 @@ const MandateStatus = z.enum(["draft", "active", "expired", "revoked"]);
 /** The period a per-period limit resets on. */
 const MandatePeriod = z.enum(["daily", "weekly", "monthly"]);
 
-/** One measured figure: micros with a currency, or whole units with their name. */
+/**
+ * One measured figure: micros with a currency, or whole units with their name.
+ * A count stays the integer string the ledger recorded — the contract allows
+ * thirty digits, and a double holds sixteen — so the figure printed and the
+ * figure the ratio was taken from are the same number.
+ */
 export const MeasureValue = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("money"), money: Money }),
   z.object({
     kind: z.literal("count"),
-    count: z.number().int().nonnegative(),
+    count: z.string().regex(/^\d+$/),
     unit: z.string().min(1),
   }),
 ]);
@@ -74,5 +79,15 @@ export const MandateRow = z.object({
 });
 export type MandateRow = z.infer<typeof MandateRow>;
 
-export const MandateList = z.object({ mandates: z.array(MandateRow) });
+export const MandateList = z.object({
+  mandates: z.array(MandateRow),
+  /**
+   * How many rows the read asked for, when the answer filled that many and
+   * older mandates may therefore be missing; null when the answer was short of
+   * the bound and so is the whole set. `list_mandates` takes no cursor, so a
+   * workspace past the bound is told what it is not seeing rather than shown a
+   * list that quietly stops.
+   */
+  truncatedAt: z.number().int().positive().nullable(),
+});
 export type MandateList = z.infer<typeof MandateList>;

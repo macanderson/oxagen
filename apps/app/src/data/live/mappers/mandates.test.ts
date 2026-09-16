@@ -13,7 +13,7 @@ import {
 } from "@/test/mandate-outputs";
 import { toMandateList } from "./mandates";
 
-const view = () => MandateList.parse(toMandateList(mandateListOutput()));
+const view = () => MandateList.parse(toMandateList(mandateListOutput(), 100));
 
 /** The one mandate of a one-mandate answer, and its first measure. */
 function only(mandates: MandateList["mandates"]): MandateList["mandates"][number] {
@@ -80,15 +80,16 @@ describe("toMandateList", () => {
         mandateListOutput([
           mandateOutput({ authority: [callsAuthorityOutput()] }),
         ]),
+        100,
       ),
     );
     expect(firstMeasure(view.mandates)).toMatchObject({
       measure: "calls",
       perCall: null,
-      perPeriod: { kind: "count", count: 50, unit: "calls" },
-      settled: { kind: "count", count: 11, unit: "calls" },
-      reserved: { kind: "count", count: 1, unit: "calls" },
-      remaining: { kind: "count", count: 38, unit: "calls" },
+      perPeriod: { kind: "count", count: "50", unit: "calls" },
+      settled: { kind: "count", count: "11", unit: "calls" },
+      reserved: { kind: "count", count: "1", unit: "calls" },
+      remaining: { kind: "count", count: "38", unit: "calls" },
       settledRatio: 0.22,
       reservedRatio: 0.02,
     });
@@ -99,11 +100,10 @@ describe("toMandateList", () => {
       toMandateList(
         mandateListOutput([
           mandateOutput({
-            authority: [
-              authorityOutput({ perPeriod: null, remaining: null }),
-            ],
+            authority: [authorityOutput({ perPeriod: null, remaining: null })],
           }),
         ]),
+        100,
       ),
     );
     expect(firstMeasure(view.mandates)).toMatchObject({
@@ -124,6 +124,7 @@ describe("toMandateList", () => {
             roleAtGrant: null,
           }),
         ]),
+        100,
       ),
     );
     expect(only(view.mandates)).toMatchObject({
@@ -147,6 +148,7 @@ describe("toMandateList", () => {
             ],
           }),
         ]),
+        100,
       ),
     );
     expect(firstMeasure(view.mandates)).toMatchObject({
@@ -159,9 +161,63 @@ describe("toMandateList", () => {
     });
   });
 
+  it("reads a three-letter unit that is no currency as a count (negative)", () => {
+    // GAU is what this product bills in, and RPM is a rate: both are
+    // well-formed three-letter units, and neither is an ISO 4217 code.
+    for (const unit of ["GAU", "RPM"]) {
+      const view = MandateList.parse(
+        toMandateList(
+          mandateListOutput([
+            mandateOutput({
+              authority: [
+                callsAuthorityOutput({ measure: "units", currencyOrUnit: unit }),
+              ],
+            }),
+          ]),
+          100,
+        ),
+      );
+      expect(firstMeasure(view.mandates).perPeriod).toEqual({
+        kind: "count",
+        count: "50",
+        unit,
+      });
+    }
+  });
+
+  it("keeps a count larger than a double holds exactly", () => {
+    const huge = "9007199254740993";
+    const view = MandateList.parse(
+      toMandateList(
+        mandateListOutput([
+          mandateOutput({
+            authority: [
+              callsAuthorityOutput({
+                perPeriod: huge,
+                settled: huge,
+                remaining: "0",
+              }),
+            ],
+          }),
+        ]),
+        100,
+      ),
+    );
+    const authority = firstMeasure(view.mandates);
+    expect(authority.perPeriod).toMatchObject({ count: huge });
+    expect(authority.settled).toMatchObject({ count: huge });
+    expect(authority.settledRatio).toBe(1);
+  });
+
+  it("says the answer filled the page it asked for, and nothing when it did not", () => {
+    const one = mandateListOutput();
+    expect(MandateList.parse(toMandateList(one, 1)).truncatedAt).toBe(1);
+    expect(MandateList.parse(toMandateList(one, 100)).truncatedAt).toBeNull();
+  });
+
   it("answers an empty workspace with no mandates", () => {
-    expect(MandateList.parse(toMandateList(mandateListOutput([])))).toEqual({
-      mandates: [],
-    });
+    expect(
+      MandateList.parse(toMandateList(mandateListOutput([]), 100)),
+    ).toEqual({ mandates: [], truncatedAt: null });
   });
 });

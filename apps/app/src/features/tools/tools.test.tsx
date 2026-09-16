@@ -122,6 +122,19 @@ describe("Tools › mandates ledger", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  it("says older mandates are not listed when the answer filled its page (negative)", async () => {
+    const { container } = await renderTools(mandateList([mandateRow()], 100));
+    expect(
+      within(ledger()).getByText(/older ones are not listed/),
+    ).toHaveAttribute("data-state", "truncated");
+    await expectNoAxe(container);
+  });
+
+  it("says nothing about older mandates when the answer was the whole set", async () => {
+    await renderTools(mandateList([mandateRow()]));
+    expect(within(ledger()).queryByText(/older ones are not listed/)).toBeNull();
+  });
+
   it("is empty when the workspace has granted no mandate", async () => {
     const { container } = await renderTools(mandateList([]));
     expect(within(ledger()).getByText(/No mandate has been granted/)).toHaveAttribute(

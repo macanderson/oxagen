@@ -1,10 +1,10 @@
 // A measured figure as text: money through <Money>, a count through
-// formatCount with its unit (INV-09). A mandate's limits and its ledger both
-// speak in measures, so one component prints them wherever they appear.
+// formatWholeUnits with its unit (INV-09). A mandate's limits and its ledger
+// both speak in measures, so one component prints them wherever they appear.
 import { useLocale, useTranslations } from "next-intl";
 import type { MeasureValue } from "@/data/contracts/mandates";
 import { Money } from "./money";
-import { formatCount, formatMoney } from "./money-format";
+import { formatMoney, formatWholeUnits } from "./money-format";
 
 export function Measure({ value }: { value: MeasureValue }) {
   const t = useTranslations("ui.measure");
@@ -13,7 +13,7 @@ export function Measure({ value }: { value: MeasureValue }) {
   return (
     <span data-testid="measure-count" className="tabular-nums">
       {t("count", {
-        count: formatCount(value.count, locale),
+        count: formatWholeUnits(value.count, locale),
         unit: value.unit,
       })}
     </span>
@@ -28,7 +28,7 @@ export function useMeasureText(): (value: MeasureValue) => string {
     value.kind === "money"
       ? formatMoney(value.money, { locale, precision: "cents" })
       : t("count", {
-          count: formatCount(value.count, locale),
+          count: formatWholeUnits(value.count, locale),
           unit: value.unit,
         });
 }

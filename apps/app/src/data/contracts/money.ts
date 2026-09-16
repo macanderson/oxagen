@@ -66,6 +66,23 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/**
+ * The ISO 4217 codes this runtime knows, which is what "a currency code"
+ * means. A mandate limit names either one of these or a unit of a count
+ * (`schemas.ts`), and the two are told apart by membership here rather than by
+ * spelling: `GAU` and `RPM` are well-formed three-letter units and every
+ * three-letter test would read them as money, printing 50 GAU as GAU 0.00.
+ * The durable answer is a kind on the wire, which belongs to the contract that
+ * writes the limit; until it carries one, this is the set the contract names.
+ */
+const CURRENCY_CODES: ReadonlySet<string> = new Set(
+  Intl.supportedValuesOf("currency"),
+);
+
+export function isCurrencyCode(code: string): boolean {
+  return CURRENCY_CODES.has(code);
+}
+
 /** Six digits of the fraction, finer than any meter draws. */
 const RATIO_SCALE = 1_000_000n;
 

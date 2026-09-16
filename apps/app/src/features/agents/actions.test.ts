@@ -331,7 +331,7 @@ describe("requestMandate", () => {
         approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
         purpose: "monthly infrastructure invoices, PO-4471",
         validFrom: "2026-09-01T00:00:00.000Z",
-        validTo: "2026-12-31T00:00:00.000Z",
+        validTo: "2026-12-31T23:59:59.999Z",
       },
       expect.objectContaining(TENANT),
     );
@@ -370,6 +370,12 @@ describe("requestMandate", () => {
     [{ validFrom: "01/09/2026" }, "validFrom"],
     [{ validTo: "" }, "validTo"],
     [{ validFrom: "2026-12-31", validTo: "2026-09-01" }, "validTo"],
+    // `calls` is the built-in measure: the gate reads one per call whatever a
+    // limit says, so a money limit filed under it would be read as a ceiling
+    // of that many calls, and the grant handler exempts it from the
+    // measure-declared check that would otherwise catch it.
+    [{ measure: "calls" }, "measure"],
+    [{ measure: "  calls  " }, "measure"],
   ])("refuses %j before the kernel runs (negative)", async (patch, field) => {
     expect(
       await requestMandate("acme", "core-platform", { ...good, ...patch }),
@@ -380,6 +386,42 @@ describe("requestMandate", () => {
       field,
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("runs the authority through the end of the last day it names", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", good);
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      validFrom: "2026-09-01T00:00:00.000Z",
+      validTo: "2026-12-31T23:59:59.999Z",
+    });
+  });
+
+  it("accepts a mandate that starts and ends on one day", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        validFrom: "2026-09-01",
+        validTo: "2026-09-01",
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("keeps a money limit and a calls-per-day limit apart, both intact", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", good);
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      limits: {
+        amount: {
+          perCall: "250000000",
+          perPeriod: "2000000000",
+          period: "monthly",
+          currencyOrUnit: "USD",
+        },
+        calls: { perPeriod: "50", period: "daily", currencyOrUnit: "calls" },
+      },
+    });
   });
 
   it("returns a denial as denied (negative)", async () => {

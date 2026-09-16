@@ -25,7 +25,8 @@
         "active": "active",
         "expired": "expired",
         "revoked": "revoked"
-      }
+      },
+      "truncated": "The newest {shown} mandates. This workspace has granted at least that many, and older ones are not listed here."
     }
   }
 }

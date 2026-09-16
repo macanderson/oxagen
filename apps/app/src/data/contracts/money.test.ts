@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   Cost,
+  isCurrencyCode,
   Money,
   microsFromDecimal,
   moneyFromMicros,
@@ -133,6 +134,18 @@ describe("microsFromDecimal", () => {
       expect(microsFromDecimal(text)).toBeNull();
     },
   );
+});
+
+describe("isCurrencyCode", () => {
+  it("knows the ISO 4217 codes a limit may name", () => {
+    for (const code of ["USD", "EUR", "JPY"])
+      expect(isCurrencyCode(code)).toBe(true);
+  });
+
+  it("refuses a well-formed three-letter unit that is not one (negative)", () => {
+    for (const unit of ["GAU", "RPM", "calls", "usd", ""])
+      expect(isCurrencyCode(unit)).toBe(false);
+  });
 });
 
 describe("ratioOfIntegers", () => {

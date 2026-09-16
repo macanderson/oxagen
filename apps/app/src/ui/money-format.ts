@@ -18,6 +18,10 @@ function isDecimal(value: string): value is Intl.StringNumericLiteral {
   return /^-?\d+\.\d+$/.test(value);
 }
 
+function isWhole(value: string): value is Intl.StringNumericLiteral {
+  return /^\d+$/.test(value);
+}
+
 /** "-1500000" → "-1.500000"; throws on anything but an integer string. */
 function microsToDecimal(micros: string): Intl.StringNumericLiteral {
   const match = MICROS.exec(micros);
@@ -54,6 +58,20 @@ export function formatMoney(
 export function formatCount(count: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
     count,
+  );
+}
+
+/**
+ * A whole count the source recorded as digits, formatted from the string so a
+ * figure past what a double holds exactly is printed as recorded. The same
+ * route money takes: Intl reads an integer literal without converting it.
+ */
+export function formatWholeUnits(digits: string, locale: string): string {
+  if (!isWhole(digits)) {
+    throw new Error(`a count must be an integer string: ${digits}`);
+  }
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+    digits,
   );
 }
 

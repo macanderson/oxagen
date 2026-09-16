@@ -46,7 +46,7 @@ describe("mandates.list", () => {
     const read = await mandates.list(ctx, { agentId: null });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: mandateList,
-      input: {},
+      input: { limit: 100 },
       page: "mandates",
     });
     expect(read.ok && read.value.mandates.map((m) => m.id)).toEqual([
@@ -59,9 +59,17 @@ describe("mandates.list", () => {
     await mandates.list(ctx, { agentId: "agt_invoicebot" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: mandateList,
-      input: { agentId: "agt_invoicebot" },
+      input: { agentId: "agt_invoicebot", limit: 100 },
       page: "mandates",
     });
+  });
+
+  it("asks for the contract's largest page, since it takes no cursor", async () => {
+    kernelRead.mockResolvedValue(readOk(mandateListOutput([])));
+    await mandates.list(ctx, { agentId: null });
+    // 100 is the contract's maximum; asking for more is refused at the input.
+    expect(mandateList.input.safeParse({ limit: 100 }).success).toBe(true);
+    expect(mandateList.input.safeParse({ limit: 101 }).success).toBe(false);
   });
 
   it("passes a denial through as the mandate ledger's own refusal (negative)", async () => {

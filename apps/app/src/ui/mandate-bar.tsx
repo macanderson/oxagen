@@ -13,8 +13,10 @@ import { eyebrow } from "./control-styles";
 import { Measure, useMeasureText } from "./measure";
 import { ratioWidth } from "./money-format";
 
+/** Whether the ledger holds anything under this figure; both forms are integer strings. */
 function isDrawn(value: MandateAuthority["reserved"]): boolean {
-  return value.kind === "money" ? value.money.micros !== "0" : value.count > 0;
+  const digits = value.kind === "money" ? value.money.micros : value.count;
+  return /[1-9]/.test(digits);
 }
 
 export function MandateBar({ authority }: { authority: MandateAuthority }) {

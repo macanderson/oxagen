@@ -4,10 +4,12 @@
 // accountable for the consequence grants or declines it. The dialog writes a
 // draft, and a draft grants nothing.
 //
-// A mandate expires: there is no unbounded option, so both dates are required.
-// The amount is read from a call by the measure the tool version declares, so
-// the measure is named here rather than guessed; a tool version that exposes
-// no such measure cannot be given a mandate and the handler refuses the draft.
+// A mandate expires: there is no unbounded option, so both dates are required,
+// and the window runs through the end of the last day. The amount is read from
+// a call by the measure the tool version declares, so the measure is named here
+// rather than guessed; a tool version that exposes no such measure cannot be
+// given a mandate and the handler refuses the draft. The measure cannot be
+// `calls`, which the field below writes and the gate reads as one per call.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";

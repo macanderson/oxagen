@@ -4,8 +4,11 @@
 //
 // A card whose call drew on a mandate carries the mandate bar (#2957): what
 // the period has settled, what calls in flight reserve, and what is left, from
-// the same ledger the Tools ledger reads. A card names no bar when the call
-// drew on no mandate, or when the viewer may not read the ledger.
+// the same ledger the Tools ledger reads. A card that drew on no mandate names
+// none. A card whose mandate the page could not read — the viewer may not read
+// the ledger, or the mandate fell outside the one page `list_mandates` answers
+// — names the mandate instead of drawing nothing, because a bar that silently
+// disappears reads as an agent acting under no authority at all.
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
@@ -51,11 +54,15 @@ function ApprovalCard({
         <dt className="text-muted-foreground">{t("requester")}</dt>
         {recorded(item.requester)}
       </dl>
-      {mandate === null
-        ? null
-        : mandate.authority.map((authority) => (
-            <MandateBar key={authority.measure} authority={authority} />
-          ))}
+      {mandate !== null ? (
+        mandate.authority.map((authority) => (
+          <MandateBar key={authority.measure} authority={authority} />
+        ))
+      ) : item.mandateId === null ? null : (
+        <p data-testid="mandate-unread" className="text-xs">
+          {t("mandateUnread", { mandate: item.mandateId })}
+        </p>
+      )}
       <p className="text-xs">
         {t.rich("timesOut", {
           clock: () => (

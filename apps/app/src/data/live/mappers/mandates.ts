@@ -3,30 +3,33 @@
 // unrecorded — who asked, who granted, the role they held, a limit with no
 // per-period figure — is null in the view model and nothing is invented.
 //
-// A limit names either a currency or a unit (`mandates/schemas.ts`), so the
-// mapper reads the shape of that name once per measure and carries every
-// figure of that measure in the same form. The ratios the meter draws are
-// computed here, on integers, so the component does no arithmetic (INV-09).
+// A limit names either an ISO 4217 currency or a unit of a count
+// (`mandates/schemas.ts`), told apart by `isCurrencyCode` rather than by the
+// shape of the name, so a three-letter unit such as GAU stays a count. Every
+// figure of one measure is carried in that measure's form, counts as the
+// integer string the ledger recorded. The ratios the meter draws are computed
+// here, on integers, so the component does no arithmetic (INV-09).
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { z } from "zod";
 import type { MandateList, MeasureValue } from "@/data/contracts/mandates";
-import { moneyFromMicros, ratioOfIntegers } from "@/data/contracts/money";
+import {
+  isCurrencyCode,
+  moneyFromMicros,
+  ratioOfIntegers,
+} from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
 
 type Out = ContractOutput<typeof mandateList>;
 type MandateOut = Out["items"][number];
 type AuthorityOut = MandateOut["authority"][number];
 
-/** An ISO 4217 code: what a limit names when its measure is an amount. */
-const CURRENCY = /^[A-Z]{3}$/;
-
 function measureValue(
   value: string,
   currencyOrUnit: string,
 ): z.input<typeof MeasureValue> {
-  return CURRENCY.test(currencyOrUnit)
+  return isCurrencyCode(currencyOrUnit)
     ? { kind: "money", money: moneyFromMicros(value, currencyOrUnit) }
-    : { kind: "count", count: Number(value), unit: currencyOrUnit };
+    : { kind: "count", count: value, unit: currencyOrUnit };
 }
 
 function toAuthority(
@@ -52,8 +55,12 @@ function toAuthority(
   };
 }
 
-export function toMandateList(out: Out): z.input<typeof MandateList> {
+export function toMandateList(
+  out: Out,
+  limit: number,
+): z.input<typeof MandateList> {
   return {
+    truncatedAt: out.items.length >= limit ? limit : null,
     mandates: out.items.map((item) => ({
       id: item.id,
       agentId: item.agentId,

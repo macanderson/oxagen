@@ -83,7 +83,7 @@ describe("MandateBar", () => {
   });
 
   it("prints a count measure in its own unit", async () => {
-    const count = (n: number) =>
+    const count = (n: string) =>
       ({ kind: "count", count: n, unit: "calls" }) as const;
     const { container } = draw(
       <MandateBar
@@ -92,10 +92,10 @@ describe("MandateBar", () => {
           period: "daily",
           periodKey: "2026-09-16",
           perCall: null,
-          perPeriod: count(50),
-          settled: count(11),
-          reserved: count(1),
-          remaining: count(38),
+          perPeriod: count("50"),
+          settled: count("11"),
+          reserved: count("1"),
+          remaining: count("38"),
           settledRatio: 0.22,
           reservedRatio: 0.02,
         })}

@@ -129,6 +129,17 @@ const CURRENCY = /^[A-Za-z]{3}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const WHOLE = /^\d{1,9}$/;
 
+/**
+ * The one built-in measure (`CALLS_MEASURE`, packages/oxagen/src/mandates/
+ * schemas.ts): every call draws exactly one of it, and the gate reads it that
+ * way whatever a limit says. A money limit filed under that name would be
+ * read as a ceiling of that many calls — $250 per call as 250,000,000 calls —
+ * and the grant handler cannot catch it, because it exempts `calls` from the
+ * measure a tool version must declare. The amount field refuses the name, and
+ * the calls-per-day field is the only writer of that limit.
+ */
+const RESERVED_MEASURE = "calls";
+
 function refuse(field: keyof MandateDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
@@ -148,7 +159,7 @@ export async function requestMandate(
   const currency = draft.currency.trim().toUpperCase();
   if (!CURRENCY.test(currency)) return refuse("currency");
   const measure = draft.measure.trim();
-  if (measure === "") return refuse("measure");
+  if (measure === "" || measure === RESERVED_MEASURE) return refuse("measure");
   const consequenceTag = draft.consequenceTag.trim();
   if (consequenceTag === "") return refuse("consequenceTag");
 
@@ -176,8 +187,12 @@ export async function requestMandate(
 
   if (!DATE.test(draft.validFrom)) return refuse("validFrom");
   if (!DATE.test(draft.validTo)) return refuse("validTo");
+  // The dates a person picks are days, and the authority runs through the last
+  // of them: a mandate valid to 2026-12-31 expires as that day ends, not as it
+  // begins. The window is inclusive at both ends, so a single-day mandate is
+  // a day rather than nothing.
   const validFrom = `${draft.validFrom}T00:00:00.000Z`;
-  const validTo = `${draft.validTo}T00:00:00.000Z`;
+  const validTo = `${draft.validTo}T23:59:59.999Z`;
   if (Date.parse(validTo) <= Date.parse(validFrom)) return refuse("validTo");
 
   const ctx = await requireViewer(org, ws);
@@ -194,10 +209,10 @@ export async function requestMandate(
       ...(callsPerDay === ""
         ? {}
         : {
-            calls: {
+            [RESERVED_MEASURE]: {
               perPeriod: callsPerDay,
               period: "daily" as const,
-              currencyOrUnit: "calls",
+              currencyOrUnit: RESERVED_MEASURE,
             },
           }),
     },

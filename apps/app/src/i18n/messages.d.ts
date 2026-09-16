@@ -448,6 +448,7 @@ type Messages = {
         confirm: string;
         pending: string;
       };
+      truncated: string;
     };
   };
   auth: {
@@ -799,6 +800,7 @@ type Messages = {
       timesOut: string;
       notRecorded: string;
       openRun: string;
+      mandateUnread: string;
     };
     runs: {
       title: string;
@@ -1442,6 +1444,7 @@ type Messages = {
         expired: string;
         revoked: string;
       };
+      truncated: string;
     };
   };
   ui: {

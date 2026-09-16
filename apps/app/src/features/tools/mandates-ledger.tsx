@@ -141,7 +141,16 @@ export function MandatesLedger({ read }: { read: Read<MandateList> }) {
             <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="flex flex-col gap-3">
+            {read.value.truncatedAt === null ? null : (
+              <p
+                data-state="truncated"
+                className="max-w-prose text-sm text-foreground"
+              >
+                {t("truncated", { shown: String(read.value.truncatedAt) })}
+              </p>
+            )}
+            <div className="overflow-x-auto">
             <table className="w-full min-w-3xl text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -168,8 +177,9 @@ export function MandatesLedger({ read }: { read: Read<MandateList> }) {
                 {read.value.mandates.map((mandate) => (
                   <Row key={mandate.id} mandate={mandate} />
                 ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

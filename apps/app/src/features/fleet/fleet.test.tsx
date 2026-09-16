@@ -10,7 +10,7 @@ import type { ApprovalItem } from "@/data/contracts/approvals";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { mandateRow } from "@/test/mandate-views";
+import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   approvalItem,
   fleetSource,
@@ -327,7 +327,7 @@ describe("Fleet approvals › the mandate bar", () => {
     const { container, calls } = await renderFleet({
       runs: NO_RUNS,
       approvals: readOk([parked]),
-      mandates: readOk({ mandates: [mandateRow()] }),
+      mandates: mandateList([mandateRow()]),
     });
     expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
     const bar = within(approvalsSection()).getByTestId("mandate-bar");
@@ -354,17 +354,45 @@ describe("Fleet approvals › the mandate bar", () => {
       approvals: readOk([parked]),
       mandates: { ok: false, reason: "denied", permission: "org.billing" },
     });
-    expect(within(approvalsSection()).getByTestId("approval")).toBeInTheDocument();
+    expect(
+      within(approvalsSection()).getByTestId("approval"),
+    ).toBeInTheDocument();
     expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
     await expectNoAxe(container);
   });
 
-  it("draws no bar for a call whose mandate the page did not read (negative)", async () => {
-    await renderFleet({
+  it("names a mandate the page did not read rather than drawing nothing (negative)", async () => {
+    const { container } = await renderFleet({
       runs: NO_RUNS,
       approvals: readOk([approvalItem({ mandateId: "mnd_absent" })]),
-      mandates: readOk({ mandates: [mandateRow()] }),
+      mandates: mandateList([mandateRow()], 100),
     });
-    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
+    const section = approvalsSection();
+    expect(within(section).queryByTestId("mandate-bar")).toBeNull();
+    expect(within(section).getByTestId("mandate-unread")).toHaveTextContent(
+      "Drew on mandate mnd_absent",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("names the mandate on a card the viewer may not read the ledger for (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: { ok: false, reason: "denied", permission: "org.billing" },
+    });
+    expect(
+      within(approvalsSection()).getByTestId("mandate-unread"),
+    ).toHaveTextContent("mnd_4f2a9c");
+  });
+
+  it("names no mandate on a card that drew on none (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(
+      within(approvalsSection()).queryByTestId("mandate-unread"),
+    ).toBeNull();
   });
 });

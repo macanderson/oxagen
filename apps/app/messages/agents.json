@@ -379,7 +379,7 @@
         "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
         "consequenceTag": "Consequence",
         "measure": "Measure",
-        "measureHint": "The name the tool version declares the amount under, which is how it is read from a call.",
+        "measureHint": "The name the tool version declares the amount under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit.",
         "currency": "Currency",
         "perCall": "Per call",
         "perPeriod": "Per period",
@@ -400,7 +400,8 @@
         "validToHint": "A mandate expires. There is no unbounded option.",
         "confirm": "Request the mandate",
         "pending": "Requesting"
-      }
+      },
+      "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here."
     }
   }
 }
