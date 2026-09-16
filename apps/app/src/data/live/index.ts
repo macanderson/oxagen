@@ -8,6 +8,7 @@ import { org } from "./org";
 import { pretenant } from "./pretenant";
 import { runs } from "./runs";
 import { shell } from "./shell";
+import { skills } from "./skills";
 import { spend } from "./spend";
 
 export const liveSource: DataSource = {
@@ -19,4 +20,5 @@ export const liveSource: DataSource = {
   billing,
   org,
   spend,
+  skills,
 };

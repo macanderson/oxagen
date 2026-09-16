@@ -44,6 +44,7 @@ export type PageKey =
   | "organization"
   | "billing"
   | "spend"
+  | "skills"
   | "shell";
 
 type PageFailure = {
@@ -79,6 +80,11 @@ export const PAGE_FAILURES = {
   spend: {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
+  },
+  // The session inventory is a control-plane table read (tacho.sessions).
+  skills: {
+    error: { code: "session_store_unavailable", status: 503 },
+    permission: "skills.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

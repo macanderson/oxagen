@@ -1,5 +1,5 @@
 {
-  "generatedCount": 293,
+  "generatedCount": 294,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2091,6 +2091,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_skills",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

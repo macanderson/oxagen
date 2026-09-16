@@ -50,6 +50,7 @@ const source = {
     budgets: vi.fn(),
   },
   org: { members: vi.fn() },
+  skills: { inventory: vi.fn() },
 };
 
 beforeEach(() => {
