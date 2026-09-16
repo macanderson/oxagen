@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ceilingOf,
   createMcpGateway,
+  outcomeOf,
   type GatewayAttribution,
   type GatewayCallRecord,
   type GatewayFetch,
@@ -13,7 +14,8 @@ import {
   toolCountOf,
   tooManyToolsMessage,
 } from "./mcp-gateway";
-import type { PolicyBundle } from "../wire";
+import { policyBundleSchema, type PolicyBundle } from "../wire";
+import { unsignedBundle } from "../host/test-support";
 
 const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
 
@@ -171,14 +173,25 @@ describe("the forward carries the host key, not the caller's", () => {
 });
 
 describe("the tool ceiling", () => {
+  /**
+   * Built through `policyBundleSchema.parse`, not cast past it. The test used
+   * to hand `ceilingOf` a bare `{ tool_ceiling }` object through
+   * `as unknown as PolicyBundle`, which is why the ceiling looked covered
+   * while the strict schema had no such field and rejected every real bundle
+   * that carried one. A fixture the schema accepts is the only one that
+   * proves anything here.
+   */
   const bundle = (maxTools: number): PolicyBundle =>
-    ({
-      tool_ceiling: {
-        model_id: "openai/gpt-5",
-        max_tools: maxTools,
-        source: "OpenAI function-calling limit of 128 tools per request",
-      },
-    }) as unknown as PolicyBundle;
+    policyBundleSchema.parse({
+      ...unsignedBundle({
+        tool_ceiling: {
+          model_id: "openai/gpt-5",
+          max_tools: maxTools,
+          source: "OpenAI function-calling limit of 128 tools per request",
+        },
+      }),
+      signature: { key_id: "k1", alg: "ed25519", sig: "sig" },
+    });
 
   const listOf = (n: number) => ({
     tools: Array.from({ length: n }, (_, i) => ({ name: `tool_${i}` })),
@@ -244,17 +257,43 @@ describe("the tool ceiling", () => {
     expect((await gw.handle(CALL, CTX)).body).toHaveProperty("result");
   });
 
-  it("reads a ceiling only when it is well formed", () => {
+  it("reads the ceiling a bundle declares, and none when it declares none", () => {
     expect(ceilingOf(undefined)).toBeUndefined();
     expect(ceilingOf({} as PolicyBundle)).toBeUndefined();
-    expect(
-      ceilingOf({ tool_ceiling: { model_id: "m" } } as unknown as PolicyBundle),
-    ).toBeUndefined();
-    expect(
-      ceilingOf({
-        tool_ceiling: { model_id: "m", max_tools: 3 },
-      } as unknown as PolicyBundle),
-    ).toEqual({ modelId: "m", maxTools: 3, source: "the workspace mandate" });
+    expect(ceilingOf(bundle(128))).toEqual({
+      modelId: "openai/gpt-5",
+      maxTools: 128,
+      source: "OpenAI function-calling limit of 128 tools per request",
+    });
+  });
+
+  it("parses a signed bundle that declares a ceiling, and rejects a half-declared one", () => {
+    const signature = { key_id: "k1", alg: "ed25519", sig: "sig" } as const;
+    // The whole point of putting the field in the schema: before this, a
+    // control plane that started signing `tool_ceiling` would have had every
+    // enrolled host reject the entire mandate, because the schema is strict.
+    expect(() =>
+      policyBundleSchema.parse({
+        ...unsignedBundle({
+          tool_ceiling: {
+            model_id: "openai/gpt-5",
+            max_tools: 128,
+            source: "the OpenAI limit",
+          },
+        }),
+        signature,
+      }),
+    ).not.toThrow();
+    // And a ceiling missing its number is not a ceiling with an unknown
+    // number — the schema refuses it rather than leaving `ceilingOf` to guess.
+    expect(() =>
+      policyBundleSchema.parse({
+        ...unsignedBundle({
+          tool_ceiling: { model_id: "openai/gpt-5" },
+        } as never),
+        signature,
+      }),
+    ).toThrow();
   });
 
   it("words the refusal the way the control plane words it", () => {
@@ -317,6 +356,62 @@ describe("evidence", () => {
     await gw.handle(CALL, CTX);
     expect(records[0]?.status).toBe("rejected");
     expect(records[0]?.refusedReason).toBe("Tool blocked by workspace policy");
+  });
+
+  it("records an ordinary tool failure as an error, not as a refusal", async () => {
+    // The daemon seals `rejected` as a policy_decision / deny / kernel and the
+    // desktop counts it as refused, so only -32002 may earn it. An unknown tool
+    // (-32601) or bad arguments (-32602) is the tool failing, not the mandate
+    // speaking, and filing it as a refusal invents a governance decision nobody
+    // made.
+    for (const code of [-32601, -32602, -32603]) {
+      const fetch: GatewayFetch = async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 7,
+            error: { code, message: "no such tool" },
+          }),
+      });
+      const { gw, records } = gateway({ fetch });
+      await gw.handle(CALL, CTX);
+      expect(records[0]?.status).toBe("error");
+    }
+  });
+
+  it("records a non-2xx answer with no rpc error as an error, not as a success", async () => {
+    // "no `error` member" used to read as success, so a control plane 502 that
+    // answered with a plain body was recorded as a tool call that worked.
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 502,
+      text: async () => JSON.stringify({ message: "bad gateway" }),
+    });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.status).toBe("error");
+  });
+
+  it("classifies an outcome from the status and the rpc error together", () => {
+    expect(outcomeOf(200, undefined)).toBe("ok");
+    expect(outcomeOf(202, undefined)).toBe("ok");
+    expect(outcomeOf(500, undefined)).toBe("error");
+    expect(
+      outcomeOf(200, {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: RPC_REFUSED, message: "denied" },
+      }),
+    ).toBe("rejected");
+    expect(
+      outcomeOf(200, {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32601, message: "no such method" },
+      }),
+    ).toBe("error");
   });
 
   it("falls back to unknown when the client never introduced itself", async () => {

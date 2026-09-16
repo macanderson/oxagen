@@ -451,9 +451,17 @@ export function claudeFacts(
 export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   const env = overrides.env ?? process.env;
   const home = overrides.home ?? homedir();
-  const paths = overrides.paths ?? tachoPaths(env, home);
   const exec = overrides.exec ?? realExec;
   const platform = overrides.platform ?? process.platform;
+  // `platform` is resolved BEFORE the paths and handed to `tachoPaths`, which
+  // derives one field from it — `claudeDesktopConfig`, undefined where Claude
+  // Desktop has no build. Omitting it let that one field read `process.platform`
+  // while `claudeDesktop()`, `runtimeCommands()` and the service manager beside
+  // it all used the override, so a deps object built with an explicit platform
+  // reported the app installed and had nowhere to write its config. Benign on a
+  // real host, where the two agree; the same disagreement in `scratchPaths` is
+  // what made the detect tests pass on macOS and fail on Linux CI.
+  const paths = overrides.paths ?? tachoPaths(env, home, platform);
   const daemonGet = async (path: string): Promise<unknown | undefined> => {
     const host = readHostFile(paths.hostFile);
     if (host === undefined) return undefined;
@@ -506,23 +514,29 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     osVersion: release(),
     arch: osArch(),
     nodeVersion: process.version,
+    // Every one of these four files carries TACHO_LOCAL_TOKEN — the bearer the
+    // loopback listener requires, and the one thing on this machine that lets a
+    // process reach the daemon and, through the gateway, the host's own Oxagen
+    // API key. So every one of them is written at the 0600 default rather than
+    // the 0644 they used to pass: on a shared machine, 0644 let any other OS
+    // account read the token out of a file it does not own and drive the host's
+    // credential. Nothing is lost by tightening it — each file is read by a tool
+    // running as the same user who was enrolled.
     readSettings: () => readJsonFileIfExists(paths.claudeSettings),
     writeSettings: (document) =>
       writeSensitiveFileAtomic(
         paths.claudeSettings,
         `${JSON.stringify(document, null, 2)}\n`,
-        0o644,
       ),
     readCodexHooks: () => readJsonFileIfExists(paths.codexHooks),
     writeCodexHooks: (document) =>
       writeSensitiveFileAtomic(
         paths.codexHooks,
         `${JSON.stringify(document, null, 2)}\n`,
-        0o644,
       ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
-      writeSensitiveFileAtomic(file.path, file.text ?? "", 0o644),
+      writeSensitiveFileAtomic(file.path, file.text ?? ""),
     readClaudeDesktopConfig: () =>
       paths.claudeDesktopConfig === undefined
         ? undefined
@@ -535,7 +549,6 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       writeSensitiveFileAtomic(
         paths.claudeDesktopConfig,
         `${JSON.stringify(document, null, 2)}\n`,
-        0o644,
       );
     },
     claude: () => claudeFacts(exec, platform, env, home),

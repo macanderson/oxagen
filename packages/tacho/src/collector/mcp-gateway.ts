@@ -225,28 +225,26 @@ export function tooManyToolsMessage(
   return `this mandate materialises ${toolCount} tools, and ${ceiling.modelId} accepts at most ${ceiling.maxTools} (${ceiling.source}). The tool list was not served, because the provider would refuse it. Narrow the mandate's toolbelt, or pin the workspace to a model without this limit.`;
 }
 
-/** The tool ceiling a bundle declares, or undefined when it declares none. */
+/**
+ * The tool ceiling a bundle declares, or undefined when it declares none.
+ *
+ * Reads `bundle.tool_ceiling` as the type, with no cast. It used to reach the
+ * field through `as { tool_ceiling?: unknown }`, which compiled only because
+ * `policyBundleSchema` did not have the field — and because the schema is
+ * `.strict()`, a real signed bundle carrying one was rejected outright, so
+ * every bundle that ever reached here declared no ceiling and the refusal
+ * below could not fire. The cast is what hid that; the schema now names the
+ * field, so the type answers the question instead.
+ */
 export function ceilingOf(
   bundle: PolicyBundle | undefined,
 ): ToolCeiling | undefined {
-  const declared = (bundle as { tool_ceiling?: unknown } | undefined)
-    ?.tool_ceiling;
-  if (declared === null || typeof declared !== "object") return undefined;
-  const {
-    model_id: modelId,
-    max_tools: maxTools,
-    source,
-  } = declared as {
-    model_id?: unknown;
-    max_tools?: unknown;
-    source?: unknown;
-  };
-  if (typeof modelId !== "string" || typeof maxTools !== "number")
-    return undefined;
+  const declared = bundle?.tool_ceiling;
+  if (declared === undefined) return undefined;
   return {
-    modelId,
-    maxTools,
-    source: typeof source === "string" ? source : "the workspace mandate",
+    modelId: declared.model_id,
+    maxTools: declared.max_tools,
+    source: declared.source,
   };
 }
 
@@ -268,6 +266,34 @@ export function readRpcBody(text: string): unknown {
   }
   if (last === undefined) return undefined;
   return JSON.parse(last) as unknown;
+}
+
+/**
+ * What a forwarded answer was, in the three words the record uses.
+ *
+ * `rejected` means **Oxagen refused this call**, because the daemon seals a
+ * rejection as a `policy_decision` with `policy_decision: "deny"` and
+ * `policy_source: "kernel"` and the desktop counts it as refused. So only the
+ * refusal code earns it: `-32002` is the code the control plane answers a
+ * governance denial with, and the one this gateway uses for its own.
+ *
+ * Every other JSON-RPC error is the tool failing, not the mandate speaking —
+ * an unknown tool name, arguments that do not validate, a handler that threw.
+ * Filing those as refusals invents governance decisions nobody made and
+ * inflates the refused count on the machine's own screen with them.
+ *
+ * A non-2xx HTTP status with no JSON-RPC error in the body is an `error` too,
+ * and explicitly so: reading "no `error` member" as success recorded a control
+ * plane 502 as a tool call that worked.
+ */
+export function outcomeOf(
+  status: number,
+  rpc: JsonRpcResponse | undefined,
+): GatewayCallRecord["status"] {
+  if (rpc?.error !== undefined)
+    return rpc.error.code === RPC_REFUSED ? "rejected" : "error";
+  if (status < 200 || status >= 300) return "error";
+  return "ok";
 }
 
 /** How many tools a `tools/list` result carries, or undefined if not one. */
@@ -448,7 +474,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
       recordCall(
         request,
         context,
-        rpc?.error === undefined ? "ok" : "rejected",
+        outcomeOf(response.status, rpc),
         now() - startedAt,
         rpc?.error?.message,
       );

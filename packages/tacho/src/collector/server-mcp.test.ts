@@ -119,6 +119,40 @@ describe("the TCP listener", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("answers a notification the gateway acknowledged with an empty body, not a 500", async () => {
+    // `notifications/initialized` is sent by every MCP client right after the
+    // handshake, and the control plane acknowledges it with 202 and no body,
+    // which `readRpcBody` reports as undefined. `send` used to hand that to
+    // JSON.stringify, get `undefined` back, and throw inside Buffer.byteLength
+    // — so the outer catch turned a successful acknowledgement into a 500 on
+    // every single handshake.
+    const notified: Call[] = [];
+    const notifyServer = createCollectorServer({
+      ...api(notified, []),
+      mcp: async (body, context) => {
+        notified.push({ body, context });
+        return { status: 202, body: undefined };
+      },
+    });
+    const listening = await notifyServer.listen({ port: 0 });
+    try {
+      const reply = await post({
+        port: listening.port as number,
+        path: "/mcp",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/initialized",
+        }),
+      });
+      expect(reply.status).toBe(202);
+      expect(reply.body).toBe("");
+      expect(reply.headers["content-length"]).toBe("0");
+      expect(reply.headers["mcp-session-id"]).toMatch(/^mcp_[0-9a-f]{24}$/);
+    } finally {
+      await notifyServer.close();
+    }
+  });
+
   it("mints a session id and hands it back, rather than taking the client's word", async () => {
     const reply = await post({ port, path: "/mcp", body: RPC });
     const minted = reply.headers["mcp-session-id"];

@@ -221,6 +221,29 @@ export const policyBundleSchema = z
       })
       .strict(),
     mode: tachoBundleModeSchema,
+    /**
+     * The ceiling the mandate puts on how many tools may be advertised to a
+     * connected app, and the model whose limit it is (ADR-078). Read by the
+     * local MCP gateway, which refuses a `tools/list` that overflows it rather
+     * than letting the provider refuse the turn with an error about a number
+     * nobody can inspect.
+     *
+     * Optional, and absent means *no ceiling this host has been told about* —
+     * not *no ceiling*, the same reading `PROVIDER_TOOL_LIMITS` documents for
+     * a provider missing from its table. It has to be declared here because
+     * this schema is `.strict()`: a bundle carrying a field the schema does
+     * not name fails to parse, so a host that did not know the field would
+     * reject the whole mandate the day the control plane started signing one.
+     */
+    tool_ceiling: z
+      .object({
+        model_id: z.string().min(1).max(256),
+        max_tools: z.number().int().positive(),
+        /** Where the number comes from; quoted verbatim into the refusal. */
+        source: z.string().min(1).max(512),
+      })
+      .strict()
+      .optional(),
     signature: z
       .object({
         key_id: z.string().min(1),

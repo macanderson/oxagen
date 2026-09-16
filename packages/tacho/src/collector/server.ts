@@ -79,6 +79,18 @@ function send(
   body: unknown,
   headers: Record<string, string> = {},
 ): void {
+  // `undefined` is a real answer, not a missing one. An MCP notification
+  // (`notifications/initialized`, which every client sends straight after the
+  // handshake) is acknowledged upstream with 202 and an empty body, which
+  // `readRpcBody` reports as `undefined` — and `JSON.stringify(undefined)` is
+  // `undefined`, not a string, so `Buffer.byteLength` threw and the outer catch
+  // turned a successful acknowledgement into a 500. A body-less response gets a
+  // body-less reply, with no Content-Type to describe a body that is not there.
+  if (body === undefined) {
+    res.writeHead(status, { "Content-Length": 0, ...headers });
+    res.end();
+    return;
+  }
   const text = typeof body === "string" ? body : JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type":

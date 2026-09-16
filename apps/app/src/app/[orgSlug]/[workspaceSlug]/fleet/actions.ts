@@ -7,8 +7,9 @@
  * Same shape as the other app-side capability calls:
  *   1. getSessionOrRedirect()  — session guard
  *   2. resolveOrg / resolveWorkspace — IDOR + slug resolution
- *   3. assertOrgMember()       — apps/app does NOT bootstrap IAM and invoke()
- *      skips role checks, so the gate is explicit at the call site
+ *   3. assertOrgMember() + assertWorkspaceMember() — apps/app does NOT
+ *      bootstrap IAM and invoke() skips role checks, so both gates are
+ *      explicit at the call site; a Server Action never runs a layout
  *   4. invoke() with surface "api" — `list_tacho_hosts` declares
  *      surfaces ["api", "mcp"], so "app" would throw surface_denied
  */
@@ -22,6 +23,7 @@ import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   assertOrgMember,
+  assertWorkspaceMember,
   resolveOrg,
   resolveWorkspace,
 } from "@/lib/resolve-org";
@@ -38,12 +40,26 @@ export async function listFleetAction(input: {
   status?: FleetHost["status"];
   cursor?: string;
 }): Promise<ListFleetResult> {
-  try {
-    const session = await getSessionOrRedirect();
-    const org = await resolveOrg(input.orgSlug);
-    await assertOrgMember(org.id, session.user.id);
-    const workspace = await resolveWorkspace(org.id, input.workspaceSlug);
+  // Deliberately OUTSIDE the try. Each of these signals by throwing a Next.js
+  // control-flow error — `getSessionOrRedirect` a redirect, `resolveOrg` /
+  // `resolveWorkspace` / the two asserts a `notFound()` — and a catch that
+  // turned those into `{ ok: false, error }` would render "Could not load the
+  // fleet" where the framework meant to send a 401 redirect or a 404. Only the
+  // capability call belongs in the try.
+  const session = await getSessionOrRedirect();
+  const org = await resolveOrg(input.orgSlug);
+  await assertOrgMember(org.id, session.user.id);
+  const workspace = await resolveWorkspace(org.id, input.workspaceSlug);
+  // Org membership is not workspace membership. `resolveWorkspace` proves the
+  // slug belongs to this org and nothing about whether this user has a
+  // `workspace_users` row in it. `[workspaceSlug]/layout.tsx` asserts that for a
+  // page render, but a Server Action is a POST straight to this function and
+  // never passes through a layout, so without this line any member of a
+  // multi-workspace org could enumerate a sibling workspace's enrolled machines
+  // by posting its slug. Every sibling action in this tree does the same.
+  await assertWorkspaceMember(workspace.id, session.user.id);
 
+  try {
     const output = (await runInTenantScope(
       {
         orgId: org.id,
