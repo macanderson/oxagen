@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**288 capabilities across 42 domains.**
+**289 capabilities across 43 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -90,9 +90,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
 
-## Audit (1)
+## Audit (2)
 
-- [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
+- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
+- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
 
 ## Billing (15)
 
@@ -363,6 +364,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
 
+## Skill (1)
+
+- [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
+
 ## Spend (4)
 
 - [spend.drill](spend.drill.md) — Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis
@@ -410,6 +415,12 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [tool.declaration.list](tool.declaration.list.md) — List the tool declarations registered in the active workspace with their pinned version facts
 - [tool.declaration.publish](tool.declaration.publish.md) — Publish a tool declaration into the workspace agent-asset registry, versioned and idempotent
+- [tool.version.list](tool.version.list.md) — List the workspace registry's active tool versions with classification, schema origin and digest, the kill switch that stops each one today, and 30-day calls; cursor-paged, filterable by consequence tag
+- [tool.classification.set](tool.classification.set.md) — Set a tool version's safety classification (risk grade, side-effect class, egress class, consequence tags, measures, data classes), recording who and why
+- [tool.import](tool.import.md) — Import a registered MCP server's pinned tools into the registry, or publish declarations against it; one immutable version per changed manifest
+- [credential.grant.list](credential.grant.list.md) — List the credential broker's grants: every credential put to use for a tool server on behalf of a run, with scope, TTL and status; never a secret
+- [kill_switch.set](kill_switch.set.md) — Flip a kill switch on or off at any level of spec §6.11; bumps the deny generation in the same transaction; a security event
+- [kill_switch.list](kill_switch.list.md) — List the kill switches reaching this workspace with the current deny generation
 
 ## User (4)
 

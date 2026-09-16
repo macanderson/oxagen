@@ -13,12 +13,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiKey } from "@/data/contracts/org";
+import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { apiKey, orgSource } from "./organization.builders";
+import { apiKey, orgSource, workspaceRow } from "./organization.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -52,10 +52,29 @@ const ORG_FIELDS = {
   orgName: "Acme Robotics",
 } as const;
 
-const CHOICES = [
-  { slug: "core-platform", name: "Core platform", archived: false },
-  { slug: "growth", name: "Growth", archived: false },
-];
+/** `list_workspaces` answers the organization's whole set, in one object. */
+const list = (...workspaces: Workspace[]): WorkspaceList => ({ workspaces });
+
+const core = workspaceRow({ slug: "core-platform", name: "Core platform" });
+const growth = workspaceRow({
+  id: "wrk_1q2w3e4r5t6y7u8i9o0p1a",
+  slug: "growth",
+  name: "Growth",
+});
+const sunset = workspaceRow({
+  id: "wrk_9z8y7x6w5v4t3s2r1q0p9n",
+  slug: "sunset",
+  name: "Sunset",
+  archivedAt: "2026-09-01T00:00:00.000Z",
+});
+/** A workspace of this organization the viewer holds no membership in. */
+const foreign = workspaceRow({
+  id: "wrk_4f3e2d1c0b9a8z7y6x5w4v",
+  slug: "finance",
+  name: "Finance",
+  role: null,
+});
+const CHOICES = list(core, growth);
 
 /** The workspace ctx the page resolves once it has picked a workspace. */
 function wsCtx(orgRole: OrgRole = "owner") {
@@ -122,7 +141,7 @@ const rowFor = (key: ApiKey) => {
 };
 
 describe("API keys tabs", () => {
-  it("link People and API keys by URL, API keys marked as the current page", async () => {
+  it("link People, Roles and API keys by URL, API keys marked as the current page", async () => {
     await renderApiKeys(readOk([live]));
     const tabs = screen.getByRole("navigation", { name: "Organization" });
     const people = within(tabs).getByRole("link", { name: "People" });
@@ -131,6 +150,17 @@ describe("API keys tabs", () => {
     expect(people).not.toHaveAttribute("aria-current");
     expect(keys).toHaveAttribute("href", "/acme/api-keys");
     expect(keys).toHaveAttribute("aria-current", "page");
+  });
+
+  it("carry Roles, the same strip every other Organization page shows", async () => {
+    // A hand-rolled two-entry strip here left Roles unreachable from this page
+    // the moment Roles was added (#3110). The shared component owns the set.
+    await renderApiKeys(readOk([live]));
+    const tabs = screen.getByRole("navigation", { name: "Organization" });
+    expect(within(tabs).getByRole("link", { name: "Roles" })).toHaveAttribute(
+      "href",
+      "/acme/roles",
+    );
   });
 });
 
@@ -268,10 +298,7 @@ describe("the workspace a key names", () => {
           await ApiKeys({
             ctx,
             source,
-            workspaces: readOk([
-              ...CHOICES,
-              { slug: "sunset", name: "Sunset", archived: true },
-            ]),
+            workspaces: readOk(list(core, growth, sunset)),
           })
         }
       </IntlProvider>,
@@ -281,6 +308,32 @@ describe("the workspace a key names", () => {
       within(picker).getByRole("link", { name: "Sunset (archived)" }),
     ).toHaveAttribute("href", "/acme/api-keys?workspace=sunset");
     await expectNoAxe(view.container);
+  });
+
+  it("offers no workspace the viewer is not a member of, which would 404 (negative)", async () => {
+    // `list_workspaces` answers the organization's whole set, with `role` null
+    // for a workspace the viewer does not belong to, and viewer resolution
+    // answers exactly those with not_found (INV-15). A link to one would be a
+    // link to a page that cannot open.
+    const ctx = wsCtx();
+    const { source } = orgSource({ apiKeys: readOk([live]) });
+    render(
+      <IntlProvider>
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk(list(core, foreign)),
+          })
+        }
+      </IntlProvider>,
+    );
+    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    expect(within(picker).queryByRole("link", { name: "Finance" })).toBeNull();
+    expect(
+      within(picker).getByRole("link", { name: "Core platform" }),
+    ).toBeInTheDocument();
+    expect(chooseWorkspace(readOk(list(foreign)), "finance")).toBeNull();
   });
 
   it("says so on the page when the workspace in scope is archived", async () => {
@@ -298,9 +351,7 @@ describe("the workspace a key names", () => {
           await ApiKeys({
             ctx,
             source,
-            workspaces: readOk([
-              { slug: "sunset", name: "Sunset", archived: true },
-            ]),
+            workspaces: readOk(list(sunset)),
           })
         }
       </IntlProvider>,
@@ -315,7 +366,7 @@ describe("the workspace a key names", () => {
     const { source, calls } = orgSource({});
     const view = render(
       <IntlProvider>
-        {await ApiKeys({ ctx, source, workspaces: readOk([]) })}
+        {await ApiKeys({ ctx, source, workspaces: readOk(list()) })}
       </IntlProvider>,
     );
     expect(calls.apiKeys).toEqual([]);
@@ -352,40 +403,23 @@ describe("the workspace a key names", () => {
 
 describe("chooseWorkspace", () => {
   it("takes the workspace the URL names, archived or not", () => {
-    expect(
-      chooseWorkspace(
-        readOk([
-          ...CHOICES,
-          { slug: "sunset", name: "Sunset", archived: true },
-        ]),
-        "sunset",
-      ),
-    ).toBe("sunset");
+    expect(chooseWorkspace(readOk(list(core, growth, sunset)), "sunset")).toBe(
+      "sunset",
+    );
   });
 
   it("opens on a workspace still in use when the URL names none", () => {
-    expect(
-      chooseWorkspace(
-        readOk([
-          { slug: "sunset", name: "Sunset", archived: true },
-          ...CHOICES,
-        ]),
-        undefined,
-      ),
-    ).toBe("core-platform");
+    expect(chooseWorkspace(readOk(list(sunset, core, growth)), undefined)).toBe(
+      "core-platform",
+    );
   });
 
   it("falls back to an archived workspace when every workspace is archived", () => {
-    expect(
-      chooseWorkspace(
-        readOk([{ slug: "sunset", name: "Sunset", archived: true }]),
-        undefined,
-      ),
-    ).toBe("sunset");
+    expect(chooseWorkspace(readOk(list(sunset)), undefined)).toBe("sunset");
   });
 
   it("names no workspace when the read failed or listed none (negative)", () => {
-    expect(chooseWorkspace(readOk([]), undefined)).toBeNull();
+    expect(chooseWorkspace(readOk(list()), undefined)).toBeNull();
     expect(
       chooseWorkspace(readError("control_plane_unavailable", 503), "growth"),
     ).toBeNull();

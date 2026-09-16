@@ -170,6 +170,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../../packages/compliance
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -1629,6 +1632,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../iam
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../notifications

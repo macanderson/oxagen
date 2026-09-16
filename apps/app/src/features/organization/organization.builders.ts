@@ -1,16 +1,68 @@
-// Typed Organization values for the People and API keys component tests
-// (ARCHITECTURE.md §5): one API key, and a DataSource that answers the three
+// Typed Organization values for the Organization component tests
+// (ARCHITECTURE.md §5): a role row, a catalogue entry, the roles read, a
+// workspace row, one API key, and a DataSource that answers the four
 // organization reads with what a test hands it while recording the arguments
 // it was called with. Every other port refuses, so a section that reads
 // outside its own port fails the test rather than passing on a stub.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type {
   ApiKey,
-  ManagedWorkspace,
   MemberList,
+  Permission,
+  Role,
+  RoleCatalog,
+  Workspace,
+  WorkspaceList,
 } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+
+export function permissionEntry(
+  overrides: Partial<Permission> = {},
+): Permission {
+  return {
+    permission: "run.read",
+    group: "Runs",
+    description: "Read runs, their approvals and the commands sent to them",
+    capabilities: ["list_runs", "get_run", "list_approvals"],
+    ...overrides,
+  };
+}
+
+export function roleRow(overrides: Partial<Role> = {}): Role {
+  return {
+    id: "rol_7k2m9q4x8r1t5v3w6y0z2a",
+    name: "agent.release",
+    description: "Cuts releases and opens their pull requests.",
+    scope: "workspace",
+    kind: "agent",
+    builtIn: false,
+    permissions: ["run.read"],
+    heldBy: 2,
+    createdBy: "Priya Natarajan",
+    ...overrides,
+  };
+}
+
+export function roleCatalog(overrides: Partial<RoleCatalog> = {}): RoleCatalog {
+  return {
+    roles: [roleRow()],
+    catalog: [permissionEntry()],
+    enforcement: { tier: "enterprise", enforced: true },
+    ...overrides,
+  };
+}
+
+export function workspaceRow(overrides: Partial<Workspace> = {}): Workspace {
+  return {
+    id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    slug: "core-platform",
+    name: "Core platform",
+    role: "Owner",
+    archivedAt: null,
+    ...overrides,
+  };
+}
 
 export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
   return {
@@ -28,7 +80,8 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
 
 type OrgReads = {
   members?: Read<MemberList>;
-  workspaces?: Read<ManagedWorkspace[]>;
+  roles?: Read<RoleCatalog>;
+  workspaces?: Read<WorkspaceList>;
   apiKeys?: Read<ApiKey[]>;
 };
 
@@ -38,6 +91,7 @@ export function orgSource(reads: OrgReads): {
 } {
   const calls: Record<keyof OrgReads, unknown[][]> = {
     members: [],
+    roles: [],
     workspaces: [],
     apiKeys: [],
   };
@@ -55,6 +109,7 @@ export function orgSource(reads: OrgReads): {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -73,12 +128,18 @@ export function orgSource(reads: OrgReads): {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
+    onboarding: { state: refuse, firstFrame: refuse },
     org: {
       members: answer(reads.members, "members"),
+      roles: answer(reads.roles, "roles"),
       workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
+    audit: { events: refuse, exportEvents: refuse },
+    skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };

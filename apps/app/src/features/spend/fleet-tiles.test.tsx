@@ -39,6 +39,7 @@ const source: DataSource = {
   shell: { context: refuse },
   billing: {
     plan: refuse,
+    usageCredits: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,
@@ -57,8 +58,13 @@ const source: DataSource = {
     drill: refuse,
     waste: refuse,
     budgets: refuse,
+    findings: refuse,
+    findingEvidence: refuse,
   },
-  org: { members: refuse, workspaces: refuse, apiKeys: refuse },
+  onboarding: { state: refuse, firstFrame: refuse },
+  org: { members: refuse, roles: refuse, workspaces: refuse, apiKeys: refuse },
+  audit: { events: refuse, exportEvents: refuse },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

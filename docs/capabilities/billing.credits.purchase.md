@@ -29,7 +29,17 @@ Initiate a dynamic usage-credit purchase via Stripe Checkout. The customer speci
 
 ## Roles
 
-Org Owner, Billing.
+Org Owner, Billing — enforced by the handler with `assertOrgRole`, on the user
+`resolveActingUserId` returns (the signed-in user, or the creator of the API
+key). The kernel's IAM check allows every capability for a non-enterprise
+organisation, so the contract's `defaultRoles` alone would not refuse an Admin
+or a Member (apps/app/ARCHITECTURE.md §3.2, INV-29).
+
+## Billing gate
+
+`noBillingGate: true` (INV-27). Usage credits are the second meter and are
+metered separately from governed action units, so a prepaid organisation whose
+GAU bucket is empty is still able to buy the credits its in-app agent runs on.
 
 ## Side effects
 

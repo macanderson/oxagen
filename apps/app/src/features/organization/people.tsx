@@ -13,9 +13,9 @@ import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
-import { RouteTabs } from "@/ui/route-tabs";
 import { MemberRowActions } from "./member-row-actions";
 import { DateCell, emptyLine } from "./parts";
+import { OrganizationTabs } from "./tabs";
 
 /** The org roles the two membership handlers admit (INV-29). */
 const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
@@ -48,21 +48,7 @@ function PeopleView({
   const t = useTranslations("organization");
   return (
     <div className="flex flex-col gap-6">
-      <RouteTabs
-        label={t("tabs.label")}
-        tabs={[
-          {
-            to: routes.people(orgSlug),
-            label: t("tabs.people"),
-            current: true,
-          },
-          {
-            to: routes.apiKeys(orgSlug),
-            label: t("tabs.apiKeys"),
-            current: false,
-          },
-        ]}
-      />
+      <OrganizationTabs org={orgSlug} current="people" />
       {read.ok ? (
         <>
           <Members

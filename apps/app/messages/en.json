@@ -13,6 +13,7 @@
     "invitation": "Join {org} on Oxagen",
     "invitationNotFound": "This invitation link does not work",
     "newOrganization": "Name your organization",
+    "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "fleet": "Fleet",
     "run": "Run",
@@ -20,11 +21,14 @@
     "agent": "Agent",
     "agentSource": "Agent definition",
     "tools": "Tools",
+    "skills": "Skills",
     "steering": "Steering",
     "spend": "Spend",
     "people": "Organization",
+    "roles": "Roles",
     "apiKeys": "API keys",
-    "billing": "Billing"
+    "billing": "Billing",
+    "audit": "Audit"
   },
   "unrecorded": {
     "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",

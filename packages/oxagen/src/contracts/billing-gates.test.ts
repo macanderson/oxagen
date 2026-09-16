@@ -12,13 +12,13 @@
  * unregistered fails here rather than silently leaving the list. The INV-27
  * list is complete for the billing page: WL-27, WL-28, WL-29 and WL-30 have
  * all landed (`get_gau_bucket`, `purchase_gau_bucket`, `list_invoices`,
- * `set_auto_topup`).
+ * `set_auto_topup`), and WL-67 adds the second meter's `purchase_credits`.
  */
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import "./index";
 
-/** INV-27: the billing-page reads and the two billing writes. */
+/** INV-27: the billing-page reads and the three billing writes. */
 const BILLING_PAGE_CONTRACTS = [
   "get_subscription",
   "get_contract_rate",
@@ -26,6 +26,9 @@ const BILLING_PAGE_CONTRACTS = [
   "purchase_gau_bucket",
   "list_invoices",
   "set_auto_topup",
+  // WL-67, the second meter (§3.9): the in-app AI usage credit top-up. A
+  // prepaid org whose GAU bucket is empty must still be able to buy credits.
+  "purchase_credits",
 ] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */
@@ -66,6 +69,12 @@ const CONSOLE_CONTRACTS = [
   "get_spend_budget",
   "set_spend_budget",
   "export_statement",
+  // The Audit page (#3097): reading and exporting the organization's own
+  // record. An audit trail that goes dark when the balance does is not one.
+  "query_audit_log",
+  "export_audit_events",
+  // The #3098 lane: the Skills page's one read (ADR-052 exclusion 2).
+  "list_skills",
 ] as const;
 
 /** The one rev1 governed action. */

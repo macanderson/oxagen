@@ -34,6 +34,10 @@ within the tenant and forms the second segment of every URL
 - ClickHouse: emit a `workspace.created` row in `events`.
 - Neo4j: upsert `(:Workspace { public_id })` and `(:Tenant)-[:OWNS]->(:Workspace)`.
 
+## Routes and the context they carry
+
+`POST /v1/:org/:ws/workspaces` and the org-only mount `POST /v1/:org_slug/workspaces`, added so a caller with no workspace can create their first one. `create_workspace` is scoped, so the kernel enters a tenant scope and asserts both ids are uuids. The org-only mount therefore carries `ORG_ONLY_WORKSPACE_ID` (`@oxagen/oxagen`) as its workspace id, the same constant `apps/app`'s kernel seam uses for an organization-level call; an empty string is refused with a `TenantScopeError` before the handler runs, which the API answers 400 `invalid_tenant_scope` (#3029).
+
 ## Access
 
 Org `Owner` or `Admin`, or the `Owner` of the workspace the call is scoped to, checked in the handler (`assertOrgRole`, INV-29) for the signed-in user or, on an API-key (MCP) call, the key's creator (`resolveActingUserId`). `noBillingGate`: creating a workspace is a settings write, never a governed action (ADR-052 exclusion 2). A call with neither a signed-in user nor an API key with a live creator is refused before any read.

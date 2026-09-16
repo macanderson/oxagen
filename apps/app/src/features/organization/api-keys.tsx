@@ -1,5 +1,5 @@
 // Organization › API keys (ARCHITECTURE.md §1.2): the keys of one workspace,
-// from list_api_keys, under the tabs that link People and API keys. A key names
+// from list_api_keys, under the shared Organization tabs. A key names
 // a workspace (ADR-073) — `auth.api_keys` is policy class `standard`, so the
 // org-only sentinel lists no key that exists and mints one into a workspace
 // that does not — and the page therefore names one too: a `?workspace=` query
@@ -19,7 +19,7 @@
 // revoked or service-owned key regardless — that refusal is the guarantee and
 // the row is the courtesy.
 import { useTranslations } from "next-intl";
-import type { ApiKey, ManagedWorkspace } from "@/data/contracts/org";
+import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
@@ -31,27 +31,44 @@ import { Table } from "@/ui/table";
 import { CreateKeyDialog } from "./create-key-dialog";
 import { KeyRow } from "./key-row";
 import { emptyLine } from "./parts";
+import { OrganizationTabs } from "./tabs";
+
+/**
+ * The workspaces of the organization this viewer may actually enter: the ones
+ * they hold a membership in, archived included. `list_workspaces` answers the
+ * organization's whole set, with `role` null for a workspace the viewer is not
+ * a member of, and `requireViewer(org, slug)` answers `not_found` for exactly
+ * those — so a picker offering one would offer a page that cannot open.
+ *
+ * Archived workspaces stay: `archive_workspace` records `archived_at` and
+ * nothing else, `resolveApiKey` never consults it, so a key in an archived
+ * workspace keeps authenticating. A key nobody can reach is a key nobody can
+ * revoke.
+ */
+function enterable(workspaces: WorkspaceList): readonly Workspace[] {
+  return workspaces.workspaces.filter((ws) => ws.role !== null);
+}
 
 /**
  * The workspace this page reads in: the one the URL names when the viewer may
  * enter it, else the first unarchived one the viewer may enter, else the first
- * of any, else none. The page resolves
- * the answer through `requireViewer`, which is where membership is checked
- * (INV-15), so an unknown or refused slug falls back rather than 404ing a page
- * the viewer is entitled to.
+ * of any, else none. The page resolves the answer through `requireViewer`,
+ * which is where membership is checked (INV-15), so an unknown or refused slug
+ * falls back rather than 404ing a page the viewer is entitled to.
  */
 export function chooseWorkspace(
-  workspaces: Read<ManagedWorkspace[]>,
+  workspaces: Read<WorkspaceList>,
   wanted: string | undefined,
 ): string | null {
   if (!workspaces.ok) return null;
-  const named = workspaces.value.find((ws) => ws.slug === wanted);
+  const mine = enterable(workspaces.value);
+  const named = mine.find((ws) => ws.slug === wanted);
   if (named) return named.slug;
   // Nothing named: land on a workspace still in use. An archived one is
   // reachable — its keys still authenticate and have to be revocable — but it
   // is not where a page opens.
-  const live = workspaces.value.find((ws) => !ws.archived);
-  return live?.slug ?? workspaces.value[0]?.slug ?? null;
+  const live = mine.find((ws) => ws.archivedAt === null);
+  return live?.slug ?? mine[0]?.slug ?? null;
 }
 
 /**
@@ -74,7 +91,7 @@ export async function ApiKeys({
   /** A `WsCtx` once a workspace is in scope; an `OrgCtx` when there is none. */
   ctx: OrgCtx;
   source: DataSource;
-  workspaces: Read<ManagedWorkspace[]>;
+  workspaces: Read<WorkspaceList>;
 }) {
   const { current, keys, now } = await readKeys(ctx, source);
   return (
@@ -99,7 +116,7 @@ function ApiKeysView({
 }: {
   orgSlug: string;
   orgRole: OrgRole;
-  workspaces: Read<ManagedWorkspace[]>;
+  workspaces: Read<WorkspaceList>;
   /** The workspace in scope, or null when the viewer may enter none. */
   current: string | null;
   /** Null when there is no workspace to read in. */
@@ -110,21 +127,10 @@ function ApiKeysView({
   const t = useTranslations("organization");
   return (
     <div className="flex flex-col gap-6">
-      <RouteTabs
-        label={t("tabs.label")}
-        tabs={[
-          {
-            to: routes.people(orgSlug),
-            label: t("tabs.people"),
-            current: false,
-          },
-          {
-            to: routes.apiKeys(orgSlug),
-            label: t("tabs.apiKeys"),
-            current: true,
-          },
-        ]}
-      />
+      {/* The shared strip, not a local copy of it: a hand-rolled two-entry
+          list here left the Roles tab unreachable from this page the moment
+          Roles was added (#3110). One component owns which tabs exist. */}
+      <OrganizationTabs org={orgSlug} current="apiKeys" />
       {!workspaces.ok ? (
         <Refused read={workspaces} orgRole={orgRole} />
       ) : current === null || read === null ? (
@@ -139,11 +145,11 @@ function ApiKeysView({
         <>
           <WorkspacePicker
             orgSlug={orgSlug}
-            workspaces={workspaces.value}
+            workspaces={enterable(workspaces.value)}
             current={current}
           />
-          {workspaces.value.find((ws) => ws.slug === current)?.archived ===
-          true ? (
+          {enterable(workspaces.value).find((ws) => ws.slug === current)
+            ?.archivedAt != null ? (
             <OutcomePanel
               tone="neutral"
               testId="api-keys-archived-workspace"
@@ -221,7 +227,7 @@ function WorkspacePicker({
   current,
 }: {
   orgSlug: string;
-  workspaces: readonly ManagedWorkspace[];
+  workspaces: readonly Workspace[];
   current: string;
 }) {
   const t = useTranslations("organization.apiKeys");
@@ -233,9 +239,10 @@ function WorkspacePicker({
         // An archived workspace is named as archived. It is here because its
         // keys still authenticate and a key nobody can reach is a key nobody
         // can revoke; the label says it is not a workspace in use.
-        label: ws.archived
-          ? t("workspace.archived", { name: ws.name })
-          : ws.name,
+        label:
+          ws.archivedAt === null
+            ? ws.name
+            : t("workspace.archived", { name: ws.name }),
         current: ws.slug === current,
       }))}
     />

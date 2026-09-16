@@ -11,7 +11,8 @@
  *       never be revived by resetting the counter
  *   A3  the security-definer trigger functions are not PUBLIC-executable
  *   A4  every authority-narrowing mutation bumps the generation IN THE SAME
- *       TRANSACTION (principal status, PRA, role, role grant, emergency deny)
+ *       TRANSACTION (principal status, PRA, role, role grant, emergency deny,
+ *       a tool version's classification or its declared consequence tags)
  *   A5  the typed emergency-deny and decision constraints
  *
  * NOTE ON SUPERUSER: superusers bypass RLS and always pass privilege checks, so
@@ -37,6 +38,8 @@ const HUMAN_PRINCIPAL = "00000000-0000-0000-0023-000000000001";
 const AGENT_PRINCIPAL = "00000000-0000-0000-0023-000000000002";
 const ROLE_ID = "00000000-0000-0000-0024-000000000001";
 const SNAPSHOT_ID = "00000000-0000-0000-0025-000000000001";
+const TOOL_ID = "00000000-0000-0000-0026-000000000001";
+const TOOL_VERSION_ID = "00000000-0000-0000-0026-000000000002";
 
 const APP_ROLE = "azf_test_app_role";
 
@@ -129,6 +132,7 @@ afterAll(async () => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
     await tx`DELETE FROM iam.authorization_decisions WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM iam.authorization_snapshots WHERE org_id IN (${ORG_A}, ${ORG_B})`;
+    await tx`DELETE FROM agent.tool_versions WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM iam.emergency_denies WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM iam.role_grants WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM iam.principal_role_assignments WHERE org_id IN (${ORG_A}, ${ORG_B})`;
@@ -636,6 +640,121 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
     expect(after!).toBeGreaterThan(before!);
   });
 
+  it("a changed tool classification bumps the generation inside its transaction; an update that keeps it does not", async () => {
+    // The kill-switch gate reloads a version's consequence tags only when the
+    // generation moves, so a reclassification is a narrowing like a deny.
+    await asSystem(
+      (tx) => tx`
+        INSERT INTO agent.tool_versions
+          (id, public_id, org_id, workspace_id, version_number, is_latest, tool_id,
+           input_schema, risk_grade, manifest, checksum)
+        VALUES (${TOOL_VERSION_ID}, 'tlv_azf_test_1', ${ORG_A}, ${WS_A}, 1, true, ${TOOL_ID},
+                '{}'::jsonb, 'high', '{}'::jsonb, ${"0".repeat(64)})
+        ON CONFLICT (id) DO NOTHING
+      `,
+    );
+    const tags = '{"consequenceTags":["moves_money"]}';
+    const observed = await asSystem(async (tx) => {
+      const read = async () => {
+        const rows = await tx<{ g: string }[]>`
+          SELECT generation::text AS g FROM iam.authorization_deny_generations
+          WHERE org_id = ${ORG_A} AND workspace_id = ${WS_A}
+        `;
+        return rows[0] ? Number(rows[0].g) : 0;
+      };
+      const before = await read();
+      await tx`
+        UPDATE agent.tool_versions
+        SET classification = ${tags}::jsonb, classified_risk_grade = 'critical',
+            classified_at = now()
+        WHERE id = ${TOOL_VERSION_ID}
+      `;
+      const afterClassify = await read();
+      await tx`
+        UPDATE agent.tool_versions
+        SET classification = ${tags}::jsonb, is_latest = false, updated_at = now()
+        WHERE id = ${TOOL_VERSION_ID}
+      `;
+      const afterSame = await read();
+      return { before, afterClassify, afterSame };
+    });
+    expect(observed.afterClassify).toBeGreaterThan(observed.before);
+    expect(observed.afterSame).toBe(observed.afterClassify);
+  });
+
+  it("a version published with DECLARED consequence tags bumps the generation, on insert and on a tag change", async () => {
+    // The other half of the tags. `publish_tool_declaration` and
+    // `import_tools` write agent.tool_versions.consequence_tags (text[]), never
+    // the classification jsonb, and publishing a version is an INSERT — which
+    // the classification trigger's `AFTER UPDATE OF` never saw. So a tool
+    // arriving already tagged `moves_money` did not move the generation and the
+    // gateway's gate kept a classification index that did not know about it for
+    // the rest of the turn. Two triggers now cover both writes.
+    const id = "0192d4a8-7c1e-7a00-8000-00000000d101";
+    const observed = await asSystem(async (tx) => {
+      const read = async () => {
+        const rows = await tx<{ g: string }[]>`
+          SELECT generation::text AS g FROM iam.authorization_deny_generations
+          WHERE org_id = ${ORG_A} AND workspace_id = ${WS_A}
+        `;
+        return rows[0] ? Number(rows[0].g) : 0;
+      };
+      await tx`DELETE FROM agent.tool_versions WHERE id = ${id}`;
+      const before = await read();
+      await tx`
+        INSERT INTO agent.tool_versions
+          (id, public_id, org_id, workspace_id, version_number, is_latest, tool_id,
+           input_schema, risk_grade, manifest, checksum, consequence_tags)
+        VALUES (${id}, 'tlv_azf_declared_1', ${ORG_A}, ${WS_A}, 2, false, ${TOOL_ID},
+                '{}'::jsonb, 'high', '{}'::jsonb, ${"1".repeat(64)},
+                ARRAY['moves_money']::text[])
+      `;
+      const afterInsert = await read();
+      await tx`
+        UPDATE agent.tool_versions
+        SET consequence_tags = ARRAY['moves_money', 'deletes_data']::text[]
+        WHERE id = ${id}
+      `;
+      const afterRetag = await read();
+      await tx`
+        UPDATE agent.tool_versions SET updated_at = now() WHERE id = ${id}
+      `;
+      const afterTouch = await read();
+      await tx`DELETE FROM agent.tool_versions WHERE id = ${id}`;
+      return { before, afterInsert, afterRetag, afterTouch };
+    });
+    expect(observed.afterInsert).toBeGreaterThan(observed.before);
+    expect(observed.afterRetag).toBeGreaterThan(observed.afterInsert);
+    // An update that touches neither half of the tags moves nothing.
+    expect(observed.afterTouch).toBe(observed.afterRetag);
+  });
+
+  it("an untagged, unclassified version moves nothing when it is published", async () => {
+    const id = "0192d4a8-7c1e-7a00-8000-00000000d102";
+    const observed = await asSystem(async (tx) => {
+      const read = async () => {
+        const rows = await tx<{ g: string }[]>`
+          SELECT generation::text AS g FROM iam.authorization_deny_generations
+          WHERE org_id = ${ORG_A} AND workspace_id = ${WS_A}
+        `;
+        return rows[0] ? Number(rows[0].g) : 0;
+      };
+      await tx`DELETE FROM agent.tool_versions WHERE id = ${id}`;
+      const before = await read();
+      await tx`
+        INSERT INTO agent.tool_versions
+          (id, public_id, org_id, workspace_id, version_number, is_latest, tool_id,
+           input_schema, risk_grade, manifest, checksum)
+        VALUES (${id}, 'tlv_azf_declared_2', ${ORG_A}, ${WS_A}, 3, false, ${TOOL_ID},
+                '{}'::jsonb, 'low', '{}'::jsonb, ${"2".repeat(64)})
+      `;
+      const after = await read();
+      await tx`DELETE FROM agent.tool_versions WHERE id = ${id}`;
+      return { before, after };
+    });
+    expect(observed.after).toBe(observed.before);
+  });
+
   it("deleting a principal bumps the generation from the OLD row's scope", async () => {
     const before = await generationOf(ORG_B, null);
     await asSystem(async (tx) => {
@@ -707,6 +826,20 @@ describe("A5: typed deny and decision constraints", () => {
         `,
       ),
     ).rejects.toThrow(/emergency_denies_active_check/);
+  });
+
+  it("rejects a kill switch flipped off with no cleared reason", async () => {
+    await expect(
+      asSystem(
+        (tx) => tx`
+          INSERT INTO iam.emergency_denies
+            (public_id, org_id, workspace_id, scope_kind, deny_kind, resource_scope_digest,
+             reason, target_kind, target_id, active, deactivated_at)
+          VALUES ('emd_azf_bad4', ${ORG_A}, NULL, 'org', 'resource_scope', ${DIGEST_A},
+                  'incident', 'class', 'moves_money', false, now())
+        `,
+      ),
+    ).rejects.toThrow(/emergency_denies_cleared_reason_check/);
   });
 
   it("rejects a snapshot whose two principals are the same", async () => {

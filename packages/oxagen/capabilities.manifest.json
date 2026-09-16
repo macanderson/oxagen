@@ -1134,6 +1134,23 @@
       }
     },
     {
+      "name": "export_audit_events",
+      "file": "audit.events.export.ts",
+      "domain": "audit",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "query_audit_log",
       "file": "audit.log.query.ts",
       "domain": "audit",
@@ -2141,6 +2158,23 @@
       }
     },
     {
+      "name": "list_credential_grants",
+      "file": "credential.grant.list.ts",
+      "domain": "credential",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "create_environment",
       "file": "environment.create.ts",
       "domain": "environment",
@@ -2633,6 +2667,41 @@
         "api",
         "mcp",
         "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_kill_switches",
+      "file": "kill_switch.list.ts",
+      "domain": "kill_switch",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_kill_switch",
+      "file": "kill_switch.set.ts",
+      "domain": "kill_switch",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
         "agent"
       ],
       "layers": {
@@ -4559,6 +4628,23 @@
       }
     },
     {
+      "name": "list_skills",
+      "file": "skill.list.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_spend_drill",
       "file": "spend.drill.ts",
       "domain": "spend",
@@ -4896,6 +4982,23 @@
       }
     },
     {
+      "name": "set_tool_classification",
+      "file": "tool.classification.set.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_tool_declarations",
       "file": "tool.declaration.list.ts",
       "domain": "tool",
@@ -4926,6 +5029,40 @@
         "api": true,
         "docs": true,
         "unit": true
+      }
+    },
+    {
+      "name": "import_tools",
+      "file": "tool.import.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_tool_versions",
+      "file": "tool.version.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

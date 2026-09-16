@@ -1,15 +1,22 @@
-// list_members {scope:"org"} and list_api_keys output to the Organization view
-// models (ARCHITECTURE.md §3.4). Typed from the contracts' `_output`, with the
-// member roster narrowed to the org branch of its scope union; the adapter
-// answers the workspace branch as unmappable.
+// The Organization contract outputs to their view models (ARCHITECTURE.md
+// §3.4): list_members {scope:"org"} to People, narrowed to the org branch of
+// its scope union (the adapter answers the workspace branch as unmappable);
+// list_iam_roles to the role and permission catalogue, folded to the
+// vocabulary the editor speaks; list_workspaces to the Workspaces section; and
+// list_api_keys to the keys the organization holds. Each carries the public id
+// so no database uuid reaches the page (INV-11), and each is typed from the
+// contract's `_output`, so a nullable contract field cannot land in a required
+// view field.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
 import type {
   ApiKeyList,
-  ManagedWorkspace,
   MemberList,
+  RoleCatalog,
+  WorkspaceList,
 } from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -35,22 +42,51 @@ export function toMemberList(out: OrgRoster): z.input<typeof MemberList> {
 }
 
 /**
- * The workspaces an organization administrator may manage keys in: the ones the
- * viewer holds a membership in, archived included and marked as such. A
- * navigation list drops the archived ones (`toWorkspaceChoices`); this one
- * cannot, because a key in an archived workspace still authenticates and has to
- * stay reachable to be revoked.
+ * A role's capability grants are already folded into catalogue permissions by
+ * the read (ADR-063), so the view carries the permissions and drops the
+ * per-capability grant rows: the editor speaks the catalogue, and a grant a
+ * permission does not cover has no control to change it.
  */
-export function toManagedWorkspaces(
+export function toRoleCatalog(
+  out: ContractOutput<typeof iamRoleList>,
+): z.input<typeof RoleCatalog> {
+  return {
+    roles: out.roles.map((role) => ({
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      scope: role.scopeKind,
+      kind: role.kind,
+      builtIn: role.isSystemDefault,
+      permissions: role.permissions,
+      heldBy: role.memberCount,
+      createdBy: role.createdBy,
+    })),
+    catalog: out.catalog.map((entry) => ({
+      permission: entry.id,
+      group: entry.group,
+      description: entry.description,
+      capabilities: entry.capabilities,
+    })),
+    enforcement: {
+      tier: out.enforcement.tier,
+      enforced: out.enforcement.enforced,
+    },
+  };
+}
+
+export function toWorkspaceList(
   out: ContractOutput<typeof workspaceList>,
-): z.input<typeof ManagedWorkspace>[] {
-  return out.workspaces
-    .filter((ws) => ws.role !== null)
-    .map((ws) => ({
-      slug: ws.slug,
-      name: ws.name,
-      archived: ws.archivedAt !== null,
-    }));
+): z.input<typeof WorkspaceList> {
+  return {
+    workspaces: out.workspaces.map((workspace) => ({
+      id: workspace.publicId,
+      slug: workspace.slug,
+      name: workspace.name,
+      role: workspace.role,
+      archivedAt: workspace.archivedAt,
+    })),
+  };
 }
 
 /**

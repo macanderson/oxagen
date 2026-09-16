@@ -2138,7 +2138,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **96 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is dropped, and the drop is listed by family at the end. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is dropped, and the drop is listed by family at the end. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2172,7 +2172,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `set_agent_role` | assign_agent_role, revoke_agent_role | |
 | `set_role_grants` | (new; grants were seeded) | role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page |
 
-**Wrapping and control (14)**
+**Wrapping and control (15)**
 
 | Agent tool | Absorbs | Does |
 |---|---|---|
@@ -2184,6 +2184,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `fetch_commands` | fetch_tacho_commands | control channel; headless |
 | `dispatch_command` | dispatch_tacho_command | pause, resume, steer, cancel, revoke |
 | `list_runs` | list_executions, list_tacho_sessions | by operator, agent, task, tier, verdict |
+| `list_skills` | (new; `tacho.sessions.skills_available` had no reader) | read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098) |
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |

@@ -68,7 +68,6 @@ import {
   AgentRoleNotAssignableError,
   AgentRoleNotFoundError,
 } from "./_agent-role";
-import { TierDeniedError } from "@oxagen/billing";
 import { makeCTX } from "../test-utils/fixtures";
 
 const AGENT_ROW = {
@@ -185,14 +184,35 @@ describe("agent.role.assign handler", () => {
     expect(fake.mutations.insert).toBe(0);
   });
 
-  it("gates CUSTOM roles to enterprise (TierDeniedError on lower tiers)", async () => {
-    fake.enqueue([AGENT_ROW], [CUSTOM_ROLE]);
-    const err = await agentRoleAssignHandler(
+  // ADR-069 removed the tier gate from create_role and set_role_grants but
+  // left this one, so on Free, Build and Scale the Roles editor created custom
+  // roles that nothing could bind — a working editor and an invisible wall at
+  // the last step. The tier decides whether the kernel RESOLVES a grant, which
+  // list_iam_roles reports as `enforcement`; it never decided whether a role
+  // may be held.
+  it("assigns a CUSTOM role at a non-enterprise tier, with no ceiling queries", async () => {
+    fake.enqueue(
+      [AGENT_ROW], // agent select
+      [CUSTOM_ROLE], // role select (custom)
+      [], // existing assignment select
+      [], // pra insert
+    );
+    const out = await agentRoleAssignHandler(
       { agentId: "agt_1", roleName: "Data Steward" },
       CTX_BUILD,
+    );
+    expect(out.assigned).toBe(true);
+    expect(fake.mutations.insert).toBe(1);
+  });
+
+  // The ceiling is still the control, and it still runs where the resolver does.
+  it("still refuses a human org role at a non-enterprise tier (negative)", async () => {
+    fake.enqueue([AGENT_ROW], [{ ...SYSTEM_ROLE, name: "Owner" }]);
+    const err = await agentRoleAssignHandler(
+      { agentId: "agt_1", roleName: "Owner" },
+      CTX_BUILD,
     ).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(TierDeniedError);
-    expect((err as TierDeniedError).code).toBe("TIER_DENIED");
+    expect(err).toBeInstanceOf(AgentRoleNotAssignableError);
     expect(fake.mutations.insert).toBe(0);
   });
 
@@ -308,7 +328,6 @@ describe("agent.role.assign handler", () => {
       /Agent not found/,
     );
   });
-
 });
 
 describe("agent.role.assign — role gate (org Owner or Admin)", () => {

@@ -220,12 +220,12 @@ describe("thumb bar", () => {
       within(sheet)
         .getAllByRole("link")
         .map((l) => l.textContent),
-    ).toEqual(["Organization", "Billing"]);
+    ).toEqual(["Organization", "Billing", "Audit"]);
   });
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Organization and Billing, and no audit entry", async () => {
+  it("rises as a bottom sheet carrying Steering, Skills, Organization, Billing and Audit", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -236,10 +236,11 @@ describe("More sheet", () => {
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Steering", "/acme/core-platform/steering"],
+      ["Skills", "/acme/core-platform/skills"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
+      ["Audit", "/acme/audit"],
     ]);
-    expect(within(sheet).queryByText(/audit/i)).toBeNull();
     for (const link of links) expect(style(link).minHeight).toBe("44px");
 
     // The bottom sheet: a drag handle, the safe-area inset, a full-width footer button, a scrim.
@@ -284,7 +285,7 @@ describe("the other dialogs on a phone", () => {
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's seven links", async () => {
+  it("the drawer opens over a scrim with the sidebar's nine links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -295,7 +296,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(7);
+    ).toHaveLength(9);
   });
 });
 

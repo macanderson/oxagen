@@ -14,7 +14,12 @@ import {
   workspaceHref,
 } from "./nav";
 
-const ALL_KEYS: readonly NavKey[] = [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"];
+const ALL_KEYS: readonly NavKey[] = [
+  ...WORKSPACE_NAV,
+  ...ORG_NAV,
+  "apiKeys",
+  "roles",
+];
 
 describe("parseShellPath", () => {
   it("reads organization, workspace and the rest", () => {
@@ -26,7 +31,7 @@ describe("parseShellPath", () => {
   });
 
   it("treats the static organization segments as organization pages, not workspaces", () => {
-    for (const segment of ["billing", "api-keys"])
+    for (const segment of ["billing", "audit", "api-keys", "roles"])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
         ws: null,
@@ -60,11 +65,14 @@ describe("isNavItemCurrent", () => {
   it.each([
     ["/acme", "organization"],
     ["/acme/billing", "billing"],
+    ["/acme/audit", "audit"],
     ["/acme/api-keys", "apiKeys"],
+    ["/acme/roles", "roles"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
+    ["/acme/core-platform/skills", "skills"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
   ] as const)("%s → %s", (path, key) => {
@@ -72,7 +80,7 @@ describe("isNavItemCurrent", () => {
       ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
     ).toEqual(key === "organization" ? [] : [key]);
     expect(isNavItemCurrent("organization", path)).toBe(
-      key === "organization" || key === "apiKeys",
+      key === "organization" || key === "apiKeys" || key === "roles",
     );
   });
 
@@ -85,8 +93,9 @@ describe("isNavItemCurrent", () => {
       expect(ALL_KEYS.filter((k) => isNavItemCurrent(k, path))).toEqual([]);
   });
 
-  it("marks Organization current for its API keys page", () => {
+  it("marks Organization current for its API keys and Roles pages", () => {
     expect(isNavItemCurrent("organization", "/acme/api-keys")).toBe(true);
+    expect(isNavItemCurrent("organization", "/acme/roles")).toBe(true);
   });
 
   it("does not mark an item current on another page", () => {
@@ -105,7 +114,9 @@ describe("hrefs", () => {
     );
     expect(workspaceHref("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(orgHref("acme", "organization")).toBe("/acme");
+    expect(orgHref("acme", "audit")).toBe("/acme/audit");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
+    expect(orgHref("acme", "roles")).toBe("/acme/roles");
   });
 
   it("refuses to build an organization href for a workspace page", () => {
@@ -114,20 +125,22 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's seven links in order, and no Run, Ontology or Audit entry", () => {
+  it("has the mockup's nine links in order, Skills between Tools and Steering and Audit after Billing, and no Run or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
       { key: "fleet", href: "/acme/core-platform" },
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "tools", href: "/acme/core-platform/tools" },
+      { key: "skills", href: "/acme/core-platform/skills" },
       { key: "steering", href: "/acme/core-platform/steering" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
       { key: "billing", href: "/acme/billing" },
+      { key: "audit", href: "/acme/audit" },
     ]);
     for (const { href } of sections.flatMap((s) => s.items))
-      expect(href).not.toMatch(/\/(ontology|audit|runs)(\/|$)/);
+      expect(href).not.toMatch(/\/(ontology|runs)(\/|$)/);
   });
 
   it("carries a key and an href per item and nothing else (negative)", () => {
@@ -145,9 +158,15 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the seven sidebar keys: four slots, the rest in the sheet, each key once", () => {
+  it("split the eight sidebar keys: four slots, the rest in the sheet, each key once", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
-    expect(MORE_SHEET).toEqual(["steering", "organization", "billing"]);
+    expect(MORE_SHEET).toEqual([
+      "steering",
+      "skills",
+      "organization",
+      "billing",
+      "audit",
+    ]);
     expect([...THUMB_SLOTS, ...MORE_SHEET].sort()).toEqual(
       [...WORKSPACE_NAV, ...ORG_NAV].sort(),
     );
@@ -157,8 +176,11 @@ describe("the phone's thumb bar and More sheet", () => {
     for (const path of [
       "/acme",
       "/acme/api-keys",
+      "/acme/roles",
       "/acme/billing",
+      "/acme/audit",
       "/acme/core-platform/steering",
+      "/acme/core-platform/skills",
     ])
       expect(isMoreCurrent(path)).toBe(true);
   });
@@ -186,6 +208,11 @@ describe("breadcrumbs", () => {
       { kind: "name", text: "Acme Robotics", href: "/acme" },
       { kind: "nav", key: "organization", href: "/acme" },
       { kind: "nav", key: "apiKeys", href: null },
+    ]);
+    expect(breadcrumbs("/acme/roles", names)).toEqual([
+      { kind: "name", text: "Acme Robotics", href: "/acme" },
+      { kind: "nav", key: "organization", href: "/acme" },
+      { kind: "nav", key: "roles", href: null },
     ]);
     expect(breadcrumbs("/acme/billing", names).at(-1)).toEqual({
       kind: "nav",

@@ -152,20 +152,23 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     },
   );
 
-  it("sends no row to Ontology or Audit", () => {
-    for (const { to } of LEGACY_ROUTES) {
-      expect(to).not.toMatch(/ontology|audit/);
+  it("sends no row to Ontology, and no row under the Audit export (negative)", () => {
+    for (const { from, to } of LEGACY_ROUTES) {
+      expect(to).not.toMatch(/ontology/);
+      // Audit is a §1.2 route again (#3097), so a row may target the page
+      // itself. A row *under* it would match /{org}/audit/export and answer
+      // the download with a redirect, so the table carries none.
+      expect(from).not.toMatch(/\{org\}\/audit(\/|$)/);
     }
   });
 
-  // The oracle: every route apps/app_deprecated shipped outside §1.2, the two
-  // billing routes and /{org}/audit/**, with the page each lands on. Dropping a
-  // row from the table fails its entry here.
+  // The oracle: every route apps/app_deprecated shipped outside §1.2 and the
+  // two billing routes, with the page each lands on — the deprecated audit
+  // viewer among them, which lands on the Audit page (#3097). Dropping a row
+  // from the table fails its entry here.
   it.each([
-    ["/acme/audit", "/acme"],
-    ["/acme/audit/events/evt_1", "/acme"],
     ["/acme/security", "/acme"],
-    ["/acme/security/audit", "/acme"],
+    ["/acme/security/audit", "/acme/audit"],
     ["/acme/security/compliance", "/acme"],
     ["/acme/security/mfa", "/acme"],
     ["/acme/security/trust", "/acme"],
@@ -214,6 +217,9 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     ["/acme/core/marketplace/integrations", "/acme/core/tools"],
     ["/acme/core/marketplace/integrations/github", "/acme/core/tools"],
     ["/acme/core/settings/mcp-server-registries", "/acme/core/tools"],
+    ["/acme/core/workbench/tools/skills", "/acme/core/skills"],
+    ["/acme/core/workbench/tools/skills/release-notes", "/acme/core/skills"],
+    ["/acme/core/settings/skills", "/acme/core/skills"],
     ["/acme/core/settings/spend-budgets", "/acme/core/spend"],
     ["/acme/core/settings", "/acme"],
     ["/acme/core/settings/general", "/acme"],

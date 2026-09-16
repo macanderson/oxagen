@@ -3,7 +3,11 @@
 // calls it inside the system transaction that creates the org, so the first
 // workspace, its owner membership, the built-in agent, the default MCP registry
 // and the default environment commit with the org or not at all.
-import { schema, deriveNamespace } from "@oxagen/database";
+import {
+  schema,
+  deriveNamespace,
+  setTransactionWorkspaceScope,
+} from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { bootstrapWorkspaceAgents } from "./workspace-agents";
@@ -33,6 +37,11 @@ export interface BootstrappedWorkspace {
  * within the org; the `(org_id, namespace)` and `(org_id, slug)` unique
  * indexes are the authoritative guards against a concurrent-create race, so a
  * unique violation surfaces to the caller unchanged.
+ *
+ * The transaction's `app.current_workspace_id` is re-pointed at the new
+ * workspace as soon as its row exists, because everything after that insert
+ * writes a table whose RLS policy reads that GUC. See
+ * `setTransactionWorkspaceScope` for why this is the one place that is allowed.
  */
 export async function bootstrapWorkspace(
   args: BootstrapWorkspaceArgs,
@@ -67,6 +76,20 @@ export async function bootstrapWorkspace(
       createdAt: schema.workspaces.createdAt,
     });
   if (!ws) throw new Error("workspace insert returned no row");
+
+  // Everything below writes workspace-GUC-scoped tables —
+  // `workspace.workspace_users` (workspace_only), `agent.agents` and
+  // `environments.environments` (standard). The transaction was opened in the
+  // CALLER's scope, which for `create_workspace` from an org-only caller is
+  // `ORG_ONLY_WORKSPACE_ID` (ADR-068) and never this workspace, so without
+  // this every one of those inserts is refused by its `tenant_isolation`
+  // WITH CHECK (42501 — not a unique violation, so it escapes the callers'
+  // slug-conflict classifier and surfaces as a 500). `workspace.workspaces`
+  // itself is `org_only`, which is why the INSERT above needed no re-point.
+  // `create_org` runs this on a `withSystemDb` transaction where RLS is
+  // bypassed; re-pointing the GUC there is harmless and, if anything, more
+  // truthful about what the transaction is writing.
+  await setTransactionWorkspaceScope(tx, ws.id);
 
   await tx.insert(schema.workspaceUsers).values({
     workspaceId: ws.id,

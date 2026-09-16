@@ -1,14 +1,21 @@
-// The Organization mappers over real list_members and list_api_keys output:
-// each sample is parsed by the contract's own output schema first, so a sample
-// the contract would reject cannot make a mapper test pass. The view model
-// parse is the boundary the adapter runs, so the stored role casing, the
-// public ids, and the absence of anything exchangeable for access are proven
-// here.
+// The Organization mappers over real list_members, list_iam_roles,
+// list_workspaces and list_api_keys output: each sample is parsed by the
+// contract's own output schema first, so a sample the contract would reject
+// cannot make a mapper test pass. The view model parse is the boundary the
+// adapter runs, so the stored role casing, the public ids, and the absence of
+// anything exchangeable for access are proven here.
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { describe, expect, it } from "vitest";
-import { ApiKeyList, MemberList } from "@/data/contracts/org";
-import { toApiKeys, toMemberList } from "./org";
+import {
+  ApiKeyList,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "@/data/contracts/org";
+import { toApiKeys, toMemberList, toRoleCatalog, toWorkspaceList } from "./org";
 
 function roster(sample: unknown) {
   const out = listMembers.output.parse(sample);
@@ -100,6 +107,186 @@ describe("toMemberList", () => {
       invitations: [{ ...invited, id: "7a000000-0000-4000-8000-0000000000a1" }],
     });
     expect(MemberList.safeParse(toMemberList(out)).success).toBe(false);
+  });
+});
+
+const customRole = {
+  id: "rol_7k2m9q4x8r1t5v3w6y0z2a",
+  name: "agent.release",
+  description: "Cuts releases and opens their pull requests.",
+  scopeKind: "workspace",
+  kind: "agent",
+  isSystemDefault: false,
+  version: "1",
+  memberCount: 2,
+  grants: [
+    { capability: "list_runs", effect: "allow" },
+    { capability: "get_run", effect: "allow" },
+  ],
+  permissions: ["run.read"],
+  createdAt: "2026-09-15T00:00:00.000Z",
+  createdBy: "Priya Natarajan",
+};
+
+const builtInRole = {
+  ...customRole,
+  id: "rol_9z8y7x6w5v4t3s2r1q0p9n",
+  name: "Owner",
+  description: null,
+  scopeKind: "org",
+  kind: "human",
+  isSystemDefault: true,
+  memberCount: 3,
+  createdBy: null,
+};
+
+function catalogOut(sample: unknown) {
+  return iamRoleList.output.parse(sample);
+}
+
+const rolesSample = {
+  roles: [customRole, builtInRole],
+  total: 2,
+  hasMore: false,
+  limit: 100,
+  offset: 0,
+  catalog: [
+    {
+      id: "run.read",
+      group: "Runs",
+      description: "Read runs, their approvals and the commands sent to them",
+      capabilities: ["list_runs", "get_run", "list_approvals"],
+    },
+  ],
+  enforcement: { tier: "enterprise", enforced: true },
+};
+
+describe("toRoleCatalog", () => {
+  it("carries every role with the permissions its grants cover, who holds it and who made it", () => {
+    const view = RoleCatalog.parse(toRoleCatalog(catalogOut(rolesSample)));
+    expect(view.roles).toEqual([
+      {
+        id: "rol_7k2m9q4x8r1t5v3w6y0z2a",
+        name: "agent.release",
+        description: "Cuts releases and opens their pull requests.",
+        scope: "workspace",
+        kind: "agent",
+        builtIn: false,
+        permissions: ["run.read"],
+        heldBy: 2,
+        createdBy: "Priya Natarajan",
+      },
+      {
+        id: "rol_9z8y7x6w5v4t3s2r1q0p9n",
+        name: "Owner",
+        description: null,
+        scope: "org",
+        kind: "human",
+        builtIn: true,
+        permissions: ["run.read"],
+        heldBy: 3,
+        createdBy: null,
+      },
+    ]);
+  });
+
+  it("carries the catalogue as the vocabulary the editor speaks, keyed by permission and not by id", () => {
+    const view = RoleCatalog.parse(toRoleCatalog(catalogOut(rolesSample)));
+    expect(view.catalog).toEqual([
+      {
+        permission: "run.read",
+        group: "Runs",
+        description: "Read runs, their approvals and the commands sent to them",
+        capabilities: ["list_runs", "get_run", "list_approvals"],
+      },
+    ]);
+  });
+
+  it("reports whether the resolver runs for this organization, as recorded", () => {
+    expect(
+      RoleCatalog.parse(toRoleCatalog(catalogOut(rolesSample))).enforcement,
+    ).toEqual({ tier: "enterprise", enforced: true });
+    expect(
+      RoleCatalog.parse(
+        toRoleCatalog(
+          catalogOut({
+            ...rolesSample,
+            enforcement: { tier: "free", enforced: false },
+          }),
+        ),
+      ).enforcement,
+    ).toEqual({ tier: "free", enforced: false });
+  });
+
+  it("a role id that is not a public id is refused by the view model (negative)", () => {
+    const out = catalogOut({
+      ...rolesSample,
+      roles: [{ ...customRole, id: "7a000000-0000-4000-8000-0000000000a1" }],
+    });
+    expect(RoleCatalog.safeParse(toRoleCatalog(out)).success).toBe(false);
+  });
+});
+
+const workspacesSample = {
+  organization: {
+    id: "7a000000-0000-4000-8000-0000000000a1",
+    publicId: "org_1",
+    slug: "acme",
+    namespace: "acme",
+    name: "Acme Robotics",
+  },
+  workspaces: [
+    {
+      id: "7b000000-0000-4000-8000-000000000001",
+      publicId: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+      slug: "core-platform",
+      namespace: "core",
+      name: "Core platform",
+      role: "Owner",
+      archivedAt: null,
+    },
+    {
+      id: "7b000000-0000-4000-8000-000000000002",
+      publicId: "wrk_9z8y7x6w5v4t3s2r1q0p9n",
+      slug: "research",
+      namespace: "research",
+      name: "Research",
+      role: null,
+      archivedAt: "2026-09-01T08:00:00.000Z",
+    },
+  ],
+};
+
+describe("toWorkspaceList", () => {
+  it("carries each workspace by its public id, with the viewer's role and its archival date", () => {
+    const view = WorkspaceList.parse(
+      toWorkspaceList(workspaceList.output.parse(workspacesSample)),
+    );
+    expect(view.workspaces).toEqual([
+      {
+        id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        slug: "core-platform",
+        name: "Core platform",
+        role: "Owner",
+        archivedAt: null,
+      },
+      {
+        id: "wrk_9z8y7x6w5v4t3s2r1q0p9n",
+        slug: "research",
+        name: "Research",
+        role: null,
+        archivedAt: "2026-09-01T08:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("carries the database uuid nowhere: the row's id is its public id (negative)", () => {
+    const view = WorkspaceList.parse(
+      toWorkspaceList(workspaceList.output.parse(workspacesSample)),
+    );
+    expect(JSON.stringify(view)).not.toContain(
+      "7b000000-0000-4000-8000-000000000001",
+    );
   });
 });
 

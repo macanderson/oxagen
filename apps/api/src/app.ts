@@ -167,6 +167,12 @@ import { mandateGetRoute } from "./routes/v1/mandate.get";
 import { mandateRevokeRoute } from "./routes/v1/mandate.revoke";
 import { mandateLimitsUpdateRoute } from "./routes/v1/mandate.limits.update";
 import { toolDeclarationListRoute } from "./routes/v1/tool.declaration.list";
+import { toolVersionListRoute } from "./routes/v1/tool.version.list";
+import { toolClassificationSetRoute } from "./routes/v1/tool.classification.set";
+import { toolImportRoute } from "./routes/v1/tool.import";
+import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
+import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
+import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
 import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
@@ -221,6 +227,7 @@ import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
+import { auditEventsExportRoute } from "./routes/v1/audit.events.export";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
@@ -261,6 +268,7 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { skillListRoute } from "./routes/v1/skill.list";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
@@ -501,6 +509,9 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+// The skills a workspace's harness sessions reported at start (#3098): a
+// noBillingGate read of tacho.sessions.
+orgScoped.route("/skills", skillListRoute);
 orgScoped.route("/spend/findings", findingListRoute);
 orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
@@ -753,6 +764,13 @@ orgScoped.route("/mandates/get", mandateGetRoute);
 orgScoped.route("/mandates/revoke", mandateRevokeRoute);
 orgScoped.route("/mandates/limits/update", mandateLimitsUpdateRoute);
 orgScoped.route("/tool/declaration/list", toolDeclarationListRoute);
+// Tools lane (#2958): registry, classification, import, the broker's grants, kill switches.
+orgScoped.route("/tools/versions", toolVersionListRoute);
+orgScoped.route("/tools/versions/classification", toolClassificationSetRoute);
+orgScoped.route("/tools/import", toolImportRoute);
+orgScoped.route("/credential-grants", credentialGrantListRoute);
+orgScoped.route("/kill-switches", killSwitchSetRoute);
+orgScoped.route("/kill-switches/list", killSwitchListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);
 orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
@@ -784,6 +802,7 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+orgScoped.route("/audit/events/export", auditEventsExportRoute);
 // Creating a workspace needs an org and cannot need a workspace: the caller is
 // asking for their first one. Mounted only under the workspace-scoped group, the
 // REST surface could not take a new account past org creation — every attempt
@@ -798,6 +817,11 @@ orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
 orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
 // The onboarding gate for an organization (#2967): its gate row.
 orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
+// An audit export answers for the whole organization, and the documented path
+// is `POST /v1/:org_slug/audit/events/export`. Mounted only on the
+// workspace-scoped group above, that URL matched no route and 404'd, leaving
+// the advertised REST surface unreachable (#3097).
+orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
