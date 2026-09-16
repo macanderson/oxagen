@@ -326,6 +326,78 @@ policy class with nothing pooled. Recorded because "are there other places this
 reasons in aggregate" is the question worth asking after a finding like this,
 and the answer should be written rather than assumed.
 
+### This check is best-effort, and it does not converge
+
+Six failures were found in it during one review cycle. **Every one reported
+clean rather than erroring**, which is the property that makes a green
+mandatory check worse than no check: it turns "nobody has verified this" into
+"CI says it is fine". They fall on three axes, and the axes are the point.
+
+| # | axis | what it could not do |
+|---|---|---|
+| 1-4 | which call sites carry a sentinel context | read a helper, `kernelRead`, `capabilityContext`, an inline object |
+| 5 | whether a predicate pins the statement it belongs to | it compared totals across a file |
+| 6 | which table a read touches | it matched the literal identifier `schema` |
+
+Each was closed. Closing axis 1 took the call-site analysis from regexes to a
+TypeScript parse. Closing axis 3 — resolving `import { schema as db }` and
+`const se = schema.securityEvents`, both live in this tree — **immediately
+produced a false positive on `list_members`**, because that handler branches on
+`input.scope` and the check pools the tables of every `withTenantDb` region in a
+handler. Knowing which branch a sentinel-scoped call takes means evaluating a
+condition on an input supplied in another file: path sensitivity, then
+interprocedural constant propagation. A fourth axis, opened by closing the
+third.
+
+**That is the answer to whether this converges: it does not.** The residual is
+structural, not a backlog:
+
+- **Naming a table.** Resolvable now: the plain form, an import alias, a local
+  binding, a destructured binding. Not resolvable: a table imported straight
+  from a schema module (module resolution across packages), a table passed as a
+  parameter (dataflow). A table chosen at runtime is over-approximated when both
+  candidates are spelled in the file and missed when they are not.
+  `residualTableForms` in the script publishes this list and the tests assert
+  each case, so the boundary moves deliberately.
+- **Reaching a capability.** Seven wrapper shapes are modelled by name. Nothing
+  stops an eighth, and the check would be as silent about it as it was about the
+  first four.
+- **Which code actually runs.** Branching, and anything that depends on a value
+  from another module.
+
+A `ts.createProgram` with the real type checker would close the alias and
+import-resolution cases by construction and move the frontier. It would not
+close path sensitivity or dataflow, it costs build time on every PR, and — the
+deciding point — **it addresses only axis 3 of three.** It buys one axis for a
+large increase in cost and complexity. That is not where the remaining value is.
+
+### Where the enforcement belongs
+
+The static check is trying to prove a negative about every call site: that no
+workspace-scoped table is read under a sentinel workspace id. The property would
+be far better enforced where the table is already known — **in Postgres.**
+
+Under an org-only scope, set `app.current_workspace_id` to a value that is not a
+uuid. Every `tenant_isolation` policy that casts the GUC then raises instead of
+quietly returning nothing. **RLS stops hiding and starts refusing**, and no
+alias, wrapper, parameter, branch or runtime table choice can defeat it, because
+the check is performed by the relation itself. It is the difference between
+proving that nobody does the wrong thing and making the wrong thing impossible.
+
+It is not enabled here because `workspace_nullable` policies reference the GUC
+too, so correct org-level reads of `iam.principals` and
+`iam.principal_role_assignments` would start raising along with the incorrect
+ones. Those call sites have to be converted first.
+
+**That reframes what this check is for.** Its durable value is not as a
+permanent gate but as the instrument that enumerates the call sites so the
+runtime refusal can be turned on — and then it becomes redundant, which is the
+right end for it. Until that lands it is worth keeping, because a net with a
+known mesh catches more than no net. It should not be read as proof that the
+tree is clean. It is best-effort, its limits are listed above and asserted in
+its tests, and `check-org-sentinel-reads` reporting clean means "none of the
+shapes this check can see", never "none exist".
+
 ### What the check can and cannot tell you
 
 `check:org-sentinel-reads` answers one question: *is this read narrowed by RLS
@@ -389,15 +461,16 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Five failures were found after the check was first written, and all five
-  were closed rather than documented. Every one of them reported CLEAN rather
-  than erroring**, which is the property that makes a green CI check worse than
-  no check: it converts "nobody has verified this" into "CI says it is fine".
-  Four were about which call sites it could read — closed by the parse, and by
-  the wrapper table whose rows each name the file they were verified on. The
-  fifth was on a different axis, aggregate counting where per-statement
-  reasoning was needed, and is why the section above audits the rest of the
-  checker for that shape instead of fixing only the instance. Against `main`, an
+- **Six failures were found after the check was first written. All six were
+  closed; the count of KNOWN blind spots shrank each round and the rate of
+  discovery did not.** Six rounds in, there is no evidence the set is finite,
+  and the section above says plainly that it is not. An earlier draft of this
+  ADR claimed the incompleteness was "written down and shrinking"; the writing
+  is accurate, the shrinking is not a claim this can support, and the sentence
+  is withdrawn.
+
+- **How each was found, because the pattern is the useful part.** Against
+  `main`, an
   `invoke()` behind a `readCapability(viewer, name, input)` helper reported
   nothing, because the capability is named at the helper's call sites; that is
   the indirect fallback, and it took `main` from five sites to twelve. Against

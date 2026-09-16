@@ -19,7 +19,9 @@ import {
   findSentinelNarrowedReads,
   parse,
   pinsNullWorkspace,
+  residualTableForms,
   sentinelNames,
+  tableResolver,
   tenantDbRegions,
 } from "./check-org-sentinel-reads.mjs";
 
@@ -437,16 +439,26 @@ describe("pinsNullWorkspace", () => {
     const sf = parse(
       `withTenantDb((tx) => tx.insert(schema.securityEvents).values({ orgId }));`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(true);
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(true);
   });
 
   it("does not exempt an INSERT that names a workspace", () => {
     const sf = parse(
       `withTenantDb((tx) => tx.insert(schema.securityEvents).values({ orgId, workspaceId: ws.id }));`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
-      false,
-    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
   });
 
   it("does not let one pinned read exempt a second unpinned one", () => {
@@ -456,9 +468,13 @@ describe("pinsNullWorkspace", () => {
          return tx.select().from(schema.securityEvents);
        });`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
-      false,
-    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
   });
 
   it("does not let ONE statement's two predicates cover a second statement", () => {
@@ -477,9 +493,13 @@ describe("pinsNullWorkspace", () => {
          return tx.select().from(schema.securityEvents).where(eq(schema.securityEvents.orgId, orgId));
        });`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
-      false,
-    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
   });
 
   it("still exempts a table when every statement pins it", () => {
@@ -489,7 +509,13 @@ describe("pinsNullWorkspace", () => {
          return tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId));
        });`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(true);
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(true);
   });
 
   it("does not let a pinned read in one scope exempt an unpinned read in another", () => {
@@ -503,9 +529,13 @@ describe("pinsNullWorkspace", () => {
          withTenantDb((tx) => tx.select().from(schema.securityEvents)),
        );`,
     );
-    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
-      false,
-    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -764,5 +794,89 @@ export default async function Page() {
     const { findings } = findSentinelNarrowedReads(root);
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ capability: "create_workspace" });
+  });
+});
+
+describe("how a read names its table", () => {
+  const tablesOf = (src: string) => {
+    const sf = parse(src);
+    const r = tableResolver(sf);
+    return [...r.tablesIn(sf)];
+  };
+
+  it("reads the plain form", () => {
+    expect(tablesOf(`tx.select().from(schema.apiKeys);`)).toContain("apiKeys");
+  });
+
+  it("follows an import alias — `import { schema as db }`", () => {
+    // schema.relationship.delete.ts does this today.
+    expect(
+      tablesOf(
+        `import { schema as db, withTenantDb } from "@oxagen/database";\ntx.select().from(db.apiKeys);`,
+      ),
+    ).toContain("apiKeys");
+  });
+
+  it("follows a local binding — `const se = schema.securityEvents`", () => {
+    // audit.shared.ts and run.list.ts do this today, five bindings between them.
+    expect(
+      tablesOf(
+        `const se = schema.securityEvents;\ntx.select().from(se).where(eq(se.orgId, o));`,
+      ),
+    ).toContain("securityEvents");
+  });
+
+  it("follows a destructured binding, including a rename", () => {
+    expect(
+      tablesOf(`const { apiKeys, users: u } = schema;\ntx.select().from(u);`),
+    ).toEqual(expect.arrayContaining(["apiKeys", "users"]));
+  });
+
+  it("follows an alias and a binding together", () => {
+    expect(
+      tablesOf(
+        `import { schema as db } from "@oxagen/database";\nconst t = db.workspaceUsers;\ntx.select().from(t);`,
+      ),
+    ).toContain("workspaceUsers");
+  });
+
+  it("still reads tx.query.<table>", () => {
+    expect(tablesOf(`tx.query.routingPolicy.findFirst({});`)).toContain(
+      "routingPolicy",
+    );
+  });
+
+  // The limit, asserted rather than described. Each of these is a real way to
+  // name a table that this check cannot resolve, and ADR-074 says so. They are
+  // tests so the boundary moves deliberately rather than by accident.
+  it("does NOT resolve a table imported straight from a schema module", () => {
+    expect(
+      tablesOf(
+        `import { apiKeys } from "@oxagen/database/schema/auth";\ntx.select().from(apiKeys);`,
+      ),
+    ).not.toContain("apiKeys");
+  });
+
+  it("does NOT resolve a table passed in as a parameter", () => {
+    expect(
+      tablesOf(`function read(tx, table) { return tx.select().from(table); }`),
+    ).toEqual([]);
+  });
+
+  it("over-approximates a table chosen at runtime, rather than missing it", () => {
+    // Both candidates are spelled in the file, so both are reported. That is
+    // the safe direction — a false positive, not a miss — and it is why this
+    // form is listed as over-approximated rather than as a gap.
+    expect(
+      tablesOf(
+        `const t = cond ? schema.apiKeys : schema.users;\ntx.select().from(t);`,
+      ),
+    ).toEqual(expect.arrayContaining(["apiKeys", "users"]));
+  });
+
+  it("publishes the residual forms so the limit is readable, not folklore", () => {
+    expect(residualTableForms).toHaveLength(3);
+    expect(residualTableForms.join(" ")).toMatch(/parameter/);
+    expect(residualTableForms.join(" ")).toMatch(/module resolution/);
   });
 });

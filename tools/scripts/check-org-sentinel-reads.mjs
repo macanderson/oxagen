@@ -379,23 +379,116 @@ export function tenantDbRegions(root) {
   return callsTo(root, "withTenantDb");
 }
 
-/** Every `schema.<name>` and `tx.query.<name>` these subtrees name. */
-export function tablesNamed(roots) {
-  const out = new Set();
-  for (const root of [roots].flat()) {
-    for (const n of nodes(root)) {
-      if (!ts.isPropertyAccessExpression(n)) continue;
-      const e = n.expression;
-      if (ts.isIdentifier(e) && e.text === "schema") out.add(n.name.text);
-      if (
-        ts.isPropertyAccessExpression(e) &&
-        e.name.text === "query" &&
-        ts.isIdentifier(e.expression) &&
-        e.expression.text === "tx"
-      ) {
-        out.add(n.name.text);
+/**
+ * How this file names tables.
+ *
+ * A read does not have to spell `schema.apiKeys`. Three forms in the tree do
+ * not, and each one made the check report clean on a table it could not see:
+ *
+ *   import { schema as db }        `db.apiKeys`      schema.relationship.delete.ts
+ *   const se = schema.apiKeys      `.from(se)`       audit.shared.ts, run.list.ts
+ *   const { apiKeys } = schema     `.from(apiKeys)`  (not in the tree today)
+ *
+ * All three are answerable from this file's own declarations, which is what
+ * this builds: the local names that mean the schema namespace, and the local
+ * names bound to a specific table. What it cannot answer is in
+ * `residualTableForms` below — a table imported directly from a schema module,
+ * one passed in as a parameter, one chosen at runtime. Those need symbol
+ * resolution or dataflow, and the last is not decidable at all.
+ */
+export function tableResolver(sourceFile) {
+  const schemaNames = new Set(["schema"]);
+  const bindings = new Map(); // local name -> table export name
+
+  for (const n of nodesOf(sourceFile)) {
+    // import { schema as db } from "@oxagen/database"
+    if (ts.isImportSpecifier(n)) {
+      if (n.propertyName?.text === "schema") schemaNames.add(n.name.text);
+      continue;
+    }
+    if (!ts.isVariableDeclaration(n) || n.initializer === undefined) continue;
+    const init = n.initializer;
+
+    // const se = schema.securityEvents
+    if (
+      ts.isIdentifier(n.name) &&
+      ts.isPropertyAccessExpression(init) &&
+      ts.isIdentifier(init.expression) &&
+      schemaNames.has(init.expression.text)
+    ) {
+      bindings.set(n.name.text, init.name.text);
+      continue;
+    }
+
+    // const { apiKeys, users: u } = schema
+    if (
+      ts.isObjectBindingPattern(n.name) &&
+      ts.isIdentifier(init) &&
+      schemaNames.has(init.text)
+    ) {
+      for (const el of n.name.elements) {
+        if (!ts.isIdentifier(el.name)) continue;
+        const exported =
+          el.propertyName !== undefined && ts.isIdentifier(el.propertyName)
+            ? el.propertyName.text
+            : el.name.text;
+        bindings.set(el.name.text, exported);
       }
     }
+  }
+
+  return {
+    /** The table this expression denotes, or null. */
+    tableOf(node) {
+      if (node === undefined) return null;
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        schemaNames.has(node.expression.text)
+      ) {
+        return node.name.text;
+      }
+      if (ts.isIdentifier(node)) return bindings.get(node.text) ?? null;
+      return null;
+    },
+    /** Every table name this subtree could be referring to. */
+    tablesIn(root) {
+      const out = new Set();
+      for (const n of nodesOf(root)) {
+        const direct = this.tableOf(n);
+        if (direct !== null) out.add(direct);
+        // tx.query.<table>
+        if (
+          ts.isPropertyAccessExpression(n) &&
+          ts.isPropertyAccessExpression(n.expression) &&
+          n.expression.name.text === "query" &&
+          ts.isIdentifier(n.expression.expression) &&
+          n.expression.expression.text === "tx"
+        ) {
+          out.add(n.name.text);
+        }
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * The ways of naming a table this check CANNOT resolve, listed so the limit is
+ * a written fact rather than the next finding. See ADR-074 — none of these is
+ * closed by more syntax, and the last is not decidable by any analysis.
+ */
+export const residualTableForms = [
+  'import { apiKeys } from "@oxagen/database/schema/auth" — a table imported straight from a schema module, which needs module resolution across packages. MISSED.',
+  "function read(tx, table) { tx.select().from(table) } — a table as a parameter, which needs dataflow. MISSED.",
+  "tx.select().from(cond ? a : b) — a table chosen at runtime. Over-approximated when both candidates are spelled in the file (a false positive, the safe direction), missed when they are not.",
+];
+
+/** Every table these subtrees name, through any form this file can resolve. */
+export function tablesNamed(roots, resolver) {
+  const out = new Set();
+  for (const root of [roots].flat()) {
+    for (const t of resolver.tablesIn(root)) out.add(t);
   }
   return out;
 }
@@ -440,13 +533,8 @@ function statementRoot(node) {
  * from different `runInTenantScope` callbacks leaked the same way across
  * scopes. Every statement now answers for itself.
  */
-export function pinsNullWorkspace(name, roots) {
-  const tableIs = (arg) =>
-    arg !== undefined &&
-    ts.isPropertyAccessExpression(arg) &&
-    ts.isIdentifier(arg.expression) &&
-    arg.expression.text === "schema" &&
-    arg.name.text === name;
+export function pinsNullWorkspace(name, roots, resolver) {
+  const tableIs = (arg) => resolver.tableOf(arg) === name;
 
   /** Does this one statement pin workspace_id IS NULL on `name`? */
   const pinnedIn = (root) => {
@@ -500,7 +588,7 @@ export function pinsNullWorkspace(name, roots) {
 }
 
 /** The offending (export, table, class) triples among the names given. */
-export function offenders(names, tableNames, policyClasses, roots) {
+export function offenders(names, tableNames, policyClasses, roots, resolver) {
   const out = [];
   for (const name of names) {
     const table = tableNames.get(name);
@@ -510,8 +598,12 @@ export function offenders(names, tableNames, policyClasses, roots) {
     // (auth.users, org.organizations, billing.plans — platform-global rows), so
     // the sentinel cannot narrow it.
     if (cls === undefined || cls === SAFE_CLASS) continue;
-    if (cls === "workspace_nullable" && pinsNullWorkspace(name, roots))
+    if (
+      cls === "workspace_nullable" &&
+      pinsNullWorkspace(name, roots, resolver)
+    ) {
       continue;
+    }
     out.push({ export: name, table, policyClass: cls });
   }
   return out.sort((a, b) => a.table.localeCompare(b.table));
@@ -542,11 +634,13 @@ export function passColocated(files, tableNames, policyClasses, root = ROOT) {
       regions.push(...tenantDbRegions(body));
     }
     if (regions.length === 0) continue;
+    const resolver = tableResolver(sourceFile);
     const bad = offenders(
-      tablesNamed(regions),
+      tablesNamed(regions, resolver),
       tableNames,
       policyClasses,
       regions,
+      resolver,
     );
     if (bad.length > 0) {
       findings.push({ pass: "co-located", file: rel(file, root), tables: bad });
@@ -736,13 +830,16 @@ function handlerFindings(
   if (modulePath === undefined) return [];
   const out = [];
   for (const { src, file } of handlerSources(modulePath, root)) {
-    const regions = tenantDbRegions(parse(src, file));
+    const sourceFile = parse(src, file);
+    const regions = tenantDbRegions(sourceFile);
     if (regions.length === 0) continue;
+    const resolver = tableResolver(sourceFile);
     const bad = offenders(
-      tablesNamed(regions),
+      tablesNamed(regions, resolver),
       tableNames,
       policyClasses,
       regions,
+      resolver,
     );
     if (bad.length > 0) {
       out.push({
@@ -846,12 +943,36 @@ function rel(file, root = ROOT) {
   return file.startsWith(root) ? file.slice(root.length + 1) : file;
 }
 
-/** The waived findings, keyed the way a finding is identified. */
+/**
+ * The findings this check does not fail on, in two kinds.
+ *
+ * `waived` — a real defect whose fix belongs to another change, named in
+ * `fixedBy`. It goes when that change lands.
+ *
+ * `acknowledged` — NOT a defect: something this check reports that a more
+ * precise analysis would not, with `needs` naming which analysis. These exist
+ * because the check is best-effort (ADR-074), and each one is evidence about
+ * where its precision ends rather than a problem to be hidden. `needs` is
+ * required so the category cannot become a place to put anything inconvenient.
+ *
+ * Both kinds ratchet the same way: an entry matching no finding is an error.
+ */
 export function readBaseline(root = ROOT) {
   const file = join(root, "tools/scripts/org-sentinel-reads-baseline.json");
   if (!existsSync(file)) return [];
   const parsed = JSON.parse(readFileSync(file, "utf8"));
-  return Array.isArray(parsed.waived) ? parsed.waived : [];
+  const waived = Array.isArray(parsed.waived) ? parsed.waived : [];
+  const acknowledged = Array.isArray(parsed.acknowledged)
+    ? parsed.acknowledged
+    : [];
+  for (const entry of acknowledged) {
+    if (typeof entry.needs !== "string" || entry.needs.length === 0) {
+      throw new Error(
+        `org-sentinel-reads-baseline.json: acknowledged entry for ${entry.file} has no "needs" — say which analysis would resolve it, or it is a waiver rather than an acknowledgement.`,
+      );
+    }
+  }
+  return [...waived, ...acknowledged];
 }
 
 /**
