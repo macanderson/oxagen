@@ -70,8 +70,8 @@ async function resolveKeyWorkspaceId(
  *
  * Its answer is that the page names the workspace; the rebuilt Mission
  * Control page does that with a `?workspace=` picker. This page is the
- * retiring app and has no picker, so it mints into the oldest workspace of
- * this org that the acting user is a member of — the same membership boundary
+ * retiring app and has no picker, so it mints into the oldest UNARCHIVED
+ * workspace of this org that the acting user is a member of — the same membership boundary
  * resolveApiKey enforces for a CLI key. An org with no such workspace gets a
  * refusal rather than an inert credential.
  */
@@ -91,6 +91,13 @@ async function resolveMintWorkspaceId(
         and(
           eq(schema.workspaces.orgId, orgId),
           eq(schema.workspaceUsers.userId, userId),
+          // Not an archived one. Archiving deliberately keeps the workspace row
+          // and its membership rows, so without this the oldest workspace an
+          // admin belongs to can be a hidden one — and the secret shown once
+          // would carry a scope they cannot see and would not expect. Same
+          // family as #3123 from the other direction: that is a key stranded by
+          // archival, this would be a key minted into it.
+          isNull(schema.workspaces.archivedAt),
         ),
       )
       .orderBy(asc(schema.workspaces.createdAt))

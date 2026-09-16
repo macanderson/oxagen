@@ -450,7 +450,13 @@ export async function removeMember(orgId: string, targetUserId: string) {
   const waiver = (file: string) =>
     JSON.stringify({
       waived: [
-        { file, capability: "remove_org_member", reason: "x", fixedBy: "#1" },
+        {
+          file,
+          capability: "remove_org_member",
+          tables: ["auth.api_keys"],
+          reason: "x",
+          fixedBy: "#1",
+        },
       ],
     });
 
@@ -486,6 +492,42 @@ export async function removeMember(orgId: string, targetUserId: string) {
     expect(out.staleWaivers).toHaveLength(1);
   });
 
+  it("does not waive a new table at the same site", () => {
+    // The rot this key shape exists to prevent: a waiver keyed on site and
+    // capability alone would keep matching after the handler grew a SECOND
+    // narrowed table, suppressing a new defect while still reading as live.
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": `import { schema, withTenantDb } from "@oxagen/database";
+export const h = async (input, ctx) =>
+  withTenantDb((tx) => {
+    tx.select().from(schema.apiKeys);
+    return tx.select().from(schema.workspaceUsers);
+  });
+`,
+      "apps/app/src/actions.ts": action,
+      "tools/scripts/org-sentinel-reads-baseline.json": JSON.stringify({
+        waived: [
+          {
+            file: "apps/app/src/actions.ts",
+            capability: "remove_org_member",
+            tables: ["auth.api_keys"],
+            reason: "x",
+            fixedBy: "#1",
+          },
+        ],
+      }),
+    });
+    const out = findSentinelNarrowedReads(root);
+    // Reported twice, and both are true: a finding whose table set the waiver
+    // does not cover, and a waiver that now matches nothing.
+    expect(out.findings).toHaveLength(1);
+    expect(
+      out.findings[0]?.tables.map((t: { table: string }) => t.table),
+    ).toEqual(["auth.api_keys", "workspace.workspace_users"]);
+    expect(out.staleWaivers).toHaveLength(1);
+  });
+
   it("does not waive a different site with the same capability", () => {
     const root = makeTree({
       "packages/handlers/src/register.ts": register,
@@ -498,5 +540,70 @@ export async function removeMember(orgId: string, targetUserId: string) {
     const out = findSentinelNarrowedReads(root);
     expect(out.findings).toHaveLength(1);
     expect(out.staleWaivers).toHaveLength(1);
+  });
+});
+
+describe("the other two wrappers around invoke()", () => {
+  const register = `registerHandler(
+    "create_workspace",
+    async () => (await import("./workspace.create")).h,
+  );
+`;
+  const handler = `import { schema, withTenantDb } from "@oxagen/database";
+export const h = async (input, ctx) =>
+  withTenantDb((tx) => tx.select().from(schema.workspaceUsers));
+`;
+
+  it("sees an apps/api route whose sentinel is inside capabilityContext", () => {
+    // The route names neither the constant nor the literal — the sentinel is
+    // introduced by capabilityContext(c, { requireWorkspace: false }).
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/workspace.create.ts": handler,
+      "apps/api/src/routes/v1/workspace.create.ts": `import { invoke } from "@oxagen/oxagen/kernel";
+import { capabilityContext } from "../../lib/context";
+route.post("/", async (c) => {
+  const ctx = capabilityContext(c, { requireWorkspace: false });
+  const out = await invoke("create_workspace", body, ctx, { surface: "api" });
+  return c.json(out);
+});
+`,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ capability: "create_workspace" });
+  });
+
+  it("leaves a route that requires a workspace alone", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/workspace.create.ts": handler,
+      "apps/api/src/routes/v1/workspace.create.ts": `import { invoke } from "@oxagen/oxagen/kernel";
+import { capabilityContext } from "../../lib/context";
+route.post("/", async (c) => {
+  const ctx = capabilityContext(c);
+  const out = await invoke("create_workspace", body, ctx, { surface: "api" });
+  return c.json(out);
+});
+`,
+    });
+    expect(findSentinelNarrowedReads(root).findings).toEqual([]);
+  });
+
+  it("sees invokeOrgCapability, which builds the ctx and calls invoke itself", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/workspace.create.ts": handler,
+      "apps/app/src/app/governance/page.tsx": `import { invokeOrgCapability } from "../_lib/invoke-org";
+export default async function Page() {
+  return invokeOrgCapability<Out>(tenant.id, session.user.id, "create_workspace", {
+    limit: 1000,
+  });
+}
+`,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ capability: "create_workspace" });
   });
 });

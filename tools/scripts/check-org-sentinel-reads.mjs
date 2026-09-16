@@ -478,9 +478,14 @@ export function passCrossSurface(
   const findings = [];
   for (const file of files) {
     const src = stripComments(readFileSync(file, "utf8"));
-    if (!src.includes("invoke(")) continue;
+    // `invoke(`, or one of the named wrappers that calls it for you.
+    if (
+      !src.includes("invoke(") &&
+      !src.includes("invokeOrgCapability")
+    ) {
+      continue;
+    }
     const names = sentinelNames(src);
-    if (names.size === 0) continue;
     // The ctx object identifiers this file builds with a sentinel workspaceId.
     const sentinelCtx = new Set();
     for (const m of src.matchAll(
@@ -491,10 +496,30 @@ export function passCrossSurface(
       if (m[1]) sentinelCtx.add(m[1]);
       else sentinelCtx.add("*"); // returned inline from a ctx builder
     }
-    if (sentinelCtx.size === 0) continue;
+    // apps/api: the sentinel is introduced inside capabilityContext, so an
+    // org-scoped route names neither the constant nor the literal — it holds
+    // only `const ctx = capabilityContext(c, { requireWorkspace: false })`.
+    // Modelled by name, like the app kernel seam.
+    for (const m of src.matchAll(
+      /(?:const|let)\s+(\w+)\s*=\s*(?:await\s+)?capabilityContext\([\s\S]{0,200}?requireWorkspace:\s*false/g,
+    )) {
+      sentinelCtx.add(m[1]);
+    }
+
+    // app_deprecated governance: invokeOrgCapability(orgId, userId, name, input)
+    // builds the sentinel ctx AND calls invoke() inside itself, so a caller
+    // names the capability and nothing else.
+    const wrapperCapabilities = new Set();
+    for (const m of src.matchAll(
+      /\binvokeOrgCapability\s*(?:<[^>]*>)?\s*\(\s*[^,]+,\s*[^,]+,\s*"([\w.]+)"/g,
+    )) {
+      wrapperCapabilities.add(m[1]);
+    }
+
+    if (sentinelCtx.size === 0 && wrapperCapabilities.size === 0) continue;
 
     // The capabilities this file invokes under a sentinel ctx.
-    const invoked = new Set();
+    const invoked = new Set(wrapperCapabilities);
     // An indirect call — `invoke(name, …)` behind a readCapability(viewer,
     // name, …) helper — names the capability at the helper's call sites and
     // not at the invoke. A real one was found on `main`
@@ -569,9 +594,24 @@ export function readBaseline(root = ROOT) {
   return Array.isArray(parsed.waived) ? parsed.waived : [];
 }
 
-/** A finding's identity for baseline matching: where it is and what it invokes. */
+/**
+ * A finding's identity for baseline matching: where it is, what it invokes, AND
+ * which tables it reports.
+ *
+ * The tables are part of the identity on purpose. Keyed on site and capability
+ * alone, a waiver would go on matching after the handler grew a SECOND narrowed
+ * table — suppressing a new defect and still reading as live rather than stale,
+ * which is the rot the baseline exists to prevent, one level down. With the
+ * table set in the key, a new table is a new finding AND the old waiver goes
+ * stale, so both halves are reported.
+ */
 export function findingKey(f) {
-  return `${f.file}::${f.capability ?? ""}`;
+  const tables = (f.tables ?? [])
+    .map((t) => (typeof t === "string" ? t : t.table))
+    .slice()
+    .sort()
+    .join(",");
+  return `${f.file}::${f.capability ?? ""}::${tables}`;
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────

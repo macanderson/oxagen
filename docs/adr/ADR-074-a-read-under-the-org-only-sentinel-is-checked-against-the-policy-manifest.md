@@ -115,10 +115,19 @@ of it. This ADR is the enforcement.
      body reaches `withTenantDb`, which is the app-page and server-action form;
    - **waived** — a live instance whose fix belongs to another change, listed in
      `tools/scripts/org-sentinel-reads-baseline.json` with its reason and the
-     change that closes it. The file ratchets down and cannot rot: an entry
-     matching no finding is itself an error, so a waiver cannot outlive the
-     defect it waives. One entry today — `org.apiKeys` in the rebuild, closed by
-     #3116.
+     change that closes it. One entry today — `org.apiKeys` in the rebuild,
+     closed by #3116.
+
+     **The property, stated exactly**, because a looser version of it was
+     claimed here first and was wrong: a waiver matches ONE site, ONE
+     capability and ONE exact set of offending tables. An entry matching no
+     finding is an error, so a waiver cannot outlive the defect it waives; and
+     because the table set is part of the identity, a handler that later
+     narrows a SECOND table produces a new finding AND a stale waiver rather
+     than silently absorbing the new defect into the old entry. Keyed on site
+     and capability alone — as it was at first — that second defect would have
+     been suppressed by a waiver still reading as live, which is the same rot
+     one level down.
    - **not scanned at all** — `*.test.ts` and `*.test.tsx`. A test naming the
      sentinel is not a production read, and a fixture that builds a sentinel ctx
      to exercise a handler is the normal way to test one. This exemption is
@@ -232,6 +241,29 @@ refusal. A wrong number that looks right is what that capability exists to
 avoid. **The missing seam is recorded as a gap for the maintainer, not
 improvised here.**
 
+### Every wrapper around `invoke()`, and which ones the check models
+
+Three of these were found by review, each after the previous one was closed, and
+the fourth by enumerating rather than waiting. The list is the point: a check
+that models call sites cannot be trusted further than the set of shapes it
+knows, so the set is written down here instead of being rediscovered.
+
+| shape | where | modelled |
+|---|---|---|
+| `invoke(name, input, ctx)` with a ctx literal naming the sentinel | `apps/app_deprecated` pages and actions | **yes** — cross-surface pass |
+| `readCapability(viewer, name, input)`, ctx and invoke inside the helper | `main`'s billing governed-actions page | **yes** — the indirect fallback, checks every capability the file names |
+| `kernelRead` / `kernelWrite` on an `OrgCtx` port method, sentinel applied in `src/server/kernel.ts` | `apps/app` (the rebuild) | **yes** — app kernel seam pass, driven by `src/data/ports.ts` |
+| `capabilityContext(c, { requireWorkspace: false })`, sentinel applied inside `apps/api/src/lib/context.ts` | `apps/api` org-scoped routes, e.g. `workspace.create.ts` | **yes** — by name, in the cross-surface pass |
+| `invokeOrgCapability(orgId, userId, name, input)`, ctx, scope and invoke all inside the helper | `apps/app_deprecated/.../governance/_lib/invoke-org.ts` | **yes** — by name; found while enumerating, not by review |
+| `buildContext(headers())` | `apps/mcp` tools | **not needed** — it refuses an empty org or workspace (`context.ts:143`), so an MCP key always carries a real workspace and there is no org-only path |
+
+**A complete enumeration is not possible in general, and this table is a
+snapshot rather than a proof.** Nothing stops the next surface from adding a
+sixth wrapper, and the check would be silent about it exactly as it was silent
+about the first four. What the table does is make the next one cheap to find:
+the question "which wrappers exist" has a written answer to diff against, and
+the rule below says when to ask it.
+
 ### What the check can and cannot tell you
 
 `check:org-sentinel-reads` answers one question: *is this read narrowed by RLS
@@ -295,18 +327,24 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Two blind spots were found by running it against a tree it was not written
-  on, and both were closed rather than documented.** Against `main`, an
+- **Three blind spots were found by running it against trees it was not written
+  on, and all three were closed rather than documented.** Against `main`, an
   `invoke()` behind a `readCapability(viewer, name, input)` helper reported
   nothing, because the capability is named at the helper's call sites; that is
   the indirect fallback, and it took `main` from five sites to twelve. Against
   `apps/app` — the rebuild this very branch sits beside — the checker reported
   nothing at all, because that app calls `invoke()` in no page and routes
   everything through `kernelRead`; that is the app-kernel pass, and it found one
-  live instance the check had been blind to for a whole review cycle. **The rule
-  the two of them make is that a checker must be run against every tree it will
-  guard, not only the one it was written on.** This one was clean on
-  `app-rebuild` and blind on the app that replaces it.
+  live instance the check had been blind to for a whole review cycle. And in
+  `apps/api`, an org-scoped route holds only `const ctx = capabilityContext(c,
+  { requireWorkspace: false })`, so the sentinel appears in neither the route
+  nor any literal there. **The rule the three of them make is that a checker
+  must be run against every tree and every surface it will guard, not only the
+  one it was written on** — and that the wrappers it models should be
+  enumerated deliberately rather than discovered one review at a time, which is
+  what the table above is for. A fourth wrapper
+  (`invokeOrgCapability`, in the deprecated app's governance pages) was found
+  that way rather than by review.
 - Its co-located pass is file-scoped in one direction: a file that scopes to the
   sentinel somewhere and also reads a workspace-scoped table under a real
   workspace elsewhere is reported. That over-reports rather than under-reports,
