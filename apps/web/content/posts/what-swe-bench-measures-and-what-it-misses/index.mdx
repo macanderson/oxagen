@@ -35,7 +35,31 @@ Two leaks matter, and they push in opposite directions.
 
 The first is tests that are too weak. Yu and colleagues built UTBoost, a test augmentation framework, and ran it across SWE-bench submissions. They found 345 patches labelled as passing that were in fact wrong: the pull request's own tests never exercised the failure mode.[^3] Adding the missing coverage changed the ranking of 40.9% of SWE-bench Lite leaderboard entries and 24.4% of SWE-bench Verified entries.[^3] A resolve rate is an upper bound on correctness, not a measurement of it.
 
+<Bars
+  title="Leaderboard entries whose ranking changed once the missing tests were added"
+  unit="%"
+  max={100}
+  head={["Leaderboard", "Entries re-ranked"]}
+  data={[
+    { label: "SWE-bench Lite", value: 40.9 },
+    { label: "SWE-bench Verified", value: 24.4 },
+  ]}
+  caption="Source: Yu, Zhu, He, and Kang (2025), UTBoost. The same run found 345 patches labelled as passing that were wrong."
+/>
+
 The second is contamination. These are public repositories with public issues and public fixes, and they predate the training cutoff of every system on the board. Liang and colleagues tested the effect directly by giving models the issue text alone, with no repository access, and asking which file held the bug. Models named the correct path up to 76% of the time on SWE-bench, and up to 53% on tasks from repositories outside it.[^4] On verbatim reproduction of the fixed function they reached up to 35% consecutive 5-gram accuracy on SWE-bench Verified against up to 18% elsewhere.[^4] Some fraction of the score is recall rather than reasoning, and nobody can say precisely how large that fraction is.
+
+<Dumbbell
+  title="What models know from the issue text alone"
+  unit="%"
+  fromLabel="Repositories outside SWE-bench"
+  toLabel="SWE-bench"
+  rows={[
+    { label: "Names the file that holds the bug", from: 53, to: 76 },
+    { label: "Reproduces the fixed function, 5-gram accuracy", from: 18, to: 35 },
+  ]}
+  caption="Source: Liang, Garg, and Zilouchian Moghaddam (2025). The highest figure across the models tested, with no repository access. The second row compares SWE-bench Verified. The gap between the dots is what recall adds."
+/>
 
 <Callout kind="note" title="Two errors, opposite signs">Weak tests inflate the score by passing wrong patches. Contamination inflates it by rewarding memory. Neither is corrected by running the benchmark more carefully, because both are properties of the dataset, not the run.</Callout>
 
@@ -48,6 +72,16 @@ SWE-agent made that argument explicitly. Yang and colleagues built a custom agen
 OpenHands generalised the same idea into an open platform where agents write code, drive a command line, and browse the web inside a sandbox, with benchmark harnesses built in.[^6] It is worth naming because it changed how results get produced: the platform is now a shared dependency of many reported numbers.
 
 Then Agentless pushed the other way. Xia and colleagues dropped tool use and autonomous decision-making entirely in favour of three fixed phases, localise, repair, and validate, and resolved 32.00% of SWE-bench Lite at roughly $0.70 per issue, beating every open-source agent available at the time on both score and cost.[^7] That result should change how you read a leaderboard. A large part of what looked like agentic capability was retrieval and localisation, and a deterministic pipeline could do it cheaper.
+
+<Flow
+  title="Agentless: three fixed phases, no autonomous tool use"
+  steps={[
+    { label: "Localise", detail: "Find the files and functions to change" },
+    { label: "Repair", detail: "Sample candidate patches" },
+    { label: "Validate", detail: "Run tests and keep a patch that passes", emph: true },
+  ]}
+  caption="Source: Xia, Deng, Dunn, and Zhang (2024). 32.00% of SWE-bench Lite at about $0.70 per issue. A fixed pipeline is also a replayable one."
+/>
 
 Retrieval quality is its own axis. RepoCoder showed that repository-level context beats in-file context by more than 10% across line, API, and function-body completion, using an iterative loop where generation informs the next retrieval.[^8] Where the relevant code lives, and whether the harness can find it, is a substantial share of any repository-scale score.
 

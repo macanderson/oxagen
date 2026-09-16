@@ -30,6 +30,18 @@ WebArena went the other way and built one environment properly.[^2] Real, self-h
 
 GAIA takes 466 questions that are conceptually simple for a person and require reasoning, multimodality, browsing, and tool use to answer.[^3] Answers are short and exactly checkable. Human respondents scored 92 percent. GPT-4 with plugins scored 15 percent. Mialon and colleagues make the design argument explicitly: the interesting frontier is robustness on tasks humans find easy, not scores on tasks humans find hard.
 
+<Dumbbell
+  title="The best agent tested against people, on the same tasks"
+  unit="%"
+  fromLabel="Best agent tested"
+  toLabel="Humans"
+  rows={[
+    { label: "WebArena", from: 14.41, to: 78.24 },
+    { label: "GAIA (GPT-4 with plugins)", from: 15, to: 92 },
+  ]}
+  caption="Sources: Zhou et al. (2023) for WebArena and Mialon et al. (2023) for GAIA, each at publication. Both are tasks a person finds routine."
+/>
+
 SWE-bench is the coding case, and its grader is the strictest of the five.[^4] It contains 2,294 real GitHub issues with their corresponding pull requests, drawn from 12 popular Python repositories. A submission succeeds when the repository's own test suite passes after the model's patch is applied. At publication the best system Jimenez and colleagues measured, Claude 2, resolved 1.96 percent of instances.
 
 Then tau-bench, which measures the thing the other four skip.[^5]
@@ -63,6 +75,28 @@ pass@k rewards a system for being right occasionally. pass^k punishes it for bei
 Inconsistency is not bad luck. It is the arithmetic of long horizons.
 
 An agent doing a real task takes a chain of dependent steps: read the ticket, query the database, decide, call the API, verify. If each step is independently right 95 percent of the time, twenty dependent steps finish correctly 36 percent of the time. Ninety-nine percent per step still only gets you to 82 percent over twenty. Nothing about that is a model flaw, it is multiplication, and it is why per-step accuracy is a misleading thing to optimise on its own.
+
+<Curve
+  title="Chance a chain of dependent steps finishes correctly"
+  unit="%"
+  xLabel="Dependent steps"
+  xMax={20}
+  xTicks={[0, 5, 10, 15, 20]}
+  yTicks={[0, 25, 50, 75, 100]}
+  series={[
+    {
+      label: "95% right per step",
+      end: "36% at 20",
+      points: [[0, 100], [1, 95], [2, 90.3], [3, 85.7], [4, 81.5], [5, 77.4], [6, 73.5], [7, 69.8], [8, 66.3], [9, 63], [10, 59.9], [11, 56.9], [12, 54], [13, 51.3], [14, 48.8], [15, 46.3], [16, 44], [17, 41.8], [18, 39.7], [19, 37.7], [20, 35.8]],
+    },
+    {
+      label: "99% right per step",
+      end: "82% at 20",
+      points: [[0, 100], [1, 99], [2, 98], [3, 97], [4, 96.1], [5, 95.1], [6, 94.1], [7, 93.2], [8, 92.3], [9, 91.4], [10, 90.4], [11, 89.5], [12, 88.6], [13, 87.8], [14, 86.9], [15, 86], [16, 85.1], [17, 84.3], [18, 83.5], [19, 82.6], [20, 81.8]],
+    },
+  ]}
+  caption="Per-step accuracy raised to the number of steps. No model data: this is the multiplication the section describes, and it assumes accuracy holds steady, which Dziri et al. find it does not."
+/>
 
 The model behaviour underneath makes it worse. Dziri and colleagues studied transformers on compositional tasks such as multi-digit multiplication, logic puzzles, and dynamic programming, and concluded that the models solve them by reducing multi-step reasoning to linearised subgraph matching rather than by acquiring a systematic procedure.[^6] They argue both theoretically and empirically that autoregressive performance decays rapidly as task complexity grows. Per-step accuracy is not even constant across a long horizon. It degrades as the horizon gets longer.
 

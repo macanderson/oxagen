@@ -1,13 +1,13 @@
 ---
 title: Managed policy
-description: Organization-level control over which MCP servers and tools are allowed, for enterprise governance.
+description: Org-level rules for which MCP servers a machine may connect and which tools stay denied, which no user, project, or local setting can override.
 ---
 
-Managed policies let organization admins control which external MCP servers developers can connect and which tools are allowed or blocked. This is the enterprise governance layer that cannot be overridden by individual user or project settings.
+A managed policy lets org admins decide which external MCP servers a developer's machine may connect and which tools are allowed or denied. No user, project, or local setting can override it.
 
 ## How it works
 
-The managed config is stored at `~/.config/oxagen/managed.json` and synced automatically from the platform (on login and periodically in the background). This file acts as an **unoverridable floor**: its rules take precedence over all user/project/local settings.
+The managed config lives at `~/.config/oxagen/managed.json`. Its rules are a floor: they take precedence over every user, project, and local setting. The runtime reads the file before it connects to any file-configured server.
 
 ## Managed config structure
 
@@ -52,7 +52,7 @@ The managed config is stored at `~/.config/oxagen/managed.json` and synced autom
 
 ### Server URL allowlist
 
-When `allowedServerUrls` is non-empty, **only** URLs matching at least one pattern can be registered. All others are blocked.
+When `allowedServerUrls` is non-empty, the runtime connects **only** to URLs that match at least one pattern. It refuses every other URL.
 
 ```json
 {
@@ -64,7 +64,7 @@ When `allowedServerUrls` is non-empty, **only** URLs matching at least one patte
 }
 ```
 
-If a developer runs `oxagen mcp add my-server --url https://random-server.com/mcp`, they receive:
+A server outside the list is refused before the runtime spawns a process or sends a request, with a message like this:
 
 ```
 Blocked by organization policy: URL "https://random-server.com/mcp" is not in the allowed server list. Contact your admin.
@@ -72,7 +72,7 @@ Blocked by organization policy: URL "https://random-server.com/mcp" is not in th
 
 ### Server URL denylist
 
-URLs matching `deniedServerUrls` are always blocked, even if they match the allowlist:
+The runtime refuses URLs that match `deniedServerUrls`, even when they also match the allowlist:
 
 ```json
 {
@@ -82,11 +82,11 @@ URLs matching `deniedServerUrls` are always blocked, even if they match the allo
 }
 ```
 
-This blocks all non-TLS servers: a common enterprise requirement.
+This refuses every non-TLS server, a common enterprise requirement.
 
 ### Command allowlist (for stdio)
 
-Controls which local commands can be spawned as stdio MCP servers:
+Sets which local commands the runtime may spawn as stdio MCP servers:
 
 ```json
 {
@@ -100,7 +100,7 @@ Controls which local commands can be spawned as stdio MCP servers:
 
 ### Tool denylist
 
-Blocks specific tools across all servers. Patterns are matched against both the tool name alone and the qualified `serverName.toolName` form:
+Denies specific tools across all servers. The runtime matches each pattern against the tool name alone and against the qualified `serverName.toolName` form:
 
 ```json
 {
@@ -113,31 +113,31 @@ Blocks specific tools across all servers. Patterns are matched against both the 
 }
 ```
 
-Denied tools are filtered out before they reach the model. They never appear in the tool list.
+The runtime drops denied tools before they reach the model. They never appear in the tool list.
 
 ## Managed servers
 
 Org-provisioned servers in the `mcpServers` section (with `"managed": true`) are:
 
-- Automatically available in every workspace
-- Cannot be removed by users
-- Cannot have their auth overridden by local settings
-- Cannot be disabled by users
+- Available in every workspace
+- Not removable from user, project, or local settings
+- Not open to an auth override from local settings
+- Not disableable from user, project, or local settings
 
-This ensures critical integrations (internal tools, company Jira, etc.) are always available and correctly configured.
+An internal tool, such as the company Jira, stays available and configured the same way on every machine.
 
 ## Enforcement points
 
 | Action | Enforcement |
 |--------|-------------|
-| `oxagen mcp add` | URL/command checked against allowlist/denylist |
+| Server connection | URL or command checked against the allowlist and denylist before the runtime connects |
 | Tool materialization | Tools checked against `deniedTools` |
-| `oxagen mcp remove` | Blocked for managed servers |
+| Removing a managed server | Blocked |
 | Auth override | Blocked for managed servers |
 
-## Syncing the policy
+## Distributing the policy
 
-The managed config is pulled from the platform automatically on `oxagen auth login` and periodically when the CLI is used (at most once per hour). To check when the policy was last synced:
+The runtime reads the file from each machine. The retired `oxagen mcp` command group no longer syncs it, and `oxagen login` does not write it, so place the file on each machine with your device management tooling. The `_syncedAt` field records when the file was last written:
 
 ```bash
 cat ~/.config/oxagen/managed.json | jq '._syncedAt'
@@ -145,14 +145,12 @@ cat ~/.config/oxagen/managed.json | jq '._syncedAt'
 
 ## For org admins
 
-Managed policies are configured in the platform at **Organization → Governance → MCP Policy**. Changes take effect on the next sync for all org members.
+To write a managed policy:
 
-To set up a managed policy:
+1. Define allowed server URLs (or leave the list empty to allow all)
+2. Add any denied URL patterns (e.g. `http://**` for TLS only)
+3. Add denied tool patterns for destructive operations
+4. Optionally provision managed servers that every member receives
+5. Place the file at `~/.config/oxagen/managed.json` on each member's machine
 
-1. Define allowed server URLs (or leave empty to allow all)
-2. Add any denied URL patterns (e.g. `http://**` for TLS-only)
-3. Add denied tool patterns for dangerous operations
-4. Optionally provision managed servers that all members receive
-5. Publish the policy
-
-Members receive the updated policy on their next automatic background sync (triggered on login or CLI use, at most once per hour).
+A machine enforces the new rules the next time the runtime reads the file.

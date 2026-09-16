@@ -45,9 +45,25 @@ async function findActivePrincipalId(
 }
 
 /**
- * ONE unexpired role name assigned to `principalId` in `scope`, or null. An
- * org-wide assignment has `workspace_id IS NULL` and an org-scoped role; a
- * workspace assignment carries the workspace id and a workspace-scoped role.
+ * When a principal holds several roles in one scope at once, the most
+ * privileged name wins. `iam.principal_role_assignments` is unique on
+ * (principal, role, org), not on (principal, org), and the lookup carries no
+ * ORDER BY, so taking whichever row Postgres returned first denied a user
+ * holding both Admin and Member depending on plan/row order.
+ */
+const ROLE_PRECEDENCE = ["Owner", "Admin"] as const;
+
+/**
+ * A principal holds a handful of roles per scope; the bound only guards a
+ * runaway row set, never which role is chosen.
+ */
+const ROLE_ASSIGNMENT_LIMIT = 50;
+
+/**
+ * One unexpired role name assigned to `principalId` in `scope`, or null: the
+ * most privileged of them by `ROLE_PRECEDENCE`. An org-wide assignment has
+ * `workspace_id IS NULL` and an org-scoped role; a workspace assignment
+ * carries the workspace id and a workspace-scoped role.
  */
 async function findAssignedRole(
   tx: Tx,
@@ -55,7 +71,7 @@ async function findAssignedRole(
   orgId: string,
   scope: RoleScope,
 ): Promise<string | null> {
-  const [praRow] = await tx
+  const assigned = await tx
     .select({ roleName: schema.roles.name })
     .from(schema.principalRoleAssignments)
     .innerJoin(
@@ -77,8 +93,11 @@ async function findAssignedRole(
         ),
       ),
     )
-    .limit(1);
-  return praRow?.roleName ?? null;
+    .limit(ROLE_ASSIGNMENT_LIMIT);
+  const names = assigned.map((row) => row.roleName);
+  return (
+    ROLE_PRECEDENCE.find((name) => names.includes(name)) ?? names[0] ?? null
+  );
 }
 
 /**
@@ -86,13 +105,11 @@ async function findAssignedRole(
  * have no active principal / unexpired org-role assignment in this org.
  *
  * A principal may hold several org-wide roles at once — `iam.principal_role_
- * assignments` is unique on (principal, role, org), not on (principal, org) —
- * and this query takes the first row Postgres returns with no ORDER BY, so
- * WHICH role comes back is not deterministic. Every caller only asks "is it in
- * {Owner, Admin}?", so a user holding both Admin and Member can be denied
- * depending on plan/row order. Fixing that means asking "does ANY assigned role
- * qualify?" instead of resolving a single name, which changes what this helper
- * promises to its callers — tracked separately, not patched here.
+ * assignments` is unique on (principal, role, org), not on (principal, org).
+ * Every caller asks "is it in {Owner, Admin}?", so the most privileged role
+ * the principal holds wins (`ROLE_PRECEDENCE`); taking whichever row Postgres
+ * returned first denied a user holding both Admin and Member depending on
+ * plan/row order.
  *
  * Time-bounded (JIT) assignments are honored the same way the kernel resolver
  * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
@@ -113,9 +130,9 @@ export async function resolveActorOrgRole(
 }
 
 /**
- * The same lookup for the user's role in one workspace of the org: the first
- * unexpired workspace-scoped assignment on that workspace, or null. Carries
- * the non-determinism `resolveActorOrgRole` documents.
+ * The same lookup for the user's role in one workspace of the org: an
+ * unexpired workspace-scoped assignment on that workspace, or null, chosen by
+ * the same precedence rule `resolveActorOrgRole` documents.
  */
 export async function resolveActorWorkspaceRole(
   orgId: string,

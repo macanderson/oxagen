@@ -26,6 +26,23 @@ The chunk came from the standard template. This customer negotiated it out
 fourteen months ago. Every part of the retrieval pipeline did its job, and the
 answer is wrong.
 
+<Timeline
+  title="The chunk that matched, and the fact that held"
+  start={-36}
+  end={0}
+  ticks={[
+    { at: -36, label: "3 years ago" },
+    { at: -14, label: "14 months ago" },
+  ]}
+  marker={{ at: 0, label: "Today" }}
+  rows={[
+    { label: "Standard template includes the uptime credit", when: "Throughout", from: -36, to: 0 },
+    { label: "This customer's contract includes it", when: "Until 14 months ago", from: -36, to: -14, ended: true },
+    { label: "Amendment removes it for this customer", when: "Since 14 months ago", from: -14, to: 0 },
+  ]}
+  caption="Illustrative. The template ranks first because it reads like the question. Only the validity window on the customer's own terms says the credit ended."
+/>
+
 ## The right-looking chunk and the wrong fact
 
 Retrieval-augmented generation was introduced to attach a non-parametric memory
@@ -101,6 +118,17 @@ recoverable, because you can see it.
 
 The pattern is to resolve the question into entities and relations first, then
 retrieve facts, then let the model write.
+
+<Flow
+  title="Facts first, prose last"
+  steps={[
+    { label: "Resolve", detail: "The question becomes entities and relations" },
+    { label: "Traverse", detail: "A typed pattern, scoped to the tenant, as of a date", emph: true },
+    { label: "Return facts", detail: "Every row carries its source document" },
+    { label: "Write", detail: "The model answers from those rows" },
+  ]}
+  caption="The order the four systems below share. The retrieval unit is a typed fact, so scope and time are constraints in step 2 rather than hopes about a chunk."
+/>
 
 The simplest version already moves the number. KAPING verbalises the facts
 attached to entities found in the question and prepends them to the prompt, with
