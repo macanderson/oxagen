@@ -1575,7 +1575,11 @@ describe("defaultCliDeps", () => {
         return { status: 0, stdout: "tool 9.8.7\n", stderr: "" };
       },
     });
-    expect(d.paths).toEqual(tachoPaths(env, home));
+    // The platform has to travel here too. `tachoPaths` resolves the Claude
+    // Desktop config from it (there is none on Linux), so an expectation that
+    // omits it asserts the host OS's answer against a deps object built for
+    // another one -- the same disagreement `defaultCliDeps` itself had.
+    expect(d.paths).toEqual(tachoPaths(env, home, "linux"));
     expect(d.home).toBe(home);
     expect(d.platform).toBe("linux");
     expect(d.serviceManager.kind).toBe("systemd");
