@@ -45,7 +45,7 @@ function isBillingError(err: unknown): err is BillingError {
 // kernel does, so this middleware takes no dependency on that package.
 function isTenantScopeError(err: unknown): err is Error {
   if (!(err instanceof Error)) return false;
-  return (err as Record<string, unknown>).code === "no_tenant_scope";
+  return (err as Error & { code?: unknown }).code === "no_tenant_scope";
 }
 
 // A handler's typed refusal (HandlerError, @oxagen/oxagen) reaches this

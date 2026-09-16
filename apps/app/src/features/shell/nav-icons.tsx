@@ -8,6 +8,7 @@ import {
   type LucideIcon,
   Radar,
   Receipt,
+  ShieldCheck,
   Wrench,
 } from "lucide-react";
 import type { NavKey } from "./nav";
@@ -21,4 +22,5 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   organization: Building2,
   billing: Receipt,
   apiKeys: KeyRound,
+  roles: ShieldCheck,
 };

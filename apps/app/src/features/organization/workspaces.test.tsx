@@ -99,6 +99,8 @@ describe("ok", () => {
     await renderWorkspaces(readOk(list));
     const section = screen.getByRole("region", { name: "Workspaces" });
     const [core, research] = within(section).getAllByRole("row").slice(1);
+    if (core === undefined || research === undefined)
+      throw new Error("expected two workspace rows");
     expect(core).toHaveAttribute("data-workspace", "wrk_0a1b2c3d4e5f6g7h8j9k0m");
     expect(core).toHaveTextContent("Core platform");
     expect(core).toHaveTextContent("core-platform");
