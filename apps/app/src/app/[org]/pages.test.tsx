@@ -33,10 +33,12 @@ const {
   Spend,
   FleetSpendTiles,
   members,
+  workspaces,
   apiKeys,
   source,
 } = vi.hoisted(() => {
   const members = vi.fn();
+  const workspaces = vi.fn();
   const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
@@ -55,8 +57,9 @@ const {
       <p data-testid="fleet-spend" />
     )),
     members,
+    workspaces,
     apiKeys,
-    source: { org: { members, apiKeys } },
+    source: { org: { members, workspaces, apiKeys } },
   };
 });
 vi.mock("@/server/viewer", () => ({ requireViewer }));
@@ -92,6 +95,8 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
+  workspaces.mockReset();
+  apiKeys.mockReset();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -357,9 +362,28 @@ describe("Organization › People", () => {
 });
 
 describe("Organization › API keys", () => {
-  it("resolves the organization viewer, names the page once and renders the keys org.apiKeys read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+  beforeEach(() => {
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: [{ slug: "core-platform", name: "Core platform" }],
+    });
+  });
+
+  it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
+    // A key names a workspace (ADR-069): the page resolves one before it reads.
+    const ctx = {
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    };
     requireViewer.mockResolvedValue(ctx);
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: [
+        { slug: "core-platform", name: "Core platform" },
+        { slug: "growth", name: "Growth" },
+      ],
+    });
     apiKeys.mockResolvedValue({
       ok: true,
       value: [
@@ -376,13 +400,42 @@ describe("Organization › API keys", () => {
     });
     await expectPageTitle(
       await API_KEYS(),
-      routeProps(SEGMENTS),
+      routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
+    expect(workspaces).toHaveBeenCalledOnce();
     expect(apiKeys).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    });
+    apiKeys.mockResolvedValue({ ok: true, value: [] });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+  });
+
+  it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    workspaces.mockResolvedValue({ ok: true, value: [] });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
+    expect(apiKeys).not.toHaveBeenCalled();
   });
 });
 

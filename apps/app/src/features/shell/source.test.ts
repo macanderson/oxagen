@@ -48,7 +48,7 @@ const source = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
-  org: { members: vi.fn(), apiKeys: vi.fn() },
+  org: { members: vi.fn(), workspaces: vi.fn(), apiKeys: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 const listed = readOk({

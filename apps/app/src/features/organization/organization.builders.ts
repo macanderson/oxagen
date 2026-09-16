@@ -1,10 +1,11 @@
 // Typed Organization values for the People and API keys component tests
-// (ARCHITECTURE.md §5): one API key, and a DataSource that answers the two
+// (ARCHITECTURE.md §5): one API key, and a DataSource that answers the three
 // organization reads with what a test hands it while recording the arguments
 // it was called with. Every other port refuses, so a section that reads
 // outside its own port fails the test rather than passing on a stub.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type { ApiKey, MemberList } from "@/data/contracts/org";
+import type { WorkspaceChoice } from "@/data/contracts/shell";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 
@@ -23,6 +24,7 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
 
 type OrgReads = {
   members?: Read<MemberList>;
+  workspaces?: Read<WorkspaceChoice[]>;
   apiKeys?: Read<ApiKey[]>;
 };
 
@@ -32,6 +34,7 @@ export function orgSource(reads: OrgReads): {
 } {
   const calls: Record<keyof OrgReads, unknown[][]> = {
     members: [],
+    workspaces: [],
     apiKeys: [],
   };
   const refuse = () => Promise.reject(new Error("not an Organization read"));
@@ -69,6 +72,7 @@ export function orgSource(reads: OrgReads): {
     },
     org: {
       members: answer(reads.members, "members"),
+      workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

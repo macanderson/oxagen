@@ -61,7 +61,7 @@
       "empty": "No invitations are waiting for an answer."
     },
     "apiKeys": {
-      "lead": "A key acts as the person who created it: on the API, MCP and the CLI it can do what that person can do, and no more.",
+      "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
       "tableLabel": "API keys",
       "columns": {
         "name": "Name",
@@ -85,7 +85,7 @@
         "rotate": {
           "open": "Rotate",
           "title": "Rotate {name}",
-          "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first.",
+          "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first. An expired key cannot be rotated, because the replacement would carry the expiry that ended it.",
           "confirm": "Rotate it",
           "pending": "Rotating"
         },
@@ -106,6 +106,7 @@
           "keyNotFound": "This key is no longer here, or it was already revoked.",
           "nameRequired": "Give the key a name so the roster can tell it apart.",
           "expiryNotADay": "That expiry is not a date. Pick a day, or leave it empty for a key that does not expire.",
+          "expiryInThePast": "That day is already over. Pick a later one, or leave it empty for a key that does not expire.",
           "refused": "The change was refused: {code}. Nothing was changed.",
           "invalid": "The request was refused as invalid. Nothing was changed.",
           "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
@@ -114,11 +115,19 @@
       },
       "status": {
         "live": "live",
+        "expired": "expired",
         "revoked": "revoked"
+      },
+      "workspace": {
+        "label": "Workspace"
+      },
+      "noWorkspace": {
+        "title": "A key needs a workspace",
+        "body": "A key is issued into one workspace and acts only there. This organization has no workspace you are a member of, so there is nowhere to issue one yet."
       },
       "never": "Never",
       "neverUsed": "Never used",
-      "empty": "This organization has no API keys.",
+      "empty": "This workspace has no API keys.",
       "denied": {
         "title": "You cannot see this organization’s API keys",
         "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."

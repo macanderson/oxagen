@@ -64,6 +64,8 @@ function useFailureText(): (failure: Failure) => string {
             return t("nameRequired");
           case "expiry_not_a_day":
             return t("expiryNotADay");
+          case "expiry_in_the_past":
+            return t("expiryInThePast");
           default:
             return t("invalid");
         }
@@ -223,10 +225,13 @@ function KeyWriteDialog({
 
 export function CreateKeyDialog({
   org,
+  ws,
   listedIds,
   after,
 }: {
   org: string;
+  /** The workspace the key is minted in; a key names one (ADR-069). */
+  ws: string;
   listedIds: readonly string[];
   after: SafePath;
 }) {
@@ -240,7 +245,7 @@ export function CreateKeyDialog({
       confirm={t("confirm")}
       pending={t("pending")}
       testId="create-api-key"
-      write={() => createApiKey(org, name, expiresOn)}
+      write={() => createApiKey(org, ws, name, expiresOn)}
       listedIds={listedIds}
       after={after}
     >
@@ -274,39 +279,52 @@ export function CreateKeyDialog({
 
 export function KeyRowActions({
   org,
+  ws,
   keyId,
   keyName,
+  rotatable,
   listedIds,
   after,
 }: {
   org: string;
+  /** The workspace the key belongs to; a key names one (ADR-069). */
+  ws: string;
   keyId: string;
   keyName: string;
+  /**
+   * Whether Rotate is offered. `rotate_api_key` gives the replacement the
+   * rotated key's expiry (`packages/handlers/src/api.key.rotate.ts:151`), so
+   * rotating an expired key would spend the one showing of a secret on a key
+   * `resolveApiKey` already refuses. An expired key keeps Revoke.
+   */
+  rotatable: boolean;
   listedIds: readonly string[];
   after: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
   return (
     <div className="flex flex-wrap gap-2">
-      <KeyWriteDialog
-        open={t("rotate.open")}
-        title={t("rotate.title", { name: keyName })}
-        confirm={t("rotate.confirm")}
-        pending={t("rotate.pending")}
-        testId="rotate-api-key"
-        write={() => rotateApiKey(org, keyId)}
-        listedIds={listedIds}
-        after={after}
-      >
-        <p className="text-sm text-muted-foreground">{t("rotate.body")}</p>
-      </KeyWriteDialog>
+      {rotatable ? (
+        <KeyWriteDialog
+          open={t("rotate.open")}
+          title={t("rotate.title", { name: keyName })}
+          confirm={t("rotate.confirm")}
+          pending={t("rotate.pending")}
+          testId="rotate-api-key"
+          write={() => rotateApiKey(org, ws, keyId)}
+          listedIds={listedIds}
+          after={after}
+        >
+          <p className="text-sm text-muted-foreground">{t("rotate.body")}</p>
+        </KeyWriteDialog>
+      ) : null}
       <KeyWriteDialog
         open={t("revoke.open")}
         title={t("revoke.title", { name: keyName })}
         confirm={t("revoke.confirm")}
         pending={t("revoke.pending")}
         testId="revoke-api-key"
-        write={() => revokeApiKey(org, keyId)}
+        write={() => revokeApiKey(org, ws, keyId)}
         listedIds={listedIds}
         after={after}
       >

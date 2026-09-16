@@ -910,6 +910,7 @@ type Messages = {
           keyNotFound: string;
           nameRequired: string;
           expiryNotADay: string;
+          expiryInThePast: string;
           refused: string;
           invalid: string;
           pendingApproval: string;
@@ -918,7 +919,15 @@ type Messages = {
       };
       status: {
         live: string;
+        expired: string;
         revoked: string;
+      };
+      workspace: {
+        label: string;
+      };
+      noWorkspace: {
+        title: string;
+        body: string;
       };
       never: string;
       neverUsed: string;

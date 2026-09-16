@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-// Organization › API keys over org.apiKeys: the tabs, the keys table in the ok
-// state with an unused key, a revoked key and a key with no expiry, the empty
-// line, and the denied, pending-approval and error states that replace the
-// table. Every state is checked with axe. No secret, no hash and no create,
-// rotate or revoke control renders: this page reads.
+// Organization › API keys over org.workspaces and org.apiKeys: the tabs, the
+// workspace picker, the keys table in the ok state with an unused key, an
+// expired key, a revoked key and a key with no expiry, the empty line, and the
+// denied, pending-approval and error states that replace the table. Every state
+// is checked with axe.
+//
+// The page names a workspace (ADR-069). It reads keys through a WsCtx and never
+// through an OrgCtx: `auth.api_keys` is policy class `standard`, so the org-only
+// sentinel lists no key that exists and mints one into a workspace that does
+// not. With no workspace the viewer may enter, the section says so and reads
+// nothing.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +36,7 @@ vi.mock("./api-key-actions", () => ({
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { OrgCtx } = await import("@/server/viewer");
+const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { ApiKeys } = await import("./api-keys");
@@ -39,17 +45,36 @@ afterEach(() => {
   cleanup();
 });
 
-async function renderApiKeys(read: Read<ApiKey[]>, orgRole: OrgRole = "owner") {
-  const ctx = unsafeMint(OrgCtx, {
-    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-    orgId: "7a000000-0000-4000-8000-0000000000a1",
-    orgSlug: "acme",
-    orgName: "Acme Robotics",
+const ORG_FIELDS = {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+} as const;
+
+const CHOICES = [
+  { slug: "core-platform", name: "Core platform" },
+  { slug: "growth", name: "Growth" },
+];
+
+/** The workspace ctx the page resolves once it has picked a workspace. */
+function wsCtx(orgRole: OrgRole = "owner") {
+  return unsafeMint(WsCtx, {
+    ...ORG_FIELDS,
     orgRole,
+    workspaceId: "7a000000-0000-4000-8000-0000000000c3",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
   });
+}
+
+async function renderApiKeys(read: Read<ApiKey[]>, orgRole: OrgRole = "owner") {
+  const ctx = wsCtx(orgRole);
   const { source, calls } = orgSource({ apiKeys: read });
   const view = render(
-    <IntlProvider>{await ApiKeys({ ctx, source })}</IntlProvider>,
+    <IntlProvider>
+      {await ApiKeys({ ctx, source, workspaces: readOk(CHOICES) })}
+    </IntlProvider>,
   );
   expect(calls.apiKeys).toEqual([[ctx]]);
   expect(calls.members).toEqual([]);
@@ -63,7 +88,14 @@ const unused = apiKey({
   name: "Release bot",
   prefix: "ox_relrelrelr",
   lastUsedAt: null,
-  expiresAt: "2027-03-01T00:00:00.000Z",
+  expiresAt: "2099-03-01T23:59:59.999Z",
+});
+const expired = apiKey({
+  id: "aky_4f3e2d1c0b9a8z7y6x5w4v",
+  name: "Old runner",
+  prefix: "ox_expexpexpe",
+  lastUsedAt: null,
+  expiresAt: "2020-01-01T23:59:59.999Z",
 });
 const revoked = apiKey({
   id: "aky_9z8y7x6w5v4t3s2r1q0p9n",
@@ -107,7 +139,7 @@ describe("ok", () => {
       "datetime",
       "2026-09-13T10:00:00.000Z",
     );
-    expect(rowFor(unused)).toHaveTextContent("Mar 1, 2027");
+    expect(rowFor(unused)).toHaveTextContent("Mar 1, 2099");
   });
 
   it("says a key was never used and never expires rather than inventing a date", async () => {
@@ -117,11 +149,15 @@ describe("ok", () => {
     expect(rowFor(live)).not.toHaveTextContent("Never used");
   });
 
-  it("marks a key live or revoked off its recorded revocation, as a dot and a word", async () => {
-    await renderApiKeys(readOk([live, revoked]));
+  it("marks a key live, expired or revoked, as a dot and a word", async () => {
+    await renderApiKeys(readOk([live, expired, revoked]));
     expect(
       within(rowFor(live)).getByText("live").closest("[data-status]"),
     ).toHaveAttribute("data-status", "live");
+    // resolveApiKey refuses an expired key, so the roster must not call it live.
+    expect(
+      within(rowFor(expired)).getByText("expired").closest("[data-status]"),
+    ).toHaveAttribute("data-status", "expired");
     expect(
       within(rowFor(revoked)).getByText("revoked").closest("[data-status]"),
     ).toHaveAttribute("data-status", "revoked");
@@ -137,13 +173,16 @@ describe("ok", () => {
     expect(keysTable()).not.toHaveTextContent(/secret|hash/i);
   });
 
-  it("carries rotate and revoke on a live key, and neither on a revoked one", async () => {
-    await renderApiKeys(readOk([live, revoked]));
-    expect(
-      within(rowFor(live))
+  it("carries rotate and revoke on a live key, revoke alone on an expired one and neither on a revoked one", async () => {
+    await renderApiKeys(readOk([live, expired, revoked]));
+    const labels = (key: ApiKey) =>
+      within(rowFor(key))
         .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["Rotate", "Revoke"]);
+        .map((button) => button.textContent);
+    expect(labels(live)).toEqual(["Rotate", "Revoke"]);
+    // Rotation gives the replacement the rotated key's expiry, so rotating an
+    // expired key would show a secret that is already unusable.
+    expect(labels(expired)).toEqual(["Revoke"]);
     expect(within(rowFor(revoked)).queryAllByRole("button")).toEqual([]);
   });
 
@@ -160,12 +199,79 @@ describe("empty", () => {
   it("says the organization holds no keys, and still offers the first one", async () => {
     await renderApiKeys(readOk([]));
     expect(
-      screen.getByText("This organization has no API keys."),
+      screen.getByText("This workspace has no API keys."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Create a key" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the workspace a key names", () => {
+  it("reads the keys of the workspace in scope, through a WsCtx and never an OrgCtx", async () => {
+    const ctx = wsCtx();
+    const { source, calls } = orgSource({ apiKeys: readOk([live]) });
+    render(
+      <IntlProvider>
+        {await ApiKeys({ ctx, source, workspaces: readOk(CHOICES) })}
+      </IntlProvider>,
+    );
+    expect(calls.apiKeys).toEqual([[ctx]]);
+    expect(WsCtx.is(calls.apiKeys[0]?.[0])).toBe(true);
+  });
+
+  it("links every workspace the viewer may enter and marks the one in scope", async () => {
+    await renderApiKeys(readOk([live]));
+    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    const here = within(picker).getByRole("link", { name: "Core platform" });
+    const other = within(picker).getByRole("link", { name: "Growth" });
+    expect(here).toHaveAttribute(
+      "href",
+      "/acme/api-keys?workspace=core-platform",
+    );
+    expect(here).toHaveAttribute("aria-current", "page");
+    expect(other).toHaveAttribute("href", "/acme/api-keys?workspace=growth");
+    expect(other).not.toHaveAttribute("aria-current");
+  });
+
+  it("reads no key at all when the viewer may enter no workspace (negative)", async () => {
+    const ctx = unsafeMint(OrgCtx, { ...ORG_FIELDS, orgRole: "owner" });
+    const { source, calls } = orgSource({});
+    const view = render(
+      <IntlProvider>
+        {await ApiKeys({ ctx, source, workspaces: readOk([]) })}
+      </IntlProvider>,
+    );
+    expect(calls.apiKeys).toEqual([]);
+    expect(screen.getByTestId("api-keys-no-workspace")).toHaveTextContent(
+      "A key is issued into one workspace and acts only there.",
+    );
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryAllByRole("button")).toEqual([]);
+    await expectNoAxe(view.container);
+  });
+
+  it("reads no key when the workspaces themselves could not be read (negative)", async () => {
+    const ctx = unsafeMint(OrgCtx, { ...ORG_FIELDS, orgRole: "owner" });
+    const { source, calls } = orgSource({});
+    const view = render(
+      <IntlProvider>
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readError("control_plane_unavailable", 503),
+          })
+        }
+      </IntlProvider>,
+    );
+    expect(calls.apiKeys).toEqual([]);
+    expect(screen.getByTestId("api-keys-error")).toHaveTextContent(
+      "503 control_plane_unavailable",
+    );
+    expect(screen.queryByRole("table")).toBeNull();
+    await expectNoAxe(view.container);
   });
 });
 

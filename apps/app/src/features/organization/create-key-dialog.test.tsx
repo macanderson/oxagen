@@ -35,7 +35,8 @@ vi.mock("./api-key-actions", () => ({
 
 const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
 
-const HERE = routes.apiKeys("acme");
+const HERE = routes.apiKeys("acme", { workspace: "core-platform" });
+const WS = "core-platform";
 const KEY = "aky_7k2m9q4x8r1t5v3w6y0z2a";
 const SECRET = "ox_3fa85f64571b4c62a0f5e8c9d1b2a3f4";
 const minted = {
@@ -49,18 +50,20 @@ const minted = {
 function createDialog(listedIds: readonly string[] = []) {
   return (
     <IntlProvider>
-      <CreateKeyDialog org="acme" listedIds={listedIds} after={HERE} />
+      <CreateKeyDialog org="acme" ws={WS} listedIds={listedIds} after={HERE} />
     </IntlProvider>
   );
 }
 
-function renderRow(listedIds: readonly string[] = [KEY]) {
+function renderRow(listedIds: readonly string[] = [KEY], rotatable = true) {
   return render(
     <IntlProvider>
       <KeyRowActions
         org="acme"
+        ws={WS}
         keyId={KEY}
         keyName="CI runner"
+        rotatable={rotatable}
         listedIds={listedIds}
         after={HERE}
       />
@@ -100,6 +103,7 @@ describe("create", () => {
     );
     expect(createApiKey).toHaveBeenCalledWith(
       "acme",
+      WS,
       "CI runner",
       "2027-03-01",
     );
@@ -161,6 +165,15 @@ describe("create", () => {
         field: "expiresAt",
       },
       "That expiry is not a date. Pick a day, or leave it empty for a key that does not expire.",
+    ],
+    [
+      {
+        ok: false,
+        reason: "invalid",
+        code: "expiry_in_the_past",
+        field: "expiresAt",
+      },
+      "That day is already over. Pick a later one, or leave it empty for a key that does not expire.",
     ],
     [
       { ok: false, reason: "denied", code: "authz_denied" },
@@ -252,7 +265,7 @@ describe("rotate", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Rotate it" }),
     );
-    expect(rotateApiKey).toHaveBeenCalledWith("acme", KEY);
+    expect(rotateApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(
       within(await screen.findByTestId("api-key-secret")).getByTestId(
         "api-key-secret-value",
@@ -281,6 +294,15 @@ describe("rotate", () => {
   });
 });
 
+describe("a key that has expired", () => {
+  it("offers Revoke and no Rotate, because the replacement would carry the expiry that ended it (negative)", async () => {
+    renderRow([KEY], false);
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate" })).toBeNull();
+    expect(rotateApiKey).not.toHaveBeenCalled();
+  });
+});
+
 describe("revoke", () => {
   it("ends the key and reloads the page, showing no secret", async () => {
     revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
@@ -290,7 +312,7 @@ describe("revoke", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Revoke" }),
     );
-    expect(revokeApiKey).toHaveBeenCalledWith("acme", KEY);
+    expect(revokeApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(router.refresh).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("api-key-secret")).toBeNull();

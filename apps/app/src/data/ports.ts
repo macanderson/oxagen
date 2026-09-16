@@ -141,8 +141,19 @@ export interface DataSource {
   org: {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
-    /** list_api_keys, every key in scope, newest first, revoked ones included */
-    apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+    /**
+     * list_workspaces: the workspaces of this organization the viewer holds a
+     * membership in, for the API keys page's workspace picker. A key names a
+     * workspace (ADR-069), so the page picks one before it reads any key.
+     */
+    workspaces(ctx: OrgCtx): Promise<Read<WorkspaceChoice[]>>;
+    /**
+     * list_api_keys, every key of the workspace in scope, newest first,
+     * revoked ones included. A `WsCtx`, never an `OrgCtx`: `auth.api_keys` is
+     * policy class `standard`, so the org-only sentinel names no key and mints
+     * one into a workspace that does not exist (ADR-069).
+     */
+    apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>>;
   };
   /**
    * The Steering page's three noBillingGate reads on the workspace; caller:
