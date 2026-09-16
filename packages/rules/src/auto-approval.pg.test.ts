@@ -64,6 +64,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       businessHours: null,
       createdBy: null,
       createdAt: "2026-09-02T00:00:00.000Z",
+      // What `set_approval_rules` would actually have stored for this rule:
+      // the effective tags of the tool its pattern matches, which is the
+      // declared `moves_money` with no classification on top. Stamped with the
+      // real value rather than whatever makes the assertions pass — a fixture
+      // stamped to go green would leave every case below asserting only its
+      // own self-consistency.
+      authoredConsequences: ["moves_money"],
     };
     const VERDICT = {
       effect: "require_approval" as const,
@@ -499,6 +506,54 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(evaluateAutoApproval([RULE], restored)?.reasons).not.toContain(
         REASON.criticalHazard,
       );
+    });
+
+    it("stops releasing calls when the tool gains a consequence the rule was not written against", async () => {
+      // The ordering attack, at the decision layer this time (#3133): the
+      // accountability gate is on the write, so classifying the tool AFTER the
+      // rule was authored reaches the same end without the gate firing. The
+      // stamp is what closes it, and this asserts the mechanism FIRES rather
+      // than only that a correctly-stamped rule still passes — a fixture
+      // stamped to go green would prove nothing without this case beside it.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.toolVersions)
+          .set({
+            classification: {
+              sideEffect: "write",
+              egress: "third_party",
+              consequenceTags: ["changes_access"],
+              measures: {},
+              dataClasses: [],
+            },
+            classifiedRiskGrade: "high",
+            classifiedAt: new Date("2026-09-16T08:00:00.000Z"),
+          })
+          .where(eq(schema.toolVersions.id, versionId)),
+      );
+      try {
+        const decision = await autoApprove(CALL, [RULE]);
+        expect(decision?.ok).toBe(false);
+        expect(decision?.reasons).toContain("consequences_changed");
+        // Not a floor: the rule is out of date rather than wrong.
+        expect(decision?.floor).toBe(false);
+        // And nothing was written, so no receipt says a rule released it.
+        expect(decision?.commit).toBeUndefined();
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.toolVersions)
+            .set({
+              classification: null,
+              classifiedRiskGrade: null,
+              classifiedAt: null,
+            })
+            .where(eq(schema.toolVersions.id, versionId)),
+        );
+      }
+      // Restored: the same call qualifies again, so the case above is about
+      // the classification and not about some leftover state.
+      expect((await autoApprove(CALL, [RULE]))?.ok).toBe(true);
     });
 
     it("never reads a person's approval of a DIFFERENT capability with the same input", async () => {
