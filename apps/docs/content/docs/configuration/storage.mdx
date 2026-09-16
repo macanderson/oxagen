@@ -1,33 +1,32 @@
 ---
 title: Storage driver
-description: "STORAGE_DRIVER and the filesystem driver: running Oxagen's blob storage without a Vercel Blob token."
+description: "STORAGE_DRIVER and the filesystem driver: Oxagen's blob storage without a Vercel Blob token."
 ---
 
 ## Overview
 
-Binary assets (avatars, generated images/video/documents, uploaded workspace
-files) go through `@oxagen/storage`, a single adapter interface with two
-drivers selected by one environment variable:
+Binary assets (avatars, generated images, video, and documents, and uploaded workspace
+files) go through `@oxagen/storage`, one adapter interface with two
+drivers. One environment variable picks the driver:
 
 ```bash
 STORAGE_DRIVER=vercel-blob   # default — requires BLOB_READ_WRITE_TOKEN
 STORAGE_DRIVER=fs            # local filesystem — no token required
 ```
 
-Whichever row (URL + metadata) references the stored object still lives in
-Postgres: only the bytes move between drivers.
+The row that references the stored object (URL and metadata) stays in
+Postgres. Only the bytes move between drivers.
 
 ## `vercel-blob` (default)
 
-The production driver, backed by Vercel Blob. Requires `BLOB_READ_WRITE_TOKEN`;
-storage calls throw a clear error at startup if the token is missing while
-this driver is selected.
+The production driver, backed by Vercel Blob. It requires `BLOB_READ_WRITE_TOKEN`.
+When this driver is selected and the token is missing, storage calls throw an
+error at startup that names it.
 
 ## `fs`: the filesystem driver
 
-Stores bytes on local disk instead of Vercel Blob: no credential required.
-Use it for local development or a CI/e2e container where no Blob token
-exists.
+The filesystem driver stores bytes on local disk instead of Vercel Blob, with no credential.
+Use it for local development, or in a CI or e2e container that has no Blob token.
 
 ```bash
 STORAGE_DRIVER=fs
@@ -37,26 +36,26 @@ STORAGE_FS_ROOT=/tmp/oxagen-storage   # optional — see default below
 | Variable | Required | Default |
 |---|---|---|
 | `STORAGE_DRIVER` | No | `vercel-blob` |
-| `STORAGE_FS_ROOT` | No | An OS-tmp-scoped absolute path (`<tmpdir>/oxagen-storage`) |
+| `STORAGE_FS_ROOT` | No | An absolute path under the OS temp directory (`<tmpdir>/oxagen-storage`) |
 
-**Why the default root is an absolute OS-tmp path, not a `cwd`-relative one:**
+**Why the default root is an absolute temp path, not a path relative to `cwd`:**
 the app (`next start`, cwd = `apps/app`) and the API (`tsx`, cwd = repo root)
 run as separate processes with different working directories. Both must
-resolve to the SAME directory or an object written by one process is
-invisible to the other: an absolute path guarantees that, and it's always
-writable inside the CI e2e container. A relative `STORAGE_FS_ROOT` is
-supported but resolved against `process.cwd()`, so it's discouraged for
-anything beyond a single-process script.
+resolve to the SAME directory, or an object one process writes is
+invisible to the other. An absolute path makes them match, and the temp directory is
+writable inside the CI e2e container. A relative `STORAGE_FS_ROOT` works,
+but it resolves against `process.cwd()`, so use it only for
+a single-process script.
 
-**Path safety.** Every object key is confined to the storage root: an
-absolute key, a key containing `..` traversal, or a null byte is rejected
-before any file operation runs. A key can never read or write outside
+**Path safety.** The driver confines every object key to the storage root. It rejects an
+absolute key, a key with `..` traversal, and a key with a null byte
+before any file operation runs. A key cannot read or write outside
 `STORAGE_FS_ROOT`.
 
 ## Adding a driver
 
-To add a third storage driver: implement the `StorageAdapter` interface, add
+To add a third storage driver, implement the `StorageAdapter` interface, add
 the driver name to the `STORAGE_DRIVER` enum in `packages/config/src/env.ts`,
 and add a case in `packages/storage/src/client.ts` that reads that driver's
-own environment variables: driver credentials stay isolated so adding one
+own environment variables. Each driver's credentials stay separate, so adding one
 never touches another's configuration.

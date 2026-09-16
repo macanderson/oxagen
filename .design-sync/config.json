@@ -18,8 +18,6 @@
       "disableTransitionOnChange": true
     }
   },
-  "guidelinesGlob": [
-    "THEME.md"
-  ],
+  "guidelinesGlob": ["THEME.md"],
   "readmeHeader": ".design-sync/conventions.md"
 }

@@ -55,6 +55,16 @@ LegalEntity and nowhere else. Constraints are the axioms that hold: a Contract
 has exactly one counterparty, a Subscription tier is drawn from a closed set of
 five values, and a LegalEntity cannot be its own parent.
 
+<Schema
+  title="Classes, relations, and the constraints on them"
+  edges={[
+    { from: "Contract", rel: "SIGNED_BY", to: "LegalEntity", notes: ["exactly one counterparty"] },
+    { from: "Customer", rel: "HAS_SUBSCRIPTION", to: "Subscription", notes: ["tier from a closed set of five"] },
+    { from: "LegalEntity", rel: "PARENT_OF", to: "LegalEntity", notes: ["never itself"] },
+  ]}
+  caption="The example domain from this section. Each relation has a domain and a range, so a Contract signed by a Person is a violation a machine can detect."
+/>
+
 The formal machinery underneath is description logics, a family of decidable
 fragments of first-order logic built specifically so that reasoning terminates.
 The reference account is the *Description Logic Handbook*, which covers the
@@ -180,6 +190,23 @@ depend on it.
 In practice this means an edge carries `validFrom` and `validTo`, and "as of"
 is a query parameter rather than an assumption.
 
+<Timeline
+  title="One customer's tier, with a clock on each fact"
+  start={0}
+  end={9}
+  ticks={[
+    { at: 0, label: "Jan" },
+    { at: 6, label: "Jul" },
+    { at: 9, label: "Oct" },
+  ]}
+  marker={{ at: 2.5, label: "As of mid-March" }}
+  rows={[
+    { label: "Acme subscribed_to Growth", when: "January to March", from: 0, to: 3, ended: true },
+    { label: "Acme subscribed_to Enterprise", when: "April onward", from: 3, to: 9 },
+  ]}
+  caption="Illustrative. Overwriting the tier in April would erase what Acme was billed in March. Two edges with validity windows keep both facts, and the as of parameter picks one."
+/>
+
 ### Provenance
 
 The second missing field is accountability. W3C standardised a vocabulary for
@@ -197,12 +224,12 @@ only believe. The check does not depend on the model cooperating.
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. Two of its five jobs sit exactly
-here. Grounding means answers come from a Neo4j graph plus an ontology, so a
-response is cited and time-aware by construction rather than by prompt
-instruction. Explaining means the lineage of an answer, the nodes, the edges,
-and the sources behind it, is a record you can pull up later. Neither job makes
-a model smarter. Both make a wrong answer visible, which is the part that
+Oxagen is the control plane for the agents you run. It does not run them. Two
+clauses of an agent's mandate sit exactly here. The knowledge an agent is
+handed comes from a Neo4j graph plus an ontology, so a response is cited and
+time-aware by construction rather than by prompt instruction. The record keeps
+the lineage of an answer, the nodes, the edges, and the sources behind it, so
+you can pull it up later. Neither clause makes a model smarter. Both make a wrong answer visible, which is the part that
 matters when someone asks why the agent said what it said.
 
 [^1]: Ji et al. (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys 55(12). https://arxiv.org/abs/2202.03629

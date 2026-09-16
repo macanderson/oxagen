@@ -54,9 +54,9 @@
   "notes": [
     "Sign in, then enroll this machine (a per-user Task Scheduler service and the hooks for the harnesses you name):",
     "  oxagen login",
-    "  tacho enroll --harness claude-code,codex",
+    "  tacho enroll --harness claude-code,codex,stella",
     "Managed machines enroll without a browser:",
-    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex",
+    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,stella",
     "SmartScreen warns while builds are unsigned; signing runs only when the Azure secrets exist in CI."
   ]
 }

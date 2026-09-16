@@ -85,7 +85,7 @@ export function siteHeader({ wordmark, current }) {
 <div class="drawer" id="drawer" data-open="false">
   <div class="wrap">
     <h5>Product</h5>
-    <a href="/products/oxagen">Oxagen — the control plane</a>
+    <a href="/products/oxagen">Oxagen, the agent control plane</a>
     <h5>More</h5>
     <a href="/blog">Research</a>
     <a href="/#field-manual">Field manual</a>
@@ -102,12 +102,12 @@ export function siteFooter({ wordmark, pillars }) {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
-        <p>Everyone has the same models.<br>Your edge is context.</p>
+        <p>Can you explain your AI bill?<br>Neither can your provider.</p>
       </div>
       <nav class="foot-col" aria-label="Product">
         <h4>Product</h4>
         <ul>
-          <li><a href="/products/oxagen">Oxagen — the platform</a></li>
+          <li><a href="/products/oxagen">Oxagen, the agent control plane</a></li>
           <li><a href="/#demo">Get a demo</a></li>
         </ul>
       </nav>
@@ -131,7 +131,7 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
     </div>
     <div class="foot-base">
       <span>© ${new Date().getUTCFullYear()} Oxagen, Inc. All rights reserved.</span>
-      <span class="mono">ship deterministic · <a href="/#field-manual">read the manual</a></span>
+      <span class="mono">agent control plane · <a href="/#field-manual">read the manual</a></span>
     </div>
   </div>
 </footer>`;
@@ -288,7 +288,7 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
     </div>
   </section>`;
   return layout({
-    title: `${BLOG_TITLE} — the science of ontologies, agents, and self-improving systems`,
+    title: `${BLOG_TITLE}: the science of ontologies, agents, and self-improving systems`,
     description: BLOG_DESCRIPTION,
     path: urls.blog(),
     image,
@@ -336,7 +336,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     </div>
   </section>`;
   return layout({
-    title: `${pillar.name} — ${BLOG_TITLE}`,
+    title: `${pillar.name} · ${BLOG_TITLE}`,
     description: pillar.description,
     path: urls.pillar(pillar.slug),
     image: pillar.images.og,
@@ -395,7 +395,7 @@ ${html}
     </footer>
   </article>`;
   return layout({
-    title: `${post.title} — ${BLOG_TITLE}`,
+    title: `${post.title} · ${BLOG_TITLE}`,
     description: post.description,
     path: urls.post(post.slug),
     image: post.images.og,

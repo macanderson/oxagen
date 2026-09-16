@@ -1,24 +1,18 @@
 ---
 title: Tools and capabilities
-description: "The agent tool surface: which capabilities agents can invoke, how the tool list is assembled, and how the MCP gateway extends it."
+description: "The agent tool surface: which capabilities an agent can request, how the tool list is assembled, and how the MCP gateway extends it."
 ---
 
 ## How the tool list is built
 
-At the start of each agent turn, the runtime materializes the tool list by:
+At the start of each agent turn, the runtime builds the tool list in four steps:
 
-1. Taking all capabilities that declare `surfaces: ['agent']` (or
-   `['api', 'mcp', 'agent']`).
-2. Filtering to capabilities enabled by the workspace tool policy.
-3. Filtering to capabilities the current principal has grants for.
-4. Adding tools contributed by enabled workspace plugins (external MCP
-   servers whose tools are injected into the workspace toolchain, through
-   the governed MCP tool gateway).
+1. Take every capability that declares `surfaces: ['agent']` (or `['api', 'mcp', 'agent']`).
+2. Keep the capabilities the turn's tool policy allows.
+3. Keep the capabilities the current principal holds grants for.
+4. Add tools from enabled workspace plugins. These are external MCP servers whose tools the governed MCP tool gateway adds to the workspace toolchain.
 
-The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent
-selects from this map; it cannot use a tool not in the map. There is no
-sandbox, file system, or browser tool: the agent's only way to affect the
-world is a capability call through `kernel.invoke()`.
+The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent picks from this map and cannot use a tool outside it. There is no sandbox, file system, or browser tool. The only way the agent changes anything is a capability call through `kernel.invoke()`, and a rule answers each one.
 
 ## Built-in agent tools
 
@@ -29,19 +23,18 @@ world is a capability call through `kernel.invoke()`.
 | `list_agent_defs` / `get_agent_def` | Look up agent definitions and their published config. |
 | `list_agent_roles` / `get_agent_role` | Inspect an agent's IAM role and effective grants. |
 | `list_agent_environments` | List an agent's environment bindings. |
-| `list_executions` / `get_execution_trace` | List and inspect past agent executions and their traces. |
-| `debug_execution` | Diagnose why an execution failed: failing step, error class, suspect files. |
+| `list_executions` / `get_execution_trace` | List past agent runs and read one run as a tree. |
+| `debug_execution` | Diagnose why a run failed: the failing step, the error class, and suspect files. |
 
 ### Memory
 
 | Tool | Description |
 |---|---|
-| `recall_memory` | Query the workspace knowledge graph for relevant memories. Returns scored matches by semantic similarity. |
+| `recall_memory` | Query the workspace knowledge graph for relevant memories. Returns matches scored by semantic similarity. |
 | `write_memory` | Persist a new memory (kind: `routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`) to the workspace knowledge graph, attached to a graph node with a weight bucket (`low`, `high`, or `critical`). |
 | `list_memory_citations` / `get_citation_stats` | Inspect how memories have grounded past answers. |
 
-Memories persist across sessions and are visible in **Workspace → Knowledge →
-Memories**. See [Agent memory](/docs/agent/memory) for the full model.
+Memories carry across runs and appear in **Workspace → Knowledge → Memory**. See [Agent memory](/docs/agent/memory) for the full model.
 
 ### Knowledge graph
 
@@ -51,36 +44,32 @@ Memories**. See [Agent memory](/docs/agent/memory) for the full model.
 | `get_ontology_neighbors` | One-hop neighborhood of a node. |
 | `search_graph` / `search_nodes` | Semantic and lexical search over the graph. |
 | `get_node` / `list_nodes` / `get_node_labels` | Node lookups and browsing. |
-| `get_graph_stats` | Aggregate node/edge counts. |
+| `get_graph_stats` | Aggregate node and edge counts. |
 
-These are the *ontology read set*: see `docs/capabilities/_ontology-read-set.md`
-in the repository for how a run opts a narrowed allowlist into it.
+These are the *ontology read set*. See `docs/capabilities/_ontology-read-set.md` in the repository for how a run opts a narrowed allowlist into it.
 
 ### Approvals
 
 | Tool | Description |
 |---|---|
-| `resolve_approval` | Approve or deny a pending tool-call approval request (used programmatically; in the app UI, approval cards render inline in chat). |
-| `resolve_mcp_consent` | Grant or deny first-use consent for an external MCP tool. |
+| `resolve_approval` | Allow or deny a pending tool-call approval request. This is for programmatic use. In the app, approval cards render inline in chat. |
+| `resolve_mcp_consent` | Allow or deny first-use consent for an external MCP tool. |
 
 ### Repository status (read-only)
 
 | Tool | Description |
 |---|---|
 | `get_pr` / `get_pr_diff` | Read pull-request metadata and diffs for a connected repository. |
-| `get_ci_status` | Read CI/check status for a branch, commit, or PR head. |
+| `get_ci_status` | Read CI and check status for a branch, commit, or PR head. |
 | `get_repo_metrics` | Read repository health metrics. |
 
-Oxagen observes connected repositories; it does not open branches, push
-commits, or open pull requests on their behalf: the mutation half of the
-repo surface (create/fork/file.put/pr.open/branch.create) was removed under
-ADR-043 along with the coding runtime that used it.
+Oxagen reads connected repositories. It does not open branches, push commits, or open pull requests on their behalf. ADR-043 removed the mutation half of the repository surface (create, fork, file.put, pr.open, and branch.create) along with the coding runtime that used it.
 
 ### Billing & budgets
 
 | Tool | Description |
 |---|---|
-| `get_spend_budget` / `update_user_budget` | Read and set a user's spend budget. |
+| `get_spend_budget` / `update_user_budget` | Read and set a person's spend budget. |
 | `get_usage_breakdown` | Read metered usage for the org or workspace. |
 
 ### MCP server management
@@ -88,31 +77,22 @@ ADR-043 along with the coding runtime that used it.
 | Tool | Description |
 |---|---|
 | `list_mcp_servers` | List external MCP servers registered for the workspace. |
-| `list_agent_tools` | List all tools available in the current session (built-in + plugin tools). |
+| `list_agent_tools` | List every tool available in the current turn (built-in and plugin tools). |
 
 ## Plugin tools
 
-When a workspace enables an external MCP server plugin, that server's tools
-are injected into the workspace toolchain through the governed MCP tool
-gateway. Plugin tools appear in the agent's tool list alongside built-in
-tools. They are governed by the same IAM and audit infrastructure: calling a
-plugin tool produces the same audit record as calling a built-in tool.
+When a workspace enables an external MCP server plugin, the governed MCP tool gateway adds that server's tools to the workspace toolchain. Plugin tools appear in the agent's tool list next to built-in tools. The same IAM and audit path governs them, so calling a plugin tool leaves the same audit record as calling a built-in tool. The server's credential stays in Oxagen, and the agent never sees it.
 
-Plugin tool names are namespaced by the plugin's server ID to prevent
-collisions.
+Plugin tool names are namespaced by the plugin's server ID to prevent collisions.
 
 ## Tool permissions and risk levels
 
 Every tool has a `riskLevel` field: `low`, `medium`, or `high`.
 
-- **Low:** No approval required by default.
-- **Medium:** May require approval depending on workspace policy.
-- **High:** Requires explicit user approval before execution (stream pauses;
-  approval card rendered).
+- **Low:** allowed without a person by default.
+- **Medium:** may be routed to a person, depending on the tool policy.
+- **High:** routed to a person before it runs. The stream pauses, and an approval card renders.
 
-The workspace tool policy can customize risk thresholds and enable/disable
-individual capabilities for the agent surface: see **Workspace → Settings →
-General → Tool policy**.
+A turn's tool policy can narrow the list further, for example with an allowlist. There is no workspace settings page for the tool policy.
 
-Default-deny applies to high-risk tools. A workspace that has never
-configured a tool policy starts with the conservative default.
+A turn with no tool policy starts from the conservative default, and high-risk tools are not in the default set.

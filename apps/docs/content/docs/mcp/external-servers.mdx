@@ -1,42 +1,42 @@
 ---
 title: External MCP servers
-description: "Connect your Oxagen workspace to external MCP servers: GitHub, Linear, custom internal tools, and any MCP-compatible service."
+description: "Register external MCP servers in a workspace, such as GitHub, Linear, and internal tools, so the agent can request their tools and a rule answers each request."
 ---
 
-Oxagen can connect **outbound** to external MCP servers, making their tools available to the agent alongside built-in capabilities. This is the inverse of the [connecting](/docs/mcp/connecting) page (which covers inbound connections to the Oxagen MCP server).
+Oxagen connects **outbound** to the external MCP servers registered in a workspace. The agent can request their tools alongside built-in capabilities, and a rule answers each request. This is the inverse of [connecting](/docs/mcp/connecting), which covers MCP clients calling the Oxagen MCP server.
 
 ## How it works
 
-External MCP servers are registered per-workspace. Once connected and authenticated, the agent can invoke their tools during a chat session: subject to IAM policies, consent rules, and permission configuration.
+You register external MCP servers per workspace. Once a server is registered and authenticated, the agent can request its tools during a turn. IAM policies, consent rules, and permission settings answer each request.
 
 There are two ways to configure external MCP servers:
 
 | Method | Best for | Requires API? |
 |--------|----------|---------------|
-| [File-based configuration](/docs/mcp/file-config) | CLI users, CI/CD, offline development, version-controlled configs | No |
-| Platform registration (web app / API) | Teams using the marketplace, OAuth flows, enterprise governance | Yes |
+| [File-based configuration](/docs/mcp/file-config) | Local development, CI/CD, offline work, version-controlled configs | No |
+| Platform registration (web app / API) | Teams using the marketplace, OAuth flows, org-level rules | Yes |
 
-Both methods feed tools into the same runtime pipeline: permissions, telemetry, and audit logging apply uniformly regardless of how the server was registered.
+Both methods feed tools into the same runtime pipeline. Permissions, telemetry, and audit logging apply the same way however the server was registered.
 
 ## Supported transports
 
 | Transport | Status | Notes |
 |-----------|--------|-------|
-| Streamable HTTP | Fully supported | The current MCP standard. Used by GitHub MCP, Linear, and most hosted servers. |
+| Streamable HTTP | Fully supported | The current MCP standard. GitHub MCP, Linear, and most hosted servers use it. |
 | SSE (Server-Sent Events) | Supported | Older MCP servers still use this transport. |
-| WebSocket | Supported | For servers that require persistent bidirectional connections. |
+| WebSocket | Supported | For servers that need a persistent bidirectional connection. |
 | stdio | CLI-only (local) | Spawns a local process. Not available in the cloud runtime. |
 
 ## Authentication strategies
 
 | Strategy | Use case |
 |----------|----------|
-| `none` | Public or locally-running MCP servers |
+| `none` | Public or locally running MCP servers |
 | `bearer` | Static API keys or tokens |
-| `header` | Arbitrary header-based auth (e.g. `X-API-Key`) |
+| `header` | Any header-based auth (e.g. `X-API-Key`) |
 | `oauth` | OAuth 2.1 with PKCE (GitHub MCP, enterprise SSO) |
 
-See [Credentials](/docs/mcp/credentials) for how tokens are stored and refreshed.
+See [Credentials](/docs/mcp/credentials) for where the credential is held and how it is refreshed.
 
 ## Architecture
 
@@ -55,11 +55,15 @@ See [Credentials](/docs/mcp/credentials) for how tokens are stored and refreshed
 └──────────────────────────────────────────────────────┘
 ```
 
-Both contributor types produce `ContributedRawTool` entries that pass through the same IAM gate, ClickHouse telemetry, and consent/approval flow before reaching the model.
+Both contributor types produce `ContributedRawTool` entries, and every entry passes the same IAM gate and ClickHouse telemetry before the model sees it. Tools from DB-backed servers also go through first-use consent and approval. Tools from file-based servers skip the consent card: the settings file is the trust anchor, because whoever can write it already controls the process.
 
 ## Quick start
 
-The fastest way to connect an external MCP server:
+Add an external MCP server with one command per server:
+
+<Callout type="warn">
+  The `oxagen mcp` commands below are retired in the Oxagen CLI. Each one prints a retirement notice that points to the `stella` CLI and exits non-zero. Write the same entries into the settings files by hand, as [File-based configuration](/docs/mcp/file-config) shows.
+</Callout>
 
 ```bash
 # Add GitHub MCP with a static auth header

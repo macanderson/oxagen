@@ -30,6 +30,18 @@ WebArena went the other way and built one environment properly.[^2] Real, self-h
 
 GAIA takes 466 questions that are conceptually simple for a person and require reasoning, multimodality, browsing, and tool use to answer.[^3] Answers are short and exactly checkable. Human respondents scored 92 percent. GPT-4 with plugins scored 15 percent. Mialon and colleagues make the design argument explicitly: the interesting frontier is robustness on tasks humans find easy, not scores on tasks humans find hard.
 
+<Dumbbell
+  title="The best agent tested against people, on the same tasks"
+  unit="%"
+  fromLabel="Best agent tested"
+  toLabel="Humans"
+  rows={[
+    { label: "WebArena", from: 14.41, to: 78.24 },
+    { label: "GAIA (GPT-4 with plugins)", from: 15, to: 92 },
+  ]}
+  caption="Sources: Zhou et al. (2023) for WebArena and Mialon et al. (2023) for GAIA, each at publication. Both are tasks a person finds routine."
+/>
+
 SWE-bench is the coding case, and its grader is the strictest of the five.[^4] It contains 2,294 real GitHub issues with their corresponding pull requests, drawn from 12 popular Python repositories. A submission succeeds when the repository's own test suite passes after the model's patch is applied. At publication the best system Jimenez and colleagues measured, Claude 2, resolved 1.96 percent of instances.
 
 Then tau-bench, which measures the thing the other four skip.[^5]
@@ -64,6 +76,28 @@ Inconsistency is not bad luck. It is the arithmetic of long horizons.
 
 An agent doing a real task takes a chain of dependent steps: read the ticket, query the database, decide, call the API, verify. If each step is independently right 95 percent of the time, twenty dependent steps finish correctly 36 percent of the time. Ninety-nine percent per step still only gets you to 82 percent over twenty. Nothing about that is a model flaw, it is multiplication, and it is why per-step accuracy is a misleading thing to optimise on its own.
 
+<Curve
+  title="Chance a chain of dependent steps finishes correctly"
+  unit="%"
+  xLabel="Dependent steps"
+  xMax={20}
+  xTicks={[0, 5, 10, 15, 20]}
+  yTicks={[0, 25, 50, 75, 100]}
+  series={[
+    {
+      label: "95% right per step",
+      end: "36% at 20",
+      points: [[0, 100], [1, 95], [2, 90.3], [3, 85.7], [4, 81.5], [5, 77.4], [6, 73.5], [7, 69.8], [8, 66.3], [9, 63], [10, 59.9], [11, 56.9], [12, 54], [13, 51.3], [14, 48.8], [15, 46.3], [16, 44], [17, 41.8], [18, 39.7], [19, 37.7], [20, 35.8]],
+    },
+    {
+      label: "99% right per step",
+      end: "82% at 20",
+      points: [[0, 100], [1, 99], [2, 98], [3, 97], [4, 96.1], [5, 95.1], [6, 94.1], [7, 93.2], [8, 92.3], [9, 91.4], [10, 90.4], [11, 89.5], [12, 88.6], [13, 87.8], [14, 86.9], [15, 86], [16, 85.1], [17, 84.3], [18, 83.5], [19, 82.6], [20, 81.8]],
+    },
+  ]}
+  caption="Per-step accuracy raised to the number of steps. No model data: this is the multiplication the section describes, and it assumes accuracy holds steady, which Dziri et al. find it does not."
+/>
+
 The model behaviour underneath makes it worse. Dziri and colleagues studied transformers on compositional tasks such as multi-digit multiplication, logic puzzles, and dynamic programming, and concluded that the models solve them by reducing multi-step reasoning to linearised subgraph matching rather than by acquiring a systematic procedure.[^6] They argue both theoretically and empirically that autoregressive performance decays rapidly as task complexity grows. Per-step accuracy is not even constant across a long horizon. It degrades as the horizon gets longer.
 
 The obvious patch is to let the agent check its own work. That patch is weaker than it looks. Huang and colleagues found that models struggle to self-correct without external feedback, and that performance sometimes degrades after an unaided self-correction pass.[^7] Self-correction works when something outside the model can rule on the last attempt. A test suite can. A database state check can. The model's own confidence cannot.
@@ -82,7 +116,7 @@ There is a practical version of this for anyone running an agent today. Accuracy
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. Two of its jobs fall straight out of the research above. It meters: every governed action is observed into ClickHouse and priced through to Stripe, so total spend can be divided by verified outcomes rather than by attempts, which is the pass^k problem expressed as a bill. And it records evidence: a typed contract binds the permitted action to a verified outcome and an audit record, so the external check that self-correction requires is a durable artifact rather than the model's own opinion. That does not make an agent reliable. It makes its reliability, and its cost, something you can quote a number for.
+Oxagen is the control plane for the agents you run. It does not run them. Two of its parts fall straight out of the research above. The meter: every governed action is priced and attributed to the person, the agent, the run, the turn, and the step, so total spend can be divided by checked outcomes rather than by tries, which is the pass^k problem expressed as a bill. The record: every run is kept frame by frame against the agent's mandate, with what it asked for, which rule answered, and what checked the outcome, so the external check that self-correction requires is a durable row rather than the model's own opinion. That does not make an agent reliable. It makes its reliability, and its cost, something you can quote a number for.
 
 [^1]: Liu, X., Yu, H., Zhang, H., Xu, Y., Lei, X., Lai, H., Gu, Y., Ding, H., Men, K., Yang, K., Zhang, S., Deng, X., Zeng, A., Du, Z., Zhang, C., Shen, S., Zhang, T., Su, Y., Sun, H., Huang, M., Dong, Y., & Tang, J. (2023). *AgentBench: Evaluating LLMs as Agents*. ICLR 2024. https://arxiv.org/abs/2308.03688
 [^2]: Zhou, S., Xu, F. F., Zhu, H., Zhou, X., Lo, R., Sridhar, A., Cheng, X., Ou, T., Bisk, Y., Fried, D., Alon, U., & Neubig, G. (2023). *WebArena: A Realistic Web Environment for Building Autonomous Agents*. ICLR 2024. https://arxiv.org/abs/2307.13854

@@ -1,8 +1,10 @@
-# Oxagen Vision — the agent control plane
+# Oxagen Vision — Mission Control for the agent workforce
 
-> **Mission: Oxagen is the control plane for the agents an enterprise runs. Every
-> agent operates under a mandate — its access, its budget, its tools, its rules —
-> set by the teams accountable for it and enforced on every run.**
+> **Mission: Oxagen is Mission Control for an autonomous agent workforce. Operators
+> give each agent its own identity, set its authority and budget, equip it with tools
+> and skills, and oversee its work through a shared agent control plane. Every agent
+> operates under a mandate set by the teams accountable for it and enforced on the
+> actions routed through Oxagen.**
 
 We sell to the teams that answer for the agents: the security team that decides
 what an agent may reach, the FinOps team that decides what it may spend and under
@@ -73,7 +75,24 @@ Oxagen does not compete where it loses. It will not out-Glean Glean on connector
 breadth and graph maturity, out-eval Braintrust, or out-mindshare LangGraph. The
 single wedge where a platform of Oxagen's exact shape can credibly be #1:
 
-**The control plane for every agent an enterprise runs — whoever built it.**
+**Mission Control for every agent an enterprise runs, whoever built it, on an agent control plane.**
+
+Mission Control is the experience and the agent control plane is the category
+(ADR-067, superseding ADR-066's two names). The operator's job is the lead: define
+an agent's identity and authority, equip it with tools, skills and the business
+context its work requires, and oversee what it does, whether the work is a bounded
+task or an ongoing responsibility. The Fleet page is where the operator sees every
+agent as one population, with its mandate, open requests, spend against budget and
+last run, and answers, funds, holds or stops it. That is what separates us from the
+plays beside us: observability watches and reports, governance says no, and neither
+operates anything. Every one of those operator actions is a governed action the
+meter prices.
+
+Every claim states its scope (ADR-067). Enforcement applies to actions routed through
+Oxagen, and observe mode is recorded, not enforced. Completion checks are an optional
+control for bounded tasks, and a passing verdict means the specified checks held.
+Cost copy claims attribution, not savings, unless the workload was measured. The
+approved copy lives in the message registry in `oxagenai/oxagen-brand` `messages/`.
 
 Not "another agent framework" and not "another enterprise search box." The knowledge
 graph is the **accuracy moat**, vendor-neutral BYOK (own model keys, own Neo4j
@@ -131,6 +150,14 @@ front line**.
 
 Work that lets an accountable team set a clause of the mandate, or lets the platform
 enforce or record it:
+
+- **The fleet (operators):** one population view of every agent the organization
+  runs — mandate, open requests, spend against budget, last run — and the actions an
+  operator takes on it (answer a routed request, fund, hold, stop), each a governed,
+  metered action. Spend lives on the fleet page beside the agent (ADR-066, ADR-067).
+- **The request, not the key (security):** an agent holds an identity and a mandate,
+  never a standing credential; it asks at the moment of use and a decision rule
+  answers allow, deny or route to a person (`packages/rules`, the approval contracts).
 
 - **Access (security):** agent identity and registration, connections to systems,
   IAM + entitlement gates, permission-scoped graph retrieval, principal attribution
@@ -213,3 +240,7 @@ strategic drift, not to nag maintenance.
    customers — markup pricing, downstream customer records, re-bill runs, or holding
    their payment credentials? (drifts)
 9. Is it routine maintenance, fix, test, or tooling work? (neutral)
+10. Does it let an operator see or act on the fleet as one population, including its
+    spend, or move a credential out of the agent's hands into a request a rule
+    answers? (advances) Does it hand an agent a standing credential, or add a
+    watch-only or forbid-only surface that no operator can act from? (drifts)

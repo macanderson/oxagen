@@ -9,6 +9,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
@@ -32,6 +33,12 @@ import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
+import {
+  readStellaHooksFile,
+  renderStellaTomlBlock,
+  STELLA_HOOK_EVENTS,
+  stellaHookPresence,
+} from "../host/stella-writer";
 import {
   type CliDeps,
   claudeFacts,
@@ -201,8 +208,12 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         JSON.stringify(document, null, 2),
         0o644,
       ),
+    readStellaHooks: (format) => readStellaHooksFile(paths, format),
+    writeStellaHooks: (file) =>
+      writeSensitiveFileAtomic(file.path, file.text ?? "", 0o644),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
+    stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
     runtime: {
       hookCommand: "node /opt/tacho/tacho-hook.mjs",
       daemonCommand: ["node", "/opt/tacho/tachod.mjs"],
@@ -456,6 +467,28 @@ describe("enroll → status → unenroll", () => {
       ).ok,
     ).toBe(false);
     expect(refused.errors[0]).toContain("refused the enrollment (403)");
+    expect(refused.errors[0]).toContain("(403) — forbidden: your token cannot");
+    const expired = deps({
+      fetch: async () => ({
+        ok: false,
+        status: 401,
+        text: async () =>
+          JSON.stringify({
+            error: { code: "unauthorized", message: "API key expired" },
+          }),
+      }),
+    });
+    expect(
+      (
+        await enroll(
+          { token: "t", org: "o", workspace: "w", apiUrl: "https://x" },
+          expired,
+        )
+      ).ok,
+    ).toBe(false);
+    expect(expired.errors[0]).toContain(
+      "(401) — API key expired: your token is invalid or expired",
+    );
     const down = deps({
       fetch: async () => {
         throw new Error("ENOTFOUND");
@@ -636,8 +669,9 @@ describe("harnesses and reassign", () => {
     ]);
     // One line naming the choices, not a ZodError's JSON issues array: both
     // CLIs print the message verbatim.
+    expect(parseHarnesses("stella,codex")).toEqual(["stella", "codex"]);
     expect(() => parseHarnesses("cursor")).toThrow(
-      'unknown harness "cursor"; expected one of claude-code, codex',
+      'unknown harness "cursor"; expected one of claude-code, codex, stella',
     );
     expect(() => parseHarnesses("claude_code")).toThrow(
       /unknown harness "claude_code"/,
@@ -1161,16 +1195,25 @@ describe("harnesses and reassign", () => {
       ),
     ).toEqual({ path: "/opt/homebrew/bin/codex", version: "9.9.9" });
     expect(calls.slice(0, 2)).toEqual(["/bin/zsh -lc", "sh -lc"]);
-    // Then the well-known directories, checked on disk.
+    // Then the well-known directories, checked on disk. The disk check only
+    // sees the scratch home: /opt/homebrew/bin and /usr/local/bin are real
+    // directories on a developer's machine, and a `codex` installed there
+    // must not decide this test.
+    const onScratchDisk = (candidate: string): boolean =>
+      candidate.startsWith(home) && existsSync(candidate);
     mkdirSync(join(home, ".local", "bin"), { recursive: true });
     writeFileSync(join(home, ".local", "bin", "claude"), "");
-    expect(harnessFacts(answering({}), "claude", "darwin", env)).toEqual({
+    expect(
+      harnessFacts(answering({}), "claude", "darwin", env, home, onScratchDisk),
+    ).toEqual({
       path: join(home, ".local", "bin", "claude"),
       version: "9.9.9",
     });
     // Nothing anywhere: not found, no --version call.
     calls.length = 0;
-    expect(harnessFacts(answering({}), "codex", "darwin", env)).toEqual({});
+    expect(
+      harnessFacts(answering({}), "codex", "darwin", env, home, onScratchDisk),
+    ).toEqual({});
     expect(calls.some((c) => c.endsWith("--version"))).toBe(false);
     // A probe that timed out (status null) reads as not found, not as a hang.
     expect(
@@ -1179,14 +1222,25 @@ describe("harnesses and reassign", () => {
         "codex",
         "darwin",
         env,
+        home,
+        onScratchDisk,
       ),
     ).toEqual({});
+    // The default disk check is the real one: an absolute install directory
+    // is found without any shell answering.
+    expect(
+      harnessFacts(answering({}), "claude", "darwin", env, home).path,
+    ).toBe(join(home, ".local", "bin", "claude"));
     // /bin/sh as the login shell is not asked twice.
     calls.length = 0;
-    harnessFacts(answering({}), "codex", "darwin", {
-      HOME: home,
-      SHELL: "/bin/sh",
-    });
+    harnessFacts(
+      answering({}),
+      "codex",
+      "darwin",
+      { HOME: home, SHELL: "/bin/sh" },
+      home,
+      onScratchDisk,
+    );
     expect(calls.filter((c) => c.startsWith("sh "))).toHaveLength(1);
   });
 });
@@ -1222,7 +1276,7 @@ describe("export and verify", () => {
     expect(empty.lines.at(-1)).toContain("no sessions");
   });
 
-  it("verify drives Codex through codex exec and matches the newest chain", async () => {
+  it("verify drives Codex through codex exec and matches the chain the turn created", async () => {
     const signer = bundleSigner();
     const calls: string[][] = [];
     const d = deps({
@@ -1234,6 +1288,33 @@ describe("export and verify", () => {
       },
     });
     d.service.running = true;
+    // A retained chain from a real session is busier than a one-prompt verify
+    // turn, so picking the highest seq would report on the wrong session.
+    const stale = {
+      session_id: "sess-yesterday",
+      session_uuid: "22222222-2222-4222-8222-222222222222",
+      sealed: true,
+      seq: 400,
+    };
+    const base = d.daemonGet;
+    d.daemonGet = async (path) =>
+      path === "/sessions"
+        ? {
+            sessions: [
+              stale,
+              ...(calls.length > 0
+                ? [
+                    {
+                      session_id: "sess-verify",
+                      session_uuid: "11111111-1111-4111-8111-111111111111",
+                      sealed: true,
+                      seq: 6,
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : base(path);
     writeHostFile(
       d.paths.hostFile,
       testHostFile(signer, signer.sign(unsignedBundle())),
@@ -1257,6 +1338,21 @@ describe("export and verify", () => {
     expect((await verify({ harness: "codex" }, noCodex)).detail).toContain(
       "codex",
     );
+    // The hooks never fired: the retained chain is not this turn's, so verify
+    // fails rather than reporting that sealed chain as a success.
+    let clock = 0;
+    const quiet = deps({ now: () => (clock += 8_000) });
+    quiet.service.running = true;
+    const quietBase = quiet.daemonGet;
+    quiet.daemonGet = async (path) =>
+      path === "/sessions" ? { sessions: [stale] } : quietBase(path);
+    writeHostFile(
+      quiet.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const missed = await verify({ harness: "codex", timeoutMs: 10_000 }, quiet);
+    expect(missed.ok).toBe(false);
+    expect(missed.detail).toContain("never saw the session");
   });
 
   it("detect reports installed harnesses and which are enrolled", () => {
@@ -1268,6 +1364,7 @@ describe("export and verify", () => {
     ).toEqual([
       ["claude-code", true, false],
       ["codex", true, false],
+      ["stella", true, false],
     ]);
     expect(d.lines.join("\n")).toContain(
       "Claude Code  2.1.263 at /usr/local/bin/claude",
@@ -1292,6 +1389,14 @@ describe("export and verify", () => {
       harnesses: [
         { harness: "claude-code", installed: true, enrolled: true },
         { harness: "codex", installed: false, enrolled: false },
+        {
+          harness: "stella",
+          label: "Stella",
+          installed: true,
+          path: "/usr/local/bin/stella",
+          version: "0.9.423",
+          enrolled: false,
+        },
       ],
     });
     expect(JSON.parse(missingCodex.lines.join("\n"))).toEqual(report);
@@ -1392,6 +1497,7 @@ describe("defaultCliDeps", () => {
     const env = {
       TACHO_HOME: join(home, "tacho"),
       CODEX_HOME: join(home, "codex"),
+      STELLA_HOME: join(home, "stella"),
     };
     const calls: string[] = [];
     const d = defaultCliDeps({
@@ -1419,11 +1525,32 @@ describe("defaultCliDeps", () => {
     expect(d.readSettings()).toEqual({ hooks: {} });
     expect(d.readCodexHooks()).toEqual({ hooks: { SessionStart: [] } });
     expect(existsSync(join(home, "codex", "hooks.json"))).toBe(true);
+    // Stella's port picks the file Stella reads and writes it whole.
+    expect(d.readStellaHooks()).toEqual({
+      path: join(home, "stella", "stella.toml"),
+      format: "toml",
+      text: undefined,
+    });
+    d.writeStellaHooks({
+      path: join(home, "stella", "settings.json"),
+      format: "json",
+      text: "{}\n",
+    });
+    expect(d.readStellaHooks()).toMatchObject({ format: "json", text: "{}\n" });
+    d.writeStellaHooks({
+      path: join(home, "stella", "stella.toml"),
+      format: "toml",
+      text: undefined,
+    });
+    expect(d.readStellaHooks()).toMatchObject({ format: "toml", text: "" });
+    expect(d.readStellaHooks("json").text).toBe("{}\n");
     // Both harness lookups go through the injected exec.
     expect(d.claude()).toEqual({ path: "/opt/bin/tool", version: "9.8.7" });
     expect(d.codex()).toEqual({ path: "/opt/bin/tool", version: "9.8.7" });
     expect(calls).toContain("sh -lc command -v claude");
     expect(calls).toContain("sh -lc command -v codex");
+    expect(d.stella()).toEqual({ path: "/opt/bin/tool", version: "9.8.7" });
+    expect(calls).toContain("sh -lc command -v stella");
     expect(d.runtime.daemonCommand).toHaveLength(2);
     expect(typeof d.hostname).toBe("string");
     expect(typeof d.osUser).toBe("string");
@@ -1492,5 +1619,321 @@ describe("defaultCliDeps", () => {
     }
     // The port is closed now: a refused connection is "no daemon", not an error.
     expect(await d.daemonGet("/status")).toBeUndefined();
+  });
+});
+
+describe("stella", () => {
+  const USER_TOML =
+    '# mine\nmodel = "opus"\n\n[[hooks.PreToolUse]]\n[[hooks.PreToolUse.hooks]]\ntype = "command"\ncommand = "guard.sh"\n';
+  const WHERE = {
+    token: "tok",
+    org: "acme",
+    workspace: "core",
+    apiUrl: "https://api.test",
+  };
+
+  it("enrolls Stella into stella.toml, reports it, and unenroll restores the file byte-for-byte", async () => {
+    const d = deps({ claude: () => ({}) });
+    writeSensitiveFileAtomic(d.paths.stellaToml, USER_TOML, 0o644);
+    const result = await enroll({ ...WHERE, harnesses: ["stella"] }, d);
+    expect(result.ok).toBe(true);
+    // A Stella-only host is not told that `claude` is missing.
+    expect(result.warnings.join("\n")).not.toContain("claude");
+    expect(d.requests[0]?.body).toMatchObject({ harnesses: ["stella"] });
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      harnesses: ["stella"],
+      stella_version: "0.9.423",
+      stella_execpath: "/usr/local/bin/stella",
+    });
+    const text = readFileSync(d.paths.stellaToml, "utf8");
+    expect(
+      text.startsWith(
+        `${USER_TOML}\n# >>> tacho enrollment ${TEST_ENROLLMENT}`,
+      ),
+    ).toBe(true);
+    expect(text).toContain(
+      `command = "node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness stella"`,
+    );
+    expect(existsSync(d.paths.stellaSettingsJson)).toBe(false);
+    expect(d.lines.join("\n")).toContain(`Stella: ${d.paths.stellaToml}`);
+    expect(d.lines.join("\n")).toContain(
+      "stella 0.9.423 at /usr/local/bin/stella",
+    );
+    expect(d.lines.at(-1)).toContain("every Stella session");
+    // A re-apply leaves the file as it is.
+    expect((await enroll({ token: "tok" }, d)).ok).toBe(true);
+    expect(readFileSync(d.paths.stellaToml, "utf8")).toBe(text);
+    expect(d.lines.join("\n")).toContain("already present; nothing to change");
+
+    const report = await status({ json: true }, d);
+    expect(report.host?.stella_version).toBe("0.9.423");
+    expect(report.host?.codex_version).toBeNull();
+    expect(report.stellaHooks).toEqual({
+      complete: true,
+      present: [...STELLA_HOOK_EVENTS],
+      missing: [],
+    });
+    expect(report.codexHooks).toBeUndefined();
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines.join("\n")).toContain(
+      "Stella      complete: 8 present, 0 missing",
+    );
+    expect(detect({ json: true }, d).harnesses[2]).toEqual({
+      harness: "stella",
+      label: "Stella",
+      installed: true,
+      path: "/usr/local/bin/stella",
+      version: "0.9.423",
+      enrolled: true,
+    });
+
+    await unenroll({ token: "tok" }, d);
+    expect(readFileSync(d.paths.stellaToml, "utf8")).toBe(USER_TOML);
+    expect(d.lines.join("\n")).toContain(
+      `removed from ${d.paths.stellaToml} too`,
+    );
+  });
+
+  it("writes the legacy settings.json when only it exists, refuses a stella.toml it would break, and unenroll strips both files", async () => {
+    const d = deps({ stella: () => ({}) });
+    writeSensitiveFileAtomic(
+      d.paths.stellaSettingsJson,
+      JSON.stringify({ model: "opus" }),
+      0o644,
+    );
+    const result = await enroll(
+      { ...WHERE, harnesses: ["claude-code", "stella"] },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContain(
+      "`stella` is not on PATH; hooks will apply once it is installed",
+    );
+    const settings = JSON.parse(
+      readFileSync(d.paths.stellaSettingsJson, "utf8"),
+    ) as {
+      model: string;
+      hooks: Record<string, Array<{ hooks: Array<{ timeoutMs: number }> }>>;
+    };
+    expect(settings.model).toBe("opus");
+    expect(settings.hooks["PreToolUse"]?.[0]?.hooks[0]?.timeoutMs).toBe(15_000);
+    expect(existsSync(d.paths.stellaToml)).toBe(false);
+    expect(d.lines.join("\n")).toContain("command hooks in settings.json");
+    expect(d.lines.at(-1)).toContain("every Claude Code and Stella session");
+    const partial = await status({ json: true }, d);
+    expect(partial.stellaHooks?.complete).toBe(true);
+
+    // The operator later creates stella.toml, which Stella then reads
+    // instead; unenroll finds the hooks in both files.
+    writeSensitiveFileAtomic(
+      d.paths.stellaToml,
+      `a = 1\n\n${renderStellaTomlBlock({ enrollmentId: TEST_ENROLLMENT, hookCommand: "x", port: 1, localToken: "t" })}`,
+      0o644,
+    );
+    await unenroll({ token: "tok" }, d);
+    expect(readFileSync(d.paths.stellaToml, "utf8")).toBe("a = 1\n");
+    expect(
+      JSON.parse(readFileSync(d.paths.stellaSettingsJson, "utf8")),
+    ).toEqual({ model: "opus" });
+
+    const refused = deps();
+    writeSensitiveFileAtomic(
+      refused.paths.stellaToml,
+      "hooks.Stop = []\n",
+      0o644,
+    );
+    const r = await enroll({ ...WHERE, harnesses: ["stella"] }, refused);
+    expect(r.ok).toBe(true);
+    expect(r.warnings.join("\n")).toContain(
+      `Stella hooks not written: ${refused.paths.stellaToml} already defines hooks.Stop`,
+    );
+    expect(refused.errors.join("\n")).toContain("Stella hooks not written");
+    expect(readFileSync(refused.paths.stellaToml, "utf8")).toBe(
+      "hooks.Stop = []\n",
+    );
+    const incomplete = await status({}, refused);
+    expect(incomplete.stellaHooks?.complete).toBe(false);
+    expect(refused.lines.join("\n")).toContain("Stella      INCOMPLETE");
+    expect(refused.lines.join("\n")).toContain("missing: SessionStart");
+  });
+
+  it("unenroll without host.json strips every enrollment's Stella hooks from both files", async () => {
+    // host.json lost mid-way (a crash, a hand delete): the enrollment id is
+    // unknown, so every Tacho block and group goes, and nothing foreign.
+    const d = deps();
+    writeSensitiveFileAtomic(
+      d.paths.stellaSettingsJson,
+      JSON.stringify({ model: "opus" }),
+      0o644,
+    );
+    expect((await enroll({ ...WHERE, harnesses: ["stella"] }, d)).ok).toBe(
+      true,
+    );
+    const block = (enrollmentId: string) =>
+      renderStellaTomlBlock({
+        enrollmentId,
+        hookCommand: "x",
+        port: 1,
+        localToken: "t",
+      });
+    writeSensitiveFileAtomic(
+      d.paths.stellaToml,
+      `${USER_TOML}\n${block(TEST_ENROLLMENT)}\n${block(OTHER_ENROLLMENT)}`,
+      0o644,
+    );
+    rmSync(d.paths.hostFile);
+    const before = d.requests.length;
+    d.lines.length = 0;
+
+    await unenroll({}, d);
+
+    expect(readFileSync(d.paths.stellaToml, "utf8")).toBe(USER_TOML);
+    expect(
+      JSON.parse(readFileSync(d.paths.stellaSettingsJson, "utf8")),
+    ).toEqual({ model: "opus" });
+    expect(d.lines).toContain(`      removed from ${d.paths.stellaToml} too`);
+    expect(d.lines).toContain(
+      `      removed from ${d.paths.stellaSettingsJson} too`,
+    );
+    expect(d.lines).toContain(
+      "[3/4] No enrollment on this machine; nothing to revoke",
+    );
+    // No enrollment id means no revoke request.
+    expect(d.requests.length).toBe(before);
+  });
+
+  it("reassign moves Stella's hooks to the new enrollment", async () => {
+    const d = deps();
+    await enroll({ ...WHERE, harnesses: ["claude-code", "stella"] }, d);
+    expect(
+      stellaHookPresence(readStellaHooksFile(d.paths), TEST_ENROLLMENT)
+        .complete,
+    ).toBe(true);
+    const result = await reassign({ token: "tok", workspace: "edge" }, d);
+    expect(result.ok).toBe(true);
+    const text = readFileSync(d.paths.stellaToml, "utf8");
+    expect(text).not.toContain(TEST_ENROLLMENT);
+    expect(
+      stellaHookPresence(readStellaHooksFile(d.paths), OTHER_ENROLLMENT)
+        .complete,
+    ).toBe(true);
+    expect(readHostFile(d.paths.hostFile)?.harnesses).toEqual([
+      "claude-code",
+      "stella",
+    ]);
+  });
+
+  it("verify runs stella run and waits for the chain that turn created to be sealed", async () => {
+    const signer = bundleSigner();
+    const host = testHostFile(signer, signer.sign(unsignedBundle()));
+    // The Stella chain of the verify turn appears only once `stella run` has
+    // been called; `stella-12` is a retained chain from a real session, which
+    // is busier than a one-prompt turn and must never be taken for it.
+    const listing =
+      (sealed: boolean, withStella = true) =>
+      (ran: () => boolean) =>
+      async (path: string) =>
+        path === "/health"
+          ? { ok: true }
+          : path === "/sessions"
+            ? {
+                sessions: [
+                  {
+                    session_id: "claude-9",
+                    session_uuid: "c",
+                    sealed: true,
+                    seq: 50,
+                    harness: "claude-code",
+                  },
+                  {
+                    session_id: "tachod-1",
+                    session_uuid: "t",
+                    sealed: false,
+                    seq: 99,
+                    harness: "claude-code",
+                  },
+                  {
+                    session_id: "stella-12",
+                    session_uuid: "old",
+                    sealed: true,
+                    seq: 220,
+                    harness: "stella",
+                  },
+                  ...(withStella && ran()
+                    ? [
+                        {
+                          session_id: "stella-77",
+                          session_uuid: "s",
+                          sealed,
+                          seq: 4,
+                          harness: "stella",
+                        },
+                      ]
+                    : []),
+                ],
+              }
+            : undefined;
+    const calls: string[][] = [];
+    const d = deps({
+      exec: (command, args) => {
+        calls.push([command, ...args]);
+        return {
+          status: 0,
+          stdout: args[0] === "run" ? "OK\n" : "",
+          stderr: "",
+        };
+      },
+    });
+    d.daemonGet = listing(true)(() => calls.length > 0);
+    writeHostFile(d.paths.hostFile, host);
+    expect(await verify({ harness: "stella" }, d)).toMatchObject({
+      ok: true,
+      sessionId: "stella-77",
+      seq: 4,
+    });
+    expect(calls).toContainEqual([
+      "/usr/local/bin/stella",
+      "run",
+      "Reply with exactly the word OK and nothing else.",
+    ]);
+    expect(d.lines.join("\n")).toContain("Running stella run");
+
+    // Stella's default wait is 45 s: a clock that jumps 10 s per read
+    // polls several times before giving up.
+    let clock = 0;
+    const slowCalls: string[][] = [];
+    const slow = deps({
+      now: () => (clock += 10_000),
+      exec: (command, args) => {
+        slowCalls.push([command, ...args]);
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    slow.daemonGet = listing(false)(() => slowCalls.length > 0);
+    writeHostFile(slow.paths.hostFile, host);
+    const unsealed = await verify({ harness: "stella" }, slow);
+    expect(unsealed).toMatchObject({ ok: false, sessionId: "stella-77" });
+    expect(unsealed.detail).toContain("Stella sends no SessionEnd");
+    expect(clock).toBeGreaterThanOrEqual(40_000);
+
+    // No new Stella chain at all: the retained `stella-12` is sealed and much
+    // busier, and must not be reported as this turn's session.
+    let clock2 = 0;
+    const unseen = deps({ now: () => (clock2 += 10_000) });
+    unseen.daemonGet = listing(true, false)(() => true);
+    writeHostFile(unseen.paths.hostFile, host);
+    const missed = await verify({ harness: "stella" }, unseen);
+    expect(missed.ok).toBe(false);
+    expect(missed.detail).toContain(
+      `is stella reading ${unseen.paths.stellaToml}?`,
+    );
+
+    const noStella = deps({ stella: () => ({}) });
+    noStella.daemonGet = listing(true)(() => true);
+    writeHostFile(noStella.paths.hostFile, host);
+    expect((await verify({ harness: "stella" }, noStella)).detail).toBe(
+      "`stella` is not on PATH",
+    );
   });
 });

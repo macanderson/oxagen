@@ -37,6 +37,13 @@ export interface TachoPaths {
   /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
   codexHooks: string;
   /**
+   * Stella's user config (`$STELLA_HOME/stella.toml`, `~/.stella` by
+   * default). When it exists it wins whole over `stellaSettingsJson`.
+   */
+  stellaToml: string;
+  /** Stella's legacy user settings (`$STELLA_HOME/settings.json`). */
+  stellaSettingsJson: string;
+  /**
    * The wrapper script the Windows scheduled task runs (sets the env, then
    * starts `tachod`). Unused on macOS and Linux, where the unit carries env.
    */
@@ -50,6 +57,7 @@ export function tachoPaths(
   const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
   const claudeConfigDir = env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
   const codexHome = env["CODEX_HOME"] ?? join(home, ".codex");
+  const stellaHome = env["STELLA_HOME"] ?? join(home, ".stella");
   return {
     root,
     hostFile: join(root, "host.json"),
@@ -64,6 +72,8 @@ export function tachoPaths(
     claudeSettings: join(claudeConfigDir, "settings.json"),
     claudeProjects: join(claudeConfigDir, "projects"),
     codexHooks: join(codexHome, "hooks.json"),
+    stellaToml: join(stellaHome, "stella.toml"),
+    stellaSettingsJson: join(stellaHome, "settings.json"),
     daemonLauncher: join(root, "tachod.cmd"),
   };
 }

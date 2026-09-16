@@ -36,17 +36,19 @@ import { schema } from "@oxagen/database";
 import {
   actorCanManageApiKeys,
   generateApiKey,
+  noOperatorMessage,
   resolveActorOrgRole,
+  resolveOperatorUserId,
 } from "./api-key-authz";
 
 /**
  * Tx double for the two-query role resolution: the principals lookup
- * (select→from→where→limit) then the role join (select→from→innerJoin→where→limit).
+ * (select→from→where→limit) then the role join (select→from→innerJoin→where).
  * `whereArgs` collects both predicates so a test can inspect the second one.
  */
 function makeRoleTx(
   principalId: string | null,
-  roleName: string | null,
+  roleNames: string[],
   whereArgs: unknown[],
 ) {
   let call = 0;
@@ -56,7 +58,11 @@ function makeRoleTx(
       const terminal = (rows: unknown[]) => ({
         where: (predicate: unknown) => {
           whereArgs.push(predicate);
-          return { limit: () => Promise.resolve(rows) };
+          // The principal lookup ends in .limit(); the role join awaits the
+          // where clause itself, so the double answers both shapes.
+          return Object.assign(Promise.resolve(rows), {
+            limit: () => Promise.resolve(rows),
+          });
         },
       });
       if (call === 1) {
@@ -66,7 +72,8 @@ function makeRoleTx(
       }
       return {
         from: () => ({
-          innerJoin: () => terminal(roleName ? [{ roleName }] : []),
+          innerJoin: () =>
+            terminal(roleNames.map((roleName) => ({ roleName }))),
         }),
       };
     },
@@ -75,11 +82,12 @@ function makeRoleTx(
 
 function stubRoleResolution(
   principalId: string | null,
-  roleName: string | null,
+  roleName: string | string[] | null,
 ) {
   const whereArgs: unknown[] = [];
+  const roleNames = [roleName ?? []].flat();
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    Promise.resolve(fn(makeRoleTx(principalId, roleName, whereArgs))),
+    Promise.resolve(fn(makeRoleTx(principalId, roleNames, whereArgs))),
   );
   return whereArgs;
 }
@@ -102,6 +110,15 @@ describe("resolveActorOrgRole", () => {
   it("returns the assigned org role name", async () => {
     stubRoleResolution("prn_1", "Admin");
     expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Admin");
+  });
+
+  it("prefers an authorized role when the principal holds several", async () => {
+    // Whichever row Postgres returned first used to win, so an Admin who is
+    // also a Member was refused depending on row order.
+    stubRoleResolution("prn_1", ["Member", "Admin"]);
+    expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Admin");
+    stubRoleResolution("prn_1", ["Viewer", "Member"]);
+    expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Viewer");
   });
 
   it("excludes expired (JIT) role assignments from the role lookup", async () => {
@@ -143,6 +160,76 @@ describe("actorCanManageApiKeys", () => {
   it("denies a user with no role at all", async () => {
     stubRoleResolution("prn_1", null);
     expect(await actorCanManageApiKeys("org_1", "user_1")).toBe(false);
+  });
+});
+
+describe("resolveOperatorUserId", () => {
+  const ORG = "org_1";
+  /** The row `oxagen login` writes: empty scope, its approver as creator. */
+  const CLI_KEY = {
+    scope: {},
+    createdByUserId: "user_cli",
+    stellaTelemetryEnrollmentId: null,
+  };
+  const KEY_CTX = { orgId: ORG, userId: null, apiKeyId: "key_1" };
+
+  function stubKey(row: Record<string, unknown> | undefined) {
+    const findFirst = vi.fn(async () => row);
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      Promise.resolve(fn({ query: { apiKeys: { findFirst } } })),
+    );
+    return findFirst;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns the session user without reading any key", async () => {
+    const findFirst = stubKey(CLI_KEY);
+    expect(
+      await resolveOperatorUserId({ ...KEY_CTX, userId: "user_session" }),
+    ).toBe("user_session");
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("acts for the user who minted an `oxagen login` key", async () => {
+    stubKey(CLI_KEY);
+    expect(await resolveOperatorUserId(KEY_CTX)).toBe("user_cli");
+    expect(mocks.isNull).toHaveBeenCalledWith(schema.apiKeys.deletedAt);
+  });
+
+  it("never acts for a key bound to a machine purpose", async () => {
+    stubKey({
+      ...CLI_KEY,
+      scope: { purpose: "tacho_host_v1", host_enrollment_id: "tch_x" },
+    });
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+    stubKey({ ...CLI_KEY, scope: { purpose: "a_purpose_added_later" } });
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+    stubKey({ ...CLI_KEY, stellaTelemetryEnrollmentId: "sten_1" });
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+  });
+
+  it("returns null for an unknown or revoked key, a key with no creator, or no credential", async () => {
+    stubKey(undefined);
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+    stubKey({ ...CLI_KEY, createdByUserId: null });
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+    const findFirst = stubKey(CLI_KEY);
+    expect(
+      await resolveOperatorUserId({ ...KEY_CTX, apiKeyId: null }),
+    ).toBeNull();
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("words the refusal for the credential that was presented", () => {
+    expect(noOperatorMessage(KEY_CTX)).toMatch(
+      /API key does not act for a person/,
+    );
+    expect(noOperatorMessage({ ...KEY_CTX, apiKeyId: null })).toBe(
+      "Unauthorized: no authenticated user",
+    );
   });
 });
 

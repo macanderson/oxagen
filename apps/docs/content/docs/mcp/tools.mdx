@@ -1,36 +1,36 @@
 ---
 title: MCP tools
-description: The tools exposed by the Oxagen MCP server, how they are named, and the flows MCP cannot reach.
+description: The tools the Oxagen MCP server exposes, how they are named, and the flows MCP cannot reach.
 ---
 
 ## Tool naming
 
-An MCP tool is named after the capability behind it, with no translation step. The capability `recall_memory` is the tool `recall_memory`.
+An MCP tool has the name of the capability behind it, with no translation step. The capability `recall_memory` is the tool `recall_memory`.
 
-Capability names are verb-first snake_case: an imperative verb, then the thing it acts on, joined by underscores. See [Capability naming](/docs/api/capabilities#capability-naming) for the full rule. Because these names contain no dots, they are already legal MCP tool names, so what you call is exactly what the contract registry declares.
+Capability names are verb-first snake_case: an imperative verb, then the thing it acts on, joined by underscores. See [Capability naming](/docs/api/capabilities#capability-naming) for the full rule. These names contain no dots, so they are already legal MCP tool names, and what you call is exactly what the contract registry declares.
 
 ## Available tools
 
-Every capability that lists `mcp` in its `surfaces` array becomes a tool. The table below covers the common ones; the [capabilities reference](/docs/api/capabilities) is the fuller list, and the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry.
+Every capability that lists `mcp` in its `surfaces` array becomes a tool. The tables below cover the common ones. The [capabilities reference](/docs/api/capabilities) is the fuller list, and the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry.
 
-Your MCP client can also just ask. Call `tools/list` after connecting and the server returns every tool your API key is allowed to use, with its input schema: that answer is always current, and this page is not.
+Your MCP client can also ask the server. Call `tools/list` after connecting, and the server returns every tool on the MCP surface with its input schema. The server does not filter that list per key: a rule answers each tool call when the call is made. The list is always current, and this page is not.
 
 ### Agent
 
 | Tool                     | Description                                          |
 | ------------------------ | ---------------------------------------------------- |
-| `list_agent_tools`       | List available tools for the current workspace       |
+| `list_agent_tools`       | List the tools in the current workspace              |
 | `list_agent_defs`        | List agent definitions in the workspace              |
 | `deploy_agent`           | Set an agent's deployment posture                    |
 | `bind_agent_environment` | Bind an agent to an environment                      |
 | `list_mcp_servers`       | List registered external MCP servers                 |
 | `register_mcp_server`    | Register an external MCP server                      |
-| `resolve_approval`       | Approve or deny a pending tool-call approval request |
-| `resolve_mcp_consent`    | Grant or deny first-use consent for an MCP tool      |
+| `resolve_approval`       | Approve or deny a tool call routed to a person       |
+| `resolve_mcp_consent`    | Allow or deny the first use of an MCP tool           |
 | `recall_memory`          | Recall memories from the workspace knowledge graph   |
 | `write_memory`           | Write a new memory to the workspace knowledge graph  |
-| `list_executions`        | List past agent executions                           |
-| `get_execution_trace`    | Read the trace for an agent execution                |
+| `list_executions`        | List past agent runs                                 |
+| `get_execution_trace`    | Read the record of one agent run                     |
 
 ### Chat and conversations
 
@@ -75,8 +75,8 @@ Your MCP client can also just ask. Call `tools/list` after connecting and the se
 | ------------------------- | -------------------------- |
 | `list_notifications`      | List notifications         |
 | `mark_notification`       | Mark notifications as read |
-| `get_user_preferences`    | Read user preferences      |
-| `update_user_preferences` | Update user preferences    |
+| `get_user_preferences`    | Read your preferences      |
+| `update_user_preferences` | Update your preferences    |
 
 ### Plugins
 
@@ -95,7 +95,7 @@ Your MCP client can also just ask. Call `tools/list` after connecting and the se
 
 ## Parity model
 
-The tool list is built from the same contract registry as the REST API. A capability that declares `mcp` in its `surfaces` array becomes a tool; one that does not is left out. Nobody keeps the two surfaces in sync by hand: the registry is the only list.
+The contract registry builds the tool list, the same registry that builds the REST API. A capability that declares `mcp` in its `surfaces` array becomes a tool. One that does not is left out. Nobody keeps the two surfaces in sync by hand: the registry is the only list.
 
 ## Known gaps
 

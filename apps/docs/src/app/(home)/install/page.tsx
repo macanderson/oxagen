@@ -9,7 +9,7 @@ import { HexField } from "@/components/ui/hex-field";
 export const metadata: Metadata = {
   title: "Install the Oxagen CLI",
   description:
-    "One command puts the oxagen binary on your PATH: the install script detects your platform, verifies the checksum, and installs to ~/.local/bin. Add the agent skills pack with npx and start querying your workspace from the terminal.",
+    "The oxagen CLI puts agent fleet management in your terminal. One command detects your platform, verifies the checksum, and installs the binary to ~/.local/bin. Add the skills pack with npx and query your workspace from the terminal.",
 };
 
 const INSTALL_CMD = "curl -fsSL https://cli.oxagen.sh/install.sh | sh";
@@ -20,19 +20,19 @@ const STEPS = [
   {
     step: "01",
     title: "Install the agent skills",
-    body: "The skills pack ships the agent's reusable capabilities, workflows, prompts, and tool definitions the CLI loads at startup. One npx command unpacks them to ~/.oxagen/skills.",
+    body: "The skills pack carries the reusable skills, workflows, prompts, and tool definitions the CLI loads at startup. One npx command unpacks them to ~/.oxagen/skills.",
     command: SKILLS_CMD,
   },
   {
     step: "02",
     title: "Install the binary",
-    body: "install.sh detects your platform, fetches the matching oxagen binary, verifies its checksum, and places it in ~/.local/bin, a directory already on your PATH, no shell-profile edits required.",
+    body: "install.sh detects your platform, fetches the matching oxagen binary, verifies its checksum, and places it in ~/.local/bin. That directory is already on your PATH, so no shell profile needs editing.",
     command: INSTALL_CMD,
   },
   {
     step: "03",
-    title: "Verify and go",
-    body: "Run oxagen --version to confirm the install, then oxagen login to connect your organization and workspace. Your first question is one command away.",
+    title: "Verify and sign in",
+    body: "Run oxagen --version to confirm the install. Then run oxagen login to sign in to your organization and workspace.",
     command: "oxagen --version",
   },
 ];
@@ -41,17 +41,17 @@ const STEPS = [
 const NEXT_STEPS = [
   {
     title: "Quickstart",
-    body: "Log in, pick a workspace, ask your first question, five minutes end to end.",
+    body: "Sign in, pick a workspace, and ask your first question in five minutes.",
     href: "/docs/cli/quickstart",
   },
   {
     title: "Account setup",
-    body: "Create your organization and workspace, mint an API key, connect the CLI.",
+    body: "Create your organization and workspace, then an Oxagen API key for the CLI.",
     href: "/docs/cli/account-setup",
   },
   {
     title: "Commands",
-    body: "The full command reference, agent loop, knowledge graph queries, configuration.",
+    body: "Every command: the agent loop, knowledge graph queries, and configuration.",
     href: "/docs/cli/commands",
   },
 ];
@@ -81,8 +81,7 @@ export default function InstallPage(): ReactNode {
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Your workspace, <span className="lp-grad-text">one command</span>{" "}
-              away.
+              Run your agents <span className="lp-grad-text">as a fleet</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
@@ -90,12 +89,13 @@ export default function InstallPage(): ReactNode {
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 oxagen
               </code>{" "}
-              CLI brings the governed agent to your terminal: the same knowledge
-              graph, the same RBAC-scoped retrieval, the same audited{" "}
+              CLI puts the fleet in your terminal: the same knowledge graph, the
+              same scoped retrieval, and the same audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
-              chokepoint. Install it in seconds; no shell-profile surgery.
+              boundary as the app. One command installs it, and no shell profile
+              needs editing.
             </p>
 
             <div className="mt-8">
@@ -132,11 +132,11 @@ export default function InstallPage(): ReactNode {
           <div className="max-w-2xl">
             <span className="ox-eyebrow">Installation</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Skills, binary, <span className="lp-grad-text">go</span>.
+              Skills, binary, <span className="lp-grad-text">sign in</span>.
             </h2>
             <p className="mt-4 text-base text-muted-foreground">
-              Two commands to install, one to verify: exactly the sequence the
-              terminal above is typing.
+              Two commands install it and one verifies it, in the order the
+              terminal above types them.
             </p>
           </div>
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-3">
@@ -180,8 +180,7 @@ export default function InstallPage(): ReactNode {
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 install.sh
               </code>{" "}
-              does four predictable things and nothing else: read it before you
-              run it, we insist.
+              does four things and nothing else. Read it before you run it.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
@@ -191,15 +190,15 @@ export default function InstallPage(): ReactNode {
                 ],
                 [
                   "Verifies the checksum",
-                  "The download is checked against a published SHA-256 before anything touches disk.",
+                  "The script checks the download against a published SHA-256 before it writes anything to disk.",
                 ],
                 [
                   "Installs to ~/.local/bin",
-                  "The XDG-standard user binary directory, already on PATH in modern shells: no profile edits.",
+                  "The XDG user binary directory, already on PATH in current shells, so no profile needs editing.",
                 ],
                 [
                   "Never needs sudo",
-                  "Everything lives in your home directory; uninstalling is deleting one file.",
+                  "Everything lives in your home directory. To uninstall, delete one file.",
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
@@ -226,15 +225,14 @@ export default function InstallPage(): ReactNode {
             <p className="mt-5 text-sm text-muted-foreground">
               The CLI is on npm too, but a global{" "}
               <code className="font-mono">npm i -g</code> is not reliably
-              standalone yet. Every option, npm, source builds, the bundle, is
-              covered in the{" "}
+              standalone yet. The{" "}
               <Link
                 href="/docs/cli/installation"
                 className="font-medium text-[var(--ember-ink)] hover:underline"
               >
                 installation guide
-              </Link>
-              .
+              </Link>{" "}
+              covers every option: npm, source builds, and the bundle.
             </p>
           </div>
         </div>
@@ -251,12 +249,13 @@ export default function InstallPage(): ReactNode {
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
             <OxagenIcon className="size-12" />
             <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Installed? <span className="lp-grad-text">Ask something.</span>
+              Never re-explain yourself{" "}
+              <span className="lp-grad-text">to AI ever again</span>.
             </h2>
             <p className="mt-4 max-w-xl text-base text-muted-foreground">
-              The CLI speaks to the same governed platform as the app and the
-              API: log in and your workspace knowledge graph is on the other end
-              of the prompt.
+              Taught once, known by every agent you run. The CLI reads the same
+              knowledge graph and the same record as the app and the API. Sign
+              in and your workspace graph is on the other end of the prompt.
             </p>
           </div>
           <div className="mt-12 grid gap-5 md:grid-cols-3">

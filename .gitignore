@@ -213,6 +213,7 @@ apps/docs/public/architecture/
 .design-sync/sb-reference/
 .design-sync/learnings/
 .design-sync/.cache/
+.design-sync/previews/
 .design-sync/node_modules
 .design-sync/*.log
 .ds-sync/

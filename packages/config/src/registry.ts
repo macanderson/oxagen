@@ -850,6 +850,14 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "rather than issuing an enrollment no install could verify.",
     secret: true,
     clientExposed: false,
+    // Deliberately unclaimed, unlike its Tacho counterpart. `valueOrigin:
+    // "generate"` means the env-manager deploy path mints a fresh value for
+    // every key in the catalog and never returns it
+    // (tools/env-manager/src/server.ts), and a Stella install verifies
+    // enrollment documents against an out-of-band copy of this exact secret —
+    // so claiming it for a service would rotate the fleet's copy away on the
+    // next deploy. Giving create_stella_enrollment a deployed secret needs a
+    // distribution story first.
     services: [],
     requiredIn: [],
     valueOrigin: "generate",
@@ -863,6 +871,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Defaults to the public endpoint; plaintext entries are dropped.",
     secret: false,
     clientExposed: false,
+    // Unclaimed while STELLA_ENROLLMENT_SIGNING_SECRET is: deploying the
+    // endpoint list alone would not make create_stella_enrollment work.
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
@@ -877,7 +887,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "distributed out of band. Unset means the capability refuses to enrol a host.",
     secret: true,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
@@ -891,7 +901,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "cannot verify. Unset means enrollment and bundle capabilities refuse.",
     secret: true,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
@@ -905,7 +915,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "the public endpoint; plaintext entries are dropped.",
     secret: false,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/tacho",
@@ -1480,6 +1490,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── CLI / tooling ────────────────────────────────────────────────────────────
+  OXAGEN_CLI_DEBUG: {
+    group: "CLI",
+    description:
+      "Set to 1 or true to write the CLI's debug log to ~/.oxagen/logs " +
+      "(apps/cli/src/lib/debug-log.ts). Developer tooling, never set on a " +
+      "deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_TOKEN: {
     group: "CLI",
     description:
@@ -1874,7 +1896,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_HOUSE_BRAND: {
     group: "Operator scripts",
     description:
-      "Path to the oxagen-house-brand checkout sync-brand-assets.mjs copies marks from. " +
+      "Path to the house brand kit checkout (oxagenai/oxagen-brand) sync-brand-assets.mjs copies marks and the branding skill from. " +
       "Defaults to a sibling directory of this repository.",
     secret: false,
     clientExposed: false,

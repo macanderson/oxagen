@@ -1,6 +1,6 @@
 /* ==========================================================================
    oxagen.sh — shared behaviour
-   Nav, dropdown, drawer, reveal, copy, the typewriters, and the lead forms.
+   Nav, drawer, reveal, live figures, the terminal, and the lead forms.
    Vanilla and dependency-free: this file ships to the browser byte-for-byte.
    The site's build (scripts/build.mjs) only assembles pages into dist/; it
    never bundles, transpiles or touches this file.
@@ -60,7 +60,7 @@
   /* ---------- nav: mark the page we are on ---------- */
   var here = location.pathname.replace(/\/$/, "") || "/";
   document
-    .querySelectorAll(".nav-links a[href], .drop-menu a[href], .drawer a[href]")
+    .querySelectorAll(".nav-links a[href], .drawer a[href]")
     .forEach(function (a) {
       var href = a.getAttribute("href") || "";
       if (href.charAt(0) !== "/" || href.indexOf("#") === 0) {
@@ -69,75 +69,8 @@
       var path = href.split("#")[0].replace(/\/$/, "") || "/";
       if (path === here && path !== "/") {
         a.setAttribute("aria-current", "page");
-        var menu = a.closest(".drop-menu");
-        if (menu) {
-          var btn = menu.parentNode.querySelector(".drop-btn");
-          if (btn) {
-            btn.setAttribute("data-current", "true");
-          }
-        }
       }
     });
-
-  /* ---------- nav: products dropdown ---------- */
-  document.querySelectorAll(".drop").forEach(function (drop) {
-    var btn = drop.querySelector(".drop-btn");
-    var closeTimer = null;
-    if (!btn) {
-      return;
-    }
-
-    function open(state) {
-      drop.setAttribute("data-open", state ? "true" : "false");
-      btn.setAttribute("aria-expanded", state ? "true" : "false");
-    }
-    function scheduleClose() {
-      closeTimer = setTimeout(function () {
-        open(false);
-      }, 160);
-    }
-    function cancelClose() {
-      if (closeTimer) {
-        clearTimeout(closeTimer);
-        closeTimer = null;
-      }
-    }
-
-    drop.addEventListener("mouseenter", function () {
-      cancelClose();
-      open(true);
-    });
-    drop.addEventListener("mouseleave", scheduleClose);
-    btn.addEventListener("click", function (e) {
-      e.preventDefault();
-      open(drop.getAttribute("data-open") !== "true");
-    });
-    // Only a focus landing *inside the menu* opens it — focusing the button
-    // itself must not, or Escape's `btn.focus()` would reopen what it closed.
-    drop.addEventListener("focusin", function (e) {
-      if (!e.target.closest(".drop-menu")) {
-        return;
-      }
-      cancelClose();
-      open(true);
-    });
-    drop.addEventListener("focusout", function (e) {
-      if (!drop.contains(e.relatedTarget)) {
-        open(false);
-      }
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && drop.getAttribute("data-open") === "true") {
-        open(false);
-        btn.focus();
-      }
-    });
-    document.addEventListener("click", function (e) {
-      if (!drop.contains(e.target)) {
-        open(false);
-      }
-    });
-  });
 
   /* ---------- nav: mobile drawer ---------- */
   var burger = document.getElementById("burger");
@@ -181,92 +114,28 @@
     });
   }
 
-  /* ---------- ticker: duplicate the track for a seamless loop ---------- */
-  document.querySelectorAll(".ticker-track").forEach(function (track) {
-    track.innerHTML += track.innerHTML;
-  });
-
-  /* ---------- typewriter: one line, cycling through phrases ----------
-     <span class="typed" data-typewriter="first|second"></span><span class="caret"></span>
-     Types, holds, backspaces, moves on. Only runs while on screen, so a page
-     of these costs nothing below the fold. */
-  function cycleType(el) {
-    var phrases = (el.getAttribute("data-typewriter") || "")
-      .split("|")
-      .filter(Boolean);
-    if (!phrases.length) {
-      return;
-    }
-    if (reduceMotion) {
-      el.textContent = phrases[0];
-      return;
-    }
-
-    var pi = 0,
-      ci = 0,
-      deleting = false,
-      live = false,
-      timer = null;
-
-    function tick() {
-      if (!live) {
-        return;
-      }
-      var text = phrases[pi];
-      if (!deleting) {
-        ci += 1;
-        el.textContent = text.slice(0, ci);
-        if (ci >= text.length) {
-          deleting = true;
-          timer = setTimeout(tick, phrases.length > 1 ? 2600 : 1e9);
-          return;
-        }
-        timer = setTimeout(tick, 34 + Math.random() * 46);
-        return;
-      }
-      ci -= 1;
-      el.textContent = text.slice(0, ci);
-      if (ci <= 0) {
-        deleting = false;
-        pi = (pi + 1) % phrases.length;
-        timer = setTimeout(tick, 420);
-        return;
-      }
-      timer = setTimeout(tick, 16);
-    }
-
-    // Observe the PARENT, at threshold 0. An empty target has a zero-area box,
-    // and a zero-area box never reaches a non-zero threshold — so observing the
-    // span itself left every typewriter waiting for an intersection that could
-    // not happen until it already had text.
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (e) {
-            if (e.isIntersecting && !live) {
-              live = true;
-              tick();
-            } else if (!e.isIntersecting) {
-              live = false;
-              clearTimeout(timer);
-            }
-          });
-        },
-        { threshold: 0 },
-      ).observe(el.parentElement || el);
-    } else {
-      live = true;
-      tick();
-    }
+  /* ---------- live figures: a loop runs only while it is on screen ----------
+     <figure class="dg" data-live> ... <span class="dg-loop"></span></figure>
+     The CSS pauses every .dg-loop until its host carries .playing, so a figure
+     below the fold, or any figure under reduced motion, costs nothing. */
+  var liveEls = document.querySelectorAll("[data-live]");
+  if (liveEls.length && "IntersectionObserver" in window && !reduceMotion) {
+    var liveIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        e.target.classList.toggle("playing", e.isIntersecting);
+      });
+    });
+    Array.prototype.forEach.call(liveEls, function (el) {
+      liveIo.observe(el);
+    });
   }
-  document.querySelectorAll("[data-typewriter]").forEach(cycleType);
 
   /* ---------- terminal: a multi-line script that types and replays ----------
      <div class="term-body" data-term="#scriptId"></div>
      <script type="application/json" id="scriptId">[[{cls,text},...],...]</script>
-     The replay never ends, so — like the typewriters above — it only runs while
-     the terminal is on screen. Otherwise it would keep a timer firing every few
-     tens of milliseconds for the whole life of the tab. */
+     The site has one of these, on the home page. The replay never ends, so it
+     only runs while the terminal is on screen. Otherwise it would keep a timer
+     firing every few tens of milliseconds for the whole life of the tab. */
   function playTerminal(body) {
     var srcSel = body.getAttribute("data-term");
     var src = srcSel && document.querySelector(srcSel);
@@ -383,147 +252,6 @@
     }
   }
   document.querySelectorAll("[data-term]").forEach(playTerminal);
-
-  /* ---------- counters: a number that climbs into place ---------- */
-  document.querySelectorAll("[data-count]").forEach(function (el) {
-    var target = parseFloat(el.getAttribute("data-count"));
-    var decimals = (el.getAttribute("data-decimals") || "0") | 0;
-    if (isNaN(target)) {
-      return;
-    }
-    if (reduceMotion || !("IntersectionObserver" in window)) {
-      el.textContent = target.toFixed(decimals);
-      return;
-    }
-    var started = false;
-    new IntersectionObserver(
-      function (entries, obs) {
-        entries.forEach(function (e) {
-          if (!e.isIntersecting || started) {
-            return;
-          }
-          started = true;
-          obs.disconnect();
-          var t0 = performance.now(),
-            dur = 1100;
-          (function step(now) {
-            var p = Math.min(1, (now - t0) / dur);
-            var eased = 1 - Math.pow(1 - p, 3);
-            el.textContent = (target * eased).toFixed(decimals);
-            if (p < 1) {
-              requestAnimationFrame(step);
-            }
-          })(t0);
-        });
-      },
-      { threshold: 0.4 },
-    ).observe(el);
-  });
-
-  /* ---------- deck: the tab strip, same shape as the one in the TUI ----------
-     <div data-tabs>
-       <div role="tablist"><button role="tab" aria-controls="panelId">…</button></div>
-       <div role="tabpanel" id="panelId">…</div>
-     </div>
-     Arrow keys move, Home/End jump, and one panel is visible at a time. */
-  document.querySelectorAll("[data-tabs]").forEach(function (deck) {
-    var tabs = Array.prototype.slice.call(
-      deck.querySelectorAll('[role="tab"]'),
-    );
-    if (!tabs.length) {
-      return;
-    }
-
-    function select(idx, focus) {
-      tabs.forEach(function (tab, i) {
-        var on = i === idx;
-        tab.setAttribute("aria-selected", on ? "true" : "false");
-        tab.tabIndex = on ? 0 : -1;
-        var panel = document.getElementById(tab.getAttribute("aria-controls"));
-        if (panel) {
-          panel.hidden = !on;
-        }
-      });
-      if (focus) {
-        tabs[idx].focus();
-      }
-    }
-
-    tabs.forEach(function (tab, i) {
-      tab.addEventListener("click", function () {
-        select(i);
-      });
-      tab.addEventListener("keydown", function (e) {
-        var next = null;
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-          next = (i + 1) % tabs.length;
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-          next = (i - 1 + tabs.length) % tabs.length;
-        } else if (e.key === "Home") {
-          next = 0;
-        } else if (e.key === "End") {
-          next = tabs.length - 1;
-        }
-        if (next !== null) {
-          e.preventDefault();
-          select(next, true);
-        }
-      });
-    });
-
-    var initial = tabs.findIndex(function (t) {
-      return t.getAttribute("aria-selected") === "true";
-    });
-    select(initial === -1 ? 0 : initial);
-  });
-
-  /* ---------- copy buttons ----------
-     navigator.clipboard only exists on a secure origin, so the execCommand
-     path is the one a plain-http preview takes. Either way the label only says
-     "Copied" once something was actually copied — a button that claims a copy
-     it did not make is worse than one that admits it failed. */
-  function legacyCopy(txt) {
-    var ta = document.createElement("textarea");
-    ta.value = txt;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    var ok = false;
-    try {
-      ok = document.execCommand("copy");
-    } catch (_) {
-      ok = false;
-    }
-    document.body.removeChild(ta);
-    return ok;
-  }
-
-  document.querySelectorAll(".copy-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var txt = btn.getAttribute("data-copy") || "";
-      var label = btn.querySelector("span");
-      var settle = function (ok) {
-        label.textContent = ok ? "Copied" : "Copy failed";
-        setTimeout(function () {
-          label.textContent = "Copy";
-        }, 1600);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(
-          function () {
-            settle(true);
-          },
-          function () {
-            settle(legacyCopy(txt));
-          },
-        );
-      } else {
-        settle(legacyCopy(txt));
-      }
-    });
-  });
 
   /* ---------- lead forms ---------- */
   function setStatus(form, msg, isErr) {

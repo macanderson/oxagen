@@ -3,7 +3,7 @@ title: Billing & usage
 description: Plans, usage credits, metered consumption, and per-turn budgets.
 ---
 
-Everything an agent, API call, or MCP tool does in Oxagen is metered at the `invoke()` boundary, so billing is a direct readout of governed activity: not a separate estimate. Org admins manage it under **Organization → Billing**.
+Oxagen meters every governed action at the `invoke()` boundary, whether an agent, an API call, or an MCP tool made it. The bill reads the same rows as the record, so billing is not a separate estimate. Org admins manage billing under **Organization → Billing**.
 
 <Mermaid
   chart="
@@ -15,39 +15,39 @@ flowchart LR
   D --> F[Stripe]"
 />
 
-*Every metered call writes a ClickHouse usage event and debits credits in the same boundary: the usage dashboard and Stripe both read off that one ledger.*
+*Every metered call writes a ClickHouse usage event and debits credits at the same boundary. The usage dashboard and Stripe both read that one ledger.*
 
 ## Subscription
 
-Each organization has a plan with monthly or yearly intervals. Plan changes go through Stripe Checkout: Oxagen returns a checkout URL, the user completes payment there, and the subscription updates on webhook confirmation. The current plan and period bounds are visible on **Billing → Subscription**.
+Each organization has a plan, billed monthly or yearly. Plan changes go through Stripe Checkout: Oxagen returns a checkout URL, you complete payment there, and the subscription updates when the webhook confirms it. **Billing → Subscription** shows the current plan and the period bounds.
 
 ## Usage credits
 
-Model and capability consumption debits **usage credits**. When plan-included credits run out, anyone with billing permission can purchase additional credits (minimum $5): again via Stripe Checkout. Every debit is recorded per invocation, so credits reconcile exactly against the audit trail.
+Model and capability consumption debits **usage credits**. When the credits included in the plan run out, anyone with billing permission can buy more (minimum $5), also through Stripe Checkout. Oxagen records every debit per governed action, so credits reconcile exactly against the audit trail.
 
 ## Usage breakdown
 
-**Billing → Usage** aggregates any time window by:
+**Billing → Usage** totals any time window by:
 
-- model,
-- surface (agent, API, MCP, CLI),
-- workspace,
-- capability,
-- acting principal (per-seat / per-agent metering),
+- model
+- surface (agent, API, MCP, CLI)
+- workspace
+- capability
+- acting principal (per-seat and per-agent metering)
 
-plus a daily time series of tokens and cost. The same breakdown is available programmatically for FinOps pipelines.
+It also shows a daily series of tokens and cost. FinOps pipelines can read the same breakdown through the API.
 
 ## Budgets
 
-Budgets put a dollar ceiling on each agent turn, evaluated as the turn runs:
+A budget puts a dollar ceiling on each agent turn, checked while the turn runs:
 
 | Mode | Behaviour at the limit |
 |---|---|
-| `grace` | Allow overage within a configured grace percentage, then stop |
-| `prompt` | Pause and ask the user whether to continue |
-| `enforce` | Hard stop the moment the limit is crossed |
+| `grace` | Allow overage up to a configured grace percentage, then stop |
+| `prompt` | Pause the turn and ask you whether to continue |
+| `enforce` | Stop the turn the moment it crosses the limit |
 
 Two layers combine:
 
-- **Personal budget**: each user's own per-turn limit and mode.
-- **Workspace budget policy**: set by an org/workspace admin, either as a soft `default` (seeds members who have not set their own) or a hard `ceiling` (members cannot exceed it, and the mode can only get stricter).
+- **Personal budget**: each member's own per-turn limit and mode.
+- **Workspace budget policy**: set by an org or workspace admin, either as a soft `default` (it seeds members who have not set their own) or as a hard `ceiling` (members cannot exceed it, and a member can only make the mode stricter).

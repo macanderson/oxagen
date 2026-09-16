@@ -36,7 +36,7 @@ export function TuiGraphSearch({ className }: { className?: string }) {
   return (
     <TuiFrame
       id="tui-graph-search"
-      title="~/acme-web — oxagen"
+      title="~/acme-web · oxagen"
       width={560}
       height={222}
       className={className}

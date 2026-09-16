@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>Oxagen · Un-poisonable Edits</title>
+<title>Oxagen · Un-poisonable edits</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B0B0C">
 <meta name="description" content="Un-poisonable edits: every agent file edit hash-anchored against stale reads, syntax-gated before it lands, and recorded with a verifiable audit anchor. What shipped, the roadmap to governed edits, and why it matters.">
@@ -247,8 +247,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <svg class="title-logo" viewBox="7.775 4.325 36.343 37.216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Oxagen logo"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient></defs><g stroke="#F1EDEA" stroke-width="1" fill="none"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/></svg>
     </div>
     <div class="eyebrow rv" data-d="2">Harness engineering · Feature briefing · July 2026</div>
-    <h1 class="rv" data-d="3">Un-poisonable edits.<br><span class="gradtext">Anchored. Verified. Audited.</span></h1>
-    <p class="lede rv" data-d="4">Torn and misapplied patches are the number-one silent killer of agent accuracy. As of today, every file edit an Oxagen agent makes is <strong>hash-anchored</strong> against stale reads, <strong>parsed before it lands</strong>, and <strong>recorded with a verifiable before/after anchor</strong>. Bad writes are refused by the harness, not discovered by the build.</p>
+    <h1 class="rv" data-d="3">Un-poisonable<br><span class="gradtext">edits.</span></h1>
+    <p class="lede rv" data-d="4">Torn and misapplied patches quietly cost agent accuracy, and every turn built on one costs tokens. Every file edit an Oxagen agent makes is <strong>hash-anchored</strong> against stale reads, <strong>parsed before it lands</strong>, and <strong>recorded with a verifiable before/after anchor</strong>. Bad writes are refused by the harness, not discovered by the build.</p>
     <div class="title-meta rv" data-d="5">
       <span class="pill">sha256 anchors</span>
       <span class="pill">AST syntax gate</span>
@@ -263,12 +263,12 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 <section class="slide" aria-label="The problem">
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">01</span> The failure class</div>
-    <h2 class="rv" data-d="1">One clean-looking edit can <span class="gradtext">poison a whole session</span>.</h2>
+    <h2 class="rv" data-d="1">One clean-looking edit can <span class="gradtext">poison a whole run</span>.</h2>
     <p class="lede rv" data-d="2">An agent edit fails in two quiet ways, and both compound: the agent keeps stacking turns on top of a poisoned file, then spends the rest of the budget undoing its own damage.</p>
     <div class="grid4 rv" data-d="3">
       <div class="card"><span class="k">Torn patches</span><p>The file changed on disk between the agent's read and its edit. The patch lands on the wrong version, or in the wrong place.</p></div>
       <div class="card"><span class="k">Silent damage</span><p>The replacement applies cleanly but breaks the syntax. Nothing notices until a build fails, many turns and many dollars later.</p></div>
-      <div class="card"><span class="k">Contested trees</span><p>Multiple sessions, subagents, and an optimizer share one checkout. External change between turns is normal, not rare.</p></div>
+      <div class="card"><span class="k">Contested trees</span><p>Multiple runs, subagents, and an optimizer share one checkout. External change between turns is normal, not rare.</p></div>
       <div class="card"><span class="k">No accountability</span><p>Afterwards, nothing records which turn damaged the file, what it changed, or whether the breakage was intentional.</p></div>
     </div>
     <p class="footnote rv" data-d="4">These are structural failures. The defense has to be structural too: a harness that refuses the bad write, not a prompt that asks the model to be careful.</p>
@@ -295,7 +295,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid3 rv" data-d="4">
       <div class="card"><span class="k">Stale-read rejection</span><p>"Stale anchor: the file changed on disk since you last read it." One re-read recovers. Nothing gets clobbered.</p></div>
       <div class="card"><span class="k">Chained edits stay cheap</span><p>Every successful mutation re-anchors the file, so consecutive edits need no re-read in between.</p></div>
-      <div class="card"><span class="k">Zero model burden</span><p>The ledger is harness state. The model never manages hashes; it simply gets stopped when it is about to be wrong.</p></div>
+      <div class="card"><span class="k">No model burden</span><p>The ledger is harness state. The model never manages hashes. It gets stopped when it is about to be wrong.</p></div>
     </div>
   </div>
 </section>
@@ -326,7 +326,7 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
     <p class="lede rv" data-d="2">The gates live at the single tool layer every agent run shares, the same seam that already enforces graph-backed file locks. No per-surface wiring, and no surface can opt out.</p>
     <div class="grid4 rv" data-d="3">
       <div class="card"><span class="k">Chat agents</span><p>The in-app coding agent gets anchored, gated edits on every turn.</p></div>
-      <div class="card"><span class="k">CLI sessions</span><p>The terminal agent runs the same tool layer, so the same physics apply.</p></div>
+      <div class="card"><span class="k">CLI runs</span><p>The terminal agent runs the same tool layer, so the same physics apply.</p></div>
       <div class="card"><span class="k">Fleet dispatch</span><p>Every fanned-out worker edits under the same anchors and gates.</p></div>
       <div class="card"><span class="k">Sandboxed runs</span><p>Remote sandbox workspaces inherit the gate through the identical seam.</p></div>
     </div>
@@ -359,8 +359,8 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
     <h2 class="rv" data-d="1">From gated edits to <span class="gradtext">governed edits</span>.</h2>
     <div class="grid3 rv" data-d="2" style="margin-top:20px">
       <div class="card"><h3><span class="g">V1.1 · weeks</span>Typecheck delta</h3><p>An incremental language service behind the diagnostics port. An edit that breaks a sibling file's types is refused at write time, not at build time.</p></div>
-      <div class="card"><h3><span class="g">V2 · next quarter</span>AST transforms</h3><p>rename_symbol, add_import, update_signature applied through the AST. Node anchors survive reformatting entirely; whitespace drift stops existing.</p></div>
-      <div class="card"><h3><span class="g">V2.2 · next quarter</span>Lineage graph</h3><p>Every gated edit lands in Neo4j linked to its turn and execution. "Which turn broke this file, and did it declare it?" becomes a query.</p></div>
+      <div class="card"><h3><span class="g">V2 · next quarter</span>AST transforms</h3><p>rename_symbol, add_import, update_signature applied through the AST. Node anchors survive reformatting entirely. Whitespace drift stops existing.</p></div>
+      <div class="card"><h3><span class="g">V2.2 · next quarter</span>Lineage graph</h3><p>Every gated edit lands in Neo4j linked to its turn and run. "Which turn broke this file, and did it declare it?" becomes a query.</p></div>
     </div>
     <div class="grid2 rv" data-d="3" style="margin-top:14px">
       <div class="card"><h3><span class="g">V3 · two quarters</span>Cross-language gates</h3><p>tree-sitter grammars and per-language diagnostic providers extend the same physics to Python, Go, Rust, SQL, and YAML.</p></div>
@@ -373,16 +373,16 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
 <!-- 8 · WHY IT MATTERS -->
 <section class="slide" aria-label="Why it matters">
   <div class="inner">
-    <div class="eyebrow rv" data-d="1"><span class="idx">07</span> Why we think this is important</div>
+    <div class="eyebrow rv" data-d="1"><span class="idx">07</span> Why it matters</div>
     <h2 class="rv" data-d="1">The wedge, applied to <span class="gradtext">the file system itself</span>.</h2>
-    <p class="lede rv" data-d="2">Oxagen's promise is one enforced object binding identity, permitted action, verified outcome, and audit record. Un-poisonable edits apply that chain to the most frequent thing agents do: <strong>mutating code</strong>. Models are no longer the differentiator; the harness is. Accuracy is a property of the loop.</p>
+    <p class="lede rv" data-d="2">Oxagen's promise is one enforced object binding identity, permitted action, verified outcome, and audit record. Un-poisonable edits apply that chain to the most frequent thing agents do: <strong>mutating code</strong>. Models are no longer the differentiator. The harness is. Accuracy is a property of the loop.</p>
     <div class="grid2 rv" data-d="3">
       <div class="card"><h3><span class="g">Oxagen, today</span>Refused, not repaired</h3><p>Every edit anchored, parsed, and recorded at a seam no surface can bypass. The bad write never happens, so nobody pays to undo it.</p></div>
-      <div class="card"><h3><span class="g">State of the art elsewhere</span>Anchored, at best</h3><p>Hash-anchored patching exists in the best mid-2026 harnesses. Nobody gates on a diagnostic delta, and nobody lands edits in a lineage graph.</p></div>
+      <div class="card"><h3><span class="g">State of the art elsewhere</span>Anchored, at best</h3><p>Hash-anchored patching exists in the best mid-2026 harnesses. They do not gate on a diagnostic delta or land edits in a lineage graph.</p></div>
     </div>
     <div class="verdict rv" data-d="4">
       <div class="big">Accuracy moat, trust moat</div>
-      <div class="small">Fewer poisoned sessions means better outcomes per dollar (the accuracy moat). A per-edit audit chain means enterprises can prove what their agents did (the trust moat). Both compound with every phase of the roadmap.</div>
+      <div class="small">Fewer poisoned runs means better outcomes per dollar (the accuracy moat). A per-edit audit chain means enterprises can prove what their agents did (the trust moat). Both compound with every phase of the roadmap.</div>
     </div>
   </div>
 </section>
@@ -392,11 +392,11 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">08</span> The close</div>
     <div class="verdict rv" data-d="2" style="margin-top:30px">
-      <div class="big">Torn patches: structurally impossible.</div>
+      <div class="big">Torn patches: refused at the seam.</div>
       <div class="small">Shipped today: hash-anchored stale detection, a pre-write syntax gate with declared breakage, a pluggable diagnostics port, and a per-edit audit record, enforced at one seam for chat, CLI, fleet, and sandbox. Next: typecheck deltas, AST transforms, lineage edges, and edits as governed, billable capabilities.</div>
     </div>
-    <p class="lede rv" data-d="3" style="margin-top:26px">The platforms that win the agent era are the ones whose loops <strong>cannot silently damage your code</strong>, and can prove it.</p>
-    <p class="footnote rv" data-d="4">Roadmap: docs/specs/unpoisonable-edits/roadmap.md · Implementation: packages/agent-engine/src/edit-integrity.ts</p>
+    <p class="lede rv" data-d="3" style="margin-top:26px">An edit that would <strong>silently damage your code</strong> is refused before it lands, and the record shows every one.</p>
+    <p class="footnote rv" data-d="4">Roadmap: docs/specs/unpoisonable-edits/roadmap.md</p>
   </div>
 </section>
 
@@ -547,9 +547,9 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
 '</style></head><body>',
 '<div class="hd"><span class="badge">Presenter · private</span><span class="pos" id="pos">–</span><span class="timer" id="timer">00:00</span></div>',
 '<div class="lbl">Now saying</div><div class="title" id="ptitle">Connecting…</div>',
-'<div class="say" id="say">Open this from the deck (press S) — it will sync automatically.</div>',
+'<div class="say" id="say">Open this from the deck (press S). It syncs automatically.</div>',
 '<div class="demo" id="demo"></div>',
-'<div class="next"><span class="lbl">Up next → </span><b id="pnext">—</b></div>',
+'<div class="next"><span class="lbl">Up next → </span><b id="pnext">·</b></div>',
 '<div class="ctrls"><button class="btn" id="preconn">⟳ Sync</button><button class="btn" id="pprev">← Prev</button><button class="btn" id="treset">Timer</button><button class="btn p" id="pnextb">Next →</button></div>',
 '<div class="tnote">Share only the DECK window/tab on your call · this window stays off-screen</div>',
 '<script>(function(){',
@@ -565,7 +565,7 @@ Fix the edit, or pass <span style="color:var(--ember-a)">expect_errors:true</spa
 'document.getElementById("pos").textContent="Slide "+(i+1)+" / "+S.length;',
 'document.getElementById("ptitle").textContent=e.title;',
 'document.getElementById("say").textContent=e.say;',
-'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"— end —";',
+'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"End of deck";',
 'var d=document.getElementById("demo");d.innerHTML="";',
 'if(e.demo){e.demo.forEach(function(step){var el=document.createElement("div");el.className="step";el.innerHTML=fmtStep(step);d.appendChild(el);});}',
 '}',

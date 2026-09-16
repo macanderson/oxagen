@@ -6,7 +6,9 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
+  noOperatorMessage,
   resolveActorOrgRole as resolveActorRole,
+  resolveOperatorUserId,
 } from "./lib/api-key-authz";
 import { logger } from "./logger";
 
@@ -26,9 +28,12 @@ function denied(message: string): CapabilityError {
 export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   typeof tachoEnrollmentRevoke
 > = async (input, ctx) => {
-  if (!ctx.userId) throw denied("Unauthorized: no authenticated user");
   if (!ctx.orgId) throw denied("Forbidden: orgId is required");
-  const actorRole = await resolveActorRole(ctx.orgId, ctx.userId);
+  // `tacho unenroll` and a harness change revoke with the `oxagen login` key;
+  // a host's own machine-bound key never acts for a person.
+  const operatorUserId = await resolveOperatorUserId(ctx);
+  if (!operatorUserId) throw denied(noOperatorMessage(ctx));
+  const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
   if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
     throw denied(
       "Forbidden: only org Owners and Admins can revoke Tacho hosts",
@@ -56,16 +61,16 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         revokedAt: now,
         revokeReason: input.reason ?? null,
         updatedAt: now,
-        updatedByUserId: ctx.userId,
+        updatedByUserId: operatorUserId,
       })
       .where(eq(schema.tachoHosts.id, host.id));
     await tx
       .update(schema.apiKeys)
       .set({
         deletedAt: now,
-        deletedByUserId: ctx.userId,
+        deletedByUserId: operatorUserId,
         updatedAt: now,
-        updatedByUserId: ctx.userId,
+        updatedByUserId: operatorUserId,
       })
       .where(eq(schema.apiKeys.id, host.apiKeyId));
     await tx.insert(schema.tachoControlCommands).values({
@@ -74,11 +79,11 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
       hostId: host.id,
       command: "revoke",
       payload: { reason: input.reason ?? "revoked by operator" },
-      issuedByUserId: ctx.userId,
+      issuedByUserId: operatorUserId,
       issuedAt: now,
       expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-      createdByUserId: ctx.userId,
-      updatedByUserId: ctx.userId,
+      createdByUserId: operatorUserId,
+      updatedByUserId: operatorUserId,
     });
     return { revokedAt: now, already: false };
   });
@@ -86,7 +91,7 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   if (!result.already) {
     emitSecurityEvent({
       eventType: "api_key.revoked",
-      actorUserId: ctx.userId,
+      actorUserId: operatorUserId,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       capability: "revoke_tacho_enrollment",

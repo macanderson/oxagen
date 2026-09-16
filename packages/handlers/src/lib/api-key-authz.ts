@@ -9,18 +9,83 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 /** Org roles permitted to manage API keys. */
 export const API_KEY_AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
 
+const ORG_ROLE_ASSIGNMENT_LIMIT = 50;
+
+/** The request identity an operator capability receives from the kernel. */
+export interface OperatorContext {
+  orgId: string;
+  userId: string | null;
+  apiKeyId?: string | null;
+}
+
 /**
- * Resolve ONE of the acting user's org-scoped role names, or null when they
- * have no active principal / unexpired org-role assignment in this org.
+ * The person an operator capability acts for, or null when there is none.
+ *
+ * A session carries its user. An API key acts for the user who minted it:
+ * `oxagen login` mints one per sign-in (POST /v1/auth/cli/token, approved only
+ * for an Owner or Admin), and it is the only credential the `tacho` CLI and the
+ * desktop app hold — refusing every key made host enrollment impossible from
+ * the one client built to do it. The API sets `userId` to null for every
+ * bearer key, so without this the handlers saw no person at all.
+ *
+ * A key whose scope names a purpose was issued to a machine by an enrollment
+ * workflow (a Tacho host, a Stella telemetry install) and never acts for a
+ * person: an enrolled machine must not be able to mint, revoke or command
+ * enrollments. Any purpose fails closed, including ones added later.
+ *
+ * Callers still run their role gate on the returned user, so a key never
+ * outlives its creator's Owner/Admin role.
+ */
+export async function resolveOperatorUserId(
+  ctx: OperatorContext,
+): Promise<string | null> {
+  if (ctx.userId) return ctx.userId;
+  const apiKeyId = ctx.apiKeyId;
+  if (!apiKeyId || !ctx.orgId) return null;
+  const key = await withTenantDb((tx) =>
+    tx.query.apiKeys.findFirst({
+      where: and(
+        eq(schema.apiKeys.id, apiKeyId),
+        eq(schema.apiKeys.orgId, ctx.orgId),
+        isNull(schema.apiKeys.deletedAt),
+      ),
+      columns: {
+        scope: true,
+        createdByUserId: true,
+        stellaTelemetryEnrollmentId: true,
+      },
+    }),
+  );
+  if (!key) return null;
+  if (key.stellaTelemetryEnrollmentId) return null;
+  if (isMachineBoundScope(key.scope)) return null;
+  return key.createdByUserId ?? null;
+}
+
+function isMachineBoundScope(scope: unknown): boolean {
+  return typeof scope === "object" && scope !== null && "purpose" in scope;
+}
+
+/**
+ * The refusal an operator capability raises when `resolveOperatorUserId`
+ * finds no person, worded for the credential that was actually presented.
+ */
+export function noOperatorMessage(ctx: OperatorContext): string {
+  return ctx.apiKeyId
+    ? "Unauthorized: this API key does not act for a person (it is bound to an enrolled machine, or has no creator); sign in with `oxagen login`"
+    : "Unauthorized: no authenticated user";
+}
+
+/**
+ * Resolve the acting user's org-scoped role name, or null when they have no
+ * active principal / unexpired org-role assignment in this org.
  *
  * A principal may hold several org-wide roles at once — `iam.principal_role_
- * assignments` is unique on (principal, role, org), not on (principal, org) —
- * and this query takes the first row Postgres returns with no ORDER BY, so
- * WHICH role comes back is not deterministic. Every caller only asks "is it in
- * {Owner, Admin}?", so a user holding both Admin and Member can be denied
- * depending on plan/row order. Fixing that means asking "does ANY assigned role
- * qualify?" instead of resolving a single name, which changes what this helper
- * promises to its three callers — tracked separately, not patched here.
+ * assignments` is unique on (principal, role, org), not on (principal, org).
+ * Every caller asks "is it in {Owner, Admin}?", so an authorized role wins
+ * over any other the principal also holds; taking whichever row Postgres
+ * returned first denied a user holding both Admin and Member depending on
+ * plan/row order.
  *
  * Time-bounded (JIT) assignments are honored the same way the kernel resolver
  * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
@@ -46,7 +111,7 @@ export async function resolveActorOrgRole(
 
     if (!principalRow) return null;
 
-    const [praRow] = await tx
+    const assigned = await tx
       .select({ roleName: schema.roles.name })
       .from(schema.principalRoleAssignments)
       .innerJoin(
@@ -66,9 +131,16 @@ export async function resolveActorOrgRole(
           ),
         ),
       )
-      .limit(1);
+      // A principal holds a handful of org roles; the bound only guards a
+      // runaway row set, never which role is chosen.
+      .limit(ORG_ROLE_ASSIGNMENT_LIMIT);
 
-    return praRow?.roleName ?? null;
+    const names = assigned.map((row) => row.roleName);
+    return (
+      names.find((name) => API_KEY_AUTHORIZED_ROLES.has(name)) ??
+      names[0] ??
+      null
+    );
   });
 }
 
