@@ -39,7 +39,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
-const { ApiKeys } = await import("./api-keys");
+const { ApiKeys, chooseWorkspace } = await import("./api-keys");
 
 afterEach(() => {
   cleanup();
@@ -53,8 +53,8 @@ const ORG_FIELDS = {
 } as const;
 
 const CHOICES = [
-  { slug: "core-platform", name: "Core platform" },
-  { slug: "growth", name: "Growth" },
+  { slug: "core-platform", name: "Core platform", archived: false },
+  { slug: "growth", name: "Growth", archived: false },
 ];
 
 /** The workspace ctx the page resolves once it has picked a workspace. */
@@ -256,6 +256,60 @@ describe("the workspace a key names", () => {
     expect(other).not.toHaveAttribute("aria-current");
   });
 
+  it("keeps an archived workspace in the picker, named as archived, so its live keys stay revocable", async () => {
+    // archive_workspace records archived_at and nothing else, and resolveApiKey
+    // never consults it: a key in an archived workspace keeps authenticating.
+    // Off the picker it would be a working credential nobody can reach.
+    const ctx = wsCtx();
+    const { source } = orgSource({ apiKeys: readOk([live]) });
+    const view = render(
+      <IntlProvider>
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk([
+              ...CHOICES,
+              { slug: "sunset", name: "Sunset", archived: true },
+            ]),
+          })
+        }
+      </IntlProvider>,
+    );
+    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    expect(
+      within(picker).getByRole("link", { name: "Sunset (archived)" }),
+    ).toHaveAttribute("href", "/acme/api-keys?workspace=sunset");
+    await expectNoAxe(view.container);
+  });
+
+  it("says so on the page when the workspace in scope is archived", async () => {
+    const ctx = unsafeMint(WsCtx, {
+      ...ORG_FIELDS,
+      orgRole: "owner",
+      workspaceId: "7a000000-0000-4000-8000-0000000000c4",
+      wsSlug: "sunset",
+      wsName: "Sunset",
+    });
+    const { source } = orgSource({ apiKeys: readOk([live]) });
+    render(
+      <IntlProvider>
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk([
+              { slug: "sunset", name: "Sunset", archived: true },
+            ]),
+          })
+        }
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
+      "Its keys still authenticate, so they are listed here until they are revoked.",
+    );
+  });
+
   it("reads no key at all when the viewer may enter no workspace (negative)", async () => {
     const ctx = unsafeMint(OrgCtx, { ...ORG_FIELDS, orgRole: "owner" });
     const { source, calls } = orgSource({});
@@ -293,6 +347,48 @@ describe("the workspace a key names", () => {
     );
     expect(screen.queryByRole("table")).toBeNull();
     await expectNoAxe(view.container);
+  });
+});
+
+describe("chooseWorkspace", () => {
+  it("takes the workspace the URL names, archived or not", () => {
+    expect(
+      chooseWorkspace(
+        readOk([
+          ...CHOICES,
+          { slug: "sunset", name: "Sunset", archived: true },
+        ]),
+        "sunset",
+      ),
+    ).toBe("sunset");
+  });
+
+  it("opens on a workspace still in use when the URL names none", () => {
+    expect(
+      chooseWorkspace(
+        readOk([
+          { slug: "sunset", name: "Sunset", archived: true },
+          ...CHOICES,
+        ]),
+        undefined,
+      ),
+    ).toBe("core-platform");
+  });
+
+  it("falls back to an archived workspace when every workspace is archived", () => {
+    expect(
+      chooseWorkspace(
+        readOk([{ slug: "sunset", name: "Sunset", archived: true }]),
+        undefined,
+      ),
+    ).toBe("sunset");
+  });
+
+  it("names no workspace when the read failed or listed none (negative)", () => {
+    expect(chooseWorkspace(readOk([]), undefined)).toBeNull();
+    expect(
+      chooseWorkspace(readError("control_plane_unavailable", 503), "growth"),
+    ).toBeNull();
   });
 });
 

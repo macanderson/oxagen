@@ -4,8 +4,11 @@
 // it was called with. Every other port refuses, so a section that reads
 // outside its own port fails the test rather than passing on a stub.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
-import type { ApiKey, MemberList } from "@/data/contracts/org";
-import type { WorkspaceChoice } from "@/data/contracts/shell";
+import type {
+  ApiKey,
+  ManagedWorkspace,
+  MemberList,
+} from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 
@@ -25,7 +28,7 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
 
 type OrgReads = {
   members?: Read<MemberList>;
-  workspaces?: Read<WorkspaceChoice[]>;
+  workspaces?: Read<ManagedWorkspace[]>;
   apiKeys?: Read<ApiKey[]>;
 };
 

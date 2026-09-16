@@ -23,6 +23,21 @@ const Invitation = z.object({
   expiresAt: z.iso.datetime().nullable(),
 });
 
+/**
+ * A workspace the API keys page may manage keys in. Distinct from the shell's
+ * `WorkspaceChoice`, which is a navigation list: an archived workspace leaves
+ * the switcher and the CLI picker, and must not leave this one. Archival
+ * records `archived_at` and nothing else — `resolveApiKey` never consults it —
+ * so a key in an archived workspace keeps authenticating, and a key nobody can
+ * reach is a key nobody can revoke.
+ */
+export const ManagedWorkspace = z.object({
+  slug: z.string().min(1),
+  name: z.string(),
+  archived: z.boolean(),
+});
+export type ManagedWorkspace = z.infer<typeof ManagedWorkspace>;
+
 export const MemberList = z.object({
   members: z.array(Member),
   invitations: z.array(Invitation),

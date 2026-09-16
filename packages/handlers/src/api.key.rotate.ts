@@ -65,6 +65,10 @@ export const apiKeyRotateHandler: CapabilityHandler<
         name: schema.apiKeys.name,
         scope: schema.apiKeys.scope,
         expiresAt: schema.apiKeys.expiresAt,
+        // Null by construction: the where filters `deleted_at IS NULL`. Passed
+        // so the predicate answers over the whole row rather than a subset of
+        // it, and so the revoked case cannot be forgotten if that filter moves.
+        revokedAt: schema.apiKeys.deletedAt,
         workspaceId: schema.apiKeys.workspaceId,
       })
       .from(schema.apiKeys)
@@ -104,7 +108,7 @@ export const apiKeyRotateHandler: CapabilityHandler<
         );
       }
       throw new HandlerError({
-        code: "conflict",
+        code: refusal.kind,
         reason: refusal.reason,
         message: refusal.message,
       });

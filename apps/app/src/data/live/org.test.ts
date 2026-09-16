@@ -154,14 +154,45 @@ describe("org.workspaces", () => {
       }),
     );
     expect(await org.workspaces(ctx)).toEqual(
-      readOk([{ slug: "core-platform", name: "Core platform" }]),
+      readOk([
+        { slug: "core-platform", name: "Core platform", archived: false },
+      ]),
     );
+    // Archived included: a key in an archived workspace keeps authenticating,
+    // so it must stay reachable to be revoked.
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: workspaceList,
-      input: { orgSlug: "acme" },
+      input: { orgSlug: "acme", includeArchived: true },
       page: "organization",
     });
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("keeps an archived workspace the viewer belongs to, marked as archived", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        organization: {
+          id: ORG_FIELDS.orgId,
+          publicId: "org_1",
+          slug: "acme",
+          namespace: "acme",
+          name: "Acme Robotics",
+        },
+        workspaces: [
+          {
+            ...workspace("sunset", "admin"),
+            archivedAt: "2026-09-01T00:00:00.000Z",
+          },
+          workspace("core-platform", "owner"),
+        ],
+      }),
+    );
+    expect(await org.workspaces(ctx)).toEqual(
+      readOk([
+        { slug: "sunset", name: "Growth", archived: true },
+        { slug: "core-platform", name: "Core platform", archived: false },
+      ]),
+    );
   });
 
   it("passes a failed read through (negative)", async () => {

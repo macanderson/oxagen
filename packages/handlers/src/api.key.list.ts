@@ -21,8 +21,11 @@
 // refuses from the same function, so `rotatable` and the refusal cannot
 // disagree — a server-owned purpose and an expiry that has passed both make a
 // key unrotatable. `rotatable` is what this read saw at the instant it ran; the
-// handler is the authority and checks again against its own clock. Revocation
-// is unaffected: a key is revocable whatever its purpose or its expiry.
+// handler is the authority and checks again against its own clock. A revoked
+// key is not rotatable either — this read returns revoked rows so the roster
+// can show them, and rotate_api_key answers not-found for one — so revocation
+// is the third reason the shared predicate weighs. Revoking is unaffected by
+// all of it: a key is revocable whatever its purpose and whatever its expiry.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -121,7 +124,14 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       expiresAt: row.expiresAt?.toISOString() ?? null,
       revokedAt: row.revokedAt?.toISOString() ?? null,
-      rotatable: isRotatableKey(row, now),
+      rotatable: isRotatableKey(
+        {
+          scope: row.scope,
+          expiresAt: row.expiresAt,
+          revokedAt: row.revokedAt,
+        },
+        now,
+      ),
     })),
   };
 };

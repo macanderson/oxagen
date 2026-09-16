@@ -14,13 +14,11 @@ import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { captureError } from "@oxagen/telemetry";
-import { ApiKeyList, MemberList } from "@/data/contracts/org";
-import { WorkspaceChoice } from "@/data/contracts/shell";
+import { ApiKeyList, ManagedWorkspace, MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toApiKeys, toMemberList } from "./mappers/org";
-import { toWorkspaceChoices } from "./mappers/pretenant";
+import { toApiKeys, toManagedWorkspaces, toMemberList } from "./mappers/org";
 
 /** A record the view model refuses is reported once and read as unmappable (§3.4). */
 function unmappable(ctx: { orgId: string }, context: string, error: unknown) {
@@ -51,12 +49,16 @@ export const org: DataSource["org"] = {
   async workspaces(ctx) {
     const read = await kernelRead(ctx, {
       contract: workspaceList,
-      input: { orgSlug: ctx.orgSlug },
+      // Archived included. `archive_workspace` records `archived_at` and
+      // nothing else, and `resolveApiKey` never consults it, so a key in an
+      // archived workspace keeps working — it has to stay reachable here or it
+      // can never be revoked.
+      input: { orgSlug: ctx.orgSlug, includeArchived: true },
       page: "organization",
     });
     if (!read.ok) return read;
-    const view = WorkspaceChoice.array().safeParse(
-      toWorkspaceChoices(read.value),
+    const view = ManagedWorkspace.array().safeParse(
+      toManagedWorkspaces(read.value),
     );
     if (view.success) return readOk(view.data);
     return unmappable(ctx, "org.workspaces record_unmappable", view.error);

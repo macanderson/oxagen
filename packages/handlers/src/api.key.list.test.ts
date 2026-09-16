@@ -264,7 +264,7 @@ describe("list_api_keys — read", () => {
           lastUsedAt: null,
           expiresAt: "2026-12-31T00:00:00.000Z",
           revokedAt: "2026-09-10T08:00:00.000Z",
-          rotatable: true,
+          rotatable: false,
         },
       ],
     });
@@ -295,6 +295,18 @@ describe("list_api_keys — read", () => {
     expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
       ["aky_live", true],
       ["aky_expired", false],
+    ]);
+  });
+
+  it("reports a revoked key as not rotatable, because rotate_api_key answers not-found for one", async () => {
+    // This read deliberately includes revoked rows so the roster can show them;
+    // without revocation in the shared predicate the read model advertised a
+    // rotation that could only fail.
+    setup("Owner", [LIVE, REVOKED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_old", false],
     ]);
   });
 

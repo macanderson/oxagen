@@ -77,6 +77,9 @@ type OldRow = {
   name: string;
   scope: Record<string, unknown>;
   expiresAt: Date | null;
+  /** `deleted_at`. The handler's where filters it null, and it selects it so
+   * the rotatability predicate sees the whole row. */
+  revokedAt: Date | null;
   workspaceId: string;
 };
 type NewRow = {
@@ -125,6 +128,7 @@ const OLD_ROW: OldRow = {
   // Well clear of any clock this suite runs on: the handler now refuses to
   // rotate an expired key, so a near-future fixture would start failing.
   expiresAt: new Date("2099-01-01T00:00:00Z"),
+  revokedAt: null,
   workspaceId: "wrk_1",
 };
 const NEW_ROW: NewRow = {
@@ -252,6 +256,31 @@ describe("api.key.rotate handler — a key that has expired", () => {
     expect(insertSpy).not.toHaveBeenCalled();
     expect(updateSpy).not.toHaveBeenCalled();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses a row that arrives already revoked, the third reason the predicate weighs", async () => {
+    // The where clause filters `deleted_at IS NULL`, so this cannot normally
+    // arrive — the predicate covers it so `list_api_keys`, which does return
+    // revoked rows, gets the same answer from the same function.
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    vi.clearAllMocks();
+    setupHappyPath(
+      "Owner",
+      { ...OLD_ROW, revokedAt: new Date("2026-09-10T08:00:00Z") },
+      NEW_ROW,
+      vi.fn(),
+      insertSpy,
+      updateSpy,
+    );
+    await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "api_key_not_found",
+    );
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
   it("rotates a key whose expiry is still ahead", async () => {

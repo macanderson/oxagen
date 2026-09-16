@@ -18,7 +18,7 @@ import type {
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
-import type { ApiKey, MemberList } from "./contracts/org";
+import type { ApiKey, ManagedWorkspace, MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -142,11 +142,13 @@ export interface DataSource {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
     /**
-     * list_workspaces: the workspaces of this organization the viewer holds a
-     * membership in, for the API keys page's workspace picker. A key names a
-     * workspace (ADR-073), so the page picks one before it reads any key.
+     * list_workspaces, archived included: the workspaces of this organization
+     * the viewer holds a membership in, for the API keys page's workspace
+     * picker. A key names a workspace (ADR-073), so the page picks one before
+     * it reads any key — and an archived workspace's keys keep authenticating,
+     * so it stays in this list where it leaves the shell's switcher.
      */
-    workspaces(ctx: OrgCtx): Promise<Read<WorkspaceChoice[]>>;
+    workspaces(ctx: OrgCtx): Promise<Read<ManagedWorkspace[]>>;
     /**
      * list_api_keys, every key of the workspace in scope, newest first,
      * revoked ones included. A `WsCtx`, never an `OrgCtx`: `auth.api_keys` is

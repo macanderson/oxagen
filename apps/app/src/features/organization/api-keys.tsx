@@ -13,46 +13,45 @@
 // same org roles in the same place (INV-29). The secret a minting write returns
 // is shown once by the client island, never by anything this section reads.
 //
-// Rotate is offered only where it would work: `list_api_keys` reports the key
-// rotatable (a key an enrollment or a login flow owns is refused), and the row
-// judges the expiry itself against a clock that keeps running, because a page
-// left open crosses an expiry without a reload and rotation copies the expiry
-// that ended a key onto its replacement. `rotate_api_key` refuses an expired
-// key regardless — that refusal is the guarantee and this is the courtesy.
-// Revoke is offered on any key that is not already revoked.
+// A row judges its own state and its own controls against one clock that keeps
+// running (`key-row.tsx`), so the status word and the controls beside it cannot
+// disagree as a page ages past an expiry. `rotate_api_key` refuses an expired,
+// revoked or service-owned key regardless — that refusal is the guarantee and
+// the row is the courtesy.
 import { useTranslations } from "next-intl";
-import type { ApiKey } from "@/data/contracts/org";
-import type { WorkspaceChoice } from "@/data/contracts/shell";
+import type { ApiKey, ManagedWorkspace } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { WsCtx } from "@/server/viewer";
-import {
-  credentialState,
-  type CredentialState,
-} from "@/shared/credential-state";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
-import { cell, Table } from "@/ui/table";
-import { CreateKeyDialog, KeyRowActions } from "./create-key-dialog";
-import { DateCell, emptyLine } from "./parts";
+import { Table } from "@/ui/table";
+import { CreateKeyDialog } from "./create-key-dialog";
+import { KeyRow } from "./key-row";
+import { emptyLine } from "./parts";
 
 /**
  * The workspace this page reads in: the one the URL names when the viewer may
- * enter it, else the first the viewer may enter, else none. The page resolves
+ * enter it, else the first unarchived one the viewer may enter, else the first
+ * of any, else none. The page resolves
  * the answer through `requireViewer`, which is where membership is checked
  * (INV-15), so an unknown or refused slug falls back rather than 404ing a page
  * the viewer is entitled to.
  */
 export function chooseWorkspace(
-  workspaces: Read<WorkspaceChoice[]>,
+  workspaces: Read<ManagedWorkspace[]>,
   wanted: string | undefined,
 ): string | null {
   if (!workspaces.ok) return null;
   const named = workspaces.value.find((ws) => ws.slug === wanted);
-  return named?.slug ?? workspaces.value[0]?.slug ?? null;
+  if (named) return named.slug;
+  // Nothing named: land on a workspace still in use. An archived one is
+  // reachable — its keys still authenticate and have to be revocable — but it
+  // is not where a page opens.
+  const live = workspaces.value.find((ws) => !ws.archived);
+  return live?.slug ?? workspaces.value[0]?.slug ?? null;
 }
 
 /**
@@ -75,7 +74,7 @@ export async function ApiKeys({
   /** A `WsCtx` once a workspace is in scope; an `OrgCtx` when there is none. */
   ctx: OrgCtx;
   source: DataSource;
-  workspaces: Read<WorkspaceChoice[]>;
+  workspaces: Read<ManagedWorkspace[]>;
 }) {
   const { current, keys, now } = await readKeys(ctx, source);
   return (
@@ -100,7 +99,7 @@ function ApiKeysView({
 }: {
   orgSlug: string;
   orgRole: OrgRole;
-  workspaces: Read<WorkspaceChoice[]>;
+  workspaces: Read<ManagedWorkspace[]>;
   /** The workspace in scope, or null when the viewer may enter none. */
   current: string | null;
   /** Null when there is no workspace to read in. */
@@ -143,6 +142,16 @@ function ApiKeysView({
             workspaces={workspaces.value}
             current={current}
           />
+          {workspaces.value.find((ws) => ws.slug === current)?.archived ===
+          true ? (
+            <OutcomePanel
+              tone="neutral"
+              testId="api-keys-archived-workspace"
+              title={t("apiKeys.workspace.label")}
+            >
+              {t("apiKeys.workspace.archivedNote")}
+            </OutcomePanel>
+          ) : null}
           {read.ok ? (
             <Keys
               keys={read.value}
@@ -212,7 +221,7 @@ function WorkspacePicker({
   current,
 }: {
   orgSlug: string;
-  workspaces: readonly WorkspaceChoice[];
+  workspaces: readonly ManagedWorkspace[];
   current: string;
 }) {
   const t = useTranslations("organization.apiKeys");
@@ -221,27 +230,15 @@ function WorkspacePicker({
       label={t("workspace.label")}
       tabs={workspaces.map((ws) => ({
         to: routes.apiKeys(orgSlug, { workspace: ws.slug }),
-        label: ws.name,
+        // An archived workspace is named as archived. It is here because its
+        // keys still authenticate and a key nobody can reach is a key nobody
+        // can revoke; the label says it is not a workspace in use.
+        label: ws.archived
+          ? t("workspace.archived", { name: ws.name })
+          : ws.name,
         current: ws.slug === current,
       }))}
     />
-  );
-}
-
-/** The key's state as a dot and a word. */
-function KeyStatus({ state }: { state: CredentialState }) {
-  const t = useTranslations("organization.apiKeys.status");
-  return (
-    <span
-      data-status={state}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
-    >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${state === "live" ? "bg-success" : state === "expired" ? "bg-warning" : "bg-muted-foreground"}`}
-      />
-      {t(state)}
-    </span>
   );
 }
 
@@ -285,53 +282,17 @@ function Keys({
             { label: t("columns.actions") },
           ]}
         >
-          {keys.map((key) => {
-            const state = credentialState(key, now);
-            return (
-              <tr key={key.id} data-api-key={key.id}>
-                <td className={`${cell} font-medium text-foreground`}>
-                  {key.name}
-                </td>
-                <td className={`${cell} ${mono}`}>{key.prefix}</td>
-                <td className={cell}>
-                  <DateCell iso={key.createdAt} />
-                </td>
-                <td className={cell}>
-                  {key.lastUsedAt === null ? (
-                    t("neverUsed")
-                  ) : (
-                    <DateCell iso={key.lastUsedAt} />
-                  )}
-                </td>
-                <td className={cell}>
-                  {key.expiresAt === null ? (
-                    t("never")
-                  ) : (
-                    <DateCell iso={key.expiresAt} />
-                  )}
-                </td>
-                <td className={cell}>
-                  <KeyStatus state={state} />
-                </td>
-                <td className={cell}>
-                  {state === "revoked" ? null : (
-                    <KeyRowActions
-                      org={org}
-                      ws={ws}
-                      keyId={key.id}
-                      keyName={key.name}
-                      expiresAt={key.expiresAt}
-                      revokedAt={key.revokedAt}
-                      rotatable={key.rotatable}
-                      now={now}
-                      listedIds={listedIds}
-                      after={here}
-                    />
-                  )}
-                </td>
-              </tr>
-            );
-          })}
+          {keys.map((key) => (
+            <KeyRow
+              key={key.id}
+              apiKey={key}
+              org={org}
+              ws={ws}
+              now={now}
+              listedIds={listedIds}
+              here={here}
+            />
+          ))}
         </Table>
       )}
     </div>

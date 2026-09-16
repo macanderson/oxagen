@@ -18,6 +18,8 @@
  *     owns its lifecycle (`rotate_agent_credential`, an operator enrollment,
  *     `oxagen login`). `create_api_key` refuses to mint one for the same
  *     reason — a caller must not self-assert an enrolment.
+ *   - **Revocation.** `list_api_keys` includes revoked rows so the roster can
+ *     show them; `rotate_api_key` filters them out and answers not-found.
  *   - **An expiry that has passed.** `rotate_api_key` gives the replacement the
  *     rotated key's `expires_at`, so rotating an expired key revokes a key in
  *     the same transaction and mints one that is already expired, spending the
@@ -37,6 +39,8 @@ import { requestsReservedTachoPurpose } from "./tacho-enrollment";
 export interface RotationCandidate {
   readonly scope: unknown;
   readonly expiresAt: Date | null;
+  /** `deleted_at`. Null for a key that is still live. */
+  readonly revokedAt: Date | null;
 }
 
 /**
@@ -46,7 +50,7 @@ export interface RotationCandidate {
 export type RotationRefusal =
   | { readonly kind: "denied"; readonly log: string; readonly denial: string }
   | {
-      readonly kind: "conflict";
+      readonly kind: "conflict" | "not_found";
       readonly log: string;
       readonly reason: string;
       readonly message: string;
@@ -92,6 +96,21 @@ export function rotationRefusalFor(
   if (reserved) {
     return { kind: "denied", log: reserved.log, denial: reserved.denial };
   }
+  // Revocation is the third reason, and it is why this predicate takes the
+  // whole row rather than a scope and an expiry. `list_api_keys` deliberately
+  // returns revoked keys so the roster can show them, and `rotate_api_key`
+  // filters `deleted_at IS NULL` and answers not-found — it cannot tell a
+  // revoked key from an absent one, and neither can this. Without it the read
+  // model advertised a rotation that could only fail.
+  if (key.revokedAt !== null) {
+    return {
+      kind: "not_found",
+      log: "api.key.rotate: rejected — the key is already revoked",
+      reason: "api_key_not_found",
+      message:
+        "Not found: API key does not exist, is not in this org, or is already revoked",
+    };
+  }
   if (key.expiresAt !== null && key.expiresAt.getTime() <= now) {
     return {
       kind: "conflict",
@@ -105,8 +124,15 @@ export function rotationRefusalFor(
 }
 
 /**
- * Whether `rotate_api_key` will replace this key at `now`. Revocation is not
- * affected: `revoke_api_key` ends a key whatever its purpose or its expiry.
+ * Whether `rotate_api_key` will replace this key at `now`.
+ *
+ * The three reasons here are every reason that is a property of the key. The
+ * rest are properties of the actor — no principal, no org, the org role — and
+ * `list_api_keys` is gated on the same role in the same place, so a caller who
+ * can read the roster can rotate what the roster says is rotatable.
+ *
+ * `revoke_api_key` is unaffected by all of it: it ends a key whatever its
+ * purpose and whatever its expiry.
  */
 export function isRotatableKey(key: RotationCandidate, now: number): boolean {
   return rotationRefusalFor(key, now) === null;

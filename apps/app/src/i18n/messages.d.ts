@@ -929,6 +929,8 @@ type Messages = {
       };
       workspace: {
         label: string;
+        archived: string;
+        archivedNote: string;
       };
       noWorkspace: {
         title: string;

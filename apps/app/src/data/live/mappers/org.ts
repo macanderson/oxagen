@@ -3,9 +3,14 @@
 // member roster narrowed to the org branch of its scope union; the adapter
 // answers the workspace branch as unmappable.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
-import type { ApiKeyList, MemberList } from "@/data/contracts/org";
+import type {
+  ApiKeyList,
+  ManagedWorkspace,
+  MemberList,
+} from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
 
 type OrgRoster = Extract<ContractOutput<typeof listMembers>, { scope: "org" }>;
@@ -27,6 +32,25 @@ export function toMemberList(out: OrgRoster): z.input<typeof MemberList> {
       expiresAt: invitation.expiresAt,
     })),
   };
+}
+
+/**
+ * The workspaces an organization administrator may manage keys in: the ones the
+ * viewer holds a membership in, archived included and marked as such. A
+ * navigation list drops the archived ones (`toWorkspaceChoices`); this one
+ * cannot, because a key in an archived workspace still authenticates and has to
+ * stay reachable to be revoked.
+ */
+export function toManagedWorkspaces(
+  out: ContractOutput<typeof workspaceList>,
+): z.input<typeof ManagedWorkspace>[] {
+  return out.workspaces
+    .filter((ws) => ws.role !== null)
+    .map((ws) => ({
+      slug: ws.slug,
+      name: ws.name,
+      archived: ws.archivedAt !== null,
+    }));
 }
 
 /**

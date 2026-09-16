@@ -7,7 +7,6 @@
 // carrying the new key the showing ends. Nothing the server sends can put a
 // secret on screen, and nothing keeps one there once the key is listed.
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -56,13 +55,7 @@ function createDialog(listedIds: readonly string[] = []) {
   );
 }
 
-const NOW = Date.parse("2026-09-16T12:00:00.000Z");
-
-function renderRow(
-  listedIds: readonly string[] = [KEY],
-  rotatable = true,
-  lifetime: { expiresAt?: string | null; revokedAt?: string | null } = {},
-) {
+function renderRow(listedIds: readonly string[] = [KEY], rotatable = true) {
   return render(
     <IntlProvider>
       <KeyRowActions
@@ -70,10 +63,7 @@ function renderRow(
         ws={WS}
         keyId={KEY}
         keyName="CI runner"
-        expiresAt={lifetime.expiresAt ?? null}
-        revokedAt={lifetime.revokedAt ?? null}
         rotatable={rotatable}
-        now={NOW}
         listedIds={listedIds}
         after={HERE}
       />
@@ -387,38 +377,6 @@ describe("a key that may not be rotated", () => {
     expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rotate" })).toBeNull();
     expect(rotateApiKey).not.toHaveBeenCalled();
-  });
-
-  it("offers Revoke and no Rotate when the key expired before the page was rendered (negative)", () => {
-    renderRow([KEY], true, { expiresAt: "2026-09-15T12:00:00.000Z" });
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Rotate" })).toBeNull();
-  });
-
-  it("takes Rotate off a row whose expiry passes while the page is open (negative)", async () => {
-    // The page clock is captured once, server-side. Rotation copies the expiry
-    // that ended the key onto the replacement, so the control must not outlive
-    // the key. The handler refuses regardless; this only narrows the window.
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      vi.setSystemTime(NOW);
-      renderRow([KEY], true, {
-        expiresAt: new Date(NOW + 20_000).toISOString(),
-      });
-      expect(
-        screen.getByRole("button", { name: "Rotate" }),
-      ).toBeInTheDocument();
-      await act(async () => {
-        vi.setSystemTime(NOW + 60_000);
-        await vi.advanceTimersByTimeAsync(31_000);
-      });
-      expect(screen.queryByRole("button", { name: "Rotate" })).toBeNull();
-      expect(
-        screen.getByRole("button", { name: "Revoke" }),
-      ).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("names the handler's refusal when a key expires between the render and the click (negative)", async () => {

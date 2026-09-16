@@ -122,7 +122,9 @@
         "revoked": "revoked"
       },
       "workspace": {
-        "label": "Workspace"
+        "label": "Workspace",
+        "archived": "{name} (archived)",
+        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked."
       },
       "noWorkspace": {
         "title": "A key needs a workspace",
