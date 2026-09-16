@@ -197,6 +197,49 @@ export async function readActiveKillSwitches(
   return sortByPrecedence(rows.map(rowOf));
 }
 
+/**
+ * The switches that are on naming any of `targets`, whatever workspace the row
+ * was written under.
+ *
+ * A switch is bound to what it names. `set_kill_switch` resolves a connection,
+ * a tool server or a tool version to an INTERNAL uuid and denies on a digest
+ * over it, so deleting that row and re-creating it mints a new id the deny
+ * matches nothing against: the control reports on and stops nothing. Rather
+ * than let a delete dismantle a control, the delete paths ask this first and
+ * refuse while a switch names their target (ADR-069). The caller passes public
+ * ids, which is what `target_id` holds.
+ *
+ * Runs in the caller's transaction, so the check and the delete commit or roll
+ * back together.
+ */
+export async function readActiveKillSwitchesForTargets(
+  tx: Tx,
+  args: {
+    orgId: string;
+    targets: readonly { kind: KillSwitchTargetKind; id: string }[];
+  },
+): Promise<KillSwitchRow[]> {
+  if (args.targets.length === 0) return [];
+  const rows = await tx
+    .select(columns)
+    .from(schema.emergencyDenies)
+    .where(
+      and(
+        eq(schema.emergencyDenies.orgId, args.orgId),
+        eq(schema.emergencyDenies.active, true),
+        or(
+          ...args.targets.map((t) =>
+            and(
+              eq(schema.emergencyDenies.targetKind, t.kind),
+              eq(schema.emergencyDenies.targetId, t.id),
+            ),
+          ),
+        ),
+      ),
+    );
+  return sortByPrecedence(rows.map(rowOf));
+}
+
 export function sortByPrecedence(
   rows: readonly KillSwitchRow[],
 ): KillSwitchRow[] {

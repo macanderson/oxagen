@@ -27,10 +27,13 @@ vi.mock("@oxagen/tenancy", () => ({
 
 import {
   createKillSwitchGate,
-  registryCapabilityId,
   type KillSwitchGateReads,
   type KillSwitchSnapshot,
 } from "./kill-switch-gate";
+import {
+  registryCapabilityId,
+  unionConsequenceTags,
+} from "./tool-registry-facts";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";

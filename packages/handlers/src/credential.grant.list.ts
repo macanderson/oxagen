@@ -9,9 +9,16 @@
 //   1. Role gate — org Owner, Admin or Compliance (assertOrgRole, INV-29).
 //   2. Decode the cursor (issued_at, id); a cursor this handler did not
 //      write is invalid_input.
-//   3. Read one row past the page, newest first, LEFT JOINed to the server
-//      for its public id and name (a soft-deleted server keeps its row), and
-//      compute each grant's status against now.
+//   3. Read one row past the page, newest first, and compute each grant's
+//      status against now.
+//
+// The row names its connection AND its server by the public id and name they
+// carried at mint time. Neither is joined: revoking a credential deletes the
+// connection row and plugin uninstall hard-deletes the server row
+// (plugin.org.uninstall), and `mcp_server_id` carries no foreign key so the
+// grant survives. Joining to the server threw `RangeError` on the first
+// orphan, which is on page 1 under a newest-first order, so one uninstall made
+// the log permanently unreadable for that workspace with no cursor past it.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -63,8 +70,8 @@ export interface GrantRow {
   id: string;
   publicId: string;
   connectionPublicId: string;
-  serverPublicId: string | null;
-  serverName: string | null;
+  serverPublicId: string;
+  serverName: string;
   runId: string | null;
   scope: unknown;
   providerTokenId: string | null;
@@ -80,7 +87,6 @@ export type PageQuery = {
 };
 
 const grants = schema.mcpCredentialGrants;
-const servers = schema.mcpServers;
 
 const issuedAtMs = sql`date_trunc('milliseconds', ${grants.issuedAt})`;
 
@@ -103,8 +109,8 @@ function grantPageQuery(
       id: grants.id,
       publicId: grants.publicId,
       connectionPublicId: grants.connectionPublicId,
-      serverPublicId: servers.publicId,
-      serverName: servers.name,
+      serverPublicId: grants.mcpServerPublicId,
+      serverName: grants.mcpServerName,
       runId: grants.runId,
       scope: grants.scope,
       providerTokenId: grants.providerTokenId,
@@ -113,7 +119,6 @@ function grantPageQuery(
       revokedAt: grants.revokedAt,
     })
     .from(grants)
-    .leftJoin(servers, eq(servers.id, grants.mcpServerId))
     .where(
       and(
         eq(grants.orgId, scope.orgId),
@@ -146,11 +151,6 @@ function toItem(row: GrantRow, now: Date): CredentialGrantItem {
     // broken row and the read fails rather than guesses.
     throw new RangeError(
       `credential_grants ${row.publicId}: scope outside the schema`,
-    );
-  }
-  if (row.serverPublicId === null || row.serverName === null) {
-    throw new RangeError(
-      `credential_grants ${row.publicId}: server row missing`,
     );
   }
   return {

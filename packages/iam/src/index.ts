@@ -58,14 +58,21 @@ export type {
 
 export { resourceScopeDigestOf } from "./resource-scope";
 
+export { assertNoActiveKillSwitch } from "./kill-switch-guard";
+
 export {
   flipKillSwitchOff,
   flipKillSwitchOn,
   matchKillSwitch,
   readActiveKillSwitches,
+  readActiveKillSwitchesForTargets,
   readKillSwitches,
 } from "./kill-switch";
-export type { KillSwitchDeny, KillSwitchRow } from "./kill-switch";
+export type {
+  KillSwitchDeny,
+  KillSwitchRow,
+  KillSwitchTargetKind,
+} from "./kill-switch";
 
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";

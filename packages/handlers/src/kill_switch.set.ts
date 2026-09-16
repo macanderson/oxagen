@@ -49,7 +49,7 @@ import {
 } from "@oxagen/iam";
 import { revokeCredentialGrants } from "@oxagen/plugins";
 import { and, eq, isNull } from "drizzle-orm";
-import { registryCapabilityId } from "@oxagen/agent/runtime/kill-switch-gate";
+import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts";
 
 /** What a target resolves to before a switch is turned on. */
 interface ResolvedTarget {

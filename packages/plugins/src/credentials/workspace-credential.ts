@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveCredentialKms } from "./kms";
 import { revokeCredentialGrants } from "./credential-grants";
+import { assertNoActiveKillSwitch } from "@oxagen/iam";
 import {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
@@ -160,6 +161,13 @@ export async function listWorkspaceCredentialStatuses(key: {
  * authentication" action. Touches no encrypted columns (nothing is decrypted),
  * so it needs no KMS key. Returns true when a row was deleted, false when no
  * credential existed for the key.
+ *
+ * Refused while a connection kill switch names the credential (ADR-069). The
+ * switch denies on a digest over `mcp.credentials.id`, so deleting the row and
+ * re-authenticating would mint a new id the deny matches nothing against —
+ * the connection live again with the switch still reporting on. Any workspace
+ * member can press "Remove authentication", and no workspace member may undo
+ * a security decision that way.
  */
 export async function deleteWorkspaceSecret(key: {
   orgId: string;
@@ -167,6 +175,29 @@ export async function deleteWorkspaceSecret(key: {
   orgListingId: string;
 }): Promise<boolean> {
   return withSystemDb(async (tx) => {
+    const doomed = await tx
+      .select({
+        id: schema.mcpCredentials.id,
+        publicId: schema.mcpCredentials.publicId,
+      })
+      .from(schema.mcpCredentials)
+      .where(
+        and(
+          eq(schema.mcpCredentials.orgId, key.orgId),
+          eq(schema.mcpCredentials.workspaceId, key.workspaceId),
+          eq(schema.mcpCredentials.orgListingId, key.orgListingId),
+        ),
+      );
+    if (doomed.length === 0) return false;
+    await assertNoActiveKillSwitch(tx, {
+      orgId: key.orgId,
+      targets: doomed.map((row) => ({
+        kind: "connection" as const,
+        id: row.publicId,
+      })),
+      action: "Removing this connection's authentication",
+    });
+
     const deleted = await tx
       .delete(schema.mcpCredentials)
       .where(

@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { assertNoActiveKillSwitch } from "@oxagen/iam";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
@@ -34,6 +35,59 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       // Hard-delete dependent MCP server rows so the gateway drops them.
       // Scope by org + workspace (not orgListingId alone) so a guessed/leaked
       // listing id from another tenant can never delete that tenant's rows.
+      const doomedServers = await tx
+        .select({
+          id: schema.mcpServers.id,
+          publicId: schema.mcpServers.publicId,
+        })
+        .from(schema.mcpServers)
+        .where(
+          and(
+            eq(schema.mcpServers.orgListingId, orgListingId),
+            eq(schema.mcpServers.orgId, ctx.orgId),
+            eq(schema.mcpServers.workspaceId, ctx.workspaceId!),
+          ),
+        );
+
+      // A kill switch on one of these servers, or on a tool version of one,
+      // denies on a digest over the server's INTERNAL uuid. Deleting the row
+      // and reinstalling mints a new uuid the deny matches nothing against, so
+      // the uninstall would dismantle the control while `list_kill_switches`
+      // kept reporting it on (ADR-069). Turning the switch off is the way
+      // through; uninstall is not.
+      if (doomedServers.length > 0) {
+        const serverIds = doomedServers.map((row) => row.id);
+        const doomedVersions = await tx
+          .select({ publicId: schema.toolVersions.publicId })
+          .from(schema.toolVersions)
+          .innerJoin(
+            schema.tools,
+            eq(schema.tools.id, schema.toolVersions.toolId),
+          )
+          .where(
+            and(
+              eq(schema.tools.orgId, ctx.orgId),
+              eq(schema.tools.workspaceId, ctx.workspaceId!),
+              inArray(schema.tools.mcpServerId, serverIds),
+              isNull(schema.tools.deletedAt),
+            ),
+          );
+        await assertNoActiveKillSwitch(tx, {
+          orgId: ctx.orgId,
+          targets: [
+            ...doomedServers.map((row) => ({
+              kind: "tool_server" as const,
+              id: row.publicId,
+            })),
+            ...doomedVersions.map((row) => ({
+              kind: "tool_version" as const,
+              id: row.publicId,
+            })),
+          ],
+          action: "Uninstalling this plugin",
+        });
+      }
+
       await tx
         .delete(schema.mcpServers)
         .where(

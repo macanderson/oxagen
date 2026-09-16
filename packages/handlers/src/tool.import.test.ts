@@ -26,7 +26,7 @@ import {
   type PinnedDescriptor,
   type ToolImportDeps,
 } from "./tool.import";
-import { registryCapabilityId } from "@oxagen/agent/runtime/kill-switch-gate";
+import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts";
 import {
   toolChecksum,
   toolSlugOf,

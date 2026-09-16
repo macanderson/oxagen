@@ -10,7 +10,9 @@
 //   2. Decode the cursor (slug, id — the registry orders by slug); a cursor
 //      this handler did not write is invalid_input.
 //   3. Read one row past the page: tools joined to their active version,
-//      optionally only those whose classification carries the category tag.
+//      optionally only those carrying the category tag in either half of the
+//      consequence tags (the declared `consequence_tags` column or the
+//      classified `classification` jsonb).
 //   4. Decide the gate each row is under today from the switches that are on
 //      — version, then server, then class (the recorded decision order,
 //      INV-10) — with the same matcher the gateway's gate uses, and read the
@@ -36,7 +38,10 @@ import {
   type KillSwitchRow,
 } from "@oxagen/iam";
 import { countRecentToolInvocations } from "@oxagen/telemetry";
-import { registryCapabilityId } from "@oxagen/agent/runtime/kill-switch-gate";
+import {
+  registryCapabilityId,
+  unionConsequenceTags,
+} from "@oxagen/agent/runtime/tool-registry-facts";
 import { and, asc, eq, gt, isNull, or, sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -92,6 +97,8 @@ export interface RegistryRow {
   riskGrade: string;
   classifiedRiskGrade: string | null;
   classification: unknown;
+  /** The declared half of the consequence tags (agent.tool_versions.consequence_tags). */
+  consequenceTags: string[] | null;
   classifiedAt: Date | null;
   schemaOrigin: string;
   checksum: string;
@@ -139,6 +146,7 @@ function registryPageQuery(
       riskGrade: versions.riskGrade,
       classifiedRiskGrade: versions.classifiedRiskGrade,
       classification: versions.classification,
+      consequenceTags: versions.consequenceTags,
       classifiedAt: versions.classifiedAt,
       schemaOrigin: versions.schemaOrigin,
       checksum: versions.checksum,
@@ -151,9 +159,13 @@ function registryPageQuery(
         eq(tools.orgId, scope.orgId),
         eq(tools.workspaceId, scope.workspaceId),
         isNull(tools.deletedAt),
+        // The category is a consequence tag, and a tag lives in either half:
+        // the declared text[] column or the classified jsonb. Filtering on the
+        // jsonb alone hid every declared-tag tool from the page the class kill
+        // switch is operated from.
         q.category === null
           ? undefined
-          : sql`${versions.classification}->'consequenceTags' ? ${q.category}`,
+          : sql`(${versions.classification}->'consequenceTags' ? ${q.category} OR ${q.category} = ANY(${versions.consequenceTags}))`,
         afterCursor(q.cursor),
       ),
     )
@@ -321,7 +333,9 @@ export function createToolVersionListHandler(
           ...scope,
           capabilityId,
           serverId: row.mcpServerId,
-          consequenceTags: classification?.consequenceTags ?? [],
+          // The same union the gateway's gate matches on, so the page and the
+          // gate agree about which tools a class switch stops.
+          consequenceTags: unionConsequenceTags(row),
         }),
         calls30d: calls === null ? null : (calls.get(capabilityId) ?? 0),
         updatedAt: row.updatedAt.toISOString(),

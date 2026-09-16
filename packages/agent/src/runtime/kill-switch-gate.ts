@@ -14,12 +14,26 @@
 // Which switches reach a call is decided by `matchKillSwitch` in @oxagen/iam,
 // the same matcher `list_tool_versions` prints the gate with. The facts a call
 // carries: its capability id, the external server and connection it goes
-// through, and the consequence tags of its registry version — read from
-// `agent.tool_versions.classification` the same time the switches are.
+// through, and the consequence tags of its registry version.
 //
-// The gate applies to every principal kind. The kernel's agent-run IAM check
-// enforces emergency denies on its own path; a human's chat turn has no such
-// path, and a kill switch is not an enterprise feature.
+// A version's consequence tags live in TWO columns and a class switch reaches
+// a tool tagged in either. `agent.tool_versions.consequence_tags` (text[]) is
+// the declared half — what `publish_tool_declaration` and `import_tools` write
+// from the descriptor, and what the mandate gate reads — and
+// `classification->'consequenceTags'` is the classified half, what
+// `set_tool_classification` writes. Both are drawn from the same vocabulary
+// (`consequenceTagSchema`), so the index is their union: reading only the
+// jsonb left every declared-tag tool outside every class switch's reach while
+// `list_kill_switches` reported the switch on.
+//
+// This gate reaches every principal kind that materializes tools through
+// `materializeTools` — the in-app agent's turn and the tool gateway. It is NOT
+// the whole product's coverage: a customer agent calling a capability through
+// the API or mcp.oxagen.sh with an API key never passes through here, and the
+// kernel consults emergency denies only on the agent-run path
+// (`checkAgentRunIAM`, packages/iam/src/check-iam.ts). `set_kill_switch`'s
+// contract description and docs/capabilities/kill_switch.set.md state that
+// coverage; do not widen the claim here without widening the enforcement.
 
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { withRepeatableReadTenantDb } from "@oxagen/database/tenant";
@@ -31,8 +45,12 @@ import {
 } from "@oxagen/iam";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
+import {
+  registryCapabilityId,
+  unionConsequenceTags,
+} from "./tool-registry-facts";
 
 /** What the gate knows about one call beyond the run's own scope. */
 interface ToolCallFacts {
@@ -65,22 +83,12 @@ export interface KillSwitchGateReads {
   }): Promise<KillSwitchSnapshot>;
 }
 
-/** The capability id a registry row is governed under. */
-export function registryCapabilityId(row: {
-  source: string;
-  slug: string;
-  name: string;
-  mcpServerId: string | null;
-}): string {
-  return row.source === "mcp" && row.mcpServerId
-    ? `mcp.${row.mcpServerId}.${row.name}`
-    : row.slug;
-}
-
 async function readClassificationIndex(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
 ): Promise<ClassificationIndex> {
+  // No `classification IS NOT NULL` filter: an unclassified version with
+  // declared consequence tags is exactly the row a class switch has to reach.
   const rows = await tx
     .select({
       source: schema.tools.source,
@@ -88,6 +96,7 @@ async function readClassificationIndex(
       name: schema.tools.name,
       mcpServerId: schema.tools.mcpServerId,
       classification: schema.toolVersions.classification,
+      consequenceTags: schema.toolVersions.consequenceTags,
     })
     .from(schema.tools)
     .innerJoin(
@@ -99,18 +108,13 @@ async function readClassificationIndex(
         eq(schema.tools.orgId, scope.orgId),
         eq(schema.tools.workspaceId, scope.workspaceId),
         isNull(schema.tools.deletedAt),
-        isNotNull(schema.toolVersions.classification),
       ),
     );
   const index = new Map<string, readonly string[]>();
   for (const row of rows) {
-    const tags = (row.classification as { consequenceTags?: unknown } | null)
-      ?.consequenceTags;
-    if (!Array.isArray(tags)) continue;
-    index.set(
-      registryCapabilityId(row),
-      tags.filter((t): t is string => typeof t === "string"),
-    );
+    const tags = unionConsequenceTags(row);
+    if (tags.length === 0) continue;
+    index.set(registryCapabilityId(row), tags);
   }
   return index;
 }

@@ -423,6 +423,13 @@ export const mcpCredentialGrants = mcpSchema.table(
     // connection's row is deleted and the log keeps naming it.
     connectionPublicId: citext("connection_public_id").notNull(),
     mcpServerId: uuid("mcp_server_id").notNull(),
+    // The server's `mcs_…` public id and name as they were at mint time. Like
+    // `connection_public_id`: `mcp_server_id` carries no foreign key because
+    // plugin uninstall hard-deletes the server row, and the log has to outlive
+    // it. Read straight off the grant, so an orphaned row reads rather than
+    // throws (`list_credential_grants`).
+    mcpServerPublicId: citext("mcp_server_public_id").notNull(),
+    mcpServerName: text("mcp_server_name").notNull(),
     // The governed run the credential served; null for a turn outside a run.
     runId: text("run_id"),
     // What the minted credential could reach: server endpoint, auth kind and

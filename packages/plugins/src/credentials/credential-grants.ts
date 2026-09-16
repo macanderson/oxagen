@@ -13,6 +13,11 @@
 // exchange, session policies and restricted keys arrive per provider; a grant
 // written then names the method it used in the same column.
 //
+// The row names its connection and its server by public id and name as they
+// were at mint time, not by a join: plugin uninstall hard-deletes the server
+// row and revoking a credential deletes the connection row, and a log that
+// cannot be read once its subject is gone is not a log.
+//
 // Revoking a connection revokes its live grants; a connection kill switch does
 // the same, and while it is on no new grant is minted: the gateway resolves
 // the connection (`findCredentialConnection`), checks the switches against
@@ -86,6 +91,10 @@ interface RecordCredentialGrantArgs {
   connection: CredentialConnection;
   /** The server the credential was presented to (`mcp.mcp_servers.id`). */
   mcpServerId: string;
+  /** Its `mcs_…` public id, kept on the row: the server row can be deleted. */
+  mcpServerPublicId: string;
+  /** Its name, kept on the row for the same reason. */
+  mcpServerName: string;
   endpointUrl: string;
   /** The governed run the use serves; null for a turn outside a run. */
   runId: string | null;
@@ -124,6 +133,8 @@ export async function recordCredentialGrant(
         connectionId: args.connection.id,
         connectionPublicId: args.connection.publicId,
         mcpServerId: args.mcpServerId,
+        mcpServerPublicId: args.mcpServerPublicId,
+        mcpServerName: args.mcpServerName,
         runId: args.runId,
         scope,
         providerTokenId: args.providerTokenId ?? null,

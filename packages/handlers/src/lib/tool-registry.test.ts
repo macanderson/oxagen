@@ -81,7 +81,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import { publishTool, type PublishToolArgs } from "./tool-registry";
 import { gateOf } from "../tool.version.list";
-import { registryCapabilityId } from "@oxagen/agent/runtime/kill-switch-gate";
+import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";

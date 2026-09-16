@@ -319,7 +319,12 @@ function connectionFor(
  */
 function grantFor(
   ctx: CapabilityContext,
-  server: { id: string; endpointUrl: string },
+  server: {
+    id: string;
+    publicId: string;
+    name: string;
+    endpointUrl: string;
+  },
   connection: CredentialConnection,
 ) {
   return recordCredentialGrant({
@@ -327,6 +332,10 @@ function grantFor(
     workspaceId: ctx.workspaceId,
     connection,
     mcpServerId: server.id,
+    // Named on the row, not joined: the server row does not outlive an
+    // uninstall and the grants log has to.
+    mcpServerPublicId: server.publicId,
+    mcpServerName: server.name,
     endpointUrl: server.endpointUrl,
     runId: ctx.agentRun?.runId ?? null,
   });
