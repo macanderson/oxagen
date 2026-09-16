@@ -3,7 +3,8 @@
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
 // WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
-// lane adds its page's port (#2956: agents; #2961: steering; #3098: skills).
+// lane adds its page's port (#2956: agents; #2961: steering; #3097: audit;
+// #3098: skills).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -13,12 +14,20 @@ import type {
 } from "./contracts/agents";
 import type { ApprovalItem } from "./contracts/approvals";
 import type {
+  AuditExport,
+  AuditExportFormat,
+  AuditFilters,
+  AuditPage,
+  AuditQuery,
+} from "./contracts/audit";
+import type {
   ContractRate,
   GauBucket,
   InvoicePage,
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
+import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
   MemberList,
@@ -156,9 +165,27 @@ export interface DataSource {
     ): Promise<Read<SpendFindingEvidence>>;
   };
   /**
+   * The onboarding gate and the register flow (#2967, ADR-065).
+   * `get_onboarding_state` (`scoped: false`) answers where the organization
+   * stands, read by features/onboarding/gate.tsx on Fleet and by the register
+   * stepper; `get_first_frame` long-polls one registered agent's first frame,
+   * caller features/onboarding/register.tsx.
+   */
+  onboarding: {
+    /** get_onboarding_state */
+    state(ctx: OrgCtx): Promise<Read<OnboardingGate>>;
+    /** get_first_frame, waiting up to `waitMs` inside the one invoke (§3.5) */
+    firstFrame(
+      ctx: WsCtx,
+      agent: string,
+      q: { waitMs: number },
+    ): Promise<Read<FirstFrame>>;
+  };
+  /**
    * The Organization pages' four reads, each noBillingGate and org-scoped
-   * (#2964, WL-37); callers: features/organization/people.tsx, roles.tsx,
-   * workspaces.tsx and api-keys.tsx.
+   * (#2964, WL-37), each an Owner-or-Admin read checked in its handler;
+   * callers: features/organization/people.tsx, roles.tsx, workspaces.tsx,
+   * api-keys.tsx and features/audit/audit.tsx (actor names, off `members`).
    */
   org: {
     /** list_members {scope:"org"} */
@@ -169,6 +196,20 @@ export interface DataSource {
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+  };
+  /**
+   * The organization's audit record (#3097), both noBillingGate reads for an
+   * org Owner or Admin (checked in the handlers); callers:
+   * features/audit/audit.tsx and features/audit/export.ts.
+   */
+  audit: {
+    /** query_audit_log, one page at `offset` */
+    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same filters */
+    exportEvents(
+      ctx: OrgCtx,
+      q: AuditFilters & { format: AuditExportFormat },
+    ): Promise<Read<AuditExport>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;

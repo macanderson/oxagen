@@ -112,6 +112,18 @@ export const routes = {
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
   /**
+   * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
+   * the identity `register_agent` minted from the name step to the wrap and
+   * run steps, so a reload lands back on the same registration.
+   */
+  register: (
+    org: string,
+    ws: string,
+    step: string,
+    q?: { agent: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "register", step), { agent: q?.agent }),
+  /**
    * Billing; `cursor` opens a later page of its invoices, `checkout` is where
    * a Stripe Checkout returns. The two meters return to different values —
    * `success` for a governed-action-unit purchase, `credits` for a usage
@@ -126,6 +138,16 @@ export const routes = {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
       checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
     }),
+  /** Audit's events; a filter or a page is a query value, not a route (§1.2). */
+  audit: (
+    org: string,
+    q: Readonly<Record<string, string | undefined>> = {},
+  ): SafePath => withQuery(pathOf(org, "audit"), q),
+  /** The signed export of Audit's events over the same query values. */
+  auditExport: (
+    org: string,
+    q: Readonly<Record<string, string | undefined>>,
+  ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),

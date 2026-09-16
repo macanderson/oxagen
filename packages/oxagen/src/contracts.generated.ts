@@ -68,6 +68,7 @@ import "./contracts/api.key.list";
 import "./contracts/api.key.revoke";
 import "./contracts/api.key.rotate";
 import "./contracts/asset.upload";
+import "./contracts/audit.events.export";
 import "./contracts/audit.log.query";
 import "./contracts/auth.cli.authorize";
 import "./contracts/billing.action_estimate";

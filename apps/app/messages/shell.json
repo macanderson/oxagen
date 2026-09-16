@@ -19,6 +19,7 @@
       "spend": "Spend",
       "organization": "Organization",
       "billing": "Billing",
+      "audit": "Audit",
       "roles": "Roles",
       "apiKeys": "API keys"
     },

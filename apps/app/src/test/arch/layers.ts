@@ -212,6 +212,9 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   ],
   "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
   "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
+  // The emitted security event types the Audit filter offers (#2528, #3097):
+  // a pure leaf package with no store and no kernel.
+  "src/features/audit/filters.ts": ["@oxagen/compliance"],
   "src/server/tenancy-lookups.ts": ["@oxagen/database", "drizzle-orm"],
   "instrumentation.ts": [
     "@oxagen/oxagen/kernel",

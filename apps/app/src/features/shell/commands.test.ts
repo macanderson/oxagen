@@ -19,6 +19,7 @@ describe("buildCommands", () => {
       "/acme/roles",
       "/acme/api-keys",
       "/acme/billing",
+      "/acme/audit",
     ]);
     expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
@@ -40,12 +41,13 @@ describe("buildCommands", () => {
       "/acme/roles",
       "/acme/api-keys",
       "/acme/billing",
+      "/acme/audit",
     ]);
   });
 
-  it("offers no Ontology graph question and no Audit export (negative)", () => {
+  it("offers a page to go to and nothing else: no Ontology graph question, no export (negative)", () => {
     for (const c of commands) {
-      expect(c.href).not.toMatch(/\/(ontology|audit)(\/|$)/);
+      expect(c.href).not.toMatch(/\/(ontology|export)(\/|$)/);
       expect(c.id).toMatch(/^go:/);
     }
   });

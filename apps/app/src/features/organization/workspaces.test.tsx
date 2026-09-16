@@ -73,7 +73,9 @@ async function renderWorkspaces(
       findings: vi.fn(),
       findingEvidence: vi.fn(),
     },
+    onboarding: { state: vi.fn(), firstFrame: vi.fn() },
     org: { members: vi.fn(), roles: vi.fn(), workspaces, apiKeys: vi.fn() },
+    audit: { events: vi.fn(), exportEvents: vi.fn() },
     skills: { inventory: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };

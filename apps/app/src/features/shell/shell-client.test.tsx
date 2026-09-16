@@ -151,10 +151,11 @@ describe("sidebar", () => {
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
+      ["Audit", "/acme/audit"],
     ]);
     for (const link of links)
       expect(link.getAttribute("href")).not.toMatch(
-        /^\/acme\/(core-platform\/ontology|audit)(\/|$)/,
+        /^\/acme\/core-platform\/ontology(\/|$)/,
       );
     expect(
       within(main).getByRole("link", { name: "Agent IAM" }),
@@ -169,7 +170,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(8);
+    expect(within(main).getAllByRole("link")).toHaveLength(9);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -195,7 +196,7 @@ describe("sidebar", () => {
       within(main)
         .getAllByRole("link")
         .map((l) => l.textContent),
-    ).toEqual(["Organization", "Billing"]);
+    ).toEqual(["Organization", "Billing", "Audit"]);
     expect(screen.queryByTestId("workspace-switcher")).toBeNull();
   });
 });
@@ -244,6 +245,7 @@ describe("command menu", () => {
       "Roles",
       "API keys",
       "Billing",
+      "Audit",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");

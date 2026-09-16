@@ -23,6 +23,7 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   spend: Coins,
   organization: Building2,
   billing: Receipt,
+  audit: ShieldCheck,
   apiKeys: KeyRound,
   roles: ShieldCheck,
 };

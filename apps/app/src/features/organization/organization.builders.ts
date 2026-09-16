@@ -130,12 +130,14 @@ export function orgSource(reads: OrgReads): {
       findings: refuse,
       findingEvidence: refuse,
     },
+    onboarding: { state: refuse, firstFrame: refuse },
     org: {
       members: answer(reads.members, "members"),
       roles: answer(reads.roles, "roles"),
       workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

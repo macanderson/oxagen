@@ -1,6 +1,6 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's eight
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's nine
 // links in the mockup's order (Workspace: Fleet, Agent IAM, Tools, Skills,
-// Steering, Spend; Organization: Organization, Billing), the phone's thumb bar and More
+// Steering, Spend; Organization: Organization, Billing, Audit), the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
@@ -14,7 +14,7 @@ export type WorkspaceNavKey =
   | "skills"
   | "steering"
   | "spend";
-export type OrgNavKey = "organization" | "billing";
+export type OrgNavKey = "organization" | "billing" | "audit";
 /** Roles and API keys are pages under Organization, not sidebar items of their own. */
 type OrgPageNavKey = "apiKeys" | "roles";
 export type NavKey = WorkspaceNavKey | OrgNavKey | OrgPageNavKey;
@@ -27,7 +27,11 @@ export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "steering",
   "spend",
 ];
-export const ORG_NAV: readonly OrgNavKey[] = ["organization", "billing"];
+export const ORG_NAV: readonly OrgNavKey[] = [
+  "organization",
+  "billing",
+  "audit",
+];
 /**
  * The Organization pages that carry a nav label and a breadcrumb but no sidebar
  * item of their own. Named once because the current-item test and the
@@ -63,6 +67,7 @@ export const MORE_SHEET: readonly NavKey[] = [
   "skills",
   "organization",
   "billing",
+  "audit",
 ];
 
 /**
@@ -71,6 +76,7 @@ export const MORE_SHEET: readonly NavKey[] = [
  */
 const ORG_SEGMENTS = {
   billing: "billing",
+  audit: "audit",
   "api-keys": "apiKeys",
   roles: "roles",
 } as const satisfies Record<string, NavKey>;
@@ -98,6 +104,8 @@ export function orgHref(org: string, key: NavKey): SafePath {
       return pathOf(org);
     case "billing":
       return pathOf(org, "billing");
+    case "audit":
+      return pathOf(org, "audit");
     case "apiKeys":
       return pathOf(org, "api-keys");
     case "roles":
