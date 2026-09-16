@@ -1,4 +1,4 @@
-# ADR-070 — A general run's spec states what the run did
+# ADR-076 — A general run's spec states what the run did
 
 - Status: accepted
 - Date: 2026-09-16

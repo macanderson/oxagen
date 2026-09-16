@@ -438,7 +438,7 @@ export const workspacePolicySchema = z
   .strict();
 
 /**
- * A general run's workspace policy (ADR-070). `sandbox_required` is a boolean
+ * A general run's workspace policy (ADR-076). `sandbox_required` is a boolean
  * here, not the literal `true` a repo edit pins, because a general run kind
  * covers work that touches no repository and needs no sandbox — the in-app
  * agent's turn is a governed question answered over the fleet record, executed

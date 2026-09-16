@@ -456,7 +456,7 @@ describe("openAssistantRun", () => {
     });
   });
 
-  // ADR-070: the seal attests to the spec's digest, so the spec has to be what
+  // ADR-076: the seal attests to the spec's digest, so the spec has to be what
   // the turn ran under. It pinned sandbox_required: true, an empty provider
   // allowlist, max_frames 0, max_tokens 0 and an empty tool allowlist while
   // running unsandboxed, framing a recalled memory, and calling the governed

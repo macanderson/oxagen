@@ -96,12 +96,12 @@ describe("set_preferences contract", () => {
     ).toBe(false);
   });
 
-  // ADR-069: one writer for the row, carrying every field the read returns. A
+  // ADR-075: one writer for the row, carrying every field the read returns. A
   // field readable and unsettable is a dead value — `defaultTextTier` and
   // `defaultTextModel` are read back by `loadEffectiveModelDefaults` on every
   // turn, so a write contract missing them pins the default at null forever.
   // `language` on the read is `locale` on the write, which is the one rename.
-  it("can set every field get_user_preferences returns (ADR-069)", () => {
+  it("can set every field get_user_preferences returns (ADR-075)", () => {
     const readable = new Set(
       Object.keys(userPreferencesRead.output.shape).map((k) =>
         k === "language" ? "locale" : k,

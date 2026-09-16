@@ -442,7 +442,7 @@ export async function openAssistantRun(
         },
         resolved_at: snapshot.resolvedAt,
       },
-      // What this turn actually ran under (ADR-070). The spec is what the
+      // What this turn actually ran under (ADR-076). The spec is what the
       // seal attests to, so every value here is the one the turn holds, not a
       // placeholder: an unsandboxed run that pins `sandbox_required: true`,
       // frames one memory and one page-context message under `max_frames: 0`,

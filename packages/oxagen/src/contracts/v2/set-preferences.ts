@@ -11,7 +11,7 @@ import { pluginSettingsSetAuthAlerts } from "../plugin.settings.set_auth_alerts"
  * `get_workspace_user_preferences` and `set_auth_alerts`.
  *
  * The account write is named `set_preferences` and not `update_user_preferences`
- * because the v1 contract was rewritten under its Appendix E name (ADR-069) and
+ * because the v1 contract was rewritten under its Appendix E name (ADR-075) and
  * `update_user_preferences` no longer exists. Naming the live contract matters
  * to more than tidiness: `exhaustive.test.ts` skips the field-by-field carry
  * when an absorbed name is absent from its file, so an absorbs entry pointing

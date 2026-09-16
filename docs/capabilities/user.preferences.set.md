@@ -2,7 +2,7 @@
 
 The Account dialog's Preferences tab (MC spec App. E). A partial write: only the fields sent change, and the answer is the whole set after the write, read back from the row. `get_user_preferences` reads the same set.
 
-It is the one writer of `auth.user_preferences` (ADR-069), so every field the read returns is settable here. `update_user_preferences` was folded into it and no longer exists. `locale` is the input name for the row's `language` column, which is the name the read answers with.
+It is the one writer of `auth.user_preferences` (ADR-075), so every field the read returns is settable here. `update_user_preferences` was folded into it and no longer exists. `locale` is the input name for the row's `language` column, which is the name the read answers with.
 
 Preferences follow the person across organisations, so the capability is `scoped: false` and writes `auth.user_preferences` on the system executor.
 

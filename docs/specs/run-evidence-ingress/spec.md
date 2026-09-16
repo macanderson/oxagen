@@ -154,7 +154,7 @@ RunSpecV2
     base_commit_sha
     base_tree_sha
   workspace_policy
-    sandbox_required = true on a repo_edit; boolean on a general run (ADR-070)
+    sandbox_required = true on a repo_edit; boolean on a general run (ADR-076)
     environment_id?
   context_policy
     provider_allowlist[]

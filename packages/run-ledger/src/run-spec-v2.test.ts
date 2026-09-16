@@ -792,7 +792,7 @@ describe("parseRunSpecV2 workspace policy", () => {
     expect(spec.workspace_policy.sandbox_required).toBe(true);
   });
 
-  // ADR-070. A general run touches no repository and may need no sandbox —
+  // ADR-076. A general run touches no repository and may need no sandbox —
   // the in-app agent's turn is answered in-process through kernel.invoke().
   // Pinning `true` there does not sandbox the run, it makes the seal attest to
   // a sandbox that never existed.

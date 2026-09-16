@@ -67,7 +67,7 @@ export async function updatePreferencesAction(
   };
 
   try {
-    // `set_preferences` is the one writer of the preference row (ADR-069). Its
+    // `set_preferences` is the one writer of the preference row (ADR-075). Its
     // `locale` is the row's `language` column, which is the name this form and
     // `get_user_preferences` use; the rest carry across unchanged.
     //

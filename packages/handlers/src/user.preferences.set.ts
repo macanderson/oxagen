@@ -1,5 +1,5 @@
 // set_preferences: the Account dialog's Preferences tab, and the ONE writer of
-// auth.user_preferences (ADR-069). Every field get_user_preferences returns is
+// auth.user_preferences (ADR-075). Every field get_user_preferences returns is
 // settable here; a preference the product reads and nothing can write is a dead
 // value. A partial upsert: a field the caller omits keeps its stored value, and
 // an explicit null on the two nullable model columns clears the preference.

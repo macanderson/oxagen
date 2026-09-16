@@ -5,7 +5,7 @@
  * account-preference set after the write, which is also what
  * `get_user_preferences` reads.
  *
- * It is the ONE writer of `auth.user_preferences` (ADR-069). Every field
+ * It is the ONE writer of `auth.user_preferences` (ADR-075). Every field
  * `get_user_preferences` returns is settable here, because a preference the
  * product reads and no surface can set is a dead value: `defaultTextTier` and
  * `defaultTextModel` are read back by `prepareAssistantTurn` through

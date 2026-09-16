@@ -76,7 +76,7 @@ describe("set_preferences", () => {
     });
   });
 
-  // ADR-069: the row has one writer, so every column it holds has to be
+  // ADR-075: the row has one writer, so every column it holds has to be
   // reachable from here. A first insert supplies the column default for each
   // field the caller left out, or the insert is invalid.
   it("writes every field the caller sends, and defaults the rest on first insert", async () => {

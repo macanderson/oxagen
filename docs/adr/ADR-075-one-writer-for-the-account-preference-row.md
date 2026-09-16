@@ -1,4 +1,4 @@
-# ADR-069 — One writer for the account preference row
+# ADR-075 — One writer for the account preference row
 
 - Status: accepted
 - Date: 2026-09-16
