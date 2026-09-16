@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Info, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "./alert";
@@ -16,7 +17,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  render: (args) => (
+  render: (args: ComponentProps<typeof Alert>) => (
     <Alert {...args} className="max-w-md">
       <Info />
       <AlertTitle>Heads up</AlertTitle>
