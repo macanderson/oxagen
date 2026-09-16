@@ -21,6 +21,7 @@
 // version with set_tool_classification.
 
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import type { MeasureDeclarations } from "@oxagen/oxagen/mandates/schemas";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { canonicalJson, sha256Hex } from "../registry-digest";
 import { logger } from "../logger";
@@ -47,7 +48,12 @@ export interface PublishToolArgs {
    * reclassification edits in place.
    */
   consequenceTags?: readonly string[];
-  measures?: Record<string, unknown>;
+  /**
+   * The measure declarations the mandate gate reads limits and targets from.
+   * Typed as the contract's own shape so a published version carries measures
+   * the gate can parse, rather than arbitrary jsonb.
+   */
+  measures?: MeasureDeclarations;
   effectIdPath?: string | null;
   /**
    * Called once, with the classification the active version carries (null for
@@ -167,7 +173,8 @@ export async function publishTool(
     manifest: args.manifest,
     checksum,
     schemaOrigin: args.schemaOrigin,
-    consequenceTags: args.consequenceTags ?? [],
+    // The column is a mutable text[]; copy so a caller's readonly tags fit.
+    consequenceTags: [...(args.consequenceTags ?? [])],
     measures: args.measures ?? {},
     effectIdPath: args.effectIdPath ?? null,
     isLatest: true,
