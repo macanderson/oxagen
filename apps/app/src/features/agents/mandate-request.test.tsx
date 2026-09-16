@@ -45,6 +45,7 @@ async function open() {
 /** Fills the fields the contract requires and submits. */
 async function ask(user: ReturnType<typeof userEvent.setup>) {
   const form = dialog();
+  await user.click(within(form).getByLabelText("moves_money"));
   await user.type(within(form).getByLabelText("Measure"), "rows");
   await user.type(within(form).getByLabelText("Unit"), "rows");
   await user.type(within(form).getByLabelText("Per period"), "2000");
@@ -71,17 +72,19 @@ describe("RequestMandate", () => {
     draw();
     await open();
     expect(dialog()).toHaveTextContent("A draft grants nothing.");
-    expect(
-      within(dialog())
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(
-      expect.arrayContaining([
-        "moves_money",
-        "destroys_data",
-        "changes_access",
-      ]),
-    );
+    // A mandate covers a tool only when it names every tag that tool declares,
+    // so the control has to be able to express a set, not a choice.
+    const chosen = within(dialog()).getAllByRole("checkbox");
+    expect(chosen.map((box) => box.getAttribute("value"))).toEqual([
+      "moves_money",
+      "destroys_data",
+      "alters_production",
+      "communicates_externally",
+      "changes_access",
+      "changes_entitlement",
+    ]);
+    for (const box of chosen) expect(box).not.toBeChecked();
+    expect(dialog()).toHaveTextContent("Name every consequence");
     expect(dialog()).toHaveTextContent("There is no unbounded option.");
     expect(dialog()).toHaveTextContent("It cannot be “calls”");
     expect(dialog()).toHaveTextContent("never scaled");
@@ -99,7 +102,7 @@ describe("RequestMandate", () => {
     await ask(user);
     expect(requestMandate).toHaveBeenCalledWith("acme", "core-platform", {
       agentId: "agt_invoicebot",
-      consequenceTag: "moves_money",
+      consequenceTags: "moves_money",
       measure: "rows",
       unit: "rows",
       perCall: "",

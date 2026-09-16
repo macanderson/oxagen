@@ -11,6 +11,11 @@
 // given a mandate and the handler refuses the draft. The measure cannot be
 // `calls`, which the field below writes and the gate reads as one per call.
 //
+// A mandate covers a tool only when it names every consequence that tool
+// declares, so the consequences are a set rather than a choice: naming one of
+// a tool's two mints a mandate that is granted as asked and authorizes nothing,
+// and the failure shows up at the moment of use, far from here.
+//
 // Every limit here is whole units and is stored exactly as typed. Scaling one
 // to micros is correct only for a measure the tool declares as an `amount`, and
 // no contract answers a tool version's `measures` — so this form does not
@@ -30,7 +35,13 @@ const TESTID = "request-mandate";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
 
-/** The starter set of consequence tags (MC spec §6.9 part 1). */
+/**
+ * The starter set of consequence tags (MC spec §6.9 part 1). More than one may
+ * be named, and usually must be: a mandate covers a tool only when it names
+ * every tag that tool declares, so naming one of a tool's two mints a mandate
+ * that authorizes nothing. Nothing the app may call answers a tool version's
+ * `consequence_tags`, so the operator states the set and the hint says the rule.
+ */
 const CONSEQUENCE_TAGS = [
   "moves_money",
   "destroys_data",
@@ -67,6 +78,13 @@ function text(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+/** The ticked boxes under `name`. A checkbox never yields a File, but FormData's type allows one. */
+function chosen(form: FormData, name: string): string[] {
+  return form
+    .getAll(name)
+    .filter((value): value is string => typeof value === "string");
+}
+
 function period(form: FormData): MandateDraft["period"] {
   const raw = text(form, "period");
   return PERIODS.find((p) => p === raw) ?? "monthly";
@@ -99,7 +117,7 @@ export function RequestMandate({
     try {
       const result = await requestMandate(org, ws, {
         agentId,
-        consequenceTag: text(form, "consequenceTag"),
+        consequenceTags: chosen(form, "consequenceTags").join(","),
         measure: text(form, "measure"),
         unit: text(form, "unit"),
         perCall: text(form, "perCall"),
@@ -147,20 +165,29 @@ export function RequestMandate({
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
-          <Field name="consequenceTag" label={t("consequenceTag")}>
-            <select
-              id={id("consequenceTag")}
-              name="consequenceTag"
-              defaultValue="moves_money"
-              className={inputBase}
-            >
+          <fieldset className="flex flex-col gap-1 text-sm text-foreground">
+            <legend>{t("consequenceTags")}</legend>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
               {CONSEQUENCE_TAGS.map((tag) => (
-                <option key={tag} value={tag}>
+                <label
+                  key={tag}
+                  htmlFor={id(`consequence-${tag}`)}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    id={id(`consequence-${tag}`)}
+                    type="checkbox"
+                    name="consequenceTags"
+                    value={tag}
+                  />
                   {tag}
-                </option>
+                </label>
               ))}
-            </select>
-          </Field>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("consequenceTagsHint")}
+            </p>
+          </fieldset>
           <Field name="measure" label={t("measure")} hint={t("measureHint")}>
             <input
               id={id("measure")}

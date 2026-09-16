@@ -426,7 +426,6 @@ type Messages = {
         open: string;
         title: string;
         body: string;
-        consequenceTag: string;
         measure: string;
         measureHint: string;
         perCall: string;
@@ -451,13 +450,15 @@ type Messages = {
         unit: string;
         unitHint: string;
         perCallHint: string;
+        consequenceTags: string;
+        consequenceTagsHint: string;
       };
       truncated: string;
-      noneVisibleTitle: string;
-      noneVisible: string;
-      noneVisibleDetail: string;
       noneEffective: string;
-      noneTruncated: string;
+      noneListedTitle: string;
+      partial: string;
+      noneListed: string;
+      noneListedDetail: string;
     };
   };
   audit: {
@@ -1803,8 +1804,9 @@ type Messages = {
         revoked: string;
       };
       truncated: string;
-      emptyVisible: string;
-      emptyVisibleDetail: string;
+      partial: string;
+      emptyListed: string;
+      emptyListedDetail: string;
     };
   };
   ui: {

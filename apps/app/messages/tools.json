@@ -2,7 +2,7 @@
   "tools": {
     "mandates": {
       "title": "Mandates ledger",
-      "lead": "Every mandate this workspace has granted, with what it has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
+      "lead": "The mandates this workspace has granted, with what each has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
       "empty": "No mandate has been granted in this workspace.",
       "emptyDetail": "A call that carries a consequence tag with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
       "noLimit": "no limit",
@@ -27,8 +27,9 @@
         "revoked": "revoked"
       },
       "truncated": "The newest {shown} mandates. This workspace has granted at least that many, and older ones are not listed here.",
-      "emptyVisible": "No mandate is listed for you. That is not the same as the workspace having granted none: you see the mandates of the agents you created, and this list is empty either way.",
-      "emptyVisibleDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has granted. This ledger is written for that office."
+      "partial": "You see the mandates of the agents you created. This ledger is not every mandate this workspace has granted.",
+      "emptyListed": "No mandate is listed here. The ledger above is not complete, so that is not a statement that the workspace has granted none.",
+      "emptyListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has granted. This ledger is written for that office."
     }
   }
 }

@@ -17,7 +17,13 @@
 // off a newest-first read, so rows are present and none of them authorize
 // anything. `blindSpotOf` answers both from the evidence that still holds them
 // — the reader's role and `truncatedAt` — because neither is visible in the
-// rows. Everyone else is told what the view cannot establish.
+// rows. `blindSpotOf` asks "is this the whole set", not "is it empty", because
+// incompleteness is a property of the answer and not of its length: a narrowed
+// list of fifty rows is as partial as a narrowed list of none. So one line
+// states what the answer is missing whenever anything is, above the rows and
+// above the authority statement both, and every claim below it is read against
+// it — the empty state declines to assert absence, and the table no longer
+// implies it is everything the agent holds.
 //
 // The warning is driven by authority and not by row count. A draft, a revoked
 // row and an expired one all authorize nothing, and `request_mandate` writes a
@@ -77,7 +83,7 @@ export function MandatesSection({
             {read.ok && effective.length === 0
               ? blindSpot === null
                 ? t("noneTitle")
-                : t("noneVisibleTitle")
+                : t("noneListedTitle")
               : title}
           </h2>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
@@ -96,36 +102,33 @@ export function MandatesSection({
           <ReadFailure read={read} section={title} />
         ) : (
           <div className="flex flex-col gap-3">
+            {blindSpot === null ? null : (
+              <p
+                data-state="incomplete"
+                data-blind-spot={blindSpot}
+                className="max-w-prose text-sm text-foreground"
+              >
+                {blindSpot === "truncated"
+                  ? t("truncated", { shown: String(read.value.truncatedAt) })
+                  : t("partial")}
+              </p>
+            )}
             {effective.length > 0 ? null : (
               <div className="flex flex-col gap-2 text-sm">
                 <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
-                  {blindSpot === "reader_scope"
-                    ? t("noneVisible")
-                    : blindSpot === "truncated"
-                      ? t("noneTruncated", {
-                          shown: String(read.value.truncatedAt),
-                        })
-                      : held.length === 0
-                        ? t("none")
-                        : t("noneEffective")}
+                  {blindSpot !== null
+                    ? t("noneListed")
+                    : held.length === 0
+                      ? t("none")
+                      : t("noneEffective")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {blindSpot === null
-                    ? t("noneDetail")
-                    : t("noneVisibleDetail")}
+                  {blindSpot === null ? t("noneDetail") : t("noneListedDetail")}
                 </p>
               </div>
             )}
             {held.length === 0 ? null : (
               <>
-                {read.value.truncatedAt === null ? null : (
-                  <p
-                    data-state="truncated"
-                    className="max-w-prose text-sm text-foreground"
-                  >
-                    {t("truncated", { shown: String(read.value.truncatedAt) })}
-                  </p>
-                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="text-xs uppercase tracking-wide text-muted-foreground">

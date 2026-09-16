@@ -157,16 +157,24 @@ export function isEffective(mandate: MandateRow, at: Date): boolean {
 }
 
 /**
- * Why this answer cannot establish that no authority exists, or null when it
- * can. Two different things make an empty result something other than an empty
- * ledger, and a surface that asserts absence has to have ruled out both:
+ * Why this answer is not the whole set, or null when it is. Note the question:
+ * not "is it empty" but "is it everything". Incompleteness is a property of the
+ * answer and not of its length — a reader-narrowed list of fifty rows is just
+ * as partial as a narrowed list of none — so every claim a surface makes about
+ * such a list is qualified, whether the claim is that nothing is there or that
+ * everything is.
  *
  * - `reader_scope` — `list_mandates` narrows a reader without an accountable
- *   org role to the agents they created, and reports the narrowing as a
- *   successful, shorter list.
+ *   org role to the agents they created, and reports the narrowing as an
+ *   ordinary successful answer.
  * - `truncated` — the read stopped at the bound it asked for, newest first, so
- *   a mandate still in effect may simply be older than the page. A hundred
- *   newer drafts push it off, and the rows that came back authorize nothing.
+ *   an older mandate is simply absent. A hundred newer drafts push the one
+ *   still in effect off the page, and every row that came back authorizes
+ *   nothing.
+ *
+ * `reader_scope` comes first because it is the stronger statement: the rows are
+ * not a prefix of the whole set but a subset of a different shape, so naming
+ * the page bound instead would understate what is missing.
  *
  * This is the same failure as the clamped ratio that `overLimit` exists for: a
  * lossy intermediate cannot be asked a question about what it lost. Both are

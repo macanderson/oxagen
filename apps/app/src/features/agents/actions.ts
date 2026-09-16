@@ -105,8 +105,13 @@ export async function commitAgentDefinition(
 /** The fields a mandate request carries, as the dialog collects them. */
 export type MandateDraft = {
   agentId: string;
-  /** The consequence the mandate answers for (`moves_money`). */
-  consequenceTag: string;
+  /**
+   * The consequences the mandate answers for, comma-separated. A mandate must
+   * name **every** tag each covered tool declares or it authorizes none of
+   * them (`findCoveringMandate`), so this is a set the operator states and not
+   * a single choice.
+   */
+  consequenceTags: string;
   /** The measure the tool version declares the limit under (`rows`, `recipients`). */
   measure: string;
   /**
@@ -213,8 +218,26 @@ export async function requestMandate(
   if (unit === "" || isCurrencyCode(unit.toUpperCase())) return refuse("unit");
   const measure = draft.measure.trim();
   if (measure === "" || measure === RESERVED_MEASURE) return refuse("measure");
-  const consequenceTag = draft.consequenceTag.trim();
-  if (consequenceTag === "") return refuse("consequenceTag");
+  // `findCoveringMandate` (packages/rules/src/mandates.ts) accepts a mandate
+  // only when `tool.consequenceTags.every(t => mandate.consequenceTags.includes(t))`,
+  // so a mandate naming one tag of a tool that declares two covers nothing —
+  // granted exactly as asked, and every call still denied, at the moment of use
+  // and far from here. The form therefore writes the whole set the operator
+  // names rather than a single tag. It cannot check the set against the tools:
+  // `consequence_tags` lives on `agent.tool_versions` and appears in exactly
+  // one contract, `publish_tool_declaration`, as an input — the same wall the
+  // measure declaration is behind (INV-05). Naming too few is the safe way to
+  // be wrong here, since the mandate then covers nothing rather than more than
+  // was meant, and the gate's denial names the tags it wanted.
+  const consequenceTags = [
+    ...new Set(
+      draft.consequenceTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== ""),
+    ),
+  ];
+  if (consequenceTags.length === 0) return refuse("consequenceTags");
 
   // Verbatim: `WHOLE_UNITS` admits "0" and a figure with no leading zero, so
   // what passes is already the digits the ledger records and there is nothing
@@ -256,7 +279,7 @@ export async function requestMandate(
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, mandateRequest, {
     agentId: draft.agentId,
-    consequenceTags: [consequenceTag],
+    consequenceTags,
     limits: {
       [measure]: {
         ...(perCallValue === null ? {} : { perCall: perCallValue }),

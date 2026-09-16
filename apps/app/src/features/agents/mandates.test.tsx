@@ -138,9 +138,9 @@ describe("Agents › Mandates", () => {
 
   it("says older mandates are not listed when the answer filled its page (negative)", async () => {
     await renderMandates(mandateList([mandateRow()], 100));
-    expect(
-      within(held()).getByText(/older ones are not listed/),
-    ).toHaveAttribute("data-state", "truncated");
+    const line = within(held()).getByText(/older ones are not listed/);
+    expect(line).toHaveAttribute("data-state", "incomplete");
+    expect(line).toHaveAttribute("data-blind-spot", "truncated");
   });
 
   it("says who may read the ledger when the viewer may not (negative)", async () => {
@@ -176,7 +176,10 @@ describe("Agents › Mandates", () => {
         "No mandate listed",
       );
       expect(
-        within(section).getByText(/not the same as the agent holding none/),
+        within(section).getByText(/not every mandate this agent holds/),
+      ).toHaveAttribute("data-blind-spot", "reader_scope");
+      expect(
+        within(section).getByText(/not a statement that the agent holds no/),
       ).toHaveAttribute("data-state", "empty");
       expect(
         within(section).queryByText(/cannot carry a consequence/),
@@ -197,11 +200,25 @@ describe("Agents › Mandates", () => {
     },
   );
 
-  it("hedges nothing when a non-accountable reader is answered rows", async () => {
+  // Incompleteness is a property of the answer, not of its length: a narrowed
+  // reader answered rows is looking at a subset, and the table above would
+  // otherwise read as every mandate the agent holds.
+  it("still says the list is partial when a narrowed reader is answered rows", async () => {
     await renderMandates(mandateList([mandateRow()]), "member");
+    const section = held();
     expect(
-      within(held()).queryByText(/not the same as the agent holding none/),
-    ).not.toBeInTheDocument();
+      within(section).getByText(/not every mandate this agent holds/),
+    ).toHaveAttribute("data-blind-spot", "reader_scope");
+    // Its authority is established, so nothing claims otherwise.
+    expect(within(section).queryByText(/not a statement/)).toBeNull();
+    expect(within(section).getByTestId("agent-mandate")).toBeInTheDocument();
+  });
+
+  it("says nothing of the sort to an accountable reader answered rows", async () => {
+    await renderMandates(mandateList([mandateRow()]), "owner");
+    expect(
+      within(held()).queryByText(/not every mandate this agent holds/),
+    ).toBeNull();
   });
 
   // A row is not authority. `request_mandate` writes a draft, so a page that
@@ -272,10 +289,12 @@ describe("Agents › Mandates", () => {
       ),
     );
     const section = held();
-    const state = within(section).getByText(/may be older than the page/);
-    expect(state).toHaveAttribute("data-state", "empty");
-    expect(state).toHaveAttribute("data-blind-spot", "truncated");
-    expect(state.textContent).toContain("3");
+    const line = within(section).getByText(/older ones are not listed/);
+    expect(line).toHaveAttribute("data-blind-spot", "truncated");
+    expect(line.textContent).toContain("3");
+    expect(
+      within(section).getByText(/not a statement that the agent holds no/),
+    ).toHaveAttribute("data-state", "empty");
     expect(
       within(section).queryByText(/cannot carry a consequence/),
     ).toBeNull();
@@ -286,6 +305,7 @@ describe("Agents › Mandates", () => {
     const state = within(held()).getByText(/cannot carry a consequence/);
     expect(state).toHaveAttribute("data-state", "empty");
     expect(state).not.toHaveAttribute("data-blind-spot");
+    expect(within(held()).queryByText(/is not complete/)).toBeNull();
   });
 
   it("stays quiet about the page bound while a mandate is in effect", async () => {

@@ -5,10 +5,13 @@
 // beneath it.
 //
 // A reader without an accountable org role is not denied this read: the
-// handler narrows it to the agents that reader created and answers a
-// successful list. So an empty answer does not establish that the workspace
-// has granted nothing, and the empty state says so unless the reader is one
-// whose answer covers every mandate (`readsEveryMandate`).
+// handler narrows it to the agents that reader created and answers an ordinary
+// successful list. That makes the answer partial whatever its length — an
+// empty one does not establish that the workspace has granted nothing, and a
+// list of fifty rows is not every mandate either, though the lead above it
+// would read as a claim that it is. `blindSpotOf` answers "is this the whole
+// set", and one line above the rows says what is missing, so neither the empty
+// state nor the table asserts more than the read can support.
 //
 // The registry, connections, kill switches and auto-approval rules are the
 // other tabs of this page and have no backing yet, so they are not drawn
@@ -154,55 +157,63 @@ export function MandatesLedger({
       <div className="mt-3">
         {!read.ok ? (
           <ReadFailure read={read} section={title} />
-        ) : read.value.mandates.length === 0 ? (
-          <div className="flex flex-col gap-1 text-sm">
-            <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
-              {blindSpot === null ? t("empty") : t("emptyVisible")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {blindSpot === null ? t("emptyDetail") : t("emptyVisibleDetail")}
-            </p>
-          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {read.value.truncatedAt === null ? null : (
+            {blindSpot === null ? null : (
               <p
-                data-state="truncated"
+                data-state="incomplete"
+                data-blind-spot={blindSpot}
                 className="max-w-prose text-sm text-foreground"
               >
-                {t("truncated", { shown: String(read.value.truncatedAt) })}
+                {blindSpot === "truncated"
+                  ? t("truncated", { shown: String(read.value.truncatedAt) })
+                  : t("partial")}
               </p>
             )}
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-3xl text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    {COLUMNS.map((column) => (
-                      <th
-                        key={column}
-                        scope="col"
-                        className={`px-3 pb-2 font-medium ${
-                          column === "perCall" ||
-                          column === "perPeriod" ||
-                          column === "settled" ||
-                          column === "reserved" ||
-                          column === "remaining"
-                            ? "text-right"
-                            : ""
-                        }`}
-                      >
-                        {t(`columns.${column}`)}
-                      </th>
+            {read.value.mandates.length > 0 ? null : (
+              <div className="flex flex-col gap-1 text-sm">
+                <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
+                  {blindSpot === null ? t("empty") : t("emptyListed")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {blindSpot === null
+                    ? t("emptyDetail")
+                    : t("emptyListedDetail")}
+                </p>
+              </div>
+            )}
+            {read.value.mandates.length === 0 ? null : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-3xl text-left text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      {COLUMNS.map((column) => (
+                        <th
+                          key={column}
+                          scope="col"
+                          className={`px-3 pb-2 font-medium ${
+                            column === "perCall" ||
+                            column === "perPeriod" ||
+                            column === "settled" ||
+                            column === "reserved" ||
+                            column === "remaining"
+                              ? "text-right"
+                              : ""
+                          }`}
+                        >
+                          {t(`columns.${column}`)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {read.value.mandates.map((mandate) => (
+                      <Row key={mandate.id} mandate={mandate} />
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {read.value.mandates.map((mandate) => (
-                    <Row key={mandate.id} mandate={mandate} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

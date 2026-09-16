@@ -131,9 +131,9 @@ describe("Tools › mandates ledger", () => {
 
   it("says older mandates are not listed when the answer filled its page (negative)", async () => {
     const { container } = await renderTools(mandateList([mandateRow()], 100));
-    expect(
-      within(ledger()).getByText(/older ones are not listed/),
-    ).toHaveAttribute("data-state", "truncated");
+    const line = within(ledger()).getByText(/older ones are not listed/);
+    expect(line).toHaveAttribute("data-state", "incomplete");
+    expect(line).toHaveAttribute("data-blind-spot", "truncated");
     await expectNoAxe(container);
   });
 
@@ -181,9 +181,10 @@ describe("Tools › mandates ledger", () => {
     async (role) => {
       const { container } = await renderTools(mandateList([]), role);
       expect(
-        within(ledger()).getByText(
-          /not the same as the workspace having granted none/,
-        ),
+        within(ledger()).getByText(/not every mandate this workspace has/),
+      ).toHaveAttribute("data-blind-spot", "reader_scope");
+      expect(
+        within(ledger()).getByText(/not a statement that the workspace/),
       ).toHaveAttribute("data-state", "empty");
       expect(
         within(ledger()).queryByText(/No mandate has been granted/),
@@ -191,6 +192,31 @@ describe("Tools › mandates ledger", () => {
       await expectNoAxe(container);
     },
   );
+
+  // Incompleteness does not depend on length: a narrowed reader answered rows
+  // is looking at a subset under a lead that describes the whole ledger.
+  it.each([["member" as const], ["viewer" as const]])(
+    "says the ledger is partial to a %s answered rows (negative)",
+    async (role) => {
+      const { container } = await renderTools(
+        mandateList([mandateRow()]),
+        role,
+      );
+      expect(
+        within(ledger()).getByText(/not every mandate this workspace has/),
+      ).toHaveAttribute("data-blind-spot", "reader_scope");
+      expect(within(ledger()).getByRole("table")).toBeInTheDocument();
+      expect(within(ledger()).queryByText(/not a statement/)).toBeNull();
+      await expectNoAxe(container);
+    },
+  );
+
+  it("says nothing of the sort to an accountable reader answered rows", async () => {
+    await renderTools(mandateList([mandateRow()]), "owner");
+    expect(
+      within(ledger()).queryByText(/not every mandate this workspace has/),
+    ).toBeNull();
+  });
 
   it.each([["owner" as const], ["admin" as const], ["compliance" as const]])(
     "tells a %s the workspace has granted none, because their answer is every one",

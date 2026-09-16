@@ -283,7 +283,7 @@ describe("a person the workspace refuses", () => {
 describe("requestMandate", () => {
   const draft = {
     agentId: "agt_invoicebot",
-    consequenceTag: "moves_money",
+    consequenceTags: "moves_money, alters_production",
     measure: "rows",
     unit: "rows",
     perCall: "50",
@@ -307,7 +307,7 @@ describe("requestMandate", () => {
       "request_mandate",
       {
         agentId: "agt_invoicebot",
-        consequenceTags: ["moves_money"],
+        consequenceTags: ["moves_money", "alters_production"],
         limits: {
           rows: {
             perCall: "50",
@@ -385,7 +385,8 @@ describe("requestMandate", () => {
 
   it.each([
     [{ measure: "  " }, "measure"],
-    [{ consequenceTag: "" }, "consequenceTag"],
+    [{ consequenceTags: "" }, "consequenceTags"],
+    [{ consequenceTags: " , , " }, "consequenceTags"],
     [{ perCall: "", perPeriod: "" }, "perPeriod"],
     [{ perCall: "1,250" }, "perCall"],
     [{ perPeriod: "-5" }, "perPeriod"],
@@ -473,6 +474,31 @@ describe("requestMandate", () => {
         },
         calls: { perPeriod: "50", period: "daily", currencyOrUnit: "calls" },
       },
+    });
+  });
+
+  // `findCoveringMandate` accepts a mandate only when it names EVERY tag the
+  // tool declares, so a form that could send one tag minted mandates that were
+  // granted exactly as asked and authorized nothing.
+  it("sends every consequence named, de-duplicated and trimmed", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      consequenceTags: " moves_money , alters_production ,moves_money, ",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      consequenceTags: ["moves_money", "alters_production"],
+    });
+  });
+
+  it("sends a single consequence as a set of one", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      consequenceTags: "destroys_data",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      consequenceTags: ["destroys_data"],
     });
   });
 
